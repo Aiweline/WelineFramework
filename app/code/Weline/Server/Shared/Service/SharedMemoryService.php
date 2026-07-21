@@ -39,8 +39,8 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
             $options['pool_min_idle'] = 0;
         }
         if (!isset($options['pool_size']) && !isset($options['max_size'])) {
-            // 默认提升共享服务连接池容量，适配高并发 Worker 复用场景。
-            $options['pool_size'] = 32;
+            // Align with SharedStatePoolDefaults / MemoryStateFacade (not the legacy 32 fallback).
+            $options['pool_size'] = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::MEMORY_POOL_SIZE;
         }
         if (!isset($options['idle_timeout'])) {
             $options['idle_timeout'] = 86400.0;

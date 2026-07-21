@@ -121,11 +121,21 @@ class Acl implements TaglibInterface
     }
     
     /**
+     * 静默权限检查：只返回结果，不向 MessageManager 写入“无权限”警告。
+     * 供纯展示型入口（如顶部设置里的清理缓存按钮）按 ACL 决定是否渲染。
+     */
+    public static function hasPermissionQuiet(string $source): bool
+    {
+        return self::hasPermission($source, true);
+    }
+
+    /**
      * 运行时权限检查方法（返回 bool）
      * @param string $source 权限源标识
+     * @param bool $silent 为 true 时无权限不追加用户警告消息
      * @return bool
      */
-    public static function hasPermission(string $source): bool
+    public static function hasPermission(string $source, bool $silent = false): bool
     {
         // 请求内缓存：避免同一请求内重复检查同一权限
         if (isset(self::$permissionCache[$source])) {
@@ -161,10 +171,12 @@ class Acl implements TaglibInterface
         
         // 无角色返回 false
         if (empty($role->getId())) {
-            $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
-            /**@var MessageManager $messageManager */
-            $messageManager = ObjectManager::getInstance(MessageManager::class);
-            $messageManager->addWarning($msg);
+            if (!$silent) {
+                $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
+                /**@var MessageManager $messageManager */
+                $messageManager = ObjectManager::getInstance(MessageManager::class);
+                $messageManager->addWarning($msg);
+            }
             self::$permissionCache[$source] = false;
             return false;
         }
@@ -186,7 +198,7 @@ class Acl implements TaglibInterface
         
         // 检查权限
         $hasAccess = in_array($source, $accesses);
-        if (!$hasAccess) {
+        if (!$hasAccess && !$silent) {
             $msg = __('该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！', $source);
             /**@var MessageManager $messageManager */
             $messageManager = ObjectManager::getInstance(MessageManager::class);

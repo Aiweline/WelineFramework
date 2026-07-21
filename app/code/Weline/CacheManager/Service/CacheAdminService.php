@@ -232,6 +232,42 @@ final class CacheAdminService
     }
 
     /**
+     * 轻量缓存池选项列表（供顶部「清理缓存」弹窗等 UI 使用，不做逐池统计）。
+     *
+     * @return array<int, array{identity: string, name: string, module: string, permanent: bool}>
+     */
+    public function listPoolOptions(): array
+    {
+        $records = $this->loadRecordMap();
+        $options = [];
+
+        foreach ($this->cacheManager->getPoolIdentities() as $identity) {
+            $identity = (string)$identity;
+            if ($identity === '') {
+                continue;
+            }
+            $record = $records[$identity] ?? [];
+            $permanent = false;
+            try {
+                $permanent = $this->cacheManager->pool($identity)->isPermanent();
+            } catch (\Throwable) {
+            }
+
+            $name = \trim((string)($record[CacheRecord::schema_fields_NAME] ?? ''));
+            $options[] = [
+                'identity' => $identity,
+                'name' => $name !== '' ? $name : $identity,
+                'module' => (string)($record[CacheRecord::schema_fields_Module] ?? ''),
+                'permanent' => $permanent,
+            ];
+        }
+
+        \usort($options, static fn(array $left, array $right): int => \strcmp($left['identity'], $right['identity']));
+
+        return $options;
+    }
+
+    /**
      * @return array<string, array<string, mixed>>
      */
     private function loadRecordMap(): array

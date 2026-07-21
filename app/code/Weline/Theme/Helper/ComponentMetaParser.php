@@ -97,10 +97,10 @@ class ComponentMetaParser
             }
         }
         
-        // 解析 @meta.name 格式（简化格式，等同于 @meta::name）
-        if (preg_match_all('/@meta\.(\w+)\s*\{([^}]+)\}/', $content, $matches, PREG_SET_ORDER)) {
+        // 解析 @meta.name / @meta.cache.mode 格式（简化格式，等同于 @meta::…；支持点号层级）
+        if (preg_match_all('/@meta\.([\w.]+)\s*\{([^}]+)\}/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
-                $metaKey = trim($match[1]); // 如：name, description
+                $metaKey = trim($match[1]); // 如：name, cache.mode
                 $attributesStr = trim($match[2]); // 如：default="...",name="...",description="..."
                 
                 // 验证保留后缀
@@ -114,11 +114,26 @@ class ComponentMetaParser
                 // 解析属性键值对
                 $attributes = self::parseAttributes($attributesStr, $filePath, $metaKey);
                 
-                // 存储到 meta 根级别
-                if (!isset($meta['meta'][$metaKey])) {
-                    $meta['meta'][$metaKey] = [];
+                // 点号键构建层级（与 @meta:: 一致），单段键仍落在 meta 根级
+                $keys = explode('.', $metaKey);
+                $current = &$meta['meta'];
+                foreach ($keys as $index => $keyPart) {
+                    if ($keyPart === '') {
+                        continue;
+                    }
+                    if ($index === count($keys) - 1) {
+                        if (!isset($current[$keyPart]) || !is_array($current[$keyPart])) {
+                            $current[$keyPart] = [];
+                        }
+                        $current[$keyPart] = array_merge($current[$keyPart], $attributes);
+                        break;
+                    }
+                    if (!isset($current[$keyPart]) || !is_array($current[$keyPart])) {
+                        $current[$keyPart] = [];
+                    }
+                    $current = &$current[$keyPart];
                 }
-                $meta['meta'][$metaKey] = array_merge($meta['meta'][$metaKey], $attributes);
+                unset($current);
             }
         }
         

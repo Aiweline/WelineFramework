@@ -1071,9 +1071,11 @@ $coroutineRuntime = new \Weline\Server\Runtime\CoroutineRuntime($eventLoop, $fib
 $asyncBizAdapters = new \Weline\Server\Runtime\Async\AsyncBizAdapters();
 \Weline\Server\Observer\SchedulerWaitObserver::setScheduler($fiberScheduler);
 \Weline\Framework\Runtime\SchedulerSystem::enableScheduler();
+\Weline\Framework\Runtime\SchedulerSystem::enableIoWait();
 $longLivedProtocolResolver = new \Weline\Server\Service\Protocol\LongLived\ProtocolResolver();
 $activeFibers = [];
 $fiberTickBudgetMs = (float)(\Weline\Framework\App\Env::get('wls.worker.fiber_tick_budget_ms', 8) ?: 8);
+\Weline\Server\Log\WlsLogger::info_("Fiber I/O await 已启用（CoroutineRuntime 驱动）");
 \Weline\Framework\Runtime\WlsConcurrency::setOtherSuspendedFiberCountProvider(
     static function () use (&$activeFibers): int {
         return \count($activeFibers);
@@ -5927,17 +5929,19 @@ while (true) {
 /**
  * @param array<int, array<string, mixed>> $activeFibers
  */
-function wlsCountActiveFibersForAdmission(array $activeFibers): int
-{
-    $count = 0;
-    foreach ($activeFibers as $fiberState) {
-        if (($fiberState['is_sse_protocol'] ?? false) === true) {
-            continue;
+if (!\function_exists('wlsCountActiveFibersForAdmission')) {
+    function wlsCountActiveFibersForAdmission(array $activeFibers): int
+    {
+        $count = 0;
+        foreach ($activeFibers as $fiberState) {
+            if (($fiberState['is_sse_protocol'] ?? false) === true) {
+                continue;
+            }
+            $count++;
         }
-        $count++;
-    }
 
-    return $count;
+        return $count;
+    }
 }
 
 /**
@@ -5945,6 +5949,7 @@ function wlsCountActiveFibersForAdmission(array $activeFibers): int
  *
  * @param array<int|string,array<string,mixed>> $activeFibers
  */
+if (!\function_exists('wlsCancelActiveFibersForConnection')) {
 function wlsCancelActiveFibersForConnection(
     array &$activeFibers,
     int $connectionId,
@@ -5972,6 +5977,7 @@ function wlsCancelActiveFibersForConnection(
     }
 
     return $cancelled;
+}
 }
 
 function wlsSslAcceptNewConnections(

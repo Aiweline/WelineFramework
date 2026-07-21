@@ -113,6 +113,66 @@ class CachePool implements CachePoolInterface, RemembererInterface
         return $this->adapter->set($this->buildKey($key), $value, $ttl);
     }
 
+    public function getCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): mixed {
+        if (!$this->enabled) {
+            $this->misses++;
+            return null;
+        }
+
+        $value = $this->adapter->get($this->buildCustomKey($key, $website, $lang, $currency));
+        if ($value === null) {
+            $this->misses++;
+            return null;
+        }
+
+        $this->hits++;
+        return $value;
+    }
+
+    public function setCustom(
+        string $key,
+        mixed $value,
+        int $ttl = 0,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        if (!$this->enabled) {
+            return true;
+        }
+
+        $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
+        $ttl = $this->applyJitter($ttl);
+        return $this->adapter->set($this->buildCustomKey($key, $website, $lang, $currency), $value, $ttl);
+    }
+
+    public function deleteCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        return $this->adapter->delete($this->buildCustomKey($key, $website, $lang, $currency));
+    }
+
+    public function hasCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        if (!$this->enabled) {
+            return false;
+        }
+
+        return $this->adapter->has($this->buildCustomKey($key, $website, $lang, $currency));
+    }
+
     /**
      * 防穿透 + 防击穿 + 防雪崩 一体化回源 API。
      *
@@ -120,31 +180,66 @@ class CachePool implements CachePoolInterface, RemembererInterface
      * - 未命中 → 通过 single-flight 协调让一个 worker / 协程执行回调；
      * - 回调返回 null → 写入 null 哨兵 + 短 TTL（防穿透）；
      * - 回调返回真实值 → 写入正常 TTL（带抖动，防雪崩）。
+     * - 普通路径自动注入 website + lang + currency + area；锁与最终存储键同源。
      */
     public function remember(string $key, int $ttl, callable $callback, ?RememberOptions $options = null): mixed
     {
+        return $this->rememberWithStorageKey($key, $this->buildKey($key), $ttl, $callback, $options);
+    }
+
+    public function rememberCustom(
+        string $key,
+        int $ttl,
+        callable $callback,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false,
+        ?RememberOptions $options = null
+    ): mixed {
+        return $this->rememberWithStorageKey(
+            $key,
+            $this->buildCustomKey($key, $website, $lang, $currency),
+            $ttl,
+            $callback,
+            $options
+        );
+    }
+
+    /**
+     * @param callable():mixed $callback
+     */
+    private function rememberWithStorageKey(
+        string $logicalKey,
+        string $storageKey,
+        int $ttl,
+        callable $callback,
+        ?RememberOptions $options
+    ): mixed {
         $options ??= new RememberOptions();
 
         if (!$this->enabled) {
             return $callback();
         }
 
-        $cached = $this->get($key);
+        $cached = $this->adapter->get($storageKey);
         if ($cached === RememberOptions::NULL_SENTINEL) {
-            $this->trackHotKey($key, $options);
+            $this->hits++;
+            $this->trackHotKey($logicalKey, $options);
             return null;
         }
         if ($cached !== null) {
-            $this->trackHotKey($key, $options);
+            $this->hits++;
+            $this->trackHotKey($logicalKey, $options);
             return $cached;
         }
+        $this->misses++;
 
         $token = null;
         if ($options->singleFlight) {
-            $token = $this->getSingleFlight()->acquire($key, $options->singleFlightTimeoutMs);
+            $token = $this->getSingleFlight()->acquire($storageKey, $options->singleFlightTimeoutMs);
 
             if ($token === null) {
-                $retry = $this->get($key);
+                $retry = $this->adapter->get($storageKey);
                 if ($retry === RememberOptions::NULL_SENTINEL) {
                     return null;
                 }
@@ -161,7 +256,7 @@ class CachePool implements CachePoolInterface, RemembererInterface
             $value = $callback();
         } catch (\Throwable $e) {
             if ($token !== null) {
-                $this->getSingleFlight()->release($key, $token);
+                $this->getSingleFlight()->release($storageKey, $token);
             }
             throw $e;
         }
@@ -169,16 +264,16 @@ class CachePool implements CachePoolInterface, RemembererInterface
         $resolvedTtl = $ttl > 0 ? $ttl : $this->defaultTtl;
         if ($value === null) {
             $nullTtl = $options->nullTtl > 0 ? $options->nullTtl : $resolvedTtl;
-            $this->setRaw($key, RememberOptions::NULL_SENTINEL, $nullTtl, false);
+            $this->setStorage($storageKey, RememberOptions::NULL_SENTINEL, $nullTtl, false);
         } else {
             $jitterFlag = $options->jitter ?? null;
             $useJitter = $jitterFlag !== false;
-            $this->setRaw($key, $value, $resolvedTtl, $useJitter, $options->jitterRatio);
-            $this->trackHotKey($key, $options, $value, $resolvedTtl);
+            $this->setStorage($storageKey, $value, $resolvedTtl, $useJitter, $options->jitterRatio);
+            $this->trackHotKey($logicalKey, $options, $value, $resolvedTtl);
         }
 
         if ($token !== null) {
-            $this->getSingleFlight()->release($key, $token);
+            $this->getSingleFlight()->release($storageKey, $token);
         }
 
         return $value;
@@ -289,7 +384,8 @@ class CachePool implements CachePoolInterface, RemembererInterface
             'hit_ratio' => $total > 0 ? round($this->hits / $total * 100, 2) : 0,
             'permanent' => $this->permanent,
             'enabled' => $this->enabled,
-            'environment_scoped' => $this->environmentScoped,
+            // Deprecated: ordinary get/set always inject storefront dimensions; kept for stats compatibility.
+            'environment_scoped' => true,
             'default_ttl' => $this->defaultTtl,
             'jitter_ratio' => $this->jitterRatio,
             'adapter' => get_class($this->adapter),
@@ -297,28 +393,40 @@ class CachePool implements CachePoolInterface, RemembererInterface
     }
 
     /**
-     * 构建缓存键
+     * 普通路径：自动注入 area + website_code + lang + currency。
      */
     protected function buildKey(string $key): string
     {
-        if ($this->environmentScoped) {
-            $key = 'env:' . KeyBuilder::environmentHash(['pool' => $this->identity]) . ':' . $key;
-        }
+        $scoped = KeyBuilder::applyDimensionFlags($key, true, true, true, true);
 
-        return KeyBuilder::build($this->identity, $key);
+        return KeyBuilder::build($this->identity, $scoped);
     }
 
     /**
-     * 不经常规 jitter 处理的内部写入（Remember 内部使用，可控制是否抖动）。
+     * Custom 路径：仅注入调用方显式开启的维；全 false 则裸 key 逃逸。
      */
-    private function setRaw(string $key, mixed $value, int $ttl, bool $useJitter, ?float $jitterRatio = null): bool
+    protected function buildCustomKey(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): string {
+        $scoped = KeyBuilder::applyDimensionFlags($key, $website, $lang, $currency, false);
+
+        return KeyBuilder::build($this->identity, $scoped);
+    }
+
+    /**
+     * 按最终存储键写入（Remember 内部使用，可控制是否抖动）。
+     */
+    private function setStorage(string $storageKey, mixed $value, int $ttl, bool $useJitter, ?float $jitterRatio = null): bool
     {
         $effectiveTtl = $ttl > 0 ? $ttl : $this->defaultTtl;
         if ($useJitter) {
             $ratio = $jitterRatio !== null ? $this->normalizeJitterRatio($jitterRatio) : $this->jitterRatio;
             $effectiveTtl = $this->applyJitterWithRatio($effectiveTtl, $ratio);
         }
-        return $this->adapter->set($this->buildKey($key), $value, $effectiveTtl);
+        return $this->adapter->set($storageKey, $value, $effectiveTtl);
     }
 
     private function applyJitter(int $ttl): int
