@@ -16,6 +16,12 @@ use Weline\Framework\Manager\ObjectManager;
 class SchedulerSystem
 {
     private static bool $schedulerActive = false;
+    /**
+     * I/O await is opt-in: only Worker loops that merge Fiber socket waiters into
+     * CoroutineRuntime::wait() may enable it. Master / EventBuffer Workers stay
+     * on sync stream_select fallback so Fibers are never suspended without a waker.
+     */
+    private static bool $ioWaitEnabled = false;
     /** @var null|callable(string, array): void */
     private static $waitDispatcher = null;
 
@@ -32,11 +38,14 @@ class SchedulerSystem
 
         /** @var null|callable(string,array):void $savedDispatcher */
         $savedDispatcher = self::$waitDispatcher;
+        $savedIoWait = self::$ioWaitEnabled;
         self::$schedulerActive = false;
+        self::$ioWaitEnabled = false;
         self::$waitDispatcher = null;
 
-        return static function () use ($savedDispatcher): void {
+        return static function () use ($savedDispatcher, $savedIoWait): void {
             self::$schedulerActive = true;
+            self::$ioWaitEnabled = $savedIoWait;
             self::$waitDispatcher = $savedDispatcher;
         };
     }
@@ -71,6 +80,7 @@ class SchedulerSystem
     public static function disableScheduler(): void
     {
         self::$schedulerActive = false;
+        self::$ioWaitEnabled = false;
         self::$waitDispatcher = null;
     }
 
@@ -80,6 +90,96 @@ class SchedulerSystem
     public static function isSchedulerActive(): bool
     {
         return self::$schedulerActive;
+    }
+
+    /**
+     * Enable Fiber socket readable/writable await when the active Worker loop
+     * actually drives CoroutineRuntime::wait() (worker.php / worker_ssl.php).
+     */
+    public static function enableIoWait(): void
+    {
+        self::$ioWaitEnabled = true;
+    }
+
+    public static function disableIoWait(): void
+    {
+        self::$ioWaitEnabled = false;
+    }
+
+    public static function isIoWaitEnabled(): bool
+    {
+        return self::$ioWaitEnabled;
+    }
+
+    /**
+     * Suspend the current Fiber until $stream is readable, or fall back to a
+     * bounded stream_select when I/O await is unavailable.
+     *
+     * @param resource $stream
+     */
+    public static function awaitReadable(mixed $stream, float $timeoutSec): bool
+    {
+        return self::awaitSocket($stream, false, $timeoutSec);
+    }
+
+    /**
+     * Suspend the current Fiber until $stream is writable, or fall back to a
+     * bounded stream_select when I/O await is unavailable.
+     *
+     * @param resource $stream
+     */
+    public static function awaitWritable(mixed $stream, float $timeoutSec): bool
+    {
+        return self::awaitSocket($stream, true, $timeoutSec);
+    }
+
+    /**
+     * @param resource $stream
+     */
+    private static function awaitSocket(mixed $stream, bool $writable, float $timeoutSec): bool
+    {
+        if (!\is_resource($stream)) {
+            return false;
+        }
+
+        $timeoutSec = \max(0.0, $timeoutSec);
+        if (!self::$schedulerActive || !self::$ioWaitEnabled || !\Fiber::getCurrent()) {
+            return self::selectOnce($stream, $writable, $timeoutSec);
+        }
+        if (!self::prepareCurrentFiberForSuspend()) {
+            return self::selectOnce($stream, $writable, $timeoutSec);
+        }
+
+        self::dispatchWait($writable ? 'io_writable' : 'io_readable', [
+            'stream' => $stream,
+            'timeout' => $timeoutSec,
+            'fiber' => \Fiber::getCurrent(),
+        ]);
+        $result = self::suspendCurrentFiber();
+
+        return $result === true;
+    }
+
+    /**
+     * @param resource $stream
+     */
+    private static function selectOnce(mixed $stream, bool $writable, float $timeoutSec): bool
+    {
+        $read = $writable ? null : [$stream];
+        $write = $writable ? [$stream] : null;
+        $except = null;
+        $sec = (int) $timeoutSec;
+        $usec = (int) \round(($timeoutSec - $sec) * 1_000_000);
+        if ($usec < 0) {
+            $usec = 0;
+        }
+        if ($timeoutSec > 0.0 && $sec === 0 && $usec === 0) {
+            $usec = 1;
+        }
+
+        $ready = @\stream_select($read, $write, $except, $sec, $usec);
+
+        return $ready !== false && $ready > 0;
     }
 
     /**
@@ -214,13 +314,13 @@ class SchedulerSystem
         return FiberOutputBuffer::flushBeforeYield();
     }
 
-    private static function suspendCurrentFiber(): void
+    private static function suspendCurrentFiber(): mixed
     {
         try {
-            \Fiber::suspend();
+            return \Fiber::suspend();
         } catch (\FiberError $e) {
             if (\str_contains($e->getMessage(), 'force-closed fiber')) {
-                return;
+                return null;
             }
             throw $e;
         }

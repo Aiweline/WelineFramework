@@ -30,9 +30,8 @@ class SharedStateClient
             $options['min_idle'] = 0;
         }
         if (!isset($options['max_size']) && !isset($options['pool_size'])) {
-            // 大并发场景下默认 8 往往不够用（池满后 acquire 只能等待/超时），提高默认上限以减少排队。
-            // 注意：连接池为「每 Worker 进程」级别，实际连接总数约为 workers * pool_size。
-            $options['pool_size'] = 32;
+            // Align with SharedStatePoolDefaults; callers that need more must pass pool_size explicitly.
+            $options['pool_size'] = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::MEMORY_POOL_SIZE;
         }
         if (!isset($options['idle_timeout'])) {
             // Worker 常驻：默认 24h 内不因「空闲略久」主动拆 TCP（仍可在 acquire 失败时 invalidate）
@@ -48,12 +47,23 @@ class SharedStateClient
 
     public function request(string $cmd, array $params = []): ?array
     {
-        return $this->withConnection(function (PooledConnectionInterface $connection) use ($cmd, $params): ?array {
+        $requestStart = \microtime(true);
+        return $this->withConnection(function (PooledConnectionInterface $connection) use ($cmd, $params, $requestStart): ?array {
+            $encodeStart = \microtime(true);
             $payload = SessionProtocol::encodeRequest($cmd, $params);
+            $this->recordClientPhase('protocol_encode', $encodeStart, 'success');
+
             if (!$connection->send($payload)) {
+                $this->recordClientPhase('request', $requestStart, 'failure');
                 return null;
             }
-            return $connection->read();
+            $response = $connection->read();
+            $this->recordClientPhase(
+                'request',
+                $requestStart,
+                \is_array($response) ? 'success' : 'timeout'
+            );
+            return $response;
         });
     }
 
@@ -123,6 +133,16 @@ class SharedStateClient
         }
 
         return $result;
+    }
+
+    private function recordClientPhase(string $phase, float $startTime, string $result): void
+    {
+        $durationMs = (\microtime(true) - $startTime) * 1000;
+        \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
+            'wls_shared_client_phase_duration_ms',
+            $durationMs,
+            ['phase' => $phase, 'result' => $result]
+        );
     }
 
     public function __destruct()

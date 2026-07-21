@@ -314,11 +314,16 @@ final class SessionProtocol
      * 从缓冲区提取完整消息
      *
      * @param string $buffer 读缓冲区（引用，会移除已提取的消息）
+     * @param int $maximumMessages 单次最多提取的完整消息数；剩余完整帧留在 buffer 供下一 tick
      * @return array 提取的消息数组
      */
-    public static function extractMessages(string &$buffer): array
+    public static function extractMessages(
+        string &$buffer,
+        int $maximumMessages = self::MAX_MESSAGES_PER_EXTRACT
+    ): array
     {
         $messages = [];
+        $maximumMessages = \max(1, \min(self::MAX_MESSAGES_PER_EXTRACT, $maximumMessages));
         $bufferLength = \strlen($buffer);
         if ($bufferLength > self::MAX_BUFFER_BYTES && \strpos($buffer, "\n") === false) {
             self::recordProtocolReject('buffer_without_delimiter', $bufferLength);
@@ -343,7 +348,7 @@ final class SessionProtocol
             }
 
             $offset = $pos + 1;
-            if (\count($messages) >= self::MAX_MESSAGES_PER_EXTRACT) {
+            if (\count($messages) >= $maximumMessages) {
                 break;
             }
         }

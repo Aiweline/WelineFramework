@@ -4,8 +4,13 @@
  *
  * This layout owns only the global page chrome and content hook. Checkout
  * business logic and one-page form rendering must stay in checkout modules.
+ *
+ * @param.showHeader {default=true,name="显示商城页头",description="是否渲染默认 Theme 商城页头"}
+ * @param.showFooter {default=true,name="显示商城页尾",description="是否渲染默认 Theme 商城页尾"}
  */
 $meta = $this->getData('meta') ?? [];
+$meta['showHeader'] = $meta['showHeader'] ?? true;
+$meta['showFooter'] = $meta['showFooter'] ?? true;
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">

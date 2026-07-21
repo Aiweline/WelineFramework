@@ -23,6 +23,8 @@ interface RemembererInterface
     /**
      * 读取缓存；未命中时通过 single-flight 协调执行回调并写回。
      *
+     * 普通路径自动注入 website_code + lang + currency（及 area）。
+     *
      * @param string $key 缓存键
      * @param int $ttl 正常 TTL（秒）。0 表示沿用池默认
      * @param callable():mixed $callback 未命中时执行的回源回调
@@ -30,4 +32,20 @@ interface RemembererInterface
      * @return mixed 缓存值；若回调返回 null，本次返回 null 但会写入空值哨兵
      */
     public function remember(string $key, int $ttl, callable $callback, ?RememberOptions $options = null): mixed;
+
+    /**
+     * 特殊 remember：默认全逃逸；维度 bool=true 时才注入对应请求环境维。
+     * single-flight 锁与最终存储键同源。
+     *
+     * @param callable():mixed $callback
+     */
+    public function rememberCustom(
+        string $key,
+        int $ttl,
+        callable $callback,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false,
+        ?RememberOptions $options = null
+    ): mixed;
 }

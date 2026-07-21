@@ -98,6 +98,43 @@ Windows 冷创建也必须遵守同一并发边界。`SharedStateServiceManager`
 - Worker 启动后以低优先 Fiber 预连 Session/Memory；失败不阻断事件循环，真实请求仍按连接超时与重连策略处理。
 - sidecar 断开是基础设施故障，Master 优先单服务复活；不能把一次 status 查询变成“修正 PID”的副作用。
 
+### 4.1 Worker 非阻塞客户端与真实池参数（2026-07-21）
+
+共享 Memory/Session 客户端（`PooledConnection`）统一使用非阻塞 socket：
+
+1. `worker.php` / `worker_ssl.php` 在 `CoroutineRuntime` 驱动主循环时调用 `SchedulerSystem::enableIoWait()`。
+2. Fiber 等待可读/可写时挂起，由 `FiberScheduler` + `CoroutineRuntime::wait()` 把 waiter fd 合入现有 EventLoop；其他请求 Fiber 可继续推进。
+3. CLI / FPM / 未启用 I/O await 的进程（含 `worker_ssl_event.php`、Master）回退到有界 `stream_select`，行为与返回契约不变。
+4. 一条连接仍是一请求一响应租约；超时、EOF、协议错误一律 `close` + `invalidate`，禁止迟到帧回池。
+
+默认池参数以 `SharedStatePoolDefaults` 为单一事实源（与 `MemoryStateFacade` / 预热一致）：
+
+| 项 | WLS 默认 |
+|---|---|
+| `pool_size` | 8（每 Worker） |
+| `pool_min_idle` | 0（预热另设 1–2） |
+| `connect_timeout` / `timeout` | 50ms |
+| `acquire_timeout` | 10ms |
+| `idle_timeout` | 86400s |
+
+源码中裸构造兜底不再使用 32。预热与业务合并时取更紧的 timeout，并对空闲连接调用 `applyTimeouts()`，避免预热连接长期保留更长预算。
+
+可观测性（低基数，不含 key/value/token）：
+
+- `wls_pool_io_phase_duration_ms`（phase=`connect|write|read`，result=`success|timeout|failure`）
+- `wls_shared_client_phase_duration_ms`（phase=`protocol_encode|request`）
+- 既有 `wls.memory.*` / `wls_pool_acquire_duration_ms`
+
+### 4.2 Sidecar 公平预算
+
+`SessionServer` 单进程事件循环增加有界处理：
+
+- 每 tick 最多 accept 8 个新连接；
+- 每客户端每 tick 最多处理 64 帧（剩余完整帧留在 buffer）；
+- 每 tick 处理客户端累计超过约 5ms 则让出到下一轮；
+- write buffer 超过 16 MiB 断开该客户端；
+- `memory_server` 角色 GC 时跳过 `var/session` 镜像文件扫描（仅 Session 角色执行）。
+
 ## 5. TLS Session Cache 边界
 
 业务 Session 命名空间仍不是 TLS Session Cache。PHP 8.4 的 Stream SSL 服务端没有纯 PHP 外部 Session Cache 回调，因此该版本只验证同一 HTTP/1.1 Keep-Alive 或 HTTP/2 多路复用连接内的握手复用；跨连接、跨 Worker TCP TLS 恢复保持 unsupported/unverified。
@@ -142,3 +179,10 @@ PHP 8.6 的 `session_new_cb/session_get_cb/session_remove_cb` 与 `Openssl\Sessi
 - 单实例停止只移除自身 consumer；最后 consumer 释放后按 grace period 清理。
 - Windows 全冷状态必须记录 launcher mode、批量提交时间、两个权威 PID 和 authenticated ready 时间；正常 WLS sidecar 批次不得出现 `parallel_helpers`。
 - 首页 Shared FPC 写入超过协议帧上限时必须返回失败，不能继续生成 Process receipt 或伪 READY；压缩后的首页载荷需在 Memory 日志验证无 `frame_too_large`，随后每个 Worker 仍须完成 Process L1 精确读回。
+- 非阻塞改造验收：专用 `ai-test-*`、`9502+` 实例上 Memory ping/get/set/mget/mset；`?wls_trace=1` 请求详情可见 `wls.memory.*`；并发等待 Memory 时 Worker 仍能响应 `/_wls/health`；超时路径必须 invalidate 连接。
+
+性能面板入口示例（替换端口/实例）：
+
+- `http://127.0.0.1:{port}/server/test/wls-performance-panel/summary?window_sec=300`
+- `http://127.0.0.1:{port}/server/test/wls-performance-panel/services`
+- `php bin/w query:help memory stats --json`

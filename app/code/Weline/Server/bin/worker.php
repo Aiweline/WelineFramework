@@ -464,8 +464,10 @@ $eventLoop = $eventLoopMeta['loop'];
 $coroutineRuntime = new \Weline\Server\Runtime\CoroutineRuntime($eventLoop, $fiberScheduler);
 \Weline\Server\Observer\SchedulerWaitObserver::setScheduler($fiberScheduler);
 \Weline\Framework\Runtime\SchedulerSystem::enableScheduler();
+\Weline\Framework\Runtime\SchedulerSystem::enableIoWait();
 $longLivedProtocolResolver = new \Weline\Server\Service\Protocol\LongLived\ProtocolResolver();
 WlsLogger::info_("Fiber 调度器已初始化");
+WlsLogger::info_("Fiber I/O await 已启用（CoroutineRuntime 驱动）");
 WlsLogger::info_(
     "EventLoop 已初始化 requested={$eventLoopMeta['requested']} resolved={$eventLoopMeta['resolved']} backend={$coroutineRuntime->getLoopBackend()}"
 );

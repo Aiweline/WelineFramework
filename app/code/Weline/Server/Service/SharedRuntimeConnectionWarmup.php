@@ -137,8 +137,14 @@ final class SharedRuntimeConnectionWarmup
         int $minIdle,
         array $policyOptions
     ): array {
-        $poolSize = self::intConfig('wls.shared_state.prewarm_pool_size', 8, 1, 64);
+        $poolSize = self::intConfig(
+            'wls.shared_state.prewarm_pool_size',
+            \Weline\Server\Shared\Connection\SharedStatePoolDefaults::MEMORY_POOL_SIZE,
+            1,
+            64
+        );
         $poolSize = \max($poolSize, $minIdle, 1);
+        $defaults = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::memoryPrewarmOptions($policyOptions);
 
         $options = [
             'token_file_name' => $endpoint['token_file_name'],
@@ -150,19 +156,19 @@ final class SharedRuntimeConnectionWarmup
             'pool_size' => $poolSize,
             'connect_timeout' => self::floatConfig(
                 'wls.shared_state.prewarm_connect_timeout',
-                (float) ($policyOptions['connect_timeout'] ?? 0.08),
+                (float) $defaults['connect_timeout'],
                 0.001,
                 2.0
             ),
             'timeout' => self::floatConfig(
                 'wls.shared_state.prewarm_timeout',
-                (float) ($policyOptions['timeout'] ?? 0.12),
+                (float) $defaults['timeout'],
                 0.001,
                 2.0
             ),
             'acquire_timeout' => self::floatConfig(
                 'wls.shared_state.prewarm_acquire_timeout',
-                (float) ($policyOptions['acquire_timeout'] ?? 0.08),
+                (float) $defaults['acquire_timeout'],
                 0.001,
                 2.0
             ),
@@ -248,9 +254,9 @@ final class SharedRuntimeConnectionWarmup
         } catch (\Throwable $e) {
             WlsLogger::warning_('[SharedStateWarmup] runtime cache policy unavailable: ' . $e->getMessage());
             return [
-                'connect_timeout' => 0.08,
-                'timeout' => 0.12,
-                'acquire_timeout' => 0.08,
+                'connect_timeout' => 0.05,
+                'timeout' => 0.05,
+                'acquire_timeout' => 0.01,
             ];
         }
     }

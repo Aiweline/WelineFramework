@@ -22,6 +22,8 @@ final class CoroutineRuntime
      */
     public function wait(array &$read, array &$write, array &$except, int $defaultUsec = 100000): int|false
     {
+        $this->scheduler->collectIoWaitStreams($read, $write);
+
         $timeoutSec = 0;
         $timeoutUsec = $defaultUsec;
         $nextDelay = $this->scheduler->getNextTimerDelay();
@@ -39,12 +41,25 @@ final class CoroutineRuntime
             }
         }
 
-        return $this->loop->wait($read, $write, $except, $timeoutSec, $timeoutUsec);
+        $readyRead = $read;
+        $readyWrite = $write;
+        $readyExcept = $except;
+        $changed = $this->loop->wait($readyRead, $readyWrite, $readyExcept, $timeoutSec, $timeoutUsec);
+
+        // Always publish the ready sets back to the caller (stream_select semantics).
+        $read = \is_array($readyRead) ? $readyRead : [];
+        $write = \is_array($readyWrite) ? $readyWrite : [];
+        $except = \is_array($readyExcept) ? $readyExcept : [];
+
+        if ($changed !== false) {
+            $this->scheduler->markIoReady($read, $write);
+        }
+
+        return $changed;
     }
 
     public function getLoopBackend(): string
     {
         return $this->loop->backend();
     }
-
 }
