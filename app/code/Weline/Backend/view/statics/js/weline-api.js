@@ -60,15 +60,25 @@
             : '/static/Weline/Frontend/js/weline-api-worker.js';
     }
 
+    // Cache-bust once per page load. Rebuilding this on every send() recreates the
+    // Shared Worker URL, which terminate()s the previous worker and orphans any
+    // in-flight query (e.g. field suggestion killed by SSE ticket refresh).
+    var cachedDevWorkerUrls = {};
+
     function withDevCacheBust(url) {
         if (!isDevMode()) {
             return url;
+        }
+        var cacheKey = String(url || '');
+        if (cachedDevWorkerUrls[cacheKey]) {
+            return cachedDevWorkerUrls[cacheKey];
         }
         var workerUrl = new URL(url, window.location.origin);
         if (!workerUrl.searchParams.has('_weline_backend_worker_dev')) {
             workerUrl.searchParams.set('_weline_backend_worker_dev', String(Date.now()));
         }
-        return workerUrl.href;
+        cachedDevWorkerUrls[cacheKey] = workerUrl.href;
+        return cachedDevWorkerUrls[cacheKey];
     }
 
     function sameOriginUrl(value) {
@@ -766,11 +776,11 @@
     }
 
     BackendQueryBinClient.prototype.ensureWorker = function (config) {
-        if (this.worker && this.workerUrl === config.workerUrl) {
+        // Reuse the live worker for the whole page. Terminating it while calls are
+        // pending (common when SSE stream-ticket refresh races a slow AI call)
+        // causes "bin-query worker request timed out" even though the server finished.
+        if (this.worker) {
             return;
-        }
-        if (this.worker && typeof this.worker.terminate === 'function') {
-            this.worker.terminate();
         }
         if (typeof window.Worker !== 'function') {
             throw new Error('[Weline.Api] Worker is unavailable; bin-query requests are disabled.');

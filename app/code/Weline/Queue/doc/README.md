@@ -20,7 +20,7 @@ Queue 内部也不能越界调用这两个模块的实现类：
 
 ## 创建任务
 
-跨模块写入统一通过 `w_query('queue', 'create', ...)`：
+跨模块写入统一通过 `w_query('queue', 'create', ...)` 或幂等 `createIfAbsent`：
 
 ```php
 use Vendor\Module\Queue\EmailQueue;
@@ -40,6 +40,12 @@ $result = w_query('queue', 'create', [
 ]);
 
 $queueId = (int)($result['queue_id'] ?? 0);
+```
+
+`auto=true` 且 `status=pending` 的新建任务会在落库后**立即尝试派发**后台 Worker；分钟级 cron 仍是兜底调度。派发使用 `Processer::createDetachedPhpArgv()`（POSIX `setsid` / Windows Start-Process），避免在 WLS HTTP Worker 内用 `nohup ... &` 留下幽灵 PID。需要显式再派发时：
+
+```php
+w_query('queue', 'dispatch', ['queue_id' => $queueId]);
 ```
 
 按业务键去重时先读取：

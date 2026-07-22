@@ -124,6 +124,49 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesWorkerQueryBinRouteByPath(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'api/framework/query-bin',
+            'QueryBin',
+            'postIndex',
+            'Weline\\Api\\Api\\Framework\\QueryBin'
+        )));
+    }
+
+    public function testMatchesWorkerStreamRouteByPath(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'api/framework/stream',
+            'Stream',
+            'getIndex',
+            'Weline\\Api\\Api\\Framework\\Stream'
+        )));
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'framework/stream',
+            'Stream',
+            'getIndex',
+            'Weline\\Framework\\Controller\\Api\\Stream'
+        )));
+    }
+
+    public function testMatchesWorkerStreamRouteByControllerClass(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'non-whitelisted/path',
+            'Stream',
+            'getIndex',
+            'Weline\\Api\\Api\\Framework\\Stream'
+        )));
+    }
+
     public function testMatchesGuestFrontendRouteWithoutAclByControllerClass(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();

@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Weline\Queue\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\System\Process\Processer;
 use Weline\Queue\Helper\Helper;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\Model\Queue\Type;
+use Weline\Queue\Service\QueueDispatchService;
 
 /**
  * 任务队列统一入口：模块间一律通过 w_query('queue', ...) 读写队列，避免直接依赖 Queue 模型类。
@@ -50,6 +52,8 @@ class QueueQueryProvider implements QueryProviderInterface
             'stats' => $this->stats(),
             'getTypeIdByClass' => $this->getTypeIdByClass($params),
             'create' => $this->createQueue($params),
+            'createIfAbsent' => $this->createQueueIfAbsent($params),
+            'dispatch' => $this->dispatchQueue($params),
             'update' => $this->updateQueue($params),
             'takeover' => $this->takeoverQueue($params),
             'delete' => $this->deleteQueue($params),
@@ -207,7 +211,78 @@ class QueueQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params type_id 或 class、name、module 必填；content、status、auto、biz_key 等可选
      * @return array{success: true, queue_id: int, data: array<string, mixed>}
      */
-    private function createQueue(array $params): array
+    /**
+     * 幂等创建队列：同一 idempotency_scope + idempotency_key 只会落库一条记录。
+     *
+     * 已存在时返回既有行并带 'created' => false；并发下依赖
+     * uk_idempotency_key UNIQUE 约束兜底，冲突后回读既有行。
+     *
+     * @param array<string, mixed> $params 除 createQueue 的参数外还需
+     *        idempotency_key（必填）与可选 idempotency_scope
+     * @return array{success: true, created: bool, queue_id: int, data: array<string, mixed>}
+     */
+    private function createQueueIfAbsent(array $params): array
+    {
+        $key = \trim((string)($params['idempotency_key'] ?? ''));
+        if ($key === '') {
+            throw new \InvalidArgumentException((string)__('请提供 idempotency_key。'));
+        }
+        $scope = \trim((string)($params['idempotency_scope'] ?? ''));
+        $storageKey = \substr($scope !== '' ? $scope . ':' . $key : $key, 0, 191);
+
+        $existing = $this->findByIdempotencyKey($storageKey);
+        if ($existing !== null) {
+            return [
+                'success' => true,
+                'created' => false,
+                'queue_id' => (int)($existing['queue_id'] ?? 0),
+                'data' => $existing,
+            ];
+        }
+
+        try {
+            $created = $this->createQueue($params, $storageKey);
+        } catch (\Throwable $throwable) {
+            // UNIQUE 冲突：并发竞争者已创建，回读既有行。
+            $existing = $this->findByIdempotencyKey($storageKey);
+            if ($existing === null) {
+                throw $throwable;
+            }
+
+            return [
+                'success' => true,
+                'created' => false,
+                'queue_id' => (int)($existing['queue_id'] ?? 0),
+                'data' => $existing,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'created' => true,
+            'queue_id' => (int)$created['queue_id'],
+            'data' => $created['data'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findByIdempotencyKey(string $storageKey): ?array
+    {
+        $queue = clone $this->queueModel;
+        $rows = $queue->clearData()->reset()
+            ->where(Queue::schema_fields_IDEMPOTENCY_KEY, $storageKey)
+            ->order(Queue::schema_fields_ID, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        $row = $rows[0] ?? [];
+
+        return \is_array($row) && $row !== [] ? $row : null;
+    }
+
+    private function createQueue(array $params, ?string $idempotencyStorageKey = null): array
     {
         $typeId = $this->resolveTypeIdFromParams($params);
         if ($typeId <= 0) {
@@ -257,6 +332,9 @@ class QueueQueryProvider implements QueryProviderInterface
                 $queue->setBizKey((string)$rawBk);
             }
         }
+        if ($idempotencyStorageKey !== null && $idempotencyStorageKey !== '') {
+            $queue->setIdempotencyKey($idempotencyStorageKey);
+        }
 
         $queueId = $queue->save(true);
         if ((int)$queueId <= 0) {
@@ -269,6 +347,10 @@ class QueueQueryProvider implements QueryProviderInterface
 
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::add', $eventData);
+        // Auto queues must start immediately. Waiting for the */1 cron left AI
+        // publish pending for up to a minute, so the live site looked unchanged
+        // until a second publish or a lucky cron tick.
+        $this->maybeDispatchAutoQueue($queue);
 
         return [
             'success' => true,
@@ -594,6 +676,58 @@ class QueueQueryProvider implements QueryProviderInterface
         return \in_array($status, self::VALID_STATUSES, true);
     }
 
+    /**
+     * @param array<string, mixed> $params
+     * @return array{success: bool, dispatched: bool, queue_id: int, status: string, data: array<string, mixed>}
+     */
+    private function dispatchQueue(array $params): array
+    {
+        $queueId = (int)($params['queue_id'] ?? $params['id'] ?? 0);
+        if ($queueId <= 0) {
+            throw new \InvalidArgumentException((string)__('请提供有效的 queue_id。'));
+        }
+        $queue = clone $this->queueModel;
+        $queue->clearData()->load($queueId);
+        if ((int)$queue->getId() <= 0) {
+            throw new \InvalidArgumentException((string)__('队列不存在。'));
+        }
+
+        $dispatched = $this->maybeDispatchAutoQueue($queue);
+        $queue->clearData()->load($queueId);
+
+        return [
+            'success' => true,
+            'dispatched' => $dispatched,
+            'queue_id' => $queueId,
+            'status' => (string)$queue->getStatus(),
+            'data' => $queue->getData(),
+        ];
+    }
+
+    private function maybeDispatchAutoQueue(Queue $queue): bool
+    {
+        if ((int)$queue->getId() <= 0) {
+            return false;
+        }
+        if (!(bool)$queue->getAuto()) {
+            return false;
+        }
+        if ((string)$queue->getStatus() !== Queue::status_pending) {
+            return false;
+        }
+
+        try {
+            /** @var QueueDispatchService $dispatcher */
+            $dispatcher = ObjectManager::getInstance(QueueDispatchService::class);
+
+            return $dispatcher->dispatchQueueIfEligible($queue);
+        } catch (\Throwable) {
+            // Cron remains the fallback scheduler; never fail create/dispatch API
+            // because the worker spawn path is temporarily unavailable.
+            return false;
+        }
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -661,6 +795,29 @@ class QueueQueryProvider implements QueryProviderInterface
                         ['name' => 'status', 'type' => 'string', 'required' => false, 'description' => __('默认 pending')],
                         ['name' => 'auto', 'type' => 'bool', 'required' => false, 'description' => __('是否参与自动消费')],
                         ['name' => 'biz_key', 'type' => 'string|null', 'required' => false, 'description' => __('业务检索键')],
+                    ],
+                ],
+                [
+                    'name' => 'createIfAbsent',
+                    'description' => __('按 idempotency_key 幂等创建；auto=pending 时立即尝试派发 Worker'),
+                    'params' => [
+                        ['name' => 'class', 'type' => 'string', 'required' => false, 'description' => __('与 type_id 二选一')],
+                        ['name' => 'type_id', 'type' => 'int', 'required' => false, 'description' => __('与 class 二选一')],
+                        ['name' => 'name', 'type' => 'string', 'required' => true, 'description' => __('任务名称')],
+                        ['name' => 'module', 'type' => 'string', 'required' => true, 'description' => __('所属模块名')],
+                        ['name' => 'content', 'type' => 'string|array', 'required' => false, 'description' => __('JSON 或数组')],
+                        ['name' => 'status', 'type' => 'string', 'required' => false, 'description' => __('默认 pending')],
+                        ['name' => 'auto', 'type' => 'bool', 'required' => false, 'description' => __('是否参与自动消费')],
+                        ['name' => 'biz_key', 'type' => 'string|null', 'required' => false, 'description' => __('业务检索键')],
+                        ['name' => 'idempotency_key', 'type' => 'string', 'required' => true, 'description' => __('幂等键')],
+                        ['name' => 'idempotency_scope', 'type' => 'string', 'required' => false, 'description' => __('幂等作用域')],
+                    ],
+                ],
+                [
+                    'name' => 'dispatch',
+                    'description' => __('立即尝试派发一条 pending+auto 队列到后台 Worker'),
+                    'params' => [
+                        ['name' => 'queue_id', 'type' => 'int', 'required' => true, 'description' => __('队列主键')],
                     ],
                 ],
                 [
