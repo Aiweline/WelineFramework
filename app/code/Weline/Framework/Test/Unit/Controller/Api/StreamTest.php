@@ -4,10 +4,19 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Controller\Api;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Controller\Api\Stream;
 
 final class StreamTest extends TestCase
 {
+    public function testStreamExtendsFrontendRestControllerForApiAreaRouting(): void
+    {
+        self::assertTrue(
+            is_subclass_of(Stream::class, FrontendRestController::class),
+            'Stream must extend FrontendRestController so /api/framework/stream is registered in frontend_rest_api.'
+        );
+    }
+
     public function testPersistentProviderIdIsPreserved(): void
     {
         $normalized = $this->normalize([

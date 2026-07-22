@@ -99,6 +99,15 @@ class PublicApiAuthRouteMatcher
         'framework/query-bin',
     ];
 
+    /**
+     * Browser EventSource transport for one-time worker stream tickets.
+     * Auth is ticket + same-origin inside the Stream controller, not API tokens.
+     */
+    private const WORKER_STREAM_PATH_PATTERNS = [
+        'api/framework/stream',
+        'framework/stream',
+    ];
+
     private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
 
     private const AUTH_ACTIONS = [
@@ -119,7 +128,7 @@ class PublicApiAuthRouteMatcher
 
     public function matches(Request $request): bool
     {
-        if ($this->matchesWorkerQueryBinRoute($request)) {
+        if ($this->matchesWorkerQueryBinRoute($request) || $this->matchesWorkerStreamRoute($request)) {
             return true;
         }
 
@@ -182,6 +191,35 @@ class PublicApiAuthRouteMatcher
 
         foreach ($paths as $path) {
             if ($this->matchesPath((string) $path, self::WORKER_QUERY_BIN_PATH_PATTERNS)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesWorkerStreamRoute(Request $request): bool
+    {
+        $controllerClass = (string) ($request->getRouterData('controller') ?? '');
+        if (
+            $controllerClass !== ''
+            && class_exists($controllerClass)
+            && (
+                $controllerClass === \Weline\Framework\Controller\Api\Stream::class
+                || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\Stream::class)
+            )
+        ) {
+            return true;
+        }
+
+        $paths = array_filter([
+            $request->getRouteUrlPath(),
+            $request->getPath(),
+            (string) ($request->getRouterData('module_path') ?? ''),
+        ]);
+
+        foreach ($paths as $path) {
+            if ($this->matchesPath((string) $path, self::WORKER_STREAM_PATH_PATTERNS)) {
                 return true;
             }
         }

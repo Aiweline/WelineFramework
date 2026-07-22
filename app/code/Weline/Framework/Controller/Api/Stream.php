@@ -3,13 +3,22 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Controller\Api;
 
-use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendQueryGateway;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 
-class Stream extends FrontendController
+/**
+ * Worker SSE transport for frontend query streams.
+ *
+ * Must extend FrontendRestController so route generation registers
+ * /api/framework/stream into frontend_rest_api (same as QueryBin).
+ * Extending FrontendController incorrectly places the route in
+ * frontend_pc, which the /api/ area never matches — EventSource then
+ * receives a WLS SSE failed frame with HTTP 404 Not Found.
+ */
+class Stream extends FrontendRestController
 {
     public function __construct(
         private readonly FrontendWorkerSessionService $sessionService,

@@ -4,9 +4,12 @@ declare(strict_types=1);
 namespace Weline\Framework\Service\Query;
 
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Session\SessionFactory;
 
 final class FrontendQueryGateway
 {
+    public const STREAM_OWNER_CONTEXT_KEY = 'frontend_worker.stream_owner';
+
     private const GRAPH_MAX_COST = 20;
     private const GRAPH_MAX_OPERATIONS = 10;
 
@@ -142,11 +145,13 @@ final class FrontendQueryGateway
         }
 
         $params = $this->validateParams($this->normalizeParams($payload['params'] ?? []), $descriptor);
-        return $this->workerSessionService->createStreamTicket($channel, $params);
+        $owner = $this->resolveStreamOwner($descriptor);
+
+        return $this->workerSessionService->createStreamTicket($channel, $params, $owner);
     }
 
     /**
-     * @param array{channel:string, params:array<string, mixed>, expires_at:int} $ticket
+     * @param array{channel:string, params:array<string, mixed>, expires_at:int, owner?:array<string, mixed>|null} $ticket
      * @return iterable<int|string, mixed>
      */
     public function executeStream(array $ticket): iterable
@@ -160,6 +165,14 @@ final class FrontendQueryGateway
         $descriptor = $this->requireOperation($provider, $operation);
         if (($descriptor['mode'] ?? '') !== 'stream') {
             throw new FrontendQueryException('capability_denied', 'Operation is not a frontend stream.', 403);
+        }
+
+        $owner = \is_array($ticket['owner'] ?? null) ? $ticket['owner'] : null;
+        if ($owner === null && (string)($descriptor['auth'] ?? '') === 'backend') {
+            $owner = $this->resolveStreamOwner($descriptor);
+        }
+        if (\is_array($owner) && $owner !== []) {
+            RequestContext::set(self::STREAM_OWNER_CONTEXT_KEY, $owner);
         }
 
         $params = $this->validateParams($this->normalizeParams($ticket['params'] ?? []), $descriptor);
@@ -178,6 +191,28 @@ final class FrontendQueryGateway
         yield [
             'event' => 'message',
             'data' => $result,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $descriptor
+     * @return array{area:string, principal:string}|null
+     */
+    private function resolveStreamOwner(array $descriptor): ?array
+    {
+        if ((string)($descriptor['auth'] ?? '') !== 'backend') {
+            return null;
+        }
+
+        $session = SessionFactory::getInstance()->createBackendSession();
+        $userId = $session->isLoggedIn() ? (int)($session->getUserId() ?? 0) : 0;
+        if ($userId <= 0) {
+            throw new FrontendQueryException('auth_error', 'Backend login is required for this stream.', 401);
+        }
+
+        return [
+            'area' => 'backend',
+            'principal' => 'backend:' . $userId,
         ];
     }
 

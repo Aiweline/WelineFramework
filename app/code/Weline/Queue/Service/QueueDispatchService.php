@@ -105,6 +105,19 @@ class QueueDispatchService
             $queuePid = (int)($queue->getPid() ?: 0);
             $pidAlive = $queuePid > 0 && Processer::isRunningByPid($queuePid);
             $running = $pidAlive && Processer::isManagedProcessRunning($queuePid, $queueName, '', $processName);
+            if (!$running && $pidAlive) {
+                // 受管身份探测可能瞬时失败（pid 索引缺失、ps 读取失败、手动 queue:run 不带 --name）。
+                // 只要命令行能确认该 PID 正在执行同一队列 ID，就视为仍在运行，绝不误杀合法 worker。
+                $cmdLine = Processer::getProcessCommandLine($queuePid, true);
+                if ($cmdLine === '') {
+                    // 命令行暂不可读：进程仍存活，跳过本轮判定，等待下一轮探测。
+                    continue;
+                }
+                if (\str_contains($cmdLine, 'queue:run')
+                    && \preg_match('/--id[= ]' . (int)$queue->getId() . '(?:\s|$)/', $cmdLine) === 1) {
+                    $running = true;
+                }
+            }
             if ($running) {
                 continue;
             }
@@ -226,7 +239,24 @@ class QueueDispatchService
             'queue-' . $queue->getName() . '-' . $queue->getId(),
         );
         $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName, $queue);
-        $pid = Processer::create($processName, true, false, true);
+        // WLS workers reap/interfere with shell `nohup ... &` children from
+        // Processer::create(), leaving a ghost PID and an empty worker log.
+        // Detached argv + posix_setsid returns the real PHP PID and survives the
+        // request worker lifecycle (same transport Master/shared sidecars use).
+        try {
+            $pid = Processer::createDetachedPhpArgv(
+                $this->buildQueueRunArgv((int)$queue->getId(), $queueName, $queue),
+                BP,
+                $processName,
+                true,
+            );
+        } catch (\Throwable $throwable) {
+            $pid = 0;
+            $queue->setProcess($this->appendProcessMessage(
+                $queue->getProcess(),
+                'Detached queue worker spawn failed: ' . $throwable->getMessage()
+            ));
+        }
         if (!$pid) {
             $output = $this->getManagedProcessOutput($processName);
             $queue->setResult($output . __('Failed to create queue process. Process name: %{1}', [$processName]))
@@ -288,6 +318,27 @@ class QueueDispatchService
             . \escapeshellarg($bin)
             . ' queue:run --id=' . $queueId
             . ' --name=' . $queueName;
+    }
+
+    /**
+     * Argv form of {@see buildQueueRunProcessName()} for Processer::createDetachedPhpArgv().
+     *
+     * @return list<string>
+     */
+    private function buildQueueRunArgv(int $queueId, string $queueName, ?Queue $queue = null): array
+    {
+        $bin = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+        $memoryLimit = $this->resolveWorkerMemoryLimit($queue);
+
+        return [
+            PHP_BINARY,
+            '-d',
+            'memory_limit=' . $memoryLimit,
+            $bin,
+            'queue:run',
+            '--id=' . $queueId,
+            '--name=' . $queueName,
+        ];
     }
 
     private function resolveWorkerMemoryLimit(?Queue $queue = null): string

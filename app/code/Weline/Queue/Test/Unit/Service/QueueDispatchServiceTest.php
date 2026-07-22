@@ -18,6 +18,8 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('queue:run --id=', $buildMethodSource);
         self::assertStringContainsString("private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';", $source);
         self::assertStringContainsString("'queue.worker.memory_limit'", $source);
+        self::assertStringContainsString('Processer::createDetachedPhpArgv', $source);
+        self::assertStringContainsString('buildQueueRunArgv', $source);
     }
 
     public function testQueueRunCommandAppliesClassMemoryLimitWhenStartedManually(): void

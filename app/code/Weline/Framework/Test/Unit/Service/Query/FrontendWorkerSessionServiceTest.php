@@ -23,4 +23,21 @@ final class FrontendWorkerSessionServiceTest extends TestCase
 
         self::assertSame('/' . $prefix . '/framework/stream?ticket=' . $ticket, $url);
     }
+
+    public function testStreamTicketPreservesOwnerBinding(): void
+    {
+        $service = new FrontendWorkerSessionService();
+        $owner = [
+            'area' => 'backend',
+            'principal' => 'backend:7',
+        ];
+
+        $created = $service->createStreamTicket('page_builder.aiSiteStream', ['public_id' => 'site-1'], $owner);
+        self::assertSame($owner, $created['owner'] ?? null);
+
+        $consumed = $service->consumeStreamTicket((string)$created['ticket']);
+        self::assertSame('page_builder.aiSiteStream', $consumed['channel']);
+        self::assertSame(['public_id' => 'site-1'], $consumed['params']);
+        self::assertSame($owner, $consumed['owner']);
+    }
 }
