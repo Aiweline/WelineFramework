@@ -159,14 +159,15 @@ final class FrontendWorkerSessionService
 
     /**
      * @param array<string, mixed> $params
-     * @return array{ticket:string, channel:string, params:array<string, mixed>, expires_at:int, url:string}
+     * @param array<string, mixed>|null $owner
+     * @return array{ticket:string, channel:string, params:array<string, mixed>, expires_at:int, url:string, owner?:array<string, mixed>|null}
      */
-    public function createStreamTicket(string $channel, array $params = []): array
+    public function createStreamTicket(string $channel, array $params = [], ?array $owner = null): array
     {
         $now = \time();
         $ticket = $this->randomToken(24);
 
-        return $this->withStore(function (array &$store) use ($channel, $params, $now, $ticket): array {
+        return $this->withStore(function (array &$store) use ($channel, $params, $owner, $now, $ticket): array {
             $tickets = $this->getStoreArray($store, self::STREAM_TICKET_KEY);
             foreach ($tickets as $storedTicket => $payload) {
                 if (!\is_array($payload) || (int)($payload['expires_at'] ?? 0) < $now) {
@@ -177,6 +178,7 @@ final class FrontendWorkerSessionService
             $tickets[$this->hash($ticket)] = [
                 'channel' => $channel,
                 'params' => $params,
+                'owner' => $owner,
                 'expires_at' => $now + self::STREAM_TICKET_TTL,
             ];
             $store[self::STREAM_TICKET_KEY] = $tickets;
@@ -185,6 +187,7 @@ final class FrontendWorkerSessionService
                 'ticket' => $ticket,
                 'channel' => $channel,
                 'params' => $params,
+                'owner' => $owner,
                 'expires_at' => $now + self::STREAM_TICKET_TTL,
                 'url' => $this->buildStreamUrl($ticket),
             ];
@@ -192,7 +195,7 @@ final class FrontendWorkerSessionService
     }
 
     /**
-     * @return array{channel:string, params:array<string, mixed>, expires_at:int}
+     * @return array{channel:string, params:array<string, mixed>, expires_at:int, owner:?array<string, mixed>}
      */
     public function consumeStreamTicket(string $ticket): array
     {
@@ -230,9 +233,15 @@ final class FrontendWorkerSessionService
                 throw new FrontendQueryException('protocol_error', 'Invalid worker stream ticket payload.', 400);
             }
 
+            $owner = $payload['owner'] ?? null;
+            if ($owner !== null && !\is_array($owner)) {
+                throw new FrontendQueryException('protocol_error', 'Invalid worker stream ticket owner.', 400);
+            }
+
             return [
                 'channel' => $channel,
                 'params' => $params,
+                'owner' => $owner,
                 'expires_at' => (int)($payload['expires_at'] ?? $now),
             ];
         });

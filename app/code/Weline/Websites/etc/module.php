@@ -27,5 +27,6 @@ return [
         \Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface::class => \Weline\Websites\Integration\Server\ActiveCertificateDomainSource::class,
         'localization_provider.Weline_Websites' => \Weline\Websites\Api\Localization\LocalizationProvider::class,
         'request_resetter.Weline_Websites' => \Weline\Websites\Api\Runtime\RequestResetter::class,
+        'process_cache_resetter.Weline_Websites' => \Weline\Websites\Api\Runtime\ProcessCacheResetter::class,
     ],
 ];

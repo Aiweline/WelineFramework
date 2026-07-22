@@ -425,7 +425,7 @@ $backendApiConfigJson = json_encode($backendApiConfig, $jsonForScriptFlags);
 $backendApiUrl = (defined('DEV') && DEV)
     ? '/Weline/Backend/view/statics/js/weline-api.js'
     : '/static/Weline/Backend/js/weline-api.js';
-$backendApiUrl .= '?v=20260704-backend-bin-query-config-timeout';
+$backendApiUrl .= '?v=20260721-backend-bin-query-worker-reuse';
 ?>
 <script data-no-extract="true">
     (function() {

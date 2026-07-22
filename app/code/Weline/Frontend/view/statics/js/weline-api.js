@@ -153,16 +153,24 @@
         return message || String(fallback || '请求失败');
     };
 
+    // Cache-bust once per page load so rebuildConfig does not churn the Worker URL.
+    const cachedDevWorkerUrls = {};
+
     const withDevCacheBust = (url) => {
         const isDev = isDevMode() || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (!isDev) {
             return url;
         }
+        const cacheKey = String(url || '');
+        if (cachedDevWorkerUrls[cacheKey]) {
+            return cachedDevWorkerUrls[cacheKey];
+        }
         const workerUrl = new URL(url, window.location.origin);
         if (!workerUrl.searchParams.has('_weline_worker_dev')) {
             workerUrl.searchParams.set('_weline_worker_dev', String(Date.now()));
         }
-        return workerUrl.href;
+        cachedDevWorkerUrls[cacheKey] = workerUrl.href;
+        return cachedDevWorkerUrls[cacheKey];
     };
 
     const getDefaultWorkerUrl = () => {

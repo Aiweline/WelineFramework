@@ -1075,17 +1075,148 @@ class Processer
             return $pid;
         }
 
-        $pid = self::createPosixDetachedPhpArgv(
-            $argv,
-            $resolvedCwd,
-            $processIdentity,
-            $enableLog
-        );
+        // WLS HTTP workers must not pcntl_fork() in-process: the child becomes a
+        // zombie under the worker and never reaches the target argv. Spawn via an
+        // out-of-process helper that forks + setsid + exec instead.
+        $inWlsWorker = \trim((string)(\getenv('WLS_WORKER_ID') ?: ($_ENV['WLS_WORKER_ID'] ?? '') )) !== '';
+        $pid = $inWlsWorker
+            ? self::createPosixDetachedPhpArgvOutOfProcess($argv, $resolvedCwd, $processIdentity, $enableLog)
+            : self::createPosixDetachedPhpArgv(
+                $argv,
+                $resolvedCwd,
+                $processIdentity,
+                $enableLog
+            );
         if ($pid <= 0) {
             throw new \RuntimeException('POSIX detached PHP fork/exec did not return a child PID.');
         }
 
-        return $pid;
+        return self::setPid($processIdentity, $pid);
+    }
+
+    /**
+     * Start {@see bin/posix_detached_spawn.php} via proc_open so fork/exec runs
+     * outside the WLS worker process.
+     *
+     * @param list<string> $argv
+     */
+    private static function createPosixDetachedPhpArgvOutOfProcess(
+        array $argv,
+        string $cwd,
+        string $processIdentity,
+        ?bool $enableLog
+    ): int {
+        $helper = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Framework' . DS
+            . 'System' . DS . 'Process' . DS . 'bin' . DS . 'posix_detached_spawn.php';
+        if (!\is_file($helper)) {
+            throw new \RuntimeException('POSIX detached spawn helper is missing: ' . $helper);
+        }
+
+        $logEnabled = $enableLog ?? self::isLogEnabled();
+        $stdoutPath = '/dev/null';
+        if ($logEnabled) {
+            $candidate = self::getLogFile($processIdentity);
+            if (self::prepareProcessLogFileForWrite($candidate)) {
+                $stdoutPath = $candidate;
+            }
+        }
+
+        $configJson = \json_encode([
+            'cwd' => $cwd,
+            'argv' => \array_values($argv),
+            'stdout' => $stdoutPath,
+        ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        if (!\is_string($configJson) || $configJson === '') {
+            throw new \RuntimeException('POSIX detached spawn config could not be encoded.');
+        }
+
+        $configDir = Env::VAR_DIR . 'process' . DS . 'spawn';
+        if (!\is_dir($configDir) && !@\mkdir($configDir, 0777, true) && !\is_dir($configDir)) {
+            throw new \RuntimeException('POSIX detached spawn config directory is unavailable.');
+        }
+        $configPath = $configDir . DS . 'spawn-' . \bin2hex(\random_bytes(8)) . '.json';
+        if (@\file_put_contents($configPath, $configJson) === false) {
+            throw new \RuntimeException('POSIX detached spawn config could not be written.');
+        }
+
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        try {
+            $process = @\proc_open(
+                [PHP_BINARY, $helper, $configPath],
+                $descriptors,
+                $pipes,
+                $cwd,
+                self::buildDetachedSpawnEnvironment(),
+                ['bypass_shell' => true]
+            );
+            if (!\is_resource($process)) {
+                throw new \RuntimeException('POSIX detached spawn helper proc_open failed.');
+            }
+
+            if (isset($pipes[0]) && \is_resource($pipes[0])) {
+                @\fclose($pipes[0]);
+            }
+            $stdout = isset($pipes[1]) && \is_resource($pipes[1])
+                ? \trim((string)\stream_get_contents($pipes[1]))
+                : '';
+            $stderr = isset($pipes[2]) && \is_resource($pipes[2])
+                ? \trim((string)\stream_get_contents($pipes[2]))
+                : '';
+            if (isset($pipes[1]) && \is_resource($pipes[1])) {
+                @\fclose($pipes[1]);
+            }
+            if (isset($pipes[2]) && \is_resource($pipes[2])) {
+                @\fclose($pipes[2]);
+            }
+            $exitCode = @\proc_close($process);
+            if ($exitCode !== 0 || $stdout === '' || !\ctype_digit($stdout)) {
+                throw new \RuntimeException(
+                    'POSIX detached spawn helper failed'
+                    . ($exitCode !== 0 ? " exit={$exitCode}" : '')
+                    . ($stderr !== '' ? " stderr={$stderr}" : '')
+                    . ($stdout !== '' ? " stdout={$stdout}" : '')
+                );
+            }
+
+            return (int)$stdout;
+        } finally {
+            @\unlink($configPath);
+        }
+    }
+
+    /**
+     * Environment for out-of-process detached workers.
+     *
+     * Strip WLS_* so queue:run / bin/w do not inherit HTTP-worker runtime hooks
+     * (shared-memory clients, supervisor topology) from the parent WLS process.
+     *
+     * @return array<string, string>
+     */
+    private static function buildDetachedSpawnEnvironment(): array
+    {
+        $env = [];
+        foreach ($_ENV as $key => $value) {
+            if (!\is_string($key) || (!\is_scalar($value) && !$value instanceof \Stringable)) {
+                continue;
+            }
+            if (\str_starts_with($key, 'WLS_')) {
+                continue;
+            }
+            $env[$key] = (string)$value;
+        }
+        if (!isset($env['PATH']) || $env['PATH'] === '') {
+            $path = \getenv('PATH');
+            $env['PATH'] = \is_string($path) && $path !== ''
+                ? $path
+                : '/usr/bin:/bin:/usr/sbin:/sbin';
+        }
+        $env['WELINE_DETACHED_QUEUE_WORKER'] = '1';
+
+        return $env;
     }
 
     /**
@@ -3210,9 +3341,9 @@ class Processer
             return false;
         }
 
-        if ($pname !== '' && $pname !== $managedIdentity) {
-            $content = \str_replace($pname, $managedIdentity, $content);
-        }
+        // Never rewrite the full launch command down to --name=... — that made
+        // process logs look like `exec nohup --name=...` and hid real argv failures.
+        // Only redact secrets; keep the command line diagnosable.
         $content = self::redactSensitiveProcessText($content);
 
         return @file_put_contents($path, $content, $append ? FILE_APPEND : 0);

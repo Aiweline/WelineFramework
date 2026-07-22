@@ -18749,6 +18749,15 @@ class ServiceOrchestrator
             'operation_id' => $operation['id'],
             'state' => $state,
         ]);
+        $this->lastControlOperationResult = [
+            'id' => $operation['id'],
+            'action' => $operation['action'],
+            'state' => $state,
+            'success' => $success,
+            'message' => $success ? 'Cache clear completed' : 'Cache clear failed',
+            'data' => $data,
+            'finished_at' => \microtime(true),
+        ];
         $this->controlServer?->sendTo(
             $operation['clientId'],
             ControlMessage::commandResult(
