@@ -1,0 +1,201 @@
+{
+  "version": "1.0.0",
+  "events": [
+    {
+      "weline_event": "page_view",
+      "ga4_event": "page_view",
+      "google_recommended": true,
+      "event_family": "page",
+      "require_exact_marker": false,
+      "skip_gtm_push": true,
+      "required_params": ["page_location", "page_title"],
+      "markers": {
+        "classes": ["weline-pixel::page_view"],
+        "attrs": ["data-pixel-event=page_view"]
+      },
+      "page_scopes": ["*"]
+    },
+    {
+      "weline_event": "page_enter",
+      "ga4_event": "page_view",
+      "google_recommended": false,
+      "event_family": "page",
+      "require_exact_marker": false,
+      "skip_gtm_push": true,
+      "required_params": ["page_location"],
+      "markers": {
+        "classes": ["weline-pixel::page_enter"],
+        "attrs": ["data-pixel-event=page_enter"]
+      },
+      "page_scopes": ["*"]
+    },
+    {
+      "weline_event": "cta_click",
+      "ga4_event": "cta_click",
+      "google_recommended": false,
+      "event_family": "cta",
+      "require_exact_marker": false,
+      "skip_gtm_push": false,
+      "required_params": ["link_url", "link_text"],
+      "markers": {
+        "classes": ["weline-pixel::cta_click"],
+        "attrs": ["data-pixel-event=cta_click", "data-cta-event", "data-cta", "data-visitor-event", "data-ga-event"]
+      },
+      "page_scopes": ["home", "content", "*"]
+    },
+    {
+      "weline_event": "hero_cta_click",
+      "ga4_event": "cta_click",
+      "google_recommended": false,
+      "event_family": "cta",
+      "require_exact_marker": false,
+      "skip_gtm_push": false,
+      "required_params": ["link_url", "link_text"],
+      "markers": {
+        "classes": ["weline-pixel::hero_cta_click"],
+        "attrs": ["data-pixel-event=hero_cta_click", "data-cta-event=hero_cta_click"]
+      },
+      "page_scopes": ["home", "content"]
+    },
+    {
+      "weline_event": "view_item",
+      "ga4_event": "view_item",
+      "google_recommended": true,
+      "event_family": "ecommerce",
+      "require_exact_marker": true,
+      "skip_gtm_push": false,
+      "required_params": ["items", "currency"],
+      "markers": {
+        "classes": ["weline-pixel::view_item"],
+        "attrs": ["data-pixel-event=view_item"]
+      },
+      "page_scopes": ["checkout"]
+    },
+    {
+      "weline_event": "add_to_cart",
+      "ga4_event": "add_to_cart",
+      "google_recommended": true,
+      "event_family": "ecommerce",
+      "require_exact_marker": true,
+      "skip_gtm_push": false,
+      "required_params": ["items", "currency", "value"],
+      "markers": {
+        "classes": ["weline-pixel::add_to_cart"],
+        "attrs": ["data-pixel-event=add_to_cart"]
+      },
+      "page_scopes": ["checkout"]
+    },
+    {
+      "weline_event": "begin_checkout",
+      "ga4_event": "begin_checkout",
+      "google_recommended": true,
+      "event_family": "ecommerce",
+      "require_exact_marker": true,
+      "skip_gtm_push": false,
+      "required_params": ["items", "currency", "value"],
+      "markers": {
+        "classes": ["weline-pixel::begin_checkout"],
+        "attrs": ["data-pixel-event=begin_checkout"]
+      },
+      "page_scopes": ["checkout"]
+    },
+    {
+      "weline_event": "checkout_success",
+      "ga4_event": "purchase",
+      "google_recommended": true,
+      "event_family": "ecommerce",
+      "require_exact_marker": true,
+      "skip_gtm_push": false,
+      "required_params": ["transaction_id", "value", "currency", "items"],
+      "markers": {
+        "classes": ["weline-pixel::checkout_success", "weline-pixel::purchase"],
+        "attrs": ["data-pixel-event=checkout_success", "data-pixel-event=purchase"]
+      },
+      "page_scopes": ["checkout"]
+    },
+    {
+      "weline_event": "checkout_failure",
+      "ga4_event": "checkout_failure",
+      "google_recommended": false,
+      "event_family": "ecommerce",
+      "require_exact_marker": true,
+      "skip_gtm_push": false,
+      "required_params": [],
+      "markers": {
+        "classes": ["weline-pixel::checkout_failure"],
+        "attrs": ["data-pixel-event=checkout_failure"]
+      },
+      "page_scopes": ["checkout"]
+    },
+    {
+      "weline_event": "search_submit",
+      "ga4_event": "search",
+      "google_recommended": true,
+      "event_family": "search",
+      "require_exact_marker": false,
+      "skip_gtm_push": false,
+      "required_params": ["search_term"],
+      "markers": {
+        "classes": ["weline-pixel::search_submit", "weline-pixel::search"],
+        "attrs": ["data-pixel-event=search_submit", "data-pixel-event=search"]
+      },
+      "page_scopes": []
+    },
+    {
+      "weline_event": "search_suggestion_click",
+      "ga4_event": "select_content",
+      "google_recommended": true,
+      "event_family": "search",
+      "require_exact_marker": false,
+      "skip_gtm_push": false,
+      "required_params": [],
+      "markers": {
+        "classes": ["weline-pixel::search_suggestion_click"],
+        "attrs": ["data-pixel-event=search_suggestion_click"]
+      },
+      "page_scopes": []
+    },
+    {
+      "weline_event": "route_click",
+      "ga4_event": "route_click",
+      "google_recommended": false,
+      "event_family": null,
+      "require_exact_marker": false,
+      "skip_gtm_push": false,
+      "required_params": ["link_url"],
+      "markers": {
+        "classes": ["weline-pixel::route_click"],
+        "attrs": ["data-pixel-event=route_click"]
+      },
+      "page_scopes": ["*"]
+    },
+    {
+      "weline_event": "login",
+      "ga4_event": "login",
+      "google_recommended": true,
+      "event_family": "account",
+      "require_exact_marker": false,
+      "skip_gtm_push": false,
+      "required_params": [],
+      "markers": {
+        "classes": ["weline-pixel::login"],
+        "attrs": ["data-pixel-event=login"]
+      },
+      "page_scopes": ["account"]
+    },
+    {
+      "weline_event": "register",
+      "ga4_event": "sign_up",
+      "google_recommended": true,
+      "event_family": "account",
+      "require_exact_marker": false,
+      "skip_gtm_push": false,
+      "required_params": [],
+      "markers": {
+        "classes": ["weline-pixel::register"],
+        "attrs": ["data-pixel-event=register"]
+      },
+      "page_scopes": ["account"]
+    }
+  ]
+}

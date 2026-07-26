@@ -1,266 +1,941 @@
 <?php
 /**
- * 站点详情页面 - 内容模板
+ * 像素详情报表（GA4 风格）
  *
  * @var \Weline\Framework\View\Template $this
  * @var int $website_id
+ * @var array $filters
  * @var array $summary
- * @var array $business_value
- * @var array $daily_comparison
- * @var array $dashboard_data
+ * @var array $engagement
+ * @var array $insight_pages
+ * @var array $insight_devices
+ * @var array $insight_screens
+ * @var array $insight_sources
+ * @var array $insight_browsers
+ * @var array $insight_recent
+ * @var array $event_rows
+ * @var array $trend
+ * @var array $channel_rows
+ * @var array $report_tabs
+ * @var string $active_report_tab
+ * @var array $ecommerce_funnel
+ * @var array $ecommerce_revenue
+ * @var array $ecommerce_items
+ * @var array $path_exploration
+ * @var array $retention
  */
 
-$websiteId = $website_id ?? 0;
+$websiteId = (int)($website_id ?? 0);
+$filters = $filters ?? [];
 $summary = $summary ?? [];
-$businessValue = $business_value ?? [];
-$dailyComparison = $daily_comparison ?? [];
-$dashboardData = $dashboard_data ?? [];
+$engagement = $engagement ?? [];
+$pages = $insight_pages ?? [];
+$devices = $insight_devices ?? [];
+$screens = $insight_screens ?? [];
+$sources = $insight_sources ?? [];
+$browsers = $insight_browsers ?? [];
+$recent = $insight_recent ?? [];
+$eventRows = $event_rows ?? [];
+$trend = $trend ?? [];
+$channelRows = $channel_rows ?? [];
+$reportTabs = $report_tabs ?? [];
+$activeReportTab = (string)($active_report_tab ?? \Weline\Visitor\Service\Report\PixelDetailReportTabService::FIRST_TAB_CODE);
+$ecommerceFunnel = $ecommerce_funnel ?? [
+    'website_id' => $websiteId,
+    'from' => '',
+    'to' => '',
+    'window_clamped' => false,
+    'steps' => [],
+    'step1_sessions' => 0,
+    'scored_sessions' => 0,
+    'error' => '',
+];
+$ecommerceFunnelSteps = is_array($ecommerceFunnel['steps'] ?? null) ? $ecommerceFunnel['steps'] : [];
+$ecommerceRevenue = $ecommerce_revenue ?? [
+    'website_id' => $websiteId,
+    'from' => '',
+    'to' => '',
+    'window_clamped' => false,
+    'purchases' => 0,
+    'purchase_revenue' => 0.0,
+    'avg_order_value' => 0.0,
+    'purchase_sessions' => 0,
+    'view_item_sessions' => 0,
+    'purchase_rate_from_view_item' => 0.0,
+    'by_channel' => [],
+    'by_day' => [],
+    'error' => '',
+];
+$revenueByChannel = is_array($ecommerceRevenue['by_channel'] ?? null) ? $ecommerceRevenue['by_channel'] : [];
+$revenueByDay = is_array($ecommerceRevenue['by_day'] ?? null) ? $ecommerceRevenue['by_day'] : [];
+$ecommerceItemsReport = $ecommerce_items ?? [
+    'website_id' => $websiteId,
+    'from' => '',
+    'to' => '',
+    'window_clamped' => false,
+    'items' => [],
+    'item_count' => 0,
+    'error' => '',
+];
+$ecommerceItemRows = is_array($ecommerceItemsReport['items'] ?? null) ? $ecommerceItemsReport['items'] : [];
+$pathExploration = $path_exploration ?? [
+    'website_id' => $websiteId,
+    'from' => '',
+    'to' => '',
+    'window_clamped' => false,
+    'total_sessions' => 0,
+    'bounced_sessions' => 0,
+    'landings' => [],
+    'top_paths' => [],
+    'max_depth' => \Weline\Visitor\Service\PixelPathExplorationService::MAX_DEPTH,
+    'error' => '',
+];
+$pathLandings = is_array($pathExploration['landings'] ?? null) ? $pathExploration['landings'] : [];
+$pathTopPaths = is_array($pathExploration['top_paths'] ?? null) ? $pathExploration['top_paths'] : [];
+$retention = $retention ?? [
+    'website_id' => $websiteId,
+    'from' => '',
+    'to' => '',
+    'window_clamped' => false,
+    'total_visitors' => 0,
+    'returning_visitors' => 0,
+    'returning_rate' => 0.0,
+    'd1_rate' => 0.0,
+    'd1_eligible' => 0,
+    'd1_retained' => 0,
+    'offsets' => [],
+    'cohorts' => [],
+    'offset_summary' => [],
+    'error' => '',
+];
+$retentionCohorts = is_array($retention['cohorts'] ?? null) ? $retention['cohorts'] : [];
+$retentionOffsets = is_array($retention['offsets'] ?? null) ? $retention['offsets'] : [];
+$retentionOffsetSummary = is_array($retention['offset_summary'] ?? null) ? $retention['offset_summary'] : [];
+
+$h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$num = static fn($value, int $decimals = 0): string => number_format((float)$value, $decimals);
+$selectedRange = (string)($filters['range'] ?? '30d');
+$rangeLabels = [
+    'today' => __('今日'),
+    'yesterday' => __('昨日'),
+    '7d' => __('近 7 天'),
+    '30d' => __('近 30 天'),
+    '90d' => __('近 90 天'),
+    'custom' => __('自定义'),
+];
+$query = array_filter([
+    'websiteId' => (string)$websiteId,
+    'event' => (string)($filters['event'] ?? ''),
+    'range' => $selectedRange,
+    'startDate' => (string)($filters['start_day'] ?? ''),
+    'endDate' => (string)($filters['end_day'] ?? ''),
+], static fn($v): bool => $v !== null && $v !== '');
+$indexUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/index', $query);
+$refreshUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/detail', $query);
+$listBaseQuery = \Weline\Visitor\Service\PixelStatisticsService::buildListDrilldownQuery($filters, [
+    'websiteId' => (string)$websiteId,
+]);
+$listUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $listBaseQuery);
 ?>
-<script src="@static(Weline_Admin::assets/libs/chart.js/Chart.min.js)"></script>
 <style>
-    .weline-pixel-dashboard-card {
-        border-radius: 10px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        border: none;
-        margin-bottom: 20px;
-    }
-    
-    .weline-pixel-dashboard-card:hover {
-        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-        transform: translateY(-2px);
-    }
-    
-    .weline-pixel-stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 24px;
-        border-radius: 12px;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .weline-pixel-stat-card.success {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    }
-    
-    .weline-pixel-stat-card.warning {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    }
-    
-    .weline-pixel-stat-card.info {
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    }
-    
-    .weline-pixel-stat-number {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin: 8px 0;
-    }
-    
-    .weline-pixel-stat-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
+.weline-pixel-insight { color: var(--backend-color-text-primary, #212529); }
+.weline-pixel-insight .card { border: 1px solid var(--backend-color-border-light, #e9ecef); border-radius: 10px; box-shadow: 0 1px 8px rgba(15,23,42,.05); }
+.weline-pixel-kpi { min-height: 118px; }
+.weline-pixel-kpi .label { color: #64748b; font-size: 12px; }
+.weline-pixel-kpi .value { font-size: 28px; font-weight: 700; line-height: 1.15; }
+.weline-pixel-kpi .sub { color: #64748b; font-size: 12px; }
+.weline-pixel-bar { height: 8px; border-radius: 999px; background: #f1f5f9; overflow: hidden; }
+.weline-pixel-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #06b6d4, #2563eb); }
+.weline-pixel-json { max-height: 220px; overflow: auto; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 12px; font-size: 12px; }
+.weline-pixel-muted { color: #64748b; }
 </style>
 
-<!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18">
-                <lang>站点详情</lang> - <lang>站点ID：</lang><?= $websiteId ?>
-            </h4>
-            <div>
-                <a href="<?= $this->getUrl('*/pixel_dashboard/index') ?>" class="btn btn-secondary btn-sm">
-                    <lang>返回列表</lang>
-                </a>
+<div class="weline-pixel-insight">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h4 class="mb-1"><?= __('像素详情报表') ?> · <?= __('站点') ?> #<?= (int)$websiteId ?></h4>
+            <div class="weline-pixel-muted small">
+                <?= $h($rangeLabels[$selectedRange] ?? $selectedRange) ?>
+                · <?= __('对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源') ?>
             </div>
         </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary btn-sm" href="<?= $h($indexUrl) ?>"><?= __('返回事件看板') ?></a>
+            <a class="btn btn-outline-primary btn-sm" href="<?= $h($listUrl) ?>"><?= __('事件列表') ?></a>
+            <a class="btn btn-primary btn-sm" href="<?= $h($refreshUrl) ?>"><?= __('刷新') ?></a>
+        </div>
     </div>
-</div>
 
-<!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
-        <template>Weline_Component::message.phtml</template>
+    <div class="row g-3 mb-3">
+        <?php
+        $kpis = [
+            [__('会话'), $engagement['sessions'] ?? 0, __('Sessions')],
+            [__('参与率'), ($engagement['engagement_rate'] ?? 0) . '%', __('Engaged sessions')],
+            [__('跳出率'), ($engagement['bounce_rate'] ?? 0) . '%', __('Bounce rate')],
+            [__('平均停留'), ($engagement['avg_session_duration_sec'] ?? 0) . 's', __('Avg session duration')],
+            [__('页/会话'), $engagement['pages_per_session'] ?? 0, __('Pages / session')],
+            [__('事件'), $engagement['events'] ?? ($summary['total_events'] ?? 0), __('Events')],
+        ];
+        foreach ($kpis as $kpi): ?>
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="card h-100"><div class="card-body weline-pixel-kpi">
+                    <div class="label"><?= $h($kpi[0]) ?></div>
+                    <div class="value"><?= $h(is_numeric($kpi[1]) ? $num($kpi[1], is_float($kpi[1]) ? 2 : 0) : $kpi[1]) ?></div>
+                    <div class="sub"><?= $h($kpi[2]) ?></div>
+                </div></div>
+            </div>
+        <?php endforeach; ?>
     </div>
-</div>
 
-<!-- 统计卡片 -->
-<div class="row">
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card primary">
-                <div class="weline-pixel-stat-label"><lang>总记录数</lang></div>
-                <div class="weline-pixel-stat-number"><?= number_format($summary['total_count'] ?? 0) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card success">
-                <div class="weline-pixel-stat-label"><lang>已处理</lang></div>
-                <div class="weline-pixel-stat-number"><?= number_format($summary['dealed_count'] ?? 0) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card warning">
-                <div class="weline-pixel-stat-label"><lang>未处理</lang></div>
-                <div class="weline-pixel-stat-number"><?= number_format($summary['un_deal_count'] ?? 0) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card info">
-                <div class="weline-pixel-stat-label"><lang>事件类型数</lang></div>
-                <div class="weline-pixel-stat-number"><?= $summary['event_count'] ?? 0 ?></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 商业价值趋势图 -->
-<?php if (!empty($businessValue['data_points'])): ?>
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>商业价值趋势</lang></h4>
-                <canvas id="businessValueChart" height="80"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- 每日对比图表 -->
-<?php if (!empty($dailyComparison['comparisons'])): ?>
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>每日对比分析</lang></h4>
-                <canvas id="dailyComparisonChart" height="80"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- 事件统计表格 -->
-<?php if (!empty($summary['events'])): ?>
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>事件统计</lang></h4>
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th><lang>事件名称</lang></th>
-                                <th><lang>数量</lang></th>
-                                <th><lang>占比</lang></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $totalEvents = array_sum($summary['events'] ?? []);
-                            foreach ($summary['events'] ?? [] as $event => $count): 
-                                $percentage = $totalEvents > 0 ? round(($count / $totalEvents) * 100, 2) : 0;
-                            ?>
-                            <tr>
-                                <td><?= htmlspecialchars($event) ?></td>
-                                <td><?= number_format($count) ?></td>
-                                <td><?= $percentage ?>%</td>
-                            </tr>
+    <div class="row g-3 mb-3">
+        <div class="col-xl-7">
+            <div class="card h-100"><div class="card-body">
+                <h2 class="h5 mb-3"><?= __('页面表现') ?></h2>
+                <?php if ($pages === []): ?>
+                    <div class="text-muted"><?= __('暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。') ?></div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr>
+                                <th><?= __('路径') ?></th>
+                                <th class="text-end"><?= __('浏览') ?></th>
+                                <th class="text-end"><?= __('事件') ?></th>
+                                <th class="text-end"><?= __('访客') ?></th>
+                                <th class="text-end"><?= __('平均停留') ?></th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ($pages as $page): ?>
+                                <tr>
+                                    <td class="text-truncate" style="max-width:280px" title="<?= $h($page['path'] ?? '') ?>"><?= $h($page['path'] ?? '/') ?></td>
+                                    <td class="text-end"><?= $num($page['views'] ?? 0) ?></td>
+                                    <td class="text-end"><?= $num($page['events'] ?? 0) ?></td>
+                                    <td class="text-end"><?= $num($page['users'] ?? 0) ?></td>
+                                    <td class="text-end"><?= $num($page['avg_dwell_sec'] ?? 0, 1) ?>s</td>
+                                </tr>
                             <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div></div>
+        </div>
+        <div class="col-xl-5">
+            <div class="card h-100"><div class="card-body">
+                <h2 class="h5 mb-3"><?= __('事件排行') ?></h2>
+                <?php if ($eventRows === []): ?>
+                    <div class="text-muted"><?= __('暂无事件排行。') ?></div>
+                <?php else: ?>
+                    <?php $max = max(1, ...(array_map(static fn($r) => (int)($r['count'] ?? 0), $eventRows))); ?>
+                    <div class="d-grid gap-2">
+                        <?php foreach (array_slice($eventRows, 0, 8) as $row): ?>
+                            <?php $width = max(4, (int)round(((int)($row['count'] ?? 0) / $max) * 100)); ?>
+                            <div>
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <strong><?= $h($row['event'] ?? '-') ?></strong>
+                                    <span><?= $num($row['count'] ?? 0) ?></span>
+                                </div>
+                                <div class="weline-pixel-bar"><i style="width:<?= $width ?>%"></i></div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3" id="ecommerce-funnel">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h2 class="h5 mb-0"><?= __('电商漏斗') ?></h2>
+                            <div class="small text-muted">
+                                <?= __('字典四步：view_item → add_to_cart → begin_checkout → checkout_success') ?>
+                                <?php if (!empty($ecommerceFunnel['window_clamped'])): ?>
+                                    · <?= __('已按热明细短窗（≤7 天）截取') ?>
+                                    （<?= $h($ecommerceFunnel['from'] ?? '') ?> → <?= $h($ecommerceFunnel['to'] ?? '') ?>）
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                    </div>
+                    <?php if (trim((string)($ecommerceFunnel['error'] ?? '')) !== ''): ?>
+                        <div class="alert alert-warning py-2 mb-0">
+                            <?= __('电商漏斗暂不可用（扁平列未就绪或查询失败）。') ?>
+                        </div>
+                    <?php elseif ((int)($ecommerceFunnel['step1_sessions'] ?? 0) <= 0): ?>
+                        <div class="text-muted"><?= __('该窗口暂无浏览商品会话，无法计算步进占比。') ?></div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th><?= __('步骤') ?></th>
+                                    <th class="text-end"><?= __('会话数') ?></th>
+                                    <th class="text-end"><?= __('相对浏览') ?></th>
+                                    <th class="text-end"><?= __('相对上步流失') ?></th>
+                                    <th style="min-width:160px"><?= __('占比条') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($ecommerceFunnelSteps as $step): ?>
+                                    <?php
+                                    $rate = (float)($step['rate_from_step1'] ?? 0);
+                                    $dropoff = (float)($step['dropoff_from_prev'] ?? 0);
+                                    $pct = (int)round($rate * 100);
+                                    $labelKey = (string)($step['label'] ?? $step['key'] ?? '');
+                                    $stepKey = (string)($step['key'] ?? '');
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <?= $h(__($labelKey)) ?>
+                                            <code class="small text-muted ms-1"><?= $h($stepKey) ?></code>
+                                        </td>
+                                        <td class="text-end"><?= $num($step['sessions'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $h(number_format($rate * 100, 1)) ?>%</td>
+                                        <td class="text-end">
+                                            <?= $stepKey === 'view_item'
+                                                ? '—'
+                                                : $h(number_format($dropoff * 100, 1) . '%') ?>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="height:8px">
+                                                <div class="progress-bar" role="progressbar"
+                                                     style="width: <?= $h((string)max(0, min(100, $pct))) ?>%"
+                                                     aria-valuenow="<?= $h((string)$pct) ?>"
+                                                     aria-valuemin="0" aria-valuemax="100"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-muted small mb-0 mt-2">
+                            <?= __('须按会话顺序命中；checkout_success 兼容 purchase。单渠道口径见流量渠道详情，可切换营销简漏斗 / 电商四步。') ?>
+                        </p>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
+
+    <div class="row g-3 mb-3" id="ecommerce-revenue">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h2 class="h5 mb-0"><?= __('购成与收入') ?></h2>
+                            <div class="small text-muted">
+                                <?= __('purchase_revenue 仅合计购买类事件（checkout_success / purchase）') ?>
+                                <?php if (!empty($ecommerceRevenue['window_clamped'])): ?>
+                                    · <?= __('已按热明细短窗（≤7 天）截取') ?>
+                                    （<?= $h($ecommerceRevenue['from'] ?? '') ?> → <?= $h($ecommerceRevenue['to'] ?? '') ?>）
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                    </div>
+                    <?php if (trim((string)($ecommerceRevenue['error'] ?? '')) !== ''): ?>
+                        <div class="alert alert-warning py-2 mb-0">
+                            <?= __('购成收入暂不可用（扁平列未就绪或查询失败）。') ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="row g-3 mb-3">
+                            <?php
+                            $revKpis = [
+                                [__('购买次数'), $ecommerceRevenue['purchases'] ?? 0, 'purchases'],
+                                [__('购买收入'), $num($ecommerceRevenue['purchase_revenue'] ?? 0, 2), 'purchase_revenue'],
+                                [__('客单价'), $num($ecommerceRevenue['avg_order_value'] ?? 0, 2), 'AOV'],
+                                [__('购成率'), $num(((float)($ecommerceRevenue['purchase_rate_from_view_item'] ?? 0)) * 100, 1) . '%', __('相对浏览商品会话')],
+                            ];
+                            foreach ($revKpis as $kpi): ?>
+                                <div class="col-6 col-md-3">
+                                    <div class="border rounded p-3 h-100">
+                                        <div class="small text-muted"><?= $h($kpi[0]) ?></div>
+                                        <div class="fs-5 fw-semibold"><?= $h(is_numeric($kpi[1]) ? $num($kpi[1]) : $kpi[1]) ?></div>
+                                        <div class="small text-muted"><?= $h($kpi[2]) ?></div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-xl-6">
+                                <h3 class="h6"><?= __('按渠道收入') ?></h3>
+                                <?php if ($revenueByChannel === []): ?>
+                                    <div class="text-muted small"><?= __('暂无购买类事件。') ?></div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm align-middle mb-0">
+                                            <thead><tr>
+                                                <th><?= __('渠道码') ?></th>
+                                                <th class="text-end"><?= __('购买次数') ?></th>
+                                                <th class="text-end"><?= __('收入') ?></th>
+                                                <th class="text-end"><?= __('客单价') ?></th>
+                                            </tr></thead>
+                                            <tbody>
+                                            <?php foreach ($revenueByChannel as $row): ?>
+                                                <tr>
+                                                    <td><code><?= $h($row['channel_code'] ?? '') ?></code></td>
+                                                    <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                                    <td class="text-end"><?= $num($row['purchase_revenue'] ?? 0, 2) ?></td>
+                                                    <td class="text-end"><?= $num($row['avg_order_value'] ?? 0, 2) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="col-xl-6">
+                                <h3 class="h6"><?= __('按日收入') ?></h3>
+                                <?php if ($revenueByDay === []): ?>
+                                    <div class="text-muted small"><?= __('暂无购买类事件。') ?></div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm align-middle mb-0">
+                                            <thead><tr>
+                                                <th><?= __('日期') ?></th>
+                                                <th class="text-end"><?= __('购买次数') ?></th>
+                                                <th class="text-end"><?= __('收入') ?></th>
+                                                <th class="text-end"><?= __('客单价') ?></th>
+                                            </tr></thead>
+                                            <tbody>
+                                            <?php foreach ($revenueByDay as $row): ?>
+                                                <tr>
+                                                    <td><?= $h($row['day'] ?? '') ?></td>
+                                                    <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                                    <td class="text-end"><?= $num($row['purchase_revenue'] ?? 0, 2) ?></td>
+                                                    <td class="text-end"><?= $num($row['avg_order_value'] ?? 0, 2) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3" id="ecommerce-items">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h2 class="h5 mb-0"><?= __('商品表现') ?></h2>
+                            <div class="small text-muted">
+                                <?= __('按 item_id 展开 items：曝光 / 加购 / 购买与收入') ?>
+                                <?php if (!empty($ecommerceItemsReport['window_clamped'])): ?>
+                                    · <?= __('已按热明细短窗（≤7 天）截取') ?>
+                                    （<?= $h($ecommerceItemsReport['from'] ?? '') ?> → <?= $h($ecommerceItemsReport['to'] ?? '') ?>）
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                    </div>
+                    <?php if (trim((string)($ecommerceItemsReport['error'] ?? '')) !== ''): ?>
+                        <div class="alert alert-warning py-2 mb-0">
+                            <?= __('商品表现暂不可用（扁平列或 items 未就绪）。') ?>
+                        </div>
+                    <?php elseif ($ecommerceItemRows === []): ?>
+                        <div class="text-muted"><?= __('该窗口暂无带 items 的电商事件。') ?></div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th><?= __('商品') ?></th>
+                                    <th class="text-end"><?= __('曝光') ?></th>
+                                    <th class="text-end"><?= __('加购') ?></th>
+                                    <th class="text-end"><?= __('结账') ?></th>
+                                    <th class="text-end"><?= __('购买') ?></th>
+                                    <th class="text-end"><?= __('销量') ?></th>
+                                    <th class="text-end"><?= __('商品收入') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($ecommerceItemRows as $row): ?>
+                                    <tr>
+                                        <td>
+                                            <div><?= $h($row['item_name'] ?? '') ?></div>
+                                            <code class="small text-muted"><?= $h($row['item_id'] ?? '') ?></code>
+                                        </td>
+                                        <td class="text-end"><?= $num($row['views'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['add_to_carts'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['begin_checkouts'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['quantity_sold'] ?? 0, 1) ?></td>
+                                        <td class="text-end"><?= $num($row['item_revenue'] ?? 0, 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3" id="path-exploration">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h2 class="h5 mb-0"><?= __('路径探索') ?></h2>
+                            <div class="small text-muted">
+                                <?= __('落地页 → 次页（限深 %{1} 步，页面事件会话）', [(int)($pathExploration['max_depth'] ?? 3)]) ?>
+                                <?php if (!empty($pathExploration['window_clamped'])): ?>
+                                    · <?= __('已按热明细短窗（≤7 天）截取') ?>
+                                    （<?= $h($pathExploration['from'] ?? '') ?> → <?= $h($pathExploration['to'] ?? '') ?>）
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                    </div>
+                    <?php if (trim((string)($pathExploration['error'] ?? '')) !== ''): ?>
+                        <div class="alert alert-warning py-2 mb-0">
+                            <?= __('路径探索暂不可用（扁平列未就绪或查询失败）。') ?>
+                        </div>
+                    <?php elseif ((int)($pathExploration['total_sessions'] ?? 0) <= 0): ?>
+                        <div class="text-muted"><?= __('该窗口暂无页面事件会话，无法分析路径。') ?></div>
+                    <?php else: ?>
+                        <div class="small text-muted mb-3">
+                            <?= __('会话数') ?>：<strong><?= $num($pathExploration['total_sessions'] ?? 0) ?></strong>
+                            · <?= __('单页离站') ?>：<strong><?= $num($pathExploration['bounced_sessions'] ?? 0) ?></strong>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-xl-7">
+                                <h3 class="h6 mb-2"><?= __('Top 落地页 → 次页') ?></h3>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th><?= __('落地页') ?></th>
+                                            <th class="text-end"><?= __('会话数') ?></th>
+                                            <th class="text-end"><?= __('单页离站') ?></th>
+                                            <th style="min-width:220px"><?= __('主要次页') ?></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($pathLandings as $landing): ?>
+                                            <?php $nextList = is_array($landing['next'] ?? null) ? $landing['next'] : []; ?>
+                                            <tr>
+                                                <td><code><?= $h($landing['path'] ?? '') ?></code></td>
+                                                <td class="text-end"><?= $num($landing['sessions'] ?? 0) ?></td>
+                                                <td class="text-end"><?= $num($landing['exits'] ?? 0) ?></td>
+                                                <td>
+                                                    <?php if ($nextList === []): ?>
+                                                        <span class="text-muted"><?= __('无次页') ?></span>
+                                                    <?php else: ?>
+                                                        <?php foreach ($nextList as $next): ?>
+                                                            <div class="d-flex justify-content-between small">
+                                                                <code><?= $h($next['path'] ?? '') ?></code>
+                                                                <span><?= $num($next['sessions'] ?? 0) ?>（<?= $num(((float)($next['rate'] ?? 0)) * 100, 1) ?>%）</span>
+                                                            </div>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-xl-5">
+                                <h3 class="h6 mb-2"><?= __('Top 路径序列') ?></h3>
+                                <?php if ($pathTopPaths === []): ?>
+                                    <div class="text-muted"><?= __('暂无路径序列。') ?></div>
+                                <?php else: ?>
+                                    <div class="d-grid gap-2">
+                                        <?php $maxPathSessions = max(1, ...array_map(static fn($r) => (int)($r['sessions'] ?? 0), $pathTopPaths)); ?>
+                                        <?php foreach ($pathTopPaths as $pathRow): ?>
+                                            <?php $width = max(4, (int)round(((int)($pathRow['sessions'] ?? 0) / $maxPathSessions) * 100)); ?>
+                                            <div>
+                                                <div class="d-flex justify-content-between small mb-1">
+                                                    <code class="text-truncate me-2" style="max-width:75%"><?= $h($pathRow['path'] ?? '') ?></code>
+                                                    <span><?= $num($pathRow['sessions'] ?? 0) ?></span>
+                                                </div>
+                                                <div class="weline-pixel-bar"><i style="width:<?= $width ?>%"></i></div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3" id="retention">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h2 class="h5 mb-0"><?= __('留存分析') ?></h2>
+                            <div class="small text-muted">
+                                <?= __('日队列留存（Day0–Day%{1}）：登录用户优先，匿名用 IP+UA 软指纹', [max(0, \count($retentionOffsets) - 1)]) ?>
+                                <?php if (!empty($retention['window_clamped'])): ?>
+                                    · <?= __('已按热明细短窗（≤7 天）截取') ?>
+                                    （<?= $h($retention['from'] ?? '') ?> → <?= $h($retention['to'] ?? '') ?>）
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                    </div>
+                    <?php if (trim((string)($retention['error'] ?? '')) !== ''): ?>
+                        <div class="alert alert-warning py-2 mb-0">
+                            <?= __('留存分析暂不可用（扁平列未就绪或查询失败）。') ?>
+                        </div>
+                    <?php elseif ((int)($retention['total_visitors'] ?? 0) <= 0): ?>
+                        <div class="text-muted"><?= __('该窗口暂无可识别访客，无法计算留存。') ?></div>
+                    <?php else: ?>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3">
+                                <div class="small text-muted"><?= __('访客数') ?></div>
+                                <div class="fs-5 fw-semibold"><?= $num($retention['total_visitors'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small text-muted"><?= __('回访访客') ?></div>
+                                <div class="fs-5 fw-semibold"><?= $num($retention['returning_visitors'] ?? 0) ?></div>
+                                <div class="small text-muted"><?= $num(((float)($retention['returning_rate'] ?? 0)) * 100, 1) ?>%</div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small text-muted"><?= __('次日留存') ?></div>
+                                <div class="fs-5 fw-semibold"><?= $num(((float)($retention['d1_rate'] ?? 0)) * 100, 1) ?>%</div>
+                                <div class="small text-muted"><?= $num($retention['d1_retained'] ?? 0) ?> / <?= $num($retention['d1_eligible'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small text-muted mb-1"><?= __('整体偏移留存') ?></div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <?php foreach ($retentionOffsetSummary as $summary): ?>
+                                        <?php if ((int)($summary['offset'] ?? 0) === 0) { continue; } ?>
+                                        <span class="badge text-bg-light border">
+                                            D<?= (int)($summary['offset'] ?? 0) ?>
+                                            <?= $num(((float)($summary['rate'] ?? 0)) * 100, 1) ?>%
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php if ($retentionCohorts === []): ?>
+                            <div class="text-muted"><?= __('暂无队列。') ?></div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                    <tr>
+                                        <th><?= __('队列日') ?></th>
+                                        <th class="text-end"><?= __('队列规模') ?></th>
+                                        <?php foreach ($retentionOffsets as $offset): ?>
+                                            <th class="text-end">D<?= (int)$offset ?></th>
+                                        <?php endforeach; ?>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($retentionCohorts as $cohort): ?>
+                                        <tr>
+                                            <td><code><?= $h($cohort['cohort_date'] ?? '') ?></code></td>
+                                            <td class="text-end"><?= $num($cohort['size'] ?? 0) ?></td>
+                                            <?php
+                                            $rates = is_array($cohort['rates'] ?? null) ? $cohort['rates'] : [];
+                                            foreach ($retentionOffsets as $idx => $offset):
+                                                $rate = $rates[$idx] ?? null;
+                                            ?>
+                                                <td class="text-end">
+                                                    <?php if ($rate === null): ?>
+                                                        <span class="text-muted">—</span>
+                                                    <?php else: ?>
+                                                        <?= $num(((float)$rate) * 100, 1) ?>%
+                                                    <?php endif; ?>
+                                                </td>
+                                            <?php endforeach; ?>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <h2 class="h5 mb-0"><?= __('引擎报表') ?></h2>
+                        <a class="btn btn-sm btn-outline-primary" href="<?= $h($listUrl) ?>"><?= __('查看全部事件') ?></a>
+                    </div>
+                    <?php if ($reportTabs === []): ?>
+                        <div class="text-muted"><?= __('暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。') ?></div>
+                    <?php else: ?>
+                        <ul class="nav nav-tabs mb-3" role="tablist" data-pixel-report-tabs>
+                            <?php foreach ($reportTabs as $tab): ?>
+                                <?php
+                                $code = (string)($tab['code'] ?? '');
+                                $isActive = $code === $activeReportTab;
+                                $tabQuery = $query;
+                                $tabQuery['report_tab'] = $code;
+                                $tabUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/detail', $tabQuery);
+                                ?>
+                                <li class="nav-item" role="presentation">
+                                    <a class="nav-link <?= $isActive ? 'active' : '' ?>"
+                                       href="<?= $h($tabUrl) ?>"
+                                       data-report-tab="<?= $h($code) ?>"
+                                       role="tab"
+                                       aria-selected="<?= $isActive ? 'true' : 'false' ?>">
+                                        <?= $h($tab['label'] ?? $code) ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <div class="tab-content" data-pixel-report-tab-panels>
+                            <?php foreach ($reportTabs as $tab): ?>
+                                <?php
+                                $code = (string)($tab['code'] ?? '');
+                                $isActive = $code === $activeReportTab;
+                                $rows = $tab['rows'] ?? [];
+                                $tabError = trim((string)($tab['error'] ?? ''));
+                                $clamped = !empty($tab['window_clamped']);
+                                ?>
+                                <div class="tab-pane fade <?= $isActive ? 'show active' : '' ?>"
+                                     id="report-tab-<?= $h($code) ?>"
+                                     data-report-tab-panel="<?= $h($code) ?>"
+                                     role="tabpanel">
+                                    <div class="small text-muted mb-2">
+                                        <?= $h($tab['description'] ?? '') ?>
+                                        <?php if ($clamped): ?>
+                                            · <?= __('已按热明细短窗（≤7 天）截取') ?>
+                                            （<?= $h($tab['from'] ?? '') ?> → <?= $h($tab['to'] ?? '') ?>）
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($tabError !== ''): ?>
+                                        <div class="alert alert-warning py-2 mb-2"><?= $h($tabError) ?></div>
+                                    <?php endif; ?>
+                                    <?php if ($rows === []): ?>
+                                        <div class="text-muted"><?= __('该 Tab 暂无聚合数据（需扁平列就绪且时间窗内有事件）。') ?></div>
+                                    <?php else: ?>
+                                        <?php $showAvgValue = array_key_exists('avg_value', $rows[0]); ?>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm align-middle mb-0">
+                                                <thead>
+                                                <tr>
+                                                    <th><?= __('维度值') ?></th>
+                                                    <th class="text-end"><?= __('事件') ?></th>
+                                                    <th class="text-end"><?= __('价值') ?></th>
+                                                    <?php if ($showAvgValue): ?>
+                                                        <th class="text-end"><?= __('均值') ?></th>
+                                                    <?php endif; ?>
+                                                    <th class="text-end"><?= __('有价事件') ?></th>
+                                                    <th class="text-end"><?= __('购买') ?></th>
+                                                    <th class="text-end"><?= __('加购') ?></th>
+                                                    <th class="text-end"><?= __('下钻') ?></th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                <?php foreach ($rows as $row): ?>
+                                                    <?php
+                                                    $dimValue = (string)($row['dimension_value'] ?? '');
+                                                    $dimId = (string)($tab['dimension'] ?? $row['dimension'] ?? '');
+                                                    $dimExtras = \Weline\Visitor\Service\Report\PixelDetailReportTabService::drilldownExtras(
+                                                        $dimId,
+                                                        $dimValue,
+                                                        (array)($tab['filters'] ?? [])
+                                                    );
+                                                    $drillUrl = '';
+                                                    if ($dimExtras !== []) {
+                                                        $drillQuery = \Weline\Visitor\Service\PixelStatisticsService::buildListDrilldownQuery($filters, array_merge($dimExtras, [
+                                                            'websiteId' => (string)$websiteId,
+                                                        ]));
+                                                        $drillUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $drillQuery);
+                                                    }
+                                                    ?>
+                                                    <tr>
+                                                        <td><code><?= $h($dimValue !== '' ? $dimValue : '—') ?></code></td>
+                                                        <td class="text-end"><?= $num($row['events'] ?? 0) ?></td>
+                                                        <td class="text-end"><?= $num($row['value_sum'] ?? 0, 2) ?></td>
+                                                        <?php if ($showAvgValue): ?>
+                                                            <td class="text-end"><?= $num($row['avg_value'] ?? 0, 2) ?></td>
+                                                        <?php endif; ?>
+                                                        <td class="text-end"><?= $num($row['valued_events'] ?? 0) ?></td>
+                                                        <td class="text-end"><?= $num($row['purchases'] ?? 0) ?></td>
+                                                        <td class="text-end"><?= $num($row['add_to_carts'] ?? 0) ?></td>
+                                                        <td class="text-end">
+                                                            <?php if ($drillUrl !== ''): ?>
+                                                                <a class="btn btn-sm btn-outline-secondary" href="<?= $h($drillUrl) ?>"><?= __('事件列表') ?></a>
+                                                            <?php else: ?>
+                                                                —
+                                                            <?php endif; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($reportTabs === [] && $channelRows !== []): ?>
+                        <hr class="my-3">
+                        <div class="small text-muted mb-2"><?= __('回退：统计服务渠道聚合') ?></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th><?= __('渠道名称') ?></th>
+                                    <th><?= __('渠道码') ?></th>
+                                    <th><?= __('流量类型') ?></th>
+                                    <th class="text-end"><?= __('事件') ?></th>
+                                    <th class="text-end"><?= __('用户') ?></th>
+                                    <th class="text-end"><?= __('价值') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($channelRows as $row): ?>
+                                    <?php
+                                    $code = (string)($row['channel_code'] ?? '');
+                                    $name = trim((string)($row['channel_name'] ?? ''));
+                                    if ($name === '') {
+                                        $name = $code !== '' ? $code : '—';
+                                    }
+                                    ?>
+                                    <tr>
+                                        <td class="fw-semibold"><?= $h($name) ?></td>
+                                        <td><code><?= $h($code !== '' ? $code : '—') ?></code></td>
+                                        <td><?= $h($row['traffic_type'] ?? '') ?></td>
+                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <?php
+        $dimensionBlocks = [
+            [__('设备'), $devices],
+            [__('屏幕分辨率'), $screens],
+            [__('流量来源'), $sources],
+            [__('浏览器'), $browsers],
+        ];
+        foreach ($dimensionBlocks as [$title, $rows]): ?>
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100"><div class="card-body">
+                    <h2 class="h6 mb-3"><?= $h($title) ?></h2>
+                    <?php if ($rows === []): ?>
+                        <div class="text-muted small"><?= __('暂无数据') ?></div>
+                    <?php else: ?>
+                        <?php foreach ($rows as $row): ?>
+                            <div class="d-flex justify-content-between small mb-2">
+                                <span class="text-truncate pe-2" title="<?= $h($row['label'] ?? '') ?>"><?= $h($row['label'] ?? '-') ?></span>
+                                <span class="text-nowrap"><?= $num($row['count'] ?? 0) ?> · <?= $num($row['share'] ?? 0, 1) ?>%</span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div></div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-xl-7">
+            <div class="card h-100"><div class="card-body">
+                <h2 class="h5 mb-3"><?= __('最近事件明细') ?></h2>
+                <?php if ($recent === []): ?>
+                    <div class="text-muted"><?= __('暂无最近事件。') ?></div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead><tr>
+                                <th><?= __('时间') ?></th>
+                                <th><?= __('事件') ?></th>
+                                <th><?= __('路径') ?></th>
+                                <th><?= __('设备') ?></th>
+                                <th><?= __('停留') ?></th>
+                                <th></th>
+                            </tr></thead>
+                            <tbody>
+                            <?php foreach ($recent as $idx => $row): ?>
+                                <tr>
+                                    <td class="small text-muted text-nowrap"><?= $h($row['created_at'] ?? '') ?></td>
+                                    <td class="fw-semibold"><?= $h($row['event'] ?? '') ?></td>
+                                    <td class="small text-truncate" style="max-width:180px" title="<?= $h($row['path'] ?? '') ?>"><?= $h($row['path'] ?? '') ?></td>
+                                    <td class="small"><?= $h($row['device'] ?? '-') ?></td>
+                                    <td class="small"><?= $num(($row['dwell_ms'] ?? 0) / 1000, 1) ?>s</td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-pixel-detail-toggle="<?= (int)$idx ?>"><?= __('细节') ?></button>
+                                    </td>
+                                </tr>
+                                <tr class="d-none" data-pixel-detail-row="<?= (int)$idx ?>">
+                                    <td colspan="6">
+                                        <pre class="weline-pixel-json mb-0"><?= $h(json_encode($row['detail'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div></div>
+        </div>
+        <div class="col-xl-5">
+            <div class="card h-100"><div class="card-body">
+                <h2 class="h5 mb-3"><?= __('趋势') ?></h2>
+                <?php if ($trend === []): ?>
+                    <div class="text-muted"><?= __('暂无趋势。') ?></div>
+                <?php else: ?>
+                    <?php $tmax = max(1, ...(array_map(static fn($r) => (int)($r['count'] ?? 0), $trend))); ?>
+                    <div class="d-grid gap-2">
+                        <?php foreach ($trend as $row): ?>
+                            <?php $width = max(4, (int)round(((int)($row['count'] ?? 0) / $tmax) * 100)); ?>
+                            <div>
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <span><?= $h($row['date'] ?? '') ?></span>
+                                    <span><?= $num($row['count'] ?? 0) ?></span>
+                                </div>
+                                <div class="weline-pixel-bar"><i style="width:<?= $width ?>%"></i></div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div></div>
+        </div>
+    </div>
 </div>
-<?php endif; ?>
-
 <script>
-(function() {
-    'use strict';
-    
-    <?php if (!empty($businessValue['data_points'])): ?>
-    // 商业价值趋势图
-    var businessValueCtx = document.getElementById('businessValueChart');
-    if (businessValueCtx) {
-        var businessData = <?= json_encode($businessValue['data_points']) ?>;
-        new Chart(businessValueCtx, {
-            type: 'line',
-            data: {
-                labels: businessData.map(function(item) { return item.date; }),
-                datasets: [{
-                    label: '<?= __('价值') ?>',
-                    data: businessData.map(function(item) { return item.value; }),
-                    borderColor: 'rgb(102, 126, 234)',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
-                }, {
-                    label: '<?= __('事件数') ?>',
-                    data: businessData.map(function(item) { return item.events; }),
-                    borderColor: 'rgb(17, 153, 142)',
-                    backgroundColor: 'rgba(17, 153, 142, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { display: true } },
-                scales: {
-                    y: { type: 'linear', display: true, position: 'left', beginAtZero: true },
-                    y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } }
-                }
-            }
+(function () {
+    document.querySelectorAll('[data-pixel-detail-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var idx = btn.getAttribute('data-pixel-detail-toggle');
+            var row = document.querySelector('[data-pixel-detail-row="' + idx + '"]');
+            if (!row) return;
+            row.classList.toggle('d-none');
         });
-    }
-    <?php endif; ?>
-
-    <?php if (!empty($dailyComparison['comparisons'])): ?>
-    // 每日对比图表
-    var dailyComparisonCtx = document.getElementById('dailyComparisonChart');
-    if (dailyComparisonCtx) {
-        var comparisonData = <?= json_encode($dailyComparison['comparisons']) ?>;
-        new Chart(dailyComparisonCtx, {
-            type: 'bar',
-            data: {
-                labels: comparisonData.map(function(item) { return item.date; }),
-                datasets: [{
-                    label: '<?= __('今天') ?>',
-                    data: comparisonData.map(function(item) { return item.today.value; }),
-                    backgroundColor: 'rgba(102, 126, 234, 0.8)'
-                }, {
-                    label: '<?= __('昨天') ?>',
-                    data: comparisonData.map(function(item) { return item.yesterday.value; }),
-                    backgroundColor: 'rgba(17, 153, 142, 0.8)'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { display: true } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-    <?php endif; ?>
+    });
 })();
 </script>

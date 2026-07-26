@@ -12,6 +12,10 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_module', columns: ['module'])]
 #[Index(name: 'idx_source', columns: ['source'])]
 #[Index(name: 'idx_cron_deal', columns: ['cron_deal'])]
+#[Index(name: 'idx_website_session_created', columns: ['website_id', 'session_id', 'created_at'])]
+#[Index(name: 'idx_website_channel_created', columns: ['website_id', 'channel_code', 'created_at'])]
+#[Index(name: 'idx_website_traffic_created', columns: ['website_id', 'traffic_type', 'created_at'])]
+#[Index(name: 'idx_website_utm_campaign', columns: ['website_id', 'utm_campaign'])]
 class Pixel extends Model
 {
     public const schema_table = 'w_pixel';
@@ -50,6 +54,20 @@ class Pixel extends Model
     public const schema_fields_CRON_DEAL = 'cron_deal';
     #[Col('datetime', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
+    #[Col('varchar', 64, comment: '像素会话ID')]
+    public const schema_fields_SESSION_ID = 'session_id';
+    #[Col('varchar', 64, comment: '流量渠道码')]
+    public const schema_fields_CHANNEL_CODE = 'channel_code';
+    #[Col('varchar', 255, comment: '流量渠道名称快照')]
+    public const schema_fields_CHANNEL_NAME = 'channel_name';
+    #[Col('varchar', 32, comment: '流量类型 paid/social/organic/email/referral/direct/custom')]
+    public const schema_fields_TRAFFIC_TYPE = 'traffic_type';
+    #[Col('varchar', 255, comment: 'utm_source')]
+    public const schema_fields_UTM_SOURCE = 'utm_source';
+    #[Col('varchar', 255, comment: 'utm_medium')]
+    public const schema_fields_UTM_MEDIUM = 'utm_medium';
+    #[Col('varchar', 255, comment: 'utm_campaign')]
+    public const schema_fields_UTM_CAMPAIGN = 'utm_campaign';
     /**
      * 获取未处理的像素记录
      * 
@@ -1017,5 +1035,75 @@ class Pixel extends Model
     public function setCreatedAt(string $created_at): static
     {
         return $this->setData(self::schema_fields_CREATED_AT, $created_at);
+    }
+
+    public function getSessionId(): string
+    {
+        return (string)$this->getData(self::schema_fields_SESSION_ID);
+    }
+
+    public function setSessionId(string $session_id): static
+    {
+        return $this->setData(self::schema_fields_SESSION_ID, $session_id);
+    }
+
+    public function getChannelCode(): string
+    {
+        return (string)$this->getData(self::schema_fields_CHANNEL_CODE);
+    }
+
+    public function setChannelCode(string $channel_code): static
+    {
+        return $this->setData(self::schema_fields_CHANNEL_CODE, $channel_code);
+    }
+
+    public function getChannelName(): string
+    {
+        return (string)$this->getData(self::schema_fields_CHANNEL_NAME);
+    }
+
+    public function setChannelName(string $channel_name): static
+    {
+        return $this->setData(self::schema_fields_CHANNEL_NAME, $channel_name);
+    }
+
+    public function getTrafficType(): string
+    {
+        return (string)$this->getData(self::schema_fields_TRAFFIC_TYPE);
+    }
+
+    public function setTrafficType(string $traffic_type): static
+    {
+        return $this->setData(self::schema_fields_TRAFFIC_TYPE, $traffic_type);
+    }
+
+    public function getUtmSource(): string
+    {
+        return (string)$this->getData(self::schema_fields_UTM_SOURCE);
+    }
+
+    public function setUtmSource(string $utm_source): static
+    {
+        return $this->setData(self::schema_fields_UTM_SOURCE, $utm_source);
+    }
+
+    public function getUtmMedium(): string
+    {
+        return (string)$this->getData(self::schema_fields_UTM_MEDIUM);
+    }
+
+    public function setUtmMedium(string $utm_medium): static
+    {
+        return $this->setData(self::schema_fields_UTM_MEDIUM, $utm_medium);
+    }
+
+    public function getUtmCampaign(): string
+    {
+        return (string)$this->getData(self::schema_fields_UTM_CAMPAIGN);
+    }
+
+    public function setUtmCampaign(string $utm_campaign): static
+    {
+        return $this->setData(self::schema_fields_UTM_CAMPAIGN, $utm_campaign);
     }
 }

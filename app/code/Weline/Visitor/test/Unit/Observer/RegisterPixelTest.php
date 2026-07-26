@@ -9,7 +9,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Visitor\Model\PixelEncryptionToken;
 use Weline\Visitor\Observer\RegisterPixel;
 use Weline\Visitor\Service\PixelEncryptionService;

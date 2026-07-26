@@ -9,6 +9,7 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Visitor\Model\PixelSource;
+use Weline\Visitor\Service\PixelChannelRuleSeedService;
 use Weline\Visitor\Service\VisitorDashboardPageInstaller;
 
 class Install implements InstallInterface
@@ -37,6 +38,13 @@ class Install implements InstallInterface
                 ['name' => 'Medium', 'code' => 'medium', 'referer_domain_contains' => 'medium', 'description' => '来自Medium的访客'],
             ];
             $model->insert($map, 'name,code,referer_domain_contains,description')->fetch();
+        }
+
+        // B08：PixelSource → pixel_channel rule 种子（表未就绪时忽略错误）
+        try {
+            ObjectManager::getInstance(PixelChannelRuleSeedService::class)->seed(false);
+        } catch (\Throwable $e) {
+            w_log_warning('PixelChannel rule seed skipped on install: ' . $e->getMessage());
         }
 
         ObjectManager::getInstance(VisitorDashboardPageInstaller::class)->ensurePages();

@@ -35,12 +35,12 @@
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：10
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：2
 - `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
 - `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：3
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：10
-- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：5
+- `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：4
 
 ## 从源码识别到的开发提示
 
@@ -52,6 +52,9 @@
 
 ## doc 目录
 
+- `app/code/Weline/Visitor/doc/Visitor_Pixel_GTM_GA4_系统设计.md`（Pixel×GTM 冻结合同；**§10 热/温/冷数据层**）
+- `app/code/Weline/Visitor/doc/数据分析功能使用指南.md`（报表数据源边界、G01–G10 实现说明）
+- `app/code/Weline/Visitor/doc/GTM_Tag配置清单.md`
 - `app/code/Weline/Visitor/doc/README.md`
 - `app/code/Weline/Visitor/doc/event/访客像素标签.md`
 - `app/code/Weline/Visitor/doc/像素拓展使用指南.md`
@@ -65,7 +68,7 @@
 - `app/code/Weline/Visitor/doc/功能检验最终报告.md`
 - `app/code/Weline/Visitor/doc/升级故障排除-traffic_split.md`
 - `app/code/Weline/Visitor/doc/多站点事件监听看板.md`
-- `app/code/Weline/Visitor/doc/数据分析功能使用指南.md`
+- `app/code/Weline/Visitor/doc/开发面板访问契约.md`
 - `app/code/Weline/Visitor/doc/站点ID功能完善说明.md`
 
 ## 开发前门禁

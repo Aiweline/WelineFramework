@@ -3,7 +3,7 @@
 namespace Weline\Visitor\Cron;
 
 use Weline\Framework\Cron\CronTaskInterface;
-use Weline\Visitor\Model\PixelSource;
+use Weline\Visitor\Service\PixelCronSourceCompatService;
 
 class Pixel implements CronTaskInterface
 {
@@ -29,7 +29,7 @@ class Pixel implements CronTaskInterface
      */
     function tip(): string
     {
-        return '定时统计和区分像素数据';
+        return '标记像素处理状态并同步渠道码到 source（旧 referer 反写默认停用）';
     }
 
     /**
@@ -45,57 +45,21 @@ class Pixel implements CronTaskInterface
      */
     function execute(): string
     {
-        $unDeaPixels = \Weline\Visitor\Model\Pixel::getUnDeaPixels();
-        $do = [];
-        /**@var \Weline\Visitor\Model\PixelSource $map */
-        $map = w_obj(PixelSource::class);
-        $maps = $map::all();
-        foreach ($unDeaPixels as $unDeaPixel) {
-            $referer = $unDeaPixel['referer'];
-            if (empty($referer)) {
-                $do[] = $unDeaPixel['pixel_id'];
-                continue;
-            }
-            $referer = parse_url($referer)['host'] ?? '';
-            if (empty($referer)) {
-                $do[] = $unDeaPixel['pixel_id'];
-                continue;
-            }
-            foreach ($maps as $item) {
-                $code = $item['code'];
-                $referer_domain_contains = $item['referer_domain_contains'] ?? '';
-                if (empty($referer_domain_contains)) {
-                    continue;
-                }
-                $referer_domain_contains = explode(',', $referer_domain_contains);
-                $has = false;
-                foreach ($referer_domain_contains as $referer_domain_contain) {
-                    if (str_contains($referer, $referer_domain_contain)) {
-                        # 相同不处理
-                        if ($unDeaPixel['source'] == $code) {
-                            $do[] = $unDeaPixel['pixel_id'];
-                            break;
-                        }
-                        /**@var \Weline\Visitor\Model\Pixel $pixel */
-                        $pixel = w_obj(\Weline\Visitor\Model\Pixel::class)->load($unDeaPixel['pixel_id']);
-                        $pixel->setSource($code)
-                            ->setCronDeal(1)
-                            ->save();
-                        $has = true;
-                        break;
-                    }
-                }
-                if ($has) {
-                    break;
-                }
-            }
-        }
-        foreach ($do as $item) {
-            $pixel = w_obj(\Weline\Visitor\Model\Pixel::class)->load($item);
-            $pixel->setData(\Weline\Visitor\Model\Pixel::schema_fields_CRON_DEAL, 1);
-            $pixel->save();
-        }
-        return 'ok';
+        $rows = \Weline\Visitor\Model\Pixel::getUnDeaPixels();
+        /**@var PixelCronSourceCompatService $compat */
+        $compat = w_obj(PixelCronSourceCompatService::class);
+        $stat = $compat->process($rows);
+
+        return sprintf(
+            'ok total=%d updated=%d synced=%d legacy=%d skipped=%d failed=%d legacy_enabled=%s',
+            $stat['total'],
+            $stat['updated'],
+            $stat['synced'],
+            $stat['legacy'],
+            $stat['skipped'],
+            $stat['failed'],
+            $stat['legacy_enabled'] ? '1' : '0'
+        );
     }
 
     /**

@@ -47,35 +47,48 @@ class ReindexCollector implements \Weline\Framework\Event\ObserverInterface
         foreach ($modules as $module) {
             $module = new Module($module);
             $models = $this->moduleFileReader->readClass($module, 'Model');
-            foreach ($models as $model) {
-                if (class_exists($model)) {
-                    // 抽象类不能被实例化，这里跳过
-                    $reflection = new \ReflectionClass($model);
-                    if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
-                        continue;
-                    }
-                    // 检查是否为静态类
-                    if (ObjectManager::isStaticClass($model)) {
-                        continue;
-                    }
-                    $model = ObjectManager::getInstance($model);
-                    if ($model instanceof AbstractModel && $indexer = $model::indexer) {
-                        # 检测是否有indexer
-                        $hasIndexer = $this->indexer
-                            ->reset()
-                            ->clearData()
-                            ->where([[$this->indexer::schema_fields_NAME, $indexer], [$this->indexer::schema_fields_MODEL, $model::class]])
-                            ->find()
-                            ->fetch();
-                        if (!$hasIndexer->getId()) {
-                            # 如果没有indexer，则创建
-                            $this->indexer->setName($indexer);
-                            $this->indexer->setModuleName($module->getName());
-                            $this->indexer->setModuleModel($model::class);
-                            $this->indexer->setModuleTable($model->getTable());
-                            $this->indexer->save();
-                        }
-                    }
+            foreach ($models as $modelClass) {
+                if (!class_exists($modelClass)) {
+                    continue;
+                }
+
+                $reflection = new \ReflectionClass($modelClass);
+                if ($reflection->isAbstract()
+                    || $reflection->isTrait()
+                    || $reflection->isInterface()
+                    || !$reflection->isSubclassOf(AbstractModel::class)
+                ) {
+                    continue;
+                }
+
+                // Model directories can also contain UI/data helper classes.
+                // Inspect the inherited/overridden constant before constructing
+                // anything: setup must not instantiate unrelated object graphs
+                // merely to discover the small set of indexed ORM models.
+                $indexer = (string)$reflection->getConstant('indexer');
+                if ($indexer === '' || ObjectManager::isStaticClass($modelClass)) {
+                    continue;
+                }
+
+                $model = ObjectManager::getInstance($modelClass);
+                if (!$model instanceof AbstractModel) {
+                    continue;
+                }
+
+                # 检测是否有indexer
+                $hasIndexer = $this->indexer
+                    ->reset()
+                    ->clearData()
+                    ->where([[$this->indexer::schema_fields_NAME, $indexer], [$this->indexer::schema_fields_MODEL, $model::class]])
+                    ->find()
+                    ->fetch();
+                if (!$hasIndexer->getId()) {
+                    # 如果没有indexer，则创建
+                    $this->indexer->setName($indexer);
+                    $this->indexer->setModuleName($module->getName());
+                    $this->indexer->setModuleModel($model::class);
+                    $this->indexer->setModuleTable($model->getTable());
+                    $this->indexer->save();
                 }
             }
         }

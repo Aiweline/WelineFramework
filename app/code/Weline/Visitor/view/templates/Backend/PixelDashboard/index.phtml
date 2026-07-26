@@ -11,6 +11,7 @@
  * @var array $event_rows
  * @var array $site_rows
  * @var array $source_rows
+ * @var array $channel_rows
  * @var array $realtime_rows
  * @var array $recent_events
  */
@@ -23,6 +24,7 @@ $trend = $trend ?? [];
 $eventRows = $event_rows ?? [];
 $siteRows = $site_rows ?? [];
 $sourceRows = $source_rows ?? [];
+$channelRows = $channel_rows ?? [];
 $realtimeRows = $realtime_rows ?? [];
 $recentEvents = $recent_events ?? [];
 
@@ -51,8 +53,17 @@ $currentQuery = [
 $currentQuery = array_filter($currentQuery, static fn($value): bool => $value !== null && $value !== '');
 $exportQuery = $currentQuery;
 $exportQuery['format'] = 'csv';
-$exportUrl = $this->getUrl('*/pixel_dashboard/export') . '?' . http_build_query($exportQuery);
-$refreshUrl = $this->getUrl('*/pixel_dashboard/index') . (!empty($currentQuery) ? '?' . http_build_query($currentQuery) : '');
+$exportUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/export', $exportQuery);
+$refreshUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/index', $currentQuery);
+$listBaseQuery = \Weline\Visitor\Service\PixelStatisticsService::buildListDrilldownQuery($filters);
+$listUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $listBaseQuery);
+$detailQuery = $currentQuery;
+if ($selectedWebsite !== '') {
+    $detailQuery['websiteId'] = $selectedWebsite;
+}
+$detailUrl = $selectedWebsite !== ''
+    ? $this->getBackendUrlPath('visitor/backend/pixel-dashboard/detail', $detailQuery)
+    : '';
 $trendMax = max(1, ...array_map(static fn($row): int => (int)($row['count'] ?? 0), $trend ?: [['count' => 0]]));
 $eventMax = max(1, ...array_map(static fn($row): int => (int)($row['count'] ?? 0), $eventRows ?: [['count' => 0]]));
 $realtimeMax = max(1, ...array_map(static fn($row): int => (int)($row['count'] ?? 0), $realtimeRows ?: [['count' => 0]]));
@@ -210,6 +221,14 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
             <a href="<?= $h($refreshUrl) ?>" class="btn btn-outline-secondary btn-sm">
                 <i class="mdi mdi-refresh"></i> <lang>刷新</lang>
             </a>
+            <a href="<?= $h($listUrl) ?>" class="btn btn-outline-secondary btn-sm">
+                <i class="mdi mdi-table"></i> <lang>事件列表</lang>
+            </a>
+            <?php if ($detailUrl !== ''): ?>
+                <a href="<?= $h($detailUrl) ?>" class="btn btn-outline-primary btn-sm">
+                    <i class="mdi mdi-chart-box-outline"></i> <lang>详情报表</lang>
+                </a>
+            <?php endif; ?>
             <a href="<?= $h($exportUrl) ?>" class="btn btn-primary btn-sm">
                 <i class="mdi mdi-download"></i> <lang>导出 CSV</lang>
             </a>
@@ -224,7 +243,7 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
 
     <div class="card mb-3">
         <div class="card-body">
-            <form method="get" action="<?= $h($this->getUrl('*/pixel_dashboard/index')) ?>" class="weline-pixel-toolbar">
+            <form method="get" action="<?= $h($this->getBackendUrlPath('visitor/backend/pixel-dashboard/index')) ?>" class="weline-pixel-toolbar">
                 <div>
                     <label class="form-label"><lang>站点</lang></label>
                     <select name="websiteId" class="form-select">
@@ -270,7 +289,7 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                     <button type="submit" class="btn btn-primary">
                         <i class="mdi mdi-filter-outline"></i> <lang>应用筛选</lang>
                     </button>
-                    <a href="<?= $h($this->getUrl('*/pixel_dashboard/index')) ?>" class="btn btn-outline-secondary">
+                    <a href="<?= $h($this->getBackendUrlPath('visitor/backend/pixel-dashboard/index')) ?>" class="btn btn-outline-secondary">
                         <lang>重置</lang>
                     </a>
                 </div>
@@ -408,9 +427,18 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                 </thead>
                                 <tbody>
                                 <?php foreach ($eventRows as $row): ?>
-                                    <?php $barWidth = max(2, round(((int)($row['count'] ?? 0) / $eventMax) * 100)); ?>
+                                    <?php
+                                    $barWidth = max(2, round(((int)($row['count'] ?? 0) / $eventMax) * 100));
+                                    $eventQuery = $currentQuery;
+                                    $eventQuery['event'] = (string)($row['event'] ?? '');
+                                    $eventUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/index', array_filter($eventQuery, static fn($v): bool => $v !== null && $v !== ''));
+                                    ?>
                                     <tr>
-                                        <td class="fw-semibold"><?= $h($row['event'] ?? '') ?></td>
+                                        <td class="fw-semibold">
+                                            <a href="<?= $h($eventUrl) ?>" class="text-decoration-none">
+                                                <?= $h($row['event'] ?? '') ?>
+                                            </a>
+                                        </td>
                                         <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
                                         <td>
                                             <div class="weline-pixel-progress" title="<?= $num($row['share'] ?? 0, 2) ?>%">
@@ -453,7 +481,7 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                     <?php
                                     $siteQuery = $currentQuery;
                                     $siteQuery['websiteId'] = (string)($row['website_id'] ?? 0);
-                                    $siteUrl = $this->getUrl('*/pixel_dashboard/index') . '?' . http_build_query($siteQuery);
+                                    $siteUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/index', $siteQuery);
                                     ?>
                                     <tr>
                                         <td class="fw-semibold"><?= __('站点 %{1}', [(int)($row['website_id'] ?? 0)]) ?></td>
@@ -478,6 +506,69 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
         </div>
     </div>
 
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><lang>流量渠道</lang></h2>
+                    <?php if (!empty($channelRows)): ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th><lang>渠道名称</lang></th>
+                                    <th><lang>渠道码</lang></th>
+                                    <th><lang>流量类型</lang></th>
+                                    <th class="text-end"><lang>事件</lang></th>
+                                    <th class="text-end"><lang>用户</lang></th>
+                                    <th class="text-end"><lang>价值</lang></th>
+                                    <th class="text-end"><lang>下钻</lang></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($channelRows as $row): ?>
+                                    <?php
+                                    $code = (string)($row['channel_code'] ?? '');
+                                    $name = trim((string)($row['channel_name'] ?? ''));
+                                    if ($name === '') {
+                                        $name = $code !== '' ? $code : '—';
+                                    }
+                                    $type = trim((string)($row['traffic_type'] ?? ''));
+                                    $drillQuery = \Weline\Visitor\Service\PixelStatisticsService::buildListDrilldownQuery($filters, [
+                                        'channel_code' => $code,
+                                        'traffic_type' => $type,
+                                    ]);
+                                    $drillUrl = $code !== ''
+                                        ? $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $drillQuery)
+                                        : '';
+                                    ?>
+                                    <tr>
+                                        <td class="fw-semibold"><?= $h($name) ?></td>
+                                        <td><code><?= $h($code !== '' ? $code : '—') ?></code></td>
+                                        <td><?= $type !== '' ? $h($type) : '—' ?></td>
+                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
+                                        <td class="text-end">
+                                            <?php if ($drillUrl !== ''): ?>
+                                                <a class="btn btn-sm btn-outline-secondary" href="<?= $h($drillUrl) ?>"><lang>事件列表</lang></a>
+                                            <?php else: ?>
+                                                —
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted"><lang>暂无流量渠道数据（需扁平列就绪且存在 channel_code）。</lang></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-3">
         <div class="col-xl-4">
             <div class="card h-100">
@@ -489,14 +580,31 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                 <thead>
                                 <tr>
                                     <th><lang>来源</lang></th>
+                                    <th><lang>渠道</lang></th>
                                     <th class="text-end"><lang>事件</lang></th>
                                     <th class="text-end"><lang>用户</lang></th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 <?php foreach ($sourceRows as $row): ?>
+                                    <?php
+                                    $srcCode = (string)($row['channel_code'] ?? '');
+                                    $srcName = trim((string)($row['channel_name'] ?? ''));
+                                    $channelLabel = $srcName !== '' ? $srcName : ($srcCode !== '' ? $srcCode : '—');
+                                    ?>
                                     <tr>
-                                        <td><?= ($row['source'] ?? '') === 'direct' ? __('直接访问') : $h($row['source'] ?? '') ?></td>
+                                        <td>
+                                            <?= ($row['source'] ?? '') === 'direct' ? __('直接访问') : $h($row['source'] ?? '') ?>
+                                            <?php if (!empty($row['utm_source'])): ?>
+                                                <div class="small text-muted">utm: <?= $h($row['utm_source']) ?><?= !empty($row['utm_medium']) ? '/' . $h($row['utm_medium']) : '' ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="small">
+                                            <?= $h($channelLabel) ?>
+                                            <?php if ($srcName !== '' && $srcCode !== '' && $srcName !== $srcCode): ?>
+                                                <div class="text-muted"><code><?= $h($srcCode) ?></code></div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
                                         <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
                                     </tr>
@@ -521,7 +629,8 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                 <tr>
                                     <th style="width: 150px;"><lang>时间</lang></th>
                                     <th style="width: 92px;"><lang>站点</lang></th>
-                                    <th style="width: 160px;"><lang>事件</lang></th>
+                                    <th style="width: 140px;"><lang>事件</lang></th>
+                                    <th style="width: 140px;"><lang>来源</lang></th>
                                     <th><lang>URL</lang></th>
                                     <th style="width: 128px;"><lang>IP</lang></th>
                                     <th style="width: 92px;" class="text-end"><lang>价值</lang></th>
@@ -529,10 +638,31 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                                 </thead>
                                 <tbody>
                                 <?php foreach ($recentEvents as $row): ?>
+                                    <?php
+                                    $attrLabel = (string)($row['source'] ?? '');
+                                    if ($attrLabel === '' || $attrLabel === 'worker') {
+                                        $attrLabel = trim((string)($row['channel_code'] ?? ''));
+                                    }
+                                    if ($attrLabel === '' && !empty($row['utm_source'])) {
+                                        $attrLabel = (string)$row['utm_source'];
+                                        if (!empty($row['utm_medium'])) {
+                                            $attrLabel .= '/' . (string)$row['utm_medium'];
+                                        }
+                                    }
+                                    if ($attrLabel === '') {
+                                        $attrLabel = '—';
+                                    }
+                                    ?>
                                     <tr>
                                         <td class="small text-muted"><?= $h($row['created_at'] ?? '') ?></td>
                                         <td><?= $num($row['website_id'] ?? 0) ?></td>
                                         <td class="fw-semibold text-truncate" title="<?= $h($row['event'] ?? '') ?>"><?= $h($row['event'] ?? '') ?></td>
+                                        <td class="small text-truncate" title="<?= $h($attrLabel) ?>">
+                                            <?= $attrLabel === 'direct' ? __('直接访问') : $h($attrLabel) ?>
+                                            <?php if (!empty($row['channel_code']) && $attrLabel !== (string)$row['channel_code']): ?>
+                                                <div class="text-muted"><?= $h($row['channel_code']) ?></div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="weline-pixel-url text-truncate" title="<?= $h($row['url'] ?? '') ?>"><?= $h($row['url'] ?? '') ?></td>
                                         <td class="small"><?= $h($row['ip'] ?? '') ?></td>
                                         <td class="text-end"><?= $num($row['value'] ?? 0, 2) ?></td>
