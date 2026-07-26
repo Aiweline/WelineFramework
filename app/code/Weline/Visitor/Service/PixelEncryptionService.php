@@ -47,6 +47,9 @@ class PixelEncryptionService
         }
 
         $encryptionToken = $token->getEncryptionToken();
+        if ($encryptionToken === '') {
+            throw new \Exception(__('版本号 %{1} 的加密token为空', [$version ?? '当前版本']));
+        }
         
         // 将数据转换为JSON字符串
         $plaintext = is_string($data) ? $data : json_encode($data, JSON_UNESCAPED_UNICODE);

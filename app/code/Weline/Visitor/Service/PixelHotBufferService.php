@@ -30,7 +30,8 @@ class PixelHotBufferService
 
     public function __construct(
         private ?PixelEventPersistenceService $persistenceService = null,
-        private ?VisitorTrackingConfig $trackingConfig = null
+        private ?VisitorTrackingConfig $trackingConfig = null,
+        private ?PixelEventService $eventService = null
     ) {
     }
 
@@ -184,7 +185,8 @@ class PixelHotBufferService
                     }
 
                     try {
-                        $this->persistence()->persistPrepared($event['post'], $event['data']);
+                        $data = $this->eventService()->hydratePreparedAttribution($event['post'], $event['data']);
+                        $this->persistence()->persistPrepared($event['post'], $data);
                         $processed++;
                     } catch (\Throwable $throwable) {
                         $failed++;
@@ -330,6 +332,15 @@ class PixelHotBufferService
         }
 
         return $this->trackingConfig;
+    }
+
+    private function eventService(): PixelEventService
+    {
+        if (!$this->eventService) {
+            $this->eventService = ObjectManager::getInstance(PixelEventService::class);
+        }
+
+        return $this->eventService;
     }
 
     /**

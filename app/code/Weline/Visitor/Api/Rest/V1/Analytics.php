@@ -5,16 +5,19 @@ namespace Weline\Visitor\Api\Rest\V1;
 use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Visitor\Api\Rest\PanelProtectedTrait;
+use Weline\Visitor\Api\Rest\VisitorPanelAnalyticsActionsTrait;
 use Weline\Visitor\Model\Pixel;
 use Weline\Visitor\Model\AbTest;
 
 /**
  * 像素数据分析API
- * 提供像素数据的商业价值分析和统计功能
+ * 提供像素数据的商业价值分析和统计功能；
+ * 开发面板「访问事件」热缓冲/巡检/通道/字典动作也挂在本控制器（/analytics/*）。
  */
 class Analytics extends FrontendRestController
 {
     use PanelProtectedTrait;
+    use VisitorPanelAnalyticsActionsTrait;
 
     /**
      * 获取商业价值分析数据

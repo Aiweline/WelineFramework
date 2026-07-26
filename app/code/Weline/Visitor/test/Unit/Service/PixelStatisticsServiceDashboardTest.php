@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Visitor\test\Unit\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Visitor\Model\Pixel;
 use Weline\Visitor\Service\PixelStatisticsService;
 
@@ -81,6 +81,45 @@ class PixelStatisticsServiceDashboardTest extends TestCore
             'startDate' => '2026-01-02',
             'endDate' => '2026-01-01',
         ]);
+    }
+
+    public function testEventListeningDashboardUsesCreateTimeWhenCreatedAtNull(): void
+    {
+        $event = 'dashboard_null_created_' . str_replace('.', '_', uniqid('', true));
+        $siteId = 910004;
+        $pixel = ObjectManager::make(Pixel::class);
+        $pixel->setData([
+            'url' => 'https://example.test/' . $event,
+            'module' => 'Weline_Visitor',
+            'name' => $event,
+            'event' => $event,
+            'value' => 15,
+            'lang' => 'zh-CN',
+            'currency' => 'CNY',
+            'website_id' => $siteId,
+            'source' => 'unit-test',
+            'referer' => 'https://example.test/ref',
+            'user_id' => 0,
+            'user_agent' => 'PHPUnit Pixel Dashboard',
+            'ip' => '203.0.113.40',
+            'browser_info' => '{}',
+            'cron_deal' => 1,
+            'created_at' => null,
+        ])->save();
+        $this->pixelIds[] = $pixel->getId();
+
+        $pdo = $pixel->getConnection()->getConnector()->getLink();
+        $pdo->prepare('UPDATE w_pixel SET created_at = NULL WHERE pixel_id = :id')->execute([':id' => (int)$pixel->getId()]);
+
+        $dashboard = PixelStatisticsService::getEventListeningDashboard([
+            'websiteId' => (string)$siteId,
+            'event' => $event,
+            'range' => '30d',
+        ]);
+
+        self::assertSame(1, (int)$dashboard['summary']['total_events']);
+        self::assertNotEmpty($dashboard['recent_events']);
+        self::assertSame($event, $dashboard['recent_events'][0]['event'] ?? null);
     }
 
     private function createPixel(int $websiteId, string $event, int $value, string $ip): Pixel

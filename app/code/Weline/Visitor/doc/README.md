@@ -68,7 +68,8 @@
 - `app/code/Weline/Visitor/doc/功能检验最终报告.md`
 - `app/code/Weline/Visitor/doc/升级故障排除-traffic_split.md`
 - `app/code/Weline/Visitor/doc/多站点事件监听看板.md`
-- `app/code/Weline/Visitor/doc/数据分析功能使用指南.md`
+- `app/code/Weline/Visitor/doc/Visitor_Pixel_GTM_GA4_系统设计.md`（含 §10 热/温/冷）
+- `app/code/Weline/Visitor/doc/数据分析功能使用指南.md`（报表数据源与 G 波次说明）
 - `app/code/Weline/Visitor/doc/站点ID功能完善说明.md`
 
 ## 维护规则

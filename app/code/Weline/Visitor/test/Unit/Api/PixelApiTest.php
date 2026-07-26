@@ -7,7 +7,7 @@ namespace Weline\Visitor\test\Unit\Api;
 use ReflectionClass;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Visitor\Api\Rest\V1\Pixel;
 use Weline\Visitor\Model\Pixel as PixelModel;
 use Weline\Visitor\Model\PixelAdditional;

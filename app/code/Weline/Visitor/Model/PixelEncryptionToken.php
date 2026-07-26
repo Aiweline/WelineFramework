@@ -142,11 +142,13 @@ class PixelEncryptionToken extends Model
      */
     public function findByVersion(string $version): ?self
     {
-        return $this->reset()
+        $token = $this->reset()
             ->where(self::schema_fields_VERSION, $version)
             ->where(self::schema_fields_IS_DELETED, 0)
             ->find()
             ->fetch();
+
+        return $this->nullIfUnusable($token);
     }
     /**
      * 获取所有有效的token（未过期且未删除）
@@ -165,12 +167,32 @@ class PixelEncryptionToken extends Model
      */
     public function getCurrentVersionToken(): ?self
     {
-        // 获取最新的未删除token
-        return $this->reset()
+        // 获取最新的未删除token；无行时 ORM find()->fetch() 仍可能返回空模型，需归一为 null。
+        $token = $this->reset()
             ->where(self::schema_fields_IS_DELETED, 0)
             ->order('created_at', 'DESC')
             ->find()
             ->fetch();
+
+        return $this->nullIfUnusable($token);
+    }
+
+    /**
+     * ORM 空结果可能是「空模型对象」而非 null；调用方依赖 ?self / if (!$token)。
+     */
+    private function nullIfUnusable(mixed $token): ?self
+    {
+        if (!$token instanceof self) {
+            return null;
+        }
+        if ((int)$token->getTokenId() <= 0) {
+            return null;
+        }
+        if ($token->getEncryptionToken() === '') {
+            return null;
+        }
+
+        return $token;
     }
     /**
      * 标记90天前的旧token为已删除

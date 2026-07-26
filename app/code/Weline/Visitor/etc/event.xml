@@ -33,4 +33,19 @@
                   shared="true"
                   sort="80"/>
     </event>
+    <!-- 开发面板「访问事件」Tab：与 DevToolPanel 同链路全局注入 HTML -->
+    <event name="Weline_Framework::telemetry::request_collected">
+        <observer name="Weline_Visitor::visitor_panel_bootstrap"
+                  instance="Weline\Visitor\Observer\VisitorPanelBootstrapObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
+    <event name="Weline_Framework::App::run_after">
+        <observer name="Weline_Visitor::visitor_panel_bootstrap_compat"
+                  instance="Weline\Visitor\Observer\VisitorPanelBootstrapObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
 </config>

@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Visitor',
     __DIR__,
-    '1.0.0',
+    '1.0.4',
     '<a href="https://bbs.aiweline.com">系统组件模块: 访客统计</a>',
     [
         'Weline_Taglib',

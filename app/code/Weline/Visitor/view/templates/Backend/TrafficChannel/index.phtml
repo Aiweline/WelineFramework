@@ -1,0 +1,133 @@
+<?php
+/**
+ * 流量渠道列表（B03）+ 新建入口（B04）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $channels
+ * @var string $kind_filter
+ * @var string $load_error
+ * @var string $page_title
+ */
+
+$channels = $channels ?? [];
+$kindFilter = (string)($kind_filter ?? 'campaign');
+$loadError = (string)($load_error ?? '');
+$h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$campaignUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/index', ['kind' => 'campaign']);
+$ruleUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/index', ['kind' => 'rule']);
+$allUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/index', ['kind' => 'all']);
+$addUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/getAdd');
+$landingUrls = $landing_urls ?? [];
+?>
+<div class="weline-traffic-channel-list">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h4 mb-0"><lang>流量渠道</lang></h1>
+        <div class="d-flex gap-2 align-items-center">
+            <div class="btn-group btn-group-sm" role="group">
+                <a class="btn <?= $kindFilter === 'campaign' ? 'btn-primary' : 'btn-outline-secondary' ?>"
+                   href="<?= $h($campaignUrl) ?>"><lang>投放渠道</lang></a>
+                <a class="btn <?= $kindFilter === 'rule' ? 'btn-primary' : 'btn-outline-secondary' ?>"
+                   href="<?= $h($ruleUrl) ?>"><lang>匹配规则</lang></a>
+                <a class="btn <?= $kindFilter === 'all' ? 'btn-primary' : 'btn-outline-secondary' ?>"
+                   href="<?= $h($allUrl) ?>"><lang>全部</lang></a>
+            </div>
+            <a class="btn btn-sm btn-primary" href="<?= $h($addUrl) ?>"><lang>新建渠道</lang></a>
+        </div>
+    </div>
+
+    <?php if ($loadError !== ''): ?>
+        <div class="alert alert-warning">
+            <lang>渠道表尚未就绪或查询失败；完成 setup:upgrade 后刷新本页。</lang>
+        </div>
+    <?php endif; ?>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                <tr>
+                    <th><lang>名称</lang></th>
+                    <th><lang>渠道码</lang></th>
+                    <th><lang>类型</lang></th>
+                    <th><lang>流量类型</lang></th>
+                    <th><lang>站点</lang></th>
+                    <th><lang>启用</lang></th>
+                    <th><lang>操作</lang></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (!$channels): ?>
+                    <tr>
+                        <td colspan="7" class="text-muted text-center py-4">
+                            <lang>暂无渠道。</lang>
+                            <a href="<?= $h($addUrl) ?>"><lang>新建渠道</lang></a>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($channels as $row): ?>
+                        <?php
+                        $data = \is_object($row) && \method_exists($row, 'getData') ? $row->getData() : (array)$row;
+                        $channelId = (int)($data['pixel_channel_id'] ?? $data['id'] ?? 0);
+                        $websiteId = (int)($data['website_id'] ?? 0);
+                        $enabled = (int)($data['enabled'] ?? 0) === 1;
+                        $editUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/getEdit', ['id' => $channelId]);
+                        $detailUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/getDetail', ['id' => $channelId]);
+                        $toggleUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/postToggleEnabled');
+                        $landingUrl = (string)($landingUrls[$channelId] ?? '');
+                        ?>
+                        <tr>
+                            <td>
+                                <?php if ($channelId > 0): ?>
+                                    <a href="<?= $h($detailUrl) ?>"><?= $h($data['name'] ?? '') ?></a>
+                                <?php else: ?>
+                                    <?= $h($data['name'] ?? '') ?>
+                                <?php endif; ?>
+                            </td>
+                            <td><code><?= $h($data['code'] ?? '') ?></code></td>
+                            <td><?= $h($data['kind'] ?? '') ?></td>
+                            <td><?= $h($data['traffic_type'] ?? '') ?></td>
+                            <td><?= $websiteId === 0 ? $h(__('全局')) : $h((string)$websiteId) ?></td>
+                            <td><?= $enabled ? $h(__('是')) : $h(__('否')) ?></td>
+                            <td class="text-nowrap">
+                                <?php if ($channelId > 0): ?>
+                                    <a class="btn btn-sm btn-outline-secondary" href="<?= $h($detailUrl) ?>"><lang>详情</lang></a>
+                                    <a class="btn btn-sm btn-outline-primary" href="<?= $h($editUrl) ?>"><lang>编辑</lang></a>
+                                    <?php if ($landingUrl !== ''): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-success js-copy-landing"
+                                                data-url="<?= $h($landingUrl) ?>"><lang>复制链接</lang></button>
+                                    <?php endif; ?>
+                                    <form method="post" action="<?= $h($toggleUrl) ?>" class="d-inline">
+                                        <input type="hidden" name="id" value="<?= $h((string)$channelId) ?>"/>
+                                        <input type="hidden" name="enabled" value="<?= $enabled ? '0' : '1' ?>"/>
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                            <?= $enabled ? $h(__('停用')) : $h(__('启用')) ?>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.querySelectorAll('.js-copy-landing').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var text = btn.getAttribute('data-url') || '';
+            if (!text) return;
+            var done = function () {
+                var old = btn.textContent;
+                btn.textContent = <?= \json_encode((string)__('已复制'), JSON_UNESCAPED_UNICODE) ?>;
+                setTimeout(function () { btn.textContent = old; }, 1200);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(function () {});
+            }
+        });
+    });
+})();
+</script>

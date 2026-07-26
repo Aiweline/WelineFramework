@@ -305,6 +305,13 @@ class TranslationCollector implements TranslationCollectorInterface
                         }
                     }
                 }
+
+                // 6. #[Acl(...)] / #[\Weline\Framework\Acl\Acl(...)] 属性字面量
+                // Acl 构造时会对 source_name / document 调用 __()，但属性参数本身不是 __('...')，
+                // 若不单独提取，setup:upgrade / i18n:collect 整表重写会丢掉这些 ACL 文案。
+                if ($ext === 'php') {
+                    yield from $this->yieldFromAclAttributes($content, $relativePath, $moduleName);
+                }
                 
                 // Generator 自然释放：$content 在下次循环迭代时被覆盖
                 // 显式 unset 确保大文件立即释放
@@ -316,11 +323,53 @@ class TranslationCollector implements TranslationCollectorInterface
         }
     }
 
+    /**
+     * @return \Generator<string, array{file: string, context: string, module: string}>
+     */
+    private function yieldFromAclAttributes(string $content, string $relativePath, string $moduleName): \Generator
+    {
+        if (!str_contains($content, '#[Acl') && !str_contains($content, 'Framework\\Acl\\Acl')) {
+            return;
+        }
+
+        if (!preg_match_all(
+            '/#\[\s*(?:\\\\Weline\\\\Framework\\\\Acl\\\\Acl|Weline\\\\Framework\\\\Acl\\\\Acl|Acl)\s*\((.*?)\)\s*\]/s',
+            $content,
+            $aclMatches
+        )) {
+            return;
+        }
+
+        foreach ($aclMatches[1] as $argsBlob) {
+            if (!preg_match_all('/(["\'])((?:\\\\.|(?!\1).)*?)\1/s', $argsBlob, $strMatches)) {
+                continue;
+            }
+            foreach ($strMatches[2] as $raw) {
+                $match = str_replace(['\\"', "\\'", '\\\\'], ['"', "'", '\\'], $raw);
+                $match = trim($match);
+                if ($match === '' || str_starts_with($match, 'mdi-')) {
+                    continue;
+                }
+                // source_id / parent_source 含 ::，isValidTranslationString 会过滤；图标已跳过
+                if (!$this->isValidTranslationString($match)) {
+                    continue;
+                }
+                yield $match => [
+                    'file' => $relativePath,
+                    'context' => 'Acl',
+                    'module' => $moduleName,
+                ];
+            }
+        }
+    }
+
     private function hasTranslationMarkers(string $content): bool
     {
         return str_contains($content, '__')
             || str_contains($content, '@lang')
-            || str_contains($content, '<lang');
+            || str_contains($content, '<lang')
+            || str_contains($content, '#[Acl')
+            || str_contains($content, 'Framework\\Acl\\Acl');
     }
     
     /**
