@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Visitor\Service;
 
 use Weline\Visitor\Model\Pixel;
+use Weline\Visitor\Model\PixelChannel;
 use Weline\Visitor\Service\PixelStatisticsCache;
 
 /**
@@ -304,9 +305,315 @@ class PixelStatisticsService
             'event_rows' => self::getDashboardEventRows($normalizedFilters, 20),
             'site_rows' => self::getDashboardSiteRows($normalizedFilters, 100),
             'source_rows' => self::getDashboardSourceRows($normalizedFilters, 10),
-            'realtime_rows' => self::getDashboardRealtimeRows($normalizedFilters, 10, 6),
+            // C05：按 channel_code 聚合 + pixel_channel name join
+            'channel_rows' => self::getDashboardChannelRows($normalizedFilters, 15),
+            'realtime_rows' => self::safeDashboardRealtimeRows($normalizedFilters, 10, 6),
             'recent_events' => self::getDashboardRecentEvents($normalizedFilters, 25),
         ];
+    }
+
+    public const LIST_DEFAULT_PAGE_SIZE = 50;
+    public const LIST_MAX_PAGE_SIZE = 200;
+
+    /**
+     * C02/C03a：看板 list 热表分页（含 channel/traffic_type/utm_* WHERE）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array{
+     *   rows: list<array<string, mixed>>,
+     *   total: int,
+     *   page: int,
+     *   page_size: int,
+     *   page_count: int,
+     *   filters: array<string, mixed>,
+     *   error: string
+     * }
+     */
+    public static function getDashboardEventListPage(array $filters = [], int $page = 1, int $pageSize = self::LIST_DEFAULT_PAGE_SIZE): array
+    {
+        [$page, $pageSize] = self::normalizeListPagination($page, $pageSize);
+        try {
+            $normalized = self::normalizeDashboardFilters($filters);
+        } catch (\Throwable $throwable) {
+            return [
+                'rows' => [],
+                'total' => 0,
+                'page' => $page,
+                'page_size' => $pageSize,
+                'page_count' => 0,
+                'filters' => [],
+                'error' => $throwable->getMessage(),
+            ];
+        }
+
+        try {
+            [$whereSql, $params] = self::buildDashboardWhere($normalized, 'p');
+            $table = self::tableSql('p');
+            $totalRow = self::fetchOne("SELECT COUNT(*) AS cnt FROM {$table} WHERE {$whereSql}", $params);
+            $total = (int)($totalRow['cnt'] ?? 0);
+            $pageCount = $total > 0 ? (int)\ceil($total / $pageSize) : 0;
+            if ($pageCount > 0 && $page > $pageCount) {
+                $page = $pageCount;
+            }
+            $offset = ($page - 1) * $pageSize;
+
+            $pixelId = self::col(Pixel::schema_fields_ID);
+            $eventTime = self::eventTimeExpression('p');
+            $select = [
+                "{$pixelId} AS pixel_id",
+                self::col(Pixel::schema_fields_WEBSITE_ID) . ' AS website_id',
+                self::col(Pixel::schema_fields_EVENT) . ' AS event',
+                self::col(Pixel::schema_fields_URL) . ' AS url',
+                self::col(Pixel::schema_fields_IP) . ' AS ip',
+                self::col(Pixel::schema_fields_SOURCE) . ' AS source',
+                self::col(Pixel::schema_fields_VALUE) . ' AS value',
+                "{$eventTime} AS created_at",
+            ];
+            if (self::hasPixelAttributionColumns()) {
+                foreach (['session_id', 'channel_code', 'channel_name', 'traffic_type', 'utm_source', 'utm_medium', 'utm_campaign'] as $field) {
+                    $select[] = self::col($field) . ' AS ' . $field;
+                }
+            }
+
+            $limitSql = self::getPdoDriver() === 'mysql'
+                ? "LIMIT {$offset}, {$pageSize}"
+                : "LIMIT {$pageSize} OFFSET {$offset}";
+
+            $rawRows = self::fetchRows(
+                'SELECT ' . implode(",\n                ", $select) . "
+                FROM {$table}
+                WHERE {$whereSql}
+                ORDER BY {$eventTime} DESC, {$pixelId} DESC
+                {$limitSql}",
+                $params
+            );
+
+            /** @var \Weline\Visitor\Service\PixelAttributionRowResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Visitor\Service\PixelAttributionRowResolver::class
+            );
+
+            $rows = array_map(static function (array $row) use ($resolver): array {
+                $resolved = $resolver->resolve($row);
+
+                return [
+                    'pixel_id' => (int)($row['pixel_id'] ?? 0),
+                    'website_id' => (int)($row['website_id'] ?? 0),
+                    'event' => (string)($row['event'] ?? ''),
+                    'url' => (string)($row['url'] ?? ''),
+                    'ip' => (string)($row['ip'] ?? ''),
+                    'source' => (string)($resolved['source_label'] ?? $row['source'] ?? ''),
+                    'channel_code' => (string)($resolved['channel_code'] ?? ''),
+                    'traffic_type' => (string)($resolved['traffic_type'] ?? ''),
+                    'session_id' => (string)($resolved['session_id'] ?? ''),
+                    'utm_source' => (string)($resolved['utm_source'] ?? ''),
+                    'utm_medium' => (string)($resolved['utm_medium'] ?? ''),
+                    'utm_campaign' => (string)($resolved['utm_campaign'] ?? ''),
+                    'value' => (float)($row['value'] ?? 0),
+                    'created_at' => $row['created_at'] ?? null,
+                ];
+            }, $rawRows);
+
+            return [
+                'rows' => $rows,
+                'total' => $total,
+                'page' => $page,
+                'page_size' => $pageSize,
+                'page_count' => $pageCount,
+                'filters' => $normalized,
+                'error' => '',
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'rows' => [],
+                'total' => 0,
+                'page' => $page,
+                'page_size' => $pageSize,
+                'page_count' => 0,
+                'filters' => $normalized,
+                'error' => $throwable->getMessage(),
+            ];
+        }
+    }
+
+    public const EXPORT_MAX_ROWS = 10000;
+
+    /**
+     * C04：导出列固定顺序（含归因列；browser_info 保留在末尾兼容旧导出）。
+     *
+     * @var list<string>
+     */
+    public const EXPORT_COLUMNS = [
+        'pixel_id',
+        'created_at',
+        'website_id',
+        'event',
+        'name',
+        'module',
+        'url',
+        'referer',
+        'source',
+        'session_id',
+        'channel_code',
+        'channel_name',
+        'traffic_type',
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'value',
+        'currency',
+        'lang',
+        'ip',
+        'user_id',
+        'user_agent',
+        'cron_deal',
+        'browser_info',
+    ];
+
+    /**
+     * C04：与 list 同筛选条件的明细导出行（含归因列）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array{
+     *   rows: list<array<string, mixed>>,
+     *   columns: list<string>,
+     *   filters: array<string, mixed>,
+     *   error: string
+     * }
+     */
+    public static function getDashboardEventExportRows(array $filters = [], int $limit = self::EXPORT_MAX_ROWS): array
+    {
+        $limit = max(1, min(self::EXPORT_MAX_ROWS, $limit));
+        try {
+            $normalized = self::normalizeDashboardFilters($filters);
+        } catch (\Throwable $throwable) {
+            return [
+                'rows' => [],
+                'columns' => self::EXPORT_COLUMNS,
+                'filters' => [],
+                'error' => $throwable->getMessage(),
+            ];
+        }
+
+        try {
+            [$whereSql, $params] = self::buildDashboardWhere($normalized, 'p');
+            $table = self::tableSql('p');
+            $pixelId = self::col(Pixel::schema_fields_ID);
+            $eventTime = self::eventTimeExpression('p');
+
+            $select = ["{$pixelId} AS pixel_id", "{$eventTime} AS created_at"];
+            foreach ([
+                Pixel::schema_fields_WEBSITE_ID,
+                Pixel::schema_fields_EVENT,
+                Pixel::schema_fields_NAME,
+                Pixel::schema_fields_MODULE,
+                Pixel::schema_fields_URL,
+                Pixel::schema_fields_REFERER,
+                Pixel::schema_fields_SOURCE,
+                Pixel::schema_fields_VALUE,
+                Pixel::schema_fields_CURRENCY,
+                Pixel::schema_fields_LANG,
+                Pixel::schema_fields_IP,
+                Pixel::schema_fields_USER_ID,
+                Pixel::schema_fields_USER_AGENT,
+                Pixel::schema_fields_CRON_DEAL,
+                Pixel::schema_fields_BROWSER_INFO,
+            ] as $field) {
+                $select[] = self::col($field) . ' AS ' . $field;
+            }
+            if (self::hasPixelAttributionColumns()) {
+                foreach (['session_id', 'channel_code', 'channel_name', 'traffic_type', 'utm_source', 'utm_medium', 'utm_campaign'] as $field) {
+                    $select[] = self::col($field) . ' AS ' . $field;
+                }
+            }
+
+            $limitSql = self::getPdoDriver() === 'mysql'
+                ? "LIMIT 0, {$limit}"
+                : "LIMIT {$limit} OFFSET 0";
+
+            $rawRows = self::fetchRows(
+                'SELECT ' . implode(",\n                ", $select) . "
+                FROM {$table}
+                WHERE {$whereSql}
+                ORDER BY {$eventTime} DESC, {$pixelId} DESC
+                {$limitSql}",
+                $params
+            );
+
+            /** @var \Weline\Visitor\Service\PixelAttributionRowResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Visitor\Service\PixelAttributionRowResolver::class
+            );
+
+            $rows = array_map(static function (array $row) use ($resolver): array {
+                $resolved = $resolver->resolve($row);
+                $merged = $row + [
+                    'session_id' => '',
+                    'channel_code' => '',
+                    'channel_name' => '',
+                    'traffic_type' => '',
+                    'utm_source' => '',
+                    'utm_medium' => '',
+                    'utm_campaign' => '',
+                ];
+                foreach (['session_id', 'channel_code', 'channel_name', 'traffic_type', 'utm_source', 'utm_medium', 'utm_campaign'] as $field) {
+                    if (trim((string)$merged[$field]) === '') {
+                        $merged[$field] = (string)($resolved[$field] ?? '');
+                    }
+                }
+                if (trim((string)($merged['source'] ?? '')) === '') {
+                    $merged['source'] = (string)($resolved['source_label'] ?? '');
+                }
+
+                $ordered = [];
+                foreach (self::EXPORT_COLUMNS as $column) {
+                    $ordered[$column] = $merged[$column] ?? '';
+                }
+
+                return $ordered;
+            }, $rawRows);
+
+            return [
+                'rows' => $rows,
+                'columns' => self::EXPORT_COLUMNS,
+                'filters' => $normalized,
+                'error' => '',
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'rows' => [],
+                'columns' => self::EXPORT_COLUMNS,
+                'filters' => $normalized,
+                'error' => $throwable->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @return array{0: int, 1: int} [page, page_size]
+     */
+    public static function normalizeListPagination(int $page, int $pageSize): array
+    {
+        $page = max(1, $page);
+        if ($pageSize <= 0) {
+            $pageSize = self::LIST_DEFAULT_PAGE_SIZE;
+        }
+        $pageSize = max(1, min(self::LIST_MAX_PAGE_SIZE, $pageSize));
+
+        return [$page, $pageSize];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, int|float|string>>
+     */
+    private static function safeDashboardRealtimeRows(array $filters, int $intervalMinutes, int $slots): array
+    {
+        try {
+            return self::getDashboardRealtimeRows($filters, $intervalMinutes, $slots);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -320,7 +627,12 @@ class PixelStatisticsService
      *     end_date: string,
      *     start_day: string,
      *     end_day: string,
-     *     day_count: int
+     *     day_count: int,
+     *     channel_code: string|null,
+     *     traffic_type: string|null,
+     *     utm_source: string|null,
+     *     utm_medium: string|null,
+     *     utm_campaign: string|null
      * }
      */
     public static function normalizeDashboardFilters(array $filters = []): array
@@ -380,6 +692,8 @@ class PixelStatisticsService
             throw new \InvalidArgumentException((string)__('时间范围不能超过 366 天'));
         }
 
+        $attribution = self::normalizeAttributionFilters($filters);
+
         return [
             'website_id' => $websiteId,
             'website_id_raw' => $websiteIdRaw,
@@ -390,7 +704,178 @@ class PixelStatisticsService
             'start_day' => $startDay,
             'end_day' => $endDay,
             'day_count' => $dayCount,
+            'channel_code' => $attribution['channel_code'],
+            'traffic_type' => $attribution['traffic_type'],
+            'utm_source' => $attribution['utm_source'],
+            'utm_medium' => $attribution['utm_medium'],
+            'utm_campaign' => $attribution['utm_campaign'],
         ];
+    }
+
+    /**
+     * C03a：归一化归因筛选（空串视为未筛）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array{
+     *   channel_code: string|null,
+     *   traffic_type: string|null,
+     *   utm_source: string|null,
+     *   utm_medium: string|null,
+     *   utm_campaign: string|null
+     * }
+     */
+    public static function normalizeAttributionFilters(array $filters): array
+    {
+        $channelCode = self::normalizeOptionalStringFilter(
+            $filters['channel_code'] ?? $filters['channelCode'] ?? null,
+            64,
+            (string)__('渠道码筛选参数过长')
+        );
+        $trafficType = self::normalizeOptionalStringFilter(
+            $filters['traffic_type'] ?? $filters['trafficType'] ?? null,
+            32,
+            (string)__('流量类型筛选参数过长')
+        );
+        if ($trafficType !== null && !\in_array($trafficType, PixelChannel::TRAFFIC_TYPES, true)) {
+            throw new \InvalidArgumentException((string)__('流量类型筛选参数无效'));
+        }
+
+        return [
+            'channel_code' => $channelCode,
+            'traffic_type' => $trafficType,
+            'utm_source' => self::normalizeOptionalStringFilter(
+                $filters['utm_source'] ?? $filters['utmSource'] ?? null,
+                255,
+                (string)__('utm_source 筛选参数过长')
+            ),
+            'utm_medium' => self::normalizeOptionalStringFilter(
+                $filters['utm_medium'] ?? $filters['utmMedium'] ?? null,
+                255,
+                (string)__('utm_medium 筛选参数过长')
+            ),
+            'utm_campaign' => self::normalizeOptionalStringFilter(
+                $filters['utm_campaign'] ?? $filters['utmCampaign'] ?? null,
+                255,
+                (string)__('utm_campaign 筛选参数过长')
+            ),
+        ];
+    }
+
+    /**
+     * 是否带有任一归因筛选（供 list/看板判断）。
+     *
+     * @param array<string, mixed> $filters 已归一化或原始均可
+     */
+    public static function hasAttributionFilter(array $filters): bool
+    {
+        foreach (['channel_code', 'traffic_type', 'utm_source', 'utm_medium', 'utm_campaign'] as $key) {
+            $value = $filters[$key] ?? null;
+            if (\is_string($value) && trim($value) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * C07：list 下钻 URL 契约键（须与 list 表单 name / getDashboardRequestFilters 一致）。
+     *
+     * @var list<string>
+     */
+    public const LIST_DRILLDOWN_QUERY_KEYS = [
+        'websiteId',
+        'event',
+        'range',
+        'startDate',
+        'endDate',
+        'channel_code',
+        'traffic_type',
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+    ];
+
+    /**
+     * C06/C07：构造 list 下钻 query（与 list 表单/filters 字段名一致；空串剔除）。
+     *
+     * @param array<string, mixed> $filters 归一化或原始均可
+     * @param array<string, mixed> $extra   覆盖项（如 channel_code / traffic_type）
+     * @return array<string, string>
+     */
+    public static function buildListDrilldownQuery(array $filters = [], array $extra = []): array
+    {
+        $merged = array_merge($filters, $extra);
+
+        $websiteRaw = $merged['websiteId']
+            ?? $merged['website_id_raw']
+            ?? $merged['website_id']
+            ?? '';
+        if ($websiteRaw === null || $websiteRaw === 'all') {
+            $websiteRaw = '';
+        }
+        $websiteRaw = trim((string)$websiteRaw);
+
+        $event = trim((string)($merged['event'] ?? ''));
+        $range = trim((string)($merged['range'] ?? ''));
+        if ($range === '') {
+            $range = '30d';
+        }
+
+        $startDate = trim((string)($merged['startDate'] ?? $merged['start_date'] ?? $merged['start_day'] ?? ''));
+        $endDate = trim((string)($merged['endDate'] ?? $merged['end_date'] ?? $merged['end_day'] ?? ''));
+        // 归一化日期可能带时间，下钻只传 YYYY-MM-DD
+        if (\strlen($startDate) >= 10) {
+            $startDate = substr($startDate, 0, 10);
+        }
+        if (\strlen($endDate) >= 10) {
+            $endDate = substr($endDate, 0, 10);
+        }
+        if ($range !== 'custom') {
+            $startDate = '';
+            $endDate = '';
+        }
+
+        $channelCode = trim((string)($merged['channel_code'] ?? $merged['channelCode'] ?? ''));
+        $trafficType = trim((string)($merged['traffic_type'] ?? $merged['trafficType'] ?? ''));
+        $utmSource = trim((string)($merged['utm_source'] ?? $merged['utmSource'] ?? ''));
+        $utmMedium = trim((string)($merged['utm_medium'] ?? $merged['utmMedium'] ?? ''));
+        $utmCampaign = trim((string)($merged['utm_campaign'] ?? $merged['utmCampaign'] ?? ''));
+
+        $query = [
+            'websiteId' => $websiteRaw,
+            'event' => $event,
+            'range' => $range,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'channel_code' => $channelCode,
+            'traffic_type' => $trafficType,
+            'utm_source' => $utmSource,
+            'utm_medium' => $utmMedium,
+            'utm_campaign' => $utmCampaign,
+        ];
+
+        // 仅允许契约键，防止额外参数漂移
+        $allowed = array_fill_keys(self::LIST_DRILLDOWN_QUERY_KEYS, true);
+        $query = array_intersect_key($query, $allowed);
+
+        return array_filter(
+            $query,
+            static fn($value): bool => $value !== null && $value !== ''
+        );
+    }
+
+    private static function normalizeOptionalStringFilter(mixed $raw, int $maxLen, string $tooLongMessage): ?string
+    {
+        $value = trim((string)($raw ?? ''));
+        if ($value === '') {
+            return null;
+        }
+        if (\strlen($value) > $maxLen) {
+            throw new \InvalidArgumentException($tooLongMessage);
+        }
+
+        return $value;
     }
 
     /**
@@ -444,7 +929,7 @@ class PixelStatisticsService
         $ip = self::col(Pixel::schema_fields_IP);
         $value = self::col(Pixel::schema_fields_VALUE);
         $cronDeal = self::col(Pixel::schema_fields_CRON_DEAL);
-        $createdAt = self::col(Pixel::schema_fields_CREATED_AT);
+        $eventTime = self::eventTimeExpression('p');
         $row = self::fetchOne(
             "SELECT
                 COUNT(*) AS total_events,
@@ -456,8 +941,8 @@ class PixelStatisticsService
                 SUM(CASE WHEN {$cronDeal} = 0 THEN 1 ELSE 0 END) AS un_deal_count,
                 SUM(CASE WHEN {$cronDeal} <> 0 THEN 1 ELSE 0 END) AS dealed_count,
                 SUM(CASE WHEN {$value} > 0 THEN 1 ELSE 0 END) AS value_event_count,
-                MIN({$createdAt}) AS first_seen,
-                MAX({$createdAt}) AS last_seen
+                MIN({$eventTime}) AS first_seen,
+                MAX({$eventTime}) AS last_seen
             FROM {$table}
             WHERE {$whereSql}",
             $params
@@ -505,11 +990,11 @@ class PixelStatisticsService
     {
         [$whereSql, $params] = self::buildDashboardWhere($filters, 'p');
         $table = self::tableSql('p');
-        $createdAt = self::col(Pixel::schema_fields_CREATED_AT);
+        $eventTime = self::eventTimeExpression('p');
         $ip = self::col(Pixel::schema_fields_IP);
         $event = self::col(Pixel::schema_fields_EVENT);
         $value = self::col(Pixel::schema_fields_VALUE);
-        $dayExpression = "DATE({$createdAt})";
+        $dayExpression = "DATE({$eventTime})";
         $rows = self::fetchRows(
             "SELECT
                 {$dayExpression} AS day,
@@ -643,6 +1128,557 @@ class PixelStatisticsService
      */
     private static function getDashboardSourceRows(array $filters, int $limit): array
     {
+        $limit = max(1, min(50, $limit));
+        $rows = [];
+        // A14：短窗且扁平列就绪 → SQL 直接读 utm/channel；无信号再走 A15 browser_info 回退。
+        if (self::isShortAttributionWindow($filters) && self::hasPixelAttributionColumns()) {
+            try {
+                $flatRows = self::getDashboardSourceRowsFromFlatSql($filters, $limit);
+                if (self::sourceRowsHaveAttributionSignal($flatRows)) {
+                    $rows = $flatRows;
+                }
+            } catch (\Throwable) {
+                // fall through
+            }
+        }
+        if ($rows === []) {
+            try {
+                $rows = self::getDashboardSourceRowsViaResolver($filters, $limit);
+            } catch (\Throwable) {
+                $rows = self::getDashboardSourceRowsLegacySql($filters, $limit);
+            }
+        }
+
+        // C05：来源行补 channel_name（pixel_channel join）
+        return self::enrichRowsWithChannelNames($rows, $filters['website_id'] ?? null);
+    }
+
+    /**
+     * C05：按 channel_code 聚合流量板块（name 来自 pixel_channel join / 扁平列兜底）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, int|float|string|null>>
+     */
+    public static function getDashboardChannelRows(array $filters, int $limit = 15): array
+    {
+        $limit = max(1, min(50, $limit));
+        if (!self::hasPixelAttributionColumns()) {
+            return [];
+        }
+
+        try {
+            $rows = self::getDashboardChannelRowsFromFlatSql($filters, $limit);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return self::enrichRowsWithChannelNames($rows, $filters['website_id'] ?? null);
+    }
+
+    /**
+     * D07a：为报表引擎提供热明细事件行（含归因扁平列）。列未就绪或查询失败时返回 []。
+     *
+     * @param array<string, mixed> $filters normalizeDashboardFilters 结果（可再覆盖 start/end）
+     * @return list<array<string, mixed>>
+     */
+    public static function fetchHotReportEventRows(array $filters, int $limit = 20000): array
+    {
+        $limit = max(1, min(100000, $limit));
+        if (!self::hasPixelAttributionColumns()) {
+            return [];
+        }
+
+        try {
+            [$whereSql, $params] = self::buildDashboardWhere($filters, 'p');
+            $table = self::tableSql('p');
+            $event = self::col(Pixel::schema_fields_EVENT);
+            $value = self::col(Pixel::schema_fields_VALUE);
+            $created = self::eventTimeExpression('p');
+            $channelCode = self::col('channel_code');
+            $trafficType = self::col('traffic_type');
+            $utmSource = self::col('utm_source');
+            $utmMedium = self::col('utm_medium');
+            $utmCampaign = self::col('utm_campaign');
+            $path = self::col(Pixel::schema_fields_URL);
+
+            $rows = self::fetchRows(
+                "SELECT
+                    {$event} AS event,
+                    {$value} AS value,
+                    {$created} AS created_at,
+                    {$channelCode} AS channel_code,
+                    {$trafficType} AS traffic_type,
+                    {$utmSource} AS utm_source,
+                    {$utmMedium} AS utm_medium,
+                    {$utmCampaign} AS utm_campaign,
+                    {$path} AS url
+                FROM {$table}
+                WHERE {$whereSql}
+                ORDER BY {$created} DESC
+                LIMIT {$limit}",
+                $params
+            );
+
+            $out = [];
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $out[] = [
+                    'event' => (string)($row['event'] ?? ''),
+                    'value' => (float)($row['value'] ?? 0),
+                    'created_at' => (string)($row['created_at'] ?? ''),
+                    'channel_code' => (string)($row['channel_code'] ?? ''),
+                    'traffic_type' => (string)($row['traffic_type'] ?? ''),
+                    'utm_source' => (string)($row['utm_source'] ?? ''),
+                    'utm_medium' => (string)($row['utm_medium'] ?? ''),
+                    'utm_campaign' => (string)($row['utm_campaign'] ?? ''),
+                    'url' => (string)($row['url'] ?? ''),
+                    'path' => (string)($row['url'] ?? ''),
+                ];
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, int|float|string|null>>
+     */
+    private static function getDashboardChannelRowsFromFlatSql(array $filters, int $limit): array
+    {
+        [$whereSql, $params] = self::buildDashboardWhere($filters, 'p');
+        $limit = max(1, min(50, $limit));
+        $table = self::tableSql('p');
+        $ip = self::col(Pixel::schema_fields_IP);
+        $value = self::col(Pixel::schema_fields_VALUE);
+        $channelCode = self::col('channel_code');
+        $channelName = self::col('channel_name');
+        $trafficType = self::col('traffic_type');
+
+        $rows = self::fetchRows(
+            "SELECT
+                {$channelCode} AS channel_code,
+                MAX({$channelName}) AS channel_name,
+                MAX({$trafficType}) AS traffic_type,
+                COUNT(*) AS event_count,
+                COUNT(DISTINCT NULLIF({$ip}, '')) AS active_users,
+                COALESCE(SUM({$value}), 0) AS total_value
+            FROM {$table}
+            WHERE {$whereSql}
+              AND NULLIF({$channelCode}, '') IS NOT NULL
+            GROUP BY {$channelCode}
+            ORDER BY event_count DESC
+            LIMIT {$limit}",
+            $params
+        );
+
+        return array_map(static function (array $row): array {
+            return [
+                'channel_code' => trim((string)($row['channel_code'] ?? '')),
+                'channel_name' => trim((string)($row['channel_name'] ?? '')),
+                'traffic_type' => trim((string)($row['traffic_type'] ?? '')),
+                'count' => (int)($row['event_count'] ?? 0),
+                'active_users' => (int)($row['active_users'] ?? 0),
+                'total_value' => (float)($row['total_value'] ?? 0),
+            ];
+        }, $rows);
+    }
+
+    /**
+     * C05：用 pixel_channel 表填充/覆盖 channel_name（站点优先于全局；campaign 优先于 rule）。
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    public static function enrichRowsWithChannelNames(array $rows, ?int $websiteId = null): array
+    {
+        if ($rows === []) {
+            return $rows;
+        }
+
+        $codes = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $code = trim((string)($row['channel_code'] ?? ''));
+            if ($code !== '') {
+                $codes[$code] = true;
+            }
+        }
+        if ($codes === []) {
+            return array_map(static function (array $row): array {
+                if (!\array_key_exists('channel_name', $row)) {
+                    $row['channel_name'] = '';
+                }
+
+                return $row;
+            }, $rows);
+        }
+
+        $map = self::loadPixelChannelNameMap(\array_keys($codes), $websiteId);
+
+        return array_map(static function (array $row) use ($map): array {
+            $code = trim((string)($row['channel_code'] ?? ''));
+            $flatName = trim((string)($row['channel_name'] ?? ''));
+            if ($code !== '' && isset($map[$code])) {
+                $joined = $map[$code];
+                $joinedName = trim((string)($joined['name'] ?? ''));
+                if ($joinedName !== '') {
+                    $row['channel_name'] = $joinedName;
+                } elseif ($flatName === '') {
+                    $row['channel_name'] = '';
+                }
+                if (trim((string)($row['traffic_type'] ?? '')) === ''
+                    && trim((string)($joined['traffic_type'] ?? '')) !== '') {
+                    $row['traffic_type'] = (string)$joined['traffic_type'];
+                }
+            } elseif (!\array_key_exists('channel_name', $row)) {
+                $row['channel_name'] = $flatName;
+            }
+
+            return $row;
+        }, $rows);
+    }
+
+    /**
+     * @param list<string> $codes
+     * @return array<string, array{name: string, traffic_type: string}>
+     */
+    public static function loadPixelChannelNameMap(array $codes, ?int $websiteId = null): array
+    {
+        $codes = array_values(array_unique(array_filter(array_map(
+            static fn($c): string => trim((string)$c),
+            $codes
+        ), static fn(string $c): bool => $c !== '')));
+        if ($codes === []) {
+            return [];
+        }
+        if (!self::hasPixelChannelTable()) {
+            return [];
+        }
+
+        try {
+            $placeholders = [];
+            $params = [];
+            foreach ($codes as $i => $code) {
+                $key = ':code_' . $i;
+                $placeholders[] = $key;
+                $params[$key] = $code;
+            }
+
+            $table = self::quoteIdentifier(self::getPixelChannelTableName());
+            $codeCol = self::quoteIdentifier(PixelChannel::schema_fields_CODE);
+            $nameCol = self::quoteIdentifier(PixelChannel::schema_fields_NAME);
+            $typeCol = self::quoteIdentifier(PixelChannel::schema_fields_TRAFFIC_TYPE);
+            $siteCol = self::quoteIdentifier(PixelChannel::schema_fields_WEBSITE_ID);
+            $kindCol = self::quoteIdentifier(PixelChannel::schema_fields_KIND);
+            $enabledCol = self::quoteIdentifier(PixelChannel::schema_fields_ENABLED);
+
+            $websiteSql = '';
+            if ($websiteId !== null) {
+                $websiteSql = " AND {$siteCol} IN (0, :website_id)";
+                $params[':website_id'] = (int)$websiteId;
+            }
+
+            $rows = self::fetchRows(
+                "SELECT {$codeCol} AS code, {$nameCol} AS name, {$typeCol} AS traffic_type,
+                        {$siteCol} AS website_id, {$kindCol} AS kind
+                 FROM {$table}
+                 WHERE {$enabledCol} = 1
+                   AND {$codeCol} IN (" . implode(', ', $placeholders) . ")
+                   {$websiteSql}",
+                $params
+            );
+
+            $best = [];
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $code = trim((string)($row['code'] ?? ''));
+                $name = trim((string)($row['name'] ?? ''));
+                if ($code === '' || $name === '') {
+                    continue;
+                }
+                $site = (int)($row['website_id'] ?? 0);
+                $kind = trim((string)($row['kind'] ?? PixelChannel::KIND_CAMPAIGN));
+                $score = 0;
+                if ($websiteId !== null && $site === (int)$websiteId) {
+                    $score += 100;
+                } elseif ($site === 0) {
+                    $score += 10;
+                }
+                if ($kind === PixelChannel::KIND_CAMPAIGN) {
+                    $score += 5;
+                }
+                if (!isset($best[$code]) || $score > $best[$code]['score']) {
+                    $best[$code] = [
+                        'score' => $score,
+                        'name' => $name,
+                        'traffic_type' => trim((string)($row['traffic_type'] ?? '')),
+                    ];
+                }
+            }
+
+            $map = [];
+            foreach ($best as $code => $item) {
+                $map[$code] = [
+                    'name' => (string)$item['name'],
+                    'traffic_type' => (string)$item['traffic_type'],
+                ];
+            }
+
+            return $map;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    private static function hasPixelChannelTable(): bool
+    {
+        try {
+            $channel = w_obj(PixelChannel::class);
+            $connector = $channel->getConnection()->getConnector();
+            $table = (string)$channel->getTable();
+
+            return $connector->hasField($table, PixelChannel::schema_fields_CODE);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private static function getPixelChannelTableName(): string
+    {
+        try {
+            return (string)w_obj(PixelChannel::class)->getTable();
+        } catch (\Throwable) {
+            return PixelChannel::schema_table;
+        }
+    }
+
+    /**
+     * 短窗：今日/昨日/近7天，或自定义跨度 ≤7 天（A14）。
+     *
+     * @param array<string, mixed> $filters
+     */
+    public static function isShortAttributionWindow(array $filters): bool
+    {
+        $range = (string)($filters['range'] ?? '');
+        if (\in_array($range, ['today', 'yesterday', '7d'], true)) {
+            return true;
+        }
+
+        return (int)($filters['day_count'] ?? 0) > 0 && (int)$filters['day_count'] <= 7;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     */
+    public static function sourceRowsHaveAttributionSignal(array $rows): bool
+    {
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $source = strtolower(trim((string)($row['source'] ?? '')));
+            if ($source !== '' && $source !== 'direct' && $source !== 'worker') {
+                return true;
+            }
+            if (trim((string)($row['channel_code'] ?? '')) !== ''
+                || trim((string)($row['utm_source'] ?? '')) !== ''
+                || trim((string)($row['utm_medium'] ?? '')) !== ''
+                || trim((string)($row['utm_campaign'] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A14：短窗 SQL 聚合扁平列；C05 再补 pixel_channel name join。
+     *
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, int|float|string|null>>
+     */
+    private static function getDashboardSourceRowsFromFlatSql(array $filters, int $limit): array
+    {
+        [$whereSql, $params] = self::buildDashboardWhere($filters, 'p');
+        $limit = max(1, min(50, $limit));
+        $table = self::tableSql('p');
+        $ip = self::col(Pixel::schema_fields_IP);
+        $value = self::col(Pixel::schema_fields_VALUE);
+        $utmSource = self::col('utm_source');
+        $channelCode = self::col('channel_code');
+        $channelName = self::col('channel_name');
+        $source = self::col(Pixel::schema_fields_SOURCE);
+        $utmMedium = self::col('utm_medium');
+        $utmCampaign = self::col('utm_campaign');
+        $trafficType = self::col('traffic_type');
+        $sourceExpression = "COALESCE("
+            . "NULLIF({$utmSource}, ''), "
+            . "NULLIF({$channelCode}, ''), "
+            . "NULLIF({$source}, ''), "
+            . "'direct')";
+
+        $rows = self::fetchRows(
+            "SELECT
+                {$sourceExpression} AS source_name,
+                MAX({$channelCode}) AS channel_code,
+                MAX({$channelName}) AS channel_name,
+                MAX({$utmSource}) AS utm_source,
+                MAX({$utmMedium}) AS utm_medium,
+                MAX({$utmCampaign}) AS utm_campaign,
+                MAX({$trafficType}) AS traffic_type,
+                COUNT(*) AS event_count,
+                COUNT(DISTINCT NULLIF({$ip}, '')) AS active_users,
+                COALESCE(SUM({$value}), 0) AS total_value
+            FROM {$table}
+            WHERE {$whereSql}
+            GROUP BY {$sourceExpression}
+            ORDER BY event_count DESC
+            LIMIT {$limit}",
+            $params
+        );
+
+        return array_map(static function (array $row): array {
+            $utmSource = trim((string)($row['utm_source'] ?? ''));
+            $utmMedium = trim((string)($row['utm_medium'] ?? ''));
+            $label = (string)($row['source_name'] ?? 'direct');
+            if ($utmSource !== '' && $utmMedium !== '' && !str_contains($label, '/')) {
+                $label = $utmSource . '/' . $utmMedium;
+            }
+
+            return [
+                'source' => $label,
+                'channel_code' => trim((string)($row['channel_code'] ?? '')),
+                'channel_name' => trim((string)($row['channel_name'] ?? '')),
+                'utm_source' => $utmSource,
+                'utm_medium' => $utmMedium,
+                'utm_campaign' => trim((string)($row['utm_campaign'] ?? '')),
+                'traffic_type' => trim((string)($row['traffic_type'] ?? '')),
+                'count' => (int)($row['event_count'] ?? 0),
+                'active_users' => (int)($row['active_users'] ?? 0),
+                'total_value' => (float)($row['total_value'] ?? 0),
+            ];
+        }, $rows);
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, int|float|string|null>>
+     */
+    private static function getDashboardSourceRowsViaResolver(array $filters, int $limit): array
+    {
+        [$whereSql, $params] = self::buildDashboardWhere($filters, 'p');
+        $table = self::tableSql('p');
+        $eventTime = self::eventTimeExpression('p');
+        $pixelId = self::col(Pixel::schema_fields_ID);
+        $select = [
+            $pixelId . ' AS pixel_id',
+            self::col(Pixel::schema_fields_URL) . ' AS url',
+            self::col(Pixel::schema_fields_REFERER) . ' AS referer',
+            self::col(Pixel::schema_fields_SOURCE) . ' AS source',
+            self::col(Pixel::schema_fields_BROWSER_INFO) . ' AS browser_info',
+            self::col(Pixel::schema_fields_IP) . ' AS ip',
+            self::col(Pixel::schema_fields_VALUE) . ' AS value',
+        ];
+        if (self::hasPixelAttributionColumns()) {
+            foreach (['session_id', 'channel_code', 'channel_name', 'traffic_type', 'utm_source', 'utm_medium', 'utm_campaign'] as $field) {
+                $select[] = self::col($field) . ' AS ' . $field;
+            }
+        }
+
+        $scanLimit = 3000;
+        $rows = self::fetchRows(
+            'SELECT ' . implode(",\n                ", $select) . "
+            FROM {$table}
+            WHERE {$whereSql}
+            ORDER BY {$eventTime} DESC, {$pixelId} DESC
+            LIMIT {$scanLimit}",
+            $params
+        );
+
+        /** @var PixelAttributionRowResolver $resolver */
+        $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(PixelAttributionRowResolver::class);
+        $buckets = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $resolved = $resolver->resolve($row);
+            $key = (string)($resolved['source_label'] ?? 'direct');
+            if ($key === '') {
+                $key = 'direct';
+            }
+            if (!isset($buckets[$key])) {
+                $buckets[$key] = [
+                    'source' => $key,
+                    'channel_code' => '',
+                    'channel_name' => '',
+                    'utm_source' => '',
+                    'utm_medium' => '',
+                    'utm_campaign' => '',
+                    'traffic_type' => '',
+                    'count' => 0,
+                    'ips' => [],
+                    'total_value' => 0.0,
+                ];
+            }
+            $buckets[$key]['count']++;
+            $buckets[$key]['total_value'] += (float)($row['value'] ?? 0);
+            if ($buckets[$key]['channel_code'] === '' && $resolved['channel_code'] !== '') {
+                $buckets[$key]['channel_code'] = $resolved['channel_code'];
+            }
+            if ($buckets[$key]['channel_name'] === '' && ($resolved['channel_name'] ?? '') !== '') {
+                $buckets[$key]['channel_name'] = (string)$resolved['channel_name'];
+            }
+            if ($buckets[$key]['utm_source'] === '' && $resolved['utm_source'] !== '') {
+                $buckets[$key]['utm_source'] = $resolved['utm_source'];
+            }
+            if ($buckets[$key]['utm_medium'] === '' && $resolved['utm_medium'] !== '') {
+                $buckets[$key]['utm_medium'] = $resolved['utm_medium'];
+            }
+            if ($buckets[$key]['utm_campaign'] === '' && $resolved['utm_campaign'] !== '') {
+                $buckets[$key]['utm_campaign'] = $resolved['utm_campaign'];
+            }
+            if ($buckets[$key]['traffic_type'] === '' && $resolved['traffic_type'] !== '') {
+                $buckets[$key]['traffic_type'] = $resolved['traffic_type'];
+            }
+            $ip = trim((string)($row['ip'] ?? ''));
+            if ($ip !== '') {
+                $buckets[$key]['ips'][$ip] = true;
+            }
+        }
+
+        usort($buckets, static fn(array $a, array $b): int => ($b['count'] <=> $a['count']));
+        $buckets = array_slice($buckets, 0, $limit);
+
+        return array_map(static fn(array $row): array => [
+            'source' => (string)$row['source'],
+            'channel_code' => (string)$row['channel_code'],
+            'channel_name' => (string)$row['channel_name'],
+            'utm_source' => (string)$row['utm_source'],
+            'utm_medium' => (string)$row['utm_medium'],
+            'utm_campaign' => (string)$row['utm_campaign'],
+            'traffic_type' => (string)$row['traffic_type'],
+            'count' => (int)$row['count'],
+            'active_users' => \count($row['ips']),
+            'total_value' => (float)$row['total_value'],
+        ], $buckets);
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, int|float|string|null>>
+     */
+    private static function getDashboardSourceRowsLegacySql(array $filters, int $limit): array
+    {
         [$whereSql, $params] = self::buildDashboardWhere($filters, 'p');
         $limit = max(1, min(50, $limit));
         $table = self::tableSql('p');
@@ -666,10 +1702,34 @@ class PixelStatisticsService
 
         return array_map(static fn(array $row): array => [
             'source' => (string)($row['source_name'] ?? 'direct'),
+            'channel_code' => '',
+            'channel_name' => '',
+            'utm_source' => '',
+            'utm_medium' => '',
+            'utm_campaign' => '',
+            'traffic_type' => '',
             'count' => (int)($row['event_count'] ?? 0),
             'active_users' => (int)($row['active_users'] ?? 0),
             'total_value' => (float)($row['total_value'] ?? 0),
         ], $rows);
+    }
+
+    private static function hasPixelAttributionColumns(): bool
+    {
+        try {
+            $pixel = w_obj(Pixel::class);
+            $connector = $pixel->getConnection()->getConnector();
+            $table = (string)$pixel->getTable();
+            foreach (['session_id', 'channel_code', 'utm_source'] as $field) {
+                if (!$connector->hasField($table, $field)) {
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -688,10 +1748,10 @@ class PixelStatisticsService
 
         [$whereSql, $params] = self::buildDashboardWhere($realtimeFilters, 'p');
         $table = self::tableSql('p');
-        $createdAt = self::col(Pixel::schema_fields_CREATED_AT);
+        $eventTime = self::eventTimeExpression('p');
         $ip = self::col(Pixel::schema_fields_IP);
         $value = self::col(Pixel::schema_fields_VALUE);
-        $timeFormat = self::getTimeSlotExpression($createdAt, $intervalMinutes);
+        $timeFormat = self::getTimeSlotExpression($eventTime, $intervalMinutes);
         $rows = self::fetchRows(
             "SELECT
                 {$timeFormat} AS time_slot,
@@ -734,51 +1794,75 @@ class PixelStatisticsService
         $lang = self::col(Pixel::schema_fields_LANG);
         $currency = self::col(Pixel::schema_fields_CURRENCY);
         $value = self::col(Pixel::schema_fields_VALUE);
-        $createdAt = self::col(Pixel::schema_fields_CREATED_AT);
+        $browserInfo = self::col(Pixel::schema_fields_BROWSER_INFO);
+        $eventTime = self::eventTimeExpression('p');
+        $select = [
+            "{$pixelId} AS pixel_id",
+            "{$website} AS website_id",
+            "{$event} AS event",
+            "{$url} AS url",
+            "{$ip} AS ip",
+            "{$source} AS source",
+            "{$referer} AS referer",
+            "{$lang} AS lang",
+            "{$currency} AS currency",
+            "{$value} AS value",
+            "{$browserInfo} AS browser_info",
+            "{$eventTime} AS created_at",
+        ];
+        if (self::hasPixelAttributionColumns()) {
+            foreach (['session_id', 'channel_code', 'channel_name', 'traffic_type', 'utm_source', 'utm_medium', 'utm_campaign'] as $field) {
+                $select[] = self::col($field) . ' AS ' . $field;
+            }
+        }
+
         $rows = self::fetchRows(
-            "SELECT
-                {$pixelId} AS pixel_id,
-                {$website} AS website_id,
-                {$event} AS event,
-                {$url} AS url,
-                {$ip} AS ip,
-                {$source} AS source,
-                {$referer} AS referer,
-                {$lang} AS lang,
-                {$currency} AS currency,
-                {$value} AS value,
-                {$createdAt} AS created_at
+            'SELECT ' . implode(",\n                ", $select) . "
             FROM {$table}
             WHERE {$whereSql}
-            ORDER BY {$createdAt} DESC, {$pixelId} DESC
+            ORDER BY {$eventTime} DESC, {$pixelId} DESC
             LIMIT {$limit}",
             $params
         );
 
-        return array_map(static fn(array $row): array => [
-            'pixel_id' => (int)($row['pixel_id'] ?? 0),
-            'website_id' => (int)($row['website_id'] ?? 0),
-            'event' => (string)($row['event'] ?? ''),
-            'url' => (string)($row['url'] ?? ''),
-            'ip' => (string)($row['ip'] ?? ''),
-            'source' => (string)($row['source'] ?? ''),
-            'referer' => (string)($row['referer'] ?? ''),
-            'lang' => (string)($row['lang'] ?? ''),
-            'currency' => (string)($row['currency'] ?? ''),
-            'value' => (float)($row['value'] ?? 0),
-            'created_at' => $row['created_at'] ?? null,
-        ], $rows);
+        /** @var PixelAttributionRowResolver $resolver */
+        $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(PixelAttributionRowResolver::class);
+
+        return array_map(static function (array $row) use ($resolver): array {
+            $resolved = $resolver->resolve($row);
+
+            return [
+                'pixel_id' => (int)($row['pixel_id'] ?? 0),
+                'website_id' => (int)($row['website_id'] ?? 0),
+                'event' => (string)($row['event'] ?? ''),
+                'url' => (string)($row['url'] ?? ''),
+                'ip' => (string)($row['ip'] ?? ''),
+                'source' => (string)($resolved['source_label'] ?? $row['source'] ?? ''),
+                'channel_code' => (string)($resolved['channel_code'] ?? ''),
+                'utm_source' => (string)($resolved['utm_source'] ?? ''),
+                'utm_medium' => (string)($resolved['utm_medium'] ?? ''),
+                'utm_campaign' => (string)($resolved['utm_campaign'] ?? ''),
+                'traffic_type' => (string)($resolved['traffic_type'] ?? ''),
+                'session_id' => (string)($resolved['session_id'] ?? ''),
+                'referer' => (string)($row['referer'] ?? ''),
+                'lang' => (string)($row['lang'] ?? ''),
+                'currency' => (string)($row['currency'] ?? ''),
+                'value' => (float)($row['value'] ?? 0),
+                'created_at' => $row['created_at'] ?? null,
+            ];
+        }, $rows);
     }
 
     /**
-     * @param array<string, mixed> $filters
+     * @param array<string, mixed> $filters 须已 normalizeDashboardFilters
      * @return array{0: string, 1: array<string, int|string>}
      */
     private static function buildDashboardWhere(array $filters, string $alias): array
     {
+        $eventTime = self::eventTimeExpression($alias);
         $clauses = [
-            self::col(Pixel::schema_fields_CREATED_AT, $alias) . " >= :start_date",
-            self::col(Pixel::schema_fields_CREATED_AT, $alias) . " <= :end_date",
+            "{$eventTime} >= :start_date",
+            "{$eventTime} <= :end_date",
         ];
         $params = [
             ':start_date' => (string)$filters['start_date'],
@@ -795,7 +1879,47 @@ class PixelStatisticsService
             $params[':event'] = (string)$filters['event'];
         }
 
+        $attributionKeys = [
+            'channel_code' => ':channel_code',
+            'traffic_type' => ':traffic_type',
+            'utm_source' => ':utm_source',
+            'utm_medium' => ':utm_medium',
+            'utm_campaign' => ':utm_campaign',
+        ];
+        $wantsAttribution = false;
+        foreach ($attributionKeys as $field => $_param) {
+            if (($filters[$field] ?? null) !== null) {
+                $wantsAttribution = true;
+                break;
+            }
+        }
+        if ($wantsAttribution) {
+            if (!self::hasPixelAttributionColumns()) {
+                throw new \InvalidArgumentException((string)__('归因筛选需要扁平列，请先执行 setup:upgrade'));
+            }
+            foreach ($attributionKeys as $field => $param) {
+                $value = $filters[$field] ?? null;
+                if ($value === null) {
+                    continue;
+                }
+                $clauses[] = self::col($field, $alias) . " = {$param}";
+                $params[$param] = (string)$value;
+            }
+        }
+
         return [implode(' AND ', $clauses), $params];
+    }
+
+    /**
+     * 事件时间：优先 created_at；历史空值回退 create_time（框架自动时间戳）。
+     */
+    private static function eventTimeExpression(string $alias = 'p'): string
+    {
+        return 'COALESCE('
+            . self::col(Pixel::schema_fields_CREATED_AT, $alias)
+            . ', '
+            . self::col('create_time', $alias)
+            . ')';
     }
 
     private static function tableSql(string $alias): string
@@ -834,8 +1958,15 @@ class PixelStatisticsService
 
     private static function getTimeSlotExpression(string $createdAtField, int $intervalMinutes): string
     {
-        if (self::getPdoDriver() === 'pgsql') {
+        $intervalMinutes = max(1, (int)$intervalMinutes);
+        $driver = self::getPdoDriver();
+        if ($driver === 'pgsql') {
             return "TO_CHAR(DATE_TRUNC('hour', {$createdAtField}) + FLOOR(EXTRACT(MINUTE FROM {$createdAtField}) / {$intervalMinutes}) * INTERVAL '{$intervalMinutes} minutes', 'YYYY-MM-DD HH24:MI:SS')";
+        }
+        if ($driver === 'sqlite') {
+            return "strftime('%Y-%m-%d %H:', {$createdAtField})"
+                . " || printf('%02d', (CAST(strftime('%M', {$createdAtField}) AS INTEGER) / {$intervalMinutes}) * {$intervalMinutes})"
+                . " || ':00'";
         }
 
         return "DATE_FORMAT(DATE_SUB({$createdAtField}, INTERVAL MINUTE({$createdAtField}) % {$intervalMinutes} MINUTE), '%Y-%m-%d %H:%i:00')";

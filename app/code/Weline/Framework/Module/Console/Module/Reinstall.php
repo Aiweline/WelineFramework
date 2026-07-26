@@ -362,6 +362,10 @@ class Reinstall extends CommandAbstract
                 if (ObjectManager::isStaticClass($modelClass)) {
                     continue;
                 }
+                // Model 目录可含 DTO/助手类；必须先确认 AbstractModel 再实例化。
+                if (!$reflection->isSubclassOf(\Weline\Framework\Database\AbstractModel::class)) {
+                    continue;
+                }
                 
                 // 实例化 Model
                 $model = ObjectManager::getInstance($modelClass);
@@ -911,23 +915,31 @@ class Reinstall extends CommandAbstract
         
         $this->printer->note(__('删除模块的所有表（包括 Setup 中定义的表）...'));
         
-        // 获取第一个 Model 的连接（所有 Model 应该使用同一个连接）
+        // 获取第一个 ORM Model 的连接（所有 Model 应该使用同一个连接）
         $modelClasses = $this->moduleFileReader->readClass($module, 'Model');
         if (empty($modelClasses)) {
             return;
         }
-        
-        $firstModelClass = $modelClasses[0];
-        if (!class_exists($firstModelClass)) {
-            return;
+
+        $firstModelClass = null;
+        foreach ($modelClasses as $candidateClass) {
+            if (!is_string($candidateClass) || $candidateClass === '' || !class_exists($candidateClass)) {
+                continue;
+            }
+            $reflection = new \ReflectionClass($candidateClass);
+            if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
+                continue;
+            }
+            if (ObjectManager::isStaticClass($candidateClass)) {
+                continue;
+            }
+            if (!$reflection->isSubclassOf(\Weline\Framework\Database\AbstractModel::class)) {
+                continue;
+            }
+            $firstModelClass = $candidateClass;
+            break;
         }
-        
-        // 跳过静态类、抽象类、trait 和接口
-        $reflection = new \ReflectionClass($firstModelClass);
-        if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
-            return;
-        }
-        if (ObjectManager::isStaticClass($firstModelClass)) {
+        if ($firstModelClass === null) {
             return;
         }
         

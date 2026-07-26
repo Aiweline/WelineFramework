@@ -63,7 +63,14 @@ class Reindex implements \Weline\Framework\Console\CommandInterface
                     if ($reflection->isAbstract() || $reflection->isTrait() || $reflection->isInterface()) {
                         continue;
                     }
-                    if (ObjectManager::isStaticClass($model)) {
+                    // Model 目录可含 DTO/助手类；必须先确认 AbstractModel 再实例化。
+                    if (!$reflection->isSubclassOf(AbstractModel::class)
+                        || ObjectManager::isStaticClass($model)
+                    ) {
+                        continue;
+                    }
+                    $indexerName = (string)$reflection->getConstant('indexer');
+                    if ($indexerName === '') {
                         continue;
                     }
                     $model = ObjectManager::getInstance($model);

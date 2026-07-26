@@ -5,11 +5,51 @@
 "Track storefront visitor pixel events.","Track storefront visitor pixel events."
 "Load visitor pixel hot buffer status.","Load visitor pixel hot buffer status."
 "Flush visitor pixel hot buffer.","Flush visitor pixel hot buffer."
+"One-click audit of pixel markers on published pages.","One-click audit of pixel markers on published pages."
+"Load latest pixel marker audit report.","Load latest pixel marker audit report."
+"Load Weline↔Google event dictionary.","Load Weline↔Google event dictionary."
+"Load GTM/GA4 channel and last audit status.","Load GTM/GA4 channel and last audit status."
 "Create visitor A/B test config.","Create visitor A/B test config."
 "Export visitor analytics data.","Export visitor analytics data."
+加载流量渠道列表失败：%{1},"Failed to load traffic channels: %{1}"
+流量渠道,"Traffic channels"
+新建投放渠道,"Create Campaign Channel"
+渠道创建成功：%{1}（%{2}）,"Channel created: %{1} (%{2})"
+渠道不存在,"Channel not found"
+编辑投放渠道,"Edit Campaign Channel"
+渠道已保存：%{1}（%{2}）,"Channel saved: %{1} (%{2})"
+热表总计暂不可用：%{1},热表总计暂不可用：%{1}
+事件轨迹暂不可用：%{1},事件轨迹暂不可用：%{1}
+渠道漏斗暂不可用：%{1},"Channel funnel unavailable: %{1}"
+渠道详情,渠道详情
+渠道已启用,"Channel enabled"
+渠道已停用,"Channel disabled"
+像素流量渠道管理,"Pixel traffic channel management"
+查看流量渠道列表,"View traffic channel list"
+新建流量渠道,"Create Traffic Channel"
+提交新建流量渠道,"Submit Create Traffic Channel"
+提交新建投放渠道,"Submit Create Campaign Channel"
+编辑流量渠道,"Edit Traffic Channel"
+提交编辑流量渠道,"Submit Edit Traffic Channel"
+提交编辑投放渠道,"Submit Edit Campaign Channel"
+查看流量渠道详情总计,查看流量渠道详情总计
+查看投放渠道热表总计,查看投放渠道热表总计
+停用或启用流量渠道,"Disable or Enable Traffic Channel"
+停用或启用投放渠道,"Disable or Enable Campaign Channel"
 加载像素统计失败：%{1},"Failed to load pixel statistics: %{1}"
-站点ID无效,"Invalid Site ID"
+请选择站点后再查看详情报表,请选择站点后再查看详情报表
 加载站点详情失败：%{1},"Failed to load site details: %{1}"
+电商漏斗暂不可用：%{1},"Ecommerce funnel unavailable: %{1}"
+购成收入暂不可用：%{1},"Purchase revenue unavailable: %{1}"
+商品表现暂不可用：%{1},"Item performance unavailable: %{1}"
+路径探索暂不可用：%{1},"Path exploration unavailable: %{1}"
+留存分析暂不可用：%{1},"Retention analysis unavailable: %{1}"
+事件列表暂不可用：%{1},事件列表暂不可用：%{1}
+像素事件列表,"Pixel event list"
+冷归档列表不可用：%{1},"Cold archive list unavailable: %{1}"
+冷归档事件列表,"Cold archive event list"
+"请选择站点后再查询冷归档（website_id=0 为系统默认站）","Select a site before querying cold archive (website_id=0 is the system default site)"
+"冷归档查询时间范围不能超过 %{1} 天","Cold archive query window must not exceed %{1} days"
 获取实时数据成功,"Successfully got real-time data"
 获取实时数据失败：%{1},"Failed to get real-time data: %{1}"
 时间维度参数错误，支持：%{1},"Invalid time dimension parameter; supported: %{1}"
@@ -19,13 +59,24 @@
 获取每日对比数据失败：%{1},"Failed to get daily comparison data: %{1}"
 获取事件统计成功,"Event statistics retrieved successfully"
 获取事件统计失败：%{1},"Failed to get event statistics: %{1}"
-导出数据成功,"Export data succeeded"
 导出数据失败：%{1},"Export data failed: %{1}"
+导出数据成功,"Export data succeeded"
+像素统计,"Pixel Statistics"
+查看像素统计,查看像素统计
+查看站点详情,查看站点详情
+查看像素事件列表,查看像素事件列表
+查看像素事件明细列表,查看像素事件明细列表
+查看冷归档像素事件,查看冷归档像素事件
+查看冷归档像素事件明细,查看冷归档像素事件明细
+查看像素实时数据,查看像素实时数据
+查看像素商业价值,查看像素商业价值
+查看像素每日对比,查看像素每日对比
+查看像素事件统计,查看像素事件统计
+导出像素数据,导出像素数据
 获取A/B测试数据失败：%{1},"Failed to get A/B test data: %{1}"
 系统级别事件,"System-Level Events"
 自定义事件,"Custom event"
 "最近 7 天像素趋势","Pixel Trend for the Last 7 Days"
-像素统计,"Pixel Statistics"
 日期,Date
 事件数,"Number of Events"
 价值,Value
@@ -40,19 +91,110 @@
 建议尽快排查并处理异常事件,"Suggestion: Investigate and handle abnormal events as soon as possible"
 "接入站点 / 累计价值","Connected sites / Cumulative value"
 "站点数量 / 像素累计价值","Number of Sites / Cumulative Pixel Value"
-多站点事件监听看板,"Multi-site Event Monitoring Dashboard"
-按站点、事件和时间范围查看像素事件、实时趋势、来源与最近触发记录。,"View pixel events, real-time trends, sources, and recent triggers by site, event, and time range."
-刷新,Refresh
-"导出 CSV","Export CSV"
+投放渠道,"Campaign Channels"
+匹配规则,"Match Rules"
+全部,All
+新建渠道,"Create Channel"
+"渠道表尚未就绪或查询失败；完成 setup:upgrade 后刷新本页。","Channel table not ready or query failed; refresh after setup:upgrade."
+名称,Name
+渠道码,"Channel code"
+类型,Types
+流量类型,"Traffic Type"
 站点,Site
-全部站点,"All Sites"
+启用,Enabled
+操作,Actions
+暂无渠道。,"No channels yet."
+详情,详情
+编辑,Edit
+复制链接,"Copy Link"
+全局,Global
+是,Yes
+否,No
+停用,Disable
+已复制,Copied
+返回列表,"Return to List"
+渠道名称,"Channel name"
+渠道码创建后不可修改。,"Channel code cannot be changed after creation."
+"2-32 位，小写字母或数字开头，仅 a-z 0-9 _ -；创建后不可改。","2-32 chars, start with lowercase letter or digit, only a-z 0-9 _ -; immutable after create."
+站点ID,"Website ID"
+"0 表示全局渠道。","0 means a global channel."
+描述,Description
+取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。,"Uncheck to disable; disabled channels still attribute old links but are hidden from the link helper."
+"自动 UTM 包","Auto UTM Package"
+"默认 utm_source=weline，utm_campaign/wch=渠道码，utm_medium 随流量类型；可覆盖 source/medium。","Default utm_source=weline, utm_campaign/wch=code, utm_medium by traffic type; source/medium can be overridden."
+投放链接,"Landing Link"
+落地路径,"Landing Path"
+"相对站点根路径，如 / 或 /promo；查询参数由 UTM 自动附加。","Path relative to site root, e.g. / or /promo; query params are appended from UTM."
+链接预览,"Link Preview"
+启用渠道并填写渠道码后可生成链接；全局渠道(website_id=0)使用系统默认基址。,"Enable the channel and set a code to generate the link; global channels (website_id=0) use the system base URL."
+"基址来自 Websites 站点 URL（查不到则回退系统基址）。","Base URL comes from the Websites site URL (falls back to system base URL)."
+已复制到剪贴板,"Copied to clipboard"
+保存,Save
+取消,Cancel
+例如：夏季促销投放,"e.g. Summer promo campaign"
+"热表总计暂不可用（扁平列未就绪或查询失败）。完成 setup:upgrade 后重试。","热表总计暂不可用（扁平列未就绪或查询失败）。完成 setup:upgrade 后重试。"
+营销简漏斗,"Marketing funnel"
+电商四步,"Ecommerce 4-step"
+"近 7 天","Last 7 days"
+"近 30 天","Last 30 days"
+渠道漏斗暂不可用（扁平列未就绪或查询失败）。,"Channel funnel unavailable (flat columns not ready or query failed)."
+步骤,步骤
+会话数,会话数
+相对上步流失,相对上步流失
+占比条,占比条
+事件轨迹,事件轨迹
+事件轨迹暂不可用（扁平列未就绪或查询失败）。,事件轨迹暂不可用（扁平列未就绪或查询失败）。
+该窗口暂无归因到此渠道的事件。,该窗口暂无归因到此渠道的事件。
+会话,Sessions
+"口径：热表明细按 channel_code 过滤；会话内事件按时间升序；漏斗按会话去重顺序步进。","口径：热表明细按 channel_code 过滤；会话内事件按时间升序；漏斗按会话去重顺序步进。"
+访客数,Visitors
+价值合计,价值合计
+浏览,浏览
+互动点击,互动点击
+加购,"Add to cart"
+转化,转化
+"近 %{1} 天","近 %{1} 天"
+"按会话去重 · 近 %{1} 天 · %{2}占比","Session-deduped · last %{1} days · share %{2}"
+"%{1} 个会话 / %{2} 条事件","%{1} 个会话 / %{2} 条事件"
+"（无 session_id）","（无 session_id）"
+"%{1} 事件","%{1} 事件"
+冷归档明细,"Cold archive details"
+返回看板,返回看板
+热表明细,"Hot table details"
+刷新,Refresh
+"冷归档查询必须指定站点（website_id=0 为系统默认站），时间范围不超过","Cold archive queries require a site (website_id=0 is the system default) and a window of at most"
+天，且始终分页；不会静默扫描热表。,"days, always paginated; hot table is never scanned silently."
+"站点 ID（必填）","Site ID (required)"
 事件,Event
-全部事件,"All Events"
 时间范围,"Time Range"
 开始日期,"Start Date"
 结束日期,"End Date"
+全部类型,"All types"
+每页条数,"Page size"
 应用筛选,"Apply Filters"
 重置,Reset
+"冷归档查询被拒绝或暂不可用（无站 / 超窗 / 数据库异常）。","Cold archive query rejected or unavailable (missing site / oversize window / database error)."
+时间,Time
+URL,URL
+归档时间,"Archived at"
+列表未就绪。,列表未就绪。
+请修正筛选条件后重试。,"Fix the filters and try again."
+当前筛选条件下暂无冷归档事件。,"No cold archive events for the current filters."
+上一页,上一页
+下一页,下一页
+今天,Today
+昨天,Yesterday
+自定义,Custom
+"最多 %{1} 天","Up to %{1} days"
+"共 %{1} 条","共 %{1} 条"
+全部事件,"All Events"
+"第 %{1} / %{2} 页 · 每页 %{3} 条","第 %{1} / %{2} 页 · 每页 %{3} 条"
+多站点事件监听看板,"Multi-site Event Monitoring Dashboard"
+按站点、事件和时间范围查看像素事件、实时趋势、来源与最近触发记录。,"View pixel events, real-time trends, sources, and recent triggers by site, event, and time range."
+事件列表,事件列表
+详情报表,详情报表
+"导出 CSV","Export CSV"
+全部站点,"All Sites"
 事件总数,"Total Events"
 较上一周期,"vs previous period"
 活跃用户,"Active Users"
@@ -70,58 +212,163 @@
 事件排行,"Event Ranking"
 事件名称,"Event Name"
 次数,Count
-占比,Percentage
+占比,Share
 用户,Users
 最近触发,"Last Triggered"
 暂无事件排行数据。,"No event ranking data."
 站点对比,"Site Comparison"
-类型,Types
 查看,View
 暂无站点对比数据。,"No site comparison data."
+下钻,"Drill down"
+"暂无流量渠道数据（需扁平列就绪且存在 channel_code）。","No traffic channel data yet (requires flat columns and channel_code)."
 来源,Sources
+渠道,Channel
 暂无来源数据。,"No source data."
 最近事件,"Recent Events"
-时间,Time
-URL,URL
 IP,IP
 暂无最近事件。,"No recent events."
 今日,Today
 昨日,Yesterday
-"近 7 天","Last 7 days"
-"近 30 天","Last 30 days"
 "近 90 天","Last 90 days"
-自定义,Custom
 "站点 %{1}","Site %{1}"
 直接访问,Direct
-站点详情,"Site Details"
-站点ID：,"Site ID:"
-返回列表,"Return to List"
-总记录数,"Total Records"
-已处理,Processed
-未处理,"Not processed"
-事件类型数,"Number of event types"
-商业价值趋势,"Business Value Trend"
-每日对比分析,"Daily comparative analysis"
-事件统计,"Event statistics"
-数量,Quantity
-今天,Today
-昨天,Yesterday
+热表明细列表,热表明细列表
+"按当前筛选导出 CSV","Export CSV with current filters"
+"站点 ID","Site ID"
+事件列表查询失败（扁平列未就绪或数据库异常）。,事件列表查询失败（扁平列未就绪或数据库异常）。
+当前筛选条件下暂无事件。,当前筛选条件下暂无事件。
+像素详情报表,像素详情报表
+"对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源","对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源"
+返回事件看板,返回事件看板
+Sessions,Sessions
+参与率,参与率
+"Engaged sessions","Engaged sessions"
+跳出率,跳出率
+"Bounce rate","Bounce rate"
+平均停留,平均停留
+"Avg session duration","Avg session duration"
+页/会话,页/会话
+"Pages / session","Pages / session"
+Events,Events
+页面表现,页面表现
+"暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。","暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。"
+路径,路径
+访客,访客
+暂无事件排行。,暂无事件排行。
+电商漏斗,"Ecommerce funnel"
+"字典四步：view_item → add_to_cart → begin_checkout → checkout_success","Dictionary 4 steps: view_item → add_to_cart → begin_checkout → checkout_success"
+"已按热明细短窗（≤7 天）截取","已按热明细短窗（≤7 天）截取"
+查看全部事件,"View all events"
+电商漏斗暂不可用（扁平列未就绪或查询失败）。,"Ecommerce funnel unavailable (flat columns missing or query failed)."
+该窗口暂无浏览商品会话，无法计算步进占比。,"No view_item sessions in this window; step rates unavailable."
+相对浏览,"Vs view_item"
+"须按会话顺序命中；checkout_success 兼容 purchase。单渠道口径见流量渠道详情，可切换营销简漏斗 / 电商四步。","Sessions must hit steps in order; checkout_success accepts purchase. Per-channel view lives on traffic channel detail with a marketing / ecommerce toggle."
+购成与收入,"Purchases & revenue"
+"purchase_revenue 仅合计购买类事件（checkout_success / purchase）","purchase_revenue sums purchase-class events only (checkout_success / purchase)"
+购成收入暂不可用（扁平列未就绪或查询失败）。,"Purchase revenue unavailable (flat columns missing or query failed)."
+购买次数,Purchases
+购买收入,"Purchase revenue"
+客单价,"Avg order value"
+购成率,"Purchase rate"
+相对浏览商品会话,"Vs view_item sessions"
+按渠道收入,"Revenue by channel"
+暂无购买类事件。,"No purchase-class events yet."
+收入,Revenue
+按日收入,"Revenue by day"
+商品表现,"Item performance"
+"按 item_id 展开 items：曝光 / 加购 / 购买与收入","Expand items by item_id: views / add_to_cart / purchases & revenue"
+"商品表现暂不可用（扁平列或 items 未就绪）。","Item performance unavailable (flat columns or items missing)."
+"该窗口暂无带 items 的电商事件。","No ecommerce events with items in this window."
+商品,Item
+曝光,Views
+结账,Checkout
+购买,Purchases
+销量,"Qty sold"
+商品收入,"Item revenue"
+路径探索,"Path exploration"
+"落地页 → 次页（限深 %{1} 步，页面事件会话）","Landing → next page (max depth %{1}, page-event sessions)"
+路径探索暂不可用（扁平列未就绪或查询失败）。,"Path exploration unavailable (flat columns missing or query failed)."
+该窗口暂无页面事件会话，无法分析路径。,"No page-event sessions in this window; cannot analyze paths."
+单页离站,"Single-page exits"
+"Top 落地页 → 次页","Top landing → next page"
+落地页,"Landing page"
+主要次页,"Top next pages"
+无次页,"No next page"
+"Top 路径序列","Top path sequences"
+暂无路径序列。,"No path sequences yet."
+留存分析,"Retention analysis"
+"日队列留存（Day0–Day%{1}）：登录用户优先，匿名用 IP+UA 软指纹","Daily cohort retention (Day0–Day%{1}): prefer logged-in user; anonymous uses IP+UA soft fingerprint"
+留存分析暂不可用（扁平列未就绪或查询失败）。,"Retention analysis unavailable (flat columns missing or query failed)."
+该窗口暂无可识别访客，无法计算留存。,"No identifiable visitors in this window; cannot compute retention."
+回访访客,"Returning visitors"
+次日留存,"Day-1 retention"
+整体偏移留存,"Retention by day offset"
+暂无队列。,"No cohorts yet."
+队列日,"Cohort date"
+队列规模,"Cohort size"
+引擎报表,引擎报表
+"暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。","暂无已挂载报表 Tab（D07a 起每次只挂 1 个）。"
+"该 Tab 暂无聚合数据（需扁平列就绪且时间窗内有事件）。","该 Tab 暂无聚合数据（需扁平列就绪且时间窗内有事件）。"
+维度值,维度值
+均值,均值
+有价事件,有价事件
+回退：统计服务渠道聚合,回退：统计服务渠道聚合
+设备,设备
+屏幕分辨率,屏幕分辨率
+流量来源,流量来源
+浏览器,浏览器
+暂无数据,暂无数据
+最近事件明细,最近事件明细
+停留,停留
+细节,细节
+趋势,趋势
+暂无趋势。,暂无趋势。
+渠道价值,渠道价值
+已按热短窗截取,"Clamped to hot short window"
+当前范围暂无渠道价值数据,当前范围暂无渠道价值数据
+有价,有价
+热门页面,热门页面
+当前范围暂无页面浏览,当前范围暂无页面浏览
+"停留 %{1}s","停留 %{1}s"
 热门像素事件,热门像素事件
+查看列表,查看列表
 当前范围暂无事件,当前范围暂无事件
 "访客 %{1}","访客 %{1}"
+当前范围暂无流量类型数据,当前范围暂无流量类型数据
+请选择站点后查看购成与收入,"Select a site to view purchases and revenue"
+当前范围暂无渠道数据,当前范围暂无渠道数据
+请选择站点后查看商品表现,"Select a site to view item performance"
+当前范围暂无商品数据,"No item data in this range"
+社媒流量,社媒流量
+当前范围暂无社媒流量数据,当前范围暂无社媒流量数据
+付费广告,付费广告
+当前范围暂无付费广告数据,当前范围暂无付费广告数据
+广告系列,广告系列
 "站点 #%{1}","站点 #%{1}"
-访客,访客
 "按 IP 去重","按 IP 去重"
 事件种类,事件种类
 处理率,处理率
 "Cron 处理","Cron 处理"
 像素概览,像素概览
+查看事件列表,查看事件列表
 像素事件趋势,像素事件趋势
 当前范围暂无像素事件,当前范围暂无像素事件
 "事件 %{1}","事件 %{1}"
+请选择站点后查看电商漏斗,"Select a site to view the ecommerce funnel"
+当前范围暂无浏览商品会话,"No view_item sessions in this range"
 像素实时动向,像素实时动向
-"最近 1 小时","最近 1 小时"
 事件触发,事件触发
+事件价值,事件价值
+当前范围暂无事件价值数据,当前范围暂无事件价值数据
+像素参与度,像素参与度
+"页/会话 %{1}","页/会话 %{1}"
+查看细节,查看细节
+事件类型数,"Number of event types"
+平均价值,平均价值
+转化率,转化率
+总记录数,"Total Records"
+总价值,总价值
+未处理记录,未处理记录
 加载失败,"Failed to load"
 确定,Confirm
 提示,Prompt
@@ -174,6 +421,25 @@ IP,IP
 数据量过大，已限制导出前%{1}条记录。请缩小时间范围或使用分页导出,"Data volume is too large, export limited to the first %{1} records. Please narrow the time range or use paginated export"
 获取报告成功,"Successfully got report"
 获取报告失败：%{1},"Failed to get report: %{1}"
+获取热缓冲状态成功,获取热缓冲状态成功
+获取热缓冲状态失败：%{1},获取热缓冲状态失败：%{1}
+热缓冲刷写完成,热缓冲刷写完成
+热缓冲刷写失败：%{1},热缓冲刷写失败：%{1}
+像素标记巡检完成,像素标记巡检完成
+像素标记巡检失败：%{1},像素标记巡检失败：%{1}
+获取巡检报告成功,获取巡检报告成功
+获取巡检报告失败：%{1},获取巡检报告失败：%{1}
+获取通道状态成功,获取通道状态成功
+获取通道状态失败：%{1},获取通道状态失败：%{1}
+获取事件字典成功,获取事件字典成功
+获取事件字典失败：%{1},获取事件字典失败：%{1}
+"渠道码 %{1} 在该站点下已存在","Channel code %{1} already exists for this website"
+保存渠道失败：%{1},"Failed to save channel: %{1}"
+保存渠道失败：未获得主键,"Failed to save channel: missing primary key"
+事件统计,"Event statistics"
+浏览商品,"View item"
+开始结账,"Begin checkout"
+购买成功,Purchase
 获取站点统计摘要失败：%{1},"Failed to fetch site statistics summary: %{1}"
 获取趋势数据失败：%{1},"Failed to fetch trend data: %{1}"
 获取商业价值数据失败：%{1},"Failed to retrieve business value data: %{1}"
@@ -183,8 +449,36 @@ IP,IP
 自定义时间范围需要开始日期和结束日期,"Custom time range requires a start date and an end date"
 开始日期不能晚于结束日期,"Start date cannot be later than end date"
 "时间范围不能超过 366 天","Time range cannot exceed 366 days"
+渠道码筛选参数过长,"Channel code filter is too long"
+流量类型筛选参数过长,"Traffic type filter is too long"
+流量类型筛选参数无效,"Invalid traffic type filter"
+"utm_source 筛选参数过长","utm_source filter is too long"
+"utm_medium 筛选参数过长","utm_medium filter is too long"
+"utm_campaign 筛选参数过长","utm_campaign filter is too long"
+"归因筛选需要扁平列，请先执行 setup:upgrade","Attribution filters require flat columns; run setup:upgrade first"
 "日期格式无效，请使用 YYYY-MM-DD","Invalid date format. Use YYYY-MM-DD"
+数量,Quantity
 解密后的数据格式错误,解密后的数据格式错误
+未登记,Unregistered
+"步骤：浏览商品 → 加购 → 开始结账 → 购买成功；须顺序命中。与全站电商漏斗（F01）同口径。","Steps: view_item → add_to_cart → begin_checkout → checkout_success, hit in order. Same definition as the site-wide ecommerce funnel."
+"步骤：落地 → 互动 → 加购 → 转化；须顺序命中。本漏斗为营销简漏斗，非电商字典四步。","步骤：落地 → 互动 → 加购 → 转化；须顺序命中。本漏斗为营销简漏斗，非电商字典四步。"
+该窗口暂无落地会话，无法计算步进占比。,该窗口暂无落地会话，无法计算步进占比。
+相对落地,相对落地
+落地,落地
+互动,互动
 "未找到版本号 %{1} 对应的加密token","Encryption token for version number %{1} not found"
+"版本号 %{1} 的加密token为空","Encryption token for version %{1} is empty"
 无效的加密数据格式,"Invalid Encrypted Data Format"
 解密失败：%{1},"Decryption failed: %{1}"
+"campaign 渠道码创建后不可修改","Campaign channel code cannot be changed after creation"
+渠道类型无效：%{1},"Invalid channel kind: %{1}"
+渠道名称必填,"Channel name is required"
+"渠道名称过长（最多 %{1} 字符）","Channel name too long (max %{1} characters)"
+渠道码必填,"Channel code is required"
+"渠道码格式无效：需 2-32 位，小写字母或数字开头，仅含 a-z 0-9 _ -","Invalid channel code: 2-32 chars, start with lowercase letter or digit, only a-z 0-9 _ -"
+"rule 渠道码无效：不含空白且最多 %{1} 字符","Invalid rule channel code: no whitespace, max %{1} characters"
+流量类型无效：%{1},"Invalid traffic type: %{1}"
+站点ID无效,"Invalid Site ID"
+"rule 匹配模式无效：%{1}","Invalid rule match mode: %{1}"
+"rule 匹配值必填","Rule match value is required"
+"campaign 渠道不接受匹配模式/匹配值","Campaign channels do not accept match mode/value"

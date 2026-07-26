@@ -12,13 +12,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     window.__WelinePixelLoaded = true;
 
     var __visitorTrackingConfig = window.__WelineVisitorTrackingConfig || <?= $__visitorTrackingConfigJson ?>;
-    window.__WelineVisitorTrackingConfig = __visitorTrackingConfig;
 
     window.addEventListener('weline:visitor-tracking-config', function (event) {
         if (event && event.detail && typeof event.detail === 'object') {
             __visitorTrackingConfig = event.detail;
             window.__WelineVisitorTrackingConfig = __visitorTrackingConfig;
             __loadVisitorGa4();
+            __loadVisitorGtm();
             __loadCustomVisitorForwarder();
         }
     });
@@ -78,6 +78,29 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     function __visitorConsentAllows(key) {
         var consent = __visitorConsentState();
         return consent.enabled ? consent[key] === true : true;
+    }
+
+    function __visitorMarketingStorageKey() {
+        var consentConfig = __visitorConfigSection('consent') || {};
+        var key = String(consentConfig.marketingStorageKey || 'ad_storage').trim();
+        return key || 'ad_storage';
+    }
+
+    function __visitorMarketingConsentAllowsStorage() {
+        return __visitorConsentAllows(__visitorMarketingStorageKey());
+    }
+
+    /** A08/A09：pixel + sticky.linkerEnabled + 营销同意 才允许改写 a */
+    function __stickyLinkerEnabled() {
+        if (!__visitorPixelEnabled()) {
+            return false;
+        }
+        var stickyCfg = __visitorConfigSection('sticky') || {};
+        var linkerFlag = stickyCfg.linkerEnabled != null ? stickyCfg.linkerEnabled : stickyCfg.linker_enabled;
+        if (!__visitorConfigBool(linkerFlag, true)) {
+            return false;
+        }
+        return __visitorMarketingConsentAllowsStorage();
     }
 
     function __visitorConfigList(section, key) {
@@ -159,20 +182,27 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         if (__visitorConfigBool(rules.excludeLocalForwarding, true) && __isVisitorLocalHost()) {
             add('local_access', '本地/私网访问', host);
         }
-        if (__visitorHostMatches(host, __visitorConfigList('trafficRules', 'excludedHosts'))) {
+
+        var excludedHosts = __visitorConfigList('trafficRules', 'excludedHosts');
+        if (__visitorHostMatches(host, excludedHosts)) {
             add('excluded_host', '站点排除 Host', host);
         }
-        if (__visitorPathMatches(path, __visitorConfigList('trafficRules', 'excludedPathPrefixes'))) {
+
+        var excludedPathPrefixes = __visitorConfigList('trafficRules', 'excludedPathPrefixes');
+        if (__visitorPathMatches(path, excludedPathPrefixes)) {
             add('excluded_path', '站点排除路径', path);
         }
+
         var matchedQueryKeys = __visitorQueryMatches(__visitorConfigList('trafficRules', 'excludedQueryKeys'));
         if (matchedQueryKeys.length) {
             add('excluded_query', '站点排除 Query', matchedQueryKeys.join(','));
         }
+
         var referrerHost = __visitorReferrerHost();
         if (referrerHost && __visitorHostMatches(referrerHost, __visitorConfigList('trafficRules', 'excludedReferrerHosts'))) {
             add('excluded_referrer', '站点排除来源', referrerHost);
         }
+
         (__visitorConfigList('trafficRules', 'excludedUserAgentKeywords') || []).some(function (keyword) {
             keyword = String(keyword || '').toLowerCase();
             if (keyword && userAgent.indexOf(keyword) > -1) {
@@ -195,18 +225,27 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     }
 
     var __visitorForwarders = window.__WelineVisitorForwarders || {};
+    var __visitorForwarderMeta = window.__WelineVisitorForwarderMeta || {};
     window.__WelineVisitorForwarders = __visitorForwarders;
+    window.__WelineVisitorForwarderMeta = __visitorForwarderMeta;
     window.WelineVisitorForwarders = Object.assign({}, window.WelineVisitorForwarders || {}, {
-        register: function (name, handler) {
+        register: function (name, handler, meta) {
             name = String(name || '').trim();
             if (!name || typeof handler !== 'function') {
                 return false;
             }
             __visitorForwarders[name] = handler;
+            if (meta && typeof meta === 'object') {
+                __visitorForwarderMeta[name] = Object.assign({}, __visitorForwarderMeta[name] || {}, meta, { id: name });
+            } else if (!__visitorForwarderMeta[name]) {
+                __visitorForwarderMeta[name] = { id: name, title: name, kind: 'module' };
+            }
             return true;
         },
         unregister: function (name) {
-            delete __visitorForwarders[String(name || '').trim()];
+            name = String(name || '').trim();
+            delete __visitorForwarders[name];
+            delete __visitorForwarderMeta[name];
         },
         emit: function (event) {
             if (event && event.forwarding && event.forwarding.allowed === false) {
@@ -224,6 +263,14 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         },
         getHandlers: function () {
             return Object.keys(__visitorForwarders);
+        },
+        getMeta: function () {
+            return Object.assign({}, __visitorForwarderMeta);
+        },
+        getChannels: function () {
+            return Object.keys(__visitorForwarderMeta).map(function (id) {
+                return Object.assign({ id: id, integrated: typeof __visitorForwarders[id] === 'function' }, __visitorForwarderMeta[id]);
+            });
         }
     });
 
@@ -311,8 +358,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             platforms: {
                 ga4: {
                     eventName: platformEventName || ''
+                },
+                gtm: {
+                    eventName: platformEventName || '',
+                    skipPush: false
                 }
-            }
+            },
+            dictVersion: (window.__WelineVisitorTrackingConfig && window.__WelineVisitorTrackingConfig.dictVersion) || ''
         };
     }
 
@@ -342,7 +394,16 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     }
 
     function __emitVisitorPixelEvent(pixelEventName, payload, meta, element, platformEventName) {
-        var event = __buildVisitorEventEnvelope(pixelEventName, payload, meta, element, platformEventName);
+        var resolved = __dictionaryResolve(pixelEventName, payload, element);
+        var ga4Name = platformEventName || resolved.ga4_event || '';
+        var event = __buildVisitorEventEnvelope(pixelEventName, payload, meta, element, ga4Name);
+        if (event.platforms && event.platforms.gtm) {
+            event.platforms.gtm.skipPush = !!resolved.skip_gtm_push;
+            event.platforms.gtm.eventName = ga4Name;
+        }
+        event.dictVersion = resolved.dict_version || event.dictVersion || '';
+        event.mappingSource = resolved.mapping_source || '';
+
         __recordVisitorRuntimeEvent(event);
         window.WelineVisitorForwarders.emit(event);
         try {
@@ -449,6 +510,12 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
 
     function __loadVisitorGa4() {
         var runtime = __ga4Config();
+        var gtm = __gtmConfig();
+        if (gtm.enabled) {
+            runtime.enabled = false;
+            runtime.disabledByGtm = true;
+            return runtime;
+        }
         if (!__shouldLoadGa4(runtime)) {
             return runtime;
         }
@@ -503,7 +570,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return Boolean(element && element.closest && element.closest('[data-pixel-event], [data-visitor-event], [data-cta-event], [data-cta], [data-cta-action], [data-ga-event], a[role="button"], button, .wf-btn, .btn-primary, .button--primary'));
     }
 
-    function __resolveGa4EventName(pixelEventName, payload, element) {
+    function __dictionaryResolve(pixelEventName, payload, element) {
+        var normalized = __normalizePixelEventName(pixelEventName || (payload && payload.eventName) || '');
+        var dict = (window.__WelineVisitorTrackingConfig && window.__WelineVisitorTrackingConfig.eventDictionary) || {};
+        var events = Array.isArray(dict.events) ? dict.events : [];
+        var ctaName = __normalizeGa4EventName((__ga4Config().ctaEventName || 'cta_click'));
+        var i;
+        var entry;
         var explicit = '';
         if (element && element.closest) {
             var explicitNode = element.closest('[data-pixel-event], [data-visitor-event], [data-cta-event], [data-ga-event]');
@@ -516,12 +589,37 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             }
         }
         explicit = __normalizeGa4EventName(explicit);
-        if (explicit) {
-            return explicit;
+        for (i = 0; i < events.length; i++) {
+            entry = events[i] || {};
+            if (__normalizePixelEventName(entry.weline_event || '') === normalized) {
+                var ga4 = __normalizeGa4EventName(entry.ga4_event || '');
+                if ((entry.event_family || '') === 'cta' && ctaName) {
+                    ga4 = ctaName;
+                }
+                if (explicit) {
+                    ga4 = explicit;
+                }
+                return {
+                    weline_event: normalized,
+                    ga4_event: ga4,
+                    skip_gtm_push: !!entry.skip_gtm_push || ga4 === 'page_view',
+                    mapping_source: (entry.event_family || '') === 'cta' && ctaName ? 'site_cta_override' : 'dictionary',
+                    event_family: entry.event_family || null,
+                    dict_version: dict.version || ''
+                };
+            }
         }
-
-        var normalized = __normalizePixelEventName(pixelEventName || payload && payload.eventName || '');
-        var map = {
+        if (explicit) {
+            return {
+                weline_event: normalized || explicit,
+                ga4_event: explicit,
+                skip_gtm_push: explicit === 'page_view',
+                mapping_source: 'dom_explicit',
+                event_family: null,
+                dict_version: dict.version || ''
+            };
+        }
+        var fallback = {
             view_item: 'view_item',
             add_to_cart: 'add_to_cart',
             begin_checkout: 'begin_checkout',
@@ -530,28 +628,218 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             search_submit: 'search',
             search_suggestion_click: 'select_content'
         };
-        if (map[normalized]) {
-            return map[normalized];
+        if (fallback[normalized]) {
+            return {
+                weline_event: normalized,
+                ga4_event: fallback[normalized],
+                skip_gtm_push: false,
+                mapping_source: 'legacy_fallback',
+                event_family: null,
+                dict_version: dict.version || ''
+            };
         }
         if (__isGa4CtaElement(element)) {
-            return __ga4Config().ctaEventName || 'cta_click';
+            return {
+                weline_event: normalized || 'cta_click',
+                ga4_event: ctaName || 'cta_click',
+                skip_gtm_push: false,
+                mapping_source: 'cta_heuristic',
+                event_family: 'cta',
+                dict_version: dict.version || ''
+            };
         }
-        return '';
+        return {
+            weline_event: normalized,
+            ga4_event: '',
+            skip_gtm_push: true,
+            mapping_source: 'unmapped',
+            event_family: null,
+            dict_version: dict.version || ''
+        };
     }
+
+    window.WelineEventDictionary = {
+        resolve: function (pixelEventName, element) {
+            return __dictionaryResolve(pixelEventName, {}, element || null);
+        }
+    };
+
+    function __resolveGa4EventName(pixelEventName, payload, element) {
+        var resolved = __dictionaryResolve(pixelEventName, payload, element);
+        return resolved && resolved.ga4_event ? resolved.ga4_event : '';
+    }
+
+    function __gtmConfig() {
+        var section = __visitorConfigSection('gtm');
+        var forwarders = __visitorConfigSection('forwarders');
+        var gtmForwarder = forwarders && forwarders.gtm ? forwarders.gtm : {};
+        var containerId = String((section && section.containerId) || gtmForwarder.containerId || '').trim().toUpperCase();
+        var configured = /^GTM-[A-Z0-9]{4,12}$/.test(containerId);
+        var enabled = configured && __visitorConfigBool((section && section.enabled) || gtmForwarder.enabled, false);
+        return {
+            enabled: enabled,
+            configured: configured,
+            containerId: configured ? containerId : ''
+        };
+    }
+
+    var __visitorGtmLoaded = '';
+    var __visitorGtmTriggers = [];
+
+    function __recordVisitorGtmTrigger(entry) {
+        entry = entry || {};
+        entry.at = Date.now();
+        __visitorGtmTriggers.unshift(entry);
+        if (__visitorGtmTriggers.length > 40) {
+            __visitorGtmTriggers.length = 40;
+        }
+        try {
+            window.dispatchEvent(new CustomEvent('weline:visitor-gtm-trigger', { detail: entry }));
+        } catch (e) {
+        }
+    }
+
+    function __loadVisitorGtm() {
+        var runtime = __gtmConfig();
+        if (!runtime.enabled || !runtime.containerId) {
+            return runtime;
+        }
+        if (__visitorGtmLoaded === runtime.containerId) {
+            return runtime;
+        }
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+        if (!document.querySelector('script[data-weline-visitor-gtm="true"][src*="' + runtime.containerId + '"]')) {
+            var script = document.createElement('script');
+            script.async = true;
+            script.setAttribute('data-weline-visitor-gtm', 'true');
+            script.src = 'https://www.googletagmanager.com/gtm.js?id=' + encodeURIComponent(runtime.containerId);
+            document.head.appendChild(script);
+        }
+        __visitorGtmLoaded = runtime.containerId;
+        return runtime;
+    }
+
+    function __clearGtmEcommerceKeys() {
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+            items: null,
+            value: null,
+            transaction_id: null,
+            currency: null,
+            item_list_id: null,
+            item_list_name: null,
+            coupon: null,
+            shipping: null,
+            tax: null
+        });
+    }
+
+    function __pushGtmDataLayer(envelope) {
+        var runtime = __loadVisitorGtm();
+        envelope = envelope || {};
+        var payload = envelope.payload || {};
+        var resolved = __dictionaryResolve(envelope.eventName || payload.eventName, payload, envelope.element && envelope.element.domElement);
+        var ga4Event = __normalizeGa4EventName((envelope.platforms && envelope.platforms.gtm && envelope.platforms.gtm.eventName) || resolved.ga4_event || '');
+        if (!ga4Event || resolved.skip_gtm_push || ga4Event === 'page_view') {
+            return;
+        }
+        if (!runtime.enabled) {
+            __recordVisitorGtmTrigger({
+                eventName: ga4Event,
+                delivery: { mode: 'preview', label: 'GTM off' },
+                params: {}
+            });
+            return;
+        }
+        var env = payload.environment || __buildEventEnvironmentContext(envelope.element && envelope.element.domElement);
+        var isCommerce = /^(view_item|add_to_cart|begin_checkout|purchase|checkout_)/.test(ga4Event) || /^(view_item|add_to_cart|begin_checkout|checkout_)/.test(resolved.weline_event || '');
+        if (isCommerce) {
+            __clearGtmEcommerceKeys();
+        }
+        var row = {
+            event: 'weline_visitor',
+            weline_event: resolved.weline_event || envelope.eventName || '',
+            ga4_event: ga4Event,
+            event_id: envelope.eventId || payload.event_id || '',
+            page_location: env.page_location,
+            page_title: env.page_title,
+            page_path: env.page_path,
+            page_referrer: env.page_referrer,
+            website_id: env.website_id,
+            website_code: env.website_code,
+            website_url: env.website_url,
+            language: env.language,
+            currency: env.currency === 'RMB' ? 'CNY' : env.currency,
+            session_id: env.session_id,
+            page_id: env.page_id,
+            content_locale: env.content_locale,
+            weline_dict_version: resolved.dict_version || envelope.dictVersion || '',
+            weline_mapping_source: resolved.mapping_source || 'dictionary'
+        };
+        ['value', 'transaction_id', 'items', 'search_term', 'link_url', 'link_text', 'item_id', 'coupon'].forEach(function (key) {
+            if (payload[key] !== undefined && payload[key] !== null && payload[key] !== '') {
+                row[key] = payload[key];
+            }
+        });
+        // A12：GTM dataLayer 带 sticky 归因参
+        __appendStickyAttributionParams(row);
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push(row);
+        __recordVisitorGtmTrigger({
+            eventName: ga4Event,
+            params: row,
+            containerId: runtime.containerId,
+            delivery: { mode: 'gtm', label: 'dataLayer' }
+        });
+    }
+
+    window.WelineVisitorForwarders.register('gtm', function (event) {
+        __pushGtmDataLayer(event || {});
+    }, {
+        title: 'GTM',
+        kind: 'system',
+        description: 'dataLayer → GTM 容器'
+    });
+
+    window.WelineGtmBridge = {
+        pushDataLayer: __pushGtmDataLayer,
+        getTriggers: function () { return __visitorGtmTriggers.slice(); },
+        load: __loadVisitorGtm
+    };
 
     function __buildGa4Params(payload, meta, element) {
         payload = payload || {};
         meta = meta || {};
         var elementInfo = payload.elementInfo || meta.element || {};
+        var env = payload.environment || __buildEventEnvironmentContext(element);
+        var linkUrl = payload.href || elementInfo.href || (element && element.href) || '';
+        if (!linkUrl && element && element.getAttribute) {
+            linkUrl = element.getAttribute('href') || element.getAttribute('data-pb-ai-target') || '';
+        }
+        if (!linkUrl) {
+            // Button / event CTAs have no href — attribute to the current page for funnel paths.
+            linkUrl = env.page_location || window.location.href;
+        }
         var params = {
             visitor_event_name: payload.eventName || payload.event || '',
-            page_location: window.location.href,
-            page_title: document.title || '',
-            page_path: window.location.pathname,
+            page_location: env.page_location,
+            page_title: env.page_title,
+            page_path: env.page_path,
+            page_referrer: env.page_referrer,
+            page_hostname: env.page_hostname,
             event_id: __visitorEventId(payload),
-            pixel_name: payload.name || window.__WelinePixelName || '',
-            link_url: payload.href || elementInfo.href || (element && element.href) || '',
-            link_text: payload.link_text || elementInfo.text || (element ? (element.innerText || element.textContent || '').trim().slice(0, 120) : '')
+            pixel_name: env.pixel_name || payload.name || window.__WelinePixelName || '',
+            link_url: linkUrl,
+            link_text: payload.link_text || elementInfo.text || (element ? (element.innerText || element.textContent || '').trim().slice(0, 120) : ''),
+            website_id: env.website_id,
+            website_code: env.website_code,
+            website_url: env.website_url,
+            language: env.language,
+            currency: env.currency,
+            session_id: env.session_id,
+            page_id: env.page_id,
+            content_locale: env.content_locale
         };
         ['value', 'currency', 'transaction_id', 'items', 'search_term', 'query', 'product_id', 'item_id', 'sku'].forEach(function (key) {
             if (payload[key] !== undefined && payload[key] !== null && payload[key] !== '') {
@@ -565,10 +853,75 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         if (params.currency === 'RMB') {
             params.currency = 'CNY';
         }
-        return params;
+        // A12：GA4 转发带 sticky 归因参
+        return __appendStickyAttributionParams(params);
+    }
+
+    /**
+     * GA4-aligned page/site environment for funnel attribution.
+     * Attached to every Visitor track payload and mirrored into GA4 params.
+     */
+    function __buildEventEnvironmentContext(element) {
+        var websiteUrl = __getPixelSiteEnvValue('website_url', 'WELINE_WEBSITE_URL') || '';
+        try {
+            websiteUrl = websiteUrl ? decodeURIComponent(websiteUrl) : '';
+        } catch (e) {
+            // keep raw value
+        }
+        var pathLocale = '';
+        try {
+            var segments = String(window.location.pathname || '').split('/').filter(Boolean);
+            var langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
+            for (var i = 0; i < Math.min(segments.length, 3); i++) {
+                if (langPattern.test(segments[i])) {
+                    pathLocale = segments[i];
+                    break;
+                }
+            }
+        } catch (e2) {
+        }
+        var language = __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || pathLocale || '';
+        var pageId = '';
+        try {
+            pageId = (typeof __pixelPageId === 'string' && __pixelPageId) ? __pixelPageId : '';
+        } catch (e3) {
+            pageId = '';
+        }
+        var sessionId = '';
+        try {
+            sessionId = (typeof __getPixelSessionId === 'function') ? String(__getPixelSessionId() || '') : '';
+        } catch (e4) {
+            sessionId = '';
+        }
+        return {
+            page_location: window.location.href,
+            page_path: window.location.pathname || '/',
+            page_title: document.title || '',
+            page_referrer: document.referrer || '',
+            page_hostname: window.location.hostname || '',
+            page_origin: window.location.origin || '',
+            page_search: window.location.search || '',
+            page_hash: window.location.hash || '',
+            website_id: String(__getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || ''),
+            website_code: String(__getPixelSiteEnvValue('website_code', 'WELINE_WEBSITE_CODE') || ''),
+            website_url: websiteUrl,
+            language: language,
+            currency: (function () {
+                var c = String(__getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || 'CNY');
+                return c === 'RMB' ? 'CNY' : c;
+            })(),
+            content_locale: pathLocale || language,
+            session_id: sessionId,
+            page_id: pageId,
+            pixel_name: window.__WelinePixelName || '',
+            engagement_target: (element && element.getAttribute && element.getAttribute('data-pb-ai-action')) || ''
+        };
     }
 
     function __sendVisitorGa4Event(pixelEventName, payload, meta, element) {
+        if (__gtmConfig().enabled) {
+            return;
+        }
         var runtime = __loadVisitorGa4();
         var ga4EventName = __normalizeGa4EventName(payload && payload.__ga4EventName) || __resolveGa4EventName(pixelEventName, payload, element);
         if (!ga4EventName || ga4EventName === 'page_view') {
@@ -608,9 +961,14 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             payload.__ga4EventName = ga4EventName;
         }
         __sendVisitorGa4Event(event.eventName || payload.eventName || payload.event, payload, event.meta || {}, event.element && event.element.domElement || null);
+    }, {
+        title: 'GA4',
+        kind: 'system',
+        description: 'gtag 直连（与 GTM 互斥）'
     });
 
     __loadVisitorGa4();
+    __loadVisitorGtm();
     __loadCustomVisitorForwarder();
     
     /**
@@ -675,6 +1033,20 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             return parts.pop().split(";").shift();
         }
         return '';
+    }
+
+    /**
+     * Prefer server-injected __WelinePixelEnv (HttpOnly cookies are not readable in JS).
+     */
+    function __getPixelSiteEnvValue(key, cookieName) {
+        try {
+            var injected = window.__WelinePixelEnv;
+            if (injected && typeof injected === 'object' && injected[key] !== undefined && injected[key] !== null && injected[key] !== '') {
+                return String(injected[key]);
+            }
+        } catch (e) {
+        }
+        return __getPixelCookie(cookieName || '') || '';
     }
 
     function __isPixelSupportedCurrencySegment(segment) {
@@ -799,6 +1171,529 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             __safeSessionSet(__pixelSessionKey, sessionId);
         }
         return sessionId;
+    }
+
+    var PIXEL_SCRIPT_VERSION = '2026.07.24-a12';
+    var __pixelStickyStorageKey = 'weline_pixel_sticky_utm';
+    var __pixelStickyCookieName = 'WELINE_PIXEL_STICKY_UTM';
+
+    function __stickyTtlMs() {
+        var stickyCfg = __visitorConfigSection('sticky') || {};
+        var hours = Number(stickyCfg.ttlHours != null ? stickyCfg.ttlHours : stickyCfg.ttl_hours);
+        if (!isFinite(hours) || hours <= 0) {
+            hours = 24;
+        }
+        return Math.round(hours * 3600 * 1000);
+    }
+
+    function __safeLocalGet(key) {
+        try {
+            return window.localStorage ? window.localStorage.getItem(key) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function __safeLocalSet(key, value) {
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem(key, value);
+            }
+        } catch (e) {
+        }
+    }
+
+    function __setPixelCookie(name, value, maxAgeSec) {
+        try {
+            var encoded = encodeURIComponent(String(value == null ? '' : value));
+            var parts = [name + '=' + encoded, 'path=/', 'SameSite=Lax'];
+            var age = Number(maxAgeSec);
+            if (isFinite(age) && age > 0) {
+                parts.push('max-age=' + Math.round(age));
+            }
+            if (window.location && window.location.protocol === 'https:') {
+                parts.push('Secure');
+            }
+            document.cookie = parts.join('; ');
+        } catch (e) {
+        }
+    }
+
+    function __captureMarketingPackFromSearch(search) {
+        var params;
+        try {
+            params = new URLSearchParams(search || '');
+        } catch (e) {
+            params = { get: function () { return ''; } };
+        }
+        function pick() {
+            for (var i = 0; i < arguments.length; i++) {
+                var v = params.get(arguments[i]);
+                if (v) {
+                    return String(v).slice(0, 255);
+                }
+            }
+            return '';
+        }
+        return {
+            wch: pick('wch', 'channel_code'),
+            utm_source: pick('utm_source'),
+            utm_medium: pick('utm_medium'),
+            utm_campaign: pick('utm_campaign'),
+            utm_content: pick('utm_content'),
+            utm_term: pick('utm_term'),
+            gclid: pick('gclid'),
+            fbclid: pick('fbclid'),
+            msclkid: pick('msclkid')
+        };
+    }
+
+    function __marketingPackHasSignal(pack) {
+        if (!pack || typeof pack !== 'object') {
+            return false;
+        }
+        var keys = ['wch', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', 'msclkid'];
+        for (var i = 0; i < keys.length; i++) {
+            if (String(pack[keys[i]] || '') !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function __normalizeStickyPack(raw) {
+        if (!raw || typeof raw !== 'object') {
+            return null;
+        }
+        var pack = {
+            wch: String(raw.wch || raw.channel_code || '').slice(0, 64),
+            utm_source: String(raw.utm_source || raw.source || '').slice(0, 255),
+            utm_medium: String(raw.utm_medium || raw.medium || '').slice(0, 255),
+            utm_campaign: String(raw.utm_campaign || raw.campaign || '').slice(0, 255),
+            utm_content: String(raw.utm_content || raw.content || '').slice(0, 255),
+            utm_term: String(raw.utm_term || raw.term || '').slice(0, 255),
+            gclid: String(raw.gclid || '').slice(0, 255),
+            fbclid: String(raw.fbclid || '').slice(0, 255),
+            msclkid: String(raw.msclkid || '').slice(0, 255),
+            locked_at: Number(raw.locked_at) || 0,
+            locked_at_iso: String(raw.locked_at_iso || '')
+        };
+        if (!__marketingPackHasSignal(pack)) {
+            return null;
+        }
+        if (!pack.locked_at) {
+            pack.locked_at = Date.now();
+            pack.locked_at_iso = new Date(pack.locked_at).toISOString();
+        }
+        return pack;
+    }
+
+    function __parseStickyRaw(raw) {
+        if (!raw) {
+            return null;
+        }
+        var parsed = typeof raw === 'string' ? __safeJsonParse(raw, null) : raw;
+        var pack = __normalizeStickyPack(parsed);
+        if (!pack) {
+            return null;
+        }
+        if ((Date.now() - pack.locked_at) > __stickyTtlMs()) {
+            return null;
+        }
+        return pack;
+    }
+
+    function __readStickyUtmPack() {
+        var fromLocal = __parseStickyRaw(__safeLocalGet(__pixelStickyStorageKey));
+        var fromSession = __parseStickyRaw(__safeSessionGet(__pixelStickyStorageKey));
+        var fromCookie = null;
+        try {
+            var cookieRaw = __getPixelCookie(__pixelStickyCookieName);
+            if (cookieRaw) {
+                fromCookie = __parseStickyRaw(decodeURIComponent(cookieRaw));
+            }
+        } catch (e) {
+            fromCookie = __parseStickyRaw(__getPixelCookie(__pixelStickyCookieName));
+        }
+        var candidates = [fromLocal, fromSession, fromCookie].filter(Boolean);
+        if (!candidates.length) {
+            return null;
+        }
+        candidates.sort(function (a, b) {
+            return (a.locked_at || 0) - (b.locked_at || 0);
+        });
+        return candidates[0];
+    }
+
+    function __persistStickyUtmPack(pack) {
+        if (!__visitorMarketingConsentAllowsStorage()) {
+            return null;
+        }
+        var normalized = __normalizeStickyPack(pack);
+        if (!normalized) {
+            return null;
+        }
+        var serialized = JSON.stringify(normalized);
+        __safeLocalSet(__pixelStickyStorageKey, serialized);
+        __safeSessionSet(__pixelStickyStorageKey, serialized);
+        __setPixelCookie(__pixelStickyCookieName, serialized, Math.round(__stickyTtlMs() / 1000));
+        return normalized;
+    }
+
+    function __ensureStickyUtmLocked() {
+        if (!__visitorMarketingConsentAllowsStorage()) {
+            return null;
+        }
+        var existing = __readStickyUtmPack();
+        var fromUrl = __captureMarketingPackFromSearch(window.location.search || '');
+        if (__marketingPackHasSignal(fromUrl)) {
+            if (!existing) {
+                var now = Date.now();
+                existing = __persistStickyUtmPack(Object.assign({}, fromUrl, {
+                    locked_at: now,
+                    locked_at_iso: new Date(now).toISOString()
+                }));
+            } else {
+                // 首触锁定：已有有效 sticky 时忽略 URL 新参；locked_at 更早者胜
+                __persistStickyUtmPack(existing);
+            }
+        }
+        return existing;
+    }
+
+    function __getStickyUtmPack() {
+        if (!__visitorMarketingConsentAllowsStorage()) {
+            return null;
+        }
+        return __ensureStickyUtmLocked();
+    }
+
+
+    function __appendStickyAttributionParams(target) {
+        target = target || {};
+        if (typeof __getStickyUtmPack !== 'function') {
+            return target;
+        }
+        var pack = null;
+        try {
+            pack = __getStickyUtmPack();
+        } catch (e) {
+            pack = null;
+        }
+        if (!pack) {
+            return target;
+        }
+        var pairs = [
+            ['wch', pack.wch],
+            ['utm_source', pack.utm_source],
+            ['utm_medium', pack.utm_medium],
+            ['utm_campaign', pack.utm_campaign],
+            ['utm_content', pack.utm_content],
+            ['utm_term', pack.utm_term],
+            ['gclid', pack.gclid],
+            ['fbclid', pack.fbclid],
+            ['msclkid', pack.msclkid]
+        ];
+        for (var i = 0; i < pairs.length; i++) {
+            var key = pairs[i][0];
+            var value = String(pairs[i][1] || '').trim();
+            if (value !== '' && (target[key] === undefined || target[key] === null || target[key] === '')) {
+                target[key] = value.slice(0, 255);
+            }
+        }
+        // GA4 常见别名，便于调试/报表可见
+        if (target.utm_source && !target.source) {
+            target.source = target.utm_source;
+        }
+        if (target.utm_medium && !target.medium) {
+            target.medium = target.utm_medium;
+        }
+        if (target.utm_campaign && !target.campaign) {
+            target.campaign = target.utm_campaign;
+        }
+        if (target.utm_content && !target.content) {
+            target.content = target.utm_content;
+        }
+        if (target.utm_term && !target.term) {
+            target.term = target.utm_term;
+        }
+        if (pack.locked_at && !target.sticky_locked_at) {
+            target.sticky_locked_at = pack.locked_at;
+        }
+        return target;
+    }
+
+    var __stickyLinkerTimer = null;
+    var __stickyLinkerObserver = null;
+    var __stickyLinkerAttr = 'data-weline-sticky-href';
+
+    function __stickyParamMap(pack) {
+        if (!pack || typeof pack !== 'object') {
+            return {};
+        }
+        var map = {};
+        var pairs = [
+            ['wch', pack.wch],
+            ['utm_source', pack.utm_source],
+            ['utm_medium', pack.utm_medium],
+            ['utm_campaign', pack.utm_campaign],
+            ['utm_content', pack.utm_content],
+            ['utm_term', pack.utm_term],
+            ['gclid', pack.gclid],
+            ['fbclid', pack.fbclid],
+            ['msclkid', pack.msclkid]
+        ];
+        for (var i = 0; i < pairs.length; i++) {
+            var key = pairs[i][0];
+            var value = String(pairs[i][1] || '').trim();
+            if (value !== '') {
+                map[key] = value.slice(0, 255);
+            }
+        }
+        return map;
+    }
+
+    function __isInternalStickyHref(href) {
+        var raw = String(href || '').trim();
+        if (!raw || raw.charAt(0) === '#') {
+            return false;
+        }
+        var lower = raw.toLowerCase();
+        if (lower.indexOf('javascript:') === 0
+            || lower.indexOf('mailto:') === 0
+            || lower.indexOf('tel:') === 0
+            || lower.indexOf('sms:') === 0
+            || lower.indexOf('data:') === 0) {
+            return false;
+        }
+        try {
+            var url = new URL(raw, window.location.href);
+            if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                return false;
+            }
+            return url.host === window.location.host;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function __applyStickyParamsToHref(href, pack) {
+        var params = __stickyParamMap(pack);
+        var keys = Object.keys(params);
+        if (!keys.length || !__isInternalStickyHref(href)) {
+            return href;
+        }
+        try {
+            var url = new URL(String(href), window.location.href);
+            for (var i = 0; i < keys.length; i++) {
+                url.searchParams.set(keys[i], params[keys[i]]);
+            }
+            // Preserve relative form when original was path-relative / root-relative
+            var original = String(href);
+            if (original.indexOf('//') === 0) {
+                return url.toString().replace(/^https?:/, '');
+            }
+            if (/^https?:\/\//i.test(original)) {
+                return url.toString();
+            }
+            return url.pathname + url.search + url.hash;
+        } catch (e) {
+            return href;
+        }
+    }
+
+    function __rewriteAnchorHref(anchor, pack) {
+        if (!anchor || !anchor.getAttribute || anchor.tagName !== 'A') {
+            return false;
+        }
+        if (anchor.hasAttribute('data-weline-sticky-skip')) {
+            return false;
+        }
+        var currentHref = anchor.getAttribute('href');
+        if (currentHref == null) {
+            return false;
+        }
+        if (!anchor.hasAttribute(__stickyLinkerAttr)) {
+            anchor.setAttribute(__stickyLinkerAttr, currentHref);
+        }
+        var baseHref = anchor.getAttribute(__stickyLinkerAttr) || currentHref;
+        if (!__isInternalStickyHref(baseHref)) {
+            return false;
+        }
+        var nextHref = __applyStickyParamsToHref(baseHref, pack);
+        if (nextHref && nextHref !== currentHref) {
+            anchor.setAttribute('href', nextHref);
+            return true;
+        }
+        return false;
+    }
+
+    function __rewriteStickyAnchors(root) {
+        if (!__stickyLinkerEnabled()) {
+            return 0;
+        }
+        var pack = __getStickyUtmPack();
+        if (!pack) {
+            return 0;
+        }
+        var scope = root && root.querySelectorAll ? root : document;
+        var anchors;
+        try {
+            anchors = scope.querySelectorAll('a[href]');
+        } catch (e) {
+            return 0;
+        }
+        var changed = 0;
+        for (var i = 0; i < anchors.length; i++) {
+            if (__rewriteAnchorHref(anchors[i], pack)) {
+                changed++;
+            }
+        }
+        return changed;
+    }
+
+    function __scheduleStickyAnchorRewrite(delayMs) {
+        if (!__stickyLinkerEnabled()) {
+            return;
+        }
+        if (__stickyLinkerTimer) {
+            window.clearTimeout(__stickyLinkerTimer);
+        }
+        __stickyLinkerTimer = window.setTimeout(function () {
+            __stickyLinkerTimer = null;
+            __rewriteStickyAnchors(document);
+        }, typeof delayMs === 'number' ? delayMs : 120);
+    }
+
+    function __initStickyUtmLinker() {
+        if (window.__WelineStickyUtmLinkerLoaded) {
+            return;
+        }
+        window.__WelineStickyUtmLinkerLoaded = true;
+        if (!__stickyLinkerEnabled()) {
+            return;
+        }
+        __rewriteStickyAnchors(document);
+        if (typeof MutationObserver !== 'function' || !document.documentElement) {
+            return;
+        }
+        try {
+            __stickyLinkerObserver = new MutationObserver(function (mutations) {
+                if (!__stickyLinkerEnabled()) {
+                    return;
+                }
+                for (var i = 0; i < mutations.length; i++) {
+                    var mutation = mutations[i];
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'href' && mutation.target && mutation.target.tagName === 'A') {
+                        // Ignore our own writes: only reschedule when base attr missing or external change
+                        if (!mutation.target.hasAttribute(__stickyLinkerAttr)
+                            || mutation.oldValue === mutation.target.getAttribute(__stickyLinkerAttr)) {
+                            __scheduleStickyAnchorRewrite(120);
+                            return;
+                        }
+                    }
+                    if (mutation.type === 'childList' && ((mutation.addedNodes && mutation.addedNodes.length) || (mutation.removedNodes && mutation.removedNodes.length))) {
+                        __scheduleStickyAnchorRewrite(120);
+                        return;
+                    }
+                }
+            });
+            __stickyLinkerObserver.observe(document.documentElement, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['href'],
+                attributeOldValue: true
+            });
+        } catch (e) {
+        }
+    }
+
+
+    function __stickyFormMergeEnabled() {
+        if (!__visitorPixelEnabled()) {
+            return false;
+        }
+        var stickyCfg = __visitorConfigSection('sticky') || {};
+        var flag = stickyCfg.formMergeEnabled != null ? stickyCfg.formMergeEnabled : stickyCfg.form_merge_enabled;
+        // A11：默认关闭
+        if (!__visitorConfigBool(flag, false)) {
+            return false;
+        }
+        return __visitorMarketingConsentAllowsStorage();
+    }
+
+    function __isGetForm(form) {
+        if (!form || !form.tagName || form.tagName !== 'FORM') {
+            return false;
+        }
+        var method = String(form.getAttribute('method') || form.method || 'get').trim().toLowerCase();
+        return method === '' || method === 'get';
+    }
+
+    function __formActionIsInternal(form) {
+        var action = form.getAttribute('action');
+        if (action == null || String(action).trim() === '') {
+            return true; // submit to current page
+        }
+        return __isInternalStickyHref(action);
+    }
+
+    function __mergeStickyIntoForm(form) {
+        if (!__stickyFormMergeEnabled() || !__isGetForm(form) || !__formActionIsInternal(form)) {
+            return 0;
+        }
+        if (form.hasAttribute('data-weline-sticky-skip')) {
+            return 0;
+        }
+        var pack = __getStickyUtmPack();
+        var params = __stickyParamMap(pack);
+        var keys = Object.keys(params);
+        if (!keys.length) {
+            return 0;
+        }
+        var added = 0;
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var value = params[key];
+            if (!value) {
+                continue;
+            }
+            var existing = null;
+            try {
+                existing = form.querySelector('[name="' + key.replace(/"/g, '\\"') + '"]');
+            } catch (e) {
+                existing = form.elements && form.elements.namedItem ? form.elements.namedItem(key) : null;
+            }
+            if (existing) {
+                continue;
+            }
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value;
+            input.setAttribute('data-weline-sticky-field', '1');
+            form.appendChild(input);
+            added++;
+        }
+        return added;
+    }
+
+    function __initStickyFormMerge() {
+        if (window.__WelineStickyFormMergeLoaded) {
+            return;
+        }
+        window.__WelineStickyFormMergeLoaded = true;
+        document.addEventListener('submit', function (event) {
+            if (!__stickyFormMergeEnabled()) {
+                return;
+            }
+            var form = event.target;
+            if (!form || form.tagName !== 'FORM') {
+                return;
+            }
+            __mergeStickyIntoForm(form);
+        }, true);
     }
 
     function __getPixelPerformanceTiming() {
@@ -928,18 +1823,46 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     }
 
     function __buildPixelBehaviorInfo(eventName, meta, eventStartedAt) {
+        var environment = __buildEventEnvironmentContext((meta && meta.domElement) || null);
+        var device = __getPixelDeviceContext();
+        var utm = __getPixelUtmContext();
+        var sticky = __getStickyUtmPack();
+        var timeData = __getPixelTimeData(eventStartedAt);
+        var dwellMs = 0;
+        if (meta && meta.duration_ms) {
+            dwellMs = Number(meta.duration_ms) || 0;
+        }
+        var engagedEvents = {
+            cta_click: 1, contact_click: 1, lead_submit: 1, hero_cta_click: 1,
+            add_to_cart: 1, begin_checkout: 1, purchase: 1, checkout_success: 1,
+            search_submit: 1, login: 1, register: 1
+        };
         return {
-            schema: 'weline_behavior_timing_v1',
-            time: __getPixelTimeData(eventStartedAt),
+            schema: 'weline_behavior_timing_v2',
+            time: timeData,
             performance: __getPixelPerformanceTiming(),
             funnel: __getFunnelChain(eventName),
+            environment: environment,
+            device: device,
+            utm: utm,
+            sticky: sticky || null,
+            engagement: {
+                engaged: !!engagedEvents[String(eventName || '')] || dwellMs >= 10000,
+                dwell_ms: dwellMs,
+                page_elapsed_ms: Number(timeData && timeData.page_elapsed_ms) || 0
+            },
             navigation: {
-                current_url: window.location.href,
-                current_path: window.location.pathname,
-                current_search: window.location.search,
-                current_hash: window.location.hash,
-                referrer: document.referrer || '',
-                last_location: __pixelLastLocation
+                current_url: environment.page_location,
+                current_path: environment.page_path,
+                current_search: environment.page_search,
+                current_hash: environment.page_hash,
+                referrer: environment.page_referrer,
+                last_location: __pixelLastLocation,
+                website_id: environment.website_id,
+                website_code: environment.website_code,
+                website_url: environment.website_url,
+                language: environment.language,
+                content_locale: environment.content_locale
             },
             viewport: {
                 inner_width: window.innerWidth,
@@ -950,6 +1873,43 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                 visibility_state: document.visibilityState || ''
             },
             meta: meta || {}
+        };
+    }
+
+    function __getPixelDeviceContext() {
+        var width = Number(window.screen && window.screen.width) || Number(window.innerWidth) || 0;
+        var height = Number(window.screen && window.screen.height) || Number(window.innerHeight) || 0;
+        var touch = !!(navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+        var category = 'desktop';
+        if (width > 0 && width < 768) {
+            category = 'mobile';
+        } else if ((width >= 768 && width < 1024) || (touch && width < 1280)) {
+            category = width < 768 ? 'mobile' : 'tablet';
+        }
+        return {
+            category: category,
+            platform: navigator.platform || '',
+            language: navigator.language || '',
+            screen_width: width,
+            screen_height: height,
+            color_depth: (window.screen && window.screen.colorDepth) || 0,
+            timezone_offset: new Date().getTimezoneOffset(),
+            touch: touch
+        };
+    }
+
+    function __getPixelUtmContext() {
+        var pack = __captureMarketingPackFromSearch(window.location.search || '');
+        return {
+            source: pack.utm_source || '',
+            medium: pack.utm_medium || '',
+            campaign: pack.utm_campaign || '',
+            content: pack.utm_content || '',
+            term: pack.utm_term || '',
+            gclid: pack.gclid || '',
+            fbclid: pack.fbclid || '',
+            msclkid: pack.msclkid || '',
+            wch: pack.wch || ''
         };
     }
 
@@ -1421,6 +2381,39 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         compact.eventName = __pixelTruncate(compact.eventName || compact.event, 128);
         compact.userLang = __pixelTruncate(compact.userLang, 64);
         compact.currency = __pixelTruncate(compact.currency, 32);
+        compact.websiteId = __pixelTruncate(compact.websiteId || (compact.environment && compact.environment.website_id), 32);
+        compact.websiteCode = __pixelTruncate(compact.websiteCode || (compact.environment && compact.environment.website_code), 64);
+        compact.websiteUrl = __pixelTruncate(compact.websiteUrl || (compact.environment && compact.environment.website_url), 255);
+        compact.page_location = __pixelTruncate(compact.page_location || (compact.environment && compact.environment.page_location), 512);
+        compact.page_path = __pixelTruncate(compact.page_path || (compact.environment && compact.environment.page_path), 160);
+        compact.page_title = __pixelTruncate(compact.page_title || (compact.environment && compact.environment.page_title), 255);
+        compact.page_referrer = __pixelTruncate(compact.page_referrer || (compact.environment && compact.environment.page_referrer), 512);
+        compact.page_hostname = __pixelTruncate(compact.page_hostname || (compact.environment && compact.environment.page_hostname), 128);
+        compact.content_locale = __pixelTruncate(compact.content_locale || (compact.environment && compact.environment.content_locale), 64);
+        compact.session_id = __pixelTruncate(compact.session_id || (compact.environment && compact.environment.session_id), 64);
+        compact.page_id = __pixelTruncate(compact.page_id || (compact.environment && compact.environment.page_id), 64);
+        if (compact.environment && typeof compact.environment === 'object') {
+            compact.environment = {
+                page_location: __pixelTruncate(compact.environment.page_location, 512),
+                page_path: __pixelTruncate(compact.environment.page_path, 160),
+                page_title: __pixelTruncate(compact.environment.page_title, 255),
+                page_referrer: __pixelTruncate(compact.environment.page_referrer, 512),
+                page_hostname: __pixelTruncate(compact.environment.page_hostname, 128),
+                page_origin: __pixelTruncate(compact.environment.page_origin, 128),
+                page_search: __pixelTruncate(compact.environment.page_search, 160),
+                page_hash: __pixelTruncate(compact.environment.page_hash, 80),
+                website_id: __pixelTruncate(compact.environment.website_id, 32),
+                website_code: __pixelTruncate(compact.environment.website_code, 64),
+                website_url: __pixelTruncate(compact.environment.website_url, 255),
+                language: __pixelTruncate(compact.environment.language, 64),
+                currency: __pixelTruncate(compact.environment.currency, 32),
+                content_locale: __pixelTruncate(compact.environment.content_locale, 64),
+                session_id: __pixelTruncate(compact.environment.session_id, 64),
+                page_id: __pixelTruncate(compact.environment.page_id, 64),
+                pixel_name: __pixelTruncate(compact.environment.pixel_name, 128),
+                engagement_target: __pixelTruncate(compact.environment.engagement_target, 64)
+            };
+        }
 
         if (compact.elementInfo && typeof compact.elementInfo === 'object') {
             compact.elementInfo = {
@@ -1435,21 +2428,43 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             };
         }
 
+        var ecommerceItems = Array.isArray(compact.items)
+            ? compact.items
+            : (additionalInfo.ecommerce && Array.isArray(additionalInfo.ecommerce.items)
+                ? additionalInfo.ecommerce.items
+                : (additionalInfo.meta && Array.isArray(additionalInfo.meta.items) ? additionalInfo.meta.items : []));
         compact.additionalInfo = {
-            schema: additionalInfo.schema || 'weline_behavior_timing_v1',
+            schema: additionalInfo.schema || 'weline_behavior_timing_v2',
             time: additionalInfo.time || {},
             performance: __compactPixelPerformance(additionalInfo.performance),
             funnel: __compactPixelFunnel(additionalInfo.funnel),
+            environment: additionalInfo.environment || {},
+            device: additionalInfo.device || {},
+            utm: additionalInfo.utm || {},
+            engagement: additionalInfo.engagement || {},
             navigation: {
                 current_url: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_url, 512),
                 current_path: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_path, 160),
                 current_search: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_search, 160),
                 current_hash: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.current_hash, 80),
                 referrer: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.referrer, 512),
-                last_location: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.last_location, 512)
+                last_location: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.last_location, 512),
+                website_id: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.website_id, 32),
+                website_code: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.website_code, 64),
+                website_url: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.website_url, 255),
+                language: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.language, 64),
+                content_locale: __pixelTruncate(additionalInfo.navigation && additionalInfo.navigation.content_locale, 64)
             },
             viewport: additionalInfo.viewport || {},
-            meta: additionalInfo.meta || {}
+            meta: additionalInfo.meta || {},
+            // F03：worker 压缩时保留电商 items，供服务端商品表现展开
+            ecommerce: {
+                items: ecommerceItems.slice(0, 20),
+                item_id: __pixelTruncate(compact.item_id || (additionalInfo.ecommerce && additionalInfo.ecommerce.item_id) || '', 120),
+                product_id: __pixelTruncate(compact.product_id || (additionalInfo.ecommerce && additionalInfo.ecommerce.product_id) || '', 120),
+                sku: __pixelTruncate(compact.sku || (additionalInfo.ecommerce && additionalInfo.ecommerce.sku) || '', 120),
+                transaction_id: __pixelTruncate(compact.transaction_id || (additionalInfo.ecommerce && additionalInfo.ecommerce.transaction_id) || '', 120)
+            }
         };
 
         return compact;
@@ -1502,6 +2517,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
 
     window.WelinePixel = {
         endpoint: 'worker:visitor.trackPixel',
+        script_version: PIXEL_SCRIPT_VERSION,
+        getStickyUtm: __getStickyUtmPack,
+        stickyLinkerEnabled: __stickyLinkerEnabled,
+        marketingConsentAllowsStorage: __visitorMarketingConsentAllowsStorage,
+        rewriteStickyAnchors: __rewriteStickyAnchors,
+        stickyFormMergeEnabled: __stickyFormMergeEnabled,
+        mergeStickyIntoForm: __mergeStickyIntoForm,
         env_model: __getPixelConfig('env_model', 'prod'),
         init: {
             url: window.location.href,
@@ -1511,10 +2533,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             eventName: 'click',
             name: window.__WelinePixelName || '{:name}',
             value: 0,
-            currency: __getPixelCookie('WELINE_USER_CURRENCY') || 'RMB',
-            websiteUrl: __getPixelCookie('WELINE_WEBSITE_URL') || '',
-            websiteId: __getPixelCookie('WELINE_WEBSITE_ID') || '',
-            userLang: __getPixelCookie('WELINE_USER_LANG') || 'zh-CN',
+            currency: (function () {
+                var c = String(__getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || 'CNY');
+                return c === 'RMB' ? 'CNY' : c;
+            })(),
+            websiteUrl: __getPixelSiteEnvValue('website_url', 'WELINE_WEBSITE_URL') || '',
+            websiteId: __getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || '',
+            userLang: __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || 'zh-CN',
             elementInfo: null,
             additionalInfo: null
         },
@@ -1526,10 +2551,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             eventName: 'click',
             name: window.__WelinePixelName || '{:name}',
             value: 0,
-            currency: __getPixelCookie('WELINE_USER_CURRENCY') || 'RMB',
-            websiteUrl: __getPixelCookie('WELINE_WEBSITE_URL') || '',
-            websiteId: __getPixelCookie('WELINE_WEBSITE_ID') || '',
-            userLang: __getPixelCookie('WELINE_USER_LANG') || 'zh-CN',
+            currency: (function () {
+                var c = String(__getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || 'CNY');
+                return c === 'RMB' ? 'CNY' : c;
+            })(),
+            websiteUrl: __getPixelSiteEnvValue('website_url', 'WELINE_WEBSITE_URL') || '',
+            websiteId: __getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || '',
+            userLang: __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || 'zh-CN',
             elementInfo: null,
             additionalInfo: null
         },
@@ -1563,6 +2591,13 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             if (__visitorPixelEnabled()) {
                 __enqueuePixelPayload(payloadData, keepalive);
             }
+            // 回写原对象，便于 track() 返回值与调试面板读取到 section 溯源字段
+            data.section_code = payloadData.section_code;
+            data.section_event_key = payloadData.section_event_key;
+            data.section_source_status = payloadData.section_source_status;
+            data.additionalInfo = payloadData.additionalInfo;
+            data.traffic = payloadData.traffic;
+            data.forwarding = payloadData.forwarding;
         },
         track: function (eventName, meta, options) {
             options = options || {};
@@ -1580,19 +2615,67 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             payload.local_datetime = now.toLocaleString();
             payload.userAgent = navigator.userAgent;
             payload.referrer = document.referrer;
+            payload.referer = document.referrer;
             payload.screen = {
                 width: window.screen.width,
                 height: window.screen.height
             };
+            // Refresh site context on every track — init snapshot / HttpOnly cookies may be stale or unreadable.
+            payload.websiteId = __getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || payload.websiteId || '';
+            payload.websiteUrl = __getPixelSiteEnvValue('website_url', 'WELINE_WEBSITE_URL') || payload.websiteUrl || '';
+            payload.websiteCode = __getPixelSiteEnvValue('website_code', 'WELINE_WEBSITE_CODE') || '';
+            payload.userLang = __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || payload.userLang || '';
+            payload.currency = __getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || payload.currency || '';
             payload.elementInfo = mergedMeta.element ? mergedMeta.element : null;
             __applyEventMetaToPayload(payload, mergedMeta);
-            payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, mergedMeta, options.startedAt);
+            payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, Object.assign({}, mergedMeta, { domElement: domElement }), options.startedAt);
+            payload.environment = (payload.additionalInfo && payload.additionalInfo.environment)
+                || __buildEventEnvironmentContext(domElement);
+            // GA4-aligned top-level mirrors for funnel / path attribution consumers.
+            payload.page_location = payload.environment.page_location;
+            payload.page_path = payload.environment.page_path;
+            payload.page_title = payload.environment.page_title;
+            payload.page_referrer = payload.environment.page_referrer;
+            payload.page_hostname = payload.environment.page_hostname;
+            payload.content_locale = payload.environment.content_locale;
+            payload.session_id = payload.environment.session_id;
+            payload.sticky = (payload.additionalInfo && payload.additionalInfo.sticky) || __getStickyUtmPack() || null;
+            payload.page_id = payload.environment.page_id;
             payload.__ga4Element = domElement;
             payload.__ga4Meta = mergedMeta;
             payload.__ga4EventName = __resolveGa4EventName(normalizedEventName, payload, domElement);
+            payload.__ga4Params = __buildGa4Params(payload, mergedMeta, domElement);
 
             if (options.keepalive) {
                 payload.__keepalive = true;
+            }
+
+            try {
+                var host = String(window.location && window.location.hostname || '');
+                var isDev = !!(window.DEV
+                    || window.WELINE_ENV === 'DEV'
+                    || window.__WELINE_DEBUG__
+                    || host === 'localhost'
+                    || host === '127.0.0.1'
+                    || /\.weline\.test$/i.test(host));
+                if (isDev && typeof console !== 'undefined' && typeof console.log === 'function') {
+                    console.log('[WelinePixel] track', {
+                        event: normalizedEventName,
+                        ga4: payload.__ga4EventName || '',
+                        trigger: mergedMeta.trigger || '',
+                        href: mergedMeta.href || (domElement && (domElement.href || domElement.getAttribute && domElement.getAttribute('href'))) || '',
+                        text: (domElement && ((domElement.innerText || domElement.textContent || '').trim().slice(0, 80))) || '',
+                        className: (domElement && typeof domElement.className === 'string') ? domElement.className : '',
+                        hasPixelClass: !!(domElement && typeof domElement.className === 'string'
+                            && domElement.className.indexOf('weline-pixel::') > -1),
+                        dataCtaEvent: (domElement && domElement.getAttribute && (domElement.getAttribute('data-cta-event')
+                            || (domElement.closest && domElement.closest('[data-cta-event]')
+                                && domElement.closest('[data-cta-event]').getAttribute('data-cta-event')))) || '',
+                        env: payload.environment,
+                        ga4Params: payload.__ga4Params
+                    });
+                }
+            } catch (devLogError) {
             }
 
             this.send(payload, options.url || this.url);
@@ -1783,6 +2866,9 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             })()
         }, extra || {}));
         __pixelLastLocation = nextUrl;
+        // A10：SPA pushState/replaceState/popstate/hashchange 后重跑 sticky 内链改写
+        __ensureStickyUtmLocked();
+        __scheduleStickyAnchorRewrite(160);
     }
 
     function __initBehaviorTelemetry() {
@@ -1790,6 +2876,9 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             return;
         }
         window.__WelinePixelBehaviorTelemetryLoaded = true;
+        __ensureStickyUtmLocked();
+        __initStickyUtmLinker();
+        __initStickyFormMerge();
 
         window.WelinePixel.track('page_view', {
             trigger: document.readyState === 'loading' ? 'script_init' : document.readyState,
@@ -1901,20 +2990,24 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
 
             var link = element && element.closest ? element.closest('a[href]') : null;
             if (link) {
-                var href = link.href || link.getAttribute('href') || '';
-                window.WelinePixel.track('route_click', {
-                    trigger: 'click',
-                    source: 'behavior_monitor',
-                    element: __getElementSnapshot(link),
-                    domElement: link,
-                    href: href,
-                    same_origin: href ? (new URL(href, window.location.href).origin === window.location.origin) : false,
-                    button: event.button,
-                    alt_key: event.altKey,
-                    ctrl_key: event.ctrlKey,
-                    meta_key: event.metaKey,
-                    shift_key: event.shiftKey
-                }, { startedAt: startedAt, keepalive: true, element: link, domEvent: event });
+                // 链接上已有业务像素标记时，只记业务事件，避免一点击再叠一条 route_click
+                var linkBusinessEvent = __findPixelEventNameFromElement(link);
+                if (!linkBusinessEvent) {
+                    var href = link.href || link.getAttribute('href') || '';
+                    window.WelinePixel.track('route_click', {
+                        trigger: 'click',
+                        source: 'behavior_monitor',
+                        element: __getElementSnapshot(link),
+                        domElement: link,
+                        href: href,
+                        same_origin: href ? (new URL(href, window.location.href).origin === window.location.origin) : false,
+                        button: event.button,
+                        alt_key: event.altKey,
+                        ctrl_key: event.ctrlKey,
+                        meta_key: event.metaKey,
+                        shift_key: event.shiftKey
+                    }, { startedAt: startedAt, keepalive: true, element: link, domEvent: event });
+                }
             }
         }, true);
 
@@ -2007,11 +3100,63 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         iframe.src = 'about:blank';
     }
     
-    // 等待 DOM 加载完成后初始化沙箱
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initPixelSandbox);
-    } else {
-        initPixelSandbox();
+    // Phase 2: fake #sandbox-pixel stopped as main path.
+    // Phase 6: remove initPixelSandbox entirely and use allow-scripts sandbox bridge.
+    // Intentionally not auto-started.
+    if (false && typeof initPixelSandbox === 'function') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initPixelSandbox);
+        } else {
+            initPixelSandbox();
+        }
     }
+
+    // True sandbox bridge (Phase 6): postMessage envelopes only; no shared WelinePixel.
+    window.WelinePixelSandbox = window.WelinePixelSandbox || {
+        injectMode: (window.__WelineVisitorTrackingConfig && window.__WelineVisitorTrackingConfig.sandbox && window.__WelineVisitorTrackingConfig.sandbox.inject_mode) || (window.DEV ? 'dry_run' : 'live'),
+        subscribers: [],
+        iframe: null,
+        ensureFrame: function () {
+            if (this.iframe && this.iframe.isConnected) {
+                return this.iframe;
+            }
+            var frame = document.createElement('iframe');
+            frame.id = 'weline-pixel-sandbox';
+            frame.setAttribute('sandbox', 'allow-scripts');
+            frame.style.display = 'none';
+            frame.src = 'about:blank';
+            document.body.appendChild(frame);
+            this.iframe = frame;
+            return frame;
+        },
+        publish: function (envelope) {
+            try {
+                var frame = this.ensureFrame();
+                var target = frame.contentWindow;
+                if (!target) {
+                    return;
+                }
+                target.postMessage({
+                    channel: 'weline-pixel-sandbox/v1',
+                    command: 'envelope',
+                    inject_mode: this.injectMode,
+                    envelope: envelope
+                }, '*');
+            } catch (e) {
+            }
+        }
+    };
+
+    var __origForwardersEmit = window.WelineVisitorForwarders.emit;
+    window.WelineVisitorForwarders.emit = function (event) {
+        __origForwardersEmit.call(window.WelineVisitorForwarders, event);
+        try {
+            if (window.WelinePixelSandbox && typeof window.WelinePixelSandbox.publish === 'function') {
+                window.WelinePixelSandbox.publish(event);
+            }
+        } catch (e2) {
+        }
+    };
 })();
+
 </script>

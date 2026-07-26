@@ -237,7 +237,7 @@ http://your-domain/visitor/test/browser
 
 如需添加新的测试用例，请遵循以下规范：
 
-1. 测试类必须继承 `Weline\Framework\UnitTest\TestCore`
+1. 测试类必须继承 `Weline\Framework\Test\TestCore`
 2. 测试方法必须以 `test` 开头
 3. 在 `setUp()` 中初始化测试对象
 4. 在 `tearDown()` 中清理测试数据
@@ -251,7 +251,7 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\test\Unit\Model;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Visitor\Model\Pixel;
 
