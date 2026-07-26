@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "reports": [
+    {
+      "code": "pixel_channels",
+      "label": "流量渠道",
+      "description": "按 channel_code 聚合事件与价值",
+      "dimension": "channel_code",
+      "metrics": ["events", "value_sum", "valued_events", "purchases", "add_to_carts"],
+      "filters": {},
+      "widget_code": "pixel_channels",
+      "enabled": true
+    },
+    {
+      "code": "pixel_traffic_type",
+      "label": "流量类型",
+      "description": "按 traffic_type 聚合",
+      "dimension": "traffic_type",
+      "metrics": ["events", "value_sum", "valued_events"],
+      "filters": {},
+      "widget_code": "pixel_traffic_type",
+      "enabled": true
+    },
+    {
+      "code": "pixel_paid",
+      "label": "付费广告",
+      "description": "traffic_type=paid，按 utm_campaign 聚合",
+      "dimension": "utm_campaign",
+      "metrics": ["events", "value_sum", "valued_events", "purchases", "add_to_carts"],
+      "filters": {"traffic_type": "paid"},
+      "widget_code": "pixel_paid",
+      "enabled": true
+    },
+    {
+      "code": "pixel_social",
+      "label": "社媒流量",
+      "description": "traffic_type=social，按 channel_code 聚合",
+      "dimension": "channel_code",
+      "metrics": ["events", "value_sum", "valued_events"],
+      "filters": {"traffic_type": "social"},
+      "widget_code": "pixel_social",
+      "enabled": true
+    },
+    {
+      "code": "pixel_event_value",
+      "label": "事件价值",
+      "description": "按 event_name 聚合次数与价值",
+      "dimension": "event_name",
+      "metrics": ["events", "value_sum", "valued_events"],
+      "filters": {},
+      "widget_code": "pixel_event_value",
+      "enabled": true
+    },
+    {
+      "code": "pixel_value_by_channel",
+      "label": "渠道价值",
+      "description": "按 channel_code 聚合事件价值",
+      "dimension": "channel_code",
+      "metrics": ["events", "value_sum", "valued_events"],
+      "filters": {},
+      "widget_code": "pixel_value_by_channel",
+      "enabled": true
+    }
+  ]
+}

@@ -10,11 +10,29 @@
     }
 
     var CONTRACT_VERSION = 'weline-panel-visitor/v1';
-    var visitorApiPromise = null;
-    var sdkLoadPromise = null;
+    var PANEL_REST_BASE = '/api/visitor/rest/v1';
     var lastAnalytics = null;
     var lastReport = null;
+    var lastAuditReport = null;
+    var lastChannelStatus = null;
     var activeSubtab = 'overview';
+
+    var PANEL_OPERATION_ROUTES = {
+        analyticsReport: { method: 'GET', path: 'analytics/report' },
+        analyticsDashboard: { method: 'GET', path: 'analytics/dashboard' },
+        analyticsBusinessValue: { method: 'GET', path: 'analytics/business-value' },
+        analyticsChangePercentage: { method: 'GET', path: 'analytics/change-percentage' },
+        analyticsDailyComparison: { method: 'GET', path: 'analytics/daily-comparison' },
+        analyticsAbTest: { method: 'GET', path: 'analytics/ab-test' },
+        analyticsAbTestList: { method: 'GET', path: 'analytics/ab-test-list' },
+        analyticsExport: { method: 'GET', path: 'analytics/export' },
+        pixelBufferStats: { method: 'GET', path: 'analytics/buffer-stats' },
+        pixelBufferFlush: { method: 'POST', path: 'analytics/buffer-flush' },
+        auditPixelMarkers: { method: 'POST', path: 'analytics/audit-markers' },
+        getPixelAuditReport: { method: 'GET', path: 'analytics/audit-report' },
+        getPixelChannelStatus: { method: 'GET', path: 'analytics/channel-status' },
+        getEventDictionary: { method: 'GET', path: 'analytics/event-dictionary' }
+    };
 
     function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -58,12 +76,16 @@
         style.setAttribute('data-weline-visitor-panel-style', '1');
         style.textContent = [
             '#dev-tool-panel .weline-visitor-panel{color:#172033;font-size:13px;line-height:1.5}',
-            '#dev-tool-panel .wvp-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:38px}',
+            '#dev-tool-panel .wvp-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:38px;flex-wrap:wrap}',
             '#dev-tool-panel .wvp-toolbar__title{font-weight:800;color:#172033}',
             '#dev-tool-panel .wvp-toolbar__meta{font-size:12px;color:#64748b;margin-left:8px;font-weight:500}',
-            '#dev-tool-panel .wvp-toolbar__actions{display:flex;gap:8px;flex-wrap:wrap}',
+            '#dev-tool-panel .wvp-toolbar__status{display:block;margin-top:4px;font-size:12px;color:#64748b;font-weight:500}',
+            '#dev-tool-panel .wvp-toolbar__status.is-ok{color:#15803d}',
+            '#dev-tool-panel .wvp-toolbar__status.is-error{color:#b91c1c}',
+            '#dev-tool-panel .wvp-toolbar__actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
             '#dev-tool-panel .wvp-btn{height:32px;border:1px solid #cbd6e4;border-radius:6px;background:#fff;color:#22304a;padding:0 12px;font-weight:700;cursor:pointer}',
             '#dev-tool-panel .wvp-btn:hover{border-color:#2563eb;color:#1d4ed8;background:#f8fbff}',
+            '#dev-tool-panel .wvp-btn:disabled{opacity:.55;cursor:wait}',
             '#dev-tool-panel .wvp-btn--primary{background:#172033;border-color:#172033;color:#fff}',
             '#dev-tool-panel .wvp-btn--primary:hover{background:#0f172a;color:#fff}',
             '#dev-tool-panel .wvp-page{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;margin-bottom:14px;padding:14px 16px;border:1px solid #d8e1ec;border-radius:8px;background:#fff}',
@@ -97,8 +119,12 @@
             '#dev-tool-panel .wvp-table th,#dev-tool-panel .wvp-table td{padding:10px 12px;border-bottom:1px solid #edf2f7;text-align:left;vertical-align:top}',
             '#dev-tool-panel .wvp-table th{background:#f7fafe;color:#3b4a60;font-size:12px;font-weight:800;position:sticky;top:0}',
             '#dev-tool-panel .wvp-table td{color:#172033}',
+            '#dev-tool-panel .wvp-na{display:inline-block;padding:2px 8px;border-radius:4px;background:#fef08a;color:#713f12;font-weight:700}',
             '#dev-tool-panel .wvp-muted{color:#64748b}',
-            '#dev-tool-panel .wvp-empty{padding:30px 16px;text-align:center;color:#64748b;background:#fff;border:1px dashed #cbd6e4;border-radius:8px}',
+            '#dev-tool-panel .wvp-empty{padding:12px 14px;text-align:left;color:#64748b;background:#f8fafc;border:1px dashed #cbd6e4;border-radius:8px}',
+            '#dev-tool-panel .wvp-empty--center{text-align:center;padding:16px 14px}',
+            '#dev-tool-panel .wvp-audit-idle{display:flex;flex-direction:column;gap:10px}',
+            '#dev-tool-panel .wvp-audit-idle .wvp-muted{margin:0}',
             '#dev-tool-panel .wvp-error{padding:12px 14px;border:1px solid #ffd0ca;background:#fff5f3;color:#9f1d14;border-radius:8px;margin-bottom:12px}',
             '@media (max-width:900px){#dev-tool-panel .wvp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#dev-tool-panel .wvp-grid{grid-template-columns:1fr}#dev-tool-panel .wvp-page{grid-template-columns:1fr}#dev-tool-panel .wvp-chip-row{justify-content:flex-start}}'
         ].join('');
@@ -339,6 +365,17 @@
         return null;
     }
 
+    function resolveSectionCode(element) {
+        if (!element || !element.closest) {
+            return '';
+        }
+        var section = element.closest('section[weline-code]');
+        if (!section) {
+            return '';
+        }
+        return String(section.getAttribute('weline-code') || '').trim();
+    }
+
     function resolveElementEvent(element) {
         var found = findEventAttribute(element) || findPixelClassEvent(element);
         var source = found ? found.source : '';
@@ -440,6 +477,7 @@
                 href: href,
                 eventName: eventInfo.eventName,
                 source: eventInfo.source,
+                section_code: resolveSectionCode(eventElement),
                 selector: elementSelectorHint(eventElement),
                 explicit: eventInfo.explicit,
                 legacy: eventInfo.legacy,
@@ -533,7 +571,8 @@
             forwarders: {
                 handlers: window.WelineVisitorForwarders && window.WelineVisitorForwarders.getHandlers ? window.WelineVisitorForwarders.getHandlers() : [],
                 eventBus: !(forwarders.eventBus && forwarders.eventBus.enabled === false),
-                customEnabled: customForwarder.enabled === true
+                customEnabled: customForwarder.enabled === true,
+                channels: []
             },
             ga4: {
                 enabled: ga4.enabled === true,
@@ -565,131 +604,248 @@
             },
             recentEvents: readRecentVisitorEvents()
         };
+        status.forwarders.channels = collectForwarderChannels(status, config);
+        return status;
     }
 
-    function getVisitorApi() {
-        if (visitorApiPromise) {
-            return visitorApiPromise;
-        }
-        visitorApiPromise = ensureWelineApi().then(function (api) {
-            if (!api || typeof api.resource !== 'function') {
-                throw new Error('Weline.Api.resource is not available');
-            }
-            return api.resource('visitor');
+    /**
+     * 转发渠道清单：系统 Pixel / GTM（+ GA4）固定出现；
+     * 模块通过 WelineVisitorForwarders.register('demo', fn, meta) 自动多出一行。
+     */
+    function collectForwarderChannels(status, config) {
+        config = config || window.__WelineVisitorTrackingConfig || {};
+        var forwarders = config.forwarders || {};
+        var gtmCfg = Object.assign({}, config.gtm || {}, forwarders.gtm || {});
+        var ga4 = status.ga4 || {};
+        var registered = {};
+        (status.forwarders && status.forwarders.handlers || []).forEach(function (name) {
+            registered[String(name)] = true;
         });
-        visitorApiPromise.catch(function () {
-            visitorApiPromise = null;
-        });
-        return visitorApiPromise;
-    }
+        var metaMap = (window.WelineVisitorForwarders && typeof window.WelineVisitorForwarders.getMeta === 'function')
+            ? (window.WelineVisitorForwarders.getMeta() || {})
+            : {};
+        var trafficOk = !!(status.forwarding && status.forwarding.allowed);
+        var channels = [];
+        var seen = {};
 
-    function configureWelineSdk() {
-        var apiConfig = {
-            workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
-            endpoint: '/api/framework/query-bin',
-            queryBinUrl: '/api/framework/query-bin',
-            baseUrl: window.location.origin
-        };
-        window.WelineApiConfig = Object.assign({}, apiConfig, window.WelineApiConfig || {});
-        window.__WelineThemeConfig = Object.assign({}, window.__WelineThemeConfig || {}, {
-            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
-            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
-            assetVersion: '20260701-visitor-panel-api',
-            api: Object.assign({}, apiConfig, (window.__WelineThemeConfig && window.__WelineThemeConfig.api) || {})
-        });
-    }
-
-    function loadScriptOnce(url, ready) {
-        if (typeof ready === 'function' && ready()) {
-            return Promise.resolve();
-        }
-        return new Promise(function (resolve, reject) {
-            var existing = Array.prototype.slice.call(document.scripts).find(function (script) {
-                return script.src && script.src.indexOf(url) !== -1;
-            });
-            if (existing) {
-                existing.addEventListener('load', function () { resolve(); }, { once: true });
-                existing.addEventListener('error', function () { reject(new Error('Script load failed: ' + url)); }, { once: true });
-                if (typeof ready === 'function') {
-                    window.setTimeout(function () {
-                        if (ready()) {
-                            resolve();
-                        }
-                    }, 0);
-                }
+        function pushChannel(channel) {
+            if (!channel || !channel.id || seen[channel.id]) {
                 return;
             }
-            var script = document.createElement('script');
-            script.src = url + (url.indexOf('?') === -1 ? '?' : '&') + 'v=20260701-visitor-panel-api';
-            script.async = true;
-            script.onload = function () {
-                if (typeof ready === 'function' && !ready()) {
-                    reject(new Error('Script loaded but API is not ready: ' + url));
-                    return;
-                }
-                resolve();
-            };
-            script.onerror = function () {
-                reject(new Error('Script load failed: ' + url));
-            };
-            (document.head || document.documentElement).appendChild(script);
-        });
-    }
+            seen[channel.id] = true;
+            channels.push(channel);
+        }
 
-    function ensureWelineApi() {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
-            return Promise.resolve(window.Weline.Api);
-        }
-        if (sdkLoadPromise) {
-            return sdkLoadPromise;
-        }
-        configureWelineSdk();
-        sdkLoadPromise = loadScriptOnce('/Weline/Frontend/view/statics/js/weline.js', function () {
-            return window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function';
-        }).then(function () {
-            if (window.Weline && typeof window.Weline.preLoad === 'function') {
-                return window.Weline.preLoad('api').catch(function () {
-                    return loadScriptOnce('/Weline/Frontend/view/statics/js/weline-api.js', function () {
-                        return window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function';
-                    });
-                });
-            }
-            return loadScriptOnce('/Weline/Frontend/view/statics/js/weline-api.js', function () {
-                return window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function';
+        var pixelEnabled = !!(status.pixel && status.pixel.enabled);
+        var pixelReady = pixelEnabled && !!(status.pixel.loaded || status.pixel.scheduled || window.WelinePixel);
+        pushChannel({
+            id: 'pixel',
+            title: 'Pixel',
+            kind: 'system',
+            integrated: true,
+            enabled: pixelEnabled,
+            working: pixelReady,
+            detail: pixelReady ? ((status.pixel && status.pixel.name) || '已注入，事件入库') : (pixelEnabled ? '已开启，等待加载' : '配置关闭')
+        });
+
+        var gtmContainer = String(gtmCfg.containerId || '').trim().toUpperCase();
+        var gtmConfigured = gtmCfg.configured === true || /^GTM-[A-Z0-9]{4,12}$/.test(gtmContainer);
+        var gtmEnabled = gtmConfigured && gtmCfg.enabled === true;
+        pushChannel({
+            id: 'gtm',
+            title: 'GTM',
+            kind: 'system',
+            integrated: !!registered.gtm,
+            enabled: gtmEnabled,
+            working: !!registered.gtm && gtmEnabled && trafficOk,
+            detail: gtmConfigured
+                ? ((gtmEnabled ? '容器 ' : '已配置未开启 ') + gtmContainer)
+                : '未配置 GTM 容器'
+        });
+
+        pushChannel({
+            id: 'ga4',
+            title: 'GA4',
+            kind: 'system',
+            integrated: !!registered.ga4,
+            enabled: !!ga4.enabled && !!ga4.configured,
+            working: !!registered.ga4 && !!ga4.eventsWillFire,
+            detail: ga4.configured
+                ? ((ga4.enabled ? 'Measurement ' : '已配置未开启 ') + (ga4.measurementId || ''))
+                : (gtmEnabled ? '因 GTM 互斥通常关闭直连' : '未配置 Measurement ID')
+        });
+
+        pushChannel({
+            id: 'eventBus',
+            title: '事件总线',
+            kind: 'system',
+            integrated: true,
+            enabled: !!(status.forwarders && status.forwarders.eventBus),
+            working: !!(status.forwarders && status.forwarders.eventBus) && trafficOk,
+            detail: 'Weline 标准事件信封分发'
+        });
+
+        if (status.forwarders && status.forwarders.customEnabled) {
+            pushChannel({
+                id: 'custom',
+                title: '自定义转化 JS',
+                kind: 'system',
+                integrated: true,
+                enabled: true,
+                working: trafficOk,
+                detail: '站点配置的自定义转发脚本'
             });
-        }).then(function () {
-            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-                throw new Error('Weline.Api.resource is not available');
+        }
+
+        Object.keys(registered).forEach(function (id) {
+            if (seen[id]) {
+                return;
             }
-            return window.Weline.Api;
-        }).catch(function (error) {
-            sdkLoadPromise = null;
-            throw error;
+            var meta = metaMap[id] || {};
+            var enabled = meta.enabled !== false;
+            pushChannel({
+                id: id,
+                title: meta.title || id,
+                kind: meta.kind || 'module',
+                integrated: true,
+                enabled: enabled,
+                working: enabled && trafficOk,
+                detail: meta.description || '模块已 register 转发器'
+            });
         });
-        return sdkLoadPromise;
+
+        return channels;
     }
 
-    function requestVisitorByCall(operation, params) {
-        return ensureWelineApi().then(function (api) {
-            if (!api || typeof api.call !== 'function') {
-                throw new Error('visitor.' + operation + ' is not available');
-            }
-            return api.call('visitor', operation, params || {});
-        });
+    function channelStateLabel(channel) {
+        if (!channel) {
+            return '未知';
+        }
+        if (!channel.integrated) {
+            return '未对接';
+        }
+        if (!channel.enabled) {
+            return '已对接·不可用';
+        }
+        if (channel.working) {
+            return '工作中';
+        }
+        return '已对接·待命';
     }
 
+    function channelStateTone(channel) {
+        if (!channel || !channel.integrated) {
+            return 'warn';
+        }
+        if (channel.working) {
+            return 'pass';
+        }
+        if (channel.enabled) {
+            return '';
+        }
+        return 'warn';
+    }
+
+    function renderForwarderChannels(channels) {
+        if (!channels || !channels.length) {
+            return '<div class="wvp-empty">暂无转发渠道。</div>';
+        }
+        return [
+            '<div class="wvp-table-wrap"><table class="wvp-table"><thead><tr>',
+            '<th>渠道</th><th>类型</th><th>对接</th><th>可用</th><th>状态</th><th>说明</th>',
+            '</tr></thead><tbody>',
+            channels.map(function (channel) {
+                return '<tr><td><strong>' + escapeHtml(channel.title || channel.id) + '</strong>' +
+                    '<div class="wvp-muted">' + escapeHtml(channel.id) + '</div></td><td>' +
+                    escapeHtml(channel.kind === 'system' ? '系统' : '模块') + '</td><td>' +
+                    escapeHtml(channel.integrated ? '是' : '否') + '</td><td>' +
+                    escapeHtml(channel.enabled ? '是' : '否') + '</td><td>' +
+                    statusChip(channelStateLabel(channel), channelStateTone(channel)) + '</td><td>' +
+                    escapeHtml(channel.detail || '--') + '</td></tr>';
+            }).join(''),
+            '</tbody></table></div>'
+        ].join('');
+    }
+
+    function appendQuery(url, params) {
+        params = params || {};
+        var query = Object.keys(params).filter(function (key) {
+            return params[key] !== undefined && params[key] !== null && params[key] !== '';
+        }).map(function (key) {
+            return encodeURIComponent(key) + '=' + encodeURIComponent(String(params[key]));
+        }).join('&');
+        if (!query) {
+            return url;
+        }
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + query;
+    }
+
+    function ensurePanelAuthorized() {
+        if (window.WelinePanel && typeof window.WelinePanel.requestAuthorization === 'function') {
+            return Promise.resolve(window.WelinePanel.requestAuthorization()).then(function (allowed) {
+                if (!allowed) {
+                    throw new Error('Weline Panel token required.');
+                }
+                return true;
+            });
+        }
+        if (window.WelinePanel && typeof window.WelinePanel.isAuthorized === 'function'
+            && !window.WelinePanel.isAuthorized()) {
+            return Promise.reject(new Error('Weline Panel token required.'));
+        }
+        return Promise.resolve(true);
+    }
+
+    /**
+     * 开发面板数据走 Visitor REST + DeveloperAccessPolicy，
+     * 禁止再走 auth=backend 的 worker query（前台无后台 Session，会刷屏 toast）。
+     */
     function requestVisitor(operation, params) {
-        return getVisitorApi().then(function (api) {
-            if (!api || typeof api[operation] !== 'function') {
-                return requestVisitorByCall(operation, params);
+        var route = PANEL_OPERATION_ROUTES[operation];
+        if (!route) {
+            return Promise.reject(new Error('visitor.' + operation + ' is not available'));
+        }
+        var method = String(route.method || 'GET').toUpperCase();
+        var path = String(route.path || '').replace(/^\/+/, '');
+        var payload = params || {};
+
+        return ensurePanelAuthorized().then(function () {
+            var headers = {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Weline-Panel': '1'
+            };
+            var url = PANEL_REST_BASE + '/' + path;
+            var body = undefined;
+            if (method === 'GET' || method === 'HEAD') {
+                url = appendQuery(url, payload);
+            } else {
+                headers['Content-Type'] = 'application/json';
+                body = JSON.stringify(payload);
             }
-            return api[operation](params || {});
-        }).catch(function (error) {
-            var message = error && error.message ? String(error.message) : '';
-            if (message.indexOf('Weline.Api.resource') !== -1) {
-                return requestVisitorByCall(operation, params);
-            }
-            throw error;
+            return fetch(url, {
+                method: method,
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: headers,
+                body: body
+            }).then(function (response) {
+                return response.text().then(function (text) {
+                    var parsed = null;
+                    if (text) {
+                        try {
+                            parsed = JSON.parse(text);
+                        } catch (error) {
+                            parsed = { raw: text };
+                        }
+                    }
+                    if (!response.ok || (parsed && (parsed.success === false || (parsed.code && Number(parsed.code) !== 200)))) {
+                        var message = parsed && (parsed.msg || parsed.message || parsed.error);
+                        throw new Error(message || ('HTTP ' + response.status));
+                    }
+                    return parsed || {};
+                });
+            });
         });
     }
 
@@ -718,10 +874,13 @@
 
     function loadAnalytics() {
         var range = defaultRange();
+        var websiteId = currentWebsiteId();
         return Promise.allSettled([
             requestVisitor('analyticsReport', range).then(responseData),
             requestVisitor('analyticsDashboard', { interval: 30, hours: 24 }).then(responseData),
-            requestVisitor('pixelBufferStats', {}).then(responseData)
+            requestVisitor('pixelBufferStats', {}).then(responseData),
+            requestVisitor('getPixelAuditReport', { websiteId: websiteId }).then(responseData),
+            requestVisitor('getPixelChannelStatus', { websiteId: websiteId }).then(responseData)
         ]).then(function (results) {
             var analytics = {
                 range: range,
@@ -745,6 +904,16 @@
             } else {
                 analytics.errors.push(results[2].reason && results[2].reason.message || 'pixelBufferStats failed');
             }
+            if (results[3].status === 'fulfilled') {
+                var cachedAudit = results[3].value;
+                // Empty {} from API means no cached report yet.
+                if (cachedAudit && typeof cachedAudit === 'object' && (cachedAudit.summary || cachedAudit.pages || cachedAudit.generated_at)) {
+                    lastAuditReport = cachedAudit;
+                }
+            }
+            if (results[4].status === 'fulfilled') {
+                lastChannelStatus = results[4].value || null;
+            }
             analytics.errors = analytics.errors.filter(function (message, index, list) {
                 return message && list.indexOf(message) === index;
             });
@@ -760,13 +929,57 @@
         searchArea.innerHTML = [
             '<div class="wvp-toolbar">',
             '<div><span class="wvp-toolbar__title">访问者模块</span>',
-            '<span class="wvp-toolbar__meta">Weline_Visitor Pixel 注入，外部平台仅做事件转发</span></div>',
+            '<span class="wvp-toolbar__meta">Weline_Visitor Pixel 注入，外部平台仅做事件转发</span>',
+            '<span class="wvp-toolbar__status" data-wvp-publish-status></span></div>',
             '<div class="wvp-toolbar__actions">',
             '<button type="button" class="wvp-btn" data-wvp-action="refresh">刷新</button>',
             '<button type="button" class="wvp-btn wvp-btn--primary" data-wvp-action="publish">发布 AI 报告</button>',
             '</div>',
             '</div>'
         ].join('');
+        bindToolbar(searchArea);
+    }
+
+    function setToolbarStatus(message, tone) {
+        var node = document.querySelector('#dev-tool-search-area-visitor [data-wvp-publish-status]');
+        if (!node) {
+            return;
+        }
+        node.textContent = message || '';
+        node.className = 'wvp-toolbar__status' + (tone === 'error' ? ' is-error' : (tone === 'ok' ? ' is-ok' : ''));
+    }
+
+    function bindToolbar(searchArea) {
+        if (!searchArea || searchArea.dataset.wvpBound === '1') {
+            return;
+        }
+        searchArea.dataset.wvpBound = '1';
+        searchArea.addEventListener('click', function (event) {
+            var action = event.target.closest('[data-wvp-action]');
+            if (!action || !searchArea.contains(action)) {
+                return;
+            }
+            event.preventDefault();
+            var name = action.getAttribute('data-wvp-action');
+            if (name === 'publish') {
+                publishReport(action);
+                return;
+            }
+            if (name === 'refresh') {
+                action.disabled = true;
+                setToolbarStatus('正在刷新…');
+                refresh({
+                    content: document.getElementById('dev-tool-content'),
+                    searchArea: searchArea
+                }).then(function () {
+                    setToolbarStatus('已刷新', 'ok');
+                }).catch(function (error) {
+                    setToolbarStatus((error && error.message) || '刷新失败', 'error');
+                }).finally(function () {
+                    action.disabled = false;
+                });
+            }
+        });
     }
 
     function statusChip(label, tone) {
@@ -781,10 +994,12 @@
             '<div data-wvp-metrics>' + renderMetrics(status, lastAnalytics) + '</div>',
             '<div class="wvp-tabs" role="tablist" aria-label="访问面板">',
             '<button type="button" class="wvp-subtab is-active" data-wvp-subtab="overview">概览</button>',
+            '<button type="button" class="wvp-subtab" data-wvp-subtab="pixel-gtm">Pixel / GTM</button>',
             '<button type="button" class="wvp-subtab" data-wvp-subtab="forwarding">事件转发</button>',
             '<button type="button" class="wvp-subtab" data-wvp-subtab="events">事件数据</button>',
             '</div>',
             '<section class="wvp-pane is-active" data-wvp-pane="overview">' + renderOverview(status, lastAnalytics) + '</section>',
+            '<section class="wvp-pane" data-wvp-pane="pixel-gtm">' + renderPixelGtm(status) + '</section>',
             '<section class="wvp-pane" data-wvp-pane="forwarding">' + renderForwarding(status) + '</section>',
             '<section class="wvp-pane" data-wvp-pane="events">' + renderEvents(status, lastAnalytics) + '</section>',
             '</div>'
@@ -904,43 +1119,222 @@
     }
 
     function renderForwarding(status) {
-        var ga4 = status.ga4;
+        var channels = (status.forwarders && status.forwarders.channels) || [];
+        var workingCount = channels.filter(function (c) { return c.working; }).length;
         return [
+            '<div class="wvp-section" style="margin-bottom:14px;"><h4>转发渠道</h4>',
+            '<p class="wvp-muted" style="margin:0 0 10px;">看哪些渠道已对接、配置是否可用。系统渠道：Pixel / GTM；模块调用 <code>WelineVisitorForwarders.register(id, handler, meta)</code> 后自动出现。</p>',
+            '<div class="wvp-chip-row" style="margin-bottom:10px;">',
+            statusChip('渠道 ' + channels.length, ''),
+            statusChip('工作中 ' + workingCount, workingCount ? 'pass' : 'warn'),
+            statusChip(status.forwarding.allowed ? '全局可转发' : '全局已过滤', status.forwarding.allowed ? 'pass' : 'warn'),
+            '</div>',
+            renderForwarderChannels(channels),
+            '</div>',
             '<div class="wvp-grid">',
             '<div class="wvp-section"><h4>当前转发决策</h4><div class="wvp-list">',
-            row('提交状态', status.forwarding.allowed ? '可提交到已启用外部平台' : '仅记录 Pixel，已阻止外部转发'),
+            row('提交状态', status.forwarding.allowed ? '可提交到已启用渠道' : '仅记录 Pixel，外部渠道跳过'),
             row('Pixel 记录', status.pixel.enabled ? '会记录' : 'Pixel 已关闭'),
-            row('规则来源', status.traffic.source),
-            row('本地访问', status.traffic.localAccess ? '是' : '否'),
             row('同意模式', status.consent.enabled ? (status.consent.analytics ? 'analytics 已同意' : 'analytics 已拒绝') : '未启用'),
+            row('本地访问', status.traffic.localAccess ? '是' : '否'),
             '</div></div>',
             '<div class="wvp-section"><h4>命中规则</h4>',
             renderRuleMatches(status.forwarding.matchedRules),
             '</div>',
             '</div>',
-            '<div class="wvp-grid" style="margin-top:14px;">',
-            '<div class="wvp-section"><h4>事件转发器</h4><div class="wvp-list">',
-            row('标准事件总线', status.forwarders.eventBus ? '开启' : '关闭'),
-            row('已注册处理器', status.forwarders.handlers.length ? status.forwarders.handlers.join('、') : '暂无'),
-            row('自定义转化 JS', boolLabel(status.forwarders.customEnabled)),
-            row('Measurement ID', ga4.measurementId || '未配置'),
-            row('GA4 开关', boolLabel(ga4.enabled)),
-            row('gtag.js', ga4.gtagScript ? '已加载' : '未加载'),
-            row('window.gtag', ga4.gtagRuntime ? '可用' : '不可用'),
-            row('debug_mode', boolLabel(ga4.debugMode)),
-            row('GA4 事件提交', ga4.eventsWillFire ? '会接收 Pixel 转发' : '不会提交'),
-            '</div></div>',
-            '<div class="wvp-section"><h4>当前页面事件清单</h4>',
+            '<div class="wvp-section" style="margin-top:14px;"><h4>当前页面事件清单</h4>',
             renderCtaTable(status.eventInventory.items),
-            '</div>',
             '</div>',
             '<div class="wvp-section" style="margin-top:14px;"><h4>最近 Pixel 事件</h4>',
             renderRecentVisitorEvents(status.recentEvents),
-            '</div>',
-            '<div class="wvp-section" style="margin-top:14px;"><h4>最近 GA4 转发结果</h4>',
-            renderRecentTriggers(ga4.recentTriggers),
             '</div>'
         ].join('');
+    }
+
+    function currentWebsiteId() {
+        var env = window.__WelinePixelEnv || {};
+        var id = Number(env.website_id || window.WELINE_WEBSITE_ID || 0);
+        return Number.isFinite(id) ? id : 0;
+    }
+
+    function hasAuditReport(report) {
+        return !!(report && (report.summary || report.pages || report.generated_at));
+    }
+
+    function renderPixelGtm(status) {
+        var cfg = window.__WelineVisitorTrackingConfig || {};
+        var gtm = cfg.gtm || {};
+        var channel = lastChannelStatus || {};
+        var forwarding = channel.forwarding || {};
+        var audited = hasAuditReport(lastAuditReport);
+        var summary = (audited && lastAuditReport.summary) || {};
+        var dict = (cfg.eventDictionary && cfg.eventDictionary.events) || (audited && lastAuditReport.dictionary && lastAuditReport.dictionary.events) || [];
+        var gtmTriggers = (window.WelineGtmBridge && window.WelineGtmBridge.getTriggers) ? window.WelineGtmBridge.getTriggers() : [];
+        var pages = (audited && lastAuditReport.pages) || [];
+        var byEvent = (audited && lastAuditReport.by_event) || [];
+        var fetchFailures = (audited && lastAuditReport.fetch_failures) || [];
+        var auditBlock = audited
+            ? [
+                '<div class="wvp-toolbar" style="margin-bottom:12px;"><div class="wvp-toolbar__actions">',
+                '<button type="button" class="wvp-btn wvp-btn--primary" data-wvp-action="audit-markers">重新检查</button>',
+                '<button type="button" class="wvp-btn" data-wvp-action="fire-test">试发 CTA 事件</button>',
+                '</div></div>',
+                '<div class="wvp-list">',
+                row('页数', formatNumber(summary.pages || 0)),
+                row('齐全(绿)', formatNumber(summary.complete || 0)),
+                row('缺标记(红)', formatNumber(summary.missing_marker || 0)),
+                row('fetch_failed', formatNumber(summary.fetch_failed || 0)),
+                row('上次检查', lastAuditReport.generated_at ? formatTimestamp(lastAuditReport.generated_at) : '--'),
+                row('报告是否过期', lastAuditReport.stale ? '是（建议重检）' : '否'),
+                '</div>'
+            ].join('')
+            : [
+                '<div class="wvp-audit-idle">',
+                '<p class="wvp-muted">用途：对照事件字典，扫描已发布页 HTML 上是否缺 <code>data-pixel-event</code> / CTA 等静态标记，指出该补哪一页。</p>',
+                '<p class="wvp-muted">限制：只看服务端 HTML；不代表已进 dataLayer/GTM；JS 后插 DOM 可能漏检。</p>',
+                '<div class="wvp-toolbar"><div class="wvp-toolbar__actions">',
+                '<button type="button" class="wvp-btn wvp-btn--primary" data-wvp-action="audit-markers">一键检查标记</button>',
+                '<button type="button" class="wvp-btn" data-wvp-action="fire-test">试发 CTA 事件</button>',
+                '</div></div>',
+                '</div>'
+            ].join('');
+        var detailBlocks = audited
+            ? [
+                '<div class="wvp-grid">',
+                '<div class="wvp-section"><h4>按事件（字典）</h4>',
+                renderAuditByEvent(byEvent, dict),
+                '</div>',
+                '<div class="wvp-section"><h4>按页面</h4>',
+                renderAuditPages(pages),
+                '</div>',
+                '</div>',
+                fetchFailures.length
+                    ? ('<div class="wvp-section" style="margin-top:14px;"><h4>fetch_failed 分列</h4>' + renderFetchFailures(fetchFailures) + '</div>')
+                    : ''
+            ].join('')
+            : '';
+        return [
+            '<div class="wvp-section" style="margin-bottom:14px;"><h4>通道条</h4><div class="wvp-list">',
+            row('dict_version', String(cfg.dictVersion || channel.dict_version || '--')),
+            row('GTM', gtm.enabled ? ('开启 ' + (gtm.containerId || '')) : '关闭'),
+            row('GA4 直连', status.ga4.enabled ? ('开启 ' + (status.ga4.measurementId || '')) : (gtm.enabled ? '已因 GTM 互斥关闭' : '关闭')),
+            row('forwarding', status.forwarding.allowed ? 'allowed' : 'filtered'),
+            row('consent', status.consent.enabled ? (status.consent.analytics ? 'analytics=true' : 'analytics=false') : 'off'),
+            row('exclude_local', forwarding.exclude_local != null ? boolLabel(forwarding.exclude_local) : boolLabel(!!(cfg.trafficRules && cfg.trafficRules.excludeLocalForwarding))),
+            '</div></div>',
+            '<div class="wvp-section" style="margin-bottom:14px;"><h4>齐全度（标记巡检）</h4>',
+            auditBlock,
+            '</div>',
+            detailBlocks,
+            '<div class="wvp-section" style="margin-top:14px;"><h4>实时流 / dataLayer 快测预览</h4>',
+            '<p class="wvp-muted" style="margin:0 0 10px;">点「试发 CTA 事件」会走 <code>WelinePixel.track(\'cta_click\')</code>，用来确认本页 Pixel/GTM 管道通不通；与齐全度巡检无关。</p>',
+            renderRecentTriggers(gtmTriggers),
+            '</div>'
+        ].join('');
+    }
+
+    function renderAuditByEvent(byEvent, dict) {
+        if (!byEvent || !byEvent.length) {
+            if (dict && dict.length) {
+                return '<div class="wvp-list">' + dict.slice(0, 40).map(function (entry) {
+                    return row((entry.weline_event || '') + ' → ' + (entry.ga4_event || ''), (entry.page_scopes || []).join(',') || '*');
+                }).join('') + '</div>';
+            }
+            return '<div class="wvp-empty">尚未一键检查；点上方「一键检查标记」后，这里会列出缺页与字典对照。</div>';
+        }
+        return [
+            '<div class="wvp-table-wrap"><table class="wvp-table"><thead><tr><th>Weline</th><th>GA4</th><th>缺页</th><th>跳转</th></tr></thead><tbody>',
+            byEvent.map(function (entry) {
+                var status = String(entry.status || '');
+                var missing = entry.missing_pages || [];
+                var applicable = Number(entry.applicable_pages || 0);
+                if (status === 'not_applicable' || (!status && applicable <= 0 && !missing.length)) {
+                    return '<tr><td>' + escapeHtml(entry.weline_event || '') + '</td><td>' +
+                        escapeHtml(entry.ga4_event || '') + '</td><td>--</td><td><span class="wvp-na">不适用</span></td></tr>';
+                }
+                var first = missing[0];
+                var jump = first && first.jump ? first.jump : {};
+                var jumpHtml = jump.frontend
+                    ? '<a href="' + escapeHtml(jump.frontend) + '" target="_blank" rel="noopener">前台</a> '
+                    : '';
+                if (jump.backend_edit) {
+                    jumpHtml += '<a href="' + escapeHtml(jump.backend_edit) + '" target="_blank" rel="noopener">后台</a>';
+                } else if (missing.length) {
+                    jumpHtml += '--';
+                } else {
+                    jumpHtml += '齐全';
+                }
+                return '<tr><td>' + escapeHtml(entry.weline_event || '') + '</td><td>' +
+                    escapeHtml(entry.ga4_event || '') + '</td><td>' +
+                    formatNumber(missing.length) + '</td><td>' + jumpHtml + '</td></tr>';
+            }).join(''),
+            '</tbody></table></div>'
+        ].join('');
+    }
+
+    function renderAuditPages(pages) {
+        if (!pages || !pages.length) {
+            return '<div class="wvp-empty">暂无页面报告。</div>';
+        }
+        return [
+            '<div class="wvp-table-wrap"><table class="wvp-table"><thead><tr><th>状态</th><th>类型</th><th>URL</th><th>缺失</th><th>跳转</th></tr></thead><tbody>',
+            pages.slice(0, 80).map(function (page) {
+                var jump = page.jump || {};
+                return '<tr><td>' + escapeHtml(page.status || '') + '</td><td>' +
+                    escapeHtml(page.page_type || '') + '</td><td>' +
+                    escapeHtml(page.url || '') + '</td><td>' +
+                    escapeHtml((page.missing_events || []).join(', ') || (page.fetch_error || '--')) + '</td><td>' +
+                    (jump.frontend ? '<a href="' + escapeHtml(jump.frontend) + '" target="_blank" rel="noopener">前台</a> ' : '') +
+                    (jump.backend_edit ? '<a href="' + escapeHtml(jump.backend_edit) + '" target="_blank" rel="noopener">后台</a>' : '') +
+                    '</td></tr>';
+            }).join(''),
+            '</tbody></table></div>'
+        ].join('');
+    }
+
+    function renderFetchFailures(items) {
+        if (!items || !items.length) {
+            return '<div class="wvp-empty">无 fetch 失败（不算缺标记）。</div>';
+        }
+        return '<div class="wvp-list">' + items.map(function (item) {
+            return row((item.error || 'fetch_failed') + ' ' + (item.url || ''), item.message || '');
+        }).join('') + '</div>';
+    }
+
+    function runAuditMarkers(root) {
+        var websiteId = currentWebsiteId();
+        return requestVisitor('auditPixelMarkers', { websiteId: websiteId, force: true }).then(responseData).then(function (report) {
+            lastAuditReport = report || null;
+            return requestVisitor('getPixelChannelStatus', { websiteId: websiteId }).then(responseData).then(function (channel) {
+                lastChannelStatus = channel || null;
+                return report;
+            }).catch(function () {
+                return report;
+            });
+        }).then(function (report) {
+            var pane = root && root.querySelector('[data-wvp-pane="pixel-gtm"]');
+            if (pane) {
+                pane.innerHTML = renderPixelGtm(collectTrackingStatus());
+            }
+            return report;
+        });
+    }
+
+    function fireTestCta() {
+        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+            throw new Error('WelinePixel.track 不可用');
+        }
+        var host = document.querySelector('section[weline-code] a[href], section[weline-code] button, section[weline-code] [data-pixel-event], section[weline-code] [data-cta-event], section[weline-code] [class*="weline-pixel::"]');
+        if (!host) {
+            host = document.querySelector('section[weline-code]');
+        }
+        window.WelinePixel.track('cta_click', {
+            trigger: 'panel_fire_test',
+            link_url: window.location.href,
+            link_text: 'panel_fire_test',
+            domElement: host || null
+        }, { element: host || null });
+        return (window.WelineGtmBridge && window.WelineGtmBridge.getTriggers) ? window.WelineGtmBridge.getTriggers()[0] : null;
     }
 
     function renderEvents(status, analytics) {
@@ -980,7 +1374,7 @@
         }
         return [
             '<div class="wvp-table-wrap"><table class="wvp-table"><thead><tr>',
-            '<th>#</th><th>事件</th><th>来源</th><th>文案</th><th>链接</th><th>转发</th>',
+            '<th>#</th><th>事件</th><th>Section</th><th>来源</th><th>文案</th><th>链接</th><th>转发</th>',
             '</tr></thead><tbody>',
             items.slice(0, 30).map(function (item, index) {
                 var delivery = item.forwardable ? '可提交' : '过滤: ' + (item.filterReasons || []).join('、');
@@ -988,6 +1382,7 @@
                     delivery += '；建议改为 Pixel 属性';
                 }
                 return '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(item.eventName) + '</td><td>' +
+                    escapeHtml(item.section_code || '--') + '</td><td>' +
                     escapeHtml(item.source || (item.explicit ? '显式' : '推断')) + '</td><td>' +
                     escapeHtml(item.text || item.tag || item.selector) + '</td><td>' + escapeHtml(item.href || '--') +
                     '</td><td>' + escapeHtml(delivery) + '</td></tr>';
@@ -1002,13 +1397,16 @@
         }
         return [
             '<div class="wvp-table-wrap"><table class="wvp-table"><thead><tr>',
-            '<th>时间</th><th>事件</th><th>元素</th><th>状态</th><th>原因</th>',
+            '<th>时间</th><th>事件</th><th>Section</th><th>元素</th><th>状态</th><th>原因</th>',
             '</tr></thead><tbody>',
             items.slice(0, 30).map(function (entry) {
                 var forwarding = entry.forwarding || {};
                 var element = entry.element || {};
+                var sectionLabel = entry.section_code
+                    || (entry.section_source_status && entry.section_source_status !== 'ok' ? entry.section_source_status : '--');
                 return '<tr><td>' + escapeHtml(entry.timeLabel || entry.timestampMs || '') + '</td><td>' +
                     escapeHtml(entry.eventName || '') + '</td><td>' +
+                    escapeHtml(sectionLabel) + '</td><td>' +
                     escapeHtml(element.text || element.href || element.tagName || '--') + '</td><td>' +
                     escapeHtml(forwarding.allowed ? '已转发/可转发' : '已过滤，仅记录') + '</td><td>' +
                     escapeHtml((forwarding.reasons || []).join('、') || '--') + '</td></tr>';
@@ -1023,12 +1421,13 @@
         }
         return [
             '<div class="wvp-table-wrap"><table class="wvp-table"><thead><tr>',
-            '<th>时间</th><th>事件</th><th>位置/文案</th><th>投递</th>',
+            '<th>时间</th><th>事件</th><th>Section</th><th>位置/文案</th><th>投递</th>',
             '</tr></thead><tbody>',
             items.slice(0, 20).map(function (entry) {
                 var params = entry.params || {};
                 return '<tr><td>' + escapeHtml(entry.timeLabel || entry.timestamp || '') + '</td><td>' +
                     escapeHtml(entry.eventName || '') + '</td><td>' +
+                    escapeHtml(params.section_code || params.section_source_status || '--') + '</td><td>' +
                     escapeHtml(params.cta_position || params.link_text || params.link_url || '--') + '</td><td>' +
                     escapeHtml(entry.delivery && entry.delivery.label || entry.mode || 'recorded') + '</td></tr>';
             }).join(''),
@@ -1055,9 +1454,11 @@
         var status = collectTrackingStatus();
         root.querySelector('[data-wvp-metrics]').innerHTML = renderMetrics(status, lastAnalytics);
         var overview = root.querySelector('[data-wvp-pane="overview"]');
+        var pixelGtm = root.querySelector('[data-wvp-pane="pixel-gtm"]');
         var forwarding = root.querySelector('[data-wvp-pane="forwarding"]');
         var events = root.querySelector('[data-wvp-pane="events"]');
         if (overview) overview.innerHTML = renderOverview(status, lastAnalytics);
+        if (pixelGtm) pixelGtm.innerHTML = renderPixelGtm(status);
         if (forwarding) forwarding.innerHTML = renderForwarding(status);
         if (events) events.innerHTML = renderEvents(status, lastAnalytics);
         syncSubtabs(root);
@@ -1076,25 +1477,41 @@
                 syncSubtabs(root);
                 return;
             }
-        });
-        var searchArea = ctx && ctx.searchArea;
-        if (searchArea && searchArea.dataset.wvpBound !== '1') {
-            searchArea.dataset.wvpBound = '1';
-            searchArea.addEventListener('click', function (event) {
-                var action = event.target.closest('[data-wvp-action]');
-                if (!action) {
-                    return;
-                }
+            var action = event.target.closest('[data-wvp-action]');
+            if (!action) {
+                return;
+            }
+            var name = action.getAttribute('data-wvp-action');
+            if (name === 'audit-markers') {
                 event.preventDefault();
-                if (action.getAttribute('data-wvp-action') === 'publish') {
-                    publishReport();
-                    return;
+                action.disabled = true;
+                runAuditMarkers(root).catch(function (error) {
+                    var errorNode = root.querySelector('[data-wvp-error]');
+                    if (errorNode) {
+                        errorNode.innerHTML = '<div class="wvp-error">' + escapeHtml(error && error.message || '一键检查失败') + '</div>';
+                    }
+                }).finally(function () {
+                    action.disabled = false;
+                });
+                return;
+            }
+            if (name === 'fire-test') {
+                event.preventDefault();
+                try {
+                    fireTestCta();
+                    var pane = root.querySelector('[data-wvp-pane="pixel-gtm"]');
+                    if (pane) {
+                        pane.innerHTML = renderPixelGtm(collectTrackingStatus());
+                    }
+                } catch (error) {
+                    var errorNode2 = root.querySelector('[data-wvp-error]');
+                    if (errorNode2) {
+                        errorNode2.innerHTML = '<div class="wvp-error">' + escapeHtml(error && error.message || '快测失败') + '</div>';
+                    }
                 }
-                if (action.getAttribute('data-wvp-action') === 'refresh') {
-                    refresh(ctx);
-                }
-            });
-        }
+            }
+        });
+        bindToolbar((ctx && ctx.searchArea) || document.getElementById('dev-tool-search-area-visitor'));
     }
 
     function refresh(ctx) {
@@ -1192,16 +1609,62 @@
         return actions;
     }
 
-    function publishReport() {
+    function writeVisitorReportNode(report) {
+        var node = document.getElementById('weline-panel-visitor-report');
+        if (!node) {
+            node = document.createElement('script');
+            node.type = 'application/json';
+            node.id = 'weline-panel-visitor-report';
+            (document.head || document.documentElement).appendChild(node);
+        }
+        node.textContent = JSON.stringify(report || {});
+        return node;
+    }
+
+    function snapshotVisitorReport() {
         var report = buildReport();
         lastReport = report;
         window.__WELINE_VISITOR_PANEL_REPORT__ = report;
         window.__WELINE_PANEL_VISITOR_REPORT__ = report;
+        writeVisitorReportNode(report);
         try {
             window.dispatchEvent(new CustomEvent('weline-panel:visitor-report', { detail: report }));
         } catch (error) {
         }
         return report;
+    }
+
+    /**
+     * 对接开发面板统一发布契约（同 SEO / WLS）：
+     * - 本 Tab：window.__WELINE_PANEL_VISITOR_REPORT__ + script#weline-panel-visitor-report
+     * - 汇总：window.__WELINE_PANEL_REPORT__ + script#weline-panel-report
+     */
+    function publishReport(trigger) {
+        if (trigger) {
+            trigger.disabled = true;
+        }
+        setToolbarStatus('正在发布 AI 报告…');
+        var ctx = {
+            content: document.getElementById('dev-tool-content'),
+            searchArea: document.getElementById('dev-tool-search-area-visitor')
+        };
+        return refresh(ctx).then(function () {
+            snapshotVisitorReport();
+            if (window.WelinePanel && typeof window.WelinePanel.publish === 'function') {
+                return window.WelinePanel.publish({ tabs: ['visitor'], refresh: false });
+            }
+            return lastReport;
+        }).then(function (report) {
+            setToolbarStatus('AI 报告已写入 window.__WELINE_PANEL_REPORT__ 与 script#weline-panel-report', 'ok');
+            return report || lastReport;
+        }).catch(function (error) {
+            setToolbarStatus((error && error.message) || 'AI 报告发布失败', 'error');
+            throw error;
+        }).finally(function () {
+            if (trigger) {
+                trigger.disabled = false;
+            }
+        });
     }
 
     function normalizeTrigger(entry) {
@@ -1234,7 +1697,7 @@
     function registerWithPanel() {
         var manifest = {
             id: 'visitor',
-            title: '访问',
+            title: '访问事件',
             order: 190,
             activate: function (ctx) {
                 return renderInto(ctx && ctx.content, ctx);
@@ -1245,18 +1708,25 @@
         };
         window.__WELINE_PANEL_TAB_QUEUE__ = window.__WELINE_PANEL_TAB_QUEUE__ || [];
         window.__WELINE_PANEL_REPORT_PROVIDERS__ = window.__WELINE_PANEL_REPORT_PROVIDERS__ || {};
-        window.__WELINE_PANEL_REPORT_PROVIDERS__.visitor = function () {
-            return buildReport();
+        var visitorProvider = function (options) {
+            if (options && options.refresh) {
+                return refresh({
+                    content: document.getElementById('dev-tool-content'),
+                    searchArea: document.getElementById('dev-tool-search-area-visitor')
+                }).then(function () {
+                    return snapshotVisitorReport();
+                });
+            }
+            return snapshotVisitorReport();
         };
+        window.__WELINE_PANEL_REPORT_PROVIDERS__.visitor = visitorProvider;
         if (window.WelinePanel && typeof window.WelinePanel.registerTab === 'function') {
             window.WelinePanel.registerTab(manifest);
         } else {
             window.__WELINE_PANEL_TAB_QUEUE__.push(manifest);
         }
         if (window.WelinePanel && typeof window.WelinePanel.registerReportProvider === 'function') {
-            window.WelinePanel.registerReportProvider('visitor', function () {
-                return buildReport();
-            });
+            window.WelinePanel.registerReportProvider('visitor', visitorProvider);
         }
     }
 

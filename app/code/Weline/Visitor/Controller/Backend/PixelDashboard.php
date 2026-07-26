@@ -7,7 +7,15 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Visitor\Model\Pixel;
+use Weline\Visitor\Service\PixelAnalyticsInsightService;
+use Weline\Visitor\Service\PixelColdArchiveQueryService;
+use Weline\Visitor\Service\PixelEcommerceFunnelService;
+use Weline\Visitor\Service\PixelEcommerceItemPerformanceService;
+use Weline\Visitor\Service\PixelEcommercePurchaseRevenueService;
+use Weline\Visitor\Service\PixelPathExplorationService;
+use Weline\Visitor\Service\PixelRetentionService;
 use Weline\Visitor\Service\PixelStatisticsService;
+use Weline\Visitor\Service\Report\PixelDetailReportTabService;
 
 /**
  * 像素统计面板控制器
@@ -42,30 +50,436 @@ class PixelDashboard extends BackendController
     }
     
     /**
-     * 站点详情页面
-     * 
-     * @return string
+     * 站点详情页面（GA4 风格洞察报表）
      */
     #[Acl('Weline_Visitor::pixel_dashboard_detail', '查看站点详情', 'mdi-chart-line', '查看站点详情')]
     public function detail(): string
     {
         try {
-            $websiteIdRaw = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
+            $filters = $this->getDashboardRequestFilters();
+            $websiteIdRaw = $this->request->getParam('websiteId')
+                ?? $this->request->getGet('websiteId')
+                ?? $this->request->getParam('website_id')
+                ?? $this->request->getGet('website_id')
+                ?? ($filters['websiteId'] ?? null);
+
             if ($websiteIdRaw === null || $websiteIdRaw === '' || $websiteIdRaw === 'all' || !is_numeric($websiteIdRaw) || (int)$websiteIdRaw < 0) {
-                MessageManager::error((string)__('站点ID无效'));
-                return $this->redirect('*/pixel_dashboard/index');
+                MessageManager::error((string)__('请选择站点后再查看详情报表'));
+                return $this->redirect('*/pixel-dashboard/index', array_filter($filters, static fn($v) => $v !== null && $v !== ''));
             }
 
             $websiteId = (int)$websiteIdRaw;
-            $filters = $this->getDashboardRequestFilters();
             $filters['websiteId'] = (string)$websiteId;
             $filters = array_filter($filters, static fn($value): bool => $value !== null && $value !== '');
-            return $this->redirect('*/pixel_dashboard/index', $filters);
-            
+
+            $dashboard = PixelStatisticsService::getEventListeningDashboard($filters);
+            /** @var PixelAnalyticsInsightService $insight */
+            $insight = w_obj(PixelAnalyticsInsightService::class);
+            $report = $insight->buildReport($filters);
+
+            // D07：detail 引擎 Tab（D07a–D07f：catalog 六个预设全部挂完）
+            $reportTabs = $this->buildDetailReportTabs($filters, $websiteId);
+            $requestedTab = trim((string)($this->request->getParam('report_tab')
+                ?? $this->request->getGet('report_tab')
+                ?? ''));
+            $activeReportTab = PixelDetailReportTabService::FIRST_TAB_CODE;
+            foreach ($reportTabs as $tab) {
+                if (($tab['code'] ?? '') === $requestedTab) {
+                    $activeReportTab = $requestedTab;
+                    break;
+                }
+            }
+
+            $this->assignDashboardData($dashboard);
+            $this->assign('website_id', $websiteId);
+            $this->assign('insight', $report);
+            $this->assign('engagement', $report['engagement'] ?? []);
+            $this->assign('insight_pages', $report['pages'] ?? []);
+            $this->assign('insight_devices', $report['devices'] ?? []);
+            $this->assign('insight_screens', $report['screens'] ?? []);
+            $this->assign('insight_sources', $report['sources'] ?? []);
+            $this->assign('insight_browsers', $report['browsers'] ?? []);
+            $this->assign('insight_recent', $report['recent_events'] ?? []);
+            $this->assign('report_tabs', $reportTabs);
+            $this->assign('active_report_tab', $activeReportTab);
+            // F01：字典电商四步漏斗（热；与 B12 渠道营销简漏斗隔离）
+            $this->assign('ecommerce_funnel', $this->buildEcommerceFunnel($filters, $websiteId));
+            // F02：购成 / 收入（仅购买类 value）
+            $this->assign('ecommerce_revenue', $this->buildEcommerceRevenue($filters, $websiteId));
+            // F03：商品表现（items 展开）
+            $this->assign('ecommerce_items', $this->buildEcommerceItems($filters, $websiteId));
+            // F04a：路径探索（简版：落地 → 次页，限深 3）
+            $this->assign('path_exploration', $this->buildPathExploration($filters, $websiteId));
+            // F04b：留存分析（简版：日队列 Day0–Day6）
+            $this->assign('retention', $this->buildRetention($filters, $websiteId));
+
+            return $this->fetch();
         } catch (\Exception $e) {
             MessageManager::error((string)__('加载站点详情失败：%{1}', [$e->getMessage()]));
-            return $this->redirect('*/pixel_dashboard/index');
+            return $this->redirect('*/pixel-dashboard/index');
         }
+    }
+
+    /**
+     * F01：站点详情报表电商漏斗（热短窗）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function buildEcommerceFunnel(array $filters, int $websiteId): array
+    {
+        $empty = [
+            'website_id' => $websiteId,
+            'from' => '',
+            'to' => '',
+            'window_clamped' => false,
+            'steps' => [],
+            'step1_sessions' => 0,
+            'scored_sessions' => 0,
+            'error' => '',
+        ];
+        try {
+            $start = trim((string)($filters['start_date'] ?? ''));
+            $end = trim((string)($filters['end_date'] ?? ''));
+            if ($start === '' || $end === '') {
+                $empty['error'] = 'missing date range';
+
+                return $empty;
+            }
+
+            /** @var PixelEcommerceFunnelService $funnelService */
+            $funnelService = w_obj(PixelEcommerceFunnelService::class);
+            $funnel = $funnelService->buildForWebsite($websiteId, $start, $end);
+            if ($funnel['error'] !== '') {
+                MessageManager::warning((string)__('电商漏斗暂不可用：%{1}', [$funnel['error']]));
+            }
+
+            return $funnel;
+        } catch (\Throwable $throwable) {
+            $empty['error'] = $throwable->getMessage();
+            MessageManager::warning((string)__('电商漏斗暂不可用：%{1}', [$empty['error']]));
+
+            return $empty;
+        }
+    }
+
+    /**
+     * F02：站点详情报表购成与收入（热短窗；仅购买类）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function buildEcommerceRevenue(array $filters, int $websiteId): array
+    {
+        $empty = [
+            'website_id' => $websiteId,
+            'from' => '',
+            'to' => '',
+            'window_clamped' => false,
+            'purchases' => 0,
+            'purchase_revenue' => 0.0,
+            'avg_order_value' => 0.0,
+            'purchase_sessions' => 0,
+            'view_item_sessions' => 0,
+            'purchase_rate_from_view_item' => 0.0,
+            'non_purchase_value_ignored' => 0.0,
+            'by_channel' => [],
+            'by_day' => [],
+            'error' => '',
+        ];
+        try {
+            $start = trim((string)($filters['start_date'] ?? ''));
+            $end = trim((string)($filters['end_date'] ?? ''));
+            if ($start === '' || $end === '') {
+                $empty['error'] = 'missing date range';
+
+                return $empty;
+            }
+
+            /** @var PixelEcommercePurchaseRevenueService $revenueService */
+            $revenueService = w_obj(PixelEcommercePurchaseRevenueService::class);
+            $revenue = $revenueService->buildForWebsite($websiteId, $start, $end);
+            if ($revenue['error'] !== '') {
+                MessageManager::warning((string)__('购成收入暂不可用：%{1}', [$revenue['error']]));
+            }
+
+            return $revenue;
+        } catch (\Throwable $throwable) {
+            $empty['error'] = $throwable->getMessage();
+            MessageManager::warning((string)__('购成收入暂不可用：%{1}', [$empty['error']]));
+
+            return $empty;
+        }
+    }
+
+    /**
+     * F03：站点详情报表商品表现（items 展开；热短窗）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function buildEcommerceItems(array $filters, int $websiteId): array
+    {
+        $empty = [
+            'website_id' => $websiteId,
+            'from' => '',
+            'to' => '',
+            'window_clamped' => false,
+            'items' => [],
+            'item_count' => 0,
+            'error' => '',
+        ];
+        try {
+            $start = trim((string)($filters['start_date'] ?? ''));
+            $end = trim((string)($filters['end_date'] ?? ''));
+            if ($start === '' || $end === '') {
+                $empty['error'] = 'missing date range';
+
+                return $empty;
+            }
+
+            /** @var PixelEcommerceItemPerformanceService $itemService */
+            $itemService = w_obj(PixelEcommerceItemPerformanceService::class);
+            $report = $itemService->buildForWebsite($websiteId, $start, $end);
+            if ($report['error'] !== '') {
+                MessageManager::warning((string)__('商品表现暂不可用：%{1}', [$report['error']]));
+            }
+
+            return $report;
+        } catch (\Throwable $throwable) {
+            $empty['error'] = $throwable->getMessage();
+            MessageManager::warning((string)__('商品表现暂不可用：%{1}', [$empty['error']]));
+
+            return $empty;
+        }
+    }
+
+    /**
+     * F04a：站点详情报表路径探索（简版；热短窗；落地 → 次页限深 3）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function buildPathExploration(array $filters, int $websiteId): array
+    {
+        $empty = [
+            'website_id' => $websiteId,
+            'from' => '',
+            'to' => '',
+            'window_clamped' => false,
+            'total_sessions' => 0,
+            'bounced_sessions' => 0,
+            'landings' => [],
+            'top_paths' => [],
+            'max_depth' => PixelPathExplorationService::MAX_DEPTH,
+            'error' => '',
+        ];
+        try {
+            $start = trim((string)($filters['start_date'] ?? ''));
+            $end = trim((string)($filters['end_date'] ?? ''));
+            if ($start === '' || $end === '') {
+                $empty['error'] = 'missing date range';
+
+                return $empty;
+            }
+
+            /** @var PixelPathExplorationService $pathService */
+            $pathService = w_obj(PixelPathExplorationService::class);
+            $report = $pathService->buildForWebsite($websiteId, $start, $end);
+            if ($report['error'] !== '') {
+                MessageManager::warning((string)__('路径探索暂不可用：%{1}', [$report['error']]));
+            }
+
+            return $report;
+        } catch (\Throwable $throwable) {
+            $empty['error'] = $throwable->getMessage();
+            MessageManager::warning((string)__('路径探索暂不可用：%{1}', [$empty['error']]));
+
+            return $empty;
+        }
+    }
+
+    /**
+     * F04b：站点详情报表留存分析（简版；热短窗；日队列）。
+     *
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function buildRetention(array $filters, int $websiteId): array
+    {
+        $empty = [
+            'website_id' => $websiteId,
+            'from' => '',
+            'to' => '',
+            'window_clamped' => false,
+            'total_visitors' => 0,
+            'returning_visitors' => 0,
+            'returning_rate' => 0.0,
+            'd1_rate' => 0.0,
+            'd1_eligible' => 0,
+            'd1_retained' => 0,
+            'offsets' => [],
+            'cohorts' => [],
+            'offset_summary' => [],
+            'error' => '',
+        ];
+        try {
+            $start = trim((string)($filters['start_date'] ?? ''));
+            $end = trim((string)($filters['end_date'] ?? ''));
+            if ($start === '' || $end === '') {
+                $empty['error'] = 'missing date range';
+
+                return $empty;
+            }
+
+            /** @var PixelRetentionService $retentionService */
+            $retentionService = w_obj(PixelRetentionService::class);
+            $report = $retentionService->buildForWebsite($websiteId, $start, $end);
+            if ($report['error'] !== '') {
+                MessageManager::warning((string)__('留存分析暂不可用：%{1}', [$report['error']]));
+            }
+
+            return $report;
+        } catch (\Throwable $throwable) {
+            $empty['error'] = $throwable->getMessage();
+            MessageManager::warning((string)__('留存分析暂不可用：%{1}', [$empty['error']]));
+
+            return $empty;
+        }
+    }
+
+    /**
+     * D07：构建 detail 已挂载报表 Tab（D07a–D07f：catalog 六个预设全部挂完）。
+     *
+     * @param array<string, mixed> $filters
+     * @return list<array<string, mixed>>
+     */
+    private function buildDetailReportTabs(array $filters, int $websiteId): array
+    {
+        try {
+            $start = trim((string)($filters['start_date'] ?? ''));
+            $end = trim((string)($filters['end_date'] ?? ''));
+            if ($start === '' || $end === '') {
+                return [];
+            }
+
+            $from = new \DateTimeImmutable($start);
+            $to = new \DateTimeImmutable($end);
+            $tabService = w_obj(PixelDetailReportTabService::class);
+
+            $rowProvider = static function (array $ctx) use ($filters, $websiteId): array {
+                $scoped = $filters;
+                $scoped['website_id'] = $websiteId;
+                $route = $ctx['route'] ?? [];
+                if (isset($route['from'], $route['to'])) {
+                    $scoped['start_date'] = (string)$route['from'];
+                    $scoped['end_date'] = (string)$route['to'];
+                }
+
+                return PixelStatisticsService::fetchHotReportEventRows($scoped, 20000);
+            };
+
+            return $tabService->buildMountedTabs($from, $to, $websiteId, $rowProvider);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * C01–C03：像素事件明细 list（短横线路由；热表分页 + 归因筛选表单）。
+     */
+    #[Acl('Weline_Visitor::pixel_dashboard_list', '查看像素事件列表', 'mdi-table', '查看像素事件明细列表')]
+    public function list(): string
+    {
+        $filters = $this->getDashboardRequestFilters();
+        $page = (int)($this->request->getParam('page') ?? $this->request->getGet('page') ?? 1);
+        $pageSize = (int)($this->request->getParam('pageSize')
+            ?? $this->request->getGet('pageSize')
+            ?? PixelStatisticsService::LIST_DEFAULT_PAGE_SIZE);
+
+        $result = PixelStatisticsService::getDashboardEventListPage($filters, $page, $pageSize);
+        if ($result['error'] !== '') {
+            MessageManager::warning((string)__('事件列表暂不可用：%{1}', [$result['error']]));
+        }
+
+        $displayFilters = $result['filters'];
+        if ($displayFilters === []) {
+            $displayFilters = $this->buildListDisplayFilters($filters);
+        }
+
+        $this->assign('page_title', (string)__('像素事件列表'));
+        $this->assign('rows', $result['rows']);
+        $this->assign('filters', $displayFilters);
+        $this->assign('traffic_type_options', \Weline\Visitor\Model\PixelChannel::TRAFFIC_TYPES);
+        $this->assign('pagination', [
+            'page' => $result['page'],
+            'page_size' => $result['page_size'],
+            'page_count' => $result['page_count'],
+            'total' => $result['total'],
+        ]);
+        $this->assign('list_ready', true);
+        $this->assign('list_error', $result['error']);
+
+        return $this->fetch('list');
+    }
+
+    /**
+     * G09：冷归档明细 list（显式入口；必选站点 + ≤31 天 + 分页）。
+     */
+    #[Acl('Weline_Visitor::pixel_dashboard_archive_list', '查看冷归档像素事件', 'mdi-archive', '查看冷归档像素事件明细')]
+    public function archiveList(): string
+    {
+        $filters = $this->getDashboardRequestFilters();
+        $page = (int)($this->request->getParam('page') ?? $this->request->getGet('page') ?? 1);
+        $pageSize = (int)($this->request->getParam('pageSize')
+            ?? $this->request->getGet('pageSize')
+            ?? PixelColdArchiveQueryService::DEFAULT_PAGE_SIZE);
+
+        /** @var PixelColdArchiveQueryService $coldQuery */
+        $coldQuery = w_obj(PixelColdArchiveQueryService::class);
+        $result = $coldQuery->queryPage($filters, $page, $pageSize);
+        if ($result['error'] !== '') {
+            MessageManager::warning((string)__('冷归档列表不可用：%{1}', [$this->translateColdArchiveError($result['error'])]));
+        }
+
+        $displayFilters = $result['filters'];
+        if (($displayFilters['website_id'] ?? null) === null && ($displayFilters['website_id_raw'] ?? '') === '') {
+            $displayFilters = array_merge($this->buildListDisplayFilters($filters), [
+                'page' => $result['page'],
+                'page_size' => $result['page_size'],
+            ]);
+        }
+
+        $this->assign('page_title', (string)__('冷归档事件列表'));
+        $this->assign('rows', $result['rows']);
+        $this->assign('filters', $displayFilters);
+        $this->assign('traffic_type_options', \Weline\Visitor\Model\PixelChannel::TRAFFIC_TYPES);
+        $this->assign('pagination', [
+            'page' => $result['page'],
+            'page_size' => $result['page_size'],
+            'page_count' => $result['page_count'],
+            'total' => $result['total'],
+        ]);
+        $this->assign('list_ready', true);
+        $this->assign('list_error', $result['error']);
+        $this->assign('max_window_days', PixelColdArchiveQueryService::MAX_WINDOW_DAYS);
+
+        return $this->fetch('archive_list');
+    }
+
+    /**
+     * 将冷查服务英文拒绝码转为可读文案。
+     */
+    private function translateColdArchiveError(string $error): string
+    {
+        if (str_contains($error, 'requires website_id')) {
+            return (string)__('请选择站点后再查询冷归档（website_id=0 为系统默认站）');
+        }
+        if (str_contains($error, 'window exceeds')) {
+            return (string)__('冷归档查询时间范围不能超过 %{1} 天', [(string)PixelColdArchiveQueryService::MAX_WINDOW_DAYS]);
+        }
+
+        return $error;
     }
     
     /**
@@ -218,80 +632,65 @@ class PixelDashboard extends BackendController
     }
     
     /**
-     * 数据导出功能
-     * 
-     * @return string
+     * C04：数据导出（与 list 同筛选条件，含渠道/UTM 归因列）。
      */
     #[Acl('Weline_Visitor::pixel_dashboard_export', '导出像素数据', 'mdi-download', '导出像素数据')]
     public function export(): string
     {
         try {
-            $filters = PixelStatisticsService::normalizeDashboardFilters($this->getDashboardRequestFilters());
-            $websiteId = $filters['website_id'];
-            $startDate = $filters['start_date'];
-            $endDate = $filters['end_date'];
-            $event = $filters['event'];
+            $requestFilters = $this->getDashboardRequestFilters();
             $format = $this->request->getParam('format') ?? $this->request->getGet('format') ?? 'csv';
-            
-            $model = w_obj(Pixel::class)->reset();
-            
-            if ($websiteId !== null) {
-                $model->where(Pixel::schema_fields_WEBSITE_ID, $websiteId);
+
+            $result = PixelStatisticsService::getDashboardEventExportRows($requestFilters);
+            if ($result['error'] !== '') {
+                return $this->error(__('导出数据失败：%{1}', [$result['error']]), '', 500);
             }
 
-            if ($event !== null) {
-                $model->where(Pixel::schema_fields_EVENT, $event);
-            }
+            $rows = $result['rows'];
+            $columns = $result['columns'];
 
-            $model->where(Pixel::schema_fields_CREATED_AT, $startDate, '>=');
-            $model->where(Pixel::schema_fields_CREATED_AT, $endDate, '<=');
-            
-            // 限制导出数量
-            $limit = 10000;
-            $data = $model->limit($limit)->select()->fetchArray();
-            
             if ($format === 'json') {
-                return $this->success(__('导出数据成功'), $data);
+                return $this->success(__('导出数据成功'), $rows);
             }
-            
-            // CSV格式
+
+            $filters = $result['filters'];
+            $websiteId = $filters['website_id'];
+            $event = $filters['event'];
+            $channelCode = (string)($filters['channel_code'] ?? '');
+
             header('Content-Type: text/csv; charset=UTF-8');
-            $filename = 'pixel_data_' . date('Y-m-d') . ($websiteId !== null ? '_site_' . $websiteId : '') . ($event !== null ? '_event_' . preg_replace('/[^a-zA-Z0-9_-]+/', '_', $event) : '') . '.csv';
+            $filename = 'pixel_data_' . date('Y-m-d')
+                . ($websiteId !== null ? '_site_' . $websiteId : '')
+                . ($event !== null ? '_event_' . $this->slugForFilename($event) : '')
+                . ($channelCode !== '' ? '_channel_' . $this->slugForFilename($channelCode) : '')
+                . '.csv';
             header('Content-Disposition: attachment; filename="' . $filename . '"');
-            
+
             $output = fopen('php://output', 'w');
-            
-            // 添加BOM以支持Excel中文显示
-            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
-            
-            // 写入表头
-            if (!empty($data)) {
-                $headers = array_keys($data[0]);
-                fputcsv($output, $headers);
-                
-                // 写入数据
-                foreach ($data as $row) {
-                    $orderedRow = [];
-                    foreach ($headers as $header) {
-                        $orderedRow[] = $row[$header] ?? '';
-                    }
-                    fputcsv($output, $orderedRow);
+
+            // BOM 让 Excel 正确识别 UTF-8
+            fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($output, $columns);
+            foreach ($rows as $row) {
+                $orderedRow = [];
+                foreach ($columns as $column) {
+                    $orderedRow[] = $row[$column] ?? '';
                 }
-            } else {
-                $defaultHeaders = [
-                    'pixel_id', 'url', 'module', 'name', 'referer', 'source',
-                    'user_id', 'user_agent', 'ip', 'event', 'website_id',
-                    'lang', 'currency', 'value', 'browser_info', 'cron_deal', 'created_at'
-                ];
-                fputcsv($output, $defaultHeaders);
+                fputcsv($output, $orderedRow);
             }
-            
+
             fclose($output);
+
             return '';
-            
         } catch (\Exception $e) {
             return $this->error(__('导出数据失败：%{1}', [$e->getMessage()]), '', 500);
         }
+    }
+
+    private function slugForFilename(string $value): string
+    {
+        return (string)preg_replace('/[^a-zA-Z0-9_-]+/', '_', $value);
     }
 
     /**
@@ -299,12 +698,68 @@ class PixelDashboard extends BackendController
      */
     private function getDashboardRequestFilters(): array
     {
+        $pick = function (string $key) {
+            return $this->request->getParam($key) ?? $this->request->getGet($key);
+        };
+
         return [
-            'websiteId' => $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId'),
-            'event' => $this->request->getParam('event') ?? $this->request->getGet('event'),
-            'range' => $this->request->getParam('range') ?? $this->request->getGet('range'),
-            'startDate' => $this->request->getParam('startDate') ?? $this->request->getGet('startDate'),
-            'endDate' => $this->request->getParam('endDate') ?? $this->request->getGet('endDate'),
+            'websiteId' => $pick('websiteId'),
+            'event' => $pick('event'),
+            'range' => $pick('range'),
+            'startDate' => $pick('startDate'),
+            'endDate' => $pick('endDate'),
+            // C03a：query 透传；表单 UI 见 C03
+            'channel_code' => $pick('channel_code') ?? $pick('channelCode'),
+            'traffic_type' => $pick('traffic_type') ?? $pick('trafficType'),
+            'utm_source' => $pick('utm_source') ?? $pick('utmSource'),
+            'utm_medium' => $pick('utm_medium') ?? $pick('utmMedium'),
+            'utm_campaign' => $pick('utm_campaign') ?? $pick('utmCampaign'),
+        ];
+    }
+
+    /**
+     * C03：归一化失败时仍回填表单展示值（不抛错）。
+     *
+     * @param array<string, mixed> $raw
+     * @return array<string, mixed>
+     */
+    private function buildListDisplayFilters(array $raw): array
+    {
+        try {
+            $attr = PixelStatisticsService::normalizeAttributionFilters($raw);
+        } catch (\Throwable) {
+            $attr = [
+                'channel_code' => null,
+                'traffic_type' => null,
+                'utm_source' => null,
+                'utm_medium' => null,
+                'utm_campaign' => null,
+            ];
+        }
+
+        $event = trim((string)($raw['event'] ?? ''));
+        $range = trim((string)($raw['range'] ?? '30d'));
+        if ($range === '') {
+            $range = '30d';
+        }
+        $startDay = trim((string)($raw['startDate'] ?? $raw['start_date'] ?? ''));
+        $endDay = trim((string)($raw['endDate'] ?? $raw['end_date'] ?? ''));
+
+        return [
+            'website_id' => null,
+            'website_id_raw' => trim((string)($raw['websiteId'] ?? $raw['website_id'] ?? '')),
+            'event' => $event !== '' ? $event : null,
+            'range' => $range,
+            'start_date' => $startDay !== '' ? $startDay . ' 00:00:00' : '',
+            'end_date' => $endDay !== '' ? $endDay . ' 23:59:59' : '',
+            'start_day' => $startDay,
+            'end_day' => $endDay,
+            'day_count' => 0,
+            'channel_code' => $attr['channel_code'],
+            'traffic_type' => $attr['traffic_type'],
+            'utm_source' => $attr['utm_source'],
+            'utm_medium' => $attr['utm_medium'],
+            'utm_campaign' => $attr['utm_campaign'],
         ];
     }
 
@@ -323,6 +778,7 @@ class PixelDashboard extends BackendController
         $this->assign('event_rows', $dashboard['event_rows'] ?? []);
         $this->assign('site_rows', $dashboard['site_rows'] ?? []);
         $this->assign('source_rows', $dashboard['source_rows'] ?? []);
+        $this->assign('channel_rows', $dashboard['channel_rows'] ?? []);
         $this->assign('realtime_rows', $dashboard['realtime_rows'] ?? []);
         $this->assign('recent_events', $dashboard['recent_events'] ?? []);
     }
@@ -359,6 +815,7 @@ class PixelDashboard extends BackendController
             'event_rows' => [],
             'site_rows' => [],
             'source_rows' => [],
+            'channel_rows' => [],
             'realtime_rows' => [],
             'recent_events' => [],
         ];

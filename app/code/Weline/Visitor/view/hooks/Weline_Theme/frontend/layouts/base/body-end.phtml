@@ -31,6 +31,24 @@ $__visitor_tracking_config = [
     ],
     'consent' => [
         'enabled' => false,
+        'marketingStorageKey' => 'ad_storage',
+        'source' => 'Weline_Visitor default',
+    ],
+    'sticky' => [
+        'ttlHours' => 24,
+        'linkerEnabled' => true,
+        'formMergeEnabled' => false,
+        'source' => 'Weline_Visitor default',
+    ],
+    'attribution' => [
+        'backfillDone' => false,
+        'legacyCronSourceEnabled' => false,
+        'source' => 'Weline_Visitor default',
+    ],
+    'retention' => [
+        'hotDays' => 365,
+        'warmDays' => 1095,
+        'coldArchiveEnabled' => true,
         'source' => 'Weline_Visitor default',
     ],
     'trafficRules' => [
@@ -68,14 +86,7 @@ try {
 }
 $__visitor_pixel_enabled = !empty($__visitor_tracking_config['pixel']['enabled']);
 $__visitor_ga4_enabled = !empty($__visitor_tracking_config['ga4']['enabled']);
-$__visitor_panel_enabled = false;
-try {
-    $__visitor_panel_enabled = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Framework\Runtime\DeveloperAccessPolicy::class
-    )->shouldInjectBootstrap();
-} catch (\Throwable) {
-    $__visitor_panel_enabled = false;
-}
+// 开发面板「访问事件」Tab 由 VisitorPanelBootstrapObserver 全局注入，不在此 hook 输出。
 
 $__pixel_name = 'weshop_storefront_behavior';
 $__data = new \Weline\Framework\DataObject\DataObject([
@@ -96,17 +107,40 @@ if ($__visitor_tracking_json === false) {
     $__visitor_tracking_json = '{}';
 }
 
-if ($__visitor_pixel_enabled || $__visitor_ga4_enabled || $__visitor_panel_enabled) {
-    $__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)?v=20260702-visitor-forwarder-traffic-2';
-    $__visitor_panel_script_url = '@static(Weline_Visitor::js/weline-panel-visitor.js)?v=20260702-visitor-panel-events-2';
+$__pixel_env = [
+    'website_id' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', (string)($_SERVER['WELINE_WEBSITE_ID'] ?? '')),
+    'website_code' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CODE', (string)($_SERVER['WELINE_WEBSITE_CODE'] ?? '')),
+    'website_url' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', (string)($_SERVER['WELINE_WEBSITE_URL'] ?? '')),
+    'language' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', (string)($_SERVER['WELINE_USER_LANG'] ?? '')),
+    'currency' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_CURRENCY', (string)($_SERVER['WELINE_USER_CURRENCY'] ?? '')),
+];
+try {
+    if ($__pixel_env['website_url'] !== '' && str_contains($__pixel_env['website_url'], '%')) {
+        $__decoded_website_url = rawurldecode($__pixel_env['website_url']);
+        if (is_string($__decoded_website_url) && $__decoded_website_url !== '') {
+            $__pixel_env['website_url'] = $__decoded_website_url;
+        }
+    }
+} catch (\Throwable) {
+}
+$__pixel_env_json = json_encode(
+    $__pixel_env,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+);
+if ($__pixel_env_json === false) {
+    $__pixel_env_json = '{}';
+}
+
+if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
+    $__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)?v=20260724-section-code-1';
     ?>
 <script>
 (function () {
     'use strict';
 
     var visitorTrackingConfig = <?= $__visitor_tracking_json ?>;
-    var shouldLoadPixel = <?= ($__visitor_pixel_enabled || $__visitor_ga4_enabled) ? 'true' : 'false' ?>;
     window.__WelineVisitorTrackingConfig = visitorTrackingConfig;
+    window.__WelinePixelEnv = Object.assign({}, window.__WelinePixelEnv || {}, <?= $__pixel_env_json ?>);
     window.__SITE_GA4__ = Object.assign({}, window.__SITE_GA4__ || {}, visitorTrackingConfig.ga4 || {}, {
         source: (visitorTrackingConfig.ga4 && visitorTrackingConfig.ga4.source) || 'Weline_Visitor SystemConfig'
     });
@@ -115,16 +149,35 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled || $__visitor_panel_enabl
     } catch (error) {
     }
 
-    if (!shouldLoadPixel) {
-        return;
-    }
-
     if (window.__WelinePixelLazyScheduled) {
         return;
     }
     window.__WelinePixelLazyScheduled = true;
 
-    function loadWelinePixel() {
+    function isLocalDevHost() {
+        try {
+            var host = String(window.location && window.location.hostname || '');
+            return !!(window.DEV
+                || window.WELINE_ENV === 'DEV'
+                || window.__WELINE_DEBUG__
+                || host === 'localhost'
+                || host === '127.0.0.1'
+                || /\.weline\.test$/i.test(host));
+        } catch (e) {
+            return !!(window.DEV || window.WELINE_ENV === 'DEV');
+        }
+    }
+
+    function devLog() {
+        if (!isLocalDevHost() || typeof console === 'undefined' || typeof console.log !== 'function') {
+            return;
+        }
+        var args = Array.prototype.slice.call(arguments);
+        args.unshift('[WelinePixel]');
+        console.log.apply(console, args);
+    }
+
+    function loadWelinePixel(reason) {
         if (window.__WelinePixelLazyLoaded || window.__WelinePixelLoaded) {
             return;
         }
@@ -134,18 +187,77 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled || $__visitor_panel_enabl
         var script = document.createElement('script');
         script.src = '<?= $__pixel_script_url ?>';
         script.async = true;
+        script.onload = function () {
+            devLog('loaded', { reason: reason || 'schedule', hasTrack: !!(window.WelinePixel && window.WelinePixel.track) });
+        };
+        script.onerror = function () {
+            devLog('load-failed', { reason: reason || 'schedule', src: script.src });
+        };
         document.head.appendChild(script);
+        devLog('loading', { reason: reason || 'schedule', src: script.src });
     }
 
     function scheduleWelinePixel() {
+        // Local/dev hosts: load immediately so CTA clicks are measurable while debugging.
+        if (isLocalDevHost()) {
+            loadWelinePixel('eager-dev');
+            return;
+        }
         window.setTimeout(function () {
             if ('requestIdleCallback' in window) {
-                window.requestIdleCallback(loadWelinePixel, { timeout: 8000 });
+                window.requestIdleCallback(function () { loadWelinePixel('idle'); }, { timeout: 8000 });
                 return;
             }
-            window.setTimeout(loadWelinePixel, 1000);
+            window.setTimeout(function () { loadWelinePixel('timeout'); }, 1000);
         }, 3500);
     }
+
+    function closestCta(node) {
+        if (!node || !node.closest) {
+            return null;
+        }
+        return node.closest([
+            '[data-cta]',
+            '[data-cta-event]',
+            '[data-pixel-event]',
+            '[data-pb-ai-action]',
+            '[class*="weline-pixel::"]',
+            'a[class*="-cta"]',
+            'button[class*="-cta"]',
+            '.pb-c-cta'
+        ].join(','));
+    }
+
+    // Capture CTA clicks even before pixel.js finishes loading.
+    document.addEventListener('click', function (event) {
+        var cta = closestCta(event.target);
+        if (!cta) {
+            return;
+        }
+        var className = typeof cta.className === 'string' ? cta.className : '';
+        var pixelClass = '';
+        className.split(/\s+/).forEach(function (token) {
+            if (token.indexOf('weline-pixel::') === 0 && token.indexOf(':value') === -1) {
+                pixelClass = token.replace('weline-pixel::', '');
+            }
+        });
+        var info = {
+            tag: cta.tagName,
+            text: ((cta.innerText || cta.textContent || '') + '').trim().slice(0, 80),
+            href: cta.getAttribute('href') || cta.href || '',
+            action: cta.getAttribute('data-pb-ai-action') || '',
+            dataCtaEvent: cta.getAttribute('data-cta-event') || '',
+            pixelClass: pixelClass,
+            className: className,
+            pixelReady: !!(window.WelinePixel && typeof window.WelinePixel.track === 'function')
+        };
+        if (isLocalDevHost()) {
+            console.log('[WelineCTA] click', info);
+        }
+        if (!window.WelinePixel || typeof window.WelinePixel.track !== 'function') {
+            loadWelinePixel('cta-click');
+        }
+    }, true);
 
     window.__WelineLoadPixel = loadWelinePixel;
     if (document.readyState === 'complete') {
@@ -155,15 +267,6 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled || $__visitor_panel_enabl
     }
 })();
 </script>
-<?php
-}
-
-if ($__visitor_panel_enabled) {
-    ?>
-<script src="<?= $__visitor_panel_script_url ?? '@static(Weline_Visitor::js/weline-panel-visitor.js)?v=20260701-visitor-panel-5' ?>"
-        data-no-extract="true"
-        data-load-order="last"
-        data-weline-panel-visitor-bootstrap="true"></script>
 <?php
 }
 ?>

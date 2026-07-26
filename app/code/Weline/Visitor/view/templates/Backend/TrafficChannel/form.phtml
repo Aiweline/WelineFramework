@@ -1,0 +1,239 @@
+<?php
+/**
+ * 新建/编辑投放渠道表单（B04/B05）。编辑时 code 只读。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $form
+ * @var array $traffic_types
+ * @var array $medium_by_type
+ * @var string $action
+ * @var string $form_title
+ * @var string $default_utm_source
+ * @var bool $code_readonly
+ * @var bool $is_edit
+ */
+
+$form = $form ?? [];
+$trafficTypes = $traffic_types ?? [];
+$mediumByType = $medium_by_type ?? [];
+$action = (string)($action ?? '');
+$formTitle = (string)($form_title ?? __('新建投放渠道'));
+$codeReadonly = !empty($code_readonly);
+$isEdit = !empty($is_edit);
+$h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$indexUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/index');
+$mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
+?>
+<div class="weline-traffic-channel-form">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h4 mb-0"><?= $h($formTitle) ?></h1>
+        <a class="btn btn-sm btn-outline-secondary" href="<?= $h($indexUrl) ?>"><lang>返回列表</lang></a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post" action="<?= $h($action) ?>" id="traffic-channel-form">
+                <input type="hidden" name="enabled_present" value="1"/>
+                <?php if ($isEdit): ?>
+                    <input type="hidden" name="id" value="<?= $h((string)($form['id'] ?? 0)) ?>"/>
+                    <input type="hidden" name="code" value="<?= $h($form['code'] ?? '') ?>"/>
+                <?php endif; ?>
+
+                <div class="mb-3">
+                    <label class="form-label"><lang>渠道名称</lang> <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" required maxlength="255"
+                           value="<?= $h($form['name'] ?? '') ?>"
+                           placeholder="<?= $h(__('例如：夏季促销投放')) ?>"/>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><lang>渠道码</lang> <span class="text-danger">*</span></label>
+                    <input type="text" name="<?= $codeReadonly ? 'code_display' : 'code' ?>"
+                           id="channel-code" class="form-control" required maxlength="32"
+                           pattern="[a-z0-9][a-z0-9_-]{1,31}"
+                           value="<?= $h($form['code'] ?? '') ?>"
+                           placeholder="summer_2026"
+                           <?= $codeReadonly ? 'readonly' : '' ?>/>
+                    <div class="form-text">
+                        <?php if ($codeReadonly): ?>
+                            <lang>渠道码创建后不可修改。</lang>
+                        <?php else: ?>
+                            <lang>2-32 位，小写字母或数字开头，仅 a-z 0-9 _ -；创建后不可改。</lang>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label"><lang>流量类型</lang></label>
+                        <select name="traffic_type" id="channel-traffic-type" class="form-select">
+                            <?php foreach ($trafficTypes as $type): ?>
+                                <option value="<?= $h($type) ?>" <?= (($form['traffic_type'] ?? '') === $type) ? 'selected' : '' ?>>
+                                    <?= $h($type) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label"><lang>站点ID</lang></label>
+                        <input type="number" name="website_id" class="form-control" min="0"
+                               value="<?= $h((string)($form['website_id'] ?? 0)) ?>"/>
+                        <div class="form-text"><lang>0 表示全局渠道。</lang></div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><lang>描述</lang></label>
+                    <textarea name="description" class="form-control" rows="2"><?= $h($form['description'] ?? '') ?></textarea>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input type="checkbox" class="form-check-input" name="enabled" id="channel-enabled" value="1"
+                        <?= !empty($form['enabled']) ? 'checked' : '' ?>/>
+                    <label class="form-check-label" for="channel-enabled"><lang>启用</lang></label>
+                    <?php if ($isEdit): ?>
+                        <div class="form-text"><lang>取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。</lang></div>
+                    <?php endif; ?>
+                </div>
+
+                <hr/>
+                <h2 class="h6"><lang>自动 UTM 包</lang></h2>
+                <p class="text-muted small"><lang>默认 utm_source=weline，utm_campaign/wch=渠道码，utm_medium 随流量类型；可覆盖 source/medium。</lang></p>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">utm_source</label>
+                        <input type="text" name="utm_source" id="channel-utm-source" class="form-control"
+                               value="<?= $h($form['utm_source'] ?? ($default_utm_source ?? 'weline')) ?>"/>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">utm_medium</label>
+                        <input type="text" name="utm_medium" id="channel-utm-medium" class="form-control"
+                               value="<?= $h($form['utm_medium'] ?? '') ?>"/>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border small mb-3">
+                    <div><strong>utm_campaign</strong> = <code id="preview-utm-campaign"><?= $h($form['utm_campaign_preview'] ?? '') ?></code></div>
+                    <div><strong>wch</strong> = <code id="preview-wch"><?= $h($form['wch_preview'] ?? '') ?></code></div>
+                </div>
+
+                <hr/>
+                <h2 class="h6"><lang>投放链接</lang></h2>
+                <div class="mb-3">
+                    <label class="form-label"><lang>落地路径</lang></label>
+                    <input type="text" name="landing_path" id="channel-landing-path" class="form-control"
+                           value="<?= $h($form['landing_path'] ?? '/') ?>"
+                           placeholder="/"/>
+                    <div class="form-text"><lang>相对站点根路径，如 / 或 /promo；查询参数由 UTM 自动附加。</lang></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><lang>链接预览</lang></label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="channel-landing-url" readonly
+                               value="<?= $h($form['landing_url'] ?? '') ?>"
+                               data-base-url="<?= $h($form['landing_base_url'] ?? '') ?>"/>
+                        <button type="button" class="btn btn-outline-primary" id="channel-copy-url"
+                            <?= empty($form['landing_showable']) ? 'disabled' : '' ?>>
+                            <lang>复制链接</lang>
+                        </button>
+                    </div>
+                    <div class="form-text" id="channel-landing-hint">
+                        <?php if (empty($form['landing_showable'])): ?>
+                            <lang>启用渠道并填写渠道码后可生成链接；全局渠道(website_id=0)使用系统默认基址。</lang>
+                        <?php else: ?>
+                            <lang>基址来自 Websites 站点 URL（查不到则回退系统基址）。</lang>
+                        <?php endif; ?>
+                    </div>
+                    <div class="form-text text-success d-none" id="channel-copy-ok"><lang>已复制到剪贴板</lang></div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
+                    <a class="btn btn-outline-secondary" href="<?= $h($indexUrl) ?>"><lang>取消</lang></a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var mediumByType = <?= $mediumJson ?>;
+    var codeInput = document.getElementById('channel-code');
+    var typeSelect = document.getElementById('channel-traffic-type');
+    var mediumInput = document.getElementById('channel-utm-medium');
+    var sourceInput = document.getElementById('channel-utm-source');
+    var campPrev = document.getElementById('preview-utm-campaign');
+    var wchPrev = document.getElementById('preview-wch');
+    var pathInput = document.getElementById('channel-landing-path');
+    var urlInput = document.getElementById('channel-landing-url');
+    var copyBtn = document.getElementById('channel-copy-url');
+    var copyOk = document.getElementById('channel-copy-ok');
+    var enabledInput = document.getElementById('channel-enabled');
+    var codeReadonly = <?= $codeReadonly ? 'true' : 'false' ?>;
+    var mediumTouched = <?= \json_encode(\trim((string)($form['utm_medium'] ?? '')) !== '') ?>;
+    var baseUrl = urlInput ? (urlInput.getAttribute('data-base-url') || '') : '';
+
+    function normalizePath(path) {
+        path = (path || '/').trim();
+        if (!path || path === '/') return '/';
+        if (/^(https?:)?\/\//i.test(path)) return '/';
+        if (path.charAt(0) !== '/') path = '/' + path;
+        path = path.split('?')[0].split('#')[0];
+        return path || '/';
+    }
+
+    function syncPreview() {
+        var code = (codeInput && codeInput.value ? codeInput.value : '').trim().toLowerCase();
+        if (campPrev) campPrev.textContent = code || 'your_code';
+        if (wchPrev) wchPrev.textContent = code || 'your_code';
+        if (!mediumTouched && mediumInput && typeSelect) {
+            mediumInput.value = mediumByType[typeSelect.value] || 'custom';
+        }
+        var enabled = !enabledInput || enabledInput.checked;
+        var path = normalizePath(pathInput ? pathInput.value : '/');
+        var source = (sourceInput && sourceInput.value ? sourceInput.value : 'weline').trim() || 'weline';
+        var medium = (mediumInput && mediumInput.value ? mediumInput.value : 'custom').trim() || 'custom';
+        var qs = 'utm_source=' + encodeURIComponent(source)
+            + '&utm_medium=' + encodeURIComponent(medium)
+            + '&utm_campaign=' + encodeURIComponent(code || 'your_code')
+            + '&wch=' + encodeURIComponent(code || 'your_code');
+        var url = '';
+        if (enabled && code && baseUrl) {
+            url = baseUrl + (path === '/' ? '/' : path) + '?' + qs;
+        }
+        if (urlInput) urlInput.value = url;
+        if (copyBtn) copyBtn.disabled = !url;
+    }
+
+    if (codeInput && !codeReadonly) codeInput.addEventListener('input', syncPreview);
+    if (typeSelect) typeSelect.addEventListener('change', function () {
+        mediumTouched = false;
+        syncPreview();
+    });
+    if (mediumInput) mediumInput.addEventListener('input', function () { mediumTouched = true; syncPreview(); });
+    if (sourceInput) sourceInput.addEventListener('input', syncPreview);
+    if (pathInput) pathInput.addEventListener('input', syncPreview);
+    if (enabledInput) enabledInput.addEventListener('change', syncPreview);
+    if (copyBtn) copyBtn.addEventListener('click', function () {
+        var text = urlInput ? urlInput.value : '';
+        if (!text) return;
+        var done = function () {
+            if (copyOk) {
+                copyOk.classList.remove('d-none');
+                setTimeout(function () { copyOk.classList.add('d-none'); }, 1500);
+            }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(function () {
+                urlInput.select();
+                try { document.execCommand('copy'); done(); } catch (e) {}
+            });
+        } else {
+            urlInput.select();
+            try { document.execCommand('copy'); done(); } catch (e2) {}
+        }
+    });
+    syncPreview();
+})();
+</script>

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\test\Unit\Cron;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Visitor\Cron\CleanExpiredTokens;
 use Weline\Visitor\Model\PixelEncryptionToken;

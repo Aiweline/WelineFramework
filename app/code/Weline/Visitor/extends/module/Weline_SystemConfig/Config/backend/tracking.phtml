@@ -93,6 +93,56 @@
         scope="global,website" />
 </w:config:group>
 
+<w:config:group code="visitor_attribution" label="归因回填" description="历史像素扁平列回填状态（A13）；Retention 仅在 done=true 后才应迁冷。" sort="25">
+    <w:config:field
+        key="visitor/tracking/attribution_backfill_done"
+        label="归因扁平列回填完成"
+        description="由 CLI pixel:attribution-backfill apply --mark-done 或 mark-done 写入。为 true 表示历史行已回填或运维确认完成。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global" />
+    <w:config:field
+        key="visitor/tracking/legacy_cron_source_enabled"
+        label="旧 Cron 反写 source（兼容）"
+        description="关闭（默认）：Cron 只把 channel_code 同步到 source 并标记已处理，不再用 PixelSource referer 规则覆盖新归因结果。开启仅用于历史数据临时兜底。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global" />
+</w:config:group>
+
+<w:config:group code="visitor_retention" label="热温冷保留策略" description="控制热明细保留、温聚合可查窗口与冷归档开关。Retention 迁冷/删热与 QueryRouter 温边界读取这些值。" sort="28">
+    <w:config:field
+        key="visitor/tracking/retention_hot_days"
+        label="热明细保留天数"
+        description="默认 365。早于该天数的热表明细在 job_log=success 且冷归档启用时可迁冷/删热；报表短窗热路由也以此为热边界。"
+        type="number"
+        value-type="int"
+        default="365"
+        scope="global"
+        validation="min:7|max:3650" />
+
+    <w:config:field
+        key="visitor/tracking/retention_warm_days"
+        label="温聚合可查天数"
+        description="默认 1095（约 3 年）。须不小于热保留天数；超出该窗口的长周期聚合查询会被拒绝（冷明细请走显式冷查入口）。"
+        type="number"
+        value-type="int"
+        default="1095"
+        scope="global"
+        validation="min:7|max:7300" />
+
+    <w:config:field
+        key="visitor/tracking/cold_archive_enabled"
+        label="启用冷归档"
+        description="关闭后禁止写入 pixel_archive，Retention 正式 apply 也会被阻断（避免未归档就删热）。冷查明细入口仍可见但依赖已有归档数据。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global" />
+</w:config:group>
+
 <w:config:group code="visitor_forward_filter" label="转发过滤规则" description="命中本地访问或站点排除规则时，Pixel 仍会记录，但不会转发到 GA4 或自定义平台。" sort="30">
     <w:config:field
         key="visitor/tracking/exclude_local_forwarding"
@@ -154,7 +204,28 @@
         validation="max:5000" />
 </w:config:group>
 
-<w:config:group code="visitor_ga4" label="事件转发与 GA4" description="GA4 作为 Weline Pixel 的一个转发器存在，由 Weline_Visitor 按站点配置转换事件。" sort="40">
+<w:config:group code="visitor_gtm" label="Google Tag Manager" description="GTM 为 Pixel 唯一 dataLayer 出口。开启且填写容器 ID 后，自动关闭 GA4 直连（互斥），避免双计。" sort="35">
+    <w:config:field
+        key="visitor/tracking/gtm_enabled"
+        label="启用 GTM"
+        description="开启后由 GtmBridge 推送 event=weline_visitor 到 dataLayer，并加载 GTM 容器。page_view 不由 Pixel 重复推送。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/gtm_container_id"
+        label="GTM Container ID"
+        description="格式为 GTM-XXXXXXX。开启 GTM 后 GA4 Measurement 直连自动停用。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:32" />
+</w:config:group>
+
+<w:config:group code="visitor_ga4" label="事件转发与 GA4" description="GA4 作为 Weline Pixel 的一个转发器存在。若已启用 GTM，本通道自动关闭。" sort="40">
     <w:config:field
         key="visitor/tracking/ga4_enabled"
         label="启用 GA4"
