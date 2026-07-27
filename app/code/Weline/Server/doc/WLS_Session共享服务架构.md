@@ -1,8 +1,10 @@
 # WLS Session / Memory 共享服务架构
 
-> 状态：现行设计，2026-07-10。本文只描述 WLS 内置 sidecar；Redis/Memcached 后端细节以对应 Backend 类为准。
+> 状态：现行设计，2026-07-24。本文只描述 WLS 内置 sidecar；Redis/Memcached 后端细节以对应 Backend 类为准。
 
 WLS 将跨 Worker 状态放到两个独立 sidecar：Session Server 保存会话，Memory Server 提供共享缓存与原子操作。Worker 只持有客户端连接池和可重建本地缓存，不把单个 Worker 内存当作跨进程权威。
+
+公网请求只由项目托管 Nginx 接收和终结 TLS，再通过 loopback HTTP/1.1 Keep-Alive 回源 Dispatcher 或 Worker；Session/Memory sidecar 不暴露公网入口。
 
 普通后台启动在 Windows、macOS、Linux 统一通过 `Processer::batchCreate()` 并发拉起 Session 与 Memory，共享一个 READY deadline；只有显式 frontend 可见窗口模式逐个创建独立控制台。launcher 返回值只用于确认提交成功，最终 runtime/registry 的服务 PID 必须来自已认证的 sidecar 存活身份，不能依赖创建顺序。
 
@@ -10,6 +12,11 @@ WLS 将跨 Worker 状态放到两个独立 sidecar：Session Server 保存会话
 
 ```mermaid
 flowchart LR
+  PUBLIC["公网 H3/H2/H1"] --> NGINX["项目托管 Nginx\nTLS / ALPN"]
+  NGINX --> LOOPBACK["127.0.0.1 HTTP/1.1 Keep-Alive"]
+  LOOPBACK --> DISPATCHER["Dispatcher"]
+  LOOPBACK --> W1
+  DISPATCHER --> W2
   W1["Worker 1"] --> SF["SessionStateFacade"]
   W2["Worker N"] --> SF
   W1 --> MF["MemoryStateFacade"]
@@ -102,9 +109,9 @@ Windows 冷创建也必须遵守同一并发边界。`SharedStateServiceManager`
 
 共享 Memory/Session 客户端（`PooledConnection`）统一使用非阻塞 socket：
 
-1. `worker.php` / `worker_ssl.php` 在 `CoroutineRuntime` 驱动主循环时调用 `SchedulerSystem::enableIoWait()`。
+1. 当前 `worker.php` 在 `CoroutineRuntime` 驱动主循环时调用 `SchedulerSystem::enableIoWait()`。
 2. Fiber 等待可读/可写时挂起，由 `FiberScheduler` + `CoroutineRuntime::wait()` 把 waiter fd 合入现有 EventLoop；其他请求 Fiber 可继续推进。
-3. CLI / FPM / 未启用 I/O await 的进程（含 `worker_ssl_event.php`、Master）回退到有界 `stream_select`，行为与返回契约不变。
+3. CLI / FPM / Master 等未启用 I/O await 的进程回退到有界 `stream_select`，行为与返回契约不变。
 4. 一条连接仍是一请求一响应租约；超时、EOF、协议错误一律 `close` + `invalidate`，禁止迟到帧回池。
 
 默认池参数以 `SharedStatePoolDefaults` 为单一事实源（与 `MemoryStateFacade` / 预热一致）：
@@ -137,9 +144,9 @@ Windows 冷创建也必须遵守同一并发边界。`SharedStateServiceManager`
 
 ## 5. TLS Session Cache 边界
 
-业务 Session 命名空间仍不是 TLS Session Cache。PHP 8.4 的 Stream SSL 服务端没有纯 PHP 外部 Session Cache 回调，因此该版本只验证同一 HTTP/1.1 Keep-Alive 或 HTTP/2 多路复用连接内的握手复用；跨连接、跨 Worker TCP TLS 恢复保持 unsupported/unverified。
+业务 Session 命名空间不是 TLS Session Cache。当前公网 TLS 只由项目托管 Nginx 终结，WLS Worker 仅接收 loopback 明文 HTTP/1.1 回源，因此 TLS Session Ticket、跨连接恢复与对应门禁都属于 Nginx 边缘能力，不能用业务 Session/Memory sidecar 或 Worker 分布替代证明。
 
-PHP 8.6 的 `session_new_cb/session_get_cb/session_remove_cb` 与 `Openssl\Session` 已接入独立 TLS 子存储和专用 fail-fast 客户端：逐条 TTL、条目/字节/DER 上限、原子读取删除、禁用持久化，证据不记录 Session ID/DER/密钥或控制令牌；回调不会调用可能阻塞重连的通用业务 `SharedStateClient`。sidecar 不可用时立即退化为完整握手且不能阻断 Worker 事件循环。该机制是 TCP 外部有状态缓存，不是 HTTP/3 原生数据面的无状态 Ticket Key Ring。故障窗口门禁要求所有 HTTPS 请求成功、实际跨 Worker、sidecar 代际切换和恢复后的独立复用证明；故障窗口内的恢复比例只作诊断，因为 sidecar 不可用时完整握手是正确降级。Windows PHP 8.6.0alpha2 x64-on-ARM 样本已实证同 Worker、跨 Worker、reload 与恢复后各 24/24；400 轮故障窗口的 800 次 HTTPS 均成功，其中 382 次为恢复握手，恢复后再次 24/24。当前恢复握手 P95 156.236ms 未通过固定生产门禁 P95 ≤ 50ms，运行时非原生且仍为 prerelease，稳定三平台原生矩阵也未完成；因此默认仍关闭，持久功能证据不得等同当前 active scope 或 production-ready。
+旧 PHP Stream SSL Worker 及其 `session_new_cb/session_get_cb/session_remove_cb` / `Openssl\Session` 方案属于 retired 历史实现，不在当前 active scope。跨连接、跨进程 TLS 会话恢复必须以当前托管 Nginx 的真实新连接握手证据验证；未取得证据时保持 unverified，不能仅凭 Keep-Alive 或 HTTP/2 多路复用宣称已恢复。
 
 ## 6. 配置
 

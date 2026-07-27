@@ -246,6 +246,15 @@ PS1;
             return null;
         }
 
+        // authopen requests a GUI authorization prompt. In a non-interactive
+        // daemon (WLS web worker, tty=0) that prompt cannot be answered, so a
+        // synchronous exec would block the whole HTTP request indefinitely.
+        // Only attempt it from an interactive session; otherwise degrade to
+        // needs_admin so callers surface a copy-paste command instead of hanging.
+        if (!self::canPromptForElevation()) {
+            return null;
+        }
+
         $authopenPath = self::findMacOsAuthOpen();
         if ($authopenPath === '') {
             return null;
@@ -342,6 +351,17 @@ PS1;
     }
 
     private static function canUseInteractiveSudo(): bool
+    {
+        return self::canPromptForElevation();
+    }
+
+    /**
+     * Whether the current process may block on an interactive privilege prompt
+     * (sudo password or macOS authopen GUI). Only true for an attached TTY
+     * session; WLS web workers run as a non-interactive daemon (tty=0) and must
+     * never synchronously wait for a credential dialog.
+     */
+    private static function canPromptForElevation(): bool
     {
         if (PHP_SAPI !== 'cli' || !\defined('STDIN')) {
             return false;

@@ -5,28 +5,25 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Runtime;
 
 /**
- * Immutable public HTTP protocol contract for one WLS instance.
+ * Immutable protocol contract for the private Nginx-to-WLS backend.
  *
- * HTTP/3 is a QUIC/UDP transport and therefore cannot be selected by the TCP
- * ALPN handshake used by HTTP/2 and HTTP/1.1. A protocol edge publishes
- * Alt-Svc for normal discovery and can also be advertised through DNS
- * HTTPS/SVCB for first-connection HTTP/3.
+ * Public TLS, HTTP/2, HTTP/3, ALPN, Alt-Svc and session tickets belong to
+ * ManagedNginxService. WLS accepts only loopback cleartext HTTP/1.1.
  */
 final readonly class HttpProtocolSelection
 {
     public const HTTP_3 = 'h3';
     public const HTTP_2 = 'h2';
     public const HTTP_1 = 'h1';
+
+    /** @deprecated Native/Caddy protocol edges are retired. */
     public const EDGE_NATIVE = 'native';
+    /** @deprecated Native/Caddy protocol edges are retired. */
     public const EDGE_CADDY = 'caddy';
     public const EDGE_DISABLED = 'disabled';
 
     /** @var list<string> */
-    public const DEFAULT_PROTOCOLS = [
-        self::HTTP_3,
-        self::HTTP_2,
-        self::HTTP_1,
-    ];
+    public const DEFAULT_PROTOCOLS = [self::HTTP_1];
 
     /**
      * @param list<string> $protocols
@@ -38,68 +35,37 @@ final readonly class HttpProtocolSelection
         public bool $tlsSessionResumption,
         public bool $altSvc,
     ) {
-        if ($protocols === [] || !\array_is_list($protocols)) {
-            throw new \InvalidArgumentException('HTTP protocol selection requires a non-empty ordered list.');
-        }
-        foreach ($protocols as $protocol) {
-            if (!\in_array($protocol, self::DEFAULT_PROTOCOLS, true)) {
-                throw new \InvalidArgumentException('Unsupported normalized HTTP protocol: ' . $protocol);
-            }
-        }
-        if (!\in_array($preferred, $protocols, true)) {
-            throw new \InvalidArgumentException('Preferred HTTP protocol must exist in the enabled protocol list.');
-        }
-        if (!\in_array($edge, [self::EDGE_NATIVE, self::EDGE_CADDY, self::EDGE_DISABLED], true)) {
-            throw new \InvalidArgumentException('Unsupported HTTP protocol edge: ' . $edge);
-        }
-        if ($this->requiresProtocolEdge() && $edge === self::EDGE_DISABLED) {
-            throw new \InvalidArgumentException('HTTP/2 and HTTP/3 require the WLS protocol edge.');
+        if ($protocols !== [self::HTTP_1]
+            || $preferred !== self::HTTP_1
+            || $edge !== self::EDGE_DISABLED
+            || $tlsSessionResumption
+            || $altSvc
+        ) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS backend requires protocols=[h1], preferred=h1, '
+                . 'edge=disabled, tls_session_resumption=false, and alt_svc=false.'
+            );
         }
     }
 
     /**
-     * @param array<string, mixed> $config Flattened WLS instance config.
+     * @param array<string, mixed> $config
      */
     public static function fromConfig(array $config, bool $sslEnabled): self
     {
-        if (!$sslEnabled) {
-            return new self(
-                [self::HTTP_1],
-                self::HTTP_1,
-                self::EDGE_DISABLED,
-                false,
-                false,
+        if ($sslEnabled) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS backend cannot enable Worker TLS.'
             );
         }
-
         $http = \is_array($config['http'] ?? null) ? $config['http'] : [];
         $protocols = self::normalizeProtocols($http['protocols'] ?? [self::HTTP_1]);
         $preferred = self::normalizeProtocol($http['preferred'] ?? self::HTTP_1);
-        if (!\in_array($preferred, $protocols, true)) {
-            throw new \RuntimeException(
-                'wls.http.preferred must be one of the enabled wls.http.protocols.'
-            );
-        }
+        $edge = self::normalizeEdge($http['protocol_edge'] ?? self::EDGE_DISABLED);
+        $tlsSessionResumption = self::disabledBoolean($http, 'tls_session_resumption');
+        $altSvc = self::disabledBoolean($http, 'alt_svc');
 
-        // Preserve the explicitly ordered product contract. h3 is discovered
-        // through QUIC/Alt-Svc or DNS HTTPS/SVCB; h2/h1 use TLS ALPN.
-        $edge = self::normalizeEdge($http['protocol_edge'] ?? 'auto', $protocols);
-        $requiresEdge = \in_array(self::HTTP_3, $protocols, true)
-            || \in_array(self::HTTP_2, $protocols, true);
-        if ($requiresEdge && $edge === self::EDGE_DISABLED) {
-            throw new \RuntimeException(
-                'WLS Workers currently speak HTTP/1.1; enabling HTTP/2 or HTTP/3 requires '
-                . 'wls.http.protocol_edge=auto/native (or explicit caddy compatibility mode).'
-            );
-        }
-
-        return new self(
-            $protocols,
-            $preferred,
-            $edge,
-            (bool)($http['tls_session_resumption'] ?? true),
-            (bool)($http['alt_svc'] ?? true),
-        );
+        return new self($protocols, $preferred, $edge, $tlsSessionResumption, $altSvc);
     }
 
     /**
@@ -109,146 +75,139 @@ final readonly class HttpProtocolSelection
     {
         $protocols = self::normalizeProtocols($data['protocols'] ?? [self::HTTP_1]);
         $preferred = self::normalizeProtocol($data['preferred'] ?? self::HTTP_1);
-        $edge = self::normalizeEdge($data['edge'] ?? self::EDGE_DISABLED, $protocols);
+        $edge = self::normalizeEdge($data['edge'] ?? self::EDGE_DISABLED);
+        $tlsSessionResumption = self::disabledBoolean($data, 'tls_session_resumption');
+        $altSvc = self::disabledBoolean($data, 'alt_svc');
 
-        return new self(
-            $protocols,
-            $preferred,
-            $edge,
-            (bool)($data['tls_session_resumption'] ?? true),
-            (bool)($data['alt_svc'] ?? true),
-        );
+        return new self($protocols, $preferred, $edge, $tlsSessionResumption, $altSvc);
     }
 
     public function isProtocolEdgeEnabled(): bool
     {
-        return $this->edge !== self::EDGE_DISABLED;
+        return false;
     }
 
     public function isNativeProtocolEdge(): bool
     {
-        return $this->edge === self::EDGE_NATIVE;
+        return false;
     }
 
     public function isCaddyProtocolEdge(): bool
     {
-        return $this->edge === self::EDGE_CADDY;
+        return false;
     }
 
     public function requiresProtocolEdge(): bool
     {
-        return \in_array(self::HTTP_3, $this->protocols, true)
-            || \in_array(self::HTTP_2, $this->protocols, true);
+        return false;
     }
 
     public function supports(string $protocol): bool
     {
-        return \in_array(self::normalizeProtocol($protocol), $this->protocols, true);
+        return self::normalizeProtocol($protocol) === self::HTTP_1;
     }
 
-    /**
-     * @return list<string>
-     */
+    public function assertCompatibleEdgeAdapter(string $edgeAdapter): void
+    {
+        if (\strtolower(\trim($edgeAdapter)) !== 'nginx') {
+            throw new \InvalidArgumentException(
+                'Nginx is the only supported WLS public edge adapter.'
+            );
+        }
+    }
+
+    /** @return list<string> */
     public function caddyProtocols(): array
     {
-        return $this->protocols;
+        return [self::HTTP_1];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return [
-            'protocols' => $this->protocols,
-            'preferred' => $this->preferred,
-            'edge' => $this->edge,
-            'tls_session_resumption' => $this->tlsSessionResumption,
-            'alt_svc' => $this->altSvc,
-            'http3_transport' => \in_array(self::HTTP_3, $this->protocols, true) ? 'quic_udp' : 'disabled',
-            'tcp_alpn' => \array_values(\array_filter(
-                $this->protocols,
-                static fn (string $protocol): bool => $protocol !== self::HTTP_3,
-            )),
+            'protocols' => [self::HTTP_1],
+            'preferred' => self::HTTP_1,
+            'edge' => self::EDGE_DISABLED,
+            'tls_session_resumption' => false,
+            'alt_svc' => false,
+            'http3_transport' => 'disabled',
+            'tcp_alpn' => [self::HTTP_1],
         ];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function toConfig(): array
     {
         return [
-            'protocols' => $this->protocols,
-            'preferred' => $this->preferred,
-            'protocol_edge' => $this->edge,
-            'protocol_edge_enabled' => $this->isProtocolEdgeEnabled(),
-            'tls_session_resumption' => $this->tlsSessionResumption,
-            'alt_svc' => $this->altSvc,
+            'protocols' => [self::HTTP_1],
+            'preferred' => self::HTTP_1,
+            'protocol_edge' => self::EDGE_DISABLED,
+            'protocol_edge_enabled' => false,
+            'tls_session_resumption' => false,
+            'alt_svc' => false,
         ];
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     private static function normalizeProtocols(mixed $value): array
     {
         if (\is_string($value)) {
             $value = \preg_split('/[\s,]+/', \trim($value), -1, \PREG_SPLIT_NO_EMPTY);
         }
-        if (!\is_array($value) || $value === []) {
-            throw new \RuntimeException('wls.http.protocols must be a non-empty list.');
+        if (!\is_array($value) || !\array_is_list($value) || \count($value) !== 1) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS backend requires wls.http.protocols=[h1].'
+            );
         }
 
-        $normalized = [];
-        foreach ($value as $protocol) {
-            if (!\is_scalar($protocol)) {
-                throw new \RuntimeException('wls.http.protocols may contain only strings.');
-            }
-            $protocol = self::normalizeProtocol((string)$protocol);
-            if (!\in_array($protocol, $normalized, true)) {
-                $normalized[] = $protocol;
-            }
-        }
-
-        return $normalized;
+        return [self::normalizeProtocol($value[0])];
     }
 
     private static function normalizeProtocol(mixed $protocol): string
     {
         $protocol = \strtolower(\trim((string)$protocol));
+        if (!\in_array($protocol, ['h1', 'http1', 'http1.1', 'http/1', 'http/1.1', '1', '1.1'], true)) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS backend supports only HTTP/1.1.'
+            );
+        }
 
-        return match ($protocol) {
-            'h3', 'http3', 'http/3', 'http/3.0', '3', '3.0' => self::HTTP_3,
-            'h2', 'http2', 'http/2', 'http/2.0', '2', '2.0' => self::HTTP_2,
-            'h1', 'http1', 'http1.1', 'http/1', 'http/1.1', '1', '1.1' => self::HTTP_1,
-            default => throw new \RuntimeException('Unsupported HTTP protocol "' . $protocol . '".'),
-        };
+        return self::HTTP_1;
+    }
+
+    private static function normalizeEdge(mixed $edge): string
+    {
+        if (\is_bool($edge)) {
+            if ($edge) {
+                throw new \InvalidArgumentException('WLS protocol edge is retired.');
+            }
+            return self::EDGE_DISABLED;
+        }
+        $edge = \strtolower(\trim((string)$edge));
+        if (!\in_array($edge, ['', 'off', 'disabled', 'false', '0', 'none'], true)) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS backend requires wls.http.protocol_edge=disabled.'
+            );
+        }
+
+        return self::EDGE_DISABLED;
     }
 
     /**
-     * @param list<string> $protocols
+     * @param array<string, mixed> $data
      */
-    private static function normalizeEdge(mixed $edge, array $protocols): string
+    private static function disabledBoolean(array $data, string $field): bool
     {
-        if (\is_bool($edge)) {
-            $edge = $edge ? self::EDGE_NATIVE : self::EDGE_DISABLED;
+        if (!\array_key_exists($field, $data)) {
+            return false;
         }
-        $edge = \strtolower(\trim((string)$edge));
-        if ($edge === '' || $edge === 'auto') {
-            return \in_array(self::HTTP_3, $protocols, true)
-                || \in_array(self::HTTP_2, $protocols, true)
-                ? self::EDGE_NATIVE
-                : self::EDGE_DISABLED;
+        if (!\is_bool($data[$field]) || $data[$field]) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS backend requires ' . $field . '=false.'
+            );
         }
 
-        return match ($edge) {
-            'native', 'wls', 'on', 'enabled', 'true', '1' => self::EDGE_NATIVE,
-            'caddy' => self::EDGE_CADDY,
-            'off', 'disabled', 'false', '0', 'none' => self::EDGE_DISABLED,
-            default => throw new \RuntimeException(
-                'wls.http.protocol_edge must be auto, native, caddy, or disabled.'
-            ),
-        };
+        return false;
     }
 }

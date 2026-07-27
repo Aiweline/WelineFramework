@@ -18,14 +18,14 @@ final class WorkerFiberContextTracker
                 return;
             }
 
-            $fiberData['context']->restore();
+            $fiberData['context']->restoreForFiber($fiber);
             return;
         }
     }
 
     /**
      * @param array<int|string, array<string, mixed>> $activeFibers
-     * @param callable():mixed $captureContext
+     * @param callable(\Fiber):mixed $captureContext
      * @return array<int|string, array<string, mixed>>
      */
     public static function capture(array $activeFibers, \Fiber $fiber, callable $captureContext, ?int $timestamp = null): array
@@ -40,7 +40,7 @@ final class WorkerFiberContextTracker
                 continue;
             }
 
-            $fiberData['context'] = $captureContext();
+            $fiberData['context'] = $captureContext($fiber);
             $fiberData['suspended_at'] = $capturedAt;
             $fiberData['last_activity'] = $capturedAt;
             $activeFibers[$connectionId] = $fiberData;

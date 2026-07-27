@@ -21,6 +21,7 @@ final class WorkerReadinessState
     public const CAPABILITY_HTTP3_QUIC_READY = 'http3_quic_ready_v3';
     public const CAPABILITY_HTTP3_LINUX_EBPF_ROUTE = 'http3_linux_ebpf_route_v1';
     public const CAPABILITY_HTTP3_TLS_TICKET_RING = 'http3_tls_ticket_ring_v1';
+    public const CAPABILITY_CACHE_NAMESPACE_INVALIDATION = 'cache_namespace_invalidation_v1';
 
     private static string $topology = '';
     private static string $policyDigest = '';
@@ -78,6 +79,7 @@ final class WorkerReadinessState
     /** @var array<string,int|string> */
     private static array $http3Route = [];
     private static string $http3ActivationId = '';
+    private static int $namespaceAuthorityClock = 0;
 
     public static function reset(string $topology): void
     {
@@ -108,6 +110,7 @@ final class WorkerReadinessState
         self::$http3TlsTicketRingDigest = '';
         self::$http3Route = [];
         self::$http3ActivationId = '';
+        self::$namespaceAuthorityClock = 0;
     }
 
     public static function markListenerBound(
@@ -227,6 +230,14 @@ final class WorkerReadinessState
         self::$policyDigest = \preg_match('/^[a-f0-9]{64}$/D', $digest) === 1 ? $digest : '';
     }
 
+    public static function markNamespaceAuthorityClock(int $authorityClock): void
+    {
+        if ($authorityClock <= 0) {
+            throw new \InvalidArgumentException('Namespace authority clock must be positive.');
+        }
+        self::$namespaceAuthorityClock = \max(self::$namespaceAuthorityClock, $authorityClock);
+    }
+
     public static function markMaintenanceReady(): void
     {
         self::$homepageFpcProof = self::emptyHomepageFpcProof();
@@ -322,6 +333,7 @@ final class WorkerReadinessState
                 self::CAPABILITY_HTTP3_QUIC_READY,
                 self::CAPABILITY_HTTP3_LINUX_EBPF_ROUTE,
                 self::CAPABILITY_HTTP3_TLS_TICKET_RING,
+                self::CAPABILITY_CACHE_NAMESPACE_INVALIDATION,
             ],
             'topology' => self::$topology,
             'policy_digest' => self::$policyDigest,
@@ -356,6 +368,7 @@ final class WorkerReadinessState
                     'route' => self::$http3Route,
                 ],
             ],
+            'namespace_authority_clock' => self::$namespaceAuthorityClock,
         ];
     }
 

@@ -5,16 +5,14 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge;
 
 /**
- * Edge protocol termination adapter.
- *
- * Isolates who terminates TLS/HTTP2/HTTP3: Nginx (default) or WLS native stack.
- * Native Protocol/Http2 and Protocol/Http3 code remains in-tree; adapters only gate runtime use.
+ * Nginx public-edge contract. Legacy WLS-native sources remain inert for
+ * compatibility archaeology and cannot be selected by runtime orchestration.
  */
 interface EdgeAdapterInterface
 {
     public const NAME_NGINX = 'nginx';
 
-    public const NAME_WLS = 'wls';
+    public const NAME_WLS = 'wls'; // Retired compatibility identifier; never selectable.
 
     public function name(): string;
 

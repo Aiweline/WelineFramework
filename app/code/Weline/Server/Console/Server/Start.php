@@ -46,13 +46,11 @@ use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper;
 use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
-use Weline\Server\Service\Runtime\ProtocolEdgeDependencyBootstrapper;
 use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
 use Weline\Server\Service\Runtime\TlsProcessProfileConfigurator;
 use Weline\Server\Service\Runtime\WlsRuntimeProfile;
-use Weline\Server\Protocol\Http3\NativeTransportLibrary;
 
 /**
  * server:start - 启动常驻内存服务器
@@ -89,8 +87,15 @@ class Start extends CommandAbstract
      * 因此“operation 已退出队列 + 状态相符”才允许启动命令报告成功。
      */
     private const MAINTENANCE_SYNC_TIMEOUT_SEC = 12.0;
+    private const WINDOWS_MAINTENANCE_SYNC_TIMEOUT_SEC = 30.0;
 
     private const MAINTENANCE_SYNC_POLL_INTERVAL_USEC = 50_000;
+    private const RESTART_CLEANUP_TIMEOUT_SECONDS = 12.0;
+
+    private const WINDOWS_RESTART_CLEANUP_TIMEOUT_SECONDS = 30.0;
+
+    private const FAST_RESTART_CLEANUP_TIMEOUT_SECONDS = 6.0;
+
 
     private const PUBLIC_IPV4_PROBE_URLS = [
         'https://checkip.amazonaws.com',
@@ -217,15 +222,13 @@ class Start extends CommandAbstract
         if (\array_key_exists('independent', $args)
             || $this->hasCliArgvToken(['--independent', '-independent'])) {
             $this->printer->error(__(
-                'WLS 已不再支持 independent 拓扑；Linux/macOS 请使用 --direct，所有平台均可使用 --dispatcher。'
+                'WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。'
             ));
             return 1;
         }
 
-        // Explicit platform exclusions are pure CLI validation and must run
+        // Mutually exclusive topology flags are pure CLI validation and must run
         // before getServerConfig(), which may touch certificate/database state.
-        // A rejected Windows Direct request must never fail for an unrelated
-        // database lock or perform any startup side effect first.
         $directRequested = \array_key_exists('direct', $args)
             || $this->hasCliArgvToken(['--direct', '-direct']);
         $dispatcherRequested = \array_key_exists('dispatcher', $args)
@@ -234,11 +237,6 @@ class Start extends CommandAbstract
             $this->printer->error(__('Conflicting WLS topology CLI options: --direct and --dispatcher.'));
             return 1;
         }
-        if ($directRequested && \PHP_OS_FAMILY === 'Windows') {
-            $this->printer->error(__('Windows supports only WLS Dispatcher topology; --direct is not supported.'));
-            return 1;
-        }
-
         // 欢迎语
         $this->printWelcome();
 
@@ -253,8 +251,8 @@ class Start extends CommandAbstract
             }
         }
         if ($useCli) {
-            $this->startCliServer($args, $data);
-            return;
+            $this->printer->error(__('Nginx-only 模式禁止 PHP 内置 CLI 服务器；请使用项目托管 Nginx。'));
+            return 1;
         }
 
         // Platform topology exclusions must fail before capability fallback;
@@ -280,14 +278,12 @@ class Start extends CommandAbstract
         // 检测可用函数
         $this->detectAvailableFunctions();
         
-        // Weline Server 不可用时自动回退到 CLI 服务器
+        // Nginx-only 不允许回退到另一个公网服务器。
         $cliService = ObjectManager::getInstance(CliServerService::class);
         if (!$cliService->isWelineServerAvailable()) {
             $this->printer->warning(__('Weline Server 不可用：%{1}', [$cliService->getUnavailableReason()]));
-            $this->printer->note(__('自动回退到 PHP 内置 CLI 服务器...'));
-            $this->printer->note(__(''));
-            $this->startCliServer($args, $data);
-            return;
+            $this->printer->error(__('Nginx-only 模式不执行 PHP CLI 回退；请修复 WLS 运行时依赖。'));
+            return 1;
         }
         
         // 解析实例名称
@@ -412,7 +408,8 @@ class Start extends CommandAbstract
                 $args,
                 $dependencyTopologyIntent['requested'],
                 $dependencyTopologyIntent['effective'],
-                empty($config['no_ssl']) && ($config['https'] ?? true) !== false,
+                false,
+                \strtolower(\trim((string)($config['runtime']['listener_mode'] ?? 'auto'))) === 'reuseport',
             );
             $dependencyStatus = (string)($dependencyResult['status'] ?? 'failed');
             $dependencyMessage = (string)($dependencyResult['message'] ?? '');
@@ -423,7 +420,7 @@ class Start extends CommandAbstract
                     $this->printer->note((string)$dependencyResult['output']);
                 }
                 if ($dependencyTopologyIntent['effective']->isDirect()) {
-                    $this->printer->note(__('Direct 不会静默降级；请预装当前 PHP 的 sockets/OpenSSL/ext-event，显式使用 --install-deps，或改用 --dispatcher。可选 HTTP/3 要求当前 PHP 已预装并启用 FFI；server:http3:build 只准备原生组件，不安装或注入 FFI。'));
+                    $this->printer->note(__('Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议仅由 Nginx 提供。'));
                 }
                 return;
             }
@@ -477,29 +474,20 @@ class Start extends CommandAbstract
         $publicHost = (string)($config['public_host'] ?? $host);
         $config['public_host'] = $publicHost;
         $daemon = $this->resolveDaemonMode($config, $foregroundMode);
+        if (!$daemon) {
+            $this->printer->error(__('Nginx-only 启动必须使用后台 Master，才能在 Worker READY 后完成 Nginx 配置事务与真实协议门禁；请移除 --foreground/--no-daemon。'));
+            return 1;
+        }
         
-        // --no-ssl 时仅 HTTP（端口保持 80）；否则默认启用 HTTPS
+        // Nginx-only 公网入口必须启用 TLS；WLS 后端随后固定为明文 H1。
         $noSsl = !empty($config['no_ssl']);
+        if ($noSsl) {
+            $this->printer->error(__('Nginx-only 公网端点强制 TLS 1.3；--no-ssl 与 wls.https=false 已停用。'));
+            return 1;
+        }
         $portExplicit = isset($args['port']) || isset($args['p']);
         
-        if ($noSsl) {
-            $sslEnabled = false;
-            $sslCert = '';
-            $sslKey = '';
-            $sslResult = ['success' => true, 'is_new' => false, 'issuer' => '', 'expires_at' => ''];
-            if ($port === self::DEFAULT_PORT) {
-                $port = self::DEFAULT_PORT;  // 保持 80
-                $config['port'] = $port;
-            }
-            $this->printer->note(__('以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。', [$port]));
-        } else {
-            // Windows 下未安装 event 时允许强制运行 SSL；提示延后到「服务器已在后台运行」之后输出（后台模式）或此处输出（前台模式）
-            $isMasterOnly = isset($args['master-only']) || getenv('WLS_MASTER_ONLY');
-            if (IS_WIN && !\extension_loaded('event') && !$isMasterOnly && !$daemon) {
-                $this->printWindowsEventHttpsWarning();
-            }
-
-            $this->traceStartupPhase($instanceName, 'ssl-ensure:before');
+        $this->traceStartupPhase($instanceName, 'ssl-ensure:before');
             $sslResult = $this->ensureSslCertificate($instanceName, $config);
             $this->traceStartupPhase($instanceName, 'ssl-ensure:after', [
                 'success' => !empty($sslResult['success']),
@@ -529,7 +517,9 @@ class Start extends CommandAbstract
                 $sslCert = '';
                 $sslKey = '';
             } else {
-                $port = $this->normalizeDefaultPortForSslState($port, $sslEnabled, $portExplicit);
+                $port = !$portExplicit && $port === self::DEFAULT_PORT
+                    ? self::DEFAULT_PORT_FALLBACK
+                    : $port;
                 $config['port'] = $port;
 
                 if ($sslResult['is_new'] ?? false) {
@@ -552,7 +542,6 @@ class Start extends CommandAbstract
                     $this->traceStartupPhase($instanceName, 'ssl-map-sync:deferred-file-mode');
                 }
             }
-        }
 
         // 在停止旧实例前完成拓扑、事件循环与策略能力预检，避免预检失败造成停机。
         $this->traceStartupPhase($instanceName, 'runtime-strategy:before');
@@ -589,60 +578,78 @@ class Start extends CommandAbstract
         $dispatcherEnabled = $runtimeSelection->isDispatcher();
         $supportsReusePort = $runtimeProfile->supportsReusePort();
         $useDirectMode = $runtimeSelection->isDirect();
-        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolveFromWlsSection($config);
-        $explicitProtocolEdge = \in_array(
-            \strtolower(\trim((string)(($config['http']['protocol_edge'] ?? '')))),
-            ['native', 'wls', 'caddy', 'on', 'enabled', 'true', '1'],
-            true,
-        );
-        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS && !$explicitProtocolEdge) {
-            if (!\is_array($config['http'] ?? null)) {
-                $config['http'] = [];
-            }
-            $config['http']['protocol_edge'] = HttpProtocolSelection::EDGE_DISABLED;
-        }
+        $usesWorkerPorts = $useDirectMode && $runtimeSelection->listenerMode === 'worker_ports';
         try {
-            $httpProtocolSelection = HttpProtocolSelection::fromConfig($config, $sslEnabled);
-        } catch (\RuntimeException $exception) {
+            $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolveFromWlsSection($config);
+        } catch (\InvalidArgumentException) {
+            $this->printer->error(__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'));
+            return 1;
+        }
+        $config['edge'] = \array_merge(
+            \is_array($config['edge'] ?? null) ? $config['edge'] : [],
+            ['adapter' => $edgeAdapter->name()],
+        );
+        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+            $this->printer->error(__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'));
+            return 1;
+        }
+        if (!$sslEnabled) {
+            $this->printer->error(__('Nginx-only 公网端点要求 TLS 1.3；已拒绝 --no-ssl。'));
+            return 1;
+        }
+        $backendSslEnabled = false;
+        $backendListenHost = '127.0.0.1';
+        $config['edge_adapter'] = $edgeAdapter->name();
+        // Validate the raw backend policy before canonicalizing it. Retired
+        // native/Caddy/TLS/H2/H3 options must fail closed instead of appearing
+        // to work after a silent overwrite.
+        try {
+            $httpProtocolSelection = HttpProtocolSelection::fromConfig($config, $backendSslEnabled);
+        } catch (\Throwable $exception) {
             $this->printer->error(__('WLS HTTP 协议配置无效：%{1}', [$exception->getMessage()]));
             return 1;
         }
-        $protocolEdgeBinary = '';
-        if ($httpProtocolSelection->isProtocolEdgeEnabled()
-            && ($edgeAdapter->name() === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS || $explicitProtocolEdge)
+        $configuredHttp = \is_array($config['http'] ?? null) ? $config['http'] : [];
+        $configuredProtocolEdgeBinary = \trim((string)(
+            $configuredHttp['protocol_edge_binary']
+            ?? $config['protocol_edge_binary']
+            ?? ''
+        ));
+        if ($configuredProtocolEdgeBinary !== ''
+            || $this->isTruthyCliFlagValue($configuredHttp['protocol_edge_enabled'] ?? false)
+            || $this->isTruthyCliFlagValue($config['protocol_edge_enabled'] ?? false)
         ) {
-            $protocolEdgeDependency = (new ProtocolEdgeDependencyBootstrapper())->ensureAvailable(
-                $args,
-                $config,
-                $httpProtocolSelection,
-            );
-            if ((string)($protocolEdgeDependency['status'] ?? 'failed') === 'failed') {
-                $this->printer->error(__('WLS HTTP/3、HTTP/2 协商依赖预检失败：%{1}', [
-                    (string)($protocolEdgeDependency['message'] ?? ''),
-                ]));
-                if (!empty($protocolEdgeDependency['output'])) {
-                    $this->printer->note((string)$protocolEdgeDependency['output']);
-                }
-                return 1;
-            }
-            $protocolEdgeBinary = (string)($protocolEdgeDependency['binary'] ?? '');
-            $this->printer->note((string)($protocolEdgeDependency['message'] ?? ''));
+            $this->printer->error(__('Nginx 回源禁止启用 WLS native/Caddy 协议边缘。'));
+            return 1;
+        }
+        $configuredHttp3 = $config['http3'] ?? [];
+        $configuredHttp3Enabled = \is_array($configuredHttp3)
+            ? ($configuredHttp3['enabled'] ?? false)
+            : $configuredHttp3;
+        $configuredHttp3RuntimeVerified = \is_array($configuredHttp3)
+            ? ($configuredHttp3['runtime_verified'] ?? false)
+            : false;
+        if ($this->isTruthyCliFlagValue($configuredHttp3Enabled)
+            || $this->isTruthyCliFlagValue($configuredHttp3RuntimeVerified)
+        ) {
+            $this->printer->error(__('WLS 原生 HTTP/3 构建已退役；公网协议只由 Nginx 提供。'));
+            return 1;
+        }
+        $protocolEdgeBinary = '';
+        if ($httpProtocolSelection->isProtocolEdgeEnabled()) {
+            $this->printer->error(__('Nginx 回源禁止启用 WLS native/Caddy 协议边缘。'));
+            return 1;
         }
         $config['http'] = \array_merge(
             \is_array($config['http'] ?? null) ? $config['http'] : [],
             $httpProtocolSelection->toConfig(),
             ['protocol_edge_binary' => $protocolEdgeBinary],
         );
-        $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled()
-            && ($edgeAdapter->name() === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS || $explicitProtocolEdge);
+        $protocolEdgeEnabled = false;
         $runtimeStrategy['http_protocol_selection'] = $httpProtocolSelection->toArray();
-        $runtimeStrategy['protocol_edge_enabled'] = $protocolEdgeEnabled;
-        $runtimeStrategy['protocol_edge_binary'] = $protocolEdgeBinary;
-        $this->printer->note(__('HTTP 自动协商：%{1}（优先 %{2}，TLS 会话复用：%{3}）', [
-            \implode(' -> ', $httpProtocolSelection->protocols),
-            $httpProtocolSelection->preferred,
-            $httpProtocolSelection->tlsSessionResumption ? __('开启') : __('关闭'),
-        ]));
+        $runtimeStrategy['protocol_edge_enabled'] = false;
+        $runtimeStrategy['protocol_edge_binary'] = '';
+        $this->printer->note(__('WLS 回源协议：HTTP/1.1（公网协议协商由 Nginx 负责）'));
         foreach ((new RuntimeDiagnosticsFormatter())->formatStartupSummary($runtimeProfile, $runtimeStrategy) as $runtimeLine) {
             if (\str_starts_with($runtimeLine, 'WARNING:') || \str_starts_with($runtimeLine, 'Warning:')) {
                 $this->printer->warning($runtimeLine);
@@ -651,7 +658,7 @@ class Start extends CommandAbstract
             }
         }
         try {
-            $tlsProcessProfile = (new TlsProcessProfileConfigurator())->activate($config, $sslEnabled);
+            $tlsProcessProfile = (new TlsProcessProfileConfigurator())->activate($config, $backendSslEnabled);
         } catch (\RuntimeException $exception) {
             $this->printer->error($exception->getMessage());
             return;
@@ -663,7 +670,7 @@ class Start extends CommandAbstract
         $config['ssl']['effective_key_exchange_profile'] = $tlsProcessProfile['effective'];
         $config['ssl']['process_openssl_conf'] = $tlsProcessProfile['openssl_conf'];
         $runtimeStrategy['tls_key_exchange_profile'] = $tlsProcessProfile['effective'];
-        if ($sslEnabled) {
+        if ($backendSslEnabled) {
             $this->printer->note(
                 'TLS key exchange: ' . $tlsProcessProfile['effective'] . ' - ' . $tlsProcessProfile['reason']
             );
@@ -672,77 +679,63 @@ class Start extends CommandAbstract
         $config['http3'] = [
             'enabled' => false,
             'runtime_verified' => false,
-            'reason' => $sslEnabled ? 'HTTP/3 requires POSIX Direct topology.' : 'HTTP/3 requires TLS.',
+            'reason' => 'WLS native HTTP/3 is disabled; Nginx exclusively owns public protocol negotiation.',
         ];
         $this->printer->note(__('边缘适配器：%{1}', [$edgeAdapter->name()]));
-        if ($edgeAdapter->expectsPlaintextBackend() && $sslEnabled) {
-            $this->printer->warning(__(
-                '当前 wls.edge.adapter=nginx，建议使用 --no-ssl 明文回源，由 Nginx 终结 TLS/HTTP2/HTTP3；继续启用 WLS SSL 时仅协商 HTTP/1.1。'
-            ));
-        }
+        $this->printer->note(__('Nginx 负责公网 TLS/HTTP；WLS 后端固定为回环地址明文 HTTP/1.1。'));
+        $managedNginxService = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
         if (isset($args['install-nginx']) || isset($args['install_nginx'])) {
-            $this->printer->note(__('正在按请求安装本项目托管 Nginx...'));
-            $installResult = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv()->install(false);
-            if (!($installResult['ok'] ?? false)) {
-                $this->printer->error((string)($installResult['message'] ?? __('托管 Nginx 安装失败')));
-                return 1;
-            }
-            $this->printer->success((string)$installResult['message']);
-        }
-        if ($sslEnabled && $runtimeSelection->isDirect() && $edgeAdapter->allowsNativeHttp3()) {
-            if (!\in_array(\PHP_OS_FAMILY, ['Darwin', 'Linux'], true)) {
-                $this->printer->error(__('HTTP/3 Direct 仅支持 macOS/Linux；当前平台必须使用 Dispatcher 的 HTTP/2/HTTP/1.1。'));
-                return;
-            }
-
-            $this->traceStartupPhase($instanceName, 'http3-native:before');
-            $nativeResult = NativeTransportLibrary::selectInstalledVerified();
-            if (!($nativeResult['ready'] ?? false)) {
-                $config['http3']['reason'] = (string)($nativeResult['reason'] ?? 'HTTP/3 component unavailable');
-                $this->printer->warning(__('HTTP/3 可选组件未就绪：%{1}', [
-                    $config['http3']['reason'],
-                ]));
-                $this->printer->note(__('WLS 将继续使用 Direct TLS、HTTP/2，并自动回退 HTTP/1.1；普通启动不会下载或编译 HTTP/3。'));
-            } else {
-                $nativeManifest = \is_array($nativeResult['manifest'] ?? null) ? $nativeResult['manifest'] : [];
-                $nativeDigest = \strtolower(\trim((string)($nativeManifest['library_sha256'] ?? '')));
-                $nativeFingerprint = \strtolower(\trim((string)($nativeManifest['fingerprint'] ?? '')));
-                $nativeReady = NativeTransportLibrary::hasVerifiedRuntimeEvidence($nativeManifest)
-                    && \preg_match('/^[a-f0-9]{64}$/D', $nativeDigest) === 1
-                    && \preg_match('/^[a-f0-9]{32}$/D', $nativeFingerprint) === 1;
-                $routeReadiness = \PHP_OS_FAMILY === 'Linux'
-                    ? NativeTransportLibrary::linuxReusePortRouteReadiness()
-                    : ['ready' => true, 'reason' => 'Darwin uses the Master-owned datagram router.'];
-
-                if (!$nativeReady) {
-                    $config['http3']['reason'] = 'Installed HTTP/3 component lacks current strong runtime evidence.';
-                    $this->printer->warning(__('HTTP/3 已安装组件缺少当前代码和运行时绑定的真实 QUIC/TLS 证据；本次仅启用 HTTP/2/HTTP/1.1。'));
-                } elseif (!($routeReadiness['ready'] ?? false)) {
-                    $config['http3']['reason'] = (string)($routeReadiness['reason'] ?? 'HTTP/3 route unavailable');
-                    $this->printer->warning(__('HTTP/3 路由能力未就绪：%{1}', [$config['http3']['reason']]));
-                    $this->printer->note(__('Direct TCP 仍保持启用；HTTP/2 与 HTTP/1.1 不受影响。'));
-                } else {
-                    $config['http3'] = [
-                        'enabled' => true,
-                        'runtime_verified' => true,
-                        'native_digest' => $nativeDigest,
-                        'fingerprint' => $nativeFingerprint,
-                        'reason' => (string)($nativeManifest['runtime_reason'] ?? 'real QUIC self-test passed'),
-                    ];
-                    $this->printer->success(__('HTTP/3 已复用预安装且验证通过的组件；将与 HTTP/2、HTTP/1.1 自动协商。'));
-                }
-            }
-            $this->traceStartupPhase($instanceName, 'http3-native:after', [
-                'enabled' => (bool)$config['http3']['enabled'],
-                'runtime_verified' => (bool)$config['http3']['runtime_verified'],
-                'fingerprint' => (string)($config['http3']['fingerprint'] ?? ''),
-            ]);
-        } elseif ($sslEnabled && $runtimeSelection->isDirect() && !$edgeAdapter->allowsNativeHttp3()) {
-            $config['http3']['reason'] = 'Native HTTP/3 retained but inactive (wls.edge.adapter=' . $edgeAdapter->name() . ').';
-            $this->printer->note(__(
-                '边缘适配器为 %{1}：WLS 原生 HTTP/3 保留但不启用；请由 Nginx 终结 HTTP/3，或设置 wls.edge.adapter=wls。',
-                [$edgeAdapter->name()]
+            $this->printer->error(__(
+                '--install-nginx 已退役；启动路径禁止下载或编译，请先单独执行 php bin/w server:nginx:install。'
             ));
+            return 1;
+        }
+        $managedNginxPaths = $managedNginxService->paths();
+        if (isset($args['no-nginx']) || isset($args['no_nginx'])) {
+            $this->printer->error(__(
+                'Nginx 是唯一公网边缘；--no-nginx 不能产生可交付的 WLS 启动。'
+            ));
+            return 1;
+        }
+        if (!$managedNginxPaths->managedEnabled()) {
+            $this->printer->error(__('Nginx-only 默认启动要求 wls.edge.nginx.managed=true。'));
+            return 1;
+        }
+        if (!$managedNginxPaths->autoStartEnabled()) {
+            $this->printer->error(__('Nginx-only 默认启动要求 wls.edge.nginx.auto_start=true。'));
+            return 1;
+        }
+        if (!$managedNginxPaths->isInstalled()) {
+            $this->printer->error(__(
+                '项目隔离 Nginx 尚未安装；普通 server:start 不下载、不编译，请先显式执行 php bin/w server:nginx:install。'
+            ));
+            return 1;
+        }
+        try {
+            $managedNginxPorts = (new \Weline\Server\Service\Edge\Nginx\ManagedNginxPortAllocator(
+                $managedNginxPaths,
+            ))->allocate();
+            $publicOrigin = \Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin::fromHostAndPort(
+                $publicHost,
+                (int)$managedNginxPorts['https'],
+            );
+        } catch (\Throwable $exception) {
+            $this->printer->error(__('Nginx 公网 origin 固化失败：%{1}', [$exception->getMessage()]));
+            return 1;
+        }
+        $config['public_origin'] = $publicOrigin;
+        $managedNginxStatus = $managedNginxService->doctorSnapshot();
+        $managedOwner = \trim((string)($managedNginxStatus['owner_instance'] ?? ''));
+        if ((bool)($managedNginxStatus['running'] ?? false) && $managedOwner === '') {
+            $this->printer->error(__('托管 Nginx 正在运行但缺少可验证 owner；请先执行身份审查与显式停止。'));
+            return 1;
+        }
+        if ($managedOwner !== '' && !\hash_equals($managedOwner, $instanceName)) {
+            $this->printer->error(__(
+                '托管 Nginx 已绑定实例 %{1}；请先停止该 owner，再启动实例 %{2}。',
+                [$managedOwner, $instanceName],
+            ));
+            return 1;
         }
         $this->traceStartupPhase($instanceName, 'runtime-strategy:after', [
             'topology' => $runtimeSelection->effectiveTopology->value,
@@ -923,7 +916,7 @@ class Start extends CommandAbstract
                 $this->traceStartupPhase($instanceName, 'force-switch-stop:before');
                 if (!$this->stopExistingServer($instanceName, $port, $count, true, 0, true)) {
                     $this->rollbackRestartMaintenanceTransactionIfPending();
-                    return;
+                    return 1;
                 }
                 $restartCleanupPerformed = true;
                 $this->traceStartupPhase($instanceName, 'force-switch-stop:after', [
@@ -950,7 +943,7 @@ class Start extends CommandAbstract
                 
                 if (!$this->stopExistingServer($instanceName, $port, $count)) {
                     $this->disableMaintenanceMode($instanceName);
-                    return;
+                    return 1;
                 }
                 $restartCleanupPerformed = true;
             }
@@ -1003,18 +996,10 @@ class Start extends CommandAbstract
         $this->printSharedStateRuntimeSummary($instanceName, $sharedStateRuntime);
 
         // Worker 端口计算移至端口冲突检测之后，避免重复计算
-        // Dispatcher 只做 TCP 透传和流量控制，不做 SSL 握手
-        // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
-        $workerSslEnabled = $sslEnabled && !$protocolEdgeEnabled;
+        // Public TLS and HTTP redirects terminate at Nginx.
         
-        // ========== HTTP Redirect：固定规则：仅 HTTPS=443 时启用 80；非 443 不启独立 Worker ==========
+        // WLS owns only the private plaintext backend.
         $httpRedirectPort = 0;
-        if ($sslEnabled) {
-            $httpRedirectPort = ($port === 443) ? 80 : 0;
-            if ($httpRedirectPort === 0) {
-                $this->printer->note(__('HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS'));
-            }
-        }
         
         // 主端口（Dispatcher 端口）被非框架进程占用时：
         // - 用户未指定 -p 且端口为 80/443（通用 web 端口，可能被宝塔/nginx 占用）→ 自动降级到 9981
@@ -1079,13 +1064,15 @@ class Start extends CommandAbstract
 
         $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts(
             $port,
-            $dispatcherEnabled || $protocolEdgeEnabled,
+            $dispatcherEnabled || $protocolEdgeEnabled || $usesWorkerPorts,
         );
         if ($protocolEdgeEnabled) {
             $reservedWorkerPorts[] = ProtocolEdgeRuntime::adminPortForInstance($instanceName, $port);
             $reservedWorkerPorts = \array_values(\array_unique($reservedWorkerPorts));
         }
-        $requiresWorkerPortAllocationLock = $protocolEdgeEnabled || (!$useDirectMode && $count > 1);
+        $requiresWorkerPortAllocationLock = $protocolEdgeEnabled
+            || $usesWorkerPorts
+            || (!$useDirectMode && $count > 1);
         $workerPortAllocationLocked = false;
         if ($requiresWorkerPortAllocationLock) {
             $this->traceStartupPhase($instanceName, 'worker-port-lock:before', [
@@ -1113,6 +1100,7 @@ class Start extends CommandAbstract
                 $count,
                 $dispatcherEnabled || $protocolEdgeEnabled,
                 $useDirectMode && !$protocolEdgeEnabled,
+                $usesWorkerPorts,
             );
 
             if ($forceRestart && !$forceSwitch && !$skipPostStopPortInspection && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort, $forceSwitch)) {
@@ -1126,7 +1114,9 @@ class Start extends CommandAbstract
         // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
         // - WLS 进程占用的端口：释放后分配给新进程
         // - 非 WLS 进程占用的端口：跳过，使用下一个可用端口
-        if (!$restartCleanupPerformed && ($dispatcherEnabled || (!$useDirectMode && $count > 1))) {
+        if (!$restartCleanupPerformed
+            && ($dispatcherEnabled || $usesWorkerPorts || (!$useDirectMode && $count > 1))
+        ) {
             $nextWorkerPort = $this->findAvailableWorkerPortBase(
                 $workerPort,
                 $count,
@@ -1241,13 +1231,13 @@ class Start extends CommandAbstract
 
         // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
         $this->traceStartupPhase($instanceName, 'permission-check:before');
-        if (!$this->ensurePrivilegedPortPermission($port, $httpRedirectPort, $sslEnabled)) {
+        if (!$this->ensurePrivilegedPortPermission($port, $httpRedirectPort, $backendSslEnabled)) {
             $this->rollbackRestartMaintenanceTransactionIfPending();
             return;
         }
         
         // Linux/macOS 下检测 socket 权限（即使高端口也可能因系统安全设置需要 sudo）
-        if (!$this->ensureUnixSocketPermission($host, $port)) {
+        if (!$this->ensureUnixSocketPermission($backendListenHost, $port)) {
             $this->rollbackRestartMaintenanceTransactionIfPending();
             return;
         }
@@ -1255,10 +1245,17 @@ class Start extends CommandAbstract
         
         // 80/443 端口自我处理提示（特权端口、单端口建议）
         if ($useDirectMode && $count > 1) {
-            $listenerLabel = $runtimeSelection->listenerMode === 'shared_fd'
-                ? __('Master 共享监听 FD')
-                : 'SO_REUSEPORT';
-            $this->printer->note(__('提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。', [$listenerLabel, $port]));
+            if ($usesWorkerPorts) {
+                $this->printer->note(__('提示：当前为 Nginx 直连模式，Worker 独立监听回环端口 %{1}-%{2}。', [
+                    $workerPort,
+                    $workerPort + $count - 1,
+                ]));
+            } else {
+                $listenerLabel = $runtimeSelection->listenerMode === 'shared_fd'
+                    ? __('Master 共享监听 FD')
+                    : 'SO_REUSEPORT';
+                $this->printer->note(__('提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。', [$listenerLabel, $port]));
+            }
         }
 
         // 检查端口是否被占用（框架进程占用时最多重试 3 次，仍占用则按 Master 前缀清理逃逸 Master 后再试）
@@ -1310,10 +1307,12 @@ class Start extends CommandAbstract
         } elseif (!$skipPostStopPortInspection) {
             // 直连模式：
             // - SO_REUSEPORT: 多 Worker 复用同一端口，只检查主端口
-            // - 非 SO_REUSEPORT: 仍按连续端口检查
-            $checkResult = $useDirectMode
-                ? $this->checkAndReleasePort($host, $port, $restartCleanupPerformed, 'Worker(Main)', $instanceName)
-                : $this->checkAndReleasePorts($host, $workerPort, $count, $restartCleanupPerformed, $instanceName);
+            // - worker_ports: Nginx 直连连续的 Worker 回环端口段
+            $checkResult = $usesWorkerPorts
+                ? $this->checkAndReleasePorts('127.0.0.1', $workerPort, $count, $restartCleanupPerformed, $instanceName)
+                : ($useDirectMode
+                    ? $this->checkAndReleasePort($host, $port, $restartCleanupPerformed, 'Worker(Main)', $instanceName)
+                    : $this->checkAndReleasePorts($host, $workerPort, $count, $restartCleanupPerformed, $instanceName));
             if (!$checkResult) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
@@ -1421,9 +1420,9 @@ class Start extends CommandAbstract
                 return;
             }
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
-            $workerScript = $this->ensureWorkerScript($workerSslEnabled);
+            $workerScript = $this->ensureWorkerScript();
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($windowMode);
-            $listenHost = $this->resolveServerListenHost((string)$host);
+            $listenHost = $backendListenHost;
             $this->traceStartupPhase($instanceName, 'save-instance:before');
             $this->saveInstanceInfo(
                 $instanceName,
@@ -1431,9 +1430,9 @@ class Start extends CommandAbstract
                 $port,
                 $count,
                 $daemon,
-                $sslEnabled,
-                $sslCert,
-                $sslKey,
+                $backendSslEnabled,
+                '',
+                '',
                 $runtimeSelection,
                 $workerPort,
                 $httpRedirectPort,
@@ -1446,7 +1445,11 @@ class Start extends CommandAbstract
                 (string)($config['dispatcher_memory_limit'] ?? ''),
                 $publicHost,
                 \is_array($config['gateway'] ?? null) ? $config['gateway'] : [],
-                \array_merge($runtimeStrategy, ['http3' => $config['http3']]),
+                \array_merge($runtimeStrategy, [
+                    'http3' => $config['http3'],
+                    'edge_adapter' => $edgeAdapter->name(),
+                    'public_origin' => $publicOrigin,
+                ]),
             );
             $this->traceStartupPhase($instanceName, 'save-instance:after');
         } finally {
@@ -1456,10 +1459,9 @@ class Start extends CommandAbstract
         }
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
-        // 同时将实际的 host/port/https 同步到 env.php，供 http:req 等 CLI 工具读取
+        // 公网 host/port/https 仅在 Nginx 实际就绪后同步，避免发布不可达地址。
         $this->traceStartupPhase($instanceName, 'save-config:before');
         $this->saveInstanceConfig($instanceName, $args, $config);
-        $this->syncServerConfigToEnv($host, $port, $sslEnabled);
         $this->traceStartupPhase($instanceName, 'save-config:after');
         
         // 显示优化建议
@@ -1488,25 +1490,37 @@ class Start extends CommandAbstract
 
         // 将 .local 域名转换为 127.0.0.1 用于实际监听
         // 域名仅用于 SSL 证书，实际监听使用 IP 避免 PHP DNS 解析问题
-        $listenHost = $this->resolveServerListenHost((string)$host);
+        $listenHost = $backendListenHost;
 
         if ($daemon) {
             $this->wlsChildProcessesMayExist = true;
             $this->traceStartupPhase($instanceName, 'master-background:before');
-            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $foregroundMode, $windowMode, $args);
+            $startupCompleted = $this->startMasterInBackground(
+                $instanceName,
+                $backendSslEnabled,
+                $listenHost,
+                $port,
+                $foregroundMode,
+                $windowMode,
+                $args,
+                $maintenanceEnabledByUs,
+                $maintenanceResetAfterForceSwitch,
+            );
             $this->traceStartupPhase($instanceName, 'master-background:after', [
                 'completed' => $startupCompleted,
             ]);
-            $this->wlsStartupProcessHandoffDone = true;
+            $this->wlsStartupProcessHandoffDone = $startupCompleted || !$this->wlsChildProcessesMayExist;
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
             // 关闭由本次启动流程引入的维护态：仅在新 Master 全部就绪后才关，避免空窗。
-            $this->finalizeMaintenanceModeAfterStartup(
-                $instanceName,
-                $maintenanceEnabledByUs,
-                $maintenanceResetAfterForceSwitch,
-                $startupCompleted
-            );
+            if ($this->restartMaintenanceSnapshot !== null) {
+                $this->finalizeMaintenanceModeAfterStartup(
+                    $instanceName,
+                    $maintenanceEnabledByUs,
+                    $maintenanceResetAfterForceSwitch,
+                    $startupCompleted
+                );
+            }
             $this->finalizeBackgroundStartupOutput(
                 $startupCompleted,
                 $instanceName,
@@ -1518,7 +1532,7 @@ class Start extends CommandAbstract
                 $dispatcherEnabled,
                 $workerPort,
                 $httpRedirectPort,
-                $useDirectMode
+                $useDirectMode ? $runtimeSelection->listenerMode : ''
             );
             if ($startupCompleted) {
                 $this->printGoodbye(true, __('所有服务已就绪，可使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
@@ -1552,7 +1566,7 @@ class Start extends CommandAbstract
 
         // Master owns all child-process startup.
         $this->wlsChildProcessesMayExist = true;
-        $this->runMasterProcess($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $windowMode);
+        $this->runMasterProcess($instanceName, $config, $workerScript, '', '', $backendSslEnabled, $httpRedirectPort, $windowMode);
     }
 
     protected function resolveStartupCommandExitCode(bool $startupCompleted): int
@@ -1935,6 +1949,9 @@ class Start extends CommandAbstract
             ) {
                 throw new \RuntimeException('WLS endpoint schema v4 requires container_registry_digest.');
             }
+            $publicOrigin = \Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin::normalize(
+                (string)($data['public_origin'] ?? ''),
+            );
             if (!\is_bool($data['supervisor_enabled'] ?? null)) {
                 throw new \RuntimeException('WLS endpoint schema v4 requires boolean supervisor_enabled.');
             }
@@ -1942,37 +1959,19 @@ class Start extends CommandAbstract
                 throw new \RuntimeException('WLS endpoint schema v4 requires supervisor_reason.');
             }
             $persistedHttp3 = \is_array($data['http3'] ?? null) ? $data['http3'] : [];
-            $sslEnabledFlag = (bool)($data['ssl_enabled'] ?? false);
             $http3Enabled = (bool)($persistedHttp3['enabled'] ?? false);
             if ($http3Enabled) {
-                if (!$sslEnabledFlag || !$persistedRuntimeSelection->isDirect()
-                    || !(bool)($persistedHttp3['runtime_verified'] ?? false)
-                    || \preg_match(
-                        '/^[a-f0-9]{32}$/D',
-                        \strtolower(\trim((string)($persistedHttp3['fingerprint'] ?? '')))
-                    ) !== 1
-                    || \preg_match(
-                        '/^[a-f0-9]{64}$/D',
-                        \strtolower(\trim((string)($persistedHttp3['native_digest'] ?? '')))
-                    ) !== 1
-                ) {
-                    throw new \RuntimeException(
-                        'Enabled HTTP/3 endpoint metadata requires Direct TLS, runtime verification, fingerprint and native digest.'
-                    );
-                }
-                $pinnedManifest = NativeTransportLibrary::pinManifest(
-                    (string)$persistedHttp3['fingerprint'],
-                    (string)$persistedHttp3['native_digest'],
+                throw new \RuntimeException('Nginx-only endpoint must not enable WLS native HTTP/3.');
+            }
+            $persistedGateway = \is_array($data['gateway'] ?? null) ? $data['gateway'] : [];
+            if (\array_key_exists('enabled', $persistedGateway)
+                && $this->isTruthyCliFlagValue($persistedGateway['enabled'])
+            ) {
+                throw new \RuntimeException(
+                    'gateway.enabled=true: ' . (string)__('Nginx 是唯一公网边缘，不能跳过其启动。')
                 );
-                $loadedNative = NativeTransportLibrary::load();
-                if (!($loadedNative['available'] ?? false)
-                    || !NativeTransportLibrary::hasVerifiedRuntimeEvidence($pinnedManifest)
-                ) {
-                    throw new \RuntimeException(
-                        'Enabled HTTP/3 endpoint could not load its pinned, runtime-verified component.'
-                    );
-                }
-            } elseif ((bool)($persistedHttp3['runtime_verified'] ?? false)
+            }
+            if ((bool)($persistedHttp3['runtime_verified'] ?? false)
                 || \trim((string)($persistedHttp3['reason'] ?? '')) === ''
             ) {
                 throw new \RuntimeException(
@@ -2025,38 +2024,51 @@ class Start extends CommandAbstract
             }
         }
 
-        if (IS_WIN && !$persistedRuntimeSelection->isDispatcher()) {
-            throw new \RuntimeException('Windows WLS only supports Dispatcher topology.');
+        if (IS_WIN
+            && $persistedRuntimeSelection->isDirect()
+            && $persistedRuntimeSelection->listenerMode !== 'worker_ports'
+        ) {
+            throw new \RuntimeException('Windows Direct requires worker_ports listener mode.');
         }
 
         $sslEnabled = (bool)($data['ssl_enabled'] ?? false);
         try {
-            $httpProtocolSelection = \is_array($data['http_protocol_selection'] ?? null)
-                ? HttpProtocolSelection::fromArray($data['http_protocol_selection'])
-                : HttpProtocolSelection::fromConfig([
-                    'http' => [
-                        'protocols' => [HttpProtocolSelection::HTTP_1],
-                        'preferred' => HttpProtocolSelection::HTTP_1,
-                        'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
-                    ],
-                ], $sslEnabled);
-        } catch (\RuntimeException $exception) {
+            $selectionData = $data['http_protocol_selection'] ?? null;
+            if (!\is_array($selectionData) || $selectionData === []) {
+                throw new \RuntimeException('persisted http_protocol_selection is missing');
+            }
+            $httpProtocolSelection = HttpProtocolSelection::fromArray($selectionData);
+        } catch (\Throwable $exception) {
             throw new \RuntimeException(
                 'Master-only startup rejected invalid HTTP protocol selection: ' . $exception->getMessage(),
                 0,
                 $exception
             );
         }
-        $protocolEdgeEnabled = $httpProtocolSelection->isProtocolEdgeEnabled();
-        $protocolEdgeBinary = \trim((string)($data['protocol_edge_binary'] ?? ''));
-        if ($protocolEdgeEnabled
-            && !ProtocolEdgeRuntime::isRunnableBinary($protocolEdgeBinary)
+        $edgeAdapterName = \strtolower(\trim((string)($data['edge_adapter'] ?? '')));
+        if ($edgeAdapterName !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+            throw new \RuntimeException('Master-only startup rejected invalid edge_adapter.');
+        }
+        $httpProtocolSelection->assertCompatibleEdgeAdapter($edgeAdapterName);
+        if ($sslEnabled) {
+            throw new \RuntimeException('Master-only startup rejected TLS on the private Nginx backend.');
+        }
+        $protocolEdgeEnabled = false;
+        if ((bool)($persistedHttp3['enabled'] ?? false)) {
+            throw new \RuntimeException('Master-only startup rejected WLS native HTTP/3 activation.');
+        }
+        if (!\is_bool($data['protocol_edge_enabled'] ?? null)
+            || (bool)$data['protocol_edge_enabled'] !== $protocolEdgeEnabled
         ) {
+            throw new \RuntimeException('Master-only startup rejected inconsistent protocol edge ownership.');
+        }
+        $protocolEdgeBinary = \trim((string)($data['protocol_edge_binary'] ?? ''));
+        if ($protocolEdgeBinary !== '') {
             throw new \RuntimeException(
                 'Master-only startup rejected: protocol edge binary is not runnable.'
             );
         }
-        $workerScript = $this->ensureWorkerScript($sslEnabled && !$protocolEdgeEnabled);
+        $workerScript = $this->ensureWorkerScript();
         $port = (int)($data['port'] ?? 443);
         $workerPort = (int)($data['worker_port'] ?? $port);
         $workerBasePort = (int)($data['worker_base_port'] ?? (10000 + MasterProcess::getProjectPortOffset()));
@@ -2068,12 +2080,15 @@ class Start extends CommandAbstract
         $config = [
             'host' => (string)($data['host'] ?? '127.0.0.1'),
             'public_host' => (string)($data['public_host'] ?? ($data['host'] ?? '127.0.0.1')),
+            'public_origin' => $publicOrigin,
             'port' => $port,
             'worker_count' => $workerCount,
             'runtime_strategy' => 'auto',
             'runtime_selection' => $persistedRuntimeSelection,
+            'edge' => ['adapter' => $edgeAdapterName],
             'runtime' => [
                 'topology' => $persistedRuntimeSelection->requestedTopology->value,
+                'listener_mode' => $persistedRuntimeSelection->listenerMode,
                 'container_registry_digest' => $expectedContainerDigest,
             ],
             'loop' => ['driver' => $persistedRuntimeSelection->eventLoopDriver],
@@ -2188,7 +2203,9 @@ class Start extends CommandAbstract
         int $port = 443,
         bool $foregroundMode = false,
         bool $windowMode = false,
-        array $args = []
+        array $args = [],
+        bool $maintenanceEnabledByUs = false,
+        bool $maintenanceResetAfterForceSwitch = false,
     ): bool {
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
@@ -2202,21 +2219,26 @@ class Start extends CommandAbstract
             $windowMode
         );
         $processIdentity = '--name=' . $masterName;
+        $spawnTransport = IS_WIN
+            ? 'windows_wmi_isolated_argv'
+            : 'detached_php_argv';
 
         $this->traceStartupPhase($instanceName, 'master-spawn:before', [
             'windows' => IS_WIN,
             'foreground' => $foregroundMode,
             'window_mode' => $windowMode,
-            'transport' => 'detached_php_argv',
+            'transport' => $spawnTransport,
         ]);
 
         try {
-            $spawnedMasterPid = Processer::createDetachedPhpArgv(
-                $argv,
-                BP,
-                $processIdentity,
-                null
-            );
+            $spawnedMasterPid = IS_WIN
+                ? Processer::createWindowsIsolatedArgv($argv, BP, $masterName)
+                : Processer::createDetachedPhpArgv(
+                    $argv,
+                    BP,
+                    $processIdentity,
+                    null
+                );
         } catch (\Throwable $exception) {
             $this->recordMasterOnlyStartupFailure($instanceName, $exception);
             $this->traceStartupPhase($instanceName, 'master-spawn:failed', [
@@ -2232,7 +2254,7 @@ class Start extends CommandAbstract
 
         $this->traceStartupPhase($instanceName, 'master-spawn:after', [
             'spawned_pid' => $spawnedMasterPid,
-            'transport' => 'detached_php_argv',
+            'transport' => $spawnTransport,
         ]);
 
         $instanceFile = $this->getRuntimeInstanceFile($instanceName);
@@ -2378,15 +2400,42 @@ class Start extends CommandAbstract
             }
 
             if ($startupCompleted) {
-                $this->printer->success(__(
-                    '服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）',
-                    [$lastMasterPid, $lastControlPort]
-                ));
-                $this->printer->success(__('所有服务已就绪，启动完成。'));
-                $this->maybeStartManagedNginxAfterReady((int)$port, is_array($args) ? $args : []);
-                $this->printer->note(__(
-                    '使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'
-                ));
+                // During a full restart Nginx is already stopped, so restoring
+                // the pre-restart maintenance state here cannot expose WLS
+                // publicly. It must happen before the Nginx health/protocol
+                // transaction, otherwise Dispatcher still routes the probes to
+                // the temporary maintenance Worker instead of the READY
+                // business generation.
+                $this->finalizeMaintenanceModeAfterStartup(
+                    $instanceName,
+                    $maintenanceEnabledByUs,
+                    $maintenanceResetAfterForceSwitch,
+                    true,
+                );
+                $managedNginxReady = $this->maybeStartManagedNginxAfterReady(
+                    (int)$port,
+                    is_array($args) ? $args : [],
+                    $instanceName,
+                );
+                if (!$managedNginxReady) {
+                    // Nginx is the only supported public edge. A READY loopback
+                    // Worker fleet without the public protocol gate is not a
+                    // successful server:start transaction and is reclaimed by
+                    // the existing failed-start shutdown guard.
+                    $this->printer->warning(__(
+                        'WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；Nginx-only 启动失败，将回收本次实例。'
+                    ));
+                    $startupCompleted = false;
+                } else {
+                    $this->printer->success(__(
+                        '服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）',
+                        [$lastMasterPid, $lastControlPort]
+                    ));
+                    $this->printer->success(__('WLS 与托管 Nginx 均已就绪，启动完成。'));
+                    $this->printer->note(__(
+                        '使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'
+                    ));
+                }
             } else {
                 $readyData = \is_array($readyResult['data'] ?? null)
                     ? $readyResult['data']
@@ -2448,12 +2497,6 @@ class Start extends CommandAbstract
             @\flush();
         }
 
-        if (IS_WIN && $sslEnabled) {
-            if (!\extension_loaded('event')) {
-                $this->printWindowsEventHttpsWarning();
-            }
-            $this->showWindowsNativeHttpsHint($host, $port);
-        }
 
         return $startupCompleted;
     }
@@ -2530,9 +2573,14 @@ class Start extends CommandAbstract
             return (int) \round(\max(0.5, \min(120.0, $configuredSec)) * 1000);
         }
         $softMs = $this->resolveBackgroundMasterConfirmWaitMs($spawnedMasterPid);
-        // 硬上限默认为控制面上报窗口的 4 倍、最多 60 秒；
-        // 显式 soft 大于 60 秒时 hard 仍不得倒挂。
-        return (int) \max($softMs, \min(60000, $softMs * 4));
+        // Keep POSIX at its existing bounded default. A Windows Master launched
+        // from a Parallels UNC share can legitimately spend more than 60 seconds
+        // in the cold PHP/bootstrap path before publishing its control endpoint;
+        // x64 PHP emulation on ARM64 is the observed worst case. The spawned PID
+        // remains known and polled throughout this window, so extend only the
+        // Windows default while retaining the configured 120-second hard ceiling.
+        $defaultHardCapMs = IS_WIN ? 120000 : 60000;
+        return (int) \max($softMs, \min($defaultHardCapMs, $softMs * 4));
     }
 
     protected function resolveBackgroundStartupReadyWaitMs(array $instanceData = []): int
@@ -3133,38 +3181,6 @@ class Start extends CommandAbstract
     }
     
     /**
-     * 输出 Windows 下未安装 event 时的 HTTPS 提示（SSL 握手阻塞约 60s，建议安装 event）
-     * 与 Windows 原生 HTTPS 提示保持一致的框式格式化输出。
-     */
-    protected function printWindowsEventHttpsWarning(): void
-    {
-        $extDir = \ini_get('extension_dir');
-        $extDirAbs = $extDir;
-        if ($extDir) {
-            if (\preg_match('#^[a-zA-Z]:[\\\\/]|^/#', $extDir)) {
-                $extDirAbs = \is_dir($extDir) ? \realpath($extDir) : $extDir;
-            } else {
-                $phpDir = \defined('PHP_BINARY') && PHP_BINARY ? \dirname(PHP_BINARY) : '';
-                $candidate = $phpDir ? $phpDir . \DIRECTORY_SEPARATOR . \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $extDir) : $extDir;
-                $extDirAbs = \is_dir($candidate) ? \realpath($candidate) : $candidate;
-            }
-        }
-        $extPath = $extDirAbs ?: $extDir ?: __('(未知)');
-        $iniFile = \php_ini_loaded_file() ?: __('(未找到，请 php --ini 查看)');
-        echo "\n";
-        $this->printer->warning(__('╔══════════════════════════════════════════════════════════════════════════════╗'));
-        $this->printer->warning(__('║  【Windows Worker】当前未安装可信且 ABI 匹配的 PHP event 扩展。             ║'));
-        $this->printer->warning(__('║  Worker 将使用稳定的 stream/select 事件循环；不会关闭任何安全策略。         ║'));
-        $this->printer->warning(__('║  当前默认协议为 HTTP/1.1；TLS 1.2/1.3 由 Worker 的 OpenSSL 实现。          ║'));
-        $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
-        $this->printer->warning(__('║  WLS 只会自动安装 PHP版本、架构、TS/NTS 与依赖均可验证的 event DLL。       ║'));
-        $this->printer->warning(__('║  不会为了显示“已安装”而加载来源不明或 ABI 不匹配的 DLL。                    ║'));
-        $this->printer->warning(__('║  ext 目录：%{1}                                                                ║', [$extPath]));
-        $this->printer->warning(__('║  php.ini：%{1}                                                                 ║', [$iniFile]));
-        $this->printer->warning(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
-    }
-    
-    /**
      * 运行 Master 进程（监控并自动重启 Worker；HTTPS 启用时可自动启动 HTTP 重定向进程）
      */
     protected function runMasterProcess(string $instanceName, array $config, string $workerScript, string $sslCert = '', string $sslKey = '', bool $sslEnabled = false, int $httpRedirectPort = 0, bool $windowMode = false): void
@@ -3642,7 +3658,10 @@ class Start extends CommandAbstract
                 $pending[$targetInstance] = $operationId !== '' ? $operationId : null;
             }
 
-            $deadlineNs = $startedAtNs + (int)(self::MAINTENANCE_SYNC_TIMEOUT_SEC * 1_000_000_000);
+            $maintenanceSyncTimeoutSec = \PHP_OS_FAMILY === 'Windows'
+                ? self::WINDOWS_MAINTENANCE_SYNC_TIMEOUT_SEC
+                : self::MAINTENANCE_SYNC_TIMEOUT_SEC;
+            $deadlineNs = $startedAtNs + (int)($maintenanceSyncTimeoutSec * 1_000_000_000);
             $lastObserved = [];
 
             while ($pending !== [] && \hrtime(true) < $deadlineNs) {
@@ -3715,7 +3734,7 @@ class Start extends CommandAbstract
                 }
                 throw new \RuntimeException(
                     'maintenance control did not reach the requested terminal state within '
-                    . self::MAINTENANCE_SYNC_TIMEOUT_SEC . 's (' . \implode('; ', $details) . ')'
+                    . $maintenanceSyncTimeoutSec . 's (' . \implode('; ', $details) . ')'
                 );
             }
 
@@ -3730,25 +3749,6 @@ class Start extends CommandAbstract
             }
             $this->printer->warning($message);
         }
-    }
-    
-    /**
-     * 启动 PHP 内置 CLI 服务器（委托给 Framework）
-     */
-    protected function startCliServer(array $args, array $data): void
-    {
-        $this->printer->note(__(''));
-        $this->printer->note(__('╔════════════════════════════════════════════════════╗'));
-        $this->printer->note(__('║        PHP 内置 CLI 服务器                         ║'));
-        $this->printer->note(__('╚════════════════════════════════════════════════════╝'));
-        $this->printer->note(__(''));
-        
-        // 移除 --cli，避免 Framework 解析异常
-        $cliArgs = $args;
-        unset($cliArgs['cli']);
-        
-        $cliStart = ObjectManager::getInstance(\Weline\Server\Console\Console\Server\Start::class);
-        $cliStart->execute($cliArgs, $data);
     }
     
     /**
@@ -3772,15 +3772,16 @@ class Start extends CommandAbstract
             'worker_base_port' => 10000 + MasterProcess::getProjectPortOffset(),  // Dispatcher 模式下 Worker 内网端口基数 + 项目偏移
             'worker_memory_limit' => '256M',
             'runtime_strategy' => 'auto',
-            'runtime' => ['strategy' => 'auto', 'topology' => 'auto'],
+            'runtime' => ['strategy' => 'auto', 'topology' => 'auto', 'listener_mode' => 'auto'],
             'event_loop' => 'auto',
             'loop' => ['driver' => 'auto'],
+            'edge' => ['adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX],
             'http' => [
                 'protocols' => [HttpProtocolSelection::HTTP_1],
                 'preferred' => HttpProtocolSelection::HTTP_1,
                 'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
                 'protocol_edge_binary' => '',
-                'tls_session_resumption' => true,
+                'tls_session_resumption' => false,
                 'alt_svc' => false,
             ],
             'supervisor' => ['enabled' => 'auto'],
@@ -3805,26 +3806,25 @@ class Start extends CommandAbstract
         // 读取 env 配置
         $envConfig = $this->getEnvConfig();
         
-        $wlsServers = ($envConfig['wls'] ?? [])['servers'] ?? [];
+        $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $wlsServers = \is_array($wls['servers'] ?? null) ? $wls['servers'] : [];
         $instanceTopologyExplicit = false;
-        // 2. 多实例：wls.servers[实例名]
-        if ($instanceName !== 'default' && isset($wlsServers[$instanceName]) && \is_array($wlsServers[$instanceName])) {
+        if ($wls !== []) {
+            $baseWls = $wls;
+            unset($baseWls['servers'], $baseWls['log'], $baseWls['session'], $baseWls['worker_base_port']);
+            $config = $this->mergeWlsConfigLayer($config, $baseWls);
+            $config['source'] = __('env.wls');
+        }
+        if ($instanceName !== 'default'
+            && isset($wlsServers[$instanceName])
+            && \is_array($wlsServers[$instanceName])
+        ) {
             $instanceConfig = $wlsServers[$instanceName];
             $instanceRuntime = \is_array($instanceConfig['runtime'] ?? null) ? $instanceConfig['runtime'] : [];
             $instanceTopologyExplicit = \array_key_exists('topology', $instanceRuntime);
-            // 移除 env 配置中的 worker_base_port，强制使用带项目偏移的默认值
             unset($instanceConfig['worker_base_port']);
-            $config = \array_merge($config, $instanceConfig);
+            $config = $this->mergeWlsConfigLayer($config, $instanceConfig);
             $config['source'] = __('env.wls.servers.%{1}', [$instanceName]);
-        }
-        // 3. 默认实例：wls
-        elseif (isset($envConfig['wls']) && \is_array($envConfig['wls'])) {
-            $baseWls = $envConfig['wls'];
-            unset($baseWls['servers'], $baseWls['log'], $baseWls['session']);
-            // 移除 env 配置中的 worker_base_port，强制使用带项目偏移的默认值
-            unset($baseWls['worker_base_port']);
-            $config = \array_merge($config, $baseWls);
-            $config['source'] = __('env.wls');
         }
 
         // Flat per-instance/default shared-state settings are user intent,
@@ -3862,8 +3862,19 @@ class Start extends CommandAbstract
             // A count remembered from an explicit -c/--count belongs to this
             // instance and therefore outranks the global wls.worker_count
             // default. Runtime-resolved auto counts are never persisted here.
-            $config['worker_count'] = \max(1, (int)$savedConfig['worker_count']);
-            $config['_instance_worker_count_explicit'] = true;
+            // D12: if worker_count_requested=auto, ignore the stale integer and recompute.
+            $savedRequested = $savedConfig['worker_count_requested'] ?? null;
+            if (\is_string($savedRequested) && \strtolower(\trim($savedRequested)) === 'auto') {
+                $config['worker_count'] = 'auto';
+                $config['worker_count_requested'] = 'auto';
+                unset($config['_instance_worker_count_explicit']);
+            } else {
+                $config['worker_count'] = \max(1, (int)$savedConfig['worker_count']);
+                $config['_instance_worker_count_explicit'] = true;
+                if ($savedRequested !== null && $savedRequested !== '') {
+                    $config['worker_count_requested'] = $savedRequested;
+                }
+            }
         }
 
         // 如果 env 配置中的 host 是 127.0.0.1 或旧格式域名，恢复为项目唯一域名（避免多项目 SSL 证书冲突）
@@ -4141,7 +4152,7 @@ class Start extends CommandAbstract
             $this->traceStartupPhase($instanceName, 'certificate-map:after');
         }
         
-        // 4. 计算实际 Worker 数量（runtime auto strategy）
+        // 4. 计算实际 Worker 数量（runtime auto strategy + worker_budget）
         $profile = $this->detectRuntimeProfile(
             $this->resolveServerListenHost((string)($config['host'] ?? '127.0.0.1'))
         );
@@ -4151,18 +4162,77 @@ class Start extends CommandAbstract
         // getServerConfig resolves the effective integer before the final
         // RuntimeSelection pass; without this field an automatic choice is
         // incorrectly reported as an explicit Worker count.
-        $config['worker_count_requested'] = $config['worker_count'];
-        $config['worker_count'] = (new RuntimeStrategyResolver())->resolveWorkerCount(
+        $cliWorkerCountExplicit = isset($args['count']) || isset($args['c']);
+        $requestedBeforeResolve = $config['worker_count_requested'] ?? $config['worker_count'];
+        $config['worker_count_requested'] = $requestedBeforeResolve;
+
+        $workerMemoryLimitMb = \Weline\Server\Service\Memory\WorkerMemoryBudgetCalculator::memoryLimitToMb(
+            $config['worker_memory_limit'] ?? '256M'
+        );
+        $resolver = new RuntimeStrategyResolver();
+        $limitMb = $profile->memoryMb() ?? 0;
+
+        // Historical integer without requested provenance: low-mem hardCap clamp (D12).
+        if (!$cliWorkerCountExplicit
+            && !empty($config['_instance_worker_count_explicit'])
+            && !\array_key_exists('worker_count_requested', $savedConfig ?? [])
+            && \is_int($config['worker_count'] ?? null)
+        ) {
+            $calculator = new \Weline\Server\Service\Memory\WorkerMemoryBudgetCalculator();
+            $clamp = $calculator->clampHistoricalCount((int)$config['worker_count'], $limitMb);
+            if ($clamp['clamped']) {
+                $config['worker_count'] = $clamp['count'];
+                $config['_worker_count_clamped_by_budget'] = true;
+                $this->printer->warning(
+                    'worker_count_clamped_by_budget: saved=' . (int)($savedConfig['worker_count'] ?? 0)
+                    . ' hard_cap=' . $clamp['hard_cap']
+                    . ' limit_mb=' . $limitMb
+                );
+            }
+        }
+
+        $detailed = $resolver->resolveWorkerCountDetailed(
             $config['worker_count'],
             (string)($config['mode'] ?? 'io'),
             $strategyName,
-            $profile
+            $profile,
+            $workerMemoryLimitMb
         );
+        $config['worker_count'] = $detailed['count'];
+        $config['budget_ceiling'] = $detailed['budget_ceiling'];
+        $config['worker_count_reason'] = $detailed['reason'] !== ''
+            ? $detailed['reason']
+            : (string)($config['worker_count_reason'] ?? '');
+        if (\is_array($detailed['budget'])) {
+            $config['worker_budget_detail'] = $detailed['budget'];
+        }
+        if ($cliWorkerCountExplicit
+            && $limitMb > 0
+            && $limitMb <= 2300
+            && (int)$config['worker_count'] > 2
+        ) {
+            $this->printer->warning(
+                'worker_count CLI exceeds low-mem hardCap advice: count='
+                . (int)$config['worker_count']
+                . ' limit_mb=' . $limitMb
+                . ' (startup keeps explicit -c; Critical may still scale down)'
+            );
+        }
+
         $config['worker_memory_limit'] = ServiceContext::normalizeMemoryLimit($config['worker_memory_limit'] ?? '256M');
         if (isset($config['dispatcher_memory_limit'])) {
             $config['dispatcher_memory_limit'] = ServiceContext::normalizeMemoryLimit(
                 $config['dispatcher_memory_limit'],
                 $config['worker_memory_limit']
+            );
+        }
+
+        $gatewayConfig = \is_array($config['gateway'] ?? null) ? $config['gateway'] : [];
+        if (\array_key_exists('enabled', $gatewayConfig)
+            && $this->isTruthyCliFlagValue($gatewayConfig['enabled'])
+        ) {
+            throw new \RuntimeException(
+                'wls.gateway.enabled=true: ' . (string)__('Nginx 是唯一公网边缘，不能跳过其启动。')
             );
         }
 
@@ -4247,20 +4317,44 @@ class Start extends CommandAbstract
     }
 
     /**
+     * Merge associative WLS sections recursively while replacing lists and
+     * scalar values atomically at the higher-priority layer.
+     *
+     * @param array<string,mixed> $base
+     * @param array<string,mixed> $override
+     * @return array<string,mixed>
+     */
+    private function mergeWlsConfigLayer(array $base, array $override): array
+    {
+        foreach ($override as $key => $value) {
+            $current = $base[$key] ?? null;
+            if (\is_array($current)
+                && \is_array($value)
+                && !\array_is_list($current)
+                && !\array_is_list($value)
+            ) {
+                $base[$key] = $this->mergeWlsConfigLayer($current, $value);
+                continue;
+            }
+            $base[$key] = $value;
+        }
+
+        return $base;
+    }
+
+    /**
      * @param array<string, mixed> $envConfig
      */
     private function hasEnvWlsConfigKey(array $envConfig, string $instanceName, string $key): bool
     {
         $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
         $servers = \is_array($wls['servers'] ?? null) ? $wls['servers'] : [];
-        if ($instanceName !== 'default'
-            && isset($servers[$instanceName])
-            && \is_array($servers[$instanceName])
-        ) {
-            return \array_key_exists($key, $servers[$instanceName]);
-        }
+        $instanceConfig = $instanceName !== 'default' && \is_array($servers[$instanceName] ?? null)
+            ? $servers[$instanceName]
+            : [];
 
-        return \array_key_exists($key, $wls);
+        return \array_key_exists($key, $instanceConfig)
+            || \array_key_exists($key, $wls);
     }
 
     /**
@@ -5454,78 +5548,137 @@ class Start extends CommandAbstract
     }
     
     /**
+     * @param array<string, mixed> $nginx
+     * @return list<int>
+     */
+    private function resolveManagedNginxUpstreamPorts(array $nginx, int $fallbackPort): array
+    {
+        $ports = $nginx['owner_upstream_ports'] ?? [];
+        $ports = \is_array($ports) ? $ports : [];
+        if ($ports === []) {
+            $ownerPort = (int)($nginx['owner_upstream_port'] ?? 0);
+            if ($ownerPort > 0) {
+                $ports[] = $ownerPort;
+            }
+        }
+        if ($ports === []) {
+            $ports[] = $fallbackPort;
+        }
+
+        $resolved = [];
+        foreach ($ports as $port) {
+            $port = (int)$port;
+            if ($port < 1 || $port > 65535 || isset($resolved[$port])) {
+                continue;
+            }
+            $resolved[$port] = $port;
+        }
+
+        return \array_values($resolved);
+    }
+
+    /**
      * 显示启动信息
      */
-    protected function showStartupInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, string $source = '', bool $sslEnabled = false, bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $directReusePortEnabled = false): void
+    protected function showStartupInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, string $source = '', bool $sslEnabled = false, bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, string $directListenerMode = ''): void
     {
         $this->printer->setup(__('Weline Server'));
         echo "\n";
-        
-        $cpuCores = $this->getCpuCoreCount();
-        $protocol = $sslEnabled ? 'https' : 'http';
+
+        $nginx = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv()->doctorSnapshot();
+        $ownerActive = (bool)($nginx['runtime_owner_active'] ?? false)
+            && \hash_equals(
+                $instanceName,
+                (string)($nginx['owner_instance'] ?? ''),
+            );
+        $httpsPort = (int)($nginx['listen_https'] ?? 0);
+        $displayHost = $this->isUsablePublicHost($host) ? $host : '127.0.0.1';
+        $httpsSuffix = $httpsPort === 443 ? '' : ':' . $httpsPort;
+        $publicUrl = $ownerActive && $httpsPort > 0
+            ? 'https://' . $displayHost . $httpsSuffix . '/'
+            : (string)__('Nginx 公网端点未验证');
+
+        $protocols = [];
+        if ($ownerActive && (bool)($nginx['http3_runtime_verified'] ?? false)) {
+            $protocols[] = 'HTTP/3';
+        }
+        if ($ownerActive && (bool)($nginx['http2_runtime_verified'] ?? false)) {
+            $protocols[] = 'HTTP/2';
+        }
+        if ($ownerActive && (bool)($nginx['http1_runtime_verified'] ?? false)) {
+            $protocols[] = 'HTTP/1.1';
+        }
+        $protocolLabel = $protocols !== []
+            ? \implode(' → ', $protocols)
+            : (string)__('未验证');
+        if ($ownerActive
+            && (bool)($nginx['http3_configured'] ?? false)
+            && !(bool)($nginx['http3_runtime_verified'] ?? false)
+        ) {
+            $protocolLabel .= '；' . (string)__('HTTP/3 QUIC pending');
+        }
+
         $workerPort = $workerPort ?: $port;
-        $endpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
-        $endpoint = \is_array($endpoint) ? $endpoint : [];
-        $protocolEdgeEnabled = (bool)($endpoint['protocol_edge_enabled'] ?? false);
-        $httpProtocols = \is_array($endpoint['http_protocols'] ?? null)
-            ? \array_values(\array_filter(\array_map('strval', $endpoint['http_protocols'])))
-            : [];
-        
-        $this->printer->note('╔══════════════════════════════════════════════════════════════╗');
-        $this->printer->note('║                   服务器启动配置                               ║');
-        $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
-        $this->printer->note(\sprintf('║  实例名称：%-50s║', $instanceName));
-        $this->printer->note(\sprintf('║  监听地址：%-50s║', "{$protocol}://{$host}:{$port}"));
-        $this->printer->note(\sprintf('║  Worker 数：%-49s║', "{$count} (CPU: {$cpuCores} 核)"));
-        
-        if ($protocolEdgeEnabled) {
-            $protocolLabel = $httpProtocols !== []
-                ? \strtoupper(\implode('/', $httpProtocols))
-                : 'H3/H2/H1';
-            $transportLabel = \in_array(HttpProtocolSelection::HTTP_3, $httpProtocols, true)
-                ? 'TCP + UDP/QUIC'
-                : 'TCP';
-            $this->printer->note(\sprintf('║  HTTP 协商：%-49s║', $protocolLabel . ' (' . $transportLabel . ')'));
-            if ($dispatcherEnabled) {
-                $dispatcherPort = (int)($endpoint['dispatcher_port'] ?? 0);
-                $dispatcherLabel = $dispatcherPort > 0
-                    ? 'Dispatcher ' . $dispatcherPort . ' → Worker '
-                    : 'Dispatcher → Worker ';
-                $this->printer->note(\sprintf('║  内部拓扑：%-49s║', $dispatcherLabel . $workerPort . ' - ' . ($workerPort + $count - 1)));
-            } else {
-                $this->printer->note(\sprintf('║  Worker 端口：%-47s║', $workerPort . ' - ' . ($workerPort + $count - 1) . ' (loopback)'));
-            }
-        } elseif ($dispatcherEnabled) {
-            $this->printer->note(\sprintf('║  流量分发：%-50s║', __('Dispatcher 模式（TCP 透传）')));
-            $dispatcherProtocol = $sslEnabled ? 'TCP→SSL' : 'TCP';
-            $this->printer->note(\sprintf('║  Dispatcher：%-48s║', "端口 {$port} ({$dispatcherProtocol})"));
-            $workerProtocol = $sslEnabled ? 'SSL' : 'HTTP';
-            $this->printer->note(\sprintf('║  Worker 端口：%-47s║', "{$workerPort} - " . ($workerPort + $count - 1) . " ({$workerProtocol})"));
+        $upstreamPorts = $this->resolveManagedNginxUpstreamPorts($nginx, $port);
+        $upstreamEndpoints = \array_map(
+            static fn(int $upstreamPort): string => 'http://127.0.0.1:' . $upstreamPort,
+            $upstreamPorts,
+        );
+        if ($dispatcherEnabled) {
+            $topology = 'Nginx → Dispatcher ' . $port . ' → Worker '
+                . $workerPort . '-' . ($workerPort + $count - 1);
         } else {
-            if ($directReusePortEnabled) {
-                $directLabel = PHP_OS_FAMILY === 'Darwin'
-                    ? __('Master 共享监听 FD')
-                    : __('SO_REUSEPORT 同端口复用');
-                $this->printer->note(\sprintf('║  端口模式：%-50s║', $directLabel));
-                $this->printer->note(\sprintf('║  Worker 端口：%-47s║', "{$port} (共享端口)"));
-            } else {
-                $this->printer->note(\sprintf('║  端口范围：%-50s║', "{$port} - " . ($port + $count - 1)));
+            $listener = \in_array($directListenerMode, ['shared_fd', 'reuseport', 'worker_ports'], true)
+                ? $directListenerMode
+                : 'direct';
+            $workerTargets = \implode(', ', $upstreamPorts);
+            if (\count($upstreamPorts) > 1
+                && ($upstreamPorts[\count($upstreamPorts) - 1] - $upstreamPorts[0] + 1) === \count($upstreamPorts)
+            ) {
+                $workerTargets = $upstreamPorts[0] . '-' . $upstreamPorts[\count($upstreamPorts) - 1];
             }
+            $topology = 'Nginx → Direct ' . $listener . ' → Worker ' . $workerTargets;
         }
-        
-        // HTTPS 模式显示 HTTP 重定向端口
-        if ($sslEnabled && $httpRedirectPort > 0) {
-            $this->printer->note(\sprintf('║  HTTP 重定向：%-47s║', "端口 {$httpRedirectPort} → HTTPS"));
+        $sessionParts = [];
+        if ($ownerActive && (bool)($nginx['tls_session_resumption_same_worker_runtime_verified'] ?? false)) {
+            $sessionParts[] = 'same Worker';
         }
-        
-        $this->printer->note(\sprintf('║  运行模式：%-50s║', $daemon ? __('后台运行（默认）') : __('前台运行')));
-        $this->printer->note(\sprintf('║  SSL/HTTPS：%-49s║', $sslEnabled ? __('已启用') : __('未启用')));
-        $this->printer->note(\sprintf('║  平台：%-54s║', IS_WIN ? 'Windows' : 'Linux/Mac'));
-        $this->printer->note(\sprintf('║  配置来源：%-50s║', $source ?: __('智能模式')));
-        $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
+        if ($ownerActive && (bool)($nginx['tls_session_resumption_cross_worker_runtime_verified'] ?? false)) {
+            $sessionParts[] = 'cross Worker';
+        }
+        if ($ownerActive
+            && (bool)($nginx['tls_session_resumption_runtime_verified'] ?? false)
+            && $sessionParts !== []
+        ) {
+            $sessionLabel = (string)__('shared cache/tickets；live Reused 已验证：%{1}', [
+                \implode(' + ', $sessionParts),
+            ]);
+        } elseif ($ownerActive
+            && (bool)($nginx['tls_session_cache_shared'] ?? false)
+            && (bool)($nginx['tls_session_tickets'] ?? false)
+        ) {
+            $sessionLabel = (string)__('shared cache/tickets 已配置；live Reused pending');
+        } else {
+            $sessionLabel = (string)__('未配置或未验证');
+        }
+
+        $this->printer->keyValue([
+            __('实例名称') => $instanceName,
+            __('Nginx 公网入口') => $publicUrl,
+            __('WLS 私网回源') => \implode(', ', $upstreamEndpoints),
+            __('Worker 数') => $count . ' (CPU: ' . $this->getCpuCoreCount() . ')',
+            __('公网协议') => $protocolLabel,
+            __('内部拓扑') => $topology,
+            __('TLS') => $ownerActive && (bool)($nginx['tls13_runtime_verified'] ?? false)
+                ? 'TLS 1.3 (Nginx, live verified)'
+                : (string)__('未验证'),
+            __('TLS 会话恢复') => $sessionLabel,
+            __('运行模式') => $daemon ? __('后台运行（默认）') : __('前台运行'),
+            __('平台') => \PHP_OS_FAMILY,
+            __('配置来源') => $source ?: __('智能模式'),
+        ], '→', 20);
         echo "\n";
 
-        // 显示函数状态
         $this->showFunctionStatus();
     }
     
@@ -6051,7 +6204,10 @@ class Start extends CommandAbstract
             $recordedWorkerPort = (int)($rawData['worker_port'] ?? 0);
             $recordedWorkerCount = \max(1, (int)($rawData['count'] ?? $workerCount));
             if ($recordedWorkerPort > 0) {
-                $lastOffset = $runtimeSelection->isDirect() ? 0 : $recordedWorkerCount - 1;
+                $lastOffset = $runtimeSelection->isDirect()
+                    && $runtimeSelection->listenerMode !== 'worker_ports'
+                        ? 0
+                        : $recordedWorkerCount - 1;
                 for ($offset = 0; $offset <= $lastOffset; $offset++) {
                     $candidates[] = $recordedWorkerPort + $offset;
                 }
@@ -6111,7 +6267,10 @@ class Start extends CommandAbstract
         bool $fastLocal = false
     ): bool
     {
-        $timeoutNanoseconds = (int)(($fastLocal ? 6.0 : 12.0) * 1_000_000_000);
+        $timeoutSeconds = $fastLocal
+            ? self::FAST_RESTART_CLEANUP_TIMEOUT_SECONDS
+            : (IS_WIN ? self::WINDOWS_RESTART_CLEANUP_TIMEOUT_SECONDS : self::RESTART_CLEANUP_TIMEOUT_SECONDS);
+        $timeoutNanoseconds = (int)($timeoutSeconds * 1_000_000_000);
         $deadline = \hrtime(true) + $timeoutNanoseconds;
         while (true) {
             Processer::clearPortCache();
@@ -6740,10 +6899,11 @@ class Start extends CommandAbstract
         int $workerBasePort,
         int $workerCount,
         bool $dispatcherEnabled,
-        bool $useDirectMode
+        bool $useDirectMode,
+        bool $usesWorkerPorts = false,
     ): int
     {
-        if ($dispatcherEnabled) {
+        if ($dispatcherEnabled || $usesWorkerPorts) {
             return $workerBasePort + $mainPort;
         }
 
@@ -6885,7 +7045,7 @@ class Start extends CommandAbstract
     protected function extractReservedWorkerPortsFromInstanceData(array $instanceData): array
     {
         $runtimeSelection = RuntimeSelection::fromEndpoint($instanceData);
-        if ($runtimeSelection->isDirect()) {
+        if ($runtimeSelection->isDirect() && $runtimeSelection->listenerMode !== 'worker_ports') {
             return [];
         }
 
@@ -6953,6 +7113,7 @@ class Start extends CommandAbstract
             'instance_name' => $instanceName,
             'host' => $host,
             'public_host' => $publicHost !== '' ? $publicHost : $host,
+            'public_origin' => (string)($runtimeMetadata['public_origin'] ?? ''),
             'port' => $port,
             'main_port' => $port,
             'count' => $count,
@@ -6961,6 +7122,12 @@ class Start extends CommandAbstract
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
             'http3' => \is_array($runtimeMetadata['http3'] ?? null) ? $runtimeMetadata['http3'] : [],
+            'edge_adapter' => (string)($runtimeMetadata['edge_adapter'] ?? ''),
+            'http_protocol_selection' => \is_array($runtimeMetadata['http_protocol_selection'] ?? null)
+                ? $runtimeMetadata['http_protocol_selection']
+                : [],
+            'protocol_edge_enabled' => (bool)($runtimeMetadata['protocol_edge_enabled'] ?? false),
+            'protocol_edge_binary' => (string)($runtimeMetadata['protocol_edge_binary'] ?? ''),
             'policy_digest' => (string)($runtimeMetadata['policy_digest'] ?? ''),
             'container_registry_digest' => $containerRegistryDigest,
             'supervisor_enabled' => (bool)($runtimeMetadata['supervisor_enabled'] ?? false),
@@ -7565,6 +7732,8 @@ class Start extends CommandAbstract
             }
         }
 
+        $savedConfig['edge_adapter'] = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
+        $savedConfig['ssl_enabled'] = false;
         $existingRuntime = \is_array($existingSavedConfig['runtime'] ?? null)
             ? $existingSavedConfig['runtime']
             : [];
@@ -7584,11 +7753,31 @@ class Start extends CommandAbstract
             $savedConfig['runtime']['topology'] = $runtimeSelection->requestedTopology->value;
         }
 
-        if (\array_key_exists('worker_count', $existingSavedConfig)) {
-            $savedConfig['worker_count'] = \max(1, (int)$existingSavedConfig['worker_count']);
-        }
         if (isset($args['count']) || isset($args['c'])) {
             $savedConfig['worker_count'] = \max(1, (int)($args['count'] ?? $args['c']));
+            $savedConfig['worker_count_requested'] = $savedConfig['worker_count'];
+        } elseif (\array_key_exists('worker_count_requested', $config)) {
+            $requested = $config['worker_count_requested'];
+            if (\is_string($requested) && \strtolower(\trim($requested)) === 'auto') {
+                $savedConfig['worker_count_requested'] = 'auto';
+                // Do not persist resolved auto integers (D12 / DEF-32).
+                unset($savedConfig['worker_count']);
+            } elseif ((\is_int($requested) && $requested > 0)
+                || (\is_string($requested) && \ctype_digit($requested) && (int)$requested > 0)
+            ) {
+                $savedConfig['worker_count_requested'] = (int)$requested;
+                $savedConfig['worker_count'] = (int)$requested;
+            } elseif (\array_key_exists('worker_count', $existingSavedConfig)) {
+                $savedConfig['worker_count'] = \max(1, (int)$existingSavedConfig['worker_count']);
+                if (\array_key_exists('worker_count_requested', $existingSavedConfig)) {
+                    $savedConfig['worker_count_requested'] = $existingSavedConfig['worker_count_requested'];
+                }
+            }
+        } elseif (\array_key_exists('worker_count', $existingSavedConfig)) {
+            $savedConfig['worker_count'] = \max(1, (int)$existingSavedConfig['worker_count']);
+            if (\array_key_exists('worker_count_requested', $existingSavedConfig)) {
+                $savedConfig['worker_count_requested'] = $existingSavedConfig['worker_count_requested'];
+            }
         }
 
         $savedConfig['saved_at'] = \date('Y-m-d H:i:s');
@@ -7607,12 +7796,11 @@ class Start extends CommandAbstract
     /**
      * 确保 Worker 脚本存在
      * 
-     * 注意：不再覆盖已有文件，bin/worker.php 和 bin/worker_ssl.php 已集成框架路由
+     * 注意：不覆盖已有的 bin/worker.php；WLS 后端只允许明文 HTTP/1.1。
      */
-    protected function ensureWorkerScript(bool $sslEnabled = false): string
+    protected function ensureWorkerScript(): string
     {
-        $suffix = $sslEnabled ? '_ssl' : '';
-        $workerScript = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin' . DS . "worker{$suffix}.php";
+        $workerScript = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin' . DS . 'worker.php';
         $scriptDir = \dirname($workerScript);
         
         if (!\is_dir($scriptDir)) {
@@ -7621,7 +7809,7 @@ class Start extends CommandAbstract
         
         // 只在文件不存在时创建（不覆盖已有的框架集成版本）
         if (!\file_exists($workerScript)) {
-            $script = $sslEnabled ? $this->getSslWorkerScriptContent() : $this->getWorkerScriptContent();
+            $script = $this->getWorkerScriptContent();
             \file_put_contents($workerScript, $script);
         }
         
@@ -7732,135 +7920,6 @@ PHP;
     }
     
     /**
-     * 获取 SSL Worker 脚本内容
-     */
-    protected function getSslWorkerScriptContent(): string
-    {
-        return <<<'PHP'
-<?php
-declare(strict_types=1);
-
-/**
- * Weline Server Worker 独立进程 (SSL/HTTPS)
- * 
- * 用法: php worker_ssl.php <host> <port> <worker_id> <instance_name> <ssl_cert> <ssl_key>
- */
-
-if (PHP_SAPI !== 'cli') {
-    exit('CLI only');
-}
-
-// 获取参数
-$host = $argv[1] ?? '127.0.0.1';
-$port = (int) ($argv[2] ?? 9981);
-$workerId = (int) ($argv[3] ?? 1);
-$instanceName = $argv[4] ?? 'default';
-$sslCert = $argv[5] ?? '';
-$sslKey = $argv[6] ?? '';
-
-// 静默模式，不输出到控制台
-error_reporting(0);
-
-// Keep native WLS HTTPS on modern TLS only; legacy TLS1.0/1.1 is slower to
-// negotiate and should not be offered by generated worker stubs.
-$cryptoMethod = STREAM_CRYPTO_METHOD_TLS_SERVER;
-if (defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
-} elseif (defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
-}
-$wlsModernTlsCiphers = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:!aNULL:!eNULL:!MD5:!RC4:!DES:!3DES:!DSS:!SHA1:!DHE';
-$wlsModernTlsCurves = 'X25519:prime256v1';
-
-// 创建 SSL 上下文（支持所有协议，默认使用最高版本）
-$context = stream_context_create([
-    'socket' => [
-        'backlog' => 1024,
-        'so_reuseaddr' => true,
-    ],
-    'ssl' => [
-        'local_cert' => $sslCert,
-        'local_pk' => $sslKey,
-        'verify_peer' => false,
-        'verify_peer_name' => false,
-        'allow_self_signed' => true,
-        'disable_compression' => true,
-        'crypto_method' => $cryptoMethod,
-        'ciphers' => $wlsModernTlsCiphers,
-        'ecdh_curve' => $wlsModernTlsCurves,
-        'single_dh_use' => true,
-        'honor_cipher_order' => true,
-    ]
-]);
-
-$socket = @stream_socket_server(
-    "ssl://{$host}:{$port}",
-    $errno,
-    $errstr,
-    STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-    $context
-);
-
-if (!$socket) {
-    exit(1);
-}
-
-stream_set_blocking($socket, false);
-
-$connections = [];
-$requestCount = 0;
-
-// 事件循环
-while (true) {
-    $read = array_merge([$socket], $connections);
-    $write = [];
-    $except = [];
-    
-    $changed = @stream_select($read, $write, $except, 0, 100000);
-    
-    if ($changed === false) {
-        continue;
-    }
-    
-    // 新连接
-    if (in_array($socket, $read)) {
-        $conn = @stream_socket_accept($socket, 0);
-        if ($conn) {
-            stream_set_blocking($conn, false);
-            $connections[(int)$conn] = $conn;
-        }
-        $key = array_search($socket, $read);
-        unset($read[$key]);
-    }
-    
-    // 处理连接
-    foreach ($read as $conn) {
-        $data = @fread($conn, 65535);
-        
-        if ($data === false || $data === '') {
-            @fclose($conn);
-            unset($connections[(int)$conn]);
-            continue;
-        }
-        
-        $requestCount++;
-        
-        // 高性能响应
-        $body = "Hello Weline Server (HTTPS)! Instance: {$instanceName}, Worker: {$workerId}, Port: {$port}, Request: {$requestCount}";
-        $response = "HTTP/1.1 200 OK\r\n";
-        $response .= "Content-Type: text/plain; charset=utf-8\r\n";
-        $response .= "Content-Length: " . strlen($body) . "\r\n";
-        $response .= "Connection: keep-alive\r\n";
-        $response .= "\r\n";
-        $response .= $body;
-        
-        @fwrite($conn, $response);
-    }
-}
-PHP;
-    }
-    
-    /**
      * 获取推荐的最佳性能配置
      */
     protected function getRecommendedConfig(): array
@@ -7918,9 +7977,12 @@ PHP;
         $issues = [];
         $recommended = $this->getRecommendedConfig();
         
-        // 0. 检查事件循环（最重要的性能因素！）
-        $eventLoopIssues = $this->detectEventLoopIssues();
-        $issues = \array_merge($issues, $eventLoopIssues);
+        // Windows Direct/Dispatcher both use the built-in select loops by design.
+        // Native event/ev extensions are neither required nor recommended there.
+        if (!IS_WIN) {
+            $eventLoopIssues = $this->detectEventLoopIssues();
+            $issues = \array_merge($issues, $eventLoopIssues);
+        }
         
         // 1. 检查 Worker 数量
         $normalizedMode = \strtolower(\trim($mode)) === 'cpu' ? 'cpu' : 'io';
@@ -7970,11 +8032,11 @@ PHP;
             ];
         }
 
-        if (!IS_WIN && $dispatcherEnabled && $supportsReusePort && !$directListenerEnabled) {
+        if ($dispatcherEnabled && !$directListenerEnabled) {
             $issues['direct_listener'] = [
                 'level' => 'info',
-                'message' => __('当前显式使用 Dispatcher 模式；Linux auto 使用 SO_REUSEPORT 直连，macOS auto 使用 Master 共享监听 FD 直连'),
-                'benefit' => __('Dispatcher 适合集中转发场景；峰值性能优先使用 auto/direct'),
+                'message' => __('当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker'),
+                'benefit' => __('Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制'),
                 'action' => __('移除 --dispatcher，或配置 wls.runtime.topology = auto/direct'),
             ];
         }
@@ -7995,9 +8057,14 @@ PHP;
         
         // OPCache CLI
         if (\extension_loaded('Zend OPcache') || \function_exists('opcache_get_status')) {
-            $opcacheCliEnabled = \ini_get('opcache.enable_cli');
+            $opcacheCliEnabled = (string)\ini_get('opcache.enable_cli') === '1'
+                || \in_array(
+                    'opcache.enable_cli=1',
+                    \Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
+                    true,
+                );
             if (!PhpRuntimeSafetyProfile::requiresJitIsolation()
-                && (!$opcacheCliEnabled || $opcacheCliEnabled === '0')
+                && !$opcacheCliEnabled
             ) {
                 $issues['opcache_cli'] = [
                     'level' => 'info',
@@ -8183,32 +8250,28 @@ PHP;
         }
     }
     
-    /**
-     * 显示 Windows 原生 WLS HTTPS 拓扑。
-     *
-     * Windows 固定使用 Dispatcher TCP 字节透传；TLS 在 WLS SSL Worker 内终结，
-     * 不需要外部 Web Server 才能提供 HTTPS。
-     */
-    protected function showWindowsNativeHttpsHint(string $host, int $port): void
-    {
-        $displayHost = $host === '0.0.0.0' || $host === '::' ? '127.0.0.1' : $host;
-        echo "\n";
-        $this->printer->success(__('Windows WLS 原生 HTTPS 已启用'));
-        $this->printer->note(__('连接路径：客户端 → WLS Dispatcher（TCP 字节透传）→ WLS SSL Worker'));
-        $this->printer->note(__('TLS、HTTP 协议协商和请求策略均由 WLS 自身处理，无需外部代理。'));
-        $this->printer->note(__('本机访问：https://%{1}:%{2}/', [$displayHost, $port]));
-    }
 
     /**
      * 显示使用说明（含各区域入口地址）
      */
     protected function showUsageInfo(string $host, int $port, string $instanceName, bool $sslEnabled = false): void
     {
-        $scheme = $sslEnabled ? 'https' : 'http';
-        // 默认端口（HTTP 80 或 HTTPS 443）不在 URL 中显示
-        $portNum = (int)$port;
-        $portSuffix = (($portNum == 80 && !$sslEnabled) || ($portNum == 443 && $sslEnabled)) ? '' : ':' . $port;
-        $baseUrl = $scheme . '://' . $host . $portSuffix . '/';
+        $nginx = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv()->doctorSnapshot();
+        $ownerActive = (bool)($nginx['runtime_owner_active'] ?? false)
+            && \hash_equals($instanceName, (string)($nginx['owner_instance'] ?? ''));
+        $publicPort = (int)($nginx['listen_https'] ?? 0);
+        $backendPorts = $this->resolveManagedNginxUpstreamPorts($nginx, $port);
+        if (!$ownerActive
+            || $publicPort < 1
+            || $publicPort > 65535
+            || $backendPorts === []
+        ) {
+            $this->printer->error(__('无法生成访问地址：实例绑定的 Nginx HTTPS 端点未验证。'));
+            return;
+        }
+        $host = $this->isUsablePublicHost($host) ? $host : '127.0.0.1';
+        $portSuffix = $publicPort === 443 ? '' : ':' . $publicPort;
+        $baseUrl = 'https://' . $host . $portSuffix . '/';
         $testUrl = $baseUrl;
 
         $backendPrefix = Env::getAreaRoutePrefix('backend') ?? '';
@@ -8240,10 +8303,15 @@ PHP;
         $this->printer->keyValue($urlRows, '→', 18);
         
         $this->printer->separator('─');
-        
-        // 默认回环地址仅供本机访问；需要外网直连时显式监听公开地址。
-        $this->printer->note(__('WLS 当前监听：%{1}://%{2}:%{3}', [$scheme, $host, $portNum]));
-        $this->printer->note(__('需要外网直连时：') . 'php bin/w server:start --host 0.0.0.0');
+
+        $backendEndpoints = \array_map(
+            static fn(int $backendPort): string => 'http://127.0.0.1:' . $backendPort,
+            $backendPorts,
+        );
+        $this->printer->note(__(
+            'WLS 私网回源：%{1}；公网访问必须经过项目托管 Nginx。',
+            [\implode(', ', $backendEndpoints)],
+        ));
         $this->printer->separator('─');
         
         // 常用命令
@@ -8267,7 +8335,7 @@ PHP;
         bool $dispatcherEnabled = false,
         int $workerPort = 0,
         int $httpRedirectPort = 0,
-        bool $directReusePortEnabled = false
+        string $directListenerMode = ''
     ): void {
         $this->showStartupInfo(
             $instanceName,
@@ -8280,7 +8348,7 @@ PHP;
             $dispatcherEnabled,
             $workerPort,
             $httpRedirectPort,
-            $directReusePortEnabled
+            $directListenerMode
         );
         $this->showUsageInfo($host, $port, $instanceName, $sslEnabled);
     }
@@ -8296,7 +8364,7 @@ PHP;
         bool $dispatcherEnabled = false,
         int $workerPort = 0,
         int $httpRedirectPort = 0,
-        bool $directReusePortEnabled = false
+        string $directListenerMode = ''
     ): void {
         if (!$startupCompleted) {
             return;
@@ -8313,7 +8381,7 @@ PHP;
             $dispatcherEnabled,
             $workerPort,
             $httpRedirectPort,
-            $directReusePortEnabled
+            $directListenerMode
         );
     }
     
@@ -8335,75 +8403,64 @@ PHP;
             __('启动 Weline 高性能常驻内存服务器'),
             [
                 '[name]' => __('实例名称（默认：default）'),
-                '--cli' => __('使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）'),
-                '--host <ip>' => __('监听地址（默认：127.0.0.1，仅本机；需外网访问时用 --host 0.0.0.0；-h 保留给帮助）'),
-                '-p, --port <port>' => __('基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）'),
+                '--host <host>' => __('公网域名或展示主机；WLS 回源始终监听 127.0.0.1'),
+                '-p, --port <port>' => __('WLS 明文 HTTP/1.1 回源端口；Nginx 公网端口由 wls.edge.nginx 配置'),
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
-                '--no-daemon' => __('前台运行（查看实时日志）'),
-                '--foreground' => __('阻塞运行前台 Master'),
                 '--win' => __('Windows 子进程使用可见控制台窗口'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
                 '-r, --restart' => __('平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换'),
-                '-f' => __('与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）；仅 --cli 时 -f 表示前台运行'),
-                '--no-ssl' => __('仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）'),
-                '--ssl-cert <path>' => __('SSL 证书文件路径（启用 HTTPS）'),
-                '--ssl-key <path>' => __('SSL 私钥文件路径（启用 HTTPS）'),
+                '-f' => __('与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）'),
+                '--ssl-cert <path>' => __('Nginx 公网 TLS 证书文件路径'),
+                '--ssl-key <path>' => __('Nginx 公网 TLS 私钥文件路径'),
                 '--worker-memory-limit <size>' => __('Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）'),
                 '--dispatcher-memory-limit <size>' => __('Dispatcher 进程 PHP memory_limit（默认跟随 Worker）'),
                 '--runtime-strategy <mode>' => __('运行策略：auto/performance/stability（默认 auto）'),
                 '--event-loop <driver>' => __('事件循环：auto/event/select（默认 auto）'),
-                '--install-deps' => __('显式调用 env:install 安装缺失运行时依赖；可能运行包管理器/PECL并修改 PHP 配置，普通 server:start 不会执行这些操作'),
-                '--install-nginx' => __('显式安装/校验本项目托管 Nginx（可能联网）；managed=true 启动时若缺失也会自动安装'),
-                '--no-nginx' => __('跳过本项目托管 Nginx 的自动启动（仍可稍后 server:nginx:start）'),
+                '--install-deps' => __('仅为 POSIX Direct 显式安装 ext-event/reuseport 依赖；Windows worker_ports 不需要编译扩展'),
+                '--install-nginx' => __('已退役：请先单独执行 server:nginx:install；启动路径不会下载或编译'),
                 '--no-auto-deps' => __('兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
-                '--direct' => __('直连模式：Linux 使用 SO_REUSEPORT，macOS 使用 Master 共享监听 FD'),
-                '--dispatcher' => __('Linux/macOS 显式使用 Dispatcher；Windows 默认且只能使用此模式'),
+                '--direct' => __('直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd'),
+                '--dispatcher' => __('显式兼容/诊断拓扑；所有平台的 auto 均不启动 Dispatcher'),
                 '--help' => __('显示帮助信息'),
             ],
             [
                 __('配置优先级') => __('命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值'),
                 __('拓扑优先级') => __('--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto'),
-                __('多实例支持') => __('可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动'),
-                __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
+                __('Nginx-only') => __('公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源'),
+                __('启动副作用') => __('普通 start/reload/restart 不下载、不编译；缺少 Nginx 时失败并提示显式 server:nginx:install'),
+                __('多实例支持') => __('可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例'),
+                __('配置记忆') => __('首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
-                __('事件循环') => __('Linux/macOS Direct 使用预装 sockets/Event；缺失时停止并提示显式 --install-deps，Dispatcher 可使用有界 select'),
-                __('依赖安装副作用') => __('只有显式 --install-deps 才会调用 env:install；该流程可能联网、运行系统包管理器或 PECL，并修改当前 PHP 配置'),
-                __('HTTP/3 组件') => __('普通 server:start 只读复用已验证组件；缺失时继续 HTTP/2/HTTP/1.1。当前 PHP 必须预装并启用 FFI，构建必须显式运行 php bin/w server:http3:build'),
-                __('默认拓扑') => __('Linux 在 SO_REUSEPORT 真实分流探测通过后 direct；macOS 在共享 FD 真实 accept 分布探测通过后 direct；Windows 固定 Dispatcher'),
+                __('事件循环') => __('Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps'),
+                __('HTTP/3') => __('仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending'),
+                __('默认拓扑') => __('所有平台 auto 均为 Nginx 直连 Worker：Windows 使用 worker_ports，Linux 优先已验证 reuseport 并回退 shared_fd，macOS 使用 shared_fd'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
-                __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
-                __('HTTP 协议') => __('当前默认 HTTP/1.1；HTTP/2/3 在 WLS 原生 Transport Adapter 完成前保持关闭，状态由 server:status/doctor 展示'),
-                __('连接复用') => __('HTTP/1.1 keep-alive 默认启用；TLS 会话能力由当前 PHP/OpenSSL 运行时验证'),
-                __('协议扩展') => __('仓库内 Go 协议边缘已移除；Caddy 仅保留为用户显式选择的兼容模式，不是默认依赖'),
-                __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
-                __('SSL 协议') => __('仅支持 TLS 1.2/1.3；空值或无效 wls.ssl.protocols 会在启动前被拒绝'),
-                __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
-                __('80/443 端口') => __('WLS 原生监听 80/443；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap'),
-                __('HTTP 重定向端口') => __('固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker'),
+                __('HTTPS') => __('仅由 Nginx 终结，启动门禁要求真实 TLS 1.3、ALPN HTTP/2 与 HTTP/1.1'),
+                __('HTTP 协议') => __('Nginx 公网默认 HTTP/2并自动回退 HTTP/1.1；WLS 回源固定 HTTP/1.1 Keep-Alive'),
+                __('连接复用') => __('Nginx 提供客户端 Keep-Alive、HTTP/2 多路复用与回源 Keep-Alive 连接池'),
+                __('TLS 会话') => __('Nginx shared SSL session cache 与 Session Tickets 由启动和 reload 的 live Reused 证据验收'),
+                __('Master 进程') => __('持续监控 Worker 状态并自动恢复；公网 HTTP→HTTPS 重定向由 Nginx 负责'),
+                __('端口') => __('-p 指定 WLS loopback 回源端口；Nginx listen_http/listen_https 是唯一公网端口'),
                 __('Worker 内存') => __('可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker'),
             ],
             [
+                __('显式安装 Nginx') => 'php bin/w server:nginx:install',
                 __('启动默认实例') => 'php bin/w server:start',
-                __('使用 CLI 服务器') => 'php bin/w server:start --cli',
-                __('启动命名实例（首次需指定端口）') => 'php bin/w server:start api -p 8443',
-                __('再次启动已配置实例（自动记忆）') => 'php bin/w server:start api',
-                __('同时运行多个实例') => 'php bin/w server:start web -p 8443 && php bin/w server:start api -p 9443',
-                __('启动 8 个进程') => 'php bin/w server:start -c 8',
-                __('Direct 模式') => 'php bin/w server:start --direct',
-                __('Dispatcher 模式') => 'php bin/w server:start --dispatcher',
-                __('显式安装依赖后启动') => 'php bin/w server:start --install-deps',
-                __('Windows 可见窗口') => 'php bin/w server:start --win',
-                __('CPU密集模式') => 'php bin/w server:start -m cpu',
-                __('平滑重启') => 'php bin/w server:start -r',
-                __('强制重启（停机型更新）') => 'php bin/w server:start -r -f',
-                __('启用 HTTPS') => 'php bin/w server:start --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
-                __('Windows 显式关闭 HTTPS') => 'php bin/w server:start --no-ssl',
-                __('设置 Worker 内存') => 'php bin/w server:start --worker-memory-limit=512M',
+                __('启动命名实例（首次指定回源端口）') => 'php bin/w server:start api -p 9981',
+                __('再次启动已配置实例') => 'php bin/w server:start api',
+                __('Direct 模式') => 'php bin/w server:start direct -p 9982 --direct',
+                __('Dispatcher 模式') => 'php bin/w server:start dispatcher -p 9983 --dispatcher',
+                __('显式安装依赖后启动') => 'php bin/w server:start deps -p 9984 --install-deps',
+                __('Windows 可见窗口') => 'php bin/w server:start win -p 9985 --win',
+                __('平滑重启') => 'php bin/w server:start api -r',
+                __('强制重启（停机型更新）') => 'php bin/w server:start api -r -f',
+                __('指定 Nginx TLS 证书') => 'php bin/w server:start api --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
+                __('设置 Worker 内存') => 'php bin/w server:start api --worker-memory-limit=512M',
                 __('查看所有实例状态') => 'php bin/w server:status --all',
                 __('停止指定实例') => 'php bin/w server:stop api',
                 __('停止所有实例') => 'php bin/w server:stop --all',
-                __('压力测试') => 'php bin/w server:benchmark',
+                __('压力测试') => 'php bin/w server:benchmark --instance=api',
             ]
         );
     }
@@ -8818,61 +8875,117 @@ PHP;
      *
      * @param array<string, mixed> $args
      */
-    private function maybeStartManagedNginxAfterReady(int $upstreamPort, array $args): void
+    private function maybeStartManagedNginxAfterReady(
+        int $upstreamPort,
+        array $args,
+        string $instanceName,
+    ): bool
     {
         if (isset($args['no-nginx']) || isset($args['no_nginx'])) {
-            $this->printer->note(__('已跳过托管 Nginx 自动启动（--no-nginx）'));
-            return;
+            $this->printer->error(__('Nginx 是唯一公网边缘，不能跳过其启动。'));
+            return false;
         }
         try {
             $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
-            if (!$service->isEdgeNginxManaged() || !$service->paths()->autoStartEnabled()) {
-                if (!$service->paths()->managedEnabled()
-                    && (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve()->name()
-                        === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-                ) {
-                    $hostBinary = $service->paths()->detectHostNginxBinary();
-                    if ($service->paths()->managedMode() === 'auto' && $hostBinary !== null) {
-                        $this->printer->note(__(
-                            '已自动检测到宿主机 Nginx（%{1}）：跳过托管 Nginx，WLS 仅处理业务回源。',
-                            [$hostBinary]
-                        ));
-                    } else {
-                        $this->printer->note(__(
-                            '宿主机 Nginx 模式（wls.edge.nginx.managed=false）：不启动托管 Nginx，WLS 仅处理业务回源。'
-                        ));
-                    }
-                }
-                return;
+            $endpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
+            $edgeAdapterName = \is_array($endpoint)
+                ? \trim((string)($endpoint['edge_adapter'] ?? ''))
+                : '';
+            if ($edgeAdapterName === '') {
+                // Master endpoint snapshots may omit edge_adapter before the
+                // Nginx publication boundary; fall back to the env-selected
+                // Nginx-only adapter instead of recycling a READY WLS fleet.
+                $edgeAdapterName = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+                    ->resolve()
+                    ->name();
             }
-            if ($service->paths()->managedMode() === 'auto') {
-                $this->printer->note(__(
-                    '未检测到宿主机 Nginx：将使用本项目托管 Nginx（extend/server/nginx）。'
-                ));
+            $publicHost = \is_array($endpoint)
+                ? \trim((string)($endpoint['public_host'] ?? ''))
+                : '';
+            if ($publicHost === '' && \is_array($endpoint)) {
+                $publicHost = \trim((string)($endpoint['host'] ?? ''));
+            }
+            $serverNames = $publicHost !== '' ? [$publicHost] : [];
+            if ($edgeAdapterName !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+                $this->printer->error(__('运行态实例不是 Nginx-only 边缘，已拒绝发布。'));
+                return false;
+            }
+            if (!$service->paths()->managedEnabled()) {
+                $this->printer->error(__('Nginx-only 默认启动要求 wls.edge.nginx.managed=true。'));
+                return false;
+            }
+            if (!$service->paths()->autoStartEnabled()) {
+                $this->printer->error(__('Nginx-only 默认启动要求 wls.edge.nginx.auto_start=true。'));
+                return false;
             }
             if (!$service->paths()->isInstalled()) {
-                $this->printer->note(__(
-                    '托管 Nginx 未安装，正在按当前平台自动安装到 extend/server/nginx（macOS/Linux 源码编译，Windows 官方 zip）...'
+                $this->printer->warning(__(
+                    '托管 Nginx 未安装：普通 server:start 不下载、不编译；请先显式执行 php bin/w server:nginx:install。'
                 ));
+                return false;
             }
-            $result = $service->prepareAndStart($upstreamPort, '127.0.0.1');
+            $result = $service->prepareAndStart(
+                $upstreamPort,
+                '127.0.0.1',
+                $serverNames,
+                $instanceName,
+                $edgeAdapterName,
+            );
             if (!($result['ok'] ?? false)) {
                 $this->printer->warning(__('托管 Nginx 启动失败：%{1}', [(string)$result['message']]));
-                return;
+                return false;
             }
             $details = \is_array($result['details'] ?? null) ? $result['details'] : [];
-            $this->printer->success(__('托管 Nginx 已启动'));
-            if ($details !== []) {
-                $this->printer->note(__('边缘 HTTP %{1} → WLS %{2}', [
-                    (string)($details['listen_http'] ?? ''),
-                    (string)($details['upstream'] ?? ''),
-                ]));
-                if (!empty($details['ssl'])) {
-                    $this->printer->note(__('边缘 HTTPS %{1}', [(string)($details['listen_https'] ?? '')]));
-                }
+            if ($details === []) {
+                $this->printer->warning(__('托管 Nginx 启动成功但缺少已验证的公网端点详情。'));
+                return false;
             }
+            $edgeSsl = (bool)($details['ssl'] ?? false);
+            if (!$edgeSsl
+                || !(bool)($details['tls13_runtime_verified'] ?? false)
+                || !(bool)($details['http2_runtime_verified'] ?? false)
+                || !(bool)($details['http1_runtime_verified'] ?? false)
+            ) {
+                $this->printer->warning(__('托管 Nginx 未同时通过 TLS 1.3、HTTP/2 与 HTTP/1.1 真实门禁。'));
+                return false;
+            }
+            $edgePort = (int)($details['listen_https'] ?? 0);
+            if ($edgePort < 1 || $edgePort > 65535) {
+                $this->printer->warning(__('托管 Nginx 返回了无效的公网监听端口。'));
+                return false;
+            }
+            $this->syncServerConfigToEnv(
+                $publicHost !== '' ? $publicHost : '127.0.0.1',
+                $edgePort,
+                true,
+            );
+            $verifiedProtocols = [];
+            if ((bool)($details['http2_runtime_verified'] ?? false)) {
+                $verifiedProtocols[] = 'HTTP/2';
+            }
+            if ((bool)($details['http1_runtime_verified'] ?? false)) {
+                $verifiedProtocols[] = 'HTTP/1.1';
+            }
+            $this->printer->success(__('托管 Nginx 已启动'));
+            $this->printer->note(__('边缘 HTTP %{1} → HTTPS 重定向', [
+                (string)($details['listen_http'] ?? ''),
+            ]));
+            $this->printer->note(__('边缘 HTTPS %{1} → WLS %{2}', [
+                (string)($details['listen_https'] ?? ''),
+                (string)($details['upstream'] ?? ''),
+            ]));
+            if ($verifiedProtocols !== []) {
+                $this->printer->note(__('公网已验证协议：%{1}', [\implode(' → ', $verifiedProtocols)]));
+            }
+            if ((bool)($details['http3_configured'] ?? false)
+                && !(bool)($details['http3_runtime_verified'] ?? false)
+            ) {
+                $this->printer->warning(__('Nginx HTTP/3 已配置并发布 Alt-Svc，但真实 QUIC 请求门禁仍为 pending。'));
+            }
+            return true;
         } catch (\Throwable $e) {
             $this->printer->warning(__('托管 Nginx 启动异常：%{1}', [$e->getMessage()]));
+            return false;
         }
     }
 

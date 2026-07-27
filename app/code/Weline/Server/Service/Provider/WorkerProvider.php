@@ -11,7 +11,6 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * Worker 服务提供者
@@ -67,21 +66,20 @@ class WorkerProvider extends AbstractServiceProvider
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
 
-        $protocolEdgeEnabled = $context->isProtocolEdgeEnabled();
-        $script = $context->sslEnabled && !$protocolEdgeEnabled
-            ? $this->resolveSslWorkerScript($scriptDir, $context)
-            : $scriptDir . DS . 'worker.php';
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve($context->envConfig);
+        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+            throw new \RuntimeException('Worker refused a non-Nginx public edge adapter.');
+        }
+        $script = $scriptDir . DS . 'worker.php';
+
 
         $port = $this->getPort($instanceId, $context);
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
 
-        // 安全：Dispatcher 模式下 Worker 仅监听 127.0.0.1，不暴露内网端口
-        // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外，Worker 端口只供本机 Dispatcher 连接
+        // Nginx exclusively owns the public listener; WLS is a loopback H1 backend.
         $direct = $context->isDirect();
         $listenerMode = $context->runtimeSelection->listenerMode;
-        $host = $direct
-            ? ($context->host ?: '127.0.0.1')
-            : '127.0.0.1';
+        $host = '127.0.0.1';
 
         $arguments = [
             $host,
@@ -90,52 +88,6 @@ class WorkerProvider extends AbstractServiceProvider
             $context->instanceName,
         ];
 
-        if ($context->sslEnabled && !$protocolEdgeEnabled && $context->sslCert && $context->sslKey) {
-            $arguments[] = '--ssl-cert=' . $context->sslCert;
-            $arguments[] = '--ssl-key=' . $context->sslKey;
-            if ($direct
-                && (bool)$context->getConfig('wls.http3.enabled', false)
-                && (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve()->allowsNativeHttp3()
-            ) {
-                $nativeDigest = \strtolower(\trim((string)$context->getConfig('wls.http3.native_digest', '')));
-                $nativeFingerprint = \strtolower(\trim((string)$context->getConfig(
-                    'wls.http3.fingerprint',
-                    '',
-                )));
-                if (\preg_match('/^[a-f0-9]{64}$/D', $nativeDigest) !== 1
-                    || \preg_match('/^[a-f0-9]{32}$/D', $nativeFingerprint) !== 1
-                ) {
-                    throw new \RuntimeException('Direct HTTP/3 Worker requires a verified native fingerprint and digest.');
-                }
-                $ticketRingEpoch = (int)$context->getConfig('wls.http3.tls_ticket_ring_epoch', 0);
-                $ticketRingDigest = \strtolower(\trim((string)$context->getConfig(
-                    'wls.http3.tls_ticket_ring_digest',
-                    '',
-                )));
-                if ($ticketRingEpoch <= 0
-                    || \preg_match('/^[a-f0-9]{64}$/D', $ticketRingDigest) !== 1
-                ) {
-                    throw new \RuntimeException('Direct HTTP/3 Worker requires published TLS ticket-ring metadata.');
-                }
-                $http3Mode = match (\PHP_OS_FAMILY) {
-                    'Darwin' => 'datagram-router',
-                    'Linux' => 'reuseport-ebpf',
-                    default => throw new \RuntimeException(
-                        'Native HTTP/3 is unsupported on the selected platform data plane.'
-                    ),
-                };
-                $arguments[] = '--wls-http3=1';
-                $arguments[] = '--wls-http3-mode=' . $http3Mode;
-                $arguments[] = '--wls-http3-native-fingerprint=' . $nativeFingerprint;
-                $arguments[] = '--wls-http3-native-digest=' . $nativeDigest;
-                $arguments[] = '--wls-http3-ticket-ring-epoch=' . $ticketRingEpoch;
-                $arguments[] = '--wls-http3-ticket-ring-digest=' . $ticketRingDigest;
-            }
-        }
-
-        if ($protocolEdgeEnabled) {
-            $arguments[] = '--protocol-edge-token-file=' . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
-        }
 
         $arguments[] = '--control-port=' . $context->controlPort;
         $arguments[] = '--master-pid=' . $context->masterPid;
@@ -150,9 +102,9 @@ class WorkerProvider extends AbstractServiceProvider
 
         if ($direct && $listenerMode === 'shared_fd') {
             $arguments[] = '--listen-fd=' . DirectSharedListener::INHERITED_FD;
-        } elseif ($direct && $listenerMode !== 'reuseport') {
+        } elseif ($direct && !\in_array($listenerMode, ['reuseport', 'worker_ports'], true)) {
             throw new \InvalidArgumentException(
-                'Direct topology requires listener mode reuseport or shared_fd.'
+                'Direct topology requires listener mode reuseport, shared_fd, or worker_ports.'
             );
         }
 
@@ -160,11 +112,6 @@ class WorkerProvider extends AbstractServiceProvider
 
         $arguments[] = '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver;
 
-        // 延迟 SSL 统一用 tcp:// 接入，accept 后按首包做 HTTP->HTTPS 跳转或 SNI 证书选择。
-        // 这同时覆盖 Dispatcher 透传和 direct SO_REUSEPORT 模式。
-        if ($context->sslEnabled && !$protocolEdgeEnabled) {
-            $arguments[] = '--defer-ssl';
-        }
 
         return new ServiceCommand(
             script: $script,
@@ -176,10 +123,10 @@ class WorkerProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         $basePort = $context->getWorkerBasePort();
-        if ($context->isProtocolEdgeEnabled()) {
-            return ProtocolEdgeRuntime::workerPort($context, $instanceId);
-        }
         if ($context->isDirect()) {
+            if ($context->runtimeSelection->listenerMode === 'worker_ports') {
+                return $context->getWorkerPort() + \max(0, $instanceId - 1);
+            }
             return $context->mainPort;
         }
 
@@ -220,26 +167,5 @@ class WorkerProvider extends AbstractServiceProvider
         return false;
     }
 
-    private function resolveSslWorkerScript(string $scriptDir, ServiceContext $context): string
-    {
-        $engine = $context->runtimeSelection->sslEngine;
-        if ($engine === 'event_buffer' && PHP_OS_FAMILY === 'Windows') {
-            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer is disabled on native Windows because its live TLS accept path has no passing runtime self-test; use stream.');
-        }
-        if ($engine === 'event_buffer' && $context->runtimeSelection->isDirect()) {
-            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer does not support direct mode; use stream.');
-        }
-        if ($engine === 'event_buffer' && $context->runtimeSelection->isDispatcher()) {
-            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface; use stream.');
-        }
-
-        return match ($engine) {
-            'stream' => $scriptDir . DS . 'worker_ssl.php',
-            'event_buffer' => $scriptDir . DS . 'worker_ssl_event.php',
-            default => throw new \InvalidArgumentException(
-                'Unsupported WLS SSL engine "' . $engine . '"; expected stream or event_buffer'
-            ),
-        };
-    }
 
 }

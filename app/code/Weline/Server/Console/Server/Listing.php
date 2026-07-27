@@ -206,7 +206,6 @@ class Listing extends CommandAbstract
             $emptyText = $runningOnly ? __('没有找到运行中的服务器实例') : __('没有找到任何服务器实例');
             $this->printer->note($this->renderBoxContent((string) $emptyText, $boxInnerWidth));
             $this->printer->note($this->renderBoxContent((string) __('使用 php bin/w server:start [name] 启动 Weline Server'), $boxInnerWidth));
-            $this->printer->note($this->renderBoxContent((string) __('使用 php bin/w server:start --cli 启动 CLI 服务器'), $boxInnerWidth));
             $this->printer->note('╰' . \str_repeat('─', $boxInnerWidth) . '╯');
             return;
         }

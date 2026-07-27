@@ -1,8 +1,8 @@
-# Windows 下 event 扩展编译说明
+# Windows 下 event 扩展编译说明（退役实验参考）
 
-Windows 固定使用 Dispatcher 拓扑。`event` 是 Dispatcher 的事件循环优化，不是启动或 HTTPS 的必要条件；没有可信 DLL 时，WLS 保持 `Dispatcher + stream SSL + 有界 stream_select`，不改写拓扑。
+> 当前生产架构不安装、下载、启用或编译 Windows `event/ev` 扩展。Windows `auto` 使用 `Direct + worker_ports + stream_select`，项目托管 Nginx 直接均衡 Worker 端口并独占公网 TLS/H2/H1。本文其余内容仅保留为历史 ABI/崩溃排查资料，不是 WLS 安装步骤。
 
-PHP 8.4 的默认安装路径不再要求人工搬运 DLL：`server:start` 在创建任何 Master、Dispatcher 或 Worker 前，从官方 PECL event 3.1.4 发布目录选择精确的 `8.4 + TS/NTS + VS17 + x64/x86` 包，以内置固定 SHA-256 校验，且只提取 `php_event.dll` 与同包 `pthreadVC2.dll`。已有 DLL 会先保留备份，再原子切换；随后必须由同一 `PHP_BINARY` 新进程实际加载 `EventBase/Event`。任何一步失败都不会尝试相邻 PHP 版本或未知二进制。
+`server:start` 不再从 PECL 选择或部署 Windows event DLL；即使显式传入 `--install-deps`，`worker_ports` Direct 也会报告平台能力已完整，不修改 PHP 配置。显式 Dispatcher 兼容模式同样使用纯 PHP 有界 select，不以 native event 为启动依赖。
 
 ## Windows ARM64 上的 x64 PHP 运行时安全档案
 
@@ -28,7 +28,7 @@ Windows ARM64 可以通过系统仿真层运行 AMD64/x64 PHP。实机已确认�
 
 禁止把 PHP 8.2/8.3 的 `php_event.dll` 放到 PHP 8.4 中试运行。DLL 文件“存在”不是能力证明；`server:start` 只有在同一 `PHP_BINARY` 的新子进程中同时验证 `extension_loaded('event')`、`EventBase` 和 `Event` 后才会启用。
 
-若 [PECL Windows event 发布目录](https://windows.php.net/downloads/pecl/releases/event/) 没有与当前 ABI 完全匹配且已在框架中固定摘要的包，保持 Windows 默认 Dispatcher 运行时，或按下文使用对应 PHP 源码自行编译。WLS 不动态选择“最新包”，也不加载未验证 DLL。
+WLS 不动态选择“最新包”，也不加载 event DLL。下文的手工 ABI 与源码编译说明只用于复现或分析历史 native 崩溃，不得接入当前 `server:start`。
 
 ---
 
@@ -127,6 +127,6 @@ php bin/w server:doctor
 
 ## 三、无法编译时的正常运行方案
 
-- 保持框架要求的 PHP 8.4，使用 Windows 默认 `Dispatcher + stream/select`。
-- HTTPS 由当前 PHP 的 OpenSSL 扩展承担；`server:start` 会用同一 `PHP_BINARY` 验证 OpenSSL，不会因 event 缺失关闭 HTTPS。
-- Windows 数据面固定为 Dispatcher：`auto` 与显式 `php bin/w server:start --dispatcher` 可用，`--direct` 会在任何 Master/Worker 创建前被拒绝。event DLL 只影响 Worker event loop 选择，不改变拓扑。
+- 保持框架要求的 PHP 8.4，使用 Windows 默认 `Direct + worker_ports + stream_select`。
+- HTTPS/TLS 1.3、HTTP/2、HTTP/1.1 回退及可用时的 HTTP/3 全部由项目托管 Nginx 承担；PHP Worker 只处理 loopback 明文 H1。
+- 显式 `php bin/w server:start --dispatcher` 仅用于兼容/诊断，仍不需要 event DLL；`--direct` 与 `auto` 都使用 `worker_ports`。

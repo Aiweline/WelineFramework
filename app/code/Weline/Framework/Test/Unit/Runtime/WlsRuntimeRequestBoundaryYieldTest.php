@@ -21,6 +21,28 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
         );
     }
 
+    public function testHandleKeepsContextUntilFinalizationWorkCompletes(): void
+    {
+        $method = new ReflectionMethod(WlsRuntime::class, 'handle');
+        $file = $method->getFileName();
+
+        self::assertIsString($file);
+        $lines = \file($file);
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+
+        self::assertStringContainsString('$globalsEmulator->reset(false)', $source);
+        self::assertMatchesRegularExpression(
+            '/flushLogs\(\).*releaseCompletedRequestPhase\(\'request_end\'\).*\$globalsEmulator->reset\(false\).*Context::enter\(\$parentContext\)/s',
+            $source,
+            'WLS must retain a Fiber-owned Context through all finalizers, then clear the request projection before restoring the Worker context.'
+        );
+    }
+
     public function testRouterDispatchDoesNotCooperativelyYieldBeforeResponseReturn(): void
     {
         $this->assertMethodDoesNotYield(

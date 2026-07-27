@@ -150,6 +150,7 @@ final class SupervisorMessage
             'homepage_fpc',
             'dynamic_first_render',
             'listen_capabilities',
+            'namespace_authority_clock',
         ] as $field) {
             if (\array_key_exists($field, $readiness)) {
                 $payload[$field] = $readiness[$field];

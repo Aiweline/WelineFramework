@@ -6,14 +6,17 @@
 
 - **模块名**: `Weline_Server`
 - **类型**: 基础设施模块
-- **协议支持**: HTTP/1.1、HTTP/2、HTTP/3（可选原生组件）、WebSocket、TCP、UDP
-- **前置反代**: 需要统一入口时推荐 Nginx 前置到 WLS；详见 `doc/WLS模式部署指南.md`
+- **协议支持**: 公网由 Nginx 提供 TLS 1.3、HTTP/2 和 HTTP/1.1 回退；HTTP/3 只在项目 owner 绑定的 HTTP/3-only QUIC 请求真实到达 `/_wls/health?detail=1`、返回匹配的 WLS 后端身份且未命中边缘缓存后确认，客户端 verifier 不可用时保持 pending；WLS 回源固定 HTTP/1.1
+- **公网入口**: 唯一使用 Nginx，WLS/Caddy/native 不作为可配置边缘；详见 `doc/WLS模式部署指南.md`
 
 ## 🚀 快速开始
 
 ```bash
-# 启动服务器（自动探测最佳配置）
-php bin/w server:start
+# 首次使用前显式安装托管 Nginx
+php bin/w server:nginx:install
+
+# 启动项目托管 Nginx；WLS 自动固定 loopback 明文 H1；普通 start 不下载或编译
+php bin/w server:start -p 9981
 
 # 查看状态
 php bin/w server:status
@@ -44,46 +47,40 @@ php bin/w server:stop
 #### 启动命令
 
 ```bash
-# 默认启动（智能模式）
-php bin/w server:start
-
-# Linux/macOS 显式切换 Dispatcher 对照/兼容
-php bin/w server:start --dispatcher
-
-# Linux/macOS 显式 direct（auto 已默认直连）
-php bin/w server:start --direct
+# 启动 Nginx 的 WLS 明文 H1 回源
+php bin/w server:start -p 9981
 
 # 命名实例
-php bin/w server:start api-server
+php bin/w server:start api-server -p 9000
 
 # 指定端口和进程数
 php bin/w server:start -p 9000 -c 8
 
 # 守护进程模式（仅 Linux/Mac）
-php bin/w server:start -d
+php bin/w server:start -d -p 9981
 ```
 
 #### 配置参数
 
 | 参数 | 简写 | 说明 | 默认值 |
 |-----|------|------|--------|
-| `--port` | `-p` | 监听端口 | 80（HTTP）/443（HTTPS）；9981 为常用自定义回退端口 |
-| `--host` | `-h` | 监听地址 | 127.0.0.1 |
+| `--port` | `-p` | WLS 明文回源端口 | 9981 为常用值；Nginx 公网端口默认按 `8080/8443 + projectPortOffset` 分配，可由 env 覆盖 |
+| `--host` | `-h` | WLS 回源地址固定为 loopback；不得用作公网监听 | 127.0.0.1 |
 | `--count` | `-c` | Worker 进程数 | 智能推算 |
 | `--daemon` | `-d` | 守护进程模式 | false |
-| `--direct` | - | 显式 direct（Linux 使用 SO_REUSEPORT，macOS 使用 Master 共享监听 FD） | POSIX `auto` 已选择 |
-| `--dispatcher` | - | 显式 Dispatcher TCP 透传 | Windows `auto` 已选择 |
 
 #### 平台拓扑
 
 | 平台 | `auto` 结果 | 说明 |
 |---|---|---|
-| Windows | Dispatcher | Windows 只支持 Dispatcher 透传；`auto` 与显式 `--dispatcher` 可用，`--direct` 在启动前拒绝 |
-| Linux | Direct | 通过 ext-event、SO_REUSEPORT 真实双监听 accept 分布和策略能力检查后，客户端直达 Worker |
-| macOS | Direct | 通过共享 listener FD 与真实 accept 分布探测后，Master 只 bind 一个公开 listener 并交给全部 Worker |
+| Windows | Direct (`worker_ports`) | 每个 Worker 使用独立 loopback 端口，托管 Nginx 将全部 READY Worker 写入 upstream；Worker 使用纯 PHP `stream_select`，不安装或编译扩展 |
+| Linux | Direct | `auto` 优先使用经能力验证的 `reuseport` 独立 accept 队列；当前 PHP/内核不支持时回退 Master-owned `shared_fd` |
+| macOS | Direct | 默认由 Master 创建一个 `shared_fd` listener，所有 Worker 共享同一 accept 队列；只需 POSIX FD 原语和 `ext-event` |
 | 其他系统 | 不启动 | 没有受支持的平台驱动时，在创建 Master/Worker 前明确失败，不回退到兼容拓扑 |
 
-Direct 时不启动 Dispatcher，不创建第二条 Worker 后端连接。两种拓扑都在 Worker 加载同一 RuntimePolicyBundle，因此 Host、后台 Key、Origin Token、安全规则、限流、Static/FPC 和维护模式不会因 direct 而失效。POSIX direct 能力检查失败时停止启动，需运维明确使用 `--dispatcher`，不静默降级。
+所有平台的 `auto` 都是 Direct，不启动 Dispatcher。Windows 由 Nginx 直接均衡 `worker_ports`；Linux 自动优先 `reuseport`，在 PHP `sockets` 或内核 `SO_REUSEPORT` 不可用时回退 `shared_fd`；macOS 使用 `shared_fd`。两条 POSIX 路径都要求预装 `ext-event`。所有内部拓扑都在 Worker 加载同一 RuntimePolicyBundle，因此 Host、后台 Key、Origin Token、安全规则、限流、Static/FPC 和维护模式不会因监听策略不同而失效。Direct 能力最终仍不满足时停止启动，不静默切换到 Dispatcher。
+
+Dispatcher 仅作为所有平台都可显式选择的兼容/诊断拓扑保留。其有界 `socket_select` 分片仍用于兼容性验证，但不是 Windows `auto` 或生产默认路径；无论是否显式选择 Dispatcher，都不改变 Nginx 作为唯一公网 HTTP/TLS 入口的边界。
 
 #### 智能模式
 
@@ -96,28 +93,10 @@ Direct 时不启动 Dispatcher，不创建第二条 Worker 后端连接。两种
 
 > **Windows 限制**: 由于 Windows 多进程开销较大，推荐值不超过 CPU 核心数
 
-### 2. CLI Server - 开发服务器
+### 2. 已退役：CLI Server
 
-适用于 **开发环境** 和 **快速调试**。
+Nginx-only 启动链不再提供 `server:start --cli` 或名为 `cli` 的替代服务器分支；公网与本机验收都经过项目托管 Nginx。直接运行 `php -S` 不受 WLS 生命周期、owner、TLS 或协议门禁管理，不是受支持的 WLS 启动方式。
 
-#### 特性
-
-| 特性 | 说明 |
-|-----|------|
-| 内置服务器 | 使用 PHP 内置 CLI 服务器 |
-| 单进程 | 简单轻量，适合开发调试 |
-| 热重载 | 文件修改后自动生效 |
-| 零配置 | 无需额外配置即可启动 |
-
-#### 启动命令
-
-```bash
-# 启动 CLI 服务器
-php bin/w server:start cli -p 8080
-
-# 或使用 PHP 内置命令
-php -S 127.0.0.1:8080 -t pub
-```
 
 ## ⚙️ 环境配置 (env.php)
 
@@ -125,17 +104,24 @@ php -S 127.0.0.1:8080 -t pub
 
 ```php
 'server' => [
-    'host' => '127.0.0.1',      // 监听地址
-    'port' => 9443,             // 显式示例端口；未配置时 HTTP 80 / HTTPS 443
+    'host' => '127.0.0.1',      // Nginx 回源地址
+    'port' => 9981,             // Nginx 回源端口
     'worker_count' => 'auto',   // 'auto' 或具体数字
     'mode' => 'io',             // 'io' 或 'cpu'
-    'https' => true,            // 启用 HTTPS（默认 true）
-    'http_redirect_port' => 9980, // HTTP 重定向端口（可选，默认 = HTTPS端口 - 463）
+    'https' => true,            // 公网 Nginx TLS 意图；WLS 回源仍固定为明文 H1
 ],
 
 'wls' => [
     'runtime' => [
-        'topology' => 'auto',  // auto/direct/dispatcher；其他值启动前拒绝
+        'topology' => 'auto',  // 所有平台 -> Direct
+        'listener_mode' => 'auto', // Windows -> worker_ports；Linux -> reuseport/shared_fd；macOS -> shared_fd
+    ],
+    'edge' => [
+        'adapter' => 'nginx',  // 唯一支持值
+        'nginx' => [
+            'managed' => true,
+            'auto_start' => true,
+        ],
     ],
 ],
 
@@ -146,8 +132,8 @@ php -S 127.0.0.1:8080 -t pub
         'port' => 9001,
         'worker_count' => 4,
     ],
-    'websocket' => [
-        'host' => '0.0.0.0',
+    'secondary' => [
+        'host' => '127.0.0.1',
         'port' => 9002,
         'worker_count' => 2,
     ],
@@ -161,28 +147,38 @@ php -S 127.0.0.1:8080 -t pub
 启动服务器。
 
 ```bash
-php bin/w server:start [name] [-p port] [-c count] [--host ip] [-d]
+php bin/w server:start [name] [-p backend-port] [-c count] [-d]
 
 # 仅在运维明确允许本次安装副作用时使用
 php bin/w server:start [name] --install-deps
 ```
 
-普通 `server:start` 只探测当前 PHP 与平台能力，不安装或编译。`--install-deps` 可能联网、运行平台包管理器/PECL 并修改 PHP 配置。
+普通 `server:start` 只探测当前 PHP、平台与已配置 Nginx，不下载、安装或编译 PHP 扩展、Nginx、Caddy 或协议组件。`--install-deps` 仅在运维显式允许时处理 PHP 运行依赖；项目托管 Nginx 缺失时，普通启动返回非零并提示单独执行 `server:nginx:install`。
 
-### server:http3:build
+### server:nginx:install
 
-显式准备 macOS/Linux 可选 HTTP/3 原生组件；当前 PHP 必须预装并启用 FFI，本命令不会安装 FFI 或修改 `ffi.enable`，普通启动也不会调用此命令。
+项目托管 Nginx 只允许通过显式命令准备：
 
 ```bash
-php bin/w server:http3:build
-php bin/w server:http3:build --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
+php bin/w server:nginx:install
+php bin/w server:nginx:install --force  # 必须先停止托管 Nginx
 ```
 
-Linux 产物把固定摘要依赖封装为私有 PIC-static transport。macOS 产物会把所有非系统 dylib 快照到 owner-only、内容寻址目录，改写为 `@loader_path` 闭包、删除 `LC_RPATH` 并逐个 ad-hoc codesign；新 PHP 子进程还会核对实际 dyld loaded-image 路径并完成真实 QUIC/TLS/Ticket 自检。schema-3 运行证据同时绑定自检/编译器和生产 Worker、响应批处理、Alt-Svc、Ticket ring、READY、SSL Worker、Orchestrator 代码；Darwin 还绑定 Router 与运行身份代码。任一集成文件变化都会使旧证据失效。候选只有在这些检查全部成功后才会原子发布为 active，普通 `server:start` 始终只读复用。
+macOS/Linux 的显式安装命令可能构建固定摘要的 Nginx 1.30.4，Windows 解压官方预编译包；这是安装 Web Server，不是用编译实现 PHP 协议。Unix 显式安装把 PCRE2 头文件和 Nginx rewrite 模块视为硬依赖；缺失时立即失败，不会以 `--without-http_rewrite_module` 构建一个无法运行标准配置的二进制。普通 start/reload/restart 永远不会调用该流程。HTTP/3 也只由 Nginx 提供：配置和 `nginx -V` 必须证明 HTTP/3/QUIC 能力；PHP cURL 支持 HTTP/3 时还必须通过 owner 绑定的 HTTP/3-only 真实 QUIC 请求抵达 WLS health，不能用 Nginx 本地响应或边缘缓存代替。客户端 verifier 不可用时状态保持 pending，不能冒充已验证。
+
+Windows 分支把下载缓存、解压目录、已校验 candidate 和 final 全部放在同一项目身份的本机 LOCALAPPDATA 根；候选的 PE 架构、二进制 SHA 与 manifest 全部通过后才执行目录级原子发布，--force 失败会恢复旧安装。安装器不会在 UNC/Parallels 共享目录解压，也不会逐文件覆盖正式安装。
+
+托管 Nginx 的 `upstream_keepalive_timeout_sec` 默认为 5 秒。Worker reload 的安全 drain 下限固定为该 idle timeout 再加 5 秒；这给旧 upstream Keep-Alive 连接一个明确排空窗口，不会在旧 Worker 退场时把正在复用的回源连接直接重置。
 
 ### TLS Session 恢复边界
 
-PHP 8.4 的 Stream SSL 服务端没有可供纯 PHP 使用的外部 Session Cache 回调；该版本已验证的是同一连接上的 HTTP/1.1 Keep-Alive、HTTP/2 多路复用和连接级 TLS 复用，不能描述为跨连接或跨 Worker Session 恢复。WLS 已接入 PHP 8.6 OpenSSL Stream 回调的纯 PHP 外部有状态 Session Cache：独立有界 RAM 存储、SNI/证书/context 隔离、fail-fast 预连接客户端、reload 连续性和 sidecar 自愈；它不同于 HTTP/3 原生数据面的无状态 Ticket Key Ring，也不要求另行编译 WLS 原生协议组件。这里的“纯 PHP”只描述 WLS 实现层；PHP/ext-openssl 本身仍是预编译运行时，并且必须暴露 PHP 8.6 的 Session Cache 回调 API。该 TCP 能力默认关闭，显式配置在不支持的 PHP 上会于监听前拒绝。Windows 11 ARM64 上的 PHP 8.6.0alpha2 x64 仿真已通过同 Worker、跨 Worker、reload 与 sidecar 恢复功能证据；最新绑定证据的恢复握手 P95 为 156.236ms，未通过固定生产门禁 P95 ≤ 50ms。该二进制不是 Windows ARM64 原生执行，PHP 又是预发布版本，稳定 macOS/Linux/Windows 原生矩阵仍未完成，因此不得标记 `active_runtime_verified` 或 `production_ready`。
+公网 TLS 由 Nginx 终结。TLS 恢复门禁固定使用 `fresh-share-two-connection-pair-v1`：每一对都创建新的 cURL SSL session share，且只包含一个 fresh issuer 与一个 fresh-TCP resume probe；至少 8 个有效 probe、`failed=0`、恢复握手 P95 不超过 50ms。多 Nginx Worker 必须在各自成对的 issuer/probe PID 上同时证明 same-worker 与 cross-worker 恢复；单 Worker 的 cross-worker 状态为 `not_applicable`。该结论只覆盖 TCP/TLS；HTTP/3/QUIC Session Resumption 仍未验证。2026-07-14/15 的 PHP Stream/WLS-native `Reused` 只属于退役数据面，不得作为当前结论。
+
+### Nginx 回源 authority 与 H1 fresh 门禁
+
+托管配置把 `$http_host` 映射为 WLS 的公开 authority；HTTP/3 中 `$http_host` 为空时使用 `$host:$server_port`，并同时转发 `X-Forwarded-Proto` 与 `X-Forwarded-Port`。RuntimePolicyBundle 固定把 `127.0.0.0/8`、`::1/128` 视为 trusted proxy transport peer，使 Worker 能在明文 H1 回源上重建真实公开 origin；这不把 loopback 加入业务 whitelist，也不绕过安全规则。
+
+只有 Nginx loopback allowlist 保护的 `/_wls/` 探测位置会把客户端精确的 `Connection: close` 传播给 WLS，用于 fresh H1 分流门禁；普通业务位置始终清空 upstream `Connection` 头并保留 Nginx upstream Keep-Alive 池。
 
 ### server:stop
 
@@ -211,7 +207,7 @@ php bin/w server:status
 php bin/w server:status api-server
 ```
 
-指定实例的详细状态只接受 endpoint schema v4，并从嵌套 `runtime_selection` 显示 requested/effective topology、listener mode、event loop、SSL engine、policy compatibility 与完整 digest。旧 endpoint schema、缺失 `runtime_selection` 或根级 topology/listener/event/SSL 投影都会 fail closed；状态命令不重新推导或补写拓扑。
+指定实例的详细状态只接受 endpoint schema v4，并从嵌套 `runtime_selection` 显示 requested/effective topology、listener mode、event loop、policy compatibility 与完整 digest。旧 endpoint schema、缺失 `runtime_selection` 或根级投影都会 fail closed；状态命令不重新推导或补写拓扑。endpoint 必须持续保留由 Start 验证的 `edge_adapter=nginx` 与 WLS HTTP/1.1 回源选择；Master/Orchestrator 写回不得删除这些协议策略，否则 Worker 在绑定监听前拒绝 READY。
 
 输出示例：
 
@@ -254,6 +250,9 @@ php bin/w server:benchmark --instance api-server
 
 # 自定义参数
 php bin/w server:benchmark --instance api-server -c 500 -n 50000
+
+# 跨主机负载发生器：TCP 连接 Windows/Linux 节点，TLS SNI 与 HTTP Host 保持公开域名
+php bin/w server:benchmark --host 10.0.0.8 --authority-host app.weline.test -p 15443 --ssl --http-version 2 --physical-connections 3 -c 96 -n 5000
 ```
 
 参数说明：
@@ -265,22 +264,23 @@ php bin/w server:benchmark --instance api-server -c 500 -n 50000
 | `--path` | - | 请求路径 | `/_wls/health` |
 | `--instance` | - | 精确指定运行实例；读取 endpoint schema v4 归因到 Benchmark report schema v4 | - |
 | `--port` | `-p` | 指定端口（可选） | 自动探测 |
-| `--no-keepalive` | - | 强制 fresh connection；HTTPS 时同时代表 fresh TLS | false |
+| `--authority-host` | - | 跨主机压测的 TLS SNI/HTTP Host；TCP 目的地址仍由 `--host` 指定 | - |
+| `--no-keepalive` | - | 对所选目标强制 fresh connection；`--instance` 默认目标是受 owner 绑定的托管 Nginx 公网端点 | false |
 
 压测开始后会立即输出首批请求的真实状态，不必等到 10% 才看到进度；运行中约每 0.5 秒刷新一次完成数、活动请求句柄、已发送数、耗时和实时 QPS，最后一次完成会强制刷新。进度只统计实际完成/失败的请求，不按时间模拟。
 
-报告保存到 `var/log/wls/benchmark_report_*.json`。这里的 **Benchmark report schema v4** 仅是压测报告格式，不是实例 endpoint 版本；实例归因必须先通过 **endpoint schema v4** 的嵌套 `runtime_selection` 校验。报告还记录 `target_attribution`、endpoint/runtime selection 校验结果、requested/effective topology、listener、event loop、SSL engine、Worker 数、policy compatibility/digest、keep-alive/fresh TLS 和响应观测到的 cache source。`qps`/“完成 QPS”按所有已完成请求（成功和失败）计算，`success_qps`/“成功 QPS”单独表示成功吞吐；`latency_ms` 默认覆盖所有已完成请求，因此 HTTP 错误和 curl 超时也会有真实耗时，不再在全失败时显示为 0。手动 `-p` 只有在 host/port（以及显式 SSL 要求）唯一匹配运行中的本地 endpoint 时才归因实例；零匹配或多匹配仍可压明确端口，但运行时字段保持 `null`。有多个运行实例且未指定目标时，命令直接拒绝自动选择，避免误压生产实例。自动唯一选择、显式 `--instance` 和唯一端口归因都会先校验 Master、全部 Worker 和登记服务的健康状态；实例未就绪时直接拒绝压测。
+报告保存到 `var/log/wls/benchmark_report_*.json`。这里的 **Benchmark report schema v4** 仅是压测报告格式，不是实例 endpoint 版本；实例归因必须先通过 **endpoint schema v4** 的嵌套 `runtime_selection` 校验。报告还记录 `target_attribution`、endpoint/runtime selection 校验结果、requested/effective topology、listener、event loop、Worker 数、policy compatibility/digest、keep-alive 和响应观测到的 cache source。跨主机模式额外记录 `target_connect_host`、`target_authority_host` 与 `target_resolve_explicit`；它只改变 cURL 的 TCP resolve，URL、TLS SNI 与 HTTP Host 始终使用 authority。未携带本机 endpoint owner 证据的远端目标仍标记为 `unattributed_endpoint`，不能冒充实例归因；但在显式强制 HTTP/2/3 时可以建立隔离的 multiplex lanes，并以实际协商版本、连接数和并发 Stream 观测决定门禁。每条物理连接 lane 只使用其 `curl_multi` 默认的 DNS/connection/TLS Session cache；不叠加 `CURLSH`，所以 `connection_share_enabled` 与 `ssl_session_share_enabled` 固定为 false。`curl_multi_tls_session_cache_enabled=true` 只表示客户端缓存能力，不是服务端恢复证据；本次 benchmark 没有服务端证据时必须保持 `curl_multi_tls_session_resumption_verified=false`，Nginx 恢复结论以 owner-bound Doctor/verifier 为准。`qps`/“完成 QPS”按所有已完成请求（成功和失败）计算，`success_qps`/“成功 QPS”单独表示成功吞吐；`latency_ms` 默认覆盖所有已完成请求，因此 HTTP 错误和 curl 超时也会有真实耗时。百万请求也不使用采样：延迟值写入有界分片，最后经精确外部归并计算分位数；内存占用不随请求数线性增长，schema v4 和门禁语义保持不变。显式 `--instance` 必须解析到 owner 与实例绑定一致、已经 live 验证的托管 Nginx 公网端点；owner/config generation 不一致时 fail closed，不回退到 WLS 后端。只有运维显式给出内部 host/port 时才测 `wls_endpoint`，报告必须如实标记该内部 surface。有多个运行实例且未指定目标时，命令拒绝自动选择，避免误压生产实例。
 
 ## 🔧 性能优化
 
 ### 事件循环（最重要！）
 
-Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 PHP，绝不下载、安装、编译或修改 PHP 配置。Linux/macOS Direct 缺少必需的 `sockets` / `ext-event` 时会在创建 Master/Worker 前停止；只有运维显式传入 `--install-deps`，本次启动才允许调用 `env:install` 并用新 PHP 进程复验。
+Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 PHP 与已配置 Nginx，绝不下载、安装、编译或修改 PHP 配置，也不安装 Nginx。Linux `auto` 先只读验证 `sockets + SO_REUSEPORT` 并优先使用 `reuseport`；能力不可用时回退只要求 POSIX FD 原语的 `shared_fd`。Linux 两种监听与 macOS `shared_fd` 都要求预装 `ext-event`。只有运维显式传入 `--install-deps`，本次启动才允许调用 `env:install` 并用新 PHP 进程复验。
 
 | 事件循环 | 性能 | 安装方式 | 说明 |
 |---------|------|---------|------|
-| **Event 扩展** | libevent 驱动，收益取决于路由与业务负载 | 预装，或显式运行 `server:start --install-deps` | Linux/macOS Direct 默认要求；安装后会使用当前 PHP 验证 |
-| stream_select | 兼容性基线 | 无需安装 | Dispatcher 缺少 ext-event 时使用；Direct 不会静默改写为 select |
+| **Event 扩展** | libevent 驱动，收益取决于路由与业务负载 | 预装，或显式运行 `server:start --install-deps` | Linux `reuseport/shared_fd` 与 macOS `shared_fd` Direct 要求；安装后会使用当前 PHP 验证 |
+| bounded select | Windows Direct 稳定基线 | 无需安装 | Windows `worker_ports` Worker 使用 `stream_select`；显式 Dispatcher 兼容模式使用可分片的 `socket_select` |
 
 #### 检测与优雅降级
 
@@ -288,14 +288,14 @@ Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 P
 启动依赖决策：
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. 普通启动 → 只读探测，不安装、不编译、不修改 PHP       │
-│ 2. Direct 依赖齐全 → 直接使用 libevent                    │
-│ 3. Direct 依赖缺失 → 停止并给出缺失项                     │
-│ 4. 显式 --install-deps → 安装、用新 PHP 复验、继续启动    │
-│ 5. Dispatcher 缺 event → 保持 Dispatcher + bounded select │
+│ 2. POSIX Direct 依赖齐全 → 直接使用 libevent              │
+│ 3. POSIX Direct 依赖缺失 → 停止并给出缺失项               │
+│ 4. POSIX 显式 --install-deps → 安装并用新 PHP 复验        │
+│ 5. Windows Direct → worker_ports + select，无需安装        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### 安装 Event 扩展
+#### 安装 Event 扩展（仅 POSIX Direct）
 
 **Linux/macOS（手动预装，适合镜像构建）:**
 ```bash
@@ -307,7 +307,7 @@ php bin/w env:install event -y
 2. 普通启动只探测当前 PHP 已加载的扩展；只有显式 `--install-deps` 才会尝试启用并用新 PHP 子进程验证 `extension_dir` 中已有的匹配 DLL。
 3. 没有可验证 DLL 时使用 Windows 稳定兼容运行时；框架不会自动下载不明 ABI 的二进制文件。
 
-生产镜像建议在构建阶段执行 `env:install` 并预装依赖。普通启动默认已经禁止安装；`--no-auto-deps` 仅保留给旧脚本表达同一默认行为，不能与 `--install-deps` 同时使用。HTTP/3 不属于普通 Direct 依赖；当前 PHP 必须预装并启用 FFI，显式 `php bin/w server:http3:build` 只准备原生工具链和可信组件，不安装或注入 FFI。
+生产镜像建议在构建阶段执行 `env:install` 并预装 PHP 依赖。普通启动默认已经禁止安装；`--no-auto-deps` 仅保留给旧脚本表达同一默认行为，不能与 `--install-deps` 同时使用。HTTP/3 不属于 WLS/PHP 依赖，只检查公网 Nginx 的 HTTP/3/QUIC 模块与真实端点门禁。
 
 ### 推荐配置
 
@@ -345,19 +345,25 @@ memory_limit=256M
 
 ```mermaid
 flowchart LR
-  MASTER["Master / Registry\n生命周期 + policy publish"] --> WORKER["Worker x N\nWorkerPolicyKernel + Runtime"]
-  MASTER --> DISP["Dispatcher\nWindows 默认 / POSIX 显式"]
-  WIN["Windows Client"] --> DISP
-  DISP -->|"PROXY v2 + TCP/TLS 字节透传"| WORKER
-  LINUX["Linux Client"] -->|"SO_REUSEPORT direct"| WORKER
-  MAC["macOS Client"] -->|"shared listener FD direct"| WORKER
+  CLIENT["Client"] -->|"TLS 1.3 + H2/H1；H3 gated"| NGINX["Nginx\n唯一公网入口"]
+  NGINX -->|"HTTP/1.1 Keep-Alive\nloopback 回源"| WIN["Windows Direct\nworker_ports upstream pool"]
+  NGINX -->|"HTTP/1.1 Keep-Alive\nloopback 回源"| LINUX["Linux Direct\nreuseport 优先 / shared_fd 回退"]
+  NGINX -->|"HTTP/1.1 Keep-Alive\nloopback 回源"| MAC["macOS Direct\nshared_fd accept queue"]
+  MASTER["Master / Registry\n生命周期 + policy publish"] --> WIN
+  MASTER --> LINUX
+  MASTER --> MAC
+  WIN --> WORKER["Worker x N\nWorkerPolicyKernel + Runtime"]
+  POSIX --> WORKER
   WORKER --> CACHE["Static L1 / FPC Process L1 + Shared L2"]
   WORKER --> APP["Router / Controller / Response"]
 ```
 
-- Windows 只使用 Dispatcher 透传。Dispatcher 负责 L4 准入、READY Worker 选择、背压和 failover，TLS/HTTP 语义由 Worker 处理。
-- Linux `auto` 由 SO_REUSEPORT Worker 共享公开端口；macOS `auto` 由 Master 绑定一个 listener 并将同一 FD 继承给 Worker。两者都没有 Dispatcher、后端连接或字节透传；可用 `--dispatcher` 显式切换对照。
-- Worker 在两种拓扑中都先执行 mandatory guard，再命中 Static/FPC，最后才进入 Session、Router 和 Controller。
+- Nginx 是唯一公网入口，负责 TLS 1.3、HTTP/2 与 HTTP/1.1 回退；HTTP/3 只在模块/UDP/Alt-Svc 与 owner 绑定的 HTTP/3-only 真实 WLS health 门禁全部通过后启用，本地响应或缓存不算。
+- Windows 的 `auto` 使用 `worker_ports` Direct：每个 Worker 绑定独立 loopback 端口，Nginx upstream 直接列出全部 READY Worker；内置 `stream_select` 足以完成 WLS 明文 H1 处理，不安装或编译 `event/ev`。
+- Windows 从 UNC/Parallels 共享项目冷启动时，首页 READY 单次预算默认从本地盘的 30 秒提高到有界 60 秒，Orchestrator 默认基线从 90 秒提高到 150 秒且绝对上限仍为 300 秒；显式环境/配置值继续优先。该兼容预算不改变 READY 的 Process FPC HIT 要求，也不能替代本地盘发布性能门禁。
+- Windows 后台启动使用精确 argv 的 WMI 隔离创建 Master，共享 Session/Memory 批次也隔离父进程标准句柄；非交互调用会在 READY/协议门禁完成后正常返回，不会因 Master 或 sidecar 继承调用端管道而继续等待。子进程自身 PID 与 IPC 注册仍是运行身份权威。
+- Linux 的 `auto` 优先经验证的 `reuseport` Direct，并在 `sockets`/`SO_REUSEPORT` 不可用时回退 Master-owned `shared_fd`；macOS 的 `auto` 使用 `shared_fd`。显式 `--dispatcher` 在所有平台仍受支持，但 `auto` 不会在 Direct 能力最终失败时静默切换拓扑。`shared_fd` rolling reload 使用标准安全分批；`reuseport` 使用独立监听队列的既有安全交接。无论内部拓扑如何选择，都不由 WLS 终结公网协议。
+- Worker 在两种内部拓扑中都先执行 mandatory guard，再命中 Static/FPC，最后才进入 Session、Router 和 Controller。
 - 策略、缓存 epoch 和维护 epoch 由 Master 版本化发布；Worker active digest 不匹配时不得 READY。
 
 完整组件、时序与请求顺序见 [WLS 运行时架构](doc/WLS架构图.md) 和 [WLS 安全与规则配置推演](doc/WLS安全与规则配置推演.md)。
@@ -452,7 +458,7 @@ WLS 内置智能内存缓存系统，采用冷热淘汰策略管理静态文件�
 ```php
 use Weline\Server\Worker;
 
-$worker = new Worker('http://0.0.0.0:8080');
+$worker = new Worker('http://127.0.0.1:8080'); // 仅作为 Nginx 回源或本机调试
 $worker->count = 4;
 $worker->name = 'MyHttpServer';
 
@@ -463,17 +469,19 @@ $worker->onMessage = function($connection, $request) {
 Worker::runAll();
 ```
 
-### 支持的协议
+### 支持的协议 surface
 
-| 协议 | 类 | 说明 |
+| Surface | 归属 | 说明 |
 |-----|-----|------|
-| HTTP/1.1 | `Protocol\Http` | 默认生产数据面（`wls.edge.adapter=nginx`）；亦为自研模式下 HTTP/2/HTTP/3 不可用时的回退 |
-| HTTP/2 | `Protocol\Http2\ConnectionAdapter` | 自研边缘（`wls.edge.adapter=wls`）下 HTTPS 目标；代码保留，nginx 适配器下 `retained_inactive` |
-| HTTP/3 | `Protocol\Http3\WorkerQuicRuntime` | 可选原生 QUIC；需 `adapter=wls` + `server:http3:build` 且证据就绪 |
-| WebSocket | `Protocol\WebSocket` | WebSocket 协议 |
-| Text | `Protocol\Text` | 文本协议（换行符分隔） |
+| 公网 HTTP/2 | Nginx | 默认协议；必须由 TLS 1.3 下真实协商的 H2 请求到达 owner 绑定的 WLS health，并匹配 generation/backend identity |
+| 公网 HTTP/1.1 | Nginx | 客户端不支持 H2 时自动回退 |
+| 公网 HTTP/3 | Nginx | 仅配置、模块、UDP、Alt-Svc 与 owner 绑定的 HTTP/3-only 真实 WLS health 请求全部通过后确认；Nginx 本地响应/缓存不构成证据，PHP cURL verifier 不可用时保持 pending |
+| WLS 回源 HTTP/1.1 | `Protocol\Http` | 唯一 WLS HTTP 数据面；业务请求保持 upstream Keep-Alive，只有 `/_wls/` fresh 门禁可传播精确 `Connection: close` |
+| Text | `Protocol\Text` | 内部文本协议（换行符分隔） |
 
-边缘终结由 `Service\Edge\*` 适配器隔离：默认 **Nginx**（对外 TLS/H2/H3），WLS 明文回源；切换 `wls` 恢复自研协商。
+`Protocol\WebSocket` 仍是通用 Worker API 组件。项目托管 WLS 当前没有“公网 101 握手 + 帧往返”的发布证据，因此不把 WebSocket 列为本轮受支持 surface；Nginx 只透传精确的 `Upgrade: websocket`，其它 Upgrade 值一律剥离。
+
+边缘终结固定为 **Nginx**。仓库中的 Caddy/WLS-native 协议实现属于不可达遗留代码，不是配置项、安装项或降级路径。
 
 ## 📁 目录结构
 
@@ -489,7 +497,6 @@ Weline/Server/
 │   ├── Stop.php            # server:stop
 │   ├── Status.php          # server:status
 │   ├── Benchmark.php       # server:benchmark
-│   ├── Http3/Build.php     # server:http3:build（显式可选构建）
 │   └── ...
 ├── Event/                  # 事件循环
 │   ├── EventInterface.php

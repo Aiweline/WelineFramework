@@ -5,17 +5,16 @@ return [
     'router' => 'server',
     'backend_router' => 'server',
     'wls' => [
-        // 监听地址：默认沿用 host 推断；线上对外公开必须设为 '0.0.0.0'（IPv4）或 '::'（IPv4+IPv6）。
-        // 仅 dispatcher 单独覆盖时使用 'dispatcher' => ['bind_host' => '0.0.0.0']。
-        'bind_host' => '0.0.0.0',
+        // WLS 只作为 Nginx 私网回源，禁止直接暴露公网监听。
+        'bind_host' => '127.0.0.1',
         'http' => [
-            // The PHP Worker currently exposes HTTP/1.1 directly. HTTP/2/3
-            // stay fail-closed until the WLS-owned Transport Adapter is ready.
+            // Public TLS/HTTP negotiation belongs exclusively to Nginx.
+            // WLS is an authenticated private HTTP/1.1 backend.
             'protocols' => ['h1'],
             'preferred' => 'h1',
             'protocol_edge' => 'disabled',
             'protocol_edge_binary' => '',
-            'tls_session_resumption' => true,
+            'tls_session_resumption' => false,
             'alt_svc' => false,
         ],
         'orchestrator' => [
@@ -30,21 +29,25 @@ return [
             'idle_shutdown_grace_sec' => 30,
             'ephemeral_consumer_ttl_sec' => 120,
         ],
-        // 边缘协议终结：未在 app/etc/env.php 覆盖时即为 nginx（也可整段省略，Resolver 同样默认 nginx）。
+        'cache_namespace' => [
+            // Release A compatibility gate. Release B requires every routing
+            // Worker to advertise cache_namespace_invalidation_v1 before READY.
+            'require_capability' => false,
+            'ack_timeout_sec' => 5.0,
+        ],
+        // Nginx 是唯一公网边缘。普通 start 绝不下载或编译；缺少项目隔离
+        // 二进制时会失败并提示显式执行 server:nginx:install。
         'edge' => [
-            'adapter' => 'nginx', // nginx|wls
-            'reload_command' => '', // 宿主机 Nginx：systemctl reload nginx / nginx -s reload
-            'reload_timeout_sec' => 30,
+            'adapter' => 'nginx',
             'nginx' => [
-                // auto：检测宿主机 Nginx（宝塔/系统 PATH）；有则 managed=false，无则托管本项目实例
-                // true/false：强制托管或强制宿主机模式
-                'managed' => 'auto',
+                // 只管理本项目隔离的 binary/runtime，绝不接管宿主机 Nginx。
+                'managed' => true,
                 'auto_start' => true,
                 'listen_http' => null,
                 'listen_https' => null,
                 'server_names' => [],
-                'install_root' => 'extend/server/nginx',
-                'runtime_root' => 'var/server/nginx',
+                'install_root' => null,
+                'runtime_root' => null,
                 // 最佳性能默认：匿名边缘微缓存 + gzip + 大回源连接池
                 'edge_cache' => true,
                 'edge_cache_ttl_sec' => 60,

@@ -46,4 +46,36 @@ final class FiberSchedulerTest extends TestCase
         self::assertTrue($fiberA->isTerminated());
         self::assertTrue($fiberB->isTerminated());
     }
+
+    public function testTickReportsBeforeResumeFailureToOwningWorkerCallback(): void
+    {
+        $scheduler = new FiberScheduler();
+        $fiber = new \Fiber(static fn (): mixed => \Fiber::suspend('waiting'));
+        self::assertSame('waiting', $fiber->start());
+        $scheduler->addYieldTimer($fiber);
+        \usleep(50);
+
+        $reportedFiber = null;
+        $reportedFailure = null;
+        $scheduler->tick(
+            static fn () => throw new \RuntimeException('restore failed'),
+            null,
+            null,
+            static function (\Fiber $failedFiber, \Throwable $failure) use (
+                &$reportedFiber,
+                &$reportedFailure,
+            ): void {
+                $reportedFiber = $failedFiber;
+                $reportedFailure = $failure;
+            },
+        );
+
+        self::assertSame($fiber, $reportedFiber);
+        self::assertInstanceOf(\RuntimeException::class, $reportedFailure);
+        self::assertSame('restore failed', $reportedFailure->getMessage());
+        self::assertTrue($fiber->isSuspended());
+
+        $fiber->resume();
+        self::assertTrue($fiber->isTerminated());
+    }
 }

@@ -29,6 +29,9 @@ final class SubprocessControlKernel
     /** Master 自愈协调器；null 时保持向后兼容（不自愈） */
     private ?ResurrectionCoordinatorInterface $resurrectionCoordinator;
 
+    /** @var null|callable(string): void */
+    private $beforeReadyGuard = null;
+
     public function __construct(
         private readonly ChildProcessIdentity $identity,
         private readonly RoleControlHandlerInterface $handler,
@@ -51,6 +54,14 @@ final class SubprocessControlKernel
     public function setResurrectionCoordinator(?ResurrectionCoordinatorInterface $coordinator): void
     {
         $this->resurrectionCoordinator = $coordinator;
+    }
+
+    public function setBeforeReadyGuard(?callable $guard): void
+    {
+        $this->beforeReadyGuard = $guard;
+        if ($this->client instanceof BeforeReadyGuardAwareClientInterface) {
+            $this->client->setBeforeReadyGuard($guard);
+        }
     }
 
     /**
@@ -141,6 +152,9 @@ final class SubprocessControlKernel
             $retryAttempt++;
             $client = $this->createClient();
             $this->client = $client;
+            if ($client instanceof BeforeReadyGuardAwareClientInterface) {
+                $client->setBeforeReadyGuard($this->beforeReadyGuard);
+            }
             $client->setSelfTag($this->selfTag);
             $client->setVerboseLog($this->verboseLog);
             $client->rememberRegistration(

@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\Service\Control\BroadcastControlDispatchService;
 
 /**
- * Self-developed edge: WLS SSL Worker negotiates HTTP/2 and optional native HTTP/3.
+ * Retired compatibility class. Nginx is the only supported public edge.
  */
 final class WlsNativeEdgeAdapter implements EdgeAdapterInterface
 {
+    public function __construct()
+    {
+        throw new \RuntimeException('WLS native edge is retired; use Nginx.');
+    }
+
     public function name(): string
     {
         return self::NAME_WLS;
@@ -19,37 +22,35 @@ final class WlsNativeEdgeAdapter implements EdgeAdapterInterface
 
     public function allowsNativeHttp2(): bool
     {
-        return true;
+        return false;
     }
 
     public function allowsNativeHttp3(): bool
     {
-        return true;
+        return false;
     }
 
     public function expectsPlaintextBackend(): bool
     {
-        return false;
+        return true;
     }
 
     public function onCertificateMaterialUpdated(string $domain, array $paths = []): void
     {
-        $domains = $domain !== '' ? [$domain] : [];
-        ObjectManager::getInstance(BroadcastControlDispatchService::class)
-            ->reloadSslCert($domains);
+        throw new \RuntimeException('WLS native certificate reload is retired; use project-managed Nginx.');
     }
 
     public function doctorSnapshot(): array
     {
         return [
             'adapter' => self::NAME_WLS,
-            'native_http2' => 'active_when_verified',
-            'native_http3' => 'active_when_verified',
-            'expects_plaintext_backend' => false,
+            'native_http2' => 'retired',
+            'native_http3' => 'retired',
+            'expects_plaintext_backend' => true,
             'reload_command_configured' => false,
             'reload_command' => '',
             'last_reload' => null,
-            'notes' => 'WLS owns TLS and native HTTP/2/HTTP/3 negotiation; certificate updates broadcast ssl_cert_reload.',
+            'notes' => 'Retired compatibility adapter; Nginx exclusively owns public TLS and HTTP negotiation.',
         ];
     }
 }

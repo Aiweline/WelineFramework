@@ -28,6 +28,7 @@ use Weline\Server\Log\LogConfig;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Protocol\Http3\NativeTransportLibrary;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\LongRunningPhpRuntime;
@@ -445,7 +446,7 @@ class MasterProcess
 
             // 最后再注销 Master PID，并标记/清理 endpoint 记录。
             try {
-                $this->unregisterMasterPid();
+                $this->unregisterMasterPid($masterPid);
             } catch (\Throwable $indexCleanupError) {
                 WlsLogger::debug_('[Master] 注销 Master PID 索引失败: ' . $indexCleanupError->getMessage());
             }
@@ -485,9 +486,32 @@ class MasterProcess
     /**
      * 从进程索引移除 Master PID
      */
-    private function unregisterMasterPid(): void
+    private function unregisterMasterPid(int $masterPid): void
     {
         $masterName = '--name=' . self::getMasterProcessName($this->instanceName);
+
+        $instanceManager = new ServerInstanceManager();
+        if ($instanceManager->hasSupersedingLiveMasterGeneration($this->instanceName, $masterPid)) {
+            $this->log(__('检测到新 Master 代际，旧 Master 跳过同名 PID 索引清理'));
+            return;
+        }
+
+        foreach (Processer::getAllPidsByName($masterName) as $registeredPid) {
+            $registeredPid = (int)$registeredPid;
+            if ($registeredPid > 0
+                && $registeredPid !== $masterPid
+                && Processer::isManagedProcessRunning(
+                    $registeredPid,
+                    self::getMasterProcessName($this->instanceName),
+                    '',
+                    $masterName
+                )
+            ) {
+                $this->log(__('检测到同名新 Master PID %{1}，旧 Master 跳过索引清理', [$registeredPid]));
+                return;
+            }
+        }
+
         Processer::removePidFile($masterName);
         $this->log(__('Master PID 索引已移除'));
     }
@@ -697,6 +721,43 @@ class MasterProcess
             );
         }
 
+        $configuredEdge = \is_array($this->config['edge'] ?? null)
+            ? $this->config['edge']
+            : [];
+        $edgeAdapter = \strtolower(\trim((string)($configuredEdge['adapter'] ?? '')));
+        if ($edgeAdapter !== 'nginx') {
+            throw new \RuntimeException('Master runtime requires persisted edge.adapter=nginx.');
+        }
+        $wls['edge'] = \array_merge(
+            \is_array($wls['edge'] ?? null) ? $wls['edge'] : [],
+            $configuredEdge,
+            ['adapter' => $edgeAdapter],
+        );
+
+        $publicOrigin = ManagedNginxPublicOrigin::normalize(
+            (string)($this->config['public_origin'] ?? ''),
+        );
+        $wls['public_origin'] = $publicOrigin;
+        $configuredHttp = \is_array($this->config['http'] ?? null)
+            ? $this->config['http']
+            : [];
+        if (\trim((string)($this->config['protocol_edge_binary'] ?? '')) !== ''
+            || (bool)($this->config['protocol_edge_enabled'] ?? false)
+        ) {
+            throw new \RuntimeException('Master runtime rejects retired WLS/Caddy protocol edges.');
+        }
+        if ($configuredHttp === []) {
+            throw new \RuntimeException('Master runtime requires a persisted wls.http protocol snapshot.');
+        }
+        $httpSelection = \Weline\Server\Service\Runtime\HttpProtocolSelection::fromConfig(
+            ['http' => $configuredHttp],
+            $this->sslEnabled,
+        );
+        $wls['http'] = \array_merge(
+            $configuredHttp,
+            $httpSelection->toConfig(),
+        );
+
         $configuredLoop = \is_array($this->config['loop'] ?? null) ? $this->config['loop'] : [];
         $wls['loop'] = \array_merge(\is_array($wls['loop'] ?? null) ? $wls['loop'] : [], $configuredLoop, [
             'driver' => $runtimeSelection->eventLoopDriver,
@@ -705,10 +766,14 @@ class MasterProcess
             'engine' => $runtimeSelection->sslEngine,
         ]);
         if (\is_array($this->config['http3'] ?? null)) {
-            $wls['http3'] = \array_merge(
-                \is_array($wls['http3'] ?? null) ? $wls['http3'] : [],
-                $this->config['http3']
-            );
+            if ((bool)($this->config['http3']['enabled'] ?? false)) {
+                throw new \RuntimeException('WLS native HTTP/3 is retired; Nginx owns HTTP/3.');
+            }
+            $wls['http3'] = \array_merge($this->config['http3'], [
+                'enabled' => false,
+                'runtime_verified' => false,
+                'reason' => 'Nginx exclusively owns public HTTP/3.',
+            ]);
         }
 
         if (isset($this->config['supervisor']) && \is_array($this->config['supervisor'])) {
@@ -1148,6 +1213,7 @@ class MasterProcess
             'instance_name',
             'host',
             'public_host',
+            'public_origin',
             'port',
             'main_port',
             'runtime_selection',
@@ -1161,6 +1227,10 @@ class MasterProcess
             'ssl_cert',
             'ssl_key',
             'http3',
+            'edge_adapter',
+            'http_protocol_selection',
+            'protocol_edge_enabled',
+            'protocol_edge_binary',
             'worker_port',
             'worker_base_port',
             'gateway',

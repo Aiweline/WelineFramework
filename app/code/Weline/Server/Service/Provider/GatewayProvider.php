@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
-use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -11,12 +10,7 @@ use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 
 /**
- * Gateway 服务提供者
- *
- * 负责启动 WLS Gateway 反向代理进程。
- * 仅在配置启用时启动。
- *
- * 优先级：40（在 Dispatcher 之后启动）
+ * Retired WLS Gateway provider retained only for compatibility diagnostics.
  */
 class GatewayProvider extends AbstractServiceProvider
 {
@@ -34,18 +28,31 @@ class GatewayProvider extends AbstractServiceProvider
 
     public function isEnabled(ServiceContext $context): bool
     {
-        // 检查 env.php 中是否配置了 wls.gateway.enabled
         $envEnabled = \getenv('WLS_GATEWAY_ENABLED');
+        $configuredEnabled = $context->getConfig('wls.gateway.enabled', false);
         if ($envEnabled !== false && \trim((string)$envEnabled) !== '') {
-            return \in_array(\strtolower(\trim((string)$envEnabled)), ['1', 'true', 'yes', 'on'], true);
+            $enabled = \in_array(\strtolower(\trim((string)$envEnabled)), ['1', 'true', 'yes', 'on'], true);
+        } elseif (\is_string($configuredEnabled)) {
+            $enabled = \in_array(
+                \strtolower(\trim($configuredEnabled)),
+                ['1', 'true', 'yes', 'on'],
+                true
+            );
+        } else {
+            $enabled = (bool)$configuredEnabled;
+        }
+        if ($enabled) {
+            throw new \RuntimeException(
+                'wls.gateway.enabled=true: ' . (string)__('Nginx 是唯一公网边缘，不能跳过其启动。')
+            );
         }
 
-        return (bool) $context->getConfig('wls.gateway.enabled', false);
+        return false;
     }
 
     public function getInstanceCount(ServiceContext $context): int
     {
-        return 1; // Gateway 单实例
+        return 0;
     }
 
     public function getPriority(): int
@@ -65,27 +72,9 @@ class GatewayProvider extends AbstractServiceProvider
 
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
-        $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
-        $script = $scriptDir . DS . 'gateway.php';
-
-        $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
-
-        // 获取监听地址
-        $listen = $this->resolveListenAddress($context);
-        [$listenHost, $listenPort] = explode(':', $listen);
-
-        $arguments = [
-            $listenHost,
-            $listenPort,
-            (string) $context->controlPort,
-            (string) $context->masterPid,
-            $context->instanceName,
-        ];
-
-        return new ServiceCommand(
-            script: $script,
-            arguments: $arguments,
-            processName: $processName,
+        throw new \RuntimeException(
+            'GatewayProvider::buildCommand: '
+            . (string)__('Nginx 是唯一公网边缘，不能跳过其启动。')
         );
     }
 

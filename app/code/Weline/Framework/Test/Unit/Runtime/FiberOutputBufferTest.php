@@ -112,4 +112,46 @@ final class FiberOutputBufferTest extends TestCase
 
         $fiber->start();
     }
+
+    public function testNonPersistentDiscardPreservesCallerOutputBuffer(): void
+    {
+        FiberOutputBuffer::uninstall();
+        Runtime::setMode(RuntimeInterface::MODE_FPM);
+        $baseline = \ob_get_level();
+        \ob_start();
+        $callerLevel = \ob_get_level();
+        try {
+            FiberOutputBuffer::beginCapture();
+            echo 'discarded-template-output';
+            FiberOutputBuffer::discardCapture();
+
+            self::assertSame($callerLevel, \ob_get_level());
+            echo 'caller-output';
+            self::assertSame('caller-output', (string)\ob_get_contents());
+        } finally {
+            while (\ob_get_level() > $baseline) {
+                \ob_end_clean();
+            }
+        }
+    }
+
+    public function testNonPersistentEndCapturePreservesCallerOutputBuffer(): void
+    {
+        FiberOutputBuffer::uninstall();
+        Runtime::setMode(RuntimeInterface::MODE_FPM);
+        $baseline = \ob_get_level();
+        \ob_start();
+        $callerLevel = \ob_get_level();
+        try {
+            FiberOutputBuffer::beginCapture();
+            echo 'template-output';
+
+            self::assertSame('template-output', FiberOutputBuffer::endCapture());
+            self::assertSame($callerLevel, \ob_get_level());
+        } finally {
+            while (\ob_get_level() > $baseline) {
+                \ob_end_clean();
+            }
+        }
+    }
 }

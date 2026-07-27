@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Test;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Cache\Scanner;
 
 use function PHPUnit\Framework\assertIsArray;

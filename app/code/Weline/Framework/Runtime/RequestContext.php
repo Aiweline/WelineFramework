@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Runtime;
 
 use Weline\Framework\Context;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
+use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 
 /**
  * Compatibility facade over the single framework Context.
@@ -27,6 +29,12 @@ class RequestContext
     private const CONNECTION_ID_PATH = 'runtime.request_context.connection_id';
     private const START_TIME_PATH = 'runtime.request_context.start_time';
     private const INITIALIZED_PATH = 'runtime.request_context.initialized';
+    private const SCOPE_IDENTITY_PATH = 'runtime.request_context.scope_identity';
+    private const SCOPE_STORE_ID_PATH = 'runtime.request_context.scope_store_id';
+    private const SCOPE_CHANNEL_ID_PATH = 'runtime.request_context.scope_channel_id';
+    private const SCOPE_TIMEZONE_PATH = 'runtime.request_context.scope_timezone';
+    private const STOREFRONT_ROUTE_PATH = 'runtime.request_context.storefront_route_path';
+    private const LEGACY_STOREFRONT_ROUTE_PATH = 'route.storefront_path';
 
     public static function init(): void
     {
@@ -206,22 +214,36 @@ class RequestContext
             return;
         }
 
+        $failures = [];
         $callbacks = (array)$context->get(self::CLEANUP_PATH, []);
-        foreach ($callbacks as $callback) {
+        foreach ($callbacks as $name => $callback) {
             try {
                 $callback();
             } catch (\Throwable $e) {
                 w_log_error('[RequestContext] Cleanup callback error: ' . $e->getMessage());
+                RequestResetException::append(
+                    $failures,
+                    'cleanup_callback:' . (\is_string($name) ? $name : (string)$name),
+                    $e,
+                );
             }
         }
 
-        $context->set(self::STORAGE_PATH, []);
-        $context->set(self::CLEANUP_PATH, []);
-        $context->set(self::REQUEST_ID_PATH, null);
-        $context->set(self::CONNECTION_ID_PATH, null);
-        $context->set(self::START_TIME_PATH, 0.0);
-        $context->set(self::INITIALIZED_PATH, false);
-        self::resetWelineVars();
+        try {
+            $context->set(self::STORAGE_PATH, []);
+            $context->set(self::CLEANUP_PATH, []);
+            $context->set(self::REQUEST_ID_PATH, null);
+            $context->set(self::CONNECTION_ID_PATH, null);
+            $context->set(self::START_TIME_PATH, 0.0);
+            $context->set(self::INITIALIZED_PATH, false);
+            self::resetWelineVars();
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'context_projection_reset', $e);
+        }
+
+        if ($failures !== []) {
+            throw new RequestResetException('request_context', $failures);
+        }
     }
 
     public static function isInitialized(): bool
@@ -272,6 +294,11 @@ class RequestContext
 
     public static function getWelineWebsiteId(): int
     {
+        $identity = self::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            return $identity->websiteId ?? 0;
+        }
+
         $context = Context::getCurrent();
         if ($context === null) {
             return 0;
@@ -280,16 +307,280 @@ class RequestContext
         return (int)$context->get('route.website_id', 0);
     }
 
+    /** @deprecated Install a ScopeIdentity after pre-freeze request assembly. */
     public static function setWelineWebsiteId(int $websiteId): void
     {
+        if (!self::allowFrozenScopeFieldWrite('website_id', $websiteId)) {
+            return;
+        }
         $context = self::ensureContext();
         $context->set('route.website_id', $websiteId);
         self::set('env.website_id', (string)$websiteId);
         $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
     }
 
+    public static function getWelineStoreId(): int
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return 0;
+        }
+
+        if (self::scopeIdentity() instanceof ScopeIdentity) {
+            return (int)$context->get(
+                self::SCOPE_STORE_ID_PATH,
+                $context->get('route.store_id', 0),
+            );
+        }
+
+        return (int)$context->get('route.store_id', 0);
+    }
+
+    /** @deprecated Install a ScopeIdentity after pre-freeze request assembly. */
+    public static function setWelineStoreId(int $storeId): void
+    {
+        if (!self::allowFrozenScopeIdWrite('store_id', $storeId)) {
+            return;
+        }
+        $context = self::ensureContext();
+        $context->set('route.store_id', $storeId);
+        self::set('env.store_id', (string)$storeId);
+        $_SERVER['WELINE_STORE_ID'] = (string)$storeId;
+    }
+
+    public static function getWelineStoreCode(): string
+    {
+        $identity = self::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            return $identity->storeCode ?? '';
+        }
+
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return '';
+        }
+
+        return (string)$context->get('route.store_code', '');
+    }
+
+    /** @deprecated Install a ScopeIdentity after pre-freeze request assembly. */
+    public static function setWelineStoreCode(string $storeCode): void
+    {
+        if (!self::allowFrozenScopeFieldWrite('store_code', $storeCode)) {
+            return;
+        }
+        $context = self::ensureContext();
+        $context->set('route.store_code', $storeCode);
+        self::set('env.store_code', $storeCode);
+        $_SERVER['WELINE_STORE_CODE'] = $storeCode;
+    }
+
+    public static function getWelineStoreMode(): string
+    {
+        $identity = self::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            return $identity->storeMode ?? '';
+        }
+
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return '';
+        }
+
+        return (string)$context->get('route.store_mode', '');
+    }
+
+    /** @deprecated Install a ScopeIdentity after pre-freeze request assembly. */
+    public static function setWelineStoreMode(string $storeMode): void
+    {
+        if (!self::allowFrozenScopeFieldWrite('store_mode', $storeMode)) {
+            return;
+        }
+        $context = self::ensureContext();
+        $context->set('route.store_mode', $storeMode);
+        self::set('env.store_mode', $storeMode);
+        $_SERVER['WELINE_STORE_MODE'] = $storeMode;
+    }
+
+    public static function getWelineChannelId(): int
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return 0;
+        }
+
+        if (self::scopeIdentity() instanceof ScopeIdentity) {
+            return (int)$context->get(
+                self::SCOPE_CHANNEL_ID_PATH,
+                $context->get('route.channel_id', 0),
+            );
+        }
+
+        return (int)$context->get('route.channel_id', 0);
+    }
+
+    /** @deprecated Install a ScopeIdentity after pre-freeze request assembly. */
+    public static function setWelineChannelId(int $channelId): void
+    {
+        if (!self::allowFrozenScopeIdWrite('channel_id', $channelId)) {
+            return;
+        }
+        $context = self::ensureContext();
+        $context->set('route.channel_id', $channelId);
+        self::set('env.channel_id', (string)$channelId);
+        $_SERVER['WELINE_CHANNEL_ID'] = (string)$channelId;
+    }
+
+    public static function getWelineChannelCode(): string
+    {
+        $identity = self::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            return $identity->channelCode ?? '';
+        }
+
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return '';
+        }
+
+        return (string)$context->get('route.channel_code', '');
+    }
+
+    /** @deprecated Install a ScopeIdentity after pre-freeze request assembly. */
+    public static function setWelineChannelCode(string $channelCode): void
+    {
+        if (!self::allowFrozenScopeFieldWrite('channel_code', $channelCode)) {
+            return;
+        }
+        $context = self::ensureContext();
+        $context->set('route.channel_code', $channelCode);
+        self::set('env.channel_code', $channelCode);
+        $_SERVER['WELINE_CHANNEL_CODE'] = $channelCode;
+    }
+
+    public static function installScopeIdentity(ScopeIdentity $identity): void
+    {
+        $context = self::ensureContext();
+        $existing = self::scopeIdentity();
+        if ($existing !== null && !$existing->equals($identity)) {
+            throw new \LogicException(__('当前请求的 ScopeIdentity 已冻结，禁止二次改写'));
+        }
+        if ($existing !== null) {
+            return;
+        }
+
+        $storeId = self::getWelineStoreId();
+        $channelId = self::getWelineChannelId();
+
+        // Clear every mutable compatibility projection before publishing the
+        // immutable identity. Omitted segments must not inherit stale values.
+        self::setWelineWebsiteId(0);
+        self::setWelineWebsiteCode('');
+        self::setWelineStoreId(0);
+        self::setWelineStoreCode('');
+        self::setWelineStoreMode('');
+        self::setWelineChannelId(0);
+        self::setWelineChannelCode('');
+
+        if (!$identity->isGlobal()) {
+            self::setWelineWebsiteId((int)$identity->websiteId);
+            self::setWelineWebsiteCode((string)$identity->websiteCode);
+            if ($identity->scopeKind === ScopeIdentity::KIND_STORE
+                || $identity->scopeKind === ScopeIdentity::KIND_CHANNEL) {
+                self::setWelineStoreId($storeId);
+                self::setWelineStoreCode((string)$identity->storeCode);
+                self::setWelineStoreMode((string)$identity->storeMode);
+            }
+            if ($identity->scopeKind === ScopeIdentity::KIND_CHANNEL) {
+                self::setWelineChannelId($channelId);
+                self::setWelineChannelCode((string)$identity->channelCode);
+            }
+        }
+
+        $legacyScope = $identity->toLegacyScopeString();
+        self::set(ScopeContext::KEY, $legacyScope);
+        self::set(ScopeContext::LEGACY_KEY, $legacyScope);
+        $context->set(self::SCOPE_STORE_ID_PATH, self::getWelineStoreId());
+        $context->set(self::SCOPE_CHANNEL_ID_PATH, self::getWelineChannelId());
+        $context->set(self::SCOPE_IDENTITY_PATH, $identity);
+    }
+
+    /**
+     * Replace the navigation-derived Store/Channel only after QueryBin has
+     * installed the matching server-constructed Worker execution context.
+     *
+     * The public API endpoint has no storefront Store path, so its initial
+     * navigation Scope can only identify the Host's default Store. A current,
+     * authoritative Worker binding may refine that Scope within the same
+     * Website after token and Catalog revalidation. Cross-Website replacement,
+     * non-REST use, or a binding that differs from the execution context is
+     * always rejected.
+     */
+    public static function replaceScopeIdentityForTrustedWorker(
+        FrontendWorkerScopeBinding $binding,
+        int $storeId,
+        int $channelId,
+    ): void {
+        $context = self::ensureContext();
+        $existing = self::scopeIdentity();
+        $replacement = $binding->scope;
+        $executionContext = self::get(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY);
+        if (!$existing instanceof ScopeIdentity
+            || $existing->scopeKind !== ScopeIdentity::KIND_CHANNEL
+            || $replacement->scopeKind !== ScopeIdentity::KIND_CHANNEL
+            || self::getWelineArea() !== self::AREA_REST_FRONTEND
+            || !$executionContext instanceof FrontendWorkerExecutionContext
+            || $executionContext->area !== FrontendWorkerExecutionContext::AREA_FRONTEND
+            || !$executionContext->scopeBinding instanceof FrontendWorkerScopeBinding
+            || !\hash_equals($executionContext->scopeBinding->digest(), $binding->digest())
+            || $existing->websiteId !== $replacement->websiteId
+            || !\hash_equals((string)$existing->websiteCode, (string)$replacement->websiteCode)
+            || $storeId < 1
+            || $channelId < 1) {
+            throw new \LogicException('Trusted Worker Scope replacement precondition failed.');
+        }
+        if ($existing->equals($replacement)) {
+            return;
+        }
+
+        // Temporarily unfreeze only the Scope projections. Request authority,
+        // method, URI, locale/currency and every unrelated request value stay
+        // intact. installScopeIdentity() then republishes one complete identity.
+        $context->set(self::SCOPE_IDENTITY_PATH, null);
+        $context->set(self::SCOPE_STORE_ID_PATH, null);
+        $context->set(self::SCOPE_CHANNEL_ID_PATH, null);
+        $context->set(self::STOREFRONT_ROUTE_PATH, null);
+        $context->set(self::LEGACY_STOREFRONT_ROUTE_PATH, null);
+        self::setWelineStoreId($storeId);
+        self::setWelineChannelId($channelId);
+        self::installScopeIdentity($replacement);
+    }
+
+    public static function scopeIdentity(): ?ScopeIdentity
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return null;
+        }
+        $identity = $context->get(self::SCOPE_IDENTITY_PATH, null);
+        if ($identity instanceof ScopeIdentity) {
+            return $identity;
+        }
+        if (is_array($identity)) {
+            $identity = ScopeIdentity::fromArray($identity);
+            $context->set(self::SCOPE_IDENTITY_PATH, $identity);
+            return $identity;
+        }
+        return null;
+    }
+
     public static function getWelineWebsiteCode(): string
     {
+        $identity = self::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            return $identity->websiteCode ?? '';
+        }
+
         $context = Context::getCurrent();
         if ($context === null) {
             return '';
@@ -298,8 +589,12 @@ class RequestContext
         return (string)$context->get('route.website_code', '');
     }
 
+    /** @deprecated Install a ScopeIdentity after pre-freeze request assembly. */
     public static function setWelineWebsiteCode(string $code): void
     {
+        if (!self::allowFrozenScopeFieldWrite('website_code', $code)) {
+            return;
+        }
         $context = self::ensureContext();
         $context->set('route.website_code', $code);
         self::set('env.website_code', $code);
@@ -362,6 +657,118 @@ class RequestContext
         \Weline\Framework\App\State::resetLangLocalCache();
     }
 
+    public static function getWelineTimezone(): string
+    {
+        $context = Context::getCurrent();
+        $timezone = $context === null
+            ? ''
+            : \trim((string)$context->get(
+                self::SCOPE_TIMEZONE_PATH,
+                $context->get('route.timezone', ''),
+            ));
+
+        return $timezone !== '' ? $timezone : \date_default_timezone_get();
+    }
+
+    public static function setWelineTimezone(string $timezone): void
+    {
+        $timezone = \trim($timezone);
+        if ($timezone === '') {
+            throw new \InvalidArgumentException('Request timezone cannot be empty.');
+        }
+        try {
+            new \DateTimeZone($timezone);
+        } catch (\Throwable $exception) {
+            throw new \InvalidArgumentException('Request timezone is invalid.', 0, $exception);
+        }
+
+        $context = self::ensureContext();
+        $existing = \trim((string)$context->get(
+            self::SCOPE_TIMEZONE_PATH,
+            $context->get('route.timezone', ''),
+        ));
+        if ($existing !== '') {
+            if (\hash_equals($existing, $timezone)) {
+                return;
+            }
+            if (self::scopeIdentity() instanceof ScopeIdentity) {
+                throw new \LogicException('The frozen request timezone cannot be changed.');
+            }
+        }
+
+        $context->set(self::SCOPE_TIMEZONE_PATH, $timezone);
+        $context->set('route.timezone', $timezone);
+    }
+
+    /**
+     * Stable response-safe metadata for the currently frozen Storefront Scope.
+     *
+     * Tokens, signatures, opaque bootstrap ids, fingerprints and secrets are
+     * intentionally absent. A null result means no Storefront Scope was frozen.
+     *
+     * @return array{scope_kind:string,website_id:int,website_code:string,store_id:int,store_code:string,store_mode:string,channel_id:int,channel_code:string,locale:string,currency:string,timezone:string,context_version:string}|null
+     */
+    public static function scopeMetadata(): ?array
+    {
+        $identity = self::scopeIdentity();
+        if (!$identity instanceof ScopeIdentity || $identity->scopeKind !== ScopeIdentity::KIND_CHANNEL) {
+            return null;
+        }
+
+        return [
+            'scope_kind' => $identity->scopeKind,
+            'website_id' => (int)$identity->websiteId,
+            'website_code' => (string)$identity->websiteCode,
+            'store_id' => self::getWelineStoreId(),
+            'store_code' => (string)$identity->storeCode,
+            'store_mode' => (string)$identity->storeMode,
+            'channel_id' => self::getWelineChannelId(),
+            'channel_code' => (string)$identity->channelCode,
+            'locale' => self::getWelineUserLang(),
+            'currency' => self::getWelineUserCurrency(),
+            'timezone' => self::getWelineTimezone(),
+            'context_version' => $identity->contextVersion,
+        ];
+    }
+
+    public static function setStorefrontRoutePath(string $routePath): void
+    {
+        $identity = self::scopeIdentity();
+        if (!$identity instanceof ScopeIdentity || $identity->scopeKind !== ScopeIdentity::KIND_CHANNEL) {
+            throw new \LogicException('A complete ScopeIdentity must be installed before publishing its route path.');
+        }
+
+        $navigation = new StorefrontNavigationScope($identity, $routePath);
+        $context = self::ensureContext();
+        $existing = $context->get(
+            self::STOREFRONT_ROUTE_PATH,
+            $context->get(self::LEGACY_STOREFRONT_ROUTE_PATH, null),
+        );
+        if (\is_string($existing) && $existing !== '') {
+            if (\hash_equals($existing, $navigation->routePath)) {
+                return;
+            }
+            throw new \LogicException('The frozen Storefront route path cannot be changed.');
+        }
+
+        $context->set(self::STOREFRONT_ROUTE_PATH, $navigation->routePath);
+        $context->set(self::LEGACY_STOREFRONT_ROUTE_PATH, $navigation->routePath);
+    }
+
+    public static function getStorefrontRoutePath(): ?string
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return null;
+        }
+
+        $routePath = $context->get(
+            self::STOREFRONT_ROUTE_PATH,
+            $context->get(self::LEGACY_STOREFRONT_ROUTE_PATH, null),
+        );
+        return \is_string($routePath) && $routePath !== '' ? $routePath : null;
+    }
+
     public static function isBackendArea(): bool
     {
         $area = self::getWelineArea();
@@ -408,8 +815,24 @@ class RequestContext
             $context->set('route.website_id', 0);
             $context->set('route.website_code', '');
             $context->set('route.website_url', '');
+            $context->set('route.store_id', 0);
+            $context->set('route.store_code', '');
+            $context->set('route.store_mode', '');
+            $context->set('route.channel_id', 0);
+            $context->set('route.channel_code', '');
+            $context->set(self::SCOPE_IDENTITY_PATH, null);
+            $context->set(self::SCOPE_STORE_ID_PATH, null);
+            $context->set(self::SCOPE_CHANNEL_ID_PATH, null);
+            $context->set(\Weline\Framework\Runtime\ScopeContext::KEY, '');
+            $context->set(\Weline\Framework\Runtime\ScopeContext::LEGACY_KEY, '');
+            self::remove(\Weline\Framework\Runtime\ScopeContext::KEY);
+            self::remove(\Weline\Framework\Runtime\ScopeContext::LEGACY_KEY);
             $context->set('route.language', 'zh_Hans_CN');
             $context->set('route.currency', 'CNY');
+            $context->set('route.timezone', '');
+            $context->set(self::SCOPE_TIMEZONE_PATH, null);
+            $context->set(self::STOREFRONT_ROUTE_PATH, null);
+            $context->set(self::LEGACY_STOREFRONT_ROUTE_PATH, null);
             $context->set('route.is_backend', false);
             $context->set('route.is_static', false);
             $context->set('route.is_media', false);
@@ -421,18 +844,44 @@ class RequestContext
         $_SERVER['WELINE_AREA'] = self::AREA_FRONTEND;
         $_SERVER['WELINE_AREA_ROUTE'] = '';
         $_SERVER['WELINE_IS_BACKEND'] = false;
-        unset($_SERVER['WELINE_WEBSITE_ID'], $_SERVER['WELINE_WEBSITE_CODE'], $_SERVER['WELINE_WEBSITE_URL'], $_SERVER['WELINE_USER_LANG'], $_SERVER['WELINE_USER_CURRENCY'], $_SERVER['WELINE_CONNECTION_ID']);
+        unset(
+            $_SERVER['WELINE_WEBSITE_ID'],
+            $_SERVER['WELINE_WEBSITE_CODE'],
+            $_SERVER['WELINE_WEBSITE_URL'],
+            $_SERVER['WELINE_STORE_ID'],
+            $_SERVER['WELINE_STORE_CODE'],
+            $_SERVER['WELINE_STORE_MODE'],
+            $_SERVER['WELINE_CHANNEL_ID'],
+            $_SERVER['WELINE_CHANNEL_CODE'],
+            $_SERVER['WELINE_USER_LANG'],
+            $_SERVER['WELINE_USER_CURRENCY'],
+            $_SERVER['WELINE_CONNECTION_ID'],
+        );
         \Weline\Framework\App\State::resetLangLocalCache();
     }
 
+    /**
+     * @deprecated Passing a value is deprecated; install ScopeIdentity instead.
+     *             Read access remains a canonical compatibility facade.
+     */
     public static function websiteId(?int $websiteId = null): ?int
     {
         if ($websiteId !== null) {
             self::setWelineWebsiteId($websiteId);
         }
 
-        $value = self::getWelineWebsiteId();
-        return $value === 0 ? null : $value;
+        $identity = self::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            return $identity->websiteId;
+        }
+
+        // website_id=0 是合法系统默认站，不得转成 null；仅在无请求上下文时返回 null
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return null;
+        }
+
+        return (int)$context->get('route.website_id', 0);
     }
 
     public static function locale(?string $locale = null): ?string
@@ -460,6 +909,60 @@ class RequestContext
         }
 
         return self::getWelineArea();
+    }
+
+    /**
+     * A legacy scope setter may populate request assembly state before freeze.
+     * After freeze, an equal call is an idempotent no-op and any conflict is
+     * rejected so mutable compatibility projections cannot become a second
+     * source of truth.
+     */
+    private static function allowFrozenScopeFieldWrite(string $field, int|string $candidate): bool
+    {
+        $identity = self::scopeIdentity();
+        if (!$identity instanceof ScopeIdentity) {
+            return true;
+        }
+
+        $canonical = match ($field) {
+            'website_id' => $identity->websiteId,
+            'website_code' => $identity->websiteCode ?? '',
+            'store_code' => $identity->storeCode ?? '',
+            'store_mode' => $identity->storeMode ?? '',
+            'channel_code' => $identity->channelCode ?? '',
+            default => throw new \LogicException('Unknown frozen ScopeIdentity field: ' . $field),
+        };
+        if ($candidate === $canonical) {
+            return false;
+        }
+
+        throw new \LogicException(__('当前请求的 ScopeIdentity 已冻结，禁止二次改写'));
+    }
+
+    private static function allowFrozenScopeIdWrite(string $field, int $candidate): bool
+    {
+        $identity = self::scopeIdentity();
+        if (!$identity instanceof ScopeIdentity) {
+            return true;
+        }
+
+        $context = self::ensureContext();
+        $canonical = match ($field) {
+            'store_id' => (int)$context->get(
+                self::SCOPE_STORE_ID_PATH,
+                $context->get('route.store_id', 0),
+            ),
+            'channel_id' => (int)$context->get(
+                self::SCOPE_CHANNEL_ID_PATH,
+                $context->get('route.channel_id', 0),
+            ),
+            default => throw new \LogicException('Unknown frozen ScopeIdentity id field: ' . $field),
+        };
+        if ($candidate === $canonical) {
+            return false;
+        }
+
+        throw new \LogicException(__('当前请求的 ScopeIdentity 已冻结，禁止二次改写'));
     }
 
     private static function ensureContext(bool $hydrateFromGlobals = false): Context
@@ -514,6 +1017,46 @@ class RequestContext
             $preferContext
                 ? ($context->get('route.website_url', '') ?: ($server['WELINE_WEBSITE_URL'] ?? ''))
                 : ($server['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', ''))
+        );
+        $storeId = (int)self::snapshotRouteValue(
+            $context,
+            $server,
+            'route.store_id',
+            'WELINE_STORE_ID',
+            0,
+            $preferContext,
+        );
+        $storeCode = (string)self::snapshotRouteValue(
+            $context,
+            $server,
+            'route.store_code',
+            'WELINE_STORE_CODE',
+            '',
+            $preferContext,
+        );
+        $storeMode = (string)self::snapshotRouteValue(
+            $context,
+            $server,
+            'route.store_mode',
+            'WELINE_STORE_MODE',
+            '',
+            $preferContext,
+        );
+        $channelId = (int)self::snapshotRouteValue(
+            $context,
+            $server,
+            'route.channel_id',
+            'WELINE_CHANNEL_ID',
+            0,
+            $preferContext,
+        );
+        $channelCode = (string)self::snapshotRouteValue(
+            $context,
+            $server,
+            'route.channel_code',
+            'WELINE_CHANNEL_CODE',
+            '',
+            $preferContext,
         );
         $userLang = (string)(
             $preferContext
@@ -610,6 +1153,11 @@ class RequestContext
         $server['WELINE_WEBSITE_ID'] = (string)$websiteId;
         $server['WELINE_WEBSITE_CODE'] = $websiteCode;
         $server['WELINE_WEBSITE_URL'] = $websiteUrl;
+        $server['WELINE_STORE_ID'] = (string)$storeId;
+        $server['WELINE_STORE_CODE'] = $storeCode;
+        $server['WELINE_STORE_MODE'] = $storeMode;
+        $server['WELINE_CHANNEL_ID'] = (string)$channelId;
+        $server['WELINE_CHANNEL_CODE'] = $channelCode;
         $server['WELINE_USER_LANG'] = $userLang;
         $server['WELINE_USER_CURRENCY'] = $userCurrency;
         $server['WELINE_IS_BACKEND'] = $isBackend;
@@ -642,6 +1190,11 @@ class RequestContext
         $context->set('route.website_id', $websiteId);
         $context->set('route.website_code', $websiteCode);
         $context->set('route.website_url', $websiteUrl);
+        $context->set('route.store_id', $storeId);
+        $context->set('route.store_code', $storeCode);
+        $context->set('route.store_mode', $storeMode);
+        $context->set('route.channel_id', $channelId);
+        $context->set('route.channel_code', $channelCode);
         $context->set('route.language', $userLang);
         $context->set('route.currency', $userCurrency);
         $context->set('route.is_backend', $isBackend);
@@ -659,8 +1212,33 @@ class RequestContext
         self::set('env.website_id', (string)$websiteId);
         self::set('env.website_code', $websiteCode);
         self::set('env.website_url', $websiteUrl);
+        self::set('env.store_id', (string)$storeId);
+        self::set('env.store_code', $storeCode);
+        self::set('env.store_mode', $storeMode);
+        self::set('env.channel_id', (string)$channelId);
+        self::set('env.channel_code', $channelCode);
         self::set('env.user.lang', $userLang);
         self::set('env.user.currency', $userCurrency);
+    }
+
+    private static function snapshotRouteValue(
+        Context $context,
+        array $server,
+        string $contextKey,
+        string $serverKey,
+        mixed $default,
+        bool $preferContext,
+    ): mixed {
+        if ($preferContext) {
+            if ($context->has($contextKey)) {
+                return $context->get($contextKey, $default);
+            }
+            return array_key_exists($serverKey, $server) ? $server[$serverKey] : $default;
+        }
+        if (array_key_exists($serverKey, $server)) {
+            return $server[$serverKey];
+        }
+        return $context->has($contextKey) ? $context->get($contextKey, $default) : $default;
     }
 
     private static function resolveConnectionId(Context $context, array $server = []): ?string

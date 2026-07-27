@@ -7,7 +7,6 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * 维护 Worker 服务提供者
@@ -74,20 +73,18 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
-        $protocolEdgeEnabled = $context->isProtocolEdgeEnabled();
-        $workerSslEnabled = $context->sslEnabled && !$protocolEdgeEnabled;
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve($context->envConfig);
+        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+            throw new \RuntimeException('Maintenance Worker refused a non-Nginx public edge adapter.');
+        }
+        $script = $scriptDir . DS . 'worker.php';
 
-        $script = $workerSslEnabled
-            ? $this->resolveSslWorkerScript($scriptDir, $context)
-            : $scriptDir . DS . 'worker.php';
 
         $port = $this->getPort($instanceId, $context);
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
 
-        $direct = $context->isDirect();
-        $host = $direct && !$protocolEdgeEnabled
-            ? ($context->host ?: '127.0.0.1')
-            : '127.0.0.1';
+        // Maintenance is never a public listener, including Direct topology.
+        $host = '127.0.0.1';
 
         $arguments = [
             $host,
@@ -100,23 +97,16 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             '--memory-limit=' . $context->getWorkerMemoryLimit(),
         ];
 
-        if ($workerSslEnabled && $context->sslCert && $context->sslKey) {
-            $arguments[] = '--ssl-cert=' . $context->sslCert;
-            $arguments[] = '--ssl-key=' . $context->sslKey;
-        }
 
         $arguments[] = '--wls-runtime-topology='
             . $context->runtimeSelection->effectiveTopology->value;
-        $arguments[] = '--wls-listener-mode=' . $context->runtimeSelection->listenerMode;
+        $arguments[] = '--wls-listener-mode=single';
         $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
 
         $arguments = \array_merge($arguments, WorkerRuntimeArgumentBuilder::sharedState($context));
 
         $arguments[] = '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver;
 
-        if ($workerSslEnabled) {
-            $arguments[] = '--defer-ssl';
-        }
 
         return new ServiceCommand(
             script: $script,
@@ -169,25 +159,4 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         $this->dynamicInstanceCount = 0;
     }
 
-    private function resolveSslWorkerScript(string $scriptDir, ServiceContext $context): string
-    {
-        $engine = $context->runtimeSelection->sslEngine;
-        if ($engine === 'event_buffer' && PHP_OS_FAMILY === 'Windows') {
-            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer is not supported on native Windows.');
-        }
-        if ($engine === 'event_buffer' && $context->runtimeSelection->isDirect()) {
-            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer does not support direct mode; use stream.');
-        }
-        if ($engine === 'event_buffer' && $context->runtimeSelection->isDispatcher()) {
-            throw new \InvalidArgumentException('wls.ssl.engine=event_buffer cannot consume the authenticated PROXY v2 preface; use stream.');
-        }
-
-        return match ($engine) {
-            'stream' => $scriptDir . DS . 'worker_ssl.php',
-            'event_buffer' => $scriptDir . DS . 'worker_ssl_event.php',
-            default => throw new \InvalidArgumentException(
-                'Unsupported WLS SSL engine "' . $engine . '"; expected stream or event_buffer'
-            ),
-        };
-    }
 }

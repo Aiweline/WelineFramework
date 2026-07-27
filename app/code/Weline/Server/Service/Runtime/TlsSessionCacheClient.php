@@ -15,6 +15,7 @@ use Weline\Server\Session\Server\SessionProtocol;
 final class TlsSessionCacheClient
 {
     private const MAX_PENDING_RESPONSES = 1024;
+    private const LATENCY_BUCKET_UPPER_BOUNDS_US = [50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000];
     private const CONNECT_IDLE = 'idle';
     private const CONNECT_TCP = 'tcp_connect';
     private const CONNECT_AUTH_WRITE = 'auth_write';
@@ -36,6 +37,32 @@ final class TlsSessionCacheClient
     private int $connectWriteOffset = 0;
     private float $connectAttemptDeadline = 0.0;
     private readonly TlsSessionCacheTokenState $tokenState;
+    /** @var array<string, array{total:int,deadline_exceeded:int,fail_fast:int,latency_bucket_counts:list<int>}> */
+    private array $callbackTelemetry;
+    /**
+     * @var array{
+     *   client_read_buffer_zero:bool,
+     *   client_write_buffer_zero:bool,
+     *   client_write_buffer_control_supported:bool,
+     *   client_tcp_nodelay:bool,
+     *   sidecar_read_buffer_zero:bool,
+     *   sidecar_write_buffer_zero:bool,
+     *   sidecar_write_buffer_control_supported:bool,
+     *   sidecar_tcp_nodelay:bool
+     * }
+     */
+    private array $transportStatus = [
+        'client_read_buffer_zero' => false,
+        'client_write_buffer_zero' => false,
+        'client_write_buffer_control_supported' => false,
+        'client_tcp_nodelay' => false,
+        'sidecar_read_buffer_zero' => false,
+        'sidecar_write_buffer_zero' => false,
+        'sidecar_write_buffer_control_supported' => false,
+        'sidecar_tcp_nodelay' => false,
+    ];
+    private string $lastRequestOutcome = 'fail_fast';
+    private string $lastIoOutcome = 'fail_fast';
 
     public function __construct(
         private readonly string $host,
@@ -45,9 +72,25 @@ final class TlsSessionCacheClient
         private readonly float $readyTimeoutSeconds,
         private readonly float $reconnectCooldownSeconds,
         private readonly string $expectedConfigFingerprint = '',
+        private readonly string $expectedIntegrationSha256 = '',
         ?TlsSessionCacheTokenState $tokenState = null,
     ) {
         $this->tokenState = $tokenState ?? new TlsSessionCacheTokenState();
+        $emptyBuckets = \array_fill(0, \count(self::LATENCY_BUCKET_UPPER_BOUNDS_US) + 1, 0);
+        $this->callbackTelemetry = [
+            'get' => [
+                'total' => 0,
+                'deadline_exceeded' => 0,
+                'fail_fast' => 0,
+                'latency_bucket_counts' => $emptyBuckets,
+            ],
+            'put' => [
+                'total' => 0,
+                'deadline_exceeded' => 0,
+                'fail_fast' => 0,
+                'latency_bucket_counts' => $emptyBuckets,
+            ],
+        ];
     }
 
     public function ready(): bool
@@ -113,10 +156,12 @@ final class TlsSessionCacheClient
     /** @return array{der:string,created_at:int,expires_at:int}|null */
     public function get(string $contextHex, string $sessionIdHex): ?array
     {
+        $startedAt = \hrtime(true);
         $response = $this->request(SessionProtocol::CMD_TLS_SESSION_GET, [
             'ctx' => $contextHex,
             'sid' => $sessionIdHex,
         ], $this->callbackTimeoutSeconds);
+        $this->recordCallbackTelemetry('get', $startedAt);
         if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
             return null;
         }
@@ -139,6 +184,7 @@ final class TlsSessionCacheClient
         int $createdAt,
         int $expiresAt
     ): bool {
+        $startedAt = \hrtime(true);
         $response = $this->request(SessionProtocol::CMD_TLS_SESSION_PUT, [
             'ctx' => $contextHex,
             'sid' => $sessionIdHex,
@@ -146,8 +192,27 @@ final class TlsSessionCacheClient
             'created_at' => $createdAt,
             'expires_at' => $expiresAt,
         ], $this->callbackTimeoutSeconds);
+        $this->recordCallbackTelemetry('put', $startedAt);
 
         return \is_array($response) && SessionProtocol::isSuccess($response);
+    }
+
+    /**
+     * @return array{
+     *   bucket_upper_bounds_us:list<int>,
+     *   get:array{total:int,deadline_exceeded:int,fail_fast:int,latency_bucket_counts:list<int>},
+     *   put:array{total:int,deadline_exceeded:int,fail_fast:int,latency_bucket_counts:list<int>},
+     *   transport:array<string,bool>
+     * }
+     */
+    public function callbackTelemetry(): array
+    {
+        return [
+            'bucket_upper_bounds_us' => self::LATENCY_BUCKET_UPPER_BOUNDS_US,
+            'get' => $this->callbackTelemetry['get'],
+            'put' => $this->callbackTelemetry['put'],
+            'transport' => $this->transportStatus,
+        ];
     }
 
     public function remove(string $contextHex, string $sessionIdHex): void
@@ -287,6 +352,16 @@ final class TlsSessionCacheClient
         $this->pendingResponses = 0;
         $this->pendingResponseDeadline = 0.0;
         $this->configurationValidated = false;
+        $this->transportStatus = [
+            'client_read_buffer_zero' => false,
+            'client_write_buffer_zero' => false,
+            'client_write_buffer_control_supported' => false,
+            'client_tcp_nodelay' => false,
+            'sidecar_read_buffer_zero' => false,
+            'sidecar_write_buffer_zero' => false,
+            'sidecar_write_buffer_control_supported' => false,
+            'sidecar_tcp_nodelay' => false,
+        ];
         $this->connectPhase = self::CONNECT_IDLE;
         $this->connectWriteBuffer = '';
         $this->connectWriteOffset = 0;
@@ -332,6 +407,12 @@ final class TlsSessionCacheClient
             return false;
         }
         @\stream_set_blocking($socket, false);
+        $this->transportStatus = $this->tuneClientTransport($socket);
+        if (!$this->transportReady($this->transportStatus, 'client')) {
+            @\fclose($socket);
+            $this->tripCircuit();
+            return false;
+        }
         $this->socket = $socket;
         $this->readBuffer = '';
         try {
@@ -427,10 +508,46 @@ final class TlsSessionCacheClient
                 $fingerprint = \is_array($stats) && \is_string($stats['config_fingerprint'] ?? null)
                     ? $stats['config_fingerprint']
                     : '';
+                $integrationSha256 = \is_array($stats) && \is_string($stats['integration_sha256'] ?? null)
+                    ? \strtolower($stats['integration_sha256'])
+                    : '';
+                $transport = \is_array($stats['transport'] ?? null) ? $stats['transport'] : [];
+                $transportKeys = \array_keys($transport);
+                \sort($transportKeys, SORT_STRING);
+                $expectedTransportKeys = [
+                    'read_buffer_zero',
+                    'tcp_nodelay',
+                    'write_buffer_control_supported',
+                    'write_buffer_zero',
+                ];
                 if (!\is_array($response)
                     || !SessionProtocol::isSuccess($response)
                     || $this->expectedConfigFingerprint === ''
                     || !\hash_equals($this->expectedConfigFingerprint, $fingerprint)
+                    || ($stats['transport_schema_version'] ?? null) !== 2
+                    || !\preg_match('/\A[a-f0-9]{64}\z/D', $this->expectedIntegrationSha256)
+                    || !\hash_equals($this->expectedIntegrationSha256, $integrationSha256)
+                    || $transportKeys !== $expectedTransportKeys
+                ) {
+                    $this->tripCircuit();
+                    return false;
+                }
+                foreach ($expectedTransportKeys as $transportKey) {
+                    if (!\is_bool($transport[$transportKey])) {
+                        $this->tripCircuit();
+                        return false;
+                    }
+                }
+                $this->transportStatus['sidecar_read_buffer_zero'] =
+                    (bool)($transport['read_buffer_zero'] ?? false);
+                $this->transportStatus['sidecar_write_buffer_zero'] =
+                    (bool)($transport['write_buffer_zero'] ?? false);
+                $this->transportStatus['sidecar_write_buffer_control_supported'] =
+                    (bool)($transport['write_buffer_control_supported'] ?? false);
+                $this->transportStatus['sidecar_tcp_nodelay'] =
+                    (bool)($transport['tcp_nodelay'] ?? false);
+                if (!$this->transportReady($this->transportStatus, 'client')
+                    || !$this->transportReady($this->transportStatus, 'sidecar')
                 ) {
                     $this->tripCircuit();
                     return false;
@@ -449,6 +566,54 @@ final class TlsSessionCacheClient
         }
 
         return false;
+    }
+
+    /** @param resource $socket @return array<string,bool> */
+    private function tuneClientTransport($socket): array
+    {
+        $readBufferZero = @\stream_set_read_buffer($socket, 0) === 0;
+        $writeBufferResult = @\stream_set_write_buffer($socket, 0);
+        $writeBufferControlSupported = $writeBufferResult === 0;
+        $writeBufferZero = $writeBufferControlSupported;
+        $tcpNoDelay = false;
+        $tcpLevel = \defined('SOL_TCP')
+            ? (int)\constant('SOL_TCP')
+            : (\defined('IPPROTO_TCP') ? (int)\constant('IPPROTO_TCP') : null);
+        if ($tcpLevel !== null
+            && \defined('TCP_NODELAY')
+            && \function_exists('socket_import_stream')
+            && \function_exists('socket_set_option')
+            && \function_exists('socket_get_option')
+        ) {
+            $nativeSocket = @\socket_import_stream($socket);
+            if ($nativeSocket !== false) {
+                $option = (int)\constant('TCP_NODELAY');
+                $set = @\socket_set_option($nativeSocket, $tcpLevel, $option, 1);
+                $value = $set ? @\socket_get_option($nativeSocket, $tcpLevel, $option) : false;
+                $tcpNoDelay = $set && (int)$value !== 0;
+            }
+        }
+
+        return [
+            'client_read_buffer_zero' => $readBufferZero,
+            'client_write_buffer_zero' => $writeBufferZero,
+            'client_write_buffer_control_supported' => $writeBufferControlSupported,
+            'client_tcp_nodelay' => $tcpNoDelay,
+            'sidecar_read_buffer_zero' => false,
+            'sidecar_write_buffer_zero' => false,
+            'sidecar_write_buffer_control_supported' => false,
+            'sidecar_tcp_nodelay' => false,
+        ];
+    }
+
+    /** @param array<string,bool> $status */
+    private function transportReady(array $status, string $endpoint): bool
+    {
+        $writeControlSupported = ($status[$endpoint . '_write_buffer_control_supported'] ?? false) === true;
+
+        return ($status[$endpoint . '_read_buffer_zero'] ?? false) === true
+            && (!$writeControlSupported || ($status[$endpoint . '_write_buffer_zero'] ?? false) === true)
+            && ($status[$endpoint . '_tcp_nodelay'] ?? false) === true;
     }
 
     /** @param array<string, mixed> $params */
@@ -586,6 +751,8 @@ final class TlsSessionCacheClient
         float $timeoutSeconds,
         bool $tripOnFailure = true
     ): ?array {
+        $this->lastRequestOutcome = 'fail_fast';
+        $this->lastIoOutcome = 'fail_fast';
         if (!$this->configurationValidated
             || !$this->isConnected()
             || $this->pendingResponses !== 0
@@ -599,6 +766,7 @@ final class TlsSessionCacheClient
             ) . "\n";
             $deadline = \microtime(true) + \max(0.0005, $timeoutSeconds);
             if (!$this->writeAll($payload, $deadline)) {
+                $this->lastRequestOutcome = $this->lastIoOutcome;
                 if ($tripOnFailure) {
                     $this->tripCircuit();
                 } else {
@@ -608,6 +776,7 @@ final class TlsSessionCacheClient
             }
             $response = $this->readOne($deadline);
             if (!\is_array($response)) {
+                $this->lastRequestOutcome = $this->lastIoOutcome;
                 if ($tripOnFailure) {
                     $this->tripCircuit();
                 } else {
@@ -616,14 +785,38 @@ final class TlsSessionCacheClient
                 return null;
             }
 
+            $this->lastRequestOutcome = 'success';
             return $response;
         } catch (\Throwable) {
+            $this->lastRequestOutcome = 'fail_fast';
             if ($tripOnFailure) {
                 $this->tripCircuit();
             } else {
                 $this->disconnect();
             }
             return null;
+        }
+    }
+
+    private function recordCallbackTelemetry(string $operation, int $startedAt): void
+    {
+        if (!isset($this->callbackTelemetry[$operation])) {
+            return;
+        }
+        $elapsedUs = \intdiv(\max(0, \hrtime(true) - $startedAt), 1000);
+        $bucket = \count(self::LATENCY_BUCKET_UPPER_BOUNDS_US);
+        foreach (self::LATENCY_BUCKET_UPPER_BOUNDS_US as $index => $upperBound) {
+            if ($elapsedUs <= $upperBound) {
+                $bucket = $index;
+                break;
+            }
+        }
+        $this->callbackTelemetry[$operation]['total']++;
+        $this->callbackTelemetry[$operation]['latency_bucket_counts'][$bucket]++;
+        if ($this->lastRequestOutcome === 'deadline_exceeded') {
+            $this->callbackTelemetry[$operation]['deadline_exceeded']++;
+        } elseif ($this->lastRequestOutcome === 'fail_fast') {
+            $this->callbackTelemetry[$operation]['fail_fast']++;
         }
     }
 
@@ -664,7 +857,12 @@ final class TlsSessionCacheClient
         $length = \strlen($payload);
         while ($offset < $length) {
             $remaining = $deadline - \microtime(true);
-            if ($remaining <= 0.0 || !$this->isConnected()) {
+            if ($remaining <= 0.0) {
+                $this->lastIoOutcome = 'deadline_exceeded';
+                return false;
+            }
+            if (!$this->isConnected()) {
+                $this->lastIoOutcome = 'fail_fast';
                 return false;
             }
             $read = null;
@@ -672,16 +870,23 @@ final class TlsSessionCacheClient
             $except = null;
             [$seconds, $microseconds] = self::selectTimeout($remaining);
             $ready = @\stream_select($read, $write, $except, $seconds, $microseconds);
+            if ($ready === 0) {
+                $this->lastIoOutcome = 'deadline_exceeded';
+                return false;
+            }
             if ($ready !== 1) {
+                $this->lastIoOutcome = 'fail_fast';
                 return false;
             }
             $written = @\fwrite($this->socket, \substr($payload, $offset));
             if (!\is_int($written) || $written <= 0) {
+                $this->lastIoOutcome = 'fail_fast';
                 return false;
             }
             $offset += $written;
         }
 
+        $this->lastIoOutcome = 'success';
         return true;
     }
 
@@ -691,16 +896,27 @@ final class TlsSessionCacheClient
         while (true) {
             $messages = SessionProtocol::extractTlsMessages($this->readBuffer, 1, $deadline);
             if ($messages === null) {
+                $this->lastIoOutcome = \microtime(true) >= $deadline
+                    ? 'deadline_exceeded'
+                    : 'fail_fast';
                 return null;
             }
             if ($messages !== []) {
-                return \is_array($messages[0] ?? null) ? $messages[0] : null;
+                $message = $messages[0] ?? null;
+                $this->lastIoOutcome = \is_array($message) ? 'success' : 'fail_fast';
+                return \is_array($message) ? $message : null;
             }
             if (\strlen($this->readBuffer) > SessionProtocol::MAX_BUFFER_BYTES) {
+                $this->lastIoOutcome = 'fail_fast';
                 return null;
             }
             $remaining = $deadline - \microtime(true);
-            if ($remaining <= 0.0 || !$this->isConnected()) {
+            if ($remaining <= 0.0) {
+                $this->lastIoOutcome = 'deadline_exceeded';
+                return null;
+            }
+            if (!$this->isConnected()) {
+                $this->lastIoOutcome = 'fail_fast';
                 return null;
             }
             $read = [$this->socket];
@@ -708,11 +924,17 @@ final class TlsSessionCacheClient
             $except = null;
             [$seconds, $microseconds] = self::selectTimeout($remaining);
             $ready = @\stream_select($read, $write, $except, $seconds, $microseconds);
+            if ($ready === 0) {
+                $this->lastIoOutcome = 'deadline_exceeded';
+                return null;
+            }
             if ($ready !== 1) {
+                $this->lastIoOutcome = 'fail_fast';
                 return null;
             }
             $chunk = @\fread($this->socket, 65536);
             if (!\is_string($chunk) || $chunk === '') {
+                $this->lastIoOutcome = 'fail_fast';
                 return null;
             }
             $this->readBuffer .= $chunk;

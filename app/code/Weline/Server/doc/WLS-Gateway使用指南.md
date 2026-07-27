@@ -1,244 +1,50 @@
-# WLS Gateway - 多项目统一入口反向代理
+# WLS Gateway 使用指南（已退役）
 
-## 概述
+> 状态：历史迁移说明，2026-07-24。Gateway 没有受支持的启动入口，不是当前部署、回退或故障转移选项。
 
-WLS Gateway 是一个基于 SNI（Server Name Indication）的 TCP 反向代理，允许多个项目共享同一个端口（如 443）。
+## 现行结论
 
-## 架构
+当前公网链路固定为：
 
-```
-客户端请求
-  ↓
-WLS Gateway (0.0.0.0:443)
-  ↓ 根据 SNI 域名路由
-  ├─→ 项目A (127.0.0.1:10443) - project-a.com
-  ├─→ 项目B (127.0.0.1:10444) - project-b.com
-  └─→ 项目C (127.0.0.1:10445) - *.dev.local
+```text
+Client
+  -> 项目托管 Nginx（TLS 1.3、HTTP/2，HTTP/1.1 自动回退；可用时 HTTP/3）
+  -> loopback HTTP/1.1 Keep-Alive
+  -> Windows Dispatcher 或 macOS/Linux Direct Worker
 ```
 
-## 使用场景
+公网 80/443 只能由本项目托管 Nginx 所有。当前 `server:start` 在创建 Master/Worker 前拒绝外部边缘、`--no-nginx`、`--no-ssl`、Caddy、Gateway、WLS-native/TLS 与 Protocol Edge。不得运行旧 `gateway:start` 命令，也不得新增 `wls.gateway` 或 `app/etc/gateway.php` 配置。
 
-### 1. 开发环境 - 多项目共享 443 端口
+现行安装、启动和验证方式见 [WLS 模式部署指南](WLS模式部署指南.md)。
 
-**问题**：多个项目都想监听 443 端口，但端口只能被一个进程占用。
+## 历史身份
 
-**解决方案**：
-- Gateway 监听 443
-- 各项目监听内网高端口（10443, 10444, ...）
-- Gateway 根据域名转发
+旧 Gateway 曾被设计为基于 SNI 的单进程 TCP 反向代理，用一个公网端口按域名转发到多个项目高端口。自动扫描 `var/server/instances/`、手工 routes/default、通配域名和独立 `gateway.php` 都属于旧设计，现行实例发现和 Nginx owner/config generation 契约不采用这些数据。
 
-### 2. 生产环境 - 单 IP 多域名部署
+以下内容只用于识别遗留部署：
 
-**问题**：服务器只有一个公网 IP，但需要部署多个项目。
+- 进程或日志名包含 `gateway`。
+- 旧配置出现 `wls.gateway.listen/routes/default`。
+- 旧运维记录出现 `gateway:start`。
+- 公网 443 owner 是 PHP Gateway，而不是项目托管 Nginx。
 
-**解决方案**：
-- 配置 DNS：project-a.com → 服务器 IP
-- 配置 DNS：project-b.com → 服务器 IP
-- Gateway 根据域名分发到不同项目
+发现这些特征时应迁移，不能把 Gateway 重新启用为兼容路径。
 
-## 配置方式
+## 迁移映射
 
-### 方式一：自动发现（推荐）
+| 旧 Gateway 概念 | 现行替代 |
+|---|---|
+| Gateway 监听公网 443 | 项目托管 Nginx 持有公网 HTTP/HTTPS 端口 |
+| SNI routes/default | 托管 Nginx 配置 generation 与项目 owner 绑定 |
+| 项目直接监听 TLS 高端口 | WLS 仅监听 loopback 明文 H1 回源端口 |
+| Gateway 扫描实例文件 | Master Registry 管进程；Nginx owner/live probe 管公网事实 |
+| Gateway 处理 TLS 字节 | Nginx 终结 TLS 1.3 与 H2/H1/H3 |
+| Gateway 手工守护 | `server:start/stop` 管理 WLS 与项目托管 Nginx 生命周期 |
 
-Gateway 会自动扫描 `var/server/instances/` 目录，发现所有运行中的项目实例。
+迁移后必须重新验证 Nginx owner/config generation、证书绑定的 TLS 1.3、H2/H1 fresh WLS health；只有 Nginx 具备 HTTP/3/QUIC 且 HTTP/3-only 请求真实到达同一 WLS health 时才能发布 H3 READY。
 
-```bash
-# 启动 Gateway（自动发现模式）
-php bin/w gateway:start
-```
+## 遗留清理边界
 
-### 方式二：env.php 配置
+停止或重启流程可以识别并回收属于同项目、同实例的旧 Gateway 残留 PID/端口；这是清理兼容，不代表 Gateway 可再次启动。未知或外部进程仍按 fail-closed 规则保留并报告，不按端口盲杀。
 
-在 `app/etc/env.php` 中添加：
-
-```php
-return [
-    // ... 其他配置
-
-    'wls' => [
-        'gateway' => [
-            'listen' => '0.0.0.0:443',
-            'routes' => [
-                // 精确匹配
-                'project-a.com' => [
-                    'host' => '127.0.0.1',
-                    'port' => 10443,
-                    'ssl' => true,
-                ],
-                'project-b.com' => [
-                    'host' => '127.0.0.1',
-                    'port' => 10444,
-                    'ssl' => true,
-                ],
-                // 通配符匹配
-                '*.dev.local' => [
-                    'host' => '127.0.0.1',
-                    'port' => 10445,
-                    'ssl' => true,
-                ],
-            ],
-            // 默认后端（当域名不匹配时）
-            'default' => [
-                'host' => '127.0.0.1',
-                'port' => 10443,
-                'ssl' => true,
-            ],
-        ],
-    ],
-];
-```
-
-### 方式三：独立配置文件
-
-创建 `app/etc/gateway.php`：
-
-```php
-return [
-    'listen' => '0.0.0.0:443',
-    'routes' => [
-        'api.example.com' => ['host' => '127.0.0.1', 'port' => 8443],
-        'admin.example.com' => ['host' => '127.0.0.1', 'port' => 9443],
-    ],
-    'default' => ['host' => '127.0.0.1', 'port' => 8443],
-];
-```
-
-启动：
-
-```bash
-php bin/w gateway:start --config=app/etc/gateway.php
-```
-
-## 部署步骤
-
-### 开发环境
-
-1. **启动各项目（使用不同端口）**
-
-```bash
-# 项目 A
-cd /path/to/project-a
-php bin/w server:start -p 10443
-
-# 项目 B
-cd /path/to/project-b
-php bin/w server:start -p 10444
-```
-
-2. **配置 hosts 文件**
-
-```
-127.0.0.1 project-a.local
-127.0.0.1 project-b.local
-```
-
-3. **启动 Gateway**
-
-```bash
-cd /path/to/project-a  # 任意项目目录
-php bin/w gateway:start
-```
-
-4. **访问**
-
-- https://project-a.local/
-- https://project-b.local/
-
-### 生产环境
-
-1. **配置 DNS**
-
-```
-project-a.com  A  服务器IP
-project-b.com  A  服务器IP
-```
-
-2. **启动各项目**
-
-```bash
-# 项目 A
-php bin/w server:start -p 10443 --host 127.0.0.1
-
-# 项目 B
-php bin/w server:start -p 10444 --host 127.0.0.1
-```
-
-3. **配置 Gateway**
-
-在 `app/etc/env.php` 中配置路由规则（见上文）。
-
-4. **启动 Gateway**
-
-```bash
-php bin/w gateway:start
-```
-
-5. **配置防火墙**
-
-```bash
-# 开放 443 端口
-firewall-cmd --add-port=443/tcp --permanent
-firewall-cmd --reload
-```
-
-## 优势
-
-### vs Nginx
-
-| 特性 | WLS Gateway | Nginx |
-|------|-------------|-------|
-| 配置复杂度 | 自动发现，零配置 | 需要手动配置 |
-| 动态路由 | 支持（自动发现新项目） | 需要重启 |
-| 性能 | 纯 TCP 转发，极低开销 | HTTP 解析，开销较大 |
-| 部署 | 单个 PHP 进程 | 需要额外安装 |
-
-### vs HAProxy
-
-| 特性 | WLS Gateway | HAProxy |
-|------|-------------|---------|
-| 学习曲线 | 简单 | 复杂 |
-| 集成度 | 原生集成 WLS | 需要额外配置 |
-| 健康检查 | 自动（基于实例文件） | 需要配置 |
-
-## 注意事项
-
-1. **端口冲突**：Gateway 监听 443 端口，各项目不能再监听 443
-2. **SSL 证书**：各项目需要配置自己的 SSL 证书
-3. **性能**：Gateway 是单进程，适合中小规模部署（< 1000 并发）
-4. **高可用**：生产环境建议使用 Supervisor 或 systemd 管理 Gateway 进程
-
-## 故障排查
-
-### Gateway 无法启动
-
-```bash
-# 检查 443 端口是否被占用
-netstat -ano | grep :443
-
-# 检查权限（Linux 需要 root 权限监听 443）
-sudo php bin/w gateway:start
-```
-
-### 域名无法路由
-
-```bash
-# 检查路由规则
-php bin/w gateway:start --config=app/etc/gateway.php
-
-# 查看日志
-tail -f var/log/wls/gateway.log
-```
-
-### SSL 握手失败
-
-- 检查各项目的 SSL 证书是否正确
-- 确保证书的 CN（Common Name）与域名匹配
-
-## 未来增强
-
-- [ ] 支持 HTTP/2
-- [ ] 支持 WebSocket
-- [ ] 健康检查和自动故障转移
-- [ ] 负载均衡（同一域名多个后端）
-- [ ] 访问日志和统计
-- [ ] 热重载配置
+Gateway 的旧优势对比、生产建议、配置示例和“未来增强”均已撤销。任何新部署、性能调优或协议验证都只针对项目托管 Nginx。
