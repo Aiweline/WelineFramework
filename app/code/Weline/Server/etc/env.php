@@ -37,10 +37,11 @@ return [
             'require_capability' => false,
             'ack_timeout_sec' => 5.0,
         ],
-        // 默认公网边缘为项目托管 Nginx。普通 start 绝不下载或编译；缺少项目隔离
-        // 二进制时会失败并提示显式执行 server:nginx:install。
-        // 无法使用 Nginx 的环境可在当次启动显式传入 --no-nginx，纯 WLS 默认 HTTPS。
+        // WLS 2.0 默认尝试加入/建立宿主级共享网关；无法安全建立时
+        // 自动降级到稳定高端口纯 WLS。adapter 仍只描述 WLS Worker
+        // 数据面（nginx=loopback H1，wls=原生 TLS），不把网关伪装成第三种 Worker。
         'edge' => [
+            'mode' => 'auto',
             'adapter' => 'nginx',
             'nginx' => [
                 // 只管理本项目隔离的 binary/runtime，绝不接管宿主机 Nginx。
@@ -61,6 +62,16 @@ return [
                 'upstream_keepalive' => 256,
                 'worker_connections' => 32768,
             ],
+        ],
+        'gateway' => [
+            'protocol' => 'wls-edge/2',
+            'heartbeat_seconds' => 10,
+            'stale_after_seconds' => 45,
+            'drain_seconds' => 300,
+            'stale_retention_seconds' => 86400,
+            'snapshot_retention_seconds' => 604800,
+            // 额外目录必须显式 enrollment；默认只授权 app/etc/ssl。
+            'certificate_roots' => [],
         ],
     ],
 ];

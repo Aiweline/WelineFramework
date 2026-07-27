@@ -240,6 +240,11 @@ class Start extends CommandAbstract
         $noNginxRequested = \array_key_exists('no-nginx', $args)
             || \array_key_exists('no_nginx', $args)
             || $this->hasCliArgvToken(['--no-nginx']);
+        $edgeCliMode = $this->resolveEdgeCliMode($args);
+        if ($noNginxRequested && $edgeCliMode !== null && $edgeCliMode !== 'wls') {
+            $this->printer->error(__('--no-nginx 只能与 --edge=wls 一起使用。'));
+            return 1;
+        }
         // 欢迎语
         $this->printWelcome();
 
@@ -384,6 +389,82 @@ class Start extends CommandAbstract
         // 获取配置（命令行参数 > 已保存实例配置 > env配置 > 默认值）
         $this->traceStartupPhase($instanceName, 'config:before');
         $config = $this->getServerConfig($instanceName, $args);
+        $portExplicit = isset($args['port']) || isset($args['p']);
+        $configuredEdgeMode = \strtolower(\trim((string)(
+            $config['edge_mode']
+            ?? ($config['edge']['mode'] ?? '')
+        )));
+        if ($configuredEdgeMode === '') {
+            $configuredEdgeMode = 'auto';
+        }
+        if (($config['_saved_legacy_edge'] ?? false) && $edgeCliMode === null && !$noNginxRequested) {
+            $configuredEdgeMode = \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_LEGACY;
+        }
+        try {
+            $edgeDecision = (new \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision())
+                ->decide($configuredEdgeMode, $instanceName, $portExplicit);
+        } catch (\Throwable $exception) {
+            $this->printer->error(__('WLS 2.0 边缘模式解析失败：%{1}', [$exception->getMessage()]));
+            return 1;
+        }
+        $effectiveEdgeMode = (string)$edgeDecision['effective'];
+        $gatewayMode = $effectiveEdgeMode
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY;
+        $noNginxRequested = $effectiveEdgeMode
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS;
+        if ($noNginxRequested) {
+            $config['edge'] = \array_merge(
+                \is_array($config['edge'] ?? null) ? $config['edge'] : [],
+                ['adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS],
+            );
+            $config['edge_adapter'] = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+            $fallbackPort = (int)($edgeDecision['fallback_port'] ?? 0);
+            if ($fallbackPort > 0) {
+                $config['port'] = $fallbackPort;
+            }
+        } else {
+            $config['edge'] = \array_merge(
+                \is_array($config['edge'] ?? null) ? $config['edge'] : [],
+                ['adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX],
+            );
+            $config['edge_adapter'] = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
+        }
+        $config['edge_mode'] = $effectiveEdgeMode;
+        $config['edge']['mode'] = $effectiveEdgeMode;
+        $config['gateway'] = \array_merge(
+            \is_array($config['gateway'] ?? null) ? $config['gateway'] : [],
+            [
+                'mode' => $effectiveEdgeMode,
+                'requested_mode' => (string)$edgeDecision['requested'],
+                'protocol' => $gatewayMode
+                    ? \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL
+                    : '',
+                'degraded_reason' => $gatewayMode ? '' : (string)$edgeDecision['reason'],
+                'public_http' => $gatewayMode
+                    ? (int)($edgeDecision['gateway']['public_http'] ?? 0)
+                    : 0,
+                'public_https' => $gatewayMode
+                    ? (int)($edgeDecision['gateway']['public_https'] ?? 0)
+                    : 0,
+                'epoch' => $gatewayMode
+                    ? (string)($edgeDecision['gateway']['epoch'] ?? '')
+                    : '',
+            ],
+        );
+        $this->printer->note(__('WLS 2.0 边缘模式：%{1}（请求：%{2}）', [
+            $effectiveEdgeMode,
+            (string)$edgeDecision['requested'],
+        ]));
+        if (!$gatewayMode && (string)$edgeDecision['requested'] === 'auto') {
+            $this->printer->warning(__('共享网关不可用，已降级纯 WLS：%{1}', [
+                (string)$edgeDecision['reason'],
+            ]));
+            if ((int)($edgeDecision['fallback_port'] ?? 0) > 0) {
+                $this->printer->note(__('备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。', [
+                    (int)$edgeDecision['fallback_port'],
+                ]));
+            }
+        }
         $this->traceStartupPhase($instanceName, 'config:after', [
             'host' => (string)($config['host'] ?? ''),
             'port' => (int)($config['port'] ?? 0),
@@ -513,6 +594,17 @@ class Start extends CommandAbstract
             $config['ssl_cert'] = $sslCert;
             $config['ssl_key'] = $sslKey;
             $config['ssl_domain'] = (string)($config['public_host'] ?? $host);
+            if ($gatewayMode) {
+                $config['gateway']['certificate_source'] = [
+                    'domain' => (string)$config['ssl_domain'],
+                    'cert_path' => (string)$sslCert,
+                    'key_path' => (string)$sslKey,
+                    'generation' => \is_file((string)$sslCert) && \is_file((string)$sslKey)
+                        ? \hash('sha256', (string)@\hash_file('sha256', (string)$sslCert)
+                            . ':' . (string)@\hash_file('sha256', (string)$sslKey))
+                        : '',
+                ];
+            }
             if (!$sslEnabled) {
                 $disableReason = \trim((string)($sslResult['message'] ?? ''));
                 $this->printer->warning(__('HTTPS 未启用：%{1}', [
@@ -704,6 +796,23 @@ class Start extends CommandAbstract
             );
             $config['public_origin'] = $publicOrigin;
             $this->printer->note(__('纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。'));
+        } elseif ($gatewayMode) {
+            $gatewayHttpsPort = (int)($config['gateway']['public_https'] ?? 0);
+            if ($gatewayHttpsPort < 1 || $gatewayHttpsPort > 65535) {
+                $this->printer->error(__('WLS 2.0 网关没有返回有效 HTTPS 监听端口。'));
+                return 1;
+            }
+            try {
+                $publicOrigin = \Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin::fromHostAndPort(
+                    $publicHost,
+                    $gatewayHttpsPort,
+                );
+            } catch (\Throwable $exception) {
+                $this->printer->error(__('WLS 2.0 网关公网 origin 固化失败：%{1}', [$exception->getMessage()]));
+                return 1;
+            }
+            $config['public_origin'] = $publicOrigin;
+            $this->printer->note(__('宿主级 Weline Gateway 负责公网 TLS/HTTP；本项目只提供 loopback WLS 后端。'));
         } else {
             $this->printer->note(__('Nginx 负责公网 TLS/HTTP；WLS 后端固定为回环地址明文 HTTP/1.1。'));
             $managedNginxService = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
@@ -2468,7 +2577,11 @@ class Start extends CommandAbstract
                             '服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）',
                             [$lastMasterPid, $lastControlPort]
                         ));
-                        $this->printer->success(__('WLS 与托管 Nginx 均已就绪，启动完成。'));
+                        $readyGateway = \is_array($readyEndpoint['gateway'] ?? null)
+                            && (string)($readyEndpoint['gateway']['mode'] ?? '') === 'gateway';
+                        $this->printer->success($readyGateway
+                            ? __('WLS 与宿主级 WLS 2.0 Gateway 均已就绪，启动完成。')
+                            : __('WLS 与项目托管 Nginx 均已就绪，启动完成。'));
                         $this->printer->note(__(
                             '使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'
                         ));
@@ -3813,7 +3926,10 @@ class Start extends CommandAbstract
             'runtime' => ['strategy' => 'auto', 'topology' => 'auto', 'listener_mode' => 'auto'],
             'event_loop' => 'auto',
             'loop' => ['driver' => 'auto'],
-            'edge' => ['adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX],
+            'edge' => [
+                'mode' => \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO,
+                'adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+            ],
             'http' => [
                 'protocols' => [HttpProtocolSelection::HTTP_1],
                 'preferred' => HttpProtocolSelection::HTTP_1,
@@ -3833,12 +3949,21 @@ class Start extends CommandAbstract
         $savedConfig = $this->loadSavedInstanceConfig($instanceName);
         $savedWorkerCountExplicit = \is_array($savedConfig)
             && \array_key_exists('worker_count', $savedConfig);
+        $savedLegacyEdge = \is_array($savedConfig)
+            && \strtolower(\trim((string)($savedConfig['edge_adapter'] ?? '')))
+                === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+            && !\array_key_exists('edge_mode', $savedConfig)
+            && !(\is_array($savedConfig['edge'] ?? null)
+                && \array_key_exists('mode', $savedConfig['edge']));
         if ($savedConfig) {
             // 移除已保存配置中的 worker_base_port，强制使用带项目偏移的默认值
             // 这确保了多项目部署时端口不会冲突（旧配置文件可能包含不带偏移的端口）
             unset($savedConfig['worker_base_port']);
             $config = \array_merge($config, $savedConfig);
             $config['source'] = __('已保存实例配置 (%{1})', [$instanceName]);
+        }
+        if ($savedLegacyEdge) {
+            $config['_saved_legacy_edge'] = true;
         }
         
         // 读取 env 配置
@@ -3941,6 +4066,22 @@ class Start extends CommandAbstract
             $config['port'] = (int) ($args['port'] ?? $args['p']);
             $config['source'] = __('命令行参数');
             $hasCliOverride = true;
+        }
+        $edgeCliMode = $this->resolveEdgeCliMode($args);
+        if ($edgeCliMode !== null) {
+            $config['edge'] = \array_merge(
+                \is_array($config['edge'] ?? null) ? $config['edge'] : [],
+                [
+                    'mode' => $edgeCliMode,
+                    'adapter' => $edgeCliMode === 'wls'
+                        ? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                        : \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+                ],
+            );
+            $config['edge_mode'] = $edgeCliMode;
+            $config['source'] = __('命令行参数 --edge');
+            $hasCliOverride = true;
+            unset($config['_saved_legacy_edge']);
         }
         if (isset($args['count']) || isset($args['c'])) {
             $config['worker_count'] = (int) ($args['count'] ?? $args['c']);
@@ -4075,6 +4216,8 @@ class Start extends CommandAbstract
                 ['adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS],
             );
             $config['edge_adapter'] = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+            $config['edge']['mode'] = \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS;
+            $config['edge_mode'] = \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS;
             $config['ssl'] = \array_merge(
                 \is_array($config['ssl'] ?? null) ? $config['ssl'] : [],
                 ['engine' => 'stream'],
@@ -5654,6 +5797,13 @@ class Start extends CommandAbstract
         $endpoint = $this->readBackgroundStartupData($this->getRuntimeInstanceFile($instanceName));
         $pureWls = \strtolower(\trim((string)($endpoint['edge_adapter'] ?? '')))
             === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+        $gatewayRuntime = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $gatewayMode = (string)($gatewayRuntime['mode'] ?? '')
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+            && (string)($gatewayRuntime['protocol'] ?? '')
+                === \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL;
         if ($pureWls) {
             $displayHost = $this->isUsablePublicHost($host) ? $host : '127.0.0.1';
             $scheme = $sslEnabled ? 'https' : 'http';
@@ -5673,6 +5823,49 @@ class Start extends CommandAbstract
                 __('TLS') => $sslEnabled ? 'TLS 1.3 (PHP Stream SSL)' : (string)__('关闭'),
                 __('TLS 会话恢复') => (string)__('跨连接/跨 Worker Reused pending'),
                 __('HTTP/3') => (string)__('不可用；需使用托管 Nginx'),
+                __('运行模式') => $daemon ? __('后台运行（默认）') : __('前台运行'),
+                __('平台') => \PHP_OS_FAMILY,
+                __('配置来源') => $source ?: __('智能模式'),
+            ], '→', 20);
+            echo "\n";
+            $this->showFunctionStatus();
+            return;
+        }
+
+        if ($gatewayMode) {
+            $displayHost = $this->isUsablePublicHost($host) ? $host : '127.0.0.1';
+            $httpsPort = (int)($gatewayRuntime['public_https'] ?? 0);
+            $httpsSuffix = $httpsPort === 443 ? '' : ':' . $httpsPort;
+            $gatewayStatus = (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())->status();
+            $gatewayHealthy = (bool)($gatewayStatus['ok'] ?? false)
+                && (bool)($gatewayStatus['ready'] ?? false);
+            $gatewayProtocols = (bool)($gatewayStatus['h3_enabled'] ?? false)
+                ? 'HTTP/3 → HTTP/2 → HTTP/1.1'
+                : 'HTTP/2 → HTTP/1.1';
+            $workerPort = $workerPort ?: $port;
+            if ($dispatcherEnabled) {
+                $topology = 'Weline Gateway → Dispatcher ' . $port . ' → Worker '
+                    . $workerPort . '-' . ($workerPort + $count - 1);
+            } else {
+                $listener = \in_array($directListenerMode, ['shared_fd', 'reuseport', 'worker_ports'], true)
+                    ? $directListenerMode
+                    : 'direct';
+                $topology = 'Weline Gateway → Direct ' . $listener . ' → Worker ' . $port;
+            }
+            $this->printer->keyValue([
+                __('实例名称') => $instanceName,
+                __('WLS 2.0 网关入口') => $httpsPort > 0
+                    ? 'https://' . $displayHost . $httpsSuffix . '/'
+                    : (string)__('网关公网端点未验证'),
+                __('WLS 私网回源') => 'http://127.0.0.1:' . $port,
+                __('Worker 数') => $count . ' (CPU: ' . $this->getCpuCoreCount() . ')',
+                __('公网协议') => $gatewayHealthy ? $gatewayProtocols : (string)__('未验证'),
+                __('内部拓扑') => $topology,
+                __('TLS') => $gatewayHealthy
+                    ? 'TLS 1.3 (Gateway certificate snapshot)'
+                    : (string)__('未验证'),
+                __('网关状态') => (string)($gatewayStatus['state'] ?? 'CONTROL_DEGRADED'),
+                __('网关 epoch') => (string)($gatewayStatus['epoch'] ?? $gatewayRuntime['epoch'] ?? ''),
                 __('运行模式') => $daemon ? __('后台运行（默认）') : __('前台运行'),
                 __('平台') => \PHP_OS_FAMILY,
                 __('配置来源') => $source ?: __('智能模式'),
@@ -7047,7 +7240,16 @@ class Start extends CommandAbstract
             return $configuredControlPort;
         }
 
-        return 20000 + $mainPort + MasterProcess::getProjectPortOffset();
+        $projectOffset = MasterProcess::getProjectPortOffset();
+        $legacyCandidate = 20000 + $mainPort + $projectOffset;
+        if ($legacyCandidate <= 65535 && $mainPort < 20000) {
+            return $legacyCandidate;
+        }
+
+        // WLS 2.0 pure-edge fallback ports live in 20000-29999. Keep the
+        // control plane in a disjoint, bounded range instead of overflowing
+        // 65535 with the historical arithmetic formula.
+        return 30000 + (($mainPort + $projectOffset) % 10000);
     }
 
     protected function isWorkerPortAllocated(int $port): bool
@@ -7829,8 +8031,20 @@ class Start extends CommandAbstract
             }
         }
 
-        $savedConfig['edge_adapter'] = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
-        $savedConfig['ssl_enabled'] = false;
+        $effectiveEdgeMode = \strtolower(\trim((string)(
+            $config['edge_mode']
+            ?? ($config['edge']['mode'] ?? \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO)
+        )));
+        $savedConfig['edge_mode'] = \strtolower(\trim((string)(
+            $config['gateway']['requested_mode'] ?? $effectiveEdgeMode
+        )));
+        $savedConfig['edge_adapter'] = $effectiveEdgeMode
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
+                ? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                : \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
+        $savedConfig['ssl_enabled'] = $effectiveEdgeMode
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
+            && empty($config['no_ssl']);
         $existingRuntime = \is_array($existingSavedConfig['runtime'] ?? null)
             ? $existingSavedConfig['runtime']
             : [];
@@ -8359,9 +8573,23 @@ PHP;
         $endpoint = $this->readBackgroundStartupData($this->getRuntimeInstanceFile($instanceName));
         $pureWls = \strtolower(\trim((string)($endpoint['edge_adapter'] ?? '')))
             === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+        $gatewayRuntime = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $gatewayMode = (string)($gatewayRuntime['mode'] ?? '')
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+            && (string)($gatewayRuntime['protocol'] ?? '')
+                === \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL;
         if ($pureWls) {
             $publicPort = $port;
             $backendPorts = [$port];
+        } elseif ($gatewayMode) {
+            $publicPort = (int)($gatewayRuntime['public_https'] ?? 0);
+            $backendPorts = [$port];
+            if ($publicPort < 1 || $publicPort > 65535) {
+                $this->printer->error(__('无法生成访问地址：WLS 2.0 Gateway HTTPS 端点未验证。'));
+                return;
+            }
         } else {
             $nginx = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv()->doctorSnapshot();
             $ownerActive = (bool)($nginx['runtime_owner_active'] ?? false)
@@ -8418,6 +8646,11 @@ PHP;
             $this->printer->note(__(
                 '纯 WLS 直接提供公网 %{1}；HTTP/3 需要托管 Nginx。',
                 [$sslEnabled ? 'TLS 1.3 + HTTP/2/HTTP/1.1' : 'HTTP/1.1'],
+            ));
+        } elseif ($gatewayMode) {
+            $this->printer->note(__(
+                'WLS 私网回源：http://127.0.0.1:%{1}；公网访问由宿主级 WLS 2.0 Gateway 提供。',
+                [$port],
             ));
         } else {
             $backendEndpoints = \array_map(
@@ -8520,8 +8753,8 @@ PHP;
             __('启动 Weline 高性能常驻内存服务器'),
             [
                 '[name]' => __('实例名称（默认：default）'),
-                '--host <host>' => __('公网域名或展示主机；Nginx 模式回源监听 127.0.0.1，--no-nginx 时由纯 WLS 直接监听'),
-                '-p, --port <port>' => __('Nginx 模式的 WLS 回源端口；--no-nginx 时为纯 WLS 公网 HTTPS 端口'),
+                '--host <host>' => __('公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听'),
+                '-p, --port <port>' => __('gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口'),
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
                 '--win' => __('Windows 子进程使用可见控制台窗口'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
@@ -8535,7 +8768,8 @@ PHP;
                 '--event-loop <driver>' => __('事件循环：auto/event/select（默认 auto）'),
                 '--install-deps' => __('仅为 POSIX Direct 显式安装 ext-event/reuseport 依赖；Windows worker_ports 不需要编译扩展'),
                 '--install-nginx' => __('已退役：请先单独执行 server:nginx:install；启动路径不会下载或编译'),
-                '--no-nginx' => __('显式退化为纯 WLS：默认 HTTPS，HTTP/2 优先并自动回退 HTTP/1.1；不提供 HTTP/3'),
+                '--edge <mode>' => __('WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）'),
+                '--no-nginx' => __('兼容别名，等价于 --edge=wls'),
                 '--no-auto-deps' => __('兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用'),
                 '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
                 '--direct' => __('直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用'),
@@ -8545,16 +8779,16 @@ PHP;
             [
                 __('配置优先级') => __('命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值'),
                 __('拓扑优先级') => __('--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto'),
-                __('默认边缘') => __('默认使用项目隔离 Nginx；不可用时显式传入 --no-nginx，由纯 WLS 直接提供公网入口'),
-                __('启动副作用') => __('普通 start/reload/restart 不下载、不编译；缺少 Nginx 时先执行 server:nginx:install，或使用 --no-nginx 退化'),
-                __('多实例支持') => __('可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例'),
+                __('默认边缘') => __('auto 加入可信 wls-edge/2 网关；无法建立时不接管未知端口 owner，自动分配 20000–29999 纯 WLS 地址'),
+                __('启动副作用') => __('建立网关前需要显式安装项目钉死版本 Nginx；网关复制到宿主 A/B 槽后不依赖引导项目'),
+                __('多项目支持') => __('多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离'),
                 __('配置记忆') => __('首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
                 __('事件循环') => __('Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps'),
                 __('HTTP/3') => __('仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending'),
                 __('默认拓扑') => __('Nginx 模式所有平台 auto 均为 Direct；纯 WLS 的 macOS/Linux 为 Direct，Windows 固定 Dispatcher'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
-                __('HTTPS') => __('默认由 Nginx 终结；--no-nginx 时由纯 WLS 默认启用 TLS 1.3'),
+                __('HTTPS') => __('gateway/legacy 由 Nginx 终结；wls 模式由纯 WLS 启用 TLS 1.3'),
                 __('HTTP 协议') => __('Nginx 公网支持 HTTP/3（能力可用时）、HTTP/2、HTTP/1.1；纯 WLS 默认 HTTP/2 并自动回退 HTTP/1.1'),
                 __('连接复用') => __('两种模式均支持 Keep-Alive；HTTP/2 使用多路复用；Nginx 模式额外提供回源连接池'),
                 __('TLS 会话') => __('Nginx 会话缓存与 Ticket 需 live Reused 验收；纯 WLS 跨连接/跨 Worker Session Ticket 仍为 pending'),
@@ -8565,7 +8799,8 @@ PHP;
             [
                 __('显式安装 Nginx') => 'php bin/w server:nginx:install',
                 __('启动默认实例') => 'php bin/w server:start',
-                __('纯 WLS HTTPS（不使用 Nginx）') => 'php bin/w server:start pure -p 9986 --no-nginx',
+                __('强制加入共享网关') => 'php bin/w server:start gateway --edge=gateway',
+                __('纯 WLS HTTPS') => 'php bin/w server:start pure -p 9986 --edge=wls',
                 __('启动命名实例（首次指定回源端口）') => 'php bin/w server:start api -p 9981',
                 __('再次启动已配置实例') => 'php bin/w server:start api',
                 __('Direct 模式') => 'php bin/w server:start direct -p 9982 --direct',
@@ -9001,12 +9236,56 @@ PHP;
     ): bool
     {
         if (isset($args['no-nginx']) || isset($args['no_nginx'])) {
-            $this->printer->error(__('Nginx 是唯一公网边缘，不能跳过其启动。'));
+            $this->printer->error(__('纯 WLS 模式不应进入 Nginx/网关发布阶段。'));
             return false;
         }
         try {
-            $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
             $endpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
+            $gatewayRuntime = \is_array($endpoint['gateway'] ?? null)
+                ? $endpoint['gateway']
+                : [];
+            if ((string)($gatewayRuntime['mode'] ?? '')
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+            ) {
+                $registration = (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
+                    ->register($instanceName);
+                $routes = \is_array($registration['routes'] ?? null)
+                    ? $registration['routes']
+                    : [];
+                $active = \array_values(\array_filter(
+                    $routes,
+                    static fn (mixed $route): bool => \is_array($route)
+                        && (string)($route['status'] ?? '') === 'ACTIVE',
+                ));
+                if ($active === []) {
+                    $states = \array_values(\array_unique(\array_map(
+                        static fn (mixed $route): string => \is_array($route)
+                            ? (string)($route['status'] ?? 'UNKNOWN')
+                            : 'UNKNOWN',
+                        $routes,
+                    )));
+                    $this->printer->warning(__('WLS 2.0 网关注册完成但没有 ACTIVE 路由：%{1}', [
+                        \implode(', ', $states),
+                    ]));
+                    return false;
+                }
+                $publicHost = \is_array($endpoint)
+                    ? \trim((string)($endpoint['public_host'] ?? $endpoint['host'] ?? ''))
+                    : '';
+                $edgePort = (int)($gatewayRuntime['public_https'] ?? 0);
+                if ($publicHost !== '' && $edgePort > 0) {
+                    $this->syncServerConfigToEnv($publicHost, $edgePort, true);
+                }
+                $this->printer->success(__('项目已注册到宿主级 WLS 2.0 Gateway'));
+                $this->printer->note(__('协议：%{1}，epoch：%{2}，活动路由：%{3}', [
+                    \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL,
+                    (string)($registration['epoch'] ?? $gatewayRuntime['epoch'] ?? ''),
+                    \count($active),
+                ]));
+                return true;
+            }
+
+            $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
             $edgeAdapterName = \is_array($endpoint)
                 ? \trim((string)($endpoint['edge_adapter'] ?? ''))
                 : '';
@@ -9134,6 +9413,24 @@ PHP;
         $this->printer->note('');
         $this->printer->note($this->colorize(str_repeat('─', 60), 'Blue'));
         $this->printer->note('');
+    }
+
+    private function resolveEdgeCliMode(array $args): ?string
+    {
+        $value = $args['edge'] ?? null;
+        if (\is_array($value)) {
+            $value = \end($value);
+        }
+        if (\is_scalar($value) && \trim((string)$value) !== '') {
+            return \strtolower(\trim((string)$value));
+        }
+        foreach ($_SERVER['argv'] ?? [] as $argument) {
+            $argument = (string)$argument;
+            if (\str_starts_with($argument, '--edge=')) {
+                return \strtolower(\trim(\substr($argument, 7)));
+            }
+        }
+        return null;
     }
 
     /**
