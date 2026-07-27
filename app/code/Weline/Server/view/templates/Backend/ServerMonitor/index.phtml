@@ -563,6 +563,35 @@ use Weline\Server\Model\ServerStatusLog;
 }
 </style>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_server) return;
+  g.__bqAdmin_server=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['server']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('server').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
 const STATUS_API_URL = '<?= $statusApiUrl ?>';
 const CLEANUP_API_URL = '<?= $this->getBackendUrl('*/backend/server-monitor/cleanup-logs') ?>';
@@ -607,7 +636,7 @@ function handleServerMonitorClick(event) {
 
 async function refreshStatus() {
     try {
-        const response = await fetch(STATUS_API_URL + '?instance=<?= $instance ?>', {
+        const data = await bqAdmin[\'server\'](STATUS_API_URL + '?instance=<?= $instance ?>', {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -615,8 +644,6 @@ async function refreshStatus() {
             },
             credentials: 'same-origin'
         });
-        
-        const data = await response.json();
         
         if (data.success) {
             updateStats(data.data);
@@ -850,7 +877,7 @@ function formatBytes(bytes) {
 
 async function refreshTraffic() {
     try {
-        const response = await fetch(TRAFFIC_API_URL + '?instance=<?= $instance ?>&window_sec=300', {
+        const data = await bqAdmin[\'server\'](TRAFFIC_API_URL + '?instance=<?= $instance ?>&window_sec=300', {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -858,7 +885,6 @@ async function refreshTraffic() {
             },
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             renderTrafficHosts((data.data || {}).hosts || []);
         }
@@ -899,7 +925,7 @@ async function runBenchmark() {
     }
     BackendToast.info('<?= __('压测执行中，请稍候...') ?>');
     try {
-        const response = await fetch(BENCHMARK_API_URL, {
+        const data = await bqAdmin[\'server\'](BENCHMARK_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -908,7 +934,6 @@ async function runBenchmark() {
             body: `instance=<?= $instance ?>&target=${encodeURIComponent(target)}&concurrency=${encodeURIComponent(concurrency)}&requests=${encodeURIComponent(requests)}`,
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (!data.success) {
             BackendToast.error(data.message || '<?= __('压测失败') ?>');
             return;
@@ -946,7 +971,7 @@ async function cleanupLogs() {
     BackendToast.info('<?= __('正在清理...') ?>');
     
     try {
-        const response = await fetch(CLEANUP_API_URL, {
+        const data = await bqAdmin[\'server\'](CLEANUP_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -955,8 +980,6 @@ async function cleanupLogs() {
             body: 'status_days=7&attack_days=30',
             credentials: 'same-origin'
         });
-        
-        const data = await response.json();
         
         if (data.success) {
             BackendToast.success(data.message + ' (状态日志: ' + data.data.status_logs_cleaned + ', 攻击日志: ' + data.data.attack_logs_cleaned + ')');

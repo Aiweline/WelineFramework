@@ -185,6 +185,19 @@ class Context
         return self::$mainContext;
     }
 
+    /**
+     * Return the context owned by an explicit Fiber without falling back to
+     * the main execution context.
+     */
+    public static function getForFiber(\Fiber $fiber): ?self
+    {
+        if (self::$fiberContexts === null || !isset(self::$fiberContexts[$fiber])) {
+            return null;
+        }
+
+        return self::$fiberContexts[$fiber];
+    }
+
     public static function current(): self
     {
         $current = self::getCurrent();
@@ -605,6 +618,11 @@ class Context
             'website_id' => (int)($server['WELINE_WEBSITE_ID'] ?? 0),
             'website_code' => (string)($server['WELINE_WEBSITE_CODE'] ?? ''),
             'website_url' => (string)($server['WELINE_WEBSITE_URL'] ?? ''),
+            'store_id' => (int)($server['WELINE_STORE_ID'] ?? 0),
+            'store_code' => (string)($server['WELINE_STORE_CODE'] ?? ''),
+            'store_mode' => (string)($server['WELINE_STORE_MODE'] ?? ''),
+            'channel_id' => (int)($server['WELINE_CHANNEL_ID'] ?? 0),
+            'channel_code' => (string)($server['WELINE_CHANNEL_CODE'] ?? ''),
             'language' => (string)($server['WELINE_USER_LANG'] ?? 'zh_Hans_CN'),
             'currency' => (string)($server['WELINE_USER_CURRENCY'] ?? 'CNY'),
             'is_backend' => (bool)($server['WELINE_IS_BACKEND'] ?? ($area === 'backend' || $area === 'rest_backend')),

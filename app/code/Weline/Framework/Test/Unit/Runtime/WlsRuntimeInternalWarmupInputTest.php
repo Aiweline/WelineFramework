@@ -98,7 +98,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         }
     }
 
-    public function testDeferredDynamicWarmupDefaultsOffAfterReady(): void
+    public function testDeferredDynamicWarmupDefaultsOnForOwnerWorker(): void
     {
         $this->withDynamicWarmupEnv([
             'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED' => null,
@@ -119,7 +119,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         ], function (): void {
             $runtime = new WlsRuntime();
 
-            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
+            self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
         });
     }
 
@@ -162,7 +162,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
     }
 
-    public function testReadyGateDynamicWarmupDefaultsOnBeforeReady(): void
+    public function testReadyGateDynamicWarmupDefaultsOffUnlessExplicitlyEnabled(): void
     {
         $this->withDynamicWarmupEnv([
             'WLS_WORKER_DYNAMIC_READY_GATE_ENABLED' => null,
@@ -171,7 +171,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         ], function (): void {
             $runtime = new WlsRuntime();
 
-            self::assertTrue($this->invokePrivate($runtime, 'shouldRunReadyGateDynamicFirstRenderWarmup'));
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunReadyGateDynamicFirstRenderWarmup'));
         });
 
         $this->withDynamicWarmupEnv([

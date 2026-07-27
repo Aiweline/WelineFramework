@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Runtime;
 
+use Weline\Framework\Runtime\SchedulerSystem;
+
 final class RuntimeCapabilityDetector
 {
     /** @var array<string, array<string, mixed>> */
@@ -53,7 +55,10 @@ final class RuntimeCapabilityDetector
             'cpu_physical_cores' => $cpuTopology['physical'],
             'cpu_performance_cores' => $cpuTopology['performance'],
             'cpu_topology_source' => $cpuTopology['source'],
-            'memory_mb' => $this->detectTotalMemoryMb($functions),
+            'memory_mb' => $this->detectCapacityMemoryMb($functions),
+            'memory_total_mb' => $this->detectTotalMemoryMb($functions),
+            'memory_cgroup_max_mb' => $this->detectCgroupMemoryMaxMb(),
+            'memory_limit_source' => $this->detectMemoryLimitSource($functions),
             'disabled_functions' => $disabled,
             'functions' => $functions,
             'extensions' => $extensions,
@@ -173,6 +178,42 @@ final class RuntimeCapabilityDetector
         }
 
         return 4;
+    }
+
+    /**
+     * Capacity limit for worker budget: usable cgroup max when present, else MemTotal.
+     *
+     * @param array<string, bool> $functions
+     */
+    private function detectCapacityMemoryMb(array $functions): ?int
+    {
+        $cgroupMax = $this->detectCgroupMemoryMaxMb();
+        if ($cgroupMax !== null && $cgroupMax > 0) {
+            return $cgroupMax;
+        }
+
+        return $this->detectTotalMemoryMb($functions);
+    }
+
+    /**
+     * @param array<string, bool> $functions
+     */
+    private function detectMemoryLimitSource(array $functions): string
+    {
+        $cgroupMax = $this->detectCgroupMemoryMaxMb();
+        if ($cgroupMax !== null && $cgroupMax > 0) {
+            return 'cgroup';
+        }
+        if ($this->detectTotalMemoryMb($functions) !== null) {
+            return 'memtotal';
+        }
+
+        return 'unknown';
+    }
+
+    private function detectCgroupMemoryMaxMb(): ?int
+    {
+        return (new \Weline\Server\Service\Memory\HostMemorySampler())->detectUsableCgroupMaxMb();
     }
 
     /**
@@ -344,7 +385,12 @@ final class RuntimeCapabilityDetector
     private function detectReusePortSupport(?string $listenHost = null): array
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            return $this->reusePortProbeResult(false, '', 'unsupported', 'Windows requires Dispatcher topology.');
+            return $this->reusePortProbeResult(
+                false,
+                '',
+                'not_required',
+                'Windows Direct uses independent worker_ports listeners; SO_REUSEPORT is not required.',
+            );
         }
         if (!\in_array(PHP_OS_FAMILY, ['Linux', 'Darwin'], true)) {
             return $this->reusePortProbeResult(false, '', 'unsupported', 'SO_REUSEPORT direct topology is supported only on Linux and macOS.');
@@ -555,20 +601,12 @@ final class RuntimeCapabilityDetector
     ): array {
         if (PHP_OS_FAMILY === 'Windows') {
             return [
-                'supported' => false,
-                'mode' => 'dispatcher',
-                'reason' => 'Windows requires Dispatcher topology.',
+                'supported' => true,
+                'mode' => 'worker_ports',
+                'reason' => 'Nginx balances independent loopback Worker ports; inherited file descriptors and SO_REUSEPORT are not required.',
             ];
         }
-        if (PHP_OS_FAMILY === 'Linux') {
-            return [
-                'supported' => (bool)($reusePortProbe['supported'] ?? false),
-                'mode' => 'reuseport',
-                'reason' => (string)($reusePortProbe['reason'] ?? ''),
-                'reuse_port_probe' => $reusePortProbe,
-            ];
-        }
-        if (PHP_OS_FAMILY !== 'Darwin') {
+        if (!\in_array(PHP_OS_FAMILY, ['Darwin', 'Linux'], true)) {
             return [
                 'supported' => false,
                 'mode' => 'dispatcher',
@@ -582,41 +620,41 @@ final class RuntimeCapabilityDetector
             return self::$directListenerProbeCache[$cacheKey];
         }
 
-        return self::$directListenerProbeCache[$cacheKey] = $this->probeDarwinSharedListener(
+        return self::$directListenerProbeCache[$cacheKey] = $this->probePosixSharedListener(
             $family,
             $functions,
-        );
+        ) + ['reuse_port_probe' => $reusePortProbe];
     }
 
     /**
-     * Verify the macOS Master-owned listener prerequisites without launching
+     * Verify the POSIX Master-owned listener prerequisites without launching
      * synthetic PHP Workers.
      *
      * The real Master listener, FD 3 delivery, Worker bootstrap, policy digest,
      * and warmup are mandatory runtime READY gates. Repeating those checks with
      * two extra PHP interpreters made a healthy host look unsupported whenever
-     * macOS executable verification was busy.
+     * executable verification was busy.
      *
      * @param array<string, bool> $functions
      * @return array<string, mixed>
      */
-    private function probeDarwinSharedListener(string $family, array $functions): array
+    private function probePosixSharedListener(string $family, array $functions): array
     {
         foreach (['proc_open', 'proc_close', 'proc_get_status', 'posix_setsid', 'posix_kill'] as $required) {
             if (empty($functions[$required])) {
                 return [
                     'supported' => false,
                     'mode' => 'shared_fd',
-                    'reason' => 'macOS direct shared listener requires proc_open and POSIX process lifecycle functions.',
+                    'reason' => 'POSIX direct shared listener requires proc_open and POSIX process lifecycle functions.',
                     'missing_function' => $required,
                 ];
             }
         }
-        if (!\is_dir('/dev/fd')) {
+        if (!\is_dir('/dev/fd') && !\is_dir('/proc/self/fd')) {
             return [
                 'supported' => false,
                 'mode' => 'shared_fd',
-                'reason' => 'macOS direct shared listener requires /dev/fd descriptor access.',
+                'reason' => 'POSIX direct shared listener requires /dev/fd or /proc/self/fd descriptor access.',
             ];
         }
 
@@ -634,7 +672,7 @@ final class RuntimeCapabilityDetector
             return [
                 'supported' => false,
                 'mode' => 'shared_fd',
-                'reason' => "Unable to create the macOS shared-listener probe: {$errstr}",
+                'reason' => "Unable to create the POSIX shared-listener probe: {$errstr}",
                 'error_code' => $errno,
             ];
         }
@@ -648,7 +686,7 @@ final class RuntimeCapabilityDetector
                 return [
                     'supported' => false,
                     'mode' => 'shared_fd',
-                    'reason' => 'Unable to resolve the macOS shared-listener probe port.',
+                    'reason' => 'Unable to resolve the POSIX shared-listener probe port.',
                 ];
             }
 
@@ -753,17 +791,21 @@ final class RuntimeCapabilityDetector
         $extensions = \is_array($data['extensions'] ?? null) ? $data['extensions'] : [];
         $functions = \is_array($data['functions'] ?? null) ? $data['functions'] : [];
 
-        if (empty($extensions['event'])) {
+        if (PHP_OS_FAMILY !== 'Windows' && empty($extensions['event'])) {
             $findings[] = [
-                'level' => PHP_OS_FAMILY === 'Windows' ? 'warning' : 'info',
+                'level' => 'info',
                 'code' => 'event_missing',
                 'message' => 'PHP event extension is not loaded; WLS will use stream_select unless event is installed.',
-                'action' => PHP_OS_FAMILY === 'Windows'
-                    ? 'Install php_event.dll and add extension=event in php.ini.'
-                    : 'Install with pecl install event and enable extension=event.',
+                'action' => 'Install with pecl install event and enable extension=event.',
             ];
         }
         $runtimeSafetyRequired = PhpRuntimeSafetyProfile::requiresJitIsolation();
+        $wlsOpcacheCliEnabled = (string)($data['opcache_enable_cli'] ?? '') === '1'
+            || \in_array(
+                'opcache.enable_cli=1',
+                \Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
+                true,
+            );
         if ($runtimeSafetyRequired) {
             $findings[] = [
                 'level' => 'info',
@@ -771,12 +813,14 @@ final class RuntimeCapabilityDetector
                 'message' => 'CLI OPcache and JIT are intentionally disabled for x64 PHP emulation on Windows ARM64 after reproduced native access violations.',
                 'action' => 'Use a native ARM64 PHP runtime to restore bytecode OPcache, then benchmark JIT separately.',
             ];
-        } elseif (empty($extensions['opcache']) || (string)($data['opcache_enable_cli'] ?? '') !== '1') {
+        } elseif (empty($extensions['opcache']) || !$wlsOpcacheCliEnabled) {
             $findings[] = [
                 'level' => 'info',
                 'code' => 'opcache_cli_disabled',
                 'message' => 'OPcache CLI is not fully enabled for long-running WLS processes.',
-                'action' => 'Set opcache.enable_cli=1 in php.ini.',
+                'action' => empty($extensions['opcache'])
+                    ? 'Install and enable Zend OPcache for the CLI runtime.'
+                    : 'Set opcache.enable_cli=1 in php.ini.',
             ];
         }
         $jit = \strtolower(\trim((string)($data['opcache_jit'] ?? '')));

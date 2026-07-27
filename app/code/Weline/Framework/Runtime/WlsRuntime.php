@@ -17,6 +17,8 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\SharedCacheStateHealthInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
+use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
+use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Context;
 use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
@@ -36,6 +38,7 @@ use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\QueryProviderRegistry;
 /**
  * WLS 运行时
@@ -52,13 +55,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private const HOMEPAGE_WARMUP_COORDINATOR_POOL_PREFIX = 'wls_homepage_warmup:';
     private const HOMEPAGE_WARMUP_OWNER_KEY = 'owner';
     private const HOMEPAGE_WARMUP_READY_KEY = 'ready';
-    // POSIX keeps the tight 4.5s/6s gate. Windows x64 PHP on ARM64 can spend
-    // materially longer loading a cold homepage from a shared UNC tree, so its
-    // bounded 12s/15s pair still preserves budget < lease < two attempts.
+    // POSIX keeps the tight 4.5s/6s gate. Windows local projects retain a 30s
+    // cold-start budget, while shared UNC projects receive a bounded 60s budget
+    // because x64 PHP emulation can spend over 30s loading the first request.
+    // The owner lease is derived from the selected budget and always outlives it.
     private const HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS = 6;
     private const HOMEPAGE_WARMUP_WINDOWS_OWNER_LEASE_SECONDS = 15;
     private const HOMEPAGE_WARMUP_READY_BUDGET_MILLISECONDS = 4500;
-    private const HOMEPAGE_WARMUP_WINDOWS_READY_BUDGET_MILLISECONDS = 12000;
+    private const HOMEPAGE_WARMUP_WINDOWS_READY_BUDGET_MILLISECONDS = 30000;
+    private const HOMEPAGE_WARMUP_WINDOWS_UNC_READY_BUDGET_MILLISECONDS = 60000;
     private const HOMEPAGE_WARMUP_OWNER_RECORD_TTL_SECONDS = 180;
     private const HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS = 25;
     private const HOMEPAGE_WARMUP_FOLLOWER_POLL_MILLISECONDS = 50;
@@ -85,6 +90,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private ?WorkerPreloadManager $preloadManager = null;
 
     private ?RequestPipelineInterface $requestPipeline = null;
+
+    private ?NamespaceGenerationRepository $namespaceGenerationRepository = null;
 
     private array $preloadPhasesCompleted = [];
 
@@ -115,7 +122,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private string $homepageCacheFullUri = '';
 
     /**
-     * @var array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     * @var array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key?:string}
      */
     private array $homepageCacheWarmupReceipt = [];
 
@@ -269,11 +276,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     public function runReadyGateWorkerBootstrapWarmup(): array
     {
+        $this->assertFrontendWorkerCredentialStoreReady();
+
         if ($this->readyGateWorkerBootstrapWarmupCompleted) {
             return $this->readyGateHomepageFpcProof
                 ?? throw new \LogicException('Worker READY warmup completed without homepage FPC proof.');
         }
 
+        // Any explicitly configured shared Worker credential store is an
+        // authentication prerequisite. This check must execute outside
+        // optional observer warmups, whose exceptions are intentionally
+        // logged and swallowed. Local remains the single-host default.
         $startedAt = \microtime(true);
         $backendResult = $this->newBackendFirstRenderWarmupResult();
         $dynamicResult = $this->newDynamicFirstRenderWarmupResult();
@@ -412,6 +425,18 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         return $this->readyGateHomepageFpcProof;
     }
 
+    public function assertFrontendWorkerCredentialStoreReady(): void
+    {
+        $driver = \strtolower(\trim((string)Env::get(
+            'wls.frontend_worker_session_store_driver',
+            'local',
+        )));
+        if ($driver === 'local') {
+            return;
+        }
+        ObjectManager::getInstance(FrontendWorkerSessionService::class)->assertStateStoreReady();
+    }
+
     /**
      * @return array{ready:bool,host:string,path:string,status_code:int,body_length:int,elapsed_ms:float,target_ms:float,attempts:int,fpc_status:string,cache:string,reason:string}
      */
@@ -523,6 +548,28 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             SchedulerSystem::yieldDelay(self::HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS);
         }
         if (!$hit) {
+            $failOpenRaw = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
+            if ($failOpenRaw === false || \trim((string)$failOpenRaw) === '') {
+                $failOpenRaw = Env::get('wls.worker.ready_gate_homepage_fail_open', '0');
+            }
+            $failOpen = \in_array(
+                \strtolower(\trim((string)$failOpenRaw)),
+                ['1', 'true', 'yes', 'on'],
+                true
+            );
+            if ($failOpen) {
+                $this->logReadyGateWarmupStep(
+                    'homepage_fpc_fail_open fpc=' . ($fpcStatus !== '' ? $fpcStatus : 'missing')
+                    . ' status=' . $proof['http_status']
+                    . ' reason=' . $reason,
+                    $workerId,
+                    $startedAt
+                );
+                $proof['hit'] = false;
+                $proof['reason'] = $reason . ':fail-open';
+
+                return $proof;
+            }
             throw new \RuntimeException(
                 'READY gate homepage process FPC proof failed worker=' . $workerId
                 . ' fpc=' . ($fpcStatus !== '' ? $fpcStatus : 'missing')
@@ -2249,36 +2296,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                         $cacheFullUri = $activeReceipt['full_uri'];
                         $this->addHomepageWarmupReceipt($candidateReceipts, $activeReceipt);
 
-                        // Publishing is not considered successful until this
-                        // owner can read the same exact entry back from Shared
-                        // L2 and install it into Process L1.
-                        $publishDeadlineNs = \min(
-                            $readyDeadlineNs,
-                            \hrtime(true) + ($waitMs * 1000000)
-                        );
-                        while (\hrtime(true) < $publishDeadlineNs) {
-                            foreach ($candidateReceipts as $candidateReceipt) {
-                                if ($this->warmHomepageProcessCacheForReceipt(
-                                    $coordinator,
-                                    $candidateReceipt,
-                                    true
-                                )) {
-                                    $activeReceipt = $candidateReceipt;
-                                    $cacheFullUri = $activeReceipt['full_uri'];
-                                    $pulledFromShared = true;
-                                    break 2;
-                                }
-                            }
-
-                            $remainingMs = (int)\max(
-                                0,
-                                \ceil(($publishDeadlineNs - \hrtime(true)) / 1000000)
-                            );
-                            if ($remainingMs <= 0) {
-                                break;
-                            }
-                            SchedulerSystem::yieldDelay(\min(10, $remainingMs));
-                        }
+                        // The prime itself is forced through Shared L2 (or a
+                        // fresh render whose shared publish is fail-closed).
+                        // Prove the exact receipt is now present in this
+                        // Worker's Process L1 without performing a second
+                        // context-sensitive shared lookup after request reset.
+                        $processProof = $coordinator
+                            ->getFormattedProcessCachedResponseForInternalReceipt($activeReceipt);
+                        $pulledFromShared = \is_array($processProof)
+                            && \is_string($processProof['response'] ?? null)
+                            && (string)$processProof['response'] !== '';
 
                     }
                     if ($pulledFromShared) {
@@ -2330,15 +2357,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
         }
 
-        $cached = $coordinator->getFormattedCachedResponseForFullUri(
-            $activeReceipt['full_uri'],
-            $activeReceipt['method'],
-            'text/html,application/xhtml+xml',
-            'identity',
-            $activeReceipt['cookie_header'],
-            false,
-            true
-        );
+        $cached = isset($activeReceipt['cache_key'])
+            ? $coordinator->getFormattedProcessCachedResponseForInternalReceipt($activeReceipt)
+            : $coordinator->getFormattedCachedResponseForFullUri(
+                $activeReceipt['full_uri'],
+                $activeReceipt['method'],
+                'text/html,application/xhtml+xml',
+                'identity',
+                $activeReceipt['cookie_header'],
+                false,
+                true
+            );
         if (!\is_array($cached) || !\is_string($cached['response'] ?? null)) {
             return [
                 'meta' => ['full_uri' => $cacheFullUri],
@@ -2437,16 +2466,35 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private static function homepageWarmupReadyBudgetMilliseconds(): int
     {
-        return \PHP_OS_FAMILY === 'Windows'
+        $default = \PHP_OS_FAMILY === 'Windows'
             ? self::HOMEPAGE_WARMUP_WINDOWS_READY_BUDGET_MILLISECONDS
             : self::HOMEPAGE_WARMUP_READY_BUDGET_MILLISECONDS;
+        if (\PHP_OS_FAMILY === 'Windows' && \defined('BP')) {
+            $projectRoot = \str_replace('/', '\\', (string)BP);
+            if (\str_starts_with($projectRoot, '\\\\')) {
+                $default = self::HOMEPAGE_WARMUP_WINDOWS_UNC_READY_BUDGET_MILLISECONDS;
+            }
+        }
+        $configured = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_BUDGET_MS');
+        if ($configured === false || \trim((string)$configured) === '') {
+            $configured = Env::get('wls.worker.ready_gate_homepage_budget_ms', $default);
+        }
+
+        $budget = \is_numeric($configured) ? (int)$configured : $default;
+
+        return \max(1000, \min(120000, $budget));
     }
 
     private static function homepageWarmupOwnerLeaseSeconds(): int
     {
-        return \PHP_OS_FAMILY === 'Windows'
-            ? self::HOMEPAGE_WARMUP_WINDOWS_OWNER_LEASE_SECONDS
-            : self::HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS;
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            return self::HOMEPAGE_WARMUP_OWNER_LEASE_SECONDS;
+        }
+
+        return \max(
+            self::HOMEPAGE_WARMUP_WINDOWS_OWNER_LEASE_SECONDS,
+            (int)\ceil(self::homepageWarmupReadyBudgetMilliseconds() / 1000) + 3,
+        );
     }
 
     private function tryAcquireHomepageWarmupLease(
@@ -2599,7 +2647,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key?:string}
      */
     private function readHomepageWarmupPublishedReceipt(
         SharedCacheStateInterface $coordinator,
@@ -2665,7 +2713,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     /**
      * @param array<string,mixed> $receipt
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key?:string}
      */
     private function normalizeHomepageWarmupReceipt(mixed $receipt): array
     {
@@ -2676,21 +2724,29 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $method = \strtoupper(\trim((string)($receipt['method'] ?? '')));
         $cookieHeader = $this->normalizeHomepageWarmupCookieHeader($receipt['cookie_header'] ?? '');
         $identityDigest = \strtolower(\trim((string)($receipt['identity_digest'] ?? '')));
+        $cacheKey = \strtolower(\trim((string)($receipt['cache_key'] ?? '')));
         if ($fullUri === ''
             || $method !== 'GET'
             || $cookieHeader === null
             || \preg_match('/^[a-f0-9]{64}$/D', $identityDigest) !== 1
+            || ($cacheKey !== ''
+                && (\preg_match('/^[a-f0-9]{16}$/D', $cacheKey) !== 1
+                    || !\hash_equals($identityDigest, \hash('sha256', $cacheKey))))
         ) {
             return [];
         }
 
-        return [
+        $normalized = [
             'version' => 1,
             'full_uri' => $fullUri,
             'method' => 'GET',
             'cookie_header' => $cookieHeader,
             'identity_digest' => $identityDigest,
         ];
+        if ($cacheKey !== '') {
+            $normalized['cache_key'] = $cacheKey;
+        }
+        return $normalized;
     }
 
     private function encodeHomepageWarmupReceipt(mixed $receipt): string
@@ -2708,7 +2764,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key?:string}
      */
     private function decodeHomepageWarmupReceipt(mixed $encoded): array
     {
@@ -2730,7 +2786,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key?:string}
      */
     private function buildHomepageWarmupReceipt(string $fullUri, string $cookieHeader = ''): array
     {
@@ -2740,12 +2796,29 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return [];
         }
 
+        $websiteCode = \trim(RequestContext::getWelineWebsiteCode());
+        if ($websiteCode === '') {
+            return [];
+        }
+        try {
+            $namespace = ObjectManager::getInstance(NamespacePath::class)->website($websiteCode);
+            $namespaceFingerprint = $this->namespaceGenerationRepository()->fingerprint([$namespace]);
+        } catch (\Throwable) {
+            // A fallback receipt without a generation fence must never become
+            // READY/FPC proof. The Coordinator-published receipt remains the
+            // preferred path.
+            return [];
+        }
+
         return [
             'version' => 1,
             'full_uri' => $fullUri,
             'method' => 'GET',
             'cookie_header' => $cookieHeader,
-            'identity_digest' => \hash('sha256', 'fallback|' . $fullUri . '|' . $cookieHeader),
+            'identity_digest' => \hash(
+                'sha256',
+                'fallback|' . $fullUri . '|' . $cookieHeader . '|' . $namespaceFingerprint,
+            ),
         ];
     }
 
@@ -2783,7 +2856,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * @param array<string,array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}> $receipts
+     * @param array<string,array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key?:string}> $receipts
      * @param array<string,mixed> $receipt
      */
     private function addHomepageWarmupReceipt(array &$receipts, array $receipt): void
@@ -2803,7 +2876,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         bool $forceSharedRead
     ): bool {
         $receipt = $this->normalizeHomepageWarmupReceipt($receipt);
-        return $receipt !== [] && $coordinator->warmProcessCacheForFullUri(
+        if ($receipt === []) {
+            return false;
+        }
+        if (isset($receipt['cache_key'])) {
+            return $coordinator->warmProcessCacheForInternalReceipt($receipt, $forceSharedRead);
+        }
+        return $coordinator->warmProcessCacheForFullUri(
             $receipt['full_uri'],
             $receipt['method'],
             $receipt['cookie_header'],
@@ -4261,6 +4340,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         FiberOutputBuffer::ensureInstalled('request_start');
 
+        $currentFiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        $parentContext = $currentFiber instanceof \Fiber
+            ? Context::getForFiber($currentFiber)
+            : Context::getCurrent();
+
         Context::enter(Context::fromRequest($request, [
             'mode' => RuntimeInterface::MODE_WLS,
             'type' => 'request',
@@ -4271,6 +4355,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $app = new App();
 
         $globalsEmulator = null;
+        $namespaceSnapshotStarted = false;
         $requestMeta = [
             'method' => 'GET',
             'ip' => 'unknown',
@@ -4350,6 +4435,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 // Template、PreparedContentStore 等请求级状态依赖 RequestContext
                 // 分片；缺失时会退回到 Fiber/连接级实例，导致模板数据跨请求串味。
                 RequestContext::init();
+                $this->namespaceGenerationRepository()->beginRequestSnapshot();
+                $namespaceSnapshotStarted = true;
                 RequestContext::set('view.template.profile', []);
                 $requestMeta['request_id'] = (string)(RequestContext::getId() ?? '');
             }
@@ -4718,8 +4805,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return $this->handleException($e);
             
         } finally {
+            $finalizationFailures = [];
             $t6 = \microtime(true);
-            Session::flushRequestSessions();
+            try {
+                Session::flushRequestSessions();
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'session_flush', $e);
+            }
             if (Runtime::isPersistent() && WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
                 && \defined('DEV') && DEV) {
                 w_log_debug(
@@ -4730,68 +4822,100 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             // 在重置前保存 HeaderCollector 的 Cookie/Header（Worker 构建响应时需要）
             // StateManager::reset() 会清空 HeaderCollector，必须在此之前提取
-            $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
+            $hc = null;
             try {
+                $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
                 $hc->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
-            } catch (\Throwable) {
+                $this->snapshotPendingResponseState($hc);
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'response_state_snapshot', $e);
             }
-            $this->snapshotPendingResponseState($hc);
-            if (RequestLifecycleTrace::isEnabled()) {
-                $timing['request_id'] = RequestLifecycleTrace::ensureRequestId();
-                $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
-                $traceTopLimit = $this->getRequestTraceSummaryLimit('request_trace_top_limit', 40);
-                $traceDbTopLimit = $this->getRequestTraceSummaryLimit('request_trace_db_top_limit', 20);
-                $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans, $traceTopLimit);
-                $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', $traceDbTopLimit);
-                $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
-                unset($traceSpans);
-                RequestLifecycleTrace::reset();
+            if ($namespaceSnapshotStarted) {
+                try {
+                    $this->namespaceGenerationRepository()->endRequestSnapshot();
+                } catch (\Throwable $e) {
+                    RequestResetException::append($finalizationFailures, 'namespace_snapshot_end', $e);
+                } finally {
+                    $namespaceSnapshotStarted = false;
+                }
+            }
+            try {
+                if (RequestLifecycleTrace::isEnabled()) {
+                    $timing['request_id'] = RequestLifecycleTrace::ensureRequestId();
+                    $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
+                    $traceTopLimit = $this->getRequestTraceSummaryLimit('request_trace_top_limit', 40);
+                    $traceDbTopLimit = $this->getRequestTraceSummaryLimit('request_trace_db_top_limit', 20);
+                    $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans, $traceTopLimit);
+                    $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', $traceDbTopLimit);
+                    $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
+                    unset($traceSpans);
+                }
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'request_trace_snapshot', $e);
+            } finally {
+                try {
+                    RequestLifecycleTrace::reset();
+                } catch (\Throwable $e) {
+                    RequestResetException::append($finalizationFailures, 'request_trace_reset', $e);
+                }
             }
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
-            $this->reset();
-            FiberOutputBuffer::ensureInstalled('request_end');
-            if ($globalsEmulator !== null) {
-                $globalsEmulator->reset();
+            try {
+                $this->reset();
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'runtime_reset', $e);
+            }
+            try {
+                FiberOutputBuffer::ensureInstalled('request_end');
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'fiber_output_buffer_install', $e);
             }
             $t7 = \microtime(true);
-            $timing['reset_ms'] = \round(($t7 - $t6) * 1000, 2);
-            $timing['total_ms'] = \round(($t7 - $t0) * 1000, 2);
-            if (!$isInternalWarmup && $this->isRootRequestUri($requestOriginalUri)) {
-                $this->noteHomepageNaturalHit($requestOriginalUri);
+            try {
+                $timing['reset_ms'] = \round(($t7 - $t6) * 1000, 2);
+                $timing['total_ms'] = \round(($t7 - $t0) * 1000, 2);
+                if (!$isInternalWarmup && $this->isRootRequestUri($requestOriginalUri)) {
+                    $this->noteHomepageNaturalHit($requestOriginalUri);
+                }
+                // 性能监控：记录所有超过500ms的请求，或DEV模式下记录所有请求
+                $isDev = \defined('DEV') && DEV;
+                // 添加请求方法、IP等信息
+                $timing['method'] = $requestMeta['method'] ?: 'GET';
+                $timing['ip'] = $requestMeta['ip'] ?: 'unknown';
+                $timing['timestamp'] = date('Y-m-d H:i:s');
+                $timing['redirect_count'] = (int) ($_SERVER['WLS_REDIRECT_COUNT'] ?? 0);
+                $timing['instance'] = $requestMeta['instance'];
+                $timing['worker_id'] = $requestMeta['worker_id'];
+                $timing['worker_port'] = $requestMeta['worker_port'];
+                $timing['pid'] = $requestMeta['pid'];
+                $timing['request_count'] = $requestMeta['request_count'];
+                $queryBinTiming = RequestContext::get('query_bin.timing');
+                if (\is_array($queryBinTiming) && $queryBinTiming !== []) {
+                    $timing['query_bin'] = $queryBinTiming;
+                }
+                $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
+                if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
+                    $timing['app_apply_url'] = $appApplyUrlProfile;
+                }
+                $templateProfile = RequestContext::get('view.template.profile');
+                if (\is_array($templateProfile) && $templateProfile !== []) {
+                    $timing['template_profile'] = $templateProfile;
+                }
+                // 同步到 WelineEnv
+                WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
+                WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
+                WelineEnv::set('wls.redirect_count', (string) $timing['redirect_count'], 'WlsRuntime finally');
+                if (!$isInternalWarmup) {
+                    $this->recordPerformanceTiming($timing, $isDev);
+                }
+            } catch (\Throwable $e) {
+                w_log_error('[WlsRuntime] Request timing finalization error: ' . $e->getMessage());
             }
-            // 性能监控：记录所有超过500ms的请求，或DEV模式下记录所有请求
-            $isDev = \defined('DEV') && DEV;
-            // 添加请求方法、IP等信息
-            $timing['method'] = $requestMeta['method'] ?: 'GET';
-            $timing['ip'] = $requestMeta['ip'] ?: 'unknown';
-            $timing['timestamp'] = date('Y-m-d H:i:s');
-            $timing['redirect_count'] = (int) ($_SERVER['WLS_REDIRECT_COUNT'] ?? 0);
-            $timing['instance'] = $requestMeta['instance'];
-            $timing['worker_id'] = $requestMeta['worker_id'];
-            $timing['worker_port'] = $requestMeta['worker_port'];
-            $timing['pid'] = $requestMeta['pid'];
-            $timing['request_count'] = $requestMeta['request_count'];
-            $queryBinTiming = RequestContext::get('query_bin.timing');
-            if (\is_array($queryBinTiming) && $queryBinTiming !== []) {
-                $timing['query_bin'] = $queryBinTiming;
+            try {
+                $this->wlsRuntimeAdapter()?->flushLogs();
+            } catch (\Throwable $e) {
+                w_log_error('[WlsRuntime] Log flush error: ' . $e->getMessage());
             }
-            $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
-            if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
-                $timing['app_apply_url'] = $appApplyUrlProfile;
-            }
-            $templateProfile = RequestContext::get('view.template.profile');
-            if (\is_array($templateProfile) && $templateProfile !== []) {
-                $timing['template_profile'] = $templateProfile;
-            }
-            // 同步到 WelineEnv
-            WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
-            WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
-            WelineEnv::set('wls.redirect_count', (string) $timing['redirect_count'], 'WlsRuntime finally');
-            if (!$isInternalWarmup) {
-                $this->recordPerformanceTiming($timing, $isDev);
-            }
-            $this->wlsRuntimeAdapter()?->flushLogs();
-            Context::leave();
             unset(
                 $timing,
                 $requestMeta,
@@ -4799,7 +4923,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $hc,
                 $app,
                 $request,
-                $globalsEmulator,
                 $resultStr,
                 $resultType,
                 $redirectResponse,
@@ -4813,8 +4936,49 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $routerProfile,
                 $pageBuilderRenderProfile
             );
-            $this->releaseCompletedRequestPhase('request_end');
+            try {
+                $this->releaseCompletedRequestPhase('request_end');
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'request_phase_release', $e);
+            }
+
+            if ($globalsEmulator !== null) {
+                try {
+                    // Finalizers above may still read/write the current request
+                    // projection or cooperatively yield. Clear it only after they
+                    // have completed, while retaining the Fiber-owned Context long
+                    // enough to restore the outer Worker boundary below.
+                    $globalsEmulator->reset(false);
+                } catch (\Throwable $e) {
+                    RequestResetException::append($finalizationFailures, 'globals_emulator_reset', $e);
+                }
+            }
+            unset($globalsEmulator);
+
+            try {
+                if ($parentContext !== null) {
+                    Context::enter($parentContext);
+                } else {
+                    Context::leave();
+                }
+            } catch (\Throwable $e) {
+                RequestResetException::append($finalizationFailures, 'context_restore', $e);
+            }
+            unset($parentContext, $currentFiber);
+
+            if ($finalizationFailures !== []) {
+                $exception = new RequestResetException('wls_request_finalization', $finalizationFailures);
+                $this->requestWorkerDrainAfterResponse('request_finalization_failure', $exception);
+                throw $exception;
+            }
         }
+    }
+
+    private function namespaceGenerationRepository(): NamespaceGenerationRepository
+    {
+        return $this->namespaceGenerationRepository ??= ObjectManager::getInstance(
+            NamespaceGenerationRepository::class,
+        );
     }
 
     private function applyFrontendRootStartPageRoute(Request $request): void
@@ -4902,31 +5066,31 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if ($url === '') {
             return;
         }
-        try {
-            $eventData = new DataObject(['url' => $url]);
-            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
-            $this->eventManager->dispatch('Weline_Framework_Url::detect_website', $eventData);
-        } catch (\Throwable) {
+        $resolution = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolveDetailed(StorefrontWebsiteContextResolverInterface::class);
+        if ($resolution->status === RuntimeProviderResolution::NOT_CONFIGURED) {
+            return;
+        }
+        if (!$resolution->isAvailable()
+            || !$resolution->provider instanceof StorefrontWebsiteContextResolverInterface) {
+            ObjectManager::getInstance(Response::class)
+                ->noRouter(503, (string)__('站点导航上下文服务暂不可用'));
+        }
+
+        $website = $resolution->provider->resolveWebsiteContext($url);
+        if (!$website instanceof StorefrontWebsiteContext) {
             return;
         }
 
-        $websiteId = (int)$eventData->getData('website_id');
-        if ($eventData->hasData('website_id') && $websiteId >= 0) {
-            $request->setServer('WELINE_WEBSITE_ID', (string)$websiteId);
-            WelineEnv::set('server.WELINE_WEBSITE_ID', (string)$websiteId, 'WlsRuntime detect website');
-        }
-
-        $websiteCode = \trim((string)$eventData->getData('code'));
-        if ($websiteCode !== '') {
-            $request->setServer('WELINE_WEBSITE_CODE', $websiteCode);
-            WelineEnv::set('server.WELINE_WEBSITE_CODE', $websiteCode, 'WlsRuntime detect website');
-        }
-
-        $websiteUrl = \trim((string)$eventData->getData('website_url'));
-        if ($websiteUrl !== '') {
-            $request->setServer('WELINE_WEBSITE_URL', $websiteUrl);
-            WelineEnv::set('server.WELINE_WEBSITE_URL', $websiteUrl, 'WlsRuntime detect website');
-        }
+        RequestContext::setWelineWebsiteId($website->websiteId);
+        RequestContext::setWelineWebsiteCode($website->code);
+        RequestContext::setWelineWebsiteUrl($website->url);
+        $request->setServer('WELINE_WEBSITE_ID', (string)$website->websiteId);
+        $request->setServer('WELINE_WEBSITE_CODE', $website->code);
+        $request->setServer('WELINE_WEBSITE_URL', $website->url);
+        WelineEnv::set('server.WELINE_WEBSITE_ID', (string)$website->websiteId, 'WlsRuntime detect website');
+        WelineEnv::set('server.WELINE_WEBSITE_CODE', $website->code, 'WlsRuntime detect website');
+        WelineEnv::set('server.WELINE_WEBSITE_URL', $website->url, 'WlsRuntime detect website');
     }
 
     private function buildStartPageRequestUrl(Request $request): string
@@ -5007,7 +5171,67 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $path = $websitePathPrefix . '/' . $path;
         }
 
+        // 保留当前 URI 上的货币/语言前缀，避免 /en_US → start-page 时丢掉语言段。
+        $localizationPrefix = $this->extractLocalizationPathPrefix($currentUri, $websitePathPrefix);
+        if ($localizationPrefix !== '') {
+            $businessPath = $path;
+            if ($websitePathPrefix !== '' && \str_starts_with($businessPath, $websitePathPrefix . '/')) {
+                $businessPath = \substr($businessPath, \strlen($websitePathPrefix) + 1);
+            } elseif ($websitePathPrefix !== '' && $businessPath === $websitePathPrefix) {
+                $businessPath = '';
+            }
+            $parts = \array_values(\array_filter([
+                $websitePathPrefix,
+                $localizationPrefix,
+                $businessPath,
+            ], static fn(string $part): bool => $part !== ''));
+            $path = \implode('/', $parts);
+        }
+
         return '/' . $path . ($query !== '' ? '?' . $query : '');
+    }
+
+    private function extractLocalizationPathPrefix(string $uri, string $websitePathPrefix = ''): string
+    {
+        $path = trim($this->parseUriPath($uri), '/');
+        if ($path === '') {
+            return '';
+        }
+
+        $websitePathPrefix = trim($websitePathPrefix, '/');
+        if ($websitePathPrefix !== '') {
+            if ($path === $websitePathPrefix) {
+                return '';
+            }
+            if (!\str_starts_with($path, $websitePathPrefix . '/')) {
+                return '';
+            }
+            $path = \substr($path, \strlen($websitePathPrefix) + 1);
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', $path),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return '';
+        }
+
+        $localization = State::resolveLocalizationFromPathSegments($segments);
+        if ((int)($localization['area_offset'] ?? 0) !== 0 || (int)($localization['consumed'] ?? 0) <= 0) {
+            return '';
+        }
+
+        $canonical = \is_array($localization['canonical'] ?? null) ? $localization['canonical'] : [];
+        $remaining = \is_array($localization['remaining'] ?? null) ? $localization['remaining'] : [];
+        $prefixSegments = $remaining === []
+            ? $canonical
+            : \array_slice($canonical, 0, \count($canonical) - \count($remaining));
+
+        return \implode('/', \array_values(\array_filter(
+            \array_map(static fn(mixed $segment): string => \trim((string)$segment), $prefixSegments),
+            static fn(string $segment): bool => $segment !== ''
+        )));
     }
 
     private function isWebsiteRootRequestUri(Request $request, string $uri): bool
@@ -5017,7 +5241,29 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return false;
         }
 
-        return trim($this->parseUriPath($uri), '/') === $websitePathPrefix;
+        $path = trim($this->parseUriPath($uri), '/');
+        if ($path === $websitePathPrefix) {
+            return true;
+        }
+
+        if ($path === '' || !\str_starts_with($path, $websitePathPrefix . '/')) {
+            return false;
+        }
+
+        // /{websitePrefix}/en_US 等：去掉站点路径前缀后若只剩本地化段，仍视为站点首页根。
+        $suffix = \substr($path, \strlen($websitePathPrefix) + 1);
+        $segments = \array_values(\array_filter(
+            \explode('/', $suffix),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return true;
+        }
+
+        $localization = State::resolveLocalizationFromPathSegments($segments);
+
+        return (int)($localization['area_offset'] ?? 0) === 0
+            && ($localization['remaining'] ?? null) === [];
     }
 
     private function getWebsitePathPrefix(Request $request): string
@@ -5036,7 +5282,21 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function isRootRequestUri(string $uri): bool
     {
-        return trim($this->parseUriPath($uri), '/') === '';
+        $path = trim($this->parseUriPath($uri), '/');
+        if ($path === '') {
+            return true;
+        }
+
+        // 仅货币/语言前缀（如 /en_US、/USD/zh_Hans_CN）视为前台首页根，与 / 同等处理。
+        $segments = \array_values(\array_filter(
+            \explode('/', $path),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $localization = State::resolveLocalizationFromPathSegments($segments);
+
+        return (int)($localization['area_offset'] ?? 0) === 0
+            && ($localization['remaining'] ?? null) === []
+            && (int)($localization['consumed'] ?? 0) > 0;
     }
 
     private function parseUriPath(string $uri): string
@@ -6467,11 +6727,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     public function reset(): void
     {
+        $failures = [];
         $omitCallbacks = null;
         if (Runtime::isPersistent() && WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0) {
             $omitCallbacks = WlsConcurrency::callbackNamesOmittableWithPeerFibers();
         }
-        StateManager::reset($omitCallbacks);
+        try {
+            StateManager::reset($omitCallbacks);
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'state_manager', $e);
+        }
         
         // 重置超全局变量
         
@@ -6482,14 +6747,50 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $this->eventManager->dispatch('Weline_Framework::Runtime::reset');
             } catch (\Throwable $e) {
                 w_log_error('[WlsRuntime] Reset event error: ' . $e->getMessage());
+                RequestResetException::append($failures, 'reset_event', $e);
             }
         }
 
-        ObjectManager::clearCurrentFiberInstances();
-        if (Runtime::isPersistent()) {
-            ObjectManager::clearCurrentRequestScope();
+        try {
+            ObjectManager::clearCurrentFiberInstances();
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'object_manager:fiber_instances', $e);
         }
-        FiberOutputBuffer::resetCurrent();
+        try {
+            if (Runtime::isPersistent()) {
+                ObjectManager::clearCurrentRequestScope();
+            }
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'object_manager:request_scope', $e);
+        }
+        try {
+            FiberOutputBuffer::resetCurrent();
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'fiber_output_buffer', $e);
+        }
+
+        if ($failures !== []) {
+            $exception = new RequestResetException('wls_runtime', $failures);
+            $this->requestWorkerDrainAfterResponse('request_reset_failure', $exception);
+            throw $exception;
+        }
+    }
+
+    private function requestWorkerDrainAfterResponse(string $reason, \Throwable $failure): void
+    {
+        try {
+            $adapter = $this->wlsRuntimeAdapter();
+            if ($adapter !== null) {
+                $adapter->requestDrainAfterResponse($reason);
+            }
+        } catch (\Throwable $adapterFailure) {
+            w_log_error(
+                '[WlsRuntime] Failed to request Worker drain after reset failure: '
+                . $adapterFailure->getMessage(),
+            );
+        }
+
+        w_log_error('[WlsRuntime] Worker quarantine requested: ' . $failure->getMessage());
     }
 
     private function bindProcessScopedServicesForCurrentRequest(): void

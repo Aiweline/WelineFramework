@@ -29,6 +29,24 @@ class KeyBuilder
     public const UNIFIED_CACHE_STATUS_KEY = 'status';
 
     /**
+     * Encode system_config inheritance version vector for cache keys (TASK-P1C-003).
+     *
+     * @param list<string> $parts e.g. ['shop.default.default=3', 'default.default.default=1']
+     */
+    public static function systemConfigVersionVectorToken(array $parts): string
+    {
+        $normalized = [];
+        foreach ($parts as $part) {
+            $part = \trim((string)$part);
+            if ($part !== '') {
+                $normalized[] = $part;
+            }
+        }
+
+        return $normalized === [] ? 'v0' : 'vv:' . \sha1(\implode('|', $normalized));
+    }
+
+    /**
      * 构建缓存键
      *
      * @param string $identity 池标识
@@ -135,7 +153,7 @@ class KeyBuilder
             'lang_local' => !empty($dimensions['lang_local']),
             'currency' => !empty($dimensions['currency']),
         ]);
-        $scope['schema'] = 'request-cache-v1';
+        $scope['schema'] = 'request-cache-v2';
 
         if (!empty($dimensions['request_prefix'])) {
             $scope['request_prefix'] = self::resolveRequestPathPrefix();
@@ -174,26 +192,48 @@ class KeyBuilder
      *
      * website is always a website_code (zero-site = default). Never mixes in website_id.
      *
-     * @return array{schema: string, area: string, website: string, lang: string, currency: string}
+     * @return array{schema:string,area:string,scope_state:string,scope_kind:string,website:string,store:string,channel:string,store_mode:string,context_version:string,lang:string,currency:string,namespace_fingerprint:string,cache_key_fingerprint:string}
      */
-    public static function storefrontDimensions(): array
+    public static function storefrontDimensions(bool $includeNamespaceFingerprint = true): array
     {
-        $lang = \trim((string)self::requestScopeValue('user.lang', 'WELINE_USER_LANG', ''));
-        if ($lang === '') {
-            $lang = (string)State::getLang();
+        $dimensions = StorefrontCacheKeyContext::currentOrRequestFence()->keyDimensions();
+        if (!$includeNamespaceFingerprint) {
+            $dimensions['namespace_fingerprint'] = '';
+            $dimensions['cache_key_fingerprint'] = '';
         }
-        $currency = \trim((string)self::requestScopeValue('user.currency', 'WELINE_USER_CURRENCY', ''));
-        if ($currency === '') {
-            $currency = (string)State::getCurrency();
-        }
+        $dimensions['area'] = self::getAreaKey();
+        return $dimensions;
+    }
 
-        return [
-            'schema' => 'storefront-cache-v1',
-            'area' => self::getAreaKey(),
-            'website' => self::resolveWebsiteCode(),
-            'lang' => $lang,
-            'currency' => $currency,
-        ];
+    /**
+     * Resolve the canonical store_code for cache keys (P1a scope isolation).
+     * Unresolved context falls back to default store.
+     */
+    public static function resolveStoreCode(): string
+    {
+        return StorefrontCacheKeyContext::currentOrRequestFence()
+            ->keyDimensions()['store'];
+    }
+
+    /**
+     * Resolve the canonical channel_code for cache keys (P1a scope isolation).
+     * Unresolved context falls back to default channel.
+     */
+    public static function resolveChannelCode(): string
+    {
+        return StorefrontCacheKeyContext::currentOrRequestFence()
+            ->keyDimensions()['channel'];
+    }
+
+    /**
+     * Resolve immutable store_mode for cache isolation.
+     * General cache callers retain the normal fallback; FPC must separately
+     * require a frozen ScopeIdentity before it may read or publish a page.
+     */
+    public static function resolveStoreMode(): string
+    {
+        return StorefrontCacheKeyContext::currentOrRequestFence()
+            ->keyDimensions()['store_mode'];
     }
 
     /**
@@ -204,12 +244,8 @@ class KeyBuilder
      */
     public static function resolveWebsiteCode(): string
     {
-        $code = \trim((string)self::requestScopeValue('website_code', 'WELINE_WEBSITE_CODE', ''));
-        if ($code !== '') {
-            return $code;
-        }
-
-        return 'default';
+        return StorefrontCacheKeyContext::currentOrRequestFence()
+            ->keyDimensions()['website'];
     }
 
     /**
@@ -230,13 +266,20 @@ class KeyBuilder
             return $logicalKey;
         }
 
-        $dims = self::storefrontDimensions();
-        $parts = [$logicalKey];
+        $dims = self::storefrontDimensions($website);
+        $parts = [$logicalKey, 'schema=' . $dims['schema']];
         if ($includeArea) {
             $parts[] = 'area=' . $dims['area'];
         }
         if ($website) {
+            $parts[] = 'scope_state=' . $dims['scope_state'];
+            $parts[] = 'scope_kind=' . $dims['scope_kind'];
             $parts[] = 'website=' . $dims['website'];
+            $parts[] = 'store=' . $dims['store'];
+            $parts[] = 'channel=' . $dims['channel'];
+            $parts[] = 'store_mode=' . $dims['store_mode'];
+            $parts[] = 'context_version=' . $dims['context_version'];
+            $parts[] = 'cache_version=' . $dims['cache_key_fingerprint'];
         }
         if ($lang) {
             $parts[] = 'lang=' . $dims['lang'];
@@ -272,7 +315,8 @@ class KeyBuilder
             'currency' => true,
         ], $dimensions);
 
-        $environment = ['schema' => 'env-cache-v1'];
+        $environment = ['schema' => 'env-cache-v2'];
+        $storefront = null;
         if (!empty($dimensions['area'])) {
             $environment['area'] = self::getAreaKey();
         }
@@ -280,8 +324,19 @@ class KeyBuilder
             $environment['area_route'] = (string)self::requestScopeValue('area_route', 'WELINE_AREA_ROUTE', '');
         }
         if (!empty($dimensions['website'])) {
-            // Prefer website_code only; never mix website_id into environment-scoped keys.
-            $environment['website'] = self::resolveWebsiteCode();
+            $storefront = self::storefrontDimensions();
+            foreach ([
+                'scope_state',
+                'scope_kind',
+                'website',
+                'store',
+                'channel',
+                'store_mode',
+                'context_version',
+                'cache_key_fingerprint',
+            ] as $field) {
+                $environment[$field] = $storefront[$field];
+            }
         }
         if (!empty($dimensions['website_url'])) {
             $environment['website_url'] = (string)self::requestScopeValue('website.url', 'WELINE_WEBSITE_URL', '');
@@ -293,13 +348,19 @@ class KeyBuilder
             $environment['base_url'] = self::resolveBaseUrlForEnvironmentContext();
         }
         if (!empty($dimensions['lang'])) {
-            $environment['lang'] = (string)State::getLang();
+            $environment['lang'] = $storefront !== null
+                ? (string)$storefront['lang']
+                : (string)State::getLang();
         }
         if (!empty($dimensions['lang_local'])) {
-            $environment['lang_local'] = (string)State::getLangLocal();
+            $environment['lang_local'] = $storefront !== null
+                ? (string)$storefront['lang']
+                : (string)State::getLangLocal();
         }
         if (!empty($dimensions['currency'])) {
-            $environment['currency'] = (string)State::getCurrency();
+            $environment['currency'] = $storefront !== null
+                ? (string)$storefront['currency']
+                : (string)State::getCurrency();
         }
 
         return self::normalizeContextValue(\array_replace($environment, $context));

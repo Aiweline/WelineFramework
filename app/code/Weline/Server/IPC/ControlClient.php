@@ -15,10 +15,11 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Server\IPC\ChildControl\BeforeReadyGuardAwareClientInterface;
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\Log\WlsLogger;
 
-class ControlClient implements ChildControlClientInterface
+class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwareClientInterface
 {
     /** TCP 连接 */
     private $socket = null;
@@ -62,6 +63,9 @@ class ControlClient implements ChildControlClientInterface
     /** Master 断开回调：function(bool $receivedShutdown, self $client): void */
     private $disconnectHandler = null;
 
+    /** @var null|callable(string): void */
+    private $beforeReadyGuard = null;
+
     /** 本端角色标识（用于日志打印） */
     private string $selfTag = 'Client';
 
@@ -92,6 +96,9 @@ class ControlClient implements ChildControlClientInterface
     /** READY 是否已收到 Master 闭环 ACK（worker 需等待 Dispatcher 入池确认） */
     private bool $readyStateConfirmed = false;
 
+    /** Master-assigned connection identity, refreshed on every REGISTER ACK. */
+    private int $masterClientId = 0;
+
     /**
      * 连接到 Master 控制端口
      *
@@ -107,6 +114,7 @@ class ControlClient implements ChildControlClientInterface
         $this->port = $port;
         $this->receivedShutdown = false;
         $this->readyStateConfirmed = false;
+        $this->masterClientId = 0;
 
         $errno  = 0;
         $errstr = '';
@@ -201,6 +209,11 @@ class ControlClient implements ChildControlClientInterface
     public function onDisconnect(callable $handler): void
     {
         $this->disconnectHandler = $handler;
+    }
+
+    public function setBeforeReadyGuard(?callable $guard): void
+    {
+        $this->beforeReadyGuard = $guard;
     }
 
     /** 是否输出详细 IPC 日志（每条 SEND/RECV）—— DEV 模式开启 */
@@ -440,6 +453,32 @@ class ControlClient implements ChildControlClientInterface
             $epoch    = (int)($this->registerInfo['epoch'] ?? 0);
             $launchId = (string)($this->registerInfo['launch_id'] ?? '');
             $msgId    = (string)($this->registerInfo['msg_id'] ?? $msgId);
+        }
+
+        if ($this->beforeReadyGuard !== null) {
+            try {
+                ($this->beforeReadyGuard)($role);
+            } catch (\Throwable) {
+                $this->ipcLog(
+                    "[IPC-{$this->selfTag}] before_ready_guard_failed error_code=ready_guard_failed",
+                );
+                $this->readyStateConfirmed = false;
+                return false;
+            }
+        }
+
+        if (\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            try {
+                \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Server\Service\Runtime\WorkerNamespaceGenerationApplier::class,
+                )->reconcileBeforeReady();
+            } catch (\Throwable) {
+                $this->ipcLog(
+                    "[IPC-{$this->selfTag}] cache_namespace_ready_reconcile_failed error_code=db_reconcile_failed",
+                );
+                $this->readyStateConfirmed = false;
+                return false;
+            }
         }
 
         $this->isReady = true;
@@ -770,6 +809,7 @@ class ControlClient implements ChildControlClientInterface
         switch ($type) {
             case ControlMessage::TYPE_ACK:
                 $this->resurrectionPriority = (int) ($msg['resurrection_priority'] ?? 0);
+                $this->masterClientId = \max(0, (int)($msg['client_id'] ?? 0));
                 break;
 
             case ControlMessage::TYPE_ACK_READY:
@@ -883,6 +923,7 @@ class ControlClient implements ChildControlClientInterface
             // 如果之前已就绪，重新发送 ready
             if ($this->isReady) {
                 if (!$this->sendReady()) {
+                    $this->close();
                     return false;
                 }
             }
@@ -897,6 +938,21 @@ class ControlClient implements ChildControlClientInterface
     public function isReconnectAbandoned(): bool
     {
         return $this->reconnectAbandoned;
+    }
+
+    /** @return array{client_id:int,role:string,worker_id:int,slot_id:string,lease_id:string,slot_generation:int,pid:int} */
+    public function runtimeSourceIdentity(): array
+    {
+        $info = $this->registerInfo ?? [];
+        return [
+            'client_id' => $this->masterClientId,
+            'role' => (string)($info['role'] ?? ''),
+            'worker_id' => \max(0, (int)($info['worker_id'] ?? 0)),
+            'slot_id' => (string)($info['slot_id'] ?? ''),
+            'lease_id' => (string)($info['lease_id'] ?? ''),
+            'slot_generation' => \max(0, (int)($info['generation'] ?? 0)),
+            'pid' => \max(0, (int)($info['pid'] ?? 0)),
+        ];
     }
 
     /**

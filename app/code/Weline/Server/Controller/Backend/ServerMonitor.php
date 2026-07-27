@@ -375,7 +375,7 @@ class ServerMonitor extends BackendController
                         'name' => __('Dispatcher 状态'),
                         'method' => 'GET',
                         'path' => '/_wls/dispatcher/status',
-                        'description' => __('获取 Dispatcher 分流器状态（仅 Windows 模式）'),
+                        'description' => __('获取 Dispatcher 分流器状态（仅显式兼容/诊断拓扑）'),
                         'response' => '{"status":"running","workers":[...],"connections":10}',
                     ],
                     [

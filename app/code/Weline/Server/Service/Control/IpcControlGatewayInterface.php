@@ -30,6 +30,23 @@ interface IpcControlGatewayInterface
      */
     public function cacheClear(string $instanceName, float $timeout = 5.0): array;
 
+    /** @return array{success:bool,message:string,data:array} */
+    public function cacheNamespaceInvalidateV1(
+        string $instanceName,
+        int $authorityClock,
+        array $changes,
+        string $requestId = '',
+        float $timeout = 0.1,
+        ?string $operationId = null,
+    ): array;
+
+    /** @return array{success:bool,message:string,data:array} */
+    public function cacheNamespaceInvalidationStatusV1(
+        string $instanceName,
+        string $operationId,
+        float $timeout = 0.1,
+    ): array;
+
     /**
      * @return array{success:bool,message:string,data:array}
      */

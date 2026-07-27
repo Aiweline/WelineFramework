@@ -18,6 +18,7 @@ final class ModuleRequestResetterRegistry implements RequestResetterInterface
 
     public function resetRequest(): void
     {
+        $failures = [];
         foreach ($this->providers->implementationsWithPrefix(self::CAPABILITY_PREFIX) as $capability => $implementation) {
             try {
                 $resetter = ObjectManager::getInstance($implementation);
@@ -33,7 +34,16 @@ final class ModuleRequestResetterRegistry implements RequestResetterInterface
                         'wls',
                     );
                 }
+                RequestResetException::append(
+                    $failures,
+                    'capability:' . $capability . '[' . $implementation . ']',
+                    $throwable,
+                );
             }
+        }
+
+        if ($failures !== []) {
+            throw new RequestResetException('module_request_resetters', $failures);
         }
     }
 }

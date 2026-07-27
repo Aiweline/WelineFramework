@@ -36,11 +36,15 @@ final class StateManagerPersistentEntryBaselineTest extends TestCase
     {
         $omit = WlsConcurrency::callbackNamesOmittableWithPeerFibers();
         self::assertNotContains('template_instance', $omit);
-        self::assertContains('virtual_theme_context', $omit);
+        self::assertNotContains('virtual_theme_context', $omit);
         self::assertContains('view_hook_runtime_cache', $omit);
+        self::assertNotContains('module_request_resetters', $omit);
         self::assertNotContains('session_instances', $omit);
+        self::assertNotContains('session_shutdown_queue', $omit);
         self::assertNotContains('sse_context', $omit);
         self::assertNotContains('request_context', $omit);
+        self::assertNotContains('db_connection_cleanup', $omit);
+        self::assertNotContains('request_instance', $omit);
     }
 
     public function testRunWlsPersistentRequestEntryBaselineClearsViewHookRuntimeCaches(): void

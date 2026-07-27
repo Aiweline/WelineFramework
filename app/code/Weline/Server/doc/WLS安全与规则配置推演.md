@@ -1,29 +1,30 @@
 # WLS 安全与规则配置推演
 
-> 状态：WLS 统一策略契约。2026-07-13。总体拓扑见 [WLS 运行时架构](WLS架构图.md)。
+> 状态：Nginx-only 公网入口下的 WLS 统一策略契约，2026-07-26。总体拓扑见 [WLS 运行时架构](WLS架构图.md)。
 
 ## 1. 核心不变量
 
-- 直连不等于绕过规则。Linux/macOS direct 和 Windows/Dispatcher 必须得到相同的 Host、后台 Key、Origin Token、封禁、请求限流、URI/Header/Body 检查、维护模式、Static 与 FPC 结果。
-- Worker 永远执行 L7 请求策略和缓存策略。Dispatcher 不再是 HTTP 规则的唯一执行点。
+- 公网入口唯一是项目托管 Nginx：TLS 1.3、HTTP/2、HTTP/1.1 回退与可用时 HTTP/3 都在 Nginx 终结；WLS 只接收 loopback HTTP/1.1 回源。
+- “Direct”表示内部 H1 回源由 Worker 直接接受，不是公网直连：Windows 为 Nginx 均衡的 `worker_ports`，Linux 为 `reuseport` 优先且 `shared_fd` 回退，macOS 为 `shared_fd`。各平台 Direct 与显式 Dispatcher 兼容模式必须得到相同的 Host、后台 Key、Origin Token、封禁、请求限流、URI/Header/Body 检查、维护模式、Static 与 FPC 结果。
+- Worker 永远执行 L7 请求策略和缓存策略；Nginx 与 Dispatcher 不复制这套业务规则。
 - Static/FPC 只能在 mandatory request guard 通过后命中；缓存不能绕过认证、后台路由、封禁或限流。
 - 策略只在启动/发布时编译。请求热路径不读 JSON/env.php，不反射模块类，不调用 CLI Command，不轮询规则文件。
 
-## 2. 两种拓扑的策略位置
+## 2. 内部回源监听策略的安全位置
 
-| 能力 | Dispatcher 拓扑 | Direct 拓扑 |
-|---|---|---|
-| IP/CIDR、连接数/速率、slowloris | legacy 公网入口由 Dispatcher L4 Gate 执行；协议边缘模式下 Dispatcher 只执行私有 upstream 的实例总量/总速率/超时，真实客户端规则由 Worker 逐请求执行 | legacy 公网入口由 Worker AcceptGate 执行；协议边缘模式下 AcceptGate 只执行实例总量/总速率/超时，真实客户端规则由 Worker 逐请求执行 |
-| Worker 选择、后端连接、背压、failover | Dispatcher | 不存在 |
-| TLS/SNI/证书/握手失败 | Worker | Worker |
-| Host、后台 Key、Origin Token | Worker | Worker |
-| URI/Header/Body/扫描/请求限流 | Worker | Worker |
-| Static/FPC/Router/Controller | Worker | Worker |
-| 维护模式 | Dispatcher 可切维护池，Worker 仍校验 epoch | Worker 本地直接响应 |
+| 能力 | Windows Direct (`worker_ports`) | POSIX Direct (`shared_fd/reuseport`) | 显式 Dispatcher 兼容模式 |
+|---|---|---|---|
+| 公网 TLS/SNI/证书/H2/H1/H3、握手限流 | 项目托管 Nginx | 项目托管 Nginx | 项目托管 Nginx |
+| 回源连接总量/速率/超时 | Worker AcceptGate | Worker AcceptGate | Dispatcher L4 Gate + Worker |
+| Worker 选择、后端连接、背压 | Nginx upstream 池 | 内核共享 accept 队列 | Dispatcher |
+| canonical client IP | Worker 按 trusted-loopback 的 Nginx 转发头逐请求重建 | 同左 | 同左；PROXY v2 仅证明实例内 hop |
+| Host/后台 Key/Origin Token 与 URI/Header/Body 策略 | Worker | Worker | Worker |
+| Static/FPC/Router/Controller | Worker | Worker | Worker |
+| 维护模式 | Worker 本地直接响应 | Worker 本地直接响应 | Dispatcher 可切维护池，Worker 仍校验 epoch |
 
-Dispatcher 拓扑使用带实例认证的 PROXY Protocol v2 把公网连接 peer 传给 Worker；Direct 使用公开 socket 的真实 peer。当前默认不存在会聚合多个客户端的私有协议边缘连接池。只有用户显式启用兼容边缘时，连接级 PROXY v2 才不能表达同一连接中每个请求的身份；兼容入口必须逐请求覆盖实例 token、`X-Forwarded-For` 和公开协议，Worker 在确认 loopback + token 后计算 canonical client identity。只有 socket peer 命中编译后的 trusted proxy CIDR，Worker 才从 `X-Forwarded-For` 右向左剥离已声明的受信 hop，并选取最靠右的第一个非受信 IP。`CF-Connecting-IP`、`X-Real-IP`、`Weline-Real-IP` 等客户端可注入的单值头不作为身份权威；XFF 缺失、畸形或全为受信 hop 时 fail-close 到 transport peer。
+Windows Direct 不使用中间 PROXY v2 hop，Worker 直接接收 Nginx 的 loopback H1。只有显式 Dispatcher 兼容模式才用带实例认证的 PROXY Protocol v2 证明“这是本实例的回源连接”；它同样不转发公网 TLS，也不把 loopback peer 当作最终客户端身份。项目托管 Nginx 保留 Host，并逐请求覆盖 `X-Forwarded-For`、公开 scheme/port 与 authority；Worker 只有在 socket peer 命中固定编译的托管 loopback trusted proxy 后才采用这些字段。解析 XFF 时从右向左剥离受信 hop，选择最靠右的第一个非受信 IP；客户端注入的 `CF-Connecting-IP`、`X-Real-IP` 或 `Weline-Real-IP` 不能单独成为身份权威，缺失或畸形时 fail closed 到 transport peer。
 
-Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX direct 绑定 `127.0.0.1` 并由 Nginx 反代时，未配置 `trusted_proxy_cidrs` 就不采信转发头，且 loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则。只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则；`trusted_proxy_cidrs` 只授权解析客户端转发头，本身不授予白名单权限。
+Trusted loopback 只授权重建客户端与公开 origin，不是业务白名单或 Origin 凭据。loopback peer 仍完整执行 Origin Token、ban、限流和攻击规则；只有运维在 `ip_whitelist.ips` 或 `wls.accept_gate.whitelist_cidrs` 显式声明的 CIDR 才能跳过这些规则。Gateway、Caddy、WLS-native/TLS 与 Protocol Edge 没有可达启动入口，也不存在可启用的兼容连接池。
 
 ## 3. RuntimePolicyBundle
 
@@ -35,7 +36,7 @@ Loopback 只是 transport peer，不是隐式白名单或 Origin 凭据。POSIX 
 - `critical`
 - `supported_topologies` / `capabilities`
 
-常用 stage 为 `connection`、`tls`、`mandatory_request`、`cache`、`deep_request`、`response`。Bundle 是不可变 PHP array，位于：
+现行常用 stage 为 `connection`、`mandatory_request`、`cache`、`deep_request`、`response`；遗留 `tls` 描述符不能让 WLS 重新获得公网 TLS 所有权。Bundle 是不可变 PHP array，位于：
 
 ```text
 var/server/policy/{instance}/{sha256}.php
@@ -47,7 +48,7 @@ var/server/policy/{instance}/{sha256}.php
 `CACHE` stage 不是只供控制面展示。Worker 在启动及策略激活时把
 `server.cache.static`、`server.cache.fpc` 的 `enabled` 与 `layer/layers`
 编译成一个只读位图，并把该位图连同 policy digest 写入每个
-`WorkerPolicyDecision`。HTTP、stream TLS、EventBuffer 都只读该快照：
+`WorkerPolicyDecision`。当前 Nginx-only H1 Worker 只读该快照；stream TLS、EventBuffer TLS 仅是不可达历史实现：
 
 - `static + process_l1` 才允许 Static L1 命中、canonical static 读取与 L1 发布；缺少或禁用该描述符时请求直接进入 Framework 路由。
 - `fpc + process_l1` 才允许 Worker FPC fast path；未授权 `shared_l2` 时只查 Process L1，不能访问 Shared L2。
@@ -87,9 +88,10 @@ POLICY_PREPARE -> PREPARED_ACK
 ## 4. 唯一请求顺序
 
 ```text
-AcceptGate
--> TLS/SNI
--> AuthoritativeHttpFramer（唯一字节边界）
+NginxPublicGate（TLS 1.3 + H2/H1 + 可用时 H3）
+-> TrustedLoopback H1
+-> AcceptGate
+-> AuthoritativeHttpFramer（WLS 唯一字节边界）
 -> MinimalRequestParser（语义只解析一次）
 -> CanonicalClientIdentity
 -> Host/Method/Header/Body 大小/Path 规范化
@@ -109,21 +111,21 @@ AcceptGate
 -> Cleanup
 ```
 
-字节分帧与语义解析是两个明确边界。`worker_http_message.php` 的纯函数分帧器是 HTTP、stream TLS 和 EventBuffer TLS 共用的唯一 message-length 权威：返回 `incomplete/complete/error + consumed bytes`，每次只交付一条完整请求，并保留 keep-alive/pipeline 尾部给下一请求。WLS 不解码 request `Transfer-Encoding`，因此任何 TE（包括 `chunked`）、TE+Content-Length、冲突的重复 Content-Length、非十进制 Content-Length 都必须 `400 + Connection: close`；重复 CL 只有在所有数值完全相同时可接受。
+字节分帧与语义解析是两个明确边界。`worker_http_message.php` 的纯函数分帧器是当前 WLS loopback H1 回源的唯一 message-length 权威：返回 `incomplete/complete/error + consumed bytes`，每次只交付一条完整请求，并保留 keep-alive/pipeline 尾部给下一请求。WLS 不解码 request `Transfer-Encoding`，因此任何 TE（包括 `chunked`）、TE+Content-Length、冲突的重复 Content-Length、非十进制 Content-Length 都必须 `400 + Connection: close`；重复 CL 只有在所有数值完全相同时可接受。
 
 “语义只解析一次”是数据契约，不是文档口号：`WorkerPolicyKernel` 只接受分帧器验证后且无尾部字节的单条请求，完成唯一一次请求行/Header 语义解析，产生不可变 `WorkerPolicyDecision` / Framework `RequestEnvelope`。该快照同时携带 method、HTTP protocol、已规范化 path、原始 target/query、小写 Header map、body、canonical client IP、trusted-proxy 结论和 policy digest。Static/FPC 与动态路由必须消费同一份 Decision；动态路由 `WlsRequest::fromEnvelope()` 直接水合，不再调用 `fromRaw()` 或重复扫描 HTTP 头。
 
-HTTP/3 只能改变传输和 framing，不能复制或缩短安全管线。原生 QUIC Adapter 将已验证的 H3 method/path/Header/body 水合为同一份不可变请求快照，再进入上述 `WorkerPolicyKernel`；Host、后台 Key、Origin Token、Ban、限流、URI/Header/Body 规则、Maintenance、Static/FPC 与 Framework Router 的顺序和 H2/H1.1 完全一致。Adapter、UDP listener、当前 policy digest 与预热未全部 READY 时不得发布 `Alt-Svc`。macOS Direct 的公开 UDP Router 只按已认证 Worker channel 和 QUIC connection ID 派发密文包，不解析 HTTP、不得自行执行或绕过业务规则。
+公网 H3/H2/H1 只能改变 Nginx 的客户端连接与协议 framing，不能复制或缩短 WLS 安全管线。Nginx 把这些协议统一转换为 loopback HTTP/1.1 请求，再由同一个 `AuthoritativeHttpFramer`、`WorkerPolicyKernel` 和 Framework Router 处理。只有 Nginx 的 HTTP/3/QUIC 模块、UDP、Alt-Svc、证书与 owner 绑定的 HTTP/3-only WLS health 全部通过时才发布 H3 READY；WLS native QUIC/UDP Router 不在当前链路。
 
 正文深度规则不得把 Weline 前端 Worker 的 WQB1 包当作 UTF-8 文本。只有同时满足 `POST`、当前 `Env::getFrontendQueryBinPath()`、`application/x-weline-query-bin`、`WQB1` magic 和版本号的包，才作为不透明二进制包跳过正文正则扫描；URI、Header、限流、封禁和后续 QueryBin 的协议头、同源、包大小/解码、worker session 与签名校验仍全部执行。该例外不是按 URL 或 Content-Type 的宽泛放行，伪造或损坏的包仍由 QueryBin 拒绝。
 
 XSS 事件属性规则必须以单词边界匹配 `\bon\w+\s*=`。边界不能省略，否则 `frontend_theme_id=` 等合法查询键会从中间的 `ontend_theme_id=` 被误判；`onload=`、`onerror=` 与 `onclick=` 等真实事件属性仍应命中。
 
-`WorkerStaticResponseL1::lookup()` 只接受该 Decision；GET/HEAD、`If-None-Match` / `If-Modified-Since`、HTTP/1.0/1.1 和 Connection close/keep-alive 都从快照判定。后续 `WorkerFullPageCacheFastPath` 也只消费该 Decision，并在 SSE/upgrade、`Cache-Control: no-cache/no-store/max-age=0`、`Pragma: no-cache` 和显式 warmup/bypass 时拒绝命中。HTTP 与 stream TLS 在 Static/FPC 命中后直接进入 transport 写缓冲收尾，EventBuffer 使用显式 hit 结果跳过响应头重扫描；三者都不再在普通热命中调用冷 static handler、文件系统、ObjectManager、同步 telemetry 或 post-response queue。`cache_clear(cache_epoch)` 在 ACK 前清空每个 Worker 的 Static L1 与 FPC Process L1。
+`WorkerStaticResponseL1::lookup()` 只接受该 Decision；GET/HEAD、`If-None-Match` / `If-Modified-Since`、HTTP/1.0/1.1 和 Connection close/keep-alive 都从快照判定。后续 `WorkerFullPageCacheFastPath` 也只消费该 Decision，并在 SSE/upgrade、`Cache-Control: no-cache/no-store/max-age=0`、`Pragma: no-cache` 和显式 warmup/bypass 时拒绝命中。当前 H1 Worker 在 Static/FPC 命中后直接进入 transport 写缓冲收尾，不再在普通热命中调用冷 static handler、文件系统、ObjectManager、同步 telemetry 或 post-response queue。`cache_clear(cache_epoch)` 在 ACK 前清空每个 Worker 的 Static L1 与 FPC Process L1。
 
 fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-Weline-Performance-Diagnostics: 1` 显式开启，且仍需通过 DeveloperAccessPolicy。DEV 模式本身不再导致所有 Static/FPC 请求生成随机 request-id 并写 TraceStore。`X-WLS-Benchmark-Worker: 1` 是独立的平台 benchmark 归因契约，仅返回 Worker ID/port/PID，不开启面板 trace，也不绕过 Origin Token、ban、限流或攻击规则。业务路径高压必须使用专用测试实例，并仅对实际压测源 IP 显式配置 whitelist CIDR；不得用裸 Header 伪造安全绕过。
 
-若 Framework runtime 未完成初始化，HTTP/HTTPS/EventBuffer 三种 Worker 统一返回通用 `500 Internal Server Error` 与 `request_id`/`X-Weline-Request-Id`。公开 body 不得包含异常消息、文件路径、连接信息或 `$runtimeError`；完整内部错误只在 WLS 日志中按同一 `request_id` 关联。
+若 Framework runtime 未完成初始化，当前 H1 Worker 返回通用 `500 Internal Server Error` 与 `request_id`/`X-Weline-Request-Id`；Nginx 只透传该结果。公开 body 不得包含异常消息、文件路径、连接信息或 `$runtimeError`；完整内部错误只在 WLS 日志中按同一 `request_id` 关联。
 
 后台路由必须以当前 `backend_key` 开头。裸 `/admin/login`、`/admin/login/post` 等缺少 Key 的路径必须在 FPC/Router 前返回 404；正确入口是 `/{backend_key}/admin/login`。Area Route Manifest 还必须支持 Key 后只有货币、只有语言，以及货币/语言任意顺序的组合。Framework Router 仍是最终权威，Worker manifest 只做无副作用的快速拒绝。
 
@@ -136,31 +138,31 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 - 配额耗尽与攻击判定必须分离：实例级、路径级 token bucket 超额只返回 `429`，不得升级为共享 IP Ban。共享 Ban 只用于高置信攻击规则、受保护路径和达到路径扫描阈值等明确安全事件，避免反向代理或本机共享出口下“一次误判、全站 403”。
 - 默认 `bad_user_agents` 只保留 `sqlmap`、`nikto`、`nmap`、`masscan` 等高置信扫描器；空 UA、`curl`、`python-requests` 可能来自健康检查、部署与运维命令，不得仅凭 UA 默认封禁。
 - 路径扫描计数只统计具有扫描价值的路径。普通 `GET/HEAD` 浏览器静态扩展（CSS、JS、图片、字体、音视频、WASM、source map）不占用 unique-path 预算；点文件、无扩展路径和服务端可执行扩展仍参与计数，并继续执行 protected-path 与恶意规则。
-- Slowloris 只统计超过 `grace_seconds` 仍未完成 TLS/HTTP 请求帧的连接。默认宽限为 1.5 秒，明显高于 fresh-TLS 的 `<1s` 运行门槛；正常 c32/c128 并发不能因事件循环调度超过旧的 250ms 窗口而被误判。宽限后仍使用实例级每 IP 10 条上限和 30 秒总超时，不能把提高宽限解释为取消慢连接防护。
+- 公网 TLS 握手、HTTP/2/3 连接与其 slow-client 限制由 Nginx 处理；WLS 的 slow-connection 预算只针对 trusted-loopback H1 回源。正常 upstream Keep-Alive 不得因旧 TLS/250ms 判定被误伤，回源帧仍必须有有界总超时。
 - `server:security:unblock` 由 Master 同时广播给当前实例的业务 Worker、维护 Worker 与 Dispatcher。各进程会同步清除请求策略内核、Connection AcceptGate、共享状态和进程内分布式 Ban。`--clear-all` 只按当前实例 hash 前缀删除共享 Ban，不得清空其他 WLS 实例；指定实例可用位置参数，或 `-n <instance>` / `--instance=<instance>`。
 - Dispatcher 不再构建 `AttackDetector`、不读取或轮询攻击规则文件，也不重复维护 whitelist/CIDR 索引。其 accept 热路的唯一安全事实源是当前已激活 Bundle 构建的 `ConnectionAcceptGatePool`；URI/Header/Body 攻击规则只在 WorkerPolicyKernel 执行。
-- 协议边缘到 Dispatcher/Worker 的 keep-alive 连接可能承载多个公网客户端，连接级 PROXY v2 不能作为逐请求身份。私有 AcceptGate 只豁免 edge loopback 的每 IP transport 配额，不豁免实例总量，也不改变 WorkerPolicyKernel 的 canonical client IP、Ban 或请求限流。
-- HTTP Protocol Edge 不执行 Host、后台 Key、Origin Token、URI/Header/Body 攻击、请求限流或 Static/FPC。它只处理 TLS/QUIC、ALPN、session ticket、连接池和 READY upstream；因此不能在 Edge 添加一份会与 Worker 漂移的业务规则。
+- Nginx 到 Dispatcher/Worker 的 H1 Keep-Alive 连接可能承载多个公网客户端，连接级 PROXY v2 不能作为逐请求身份。回源 AcceptGate 只按 transport 保护实例总量；WorkerPolicyKernel 仍按每个请求的 trusted-proxy 事实计算 canonical client IP、Ban 与请求限流。
+- 项目托管 Nginx 不执行 WLS 的 Host、后台 Key、Origin Token、URI/Header/Body 攻击、请求限流或 Static/FPC。它只拥有公网 TLS/QUIC、ALPN、session ticket、边缘连接与 H1 upstream；不得在 Nginx 再维护一份会与 Worker 漂移的业务规则。
 - 攻击日志进入进程 ring buffer 后批量提交；请求热路径不直接 ORM、写 JSON 或同步 IPC。
-- TLS 握手和握手后的首请求都必须有总 deadline。macOS shared-FD 路径只对新握手连接执行 200ms 有界首读泵送，不允许将兼容补偿扩展为普通 keep-alive 的全连接扫描或秒级等待。
+- Nginx 公网握手和首请求必须有总 deadline；WLS 只对 loopback H1 framing/首请求应用自己的有界预算。macOS shared-FD 仅承载明文 H1，不执行 TLS 首读补偿。
 - `server:wls_error_scan` 使用增量 cursor 流式读取：单次最多 32 MiB、单文件最多 8 MiB、总 deadline 250 ms、单块 64 KiB。未结束的超长行只持久化 8 KiB 摘要、模式尾部和匹配状态；轮转以 inode/device/size 识别，多个日志按 cursor 轮转起点公平续扫。首次发现既有日志直接从 EOF 建 cursor，不再为了统计行号扫描整个历史文件。
 
 ## 6. 验证要点
 
-- 对同一请求语料对比 Dispatcher/direct 的状态码、Header、Body、封禁、限流和缓存来源，结果必须一致。
-- 三种 transport 必须一致拒绝 TE+CL、任何未支持 TE/chunked 和冲突的重复 CL；同一连接一次写入两条完整请求时，必须按顺序返回两个响应，不得把尾部当作第一请求 body 或静默丢弃。
-- 伪造 XFF/CF Header 不能覆盖非受信 peer；Dispatcher 的 PROXY v2 元数据必须通过实例认证。
+- 对同一 Nginx 回源请求语料对比 Windows `worker_ports`、Linux `reuseport/shared_fd`、macOS `shared_fd` 与显式 Dispatcher 的状态码、Header、Body、封禁、限流和缓存来源，结果必须一致。
+- 当前 H1 Worker 必须拒绝 TE+CL、任何未支持 TE/chunked 和冲突的重复 CL；同一回源连接一次写入两条完整请求时，必须按顺序返回两个响应，不得把尾部当作第一请求 body 或静默丢弃。
+- 公网请求只能由项目托管 Nginx 覆盖转发头；伪造 XFF/CF Header 不能覆盖非受信 peer，Dispatcher 的 PROXY v2 元数据仍必须通过实例认证。
 - 生产/预发环境中，loopback peer 未显式命中 whitelist CIDR 时，必须与公网 peer 一样执行 Origin Token、ban、限流和攻击规则；trusted proxy 不等于 whitelist。DEV/local/test 策略编译会自动加入 `127.0.0.1/32` 与 `::1/128`，避免本机浏览器调试时因扫描规则残留导致全站 Forbidden，该例外不得扩展到生产。
 - 对已声明实例 Host 的 Bundle，`host_policy_strict=true`、context digest 与最终 Start 配置一致；正确 Host 可通过，任意非托管 Host 必须在缓存和 Router 前 403。staged/rollback 的旧 Host context 不得激活。
 - 16 Worker 全局限流仍为一份实例总额。
 - 普通 `curl` 与浏览器 UA 必须通过；连续超过实例/路径额度时响应为 `429`，随后不得变成 `shared_ban`。高置信扫描器应立即 403，并使同一客户端后续请求命中共享 Ban。
 - 含 `|` 等普通二进制字节的有效 WQB1 query-bin 请求不得触发正文攻击规则或把浏览器封禁；同样的攻击特征出现在普通文本请求正文时仍必须由正文规则处理。
 - 同一客户端访问超过路径扫描阈值数量的不同静态资源后，首页仍必须可访问；非静态扫描路径超过阈值仍应触发 Ban。
-- fresh-TLS c32/c128 在正常运行门槛内必须 0 reset/0 handshake error；只有连接超过 1.5 秒仍未形成完整请求时才进入 slowloris 共享计数。
+- fresh-TLS c32/c128 的 0 reset/0 handshake error 与握手 P95 门禁只在项目托管 Nginx 公网端点测量；WLS 回源另测 H1 错误、超时与 Keep-Alive 复用。
 - Static/FPC 命中时不创建 Session、Router 或 Controller，但 mandatory guard 必须已执行。
-- 禁用 `server.cache.static` 或 `server.cache.fpc` 后，三种 transport 都不得继续命中或发布对应缓存；重新启用只能由新的 active digest 生效。
-- 普通、TLS stream、EventBuffer 的动态请求在策略通过后均由同一 `RequestEnvelope` 创建 `WlsRequest`；Worker 热路不应再出现 `WlsRequest::fromRaw()`。
-- 同一请求语料经 H3/H2/H1.1 必须得到一致的后台 Key、Host、Origin Token、攻击规则、限流、Static/FPC 与 Router 结果；H3 READY 前不得出现 `Alt-Svc`，滚动重载后旧 QUIC connection ID 必须收到明确终止包而不是静默黑洞。
+- 禁用 `server.cache.static` 或 `server.cache.fpc` 后，两种内部回源拓扑都不得继续命中或发布对应缓存；重新启用只能由新的 active digest 生效。
+- 当前 H1 动态请求在策略通过后由同一 `RequestEnvelope` 创建 `WlsRequest`；Worker 热路不应再出现 `WlsRequest::fromRaw()`。
+- 同一公网请求语料经 Nginx H3/H2/H1.1 后必须得到一致的后台 Key、Host、Origin Token、攻击规则、限流、Static/FPC 与 Router 结果；H3 READY 前不得出现 `Alt-Svc`，且 H3 请求必须真实穿过 Nginx 到达 owner 绑定的 WLS health。
 - 注入含密码/文件路径的 runtime 初始化错误时，公开 500 只能看到通用消息和 `request_id`，日志可用该 ID 定位内部细节。
 - 策略发布失败后旧 active digest 不变；任一请求观测到混合 digest 都是发布失败。
-- 可在 Dispatcher 中执行但 direct 无法履行的策略（例如按 SNI 切到不同进程池）必须让 direct 启动明确失败，不得静默忽略。
+- 只有一种内部回源拓扑可履行的 mandatory 策略必须让另一拓扑在启动前明确失败，不得静默忽略；公网 SNI 路由只属于项目托管 Nginx，不得下沉到 Dispatcher。

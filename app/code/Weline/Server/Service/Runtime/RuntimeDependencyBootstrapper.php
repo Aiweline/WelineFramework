@@ -32,27 +32,15 @@ final class RuntimeDependencyBootstrapper
         RequestedTopology $requestedTopology,
         EffectiveTopology $effectiveTopology,
         bool $sslRequired = false,
+        bool $reusePortRequired = false,
     ): array
     {
         $posix = \in_array(PHP_OS_FAMILY, ['Darwin', 'Linux'], true);
         $direct = $effectiveTopology->isDirect();
         $reentry = $this->isReentry($args);
-
-        if ($direct && !$posix) {
-            return $this->result(
-                'failed',
-                (string)__('当前平台无法履行 Direct 拓扑依赖契约；已拒绝启动。')
-            );
-        }
-        if ($requestedTopology === RequestedTopology::Dispatcher && $direct) {
-            return $this->result(
-                'failed',
-                (string)__('Dispatcher 请求与 Direct 有效拓扑冲突；已拒绝静默改写拓扑。')
-            );
-        }
-
         $installRequested = $this->hasFlag($args, ['install-deps', 'install-dependencies']);
         $installDisabled = $this->hasFlag($args, ['no-auto-deps', 'no-auto-dependencies']);
+
         if ($installRequested && $installDisabled) {
             return $this->result(
                 'failed',
@@ -60,13 +48,48 @@ final class RuntimeDependencyBootstrapper
             );
         }
 
+        if ($requestedTopology === RequestedTopology::Dispatcher && $direct) {
+            return $this->result(
+                'failed',
+                (string)__('Dispatcher 请求与 Direct 有效拓扑冲突；已拒绝静默改写拓扑。')
+            );
+        }
+        if ($direct && PHP_OS_FAMILY === 'Windows') {
+            return $this->result(
+                'platform_optimal',
+                (string)__(
+                    'Windows Direct 使用 Nginx 直连的独立 Worker 回环端口与内置 stream_select；不需要安装或编译 ext-event。'
+                )
+            );
+        }
+        if ($direct && !$posix) {
+            return $this->result(
+                'failed',
+                (string)__('当前平台无法履行 Direct 拓扑依赖契约；已拒绝启动。')
+            );
+        }
+        if ($direct && !$reusePortRequired && !$this->canUseSharedFdPrimitives()) {
+            return $this->result(
+                'failed',
+                (string)__('Direct shared_fd 需要 proc_open/proc_get_status、POSIX 进程控制和可枚举的继承描述符；当前 PHP/系统不满足。')
+            );
+        }
+
         $opensslReady = !$sslRequired || $this->canUseOpenSsl();
-        if ($direct && $this->canUseSockets() && $this->canUseEvent() && $opensslReady) {
+        if ($direct
+            && (!$reusePortRequired || $this->canUseSockets())
+            && $this->canUseEvent()
+            && $opensslReady
+        ) {
             return $this->result(
                 'ready',
-                $sslRequired
-                    ? (string)__('sockets、OpenSSL 与 ext-event 已由当前 PHP 二进制加载且可用。')
-                    : (string)__('sockets 与 ext-event 已由当前 PHP 二进制加载且可用。')
+                $reusePortRequired
+                    ? ($sslRequired
+                        ? (string)__('sockets、OpenSSL 与 ext-event 已由当前 PHP 二进制加载且可用。')
+                        : (string)__('sockets 与 ext-event 已由当前 PHP 二进制加载且可用。'))
+                    : ($sslRequired
+                        ? (string)__('OpenSSL、ext-event 与 POSIX shared_fd 启动原语已可用。')
+                        : (string)__('ext-event 与 POSIX shared_fd 启动原语已可用。'))
             );
         }
         if (!$direct && $this->canUseEvent() && $opensslReady) {
@@ -87,7 +110,7 @@ final class RuntimeDependencyBootstrapper
             }
             if ($direct) {
                 $missing = [];
-                if (!$this->canUseSockets()) {
+                if ($reusePortRequired && !$this->canUseSockets()) {
                     $missing[] = 'sockets';
                 }
                 if (!$this->canUseEvent()) {
@@ -231,7 +254,9 @@ final class RuntimeDependencyBootstrapper
             return ($direct || !$opensslReady)
                 ? $this->result(
                     'failed',
-                    (string)__('本次显式依赖安装后 sockets/OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。')
+                    $reusePortRequired
+                        ? (string)__('本次显式依赖安装后 sockets/OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。')
+                        : (string)__('本次显式依赖安装后 OpenSSL/ext-event 仍不可用；已拒绝重复安装循环。')
                 )
                 : $this->result(
                     'platform_optimal',
@@ -255,22 +280,24 @@ final class RuntimeDependencyBootstrapper
         }
 
         try {
-            $freshSocketsReady = !$direct || $this->freshPhpCanUseSockets();
+            $freshSocketsReady = !$reusePortRequired || $this->freshPhpCanUseSockets();
             $freshOpenSslReady = !$sslRequired || $this->freshPhpCanUseOpenSsl();
             $freshEventReady = $this->freshPhpCanUseEvent();
             if ($freshSocketsReady && $freshOpenSslReady && $freshEventReady) {
                 return $this->afterSuccessfulInstall(
                     $direct
-                        ? (string)__('其他 WLS 启动进程已安装 sockets/OpenSSL/ext-event。')
+                        ? ($reusePortRequired
+                            ? (string)__('其他 WLS 启动进程已安装 sockets/OpenSSL/ext-event。')
+                            : (string)__('其他 WLS 启动进程已安装 OpenSSL/ext-event。'))
                         : (string)__('其他 WLS 启动进程已安装 HTTPS/OpenSSL 与 Dispatcher 可选 ext-event。'),
-                    $direct,
+                    $reusePortRequired,
                     $sslRequired,
                     true,
                 );
             }
 
             $dependencies = [];
-            if ($direct && !$freshSocketsReady) {
+            if ($reusePortRequired && !$freshSocketsReady) {
                 $dependencies[] = 'sockets';
             }
             if (!$freshOpenSslReady) {
@@ -322,9 +349,11 @@ final class RuntimeDependencyBootstrapper
 
             return $this->afterSuccessfulInstall(
                 $direct
-                    ? (string)__('sockets/OpenSSL/ext-event 已使用当前 PHP 安装并验证。')
+                    ? ($reusePortRequired
+                        ? (string)__('sockets/OpenSSL/ext-event 已使用当前 PHP 安装并验证。')
+                        : (string)__('OpenSSL/ext-event 已使用当前 PHP 安装并验证。'))
                     : (string)__('HTTPS/OpenSSL 与 Dispatcher 可选 ext-event 已使用当前 PHP 安装并验证。'),
-                $direct,
+                $reusePortRequired,
                 $sslRequired,
                 true,
             );
@@ -395,6 +424,17 @@ final class RuntimeDependencyBootstrapper
         return \extension_loaded('sockets')
             && \function_exists('socket_create')
             && \defined('SO_REUSEPORT');
+    }
+
+    private function canUseSharedFdPrimitives(): bool
+    {
+        foreach (['proc_open', 'proc_close', 'proc_get_status', 'posix_setsid', 'posix_kill'] as $function) {
+            if (!\function_exists($function)) {
+                return false;
+            }
+        }
+
+        return \is_dir('/dev/fd') || \is_dir('/proc/self/fd');
     }
 
     private function canUseOpenSsl(): bool

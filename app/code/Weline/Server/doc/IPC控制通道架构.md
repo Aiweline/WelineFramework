@@ -1,18 +1,10 @@
 # WLS IPC 控制通道架构
 
-## Linux HTTP/3 路由激活闭环（readiness v7）
+> 状态：现行协议摘要，2026-07-24；包含 readiness v7 与 namespace IPC v1。消息常量与超时预算以 `IPC/ControlMessage.php` 为准。
 
-Linux Direct HTTP/3 把“socket 已绑定”和“允许接流量”拆成两个状态。Worker 首次 READY 仅上报 `reuseport-ebpf/staged` 以及 route identity；Master 通过 `ack_ready` 返回 `ready_phase=activate + http3_route`，但不设置 `STATE_READY`。Worker 完成本地 eBPF 激活后发送 `http3_route_activated`，Master 对当前 IPC client、slot、lease、generation、owner epoch、activation id、native digest、namespace digest、socket cookie、program/map id 做全量相等校验，成功后才返回 `ready_phase=final`。
+WLS 使用 NDJSON 控制通道连接 CLI、Master、Dispatcher、Worker 和其它子服务。控制面传递身份、READY、路由快照、排水、重载、停止与遥测；公网协议不进入该通道。
 
-`register` 只承载子进程身份，不得混入 READY ACK 字段。`ControlClient` 与 `SupervisorChildClient` 只把 `final` 视为 READY confirmed。Hybrid Supervisor 对 preliminary ACK 原样透传，不提前 `resolveDeferredReady()`；激活回执属于关键 passthrough 消息。READY 闭环使用统一 3 秒总预算，Worker 每 0.5 秒重发同一 READY，Master 在预算内复用同一个 activation id 并重发 activate。Worker 始终从 `SubprocessControlKernel` 获取当前 client，避免启动重连后向旧连接写回执。
-
-相同 client/slot/lease/generation、activation id、native digest 和完整 route status 的重复激活回执是幂等消息：Master 补发同一 `final` ACK，不断开已经健康的 Worker。任何身份、代际、摘要或 route status 不一致仍 fail closed；断线会清除 pending activation，超过总预算直接拒绝该子进程。
-
-Surge Worker 的 eligibility 在 argv 构建和进程 spawn 前固化为 false；其 final ACK 携带 `action=hold`，因此可以完成 TCP/FPC 预热，但不能发布 Linux HTTP/3 listener slot。
-
-> 状态：现行协议摘要，2026-07-17。消息常量与超时预算以 `IPC/ControlMessage.php` 为准。
-
-WLS 使用 NDJSON 控制通道连接 CLI、Master、Dispatcher、Worker 和其它子服务。控制面传递身份、READY、路由快照、排水、重载、停止与遥测；用户 HTTP/TLS 流量始终走独立数据面。
+当前唯一公网数据面为“项目托管 Nginx TLS 1.3/H2/H1（H3 可用时）→ loopback HTTP/1.1 Keep-Alive → Direct Worker”。Windows 由 Nginx 均衡独立 `worker_ports`；Linux 自动优先 `reuseport`，不可用时回退 `shared_fd`；macOS 使用 `shared_fd`。这里的 Direct 仅表示内部回源 socket 由 Worker 接受，不表示客户端直连 WLS。旧 Linux native HTTP/3 activation、Gateway、Caddy、WLS TLS/Protocol Edge 消息即使仍留有历史常量，也没有受支持的启动入口，不属于现行 READY 契约。
 
 ## 1. 控制面与数据面
 
@@ -21,12 +13,17 @@ flowchart LR
   CLI["CLI"] <-->|"command / progress / result"| MASTER["MasterControlServer\nServiceOrchestrator"]
   MASTER <-->|"REGISTER / READY / lease / heartbeat"| DISP["Dispatcher"]
   MASTER <-->|"REGISTER / READY / drain / shutdown"| WORKER["Worker / Maintenance"]
-  MASTER <-->|"REGISTER / READY / shutdown"| SIDE["Session / Memory / Redirect / Gateway"]
-  CLIENT["Client"] --> DISP
-  DISP --> WORKER
+  MASTER <-->|"REGISTER / READY / shutdown"| SIDE["Session / Memory / Redirect"]
+  CLIENT["Client"] --> NGINX["项目托管 Nginx\nTLS 1.3 + H2/H1 + 可用时 H3"]
+  NGINX -->|"loopback H1 Keep-Alive"| ROUTE{"内部拓扑"}
+  ROUTE -->|"显式兼容模式"| DISP
+  ROUTE -->|"Windows worker_ports / Linux reuseport→shared_fd / macOS shared_fd"| WORKER
+  DISP -->|"H1 bytes"| WORKER
 ```
 
 控制 endpoint 由 Master 启动时分配，只监听本机并写入实例元数据供 CLI/子进程发现。`instance.json` 不是运行时共识；已连接会话、lease token、epoch、launch id 和 Master Registry 才是控制事实。
+
+Nginx 的 owner/config generation、TLS/H2/H1/H3 运行证据属于公网边缘事实；Master Registry、Worker READY 与显式兼容模式下的 Dispatcher 路由 ACK 属于 WLS 回源事实。两者必须分别验证，不能用 IPC READY 推导公网协议已可用，也不能用 Nginx 本地响应替代真实 WLS health。
 
 ### 1.1 Supervisor 本机 endpoint 选择
 
@@ -45,7 +42,7 @@ Windows 保持 `127.0.0.1` 稳定 TCP 端口。POSIX 使用 UNIX socket，并在
 
 ```json
 {"type":"register","role":"worker","worker_id":2,"pid":12345,"port":19982}
-{"type":"ready","role":"worker","worker_id":2,"port":19982,"readiness_protocol_version":2,"readiness_capabilities":["dynamic_first_render_proof_v1"]}
+{"type":"ready","role":"worker","worker_id":2,"port":19982,"readiness_protocol_version":7,"readiness_capabilities":["dynamic_first_render_proof_v1","compiled_container_digest_v1","cache_namespace_invalidation_v1"],"namespace_authority_clock":42}
 ```
 
 接收方必须按 NDJSON 增量解析，不能假设一次 socket read 等于一条完整消息。未知类型记录后忽略；非法身份、过期 epoch/launch id 或不匹配 lease 的消息不得改变 Registry。
@@ -61,7 +58,7 @@ sequenceDiagram
   C->>M: register(role, slot, pid, port, epoch, launch_id)
   M-->>C: ack + lease_assign
   C->>C: listen + bootstrap + READY gate warmup
-  C->>M: ready(v3, policy, container digest, FPC, dynamic render, listener)
+  C->>M: ready(v7, policy, container digest, FPC, namespace clock, listener)
   M-->>C: ack_ready / ready_ack
   M->>D: set_route_table(version, epoch, checksum)
   D-->>M: route_table_ack / worker_pool_ack
@@ -72,9 +69,9 @@ sequenceDiagram
 
 - `REGISTER` 证明进程身份已接入控制面，不代表可服务。
 - `READY` 必须晚于端口监听、框架初始化与 READY gate。
-- 业务 Worker 的 READY v3 必须携带 `dynamic_first_render` 精确回执：`host/path/status_code/body_length/elapsed_ms/target_ms/attempts/fpc_status/ready/reason`，并声明 `compiled_container_digest_v1` 能力与 64 位 `container_registry_digest`。Master 只接受真实动态首页（`path=/`、FPC 非 HIT、2xx/3xx、非空正文且 `elapsed_ms < target_ms`），且 Worker 容器摘要必须与 Master 启动快照相同；缺少版本、能力、摘要或任一证明字段都 fail closed。
+- 业务 Worker 的当前 READY v7 必须携带 `dynamic_first_render` 精确回执：`host/path/status_code/body_length/elapsed_ms/target_ms/attempts/fpc_status/ready/reason`，并声明 `compiled_container_digest_v1` 能力与 64 位 `container_registry_digest`。Master 只接受真实动态首页（`path=/`、FPC 非 HIT、2xx/3xx、非空正文）；配置了首屏耗时门禁时还必须满足 `elapsed_ms < target_ms`。Worker 容器摘要必须与 Master 启动快照相同；缺少版本、能力、摘要或任一证明字段都 fail closed。
 - Maintenance Worker 不执行动态首页，因此不要求 `dynamic_first_render` 通过业务门禁；拓扑、策略、container digest、监听与 maintenance warmup 证明仍必须通过。
-- 缺字段不代表“旧协议”。只有双方以后明确协商出的旧协议版本/能力才可进入独立兼容分支；当前 Worker 统一要求 v3。
+- 缺字段不代表“旧协议”。只有双方明确协商的版本/能力才可进入独立兼容分支；当前 Worker 统一使用 readiness v7。Namespace capability 是 v7 内的增量能力，没有单独提高 readiness 版本。
 - Worker 只有进入 Master Registry 的 READY 状态后才可出现在路由快照中。
 - `route_table_ack`/`worker_pool_ack` 关闭 Master 到 Dispatcher 的发布闭环。
 - PID 为 0 仅表示尚未观察到 PID，不是生命周期状态。
@@ -113,12 +110,13 @@ sequenceDiagram
 | `set_route_table`、`route_table_ack`、`worker_pool_ack` | Master ↔ Dispatcher | 路由快照闭环 |
 | `drain`、`draining_complete`、`shutdown`、`exited`、`exit_reason` | Master ↔ Child | 排水与终结 |
 | `cache_clear(cache_epoch)`、`cache_clear_ack` | Master ↔ READY Worker | 按单调代际原地清理 L1/Static/FPC，并闭合精确 ACK |
+| `cache_namespace_invalidate_v1`、`cache_namespace_invalidate_ack_v1` | Master ↔ READY Worker | 只推进 namespace generation 进程快照，不执行任何全量缓存清理 |
 | `command`、`command_accept`、`command_done`、`command_result` | CLI ↔ Master | 运维命令 |
 | `reload_progress`、`reload_completed`、`reload_failed` | Master → CLI | 长操作进度 |
 | `dispatcher_alert`、`telemetry`、`route_observation` | Child → Master | 自愈与观测 |
 | `set_maintenance_mode`、`maintenance_mode_ack` | Master ↔ Worker | 维护状态确认 |
 
-完整的证书、Fiber、扩缩容、Gateway 和安全消息不在本文重复枚举，直接查 `ControlMessage`。
+完整的证书、Fiber、扩缩容和安全消息不在本文重复枚举，直接查 `ControlMessage`。Gateway/native HTTP/3 等遗留消息仅供历史清理与取证，不得作为当前可配置能力。
 
 ### 5.1 异步控制操作终态
 
@@ -133,7 +131,78 @@ Dispatcher 维护启用的提交条件为：
 
 无 READY Dispatcher 或 ACK 超时时，Master 必须强制发布业务池快照、停止未提交的 maintenance Worker、恢复 `maintenance_mode=false`，并把失败写入终态结果；禁止留下“Master 显示维护，Dispatcher 仍走业务池”的分裂状态。
 
-### 5.2 模块重载 Api 边界
+### 5.2 Namespace generation 精准失效
+
+Framework 的 `RuntimeNamespaceInvalidationPublisherInterface` 只向每个存活 Master 提交一个有界操作：单实例最多 100ms，整次发布最多 500ms，不在业务事务的 `afterCommit` 回调中等待 Worker ACK。Master 保留“一个 active + 一个按 namespace 最大 generation 合并的 pending”队列，最近 256 个或 10 分钟内的终态可按 `operation_id` 查询。
+
+Worker 只在共享 `WorkerNamespaceGenerationApplier` 中验证严格 v1 帧、幂等推进进程快照并回传权威时钟/代际。Master 以接收操作时快照的 `client + role + worker + slot + lease + slot_generation + PID` 审计 ACK；断线、身份换代、缺能力、时钟落后、代际不足或超时都是结构化失败。三个 Worker 入口共用同一 applier，旧 `cache_clear` 协议与清理语义保持不变。
+
+Worker 每次初始 READY、重连 READY、replacement/surge 准入前都从 DB 重建 namespace 快照，并上报 `cache_namespace_invalidation_v1` 能力和 `namespace_authority_clock`。Master 在发布最终 READY/路由前再次与 DB 权威时钟比对，落后 Worker fail closed。混合控制面必须保留 Supervisor 认证后的 source identity，不得用 Worker 自报字段替代。
+
+#### v1 wire
+
+```json
+{
+  "type": "cache_namespace_invalidate_v1",
+  "schema_version": 1,
+  "operation_id": "nsi_0123456789abcdef0123456789abcdef",
+  "authority_clock": 42,
+  "changes": [
+    {"namespace": "website/default", "generation": 18}
+  ]
+}
+```
+
+- `operation_id` 匹配 `^nsi_[a-f0-9]{32}$`。同 ID + 同 payload hash 幂等，同 ID + 不同 hash 返回 `operation_conflict`。
+- authority clock/generation 是正整数；changes 为 1..64 条，按 namespace 字典序，重复路径取最大 generation。
+- NamespacePath 仅允许 `website/{code}` 或 `global/{scope}` 根，最多 16 段、512 bytes。NDJSON 整帧不得超过 64 KiB。
+- 帧中不含 Session、cookie、admin 或 WelineEnv 快照。
+
+ACK 为：
+
+```json
+{
+  "type": "cache_namespace_invalidate_ack_v1",
+  "operation_id": "nsi_0123456789abcdef0123456789abcdef",
+  "success": true,
+  "applied": true,
+  "authority_clock": 42,
+  "generations": {"website/default": 18},
+  "source": {
+    "client_id": 7,
+    "role": "worker",
+    "worker_id": 2,
+    "slot_id": "worker#2",
+    "lease_id": "...",
+    "slot_generation": 4,
+    "pid": 12345
+  },
+  "error_code": "",
+  "error": ""
+}
+```
+
+Direct 连接的 client id 来自 Master REGISTER ACK；Hybrid 由 Supervisor 用已认证 session 覆盖 source 字段。Master 不信任 Worker 自报身份，且要求 ACK 只包含请求的 namespace，每个 generation 不小于请求值。
+
+#### operation 与失败
+
+`publish()` 返回 `success/completed=false/attempted/operations_by_instance/failed_by_instance/skipped_by_instance`。未点名实例且没有 WLS 时，是可预期跳过：`success=true`、`attempted=[]`、`runtime_not_present`；显式点名不存在实例则失败。accepted 不等于 completed，`publishAndWait()` 才会按 ID 查终态。
+
+Master 最多一个 active + 一个 pending，pending 按 namespace 最大 generation 合并；超过 64 个唯一 namespace 或队列成员上限返回 `queue_capacity_exceeded`。终态按 operation ID 保留最近 256 条或 10 分钟，先到的保留上限先触发淘汰。
+
+`send_failed`、`ipc_disconnected`、`identity_changed`、`worker_rejected`、`ack_timeout` 等独立记录。默认 ACK 总 deadline 为 5 秒，配置范围 0.2..30 秒。
+
+#### 默认、上线与回滚
+
+`cache.namespace.publisher_enabled=false`、`cache.namespace.legacy_full_clear_fallback=true`、`wls.cache_namespace.require_capability=false` 是当前默认。
+
+- Release A 保持上述默认，先上线 DB generation、读时指纹、shared applier/capability，并替换 Worker。
+- 只有全部 routing-eligible Worker 已上报 capability + authority clock 后才可开 publisher 并把 capability 设为 required。精准 IPC/FPC 验收后才可关旧全清 fallback。
+- 回滚先关 publisher、重开 legacy fallback 并等待 active/pending operation 终态；再执行一次旧 `cache_clear` 并收齐旧 ACK。不降表、不删 generation 历史。
+
+配置切换后要重建 registry/provider 并重启 Master，仅 reload Worker 不足够。本节是源码契约摘要，不声称 Direct/Hybrid、replacement/surge、断线、超时或新旧 Worker 混合版本已在本次任务中实机验收通过。
+
+### 5.3 模块重载 Api 边界
 
 需要在受控后台操作后请求指定实例强制重载的模块，只能调用
 `Weline\Server\Api\Control\RuntimeReloadGateway::forceReloadAsync()`，并读取只读
@@ -160,8 +229,9 @@ Dispatcher 维护启用的提交条件为：
 7. 缓存清理先快照全部 READY canonical Worker 的 `client + slot + lease + generation + PID`；Worker 只有在本进程全部 L1/Static/FPC reset 成功后才提交 `cache_epoch` 并 ACK。
 8. Master 在一个总 deadline 内必须收齐快照中每个 Worker 的同代际、同租约 ACK；发送失败、会话换代、Worker 拒绝或超时都是结构化失败，不得回报清理成功。
 9. Shared L2 namespace 清理是幂等操作：共享状态服务明确返回 `not_found` / `Session not found` 代表目标状态已经满足，尤其适用于多个 Worker 并发清同一池；传输、鉴权、超时或其他协议错误仍是硬失败。普通、TLS 与 EventBuffer Worker 统一通过 `WorkerCachePoolResetter` 检查每个池，任一真实失败都不提交 epoch。
-10. 初次启动和 Direct surge 重载必须复用同一 dynamic first-render 校验器；不能出现初启严格、replacement 宽松或反向漂移。验收后的证明保存到 Registry metadata，`server:status <instance>` 在每个业务 Worker 下展示动态首渲染耗时、目标、状态、正文长度、尝试数、FPC 和实际 host/path。
+10. 初次启动和内部 Direct surge 重载必须复用同一 dynamic first-render 校验器；不能出现初启严格、replacement 宽松或反向漂移。验收后的证明保存到 Registry metadata，`server:status <instance>` 在每个业务 Worker 下展示动态首渲染耗时、目标、状态、正文长度、尝试数、FPC 和实际 host/path。
 11. 复活队列的完成条件是 READY + 当前 IPC 会话双重事实；REGISTERED、历史 client id、发现文件或仍存活 PID 都不能单独取消恢复。
+12. Namespace generation 只允许单调推进；精准失效不得调用 ObjectManager reset、FPC 全清或旧 `cache_clear`。READY 发布前的 DB authority clock 对齐是必经门禁。
 
 ## 8. 代码锚点
 
@@ -169,5 +239,7 @@ Dispatcher 维护启用的提交条件为：
 - `IPC/MasterControlServer.php`：Master 监听与会话。
 - `IPC/ChildControl/*`：子进程会话、lease 与 Master guard。
 - `Service/ServiceOrchestrator.php`：消息处理、Registry、路由与恢复。
+- `Service/Runtime/NamespaceInvalidationProtocol.php`：严格 v1 帧、容量与 operation id 契约。
+- `Service/Runtime/WorkerNamespaceGenerationApplier.php`：三 Worker 入口共享的 generation 应用器。
 - `Dispatcher/Dispatcher.php`：Dispatcher IPC 和路由 ACK。
 - `Console/Server/*`：CLI command/progress/result。

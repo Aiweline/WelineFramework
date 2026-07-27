@@ -9,13 +9,13 @@ declare(strict_types=1);
  *
  * @author Weline
  */
-namespace Weline\Server\Controller\Frontend;
+namespace Weline\Server\Controller;
 
-use Weline\Framework\Controller\PcController;
+use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Shared\Client\SharedStateClient;
 
-class FiberConcurrencyProbe extends PcController
+class FiberConcurrencyProbe extends FrontendController
 {
     /**
      * 说明页：如何本地做真并发（curl_multi / 本仓库 PHPUnit 用例）

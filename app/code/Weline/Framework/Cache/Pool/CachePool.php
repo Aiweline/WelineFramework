@@ -17,6 +17,7 @@ namespace Weline\Framework\Cache\Pool;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\HotKeyAwareInterface;
+use Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface;
 use Weline\Framework\Cache\Contract\RemembererInterface;
 use Weline\Framework\Cache\Contract\RememberOptions;
 use Weline\Framework\Cache\Contract\SingleFlightInterface;
@@ -27,7 +28,7 @@ use Weline\Framework\Cache\Service\SingleFlightCoordinator;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
-class CachePool implements CachePoolInterface, RemembererInterface
+class CachePool implements CachePoolInterface, RemembererInterface, NamespaceScopedCachePoolInterface
 {
     /**
      * 默认 TTL 抖动比例（避免缓存雪崩）。permanent 池强制 0；
@@ -82,6 +83,16 @@ class CachePool implements CachePoolInterface, RemembererInterface
     public function isPermanent(): bool
     {
         return $this->permanent;
+    }
+
+    public function withNamespace(string $namespace): NamespaceScopedCachePoolInterface
+    {
+        return NamespaceScopedCachePool::create($this, [$namespace]);
+    }
+
+    public function withNamespaces(array $namespaces): NamespaceScopedCachePoolInterface
+    {
+        return NamespaceScopedCachePool::create($this, $namespaces);
     }
 
     public function get(string $key): mixed

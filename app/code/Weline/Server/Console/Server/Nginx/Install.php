@@ -9,7 +9,7 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 
 /**
- * Explicit installer for the per-project managed nginx under extend/server/nginx.
+ * Explicit installer for the per-project managed nginx local install root.
  */
 final class Install extends CommandAbstract
 {
@@ -17,7 +17,7 @@ final class Install extends CommandAbstract
     {
         $force = isset($args['force']) || isset($args['f']);
         $this->printer->setup(__('安装本项目托管 Nginx'));
-        $this->printer->warning(__('本命令可能联网下载钉死版本的 nginx 源码/压缩包，并写入 extend/server/nginx。'));
+        $this->printer->warning(__('本命令可能联网下载钉死版本的 Nginx 源码/压缩包，并写入项目隔离的本地安装根。'));
         $service = ManagedNginxService::fromEnv();
         $result = $service->install($force);
         if (!($result['ok'] ?? false)) {
@@ -37,7 +37,7 @@ final class Install extends CommandAbstract
 
     public function tip(): string
     {
-        return __('安装本项目托管 Nginx 到 extend/server/nginx');
+        return __('安装本项目托管 Nginx 到项目隔离的本地安装根');
     }
 
     public function help(): array|string
@@ -46,14 +46,14 @@ final class Install extends CommandAbstract
             'server:nginx:install',
             __('按平台下载并安装本项目独立 Nginx 实例；普通 server:start 不会静默下载'),
             [
-                '--force|-f' => __('强制重新下载/编译安装'),
+                '--force|-f' => __('强制重新获取并按平台重新安装（macOS/Linux 编译，Windows 解压官方预编译包）'),
             ],
             [
-                __('隔离') => __('每个项目安装到各自 BP/extend/server/nginx，互不影响'),
+                __('隔离') => __('每个项目使用独立安装根；Windows 固定使用本机 LOCALAPPDATA，避免 UNC/共享盘解压'),
                 __('端口') => __('未配置时使用 8080/8443 + projectPortOffset'),
-                __('macOS') => __('需 Xcode CLT；建议 brew install openssl@3 pcre2'),
+                __('macOS') => __('需 Xcode CLT、OpenSSL 3 与 PCRE2；可执行 brew install openssl@3 pcre2'),
                 __('Linux') => __('需 gcc/make 与 OpenSSL/PCRE 头文件（apt/dnf/apk 对应 *-devel/*-dev）'),
-                __('Windows') => __('下载官方 nginx.zip 到 extend/server/nginx；需 ZipArchive 或 PowerShell/tar'),
+                __('Windows') => __('下载官方 nginx.zip 到本机项目隔离目录；需 ZipArchive 或 PowerShell/tar'),
             ],
             [
                 __('安装') => 'php bin/w server:nginx:install',

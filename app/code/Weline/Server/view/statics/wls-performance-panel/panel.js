@@ -1,3 +1,28 @@
+
+(function(g){
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['server']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('server').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(typeof window!=='undefined'?window:globalThis);
 (function (window, document) {
   "use strict";
 
@@ -209,40 +234,6 @@
     return payload;
   }
 
-  function requestWithXhr(url, options) {
-    return new Promise(function (resolve, reject) {
-      if (typeof window.XMLHttpRequest !== "function") {
-        reject(new Error("WLS 面板端点暂不可用，当前浏览器缺少请求能力。"));
-        return;
-      }
-      var xhr = new window.XMLHttpRequest();
-      xhr.open(options.method || "GET", url, true);
-      xhr.withCredentials = true;
-      xhr.timeout = 15000;
-      Object.keys(options.headers || {}).forEach(function (key) {
-        xhr.setRequestHeader(key, options.headers[key]);
-      });
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState !== 4) {
-          return;
-        }
-        var status = xhr.status === 1223 ? 204 : xhr.status;
-        try {
-          resolve(parseJsonPayload(xhr.responseText || "", status >= 200 && status < 300, status));
-        } catch (error) {
-          reject(error);
-        }
-      };
-      xhr.onerror = function () {
-        reject(new Error("WLS 面板端点暂不可用，请确认 WLS 已重载路由。"));
-      };
-      xhr.ontimeout = function () {
-        reject(new Error("WLS 面板端点请求超时，请稍后刷新。"));
-      };
-      xhr.send();
-    });
-  }
-
   function withRequestTimeout(request) {
     return new Promise(function (resolve, reject) {
       var settled = false;
@@ -277,7 +268,6 @@
     var url = requestUrl(operation, isClear ? {} : (params || {}));
     var options = {
       method: isClear ? "POST" : "GET",
-      credentials: "same-origin",
       headers: {
         Accept: "application/json",
         "Cache-Control": "no-cache",
@@ -285,14 +275,13 @@
         "X-WLS-FPC-Bypass": "1"
       }
     };
-    var request;
-    try {
-      request = typeof window.XMLHttpRequest === "function"
-        ? requestWithXhr(url, options)
-        : window.fetch(url, options).then(parseJsonResponse);
-    } catch (error) {
-      request = Promise.reject(error);
+    var bridge = window.bqAdmin && window.bqAdmin['server'];
+    if (!bridge) {
+      return Promise.reject(new Error("WLS 面板 bin-query 桥接不可用。"));
     }
+    var request = bridge(url, options).then(function (resp) {
+      return resp && typeof resp.json === 'function' ? resp.json() : resp;
+    });
     return withRequestTimeout(request).then(function (payload) {
       if (payload && payload.success === false && operation !== "wlsPerformanceRequestDetail") {
         throw new Error(payload.message || "WLS 面板请求失败。");

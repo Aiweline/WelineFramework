@@ -13,6 +13,8 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Helper;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\StorefrontCacheKeyContext;
+use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
@@ -28,6 +30,11 @@ use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestPipeline;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolution;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\StorefrontNavigationScope;
+use Weline\Framework\Runtime\StorefrontScopeInstallerInterface;
 use Weline\Framework\Runtime\InternalHomepagePrime;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
@@ -70,10 +77,22 @@ class App
 
     public function dispatch(): Response
     {
-        return Response::normalize(
+        $response = Response::normalize(
             $this->runPipeline(),
             ObjectManager::getInstance(Response::class)
-        )->markTelemetryPrepared();
+        );
+        $eventManager = $this->resolveEventManager();
+        if ($eventManager->hasObservers('Weline_Framework_Http::response_ready')) {
+            $eventData = ['response' => $response];
+            $eventManager->dispatch('Weline_Framework_Http::response_ready', $eventData);
+            $decorated = $eventData['response'] ?? null;
+            if (!$decorated instanceof Response) {
+                throw new \RuntimeException(__('最终响应装饰器返回了无效响应'));
+            }
+            $response = $decorated;
+        }
+
+        return $response->markTelemetryPrepared();
     }
 
     public function runResponse(): Response
@@ -324,9 +343,14 @@ class App
         WelineEnv::set('request.uri', $currentUri, 'App applyParsedUrl');
         $markApplyUrlStep('current_uri');
 
-        $scheme = (string)WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http'));
-        $host = (string)WelineEnv::get('server.http_host', Context::current()->get('input.host', 'localhost'));
-        $fullRequestUri = $scheme . '://' . $host . $rawRequestUri;
+        // The ingress HTTP_HOST is the validated public authority and retains a
+        // non-default port. Parser-derived input.host may intentionally contain
+        // only the hostname; using it here would make FPC reads and publishes
+        // derive different keys on dedicated ports.
+        $scheme = (string)(($server['REQUEST_SCHEME'] ?? '')
+            ?: WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http')));
+        $host = \trim((string)($server['HTTP_HOST'] ?? ''));
+        $fullRequestUri = $host === '' ? '' : $scheme . '://' . $host . $rawRequestUri;
         Context::current()->set('input.server.WELINE_ORIGIN_REQUEST_URI', $rawRequestUri);
         Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', $fullRequestUri);
         WelineEnv::set('origin_request_uri', $rawRequestUri, 'App applyParsedUrl');
@@ -334,6 +358,49 @@ class App
         $markApplyUrlStep('full_request_uri', [
             'host' => $host,
             'scheme' => $scheme,
+        ]);
+
+        $navigationScope = $this->installStorefrontNavigationScope($fullRequestUri, $currentUri, $isBackend);
+        if ($navigationScope instanceof StorefrontNavigationScope) {
+            $currentUri = $navigationScope->routePath;
+            Context::current()->set('input.server.REQUEST_URI', $currentUri);
+            Context::current()->set('input.uri', $currentUri);
+            WelineEnv::set('request.uri', $currentUri, 'App apply storefront route path');
+        }
+        $markApplyUrlStep('storefront_scope_install', [
+            'installed' => RequestContext::scopeIdentity() instanceof ScopeIdentity,
+            'route_path' => $navigationScope?->routePath,
+        ]);
+
+        $scopeGateEventManager = $this->resolveEventManager();
+        if ($scopeGateEventManager->hasObservers('Weline_Framework::App::storefront_scope_ready_gate')) {
+            $scopeGateData = [
+                'navigation_scope' => $navigationScope,
+                'scope_identity' => RequestContext::scopeIdentity(),
+            ];
+            $scopeGateEventManager->dispatch(
+                'Weline_Framework::App::storefront_scope_ready_gate',
+                $scopeGateData,
+            );
+        }
+        $markApplyUrlStep('storefront_scope_ready_gate');
+
+        $scopeIdentity = RequestContext::scopeIdentity();
+        $cacheKeyContextResolver = ObjectManager::getInstance(StorefrontCacheKeyContextResolver::class);
+        if ($scopeIdentity instanceof ScopeIdentity
+            && $scopeIdentity->scopeKind === ScopeIdentity::KIND_CHANNEL
+        ) {
+            $cacheKeyContext = $cacheKeyContextResolver->freezeCurrent();
+        } else {
+            $scopeProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+                ->resolveDetailed(StorefrontScopeInstallerInterface::class);
+            $cacheKeyContext = ($isBackend || $scopeProvider->status === RuntimeProviderResolution::NOT_CONFIGURED)
+                ? $cacheKeyContextResolver->freezeLegacyDefault()
+                : StorefrontCacheKeyContext::currentOrRequestFence('storefront_scope_deferred');
+        }
+        $markApplyUrlStep('storefront_cache_key_context', [
+            'cacheable' => $cacheKeyContext->cacheable,
+            'failure_code' => $cacheKeyContext->failureCode,
         ]);
 
         $shouldDispatchUrlParsedAfter = (PROD || Runtime::isPersistent()) && !WelineEnv::get('is_backend', false);
@@ -366,6 +433,61 @@ class App
         $this->invalidateCurrentRequestUriCache();
         $markApplyUrlStep('invalidate_uri_cache');
         $flushApplyUrlProfile();
+    }
+
+    /**
+     * Install Website/Store/Channel exactly once before any storefront FPC
+     * lookup. QueryBin uses its signed Worker/Scope recovery gate because its
+     * fixed API URI cannot authoritatively select a path-based Store.
+     */
+    private function installStorefrontNavigationScope(
+        string $fullRequestUri,
+        string $currentUri,
+        bool $isBackend,
+    ): ?StorefrontNavigationScope {
+        if ($isBackend
+            || WelineEnv::get('is_static_file', false)
+            || $this->isFrontendWorkerScopeDeferredRequestUri($currentUri)) {
+            return null;
+        }
+
+        $existingIdentity = RequestContext::scopeIdentity();
+        if ($existingIdentity instanceof ScopeIdentity) {
+            if ($existingIdentity->scopeKind !== ScopeIdentity::KIND_CHANNEL
+                || RequestContext::scopeMetadata() === null) {
+                ObjectManager::getInstance(Response::class)
+                    ->noRouter(503, (string)__('当前请求的商城范围未完整冻结'));
+            }
+            $routePath = RequestContext::getStorefrontRoutePath();
+            if ($routePath === null) {
+                ObjectManager::getInstance(Response::class)
+                    ->noRouter(503, (string)__('当前请求的商城路由上下文未完整冻结'));
+            }
+            return new StorefrontNavigationScope($existingIdentity, $routePath);
+        }
+
+        $resolution = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolveDetailed(StorefrontScopeInstallerInterface::class);
+        if ($resolution->status === RuntimeProviderResolution::NOT_CONFIGURED) {
+            return null;
+        }
+        if (!$resolution->isAvailable()
+            || !$resolution->provider instanceof StorefrontScopeInstallerInterface) {
+            ObjectManager::getInstance(Response::class)
+                ->noRouter(503, (string)__('商城范围服务暂不可用'));
+        }
+
+        $navigationScope = $resolution->provider->installNavigationScope($fullRequestUri);
+        $identity = $navigationScope->identity;
+        $installedIdentity = RequestContext::scopeIdentity();
+        if ($identity->scopeKind !== ScopeIdentity::KIND_CHANNEL
+            || !$installedIdentity instanceof ScopeIdentity
+            || !$installedIdentity->equals($identity)) {
+            ObjectManager::getInstance(Response::class)
+                ->noRouter(503, (string)__('商城范围安装失败'));
+        }
+
+        return $navigationScope;
     }
 
     private function tryPersistentFpcFastPath(): bool
@@ -432,6 +554,22 @@ class App
         $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
         $normalizedPath = '/' . \ltrim($path, '/');
         return \strtolower($normalizedPath) === \strtolower(Env::getFrontendQueryBinPath());
+    }
+
+    private function isFrontendWorkerScopeDeferredRequestUri(string $requestUri): bool
+    {
+        if ($this->isFrontendQueryBinRequestUri($requestUri)) {
+            return true;
+        }
+
+        $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
+        $normalizedPath = '/' . \ltrim($path, '/');
+        $restPrefix = \trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/');
+        $streamPath = '/' . ($restPrefix !== '' ? $restPrefix . '/' : '') . 'framework/stream';
+
+        $normalizedPath = \strtolower($normalizedPath);
+        return $normalizedPath === \strtolower($streamPath)
+            || $normalizedPath === '/framework/stream';
     }
 
     private function canDeferFrontendSessionStart(string $requestMethod): bool
@@ -683,17 +821,10 @@ class App
             $context->set('input.server.WELINE_ORIGIN_REQUEST_URI', $requestUri);
             // 完整的地址拼接（包含端口）
             $scheme = (string)$context->get('input.server.REQUEST_SCHEME', $context->get('input.scheme', 'http'));
-            $host = (string)(
-                $context->get('input.server.HTTP_HOST')
-                ?? $context->get('input.server.SERVER_NAME')
-                ?? $context->get('input.host', '')
-                ?? ''
-            );
-            $port = (string)$context->get('input.server.SERVER_PORT', '80');
-            // 如果 HTTP_HOST 不包含端口，且端口不是默认端口，则添加端口
-            if ($host !== '' && !str_contains($host, ':') && $port != '80' && $port != '443') {
-                $host .= ':' . $port;
-            }
+            // Only the validated public Host authority is allowed here. Do not
+            // reconstruct it from SERVER_NAME/input.host or guess a public port
+            // from the local listener's SERVER_PORT.
+            $host = \trim((string)$context->get('input.server.HTTP_HOST', ''));
             if ($host !== '') {
                 $context->set('input.server.WELINE_FULL_REQUEST_URI', $scheme . '://' . $host . $requestUri);
             } else {
@@ -825,7 +956,7 @@ class App
         // 重要：只在 CLI 模式下加载，Web 请求生命周期中不允许运行测试框架
         if (CLI && defined('ENV_TEST') && ENV_TEST === true) {
             try {
-                \Weline\Framework\UnitTest\Pest\Boot::boot();
+                \Weline\Framework\Test\Pest\Boot::boot();
             } catch (\Exception $e) {
                 // 如果 Pest 未安装，静默失败（不影响正常应用运行）
                 if (DEBUG) {
@@ -1001,9 +1132,16 @@ class App
 
         $cookiesToSet = [];
         foreach ($defaultCookies as $key) {
-            $value = $this->getContextServerValue($key, null);
-            if ($value === null) {
-                $value = \in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true) ? '' : null;
+            // 语言/货币以 State 解析结果为准，避免站点已停用语言的 HttpOnly Cookie 残留无法被前端覆盖。
+            if ($key === 'WELINE_USER_LANG') {
+                $value = State::getLang();
+            } elseif ($key === 'WELINE_USER_CURRENCY') {
+                $value = State::getCurrency();
+            } else {
+                $value = $this->getContextServerValue($key, null);
+                if ($value === null) {
+                    $value = \in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true) ? '' : null;
+                }
             }
             if ($value === null) {
                 throw new Exception(__('系统错误：%{1}', $key));
@@ -1016,7 +1154,11 @@ class App
         }
 
         foreach ($cookiesToSet as $key => $value) {
-            Cookie::set($key, $value, 3600 * 24 * 30, []);
+            // 语言/货币偏好需可被前台语言切换器 JS 读写；其余站点身份 Cookie 保持 HttpOnly。
+            $options = \in_array($key, ['WELINE_USER_LANG', 'WELINE_USER_CURRENCY'], true)
+                ? ['httponly' => false]
+                : [];
+            Cookie::set($key, $value, 3600 * 24 * 30, $options);
         }
     }
 

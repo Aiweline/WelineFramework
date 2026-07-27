@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+throw new \RuntimeException(
+    'WLS native/Caddy protocol edge is retired; Nginx is the only public protocol terminator.'
+);
+
 /**
  * WLS public protocol edge supervisor.
  *

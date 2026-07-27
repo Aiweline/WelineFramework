@@ -191,8 +191,8 @@ class Restart extends CommandAbstract
             [
                 '-r, --force' => __('强制重启（保持 Master，滚动重载 Worker）'),
                 '-f' => __('与 -r 同用时：单批次重启 Worker（跳过分批策略）'),
-                '-h, --host <ip>' => __('监听地址（默认：0.0.0.0）'),
-                '-p, --port <port>' => __('监听端口（默认：443）'),
+                '-h, --host <host>' => __('公网域名或展示主机；WLS 回源始终监听 127.0.0.1'),
+                '-p, --port <port>' => __('WLS 明文 HTTP/1.1 回源端口；Nginx 公网端口由 wls.edge.nginx 配置'),
                 '-c, --count <n>' => __('Worker 进程数（默认：4）'),
                 '--help' => __('显示帮助信息'),
             ],

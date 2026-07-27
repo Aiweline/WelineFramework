@@ -187,7 +187,7 @@ class GlobalsEmulator
         }
     }
 
-    public function reset(): void
+    public function reset(bool $leaveContext = true): void
     {
         if (!$this->emulated) {
             return;
@@ -230,7 +230,7 @@ class GlobalsEmulator
         $this->emulated = false;
 
         try {
-            WelineEnv::getInstance()->reset();
+            WelineEnv::getInstance()->reset($leaveContext);
         } catch (\Throwable) {
         }
     }

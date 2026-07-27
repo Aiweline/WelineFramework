@@ -8,9 +8,9 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
- * Verifies an explicitly configured compatibility protocol edge before WLS
- * creates managed processes. The former in-repository Go engine is removed;
- * native HTTP/2/3 remains fail-closed until a WLS Transport Adapter exists.
+ * Verifies only the explicitly configured Caddy compatibility edge before WLS
+ * creates managed processes. WLS-native HTTP/2/HTTP/3 runs in Worker/Dispatcher
+ * and never downloads or compiles a protocol-edge binary.
  */
 final class ProtocolEdgeDependencyBootstrapper
 {
@@ -47,8 +47,8 @@ final class ProtocolEdgeDependencyBootstrapper
 
         if ($selection->isNativeProtocolEdge()) {
             return [
-                'status' => 'failed',
-                'message' => (string)__('内置 Go 协议边缘已移除；HTTP/2/3 将在 WLS 原生 Transport Adapter 完成前保持关闭。'),
+                'status' => 'native',
+                'message' => (string)__('WLS 原生 HTTP/2/HTTP/3 使用 Worker/Dispatcher 数据面，无需协议边缘二进制。'),
                 'binary' => '',
             ];
         }

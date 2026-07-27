@@ -61,7 +61,8 @@ class SharedStateServiceManager
                 ControlMessage::ROLE_MEMORY_SERVER,
                 $requesterInstanceName,
                 $config,
-                $envConfig
+                $envConfig,
+                [(int) $sessionDefinition['port']]
             )
             : null;
 
@@ -391,7 +392,7 @@ class SharedStateServiceManager
             );
         }
 
-        $platformDeadlineSec = (\defined('IS_WIN') && IS_WIN) ? 5.0 : 3.0;
+        $platformDeadlineSec = (\defined('IS_WIN') && IS_WIN) ? 30.0 : 3.0;
         $timeoutSec = 0.5;
         foreach ($definitions as $definition) {
             $configured = (float)($definition['ensure_timeout_sec'] ?? $platformDeadlineSec);
@@ -1135,7 +1136,9 @@ class SharedStateServiceManager
             $processName = (string)($command->getProcessName() ?? '');
             $registryIdentity = $command->build();
             $argv = \array_merge(
-                [PHP_BINARY, $command->getAbsoluteScript()],
+                [PHP_BINARY],
+                LongRunningPhpRuntime::startupCliArguments(),
+                [$command->getAbsoluteScript()],
                 \array_map(static fn(mixed $argument): string => (string)$argument, $command->arguments)
             );
             if ($processName !== '') {
@@ -1151,6 +1154,7 @@ class SharedStateServiceManager
                 'foreground' => false,
                 'enableLog' => true,
                 'childOwnsPid' => true,
+                'isolateParentHandles' => IS_WIN,
             ];
         }
 
@@ -1170,7 +1174,9 @@ class SharedStateServiceManager
         $registryIdentity = $command->build();
         $processName = (string)($command->getProcessName() ?? '');
         $argv = \array_merge(
-            [PHP_BINARY, $command->getAbsoluteScript()],
+            [PHP_BINARY],
+            LongRunningPhpRuntime::startupCliArguments(),
+            [$command->getAbsoluteScript()],
             \array_map(static fn(mixed $argument): string => (string)$argument, $command->arguments)
         );
         if ($processName !== '') {
@@ -1358,13 +1364,15 @@ class SharedStateServiceManager
     /**
      * @param array<string, mixed> $config
      * @param array<string, mixed> $envConfig
+     * @param list<int> $reservedPorts Ports already assigned to another role in the same startup batch.
      * @return array<string, mixed>
      */
     protected function buildRoleDefinition(
         string $role,
         string $requesterInstanceName,
         array $config,
-        array $envConfig
+        array $envConfig,
+        array $reservedPorts = []
     ): array {
         $role = $this->normalizeRoleName($role);
         $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
@@ -1406,7 +1414,8 @@ class SharedStateServiceManager
                 $role,
                 $port,
                 $tokenFileName,
-                $memoryPortExplicit
+                $memoryPortExplicit,
+                $reservedPorts
             );
             $tokenFileName = $this->resolveSharedServiceTokenFileName(
                 $role,
@@ -1471,7 +1480,8 @@ class SharedStateServiceManager
             $role,
             $port,
             $tokenFileName,
-            $sessionPortExplicit
+            $sessionPortExplicit,
+            $reservedPorts
         );
         $tokenFileName = $this->resolveSharedServiceTokenFileName(
             $role,
@@ -2057,13 +2067,29 @@ class SharedStateServiceManager
         string $role,
         int $preferredPort,
         string $tokenFileName,
-        bool $explicitConfigured
+        bool $explicitConfigured,
+        array $reservedPorts = []
     ): int {
         if ($preferredPort <= 0) {
             $preferredPort = $this->defaultPortForRole($role);
         }
 
+        $reservedPortMap = [];
+        foreach ($reservedPorts as $reservedPort) {
+            $reservedPort = (int) $reservedPort;
+            if ($reservedPort > 0 && $reservedPort <= 65535) {
+                $reservedPortMap[$reservedPort] = true;
+            }
+        }
+
         if ($explicitConfigured) {
+            if (isset($reservedPortMap[$preferredPort])) {
+                throw new \RuntimeException(\sprintf(
+                    'Configured shared %s port %d collides with another shared service in the same startup batch.',
+                    $this->displayNameForRole($role),
+                    $preferredPort
+                ));
+            }
             // 用户在 env.php 中钉死了端口：严格按配置返回，不做"可复用性"早校验、也不顺延。
             //
             // 早前版本会在这里调 `isPortCandidateReusable()` 做一次前置校验，占用不可复用时立即
@@ -2078,7 +2104,9 @@ class SharedStateServiceManager
             return $preferredPort;
         }
 
-        if ($this->isPortCandidateReusable($role, $preferredPort, $tokenFileName)) {
+        if (!isset($reservedPortMap[$preferredPort])
+            && $this->isPortCandidateReusable($role, $preferredPort, $tokenFileName)
+        ) {
             return $preferredPort;
         }
 
@@ -2088,11 +2116,10 @@ class SharedStateServiceManager
         if ($runtimeTokenFileName === '') {
             $runtimeTokenFileName = $tokenFileName;
         }
-        if ($runtimePort > 0 && $this->isPortCandidateReusable(
-            $role,
-            $runtimePort,
-            $runtimeTokenFileName
-        )) {
+        if ($runtimePort > 0
+            && !isset($reservedPortMap[$runtimePort])
+            && $this->isPortCandidateReusable($role, $runtimePort, $runtimeTokenFileName)
+        ) {
             return $runtimePort;
         }
 
@@ -2104,14 +2131,18 @@ class SharedStateServiceManager
                 break;
             }
 
-            if ($this->isPortCandidateReusable($role, $port, $tokenFileName)) {
+            if (!isset($reservedPortMap[$port])
+                && $this->isPortCandidateReusable($role, $port, $tokenFileName)
+            ) {
                 return $port;
             }
         }
 
         $secondEnd = \min($preferredPort, 65536);
         for ($port = 1025; $port < $secondEnd; $port++) {
-            if ($this->isPortCandidateReusable($role, $port, $tokenFileName)) {
+            if (!isset($reservedPortMap[$port])
+                && $this->isPortCandidateReusable($role, $port, $tokenFileName)
+            ) {
                 return $port;
             }
         }

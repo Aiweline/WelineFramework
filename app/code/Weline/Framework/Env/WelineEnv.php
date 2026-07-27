@@ -434,11 +434,13 @@ class WelineEnv
         }
     }
 
-    public function reset(): void
+    public function reset(bool $leaveContext = true): void
     {
-        Context::leave();
         $this->clearRequestContextEnvShadow();
         $this->overrides = [];
+        if ($leaveContext) {
+            Context::leave();
+        }
     }
 
     public function capture(): array

@@ -47,6 +47,12 @@ class ControlMessage
     /** Worker → Master：确认指定缓存代际已在本进程生效。 */
     public const TYPE_CACHE_CLEAR_ACK = 'cache_clear_ack';
 
+    /** Master → Worker：精确推进 namespace generation，不执行全清。 */
+    public const TYPE_CACHE_NAMESPACE_INVALIDATE_V1 = 'cache_namespace_invalidate_v1';
+
+    /** Worker → Master：namespace generation 已应用或已覆盖。 */
+    public const TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1 = 'cache_namespace_invalidate_ack_v1';
+
     /** Master → Worker：下发驱动路由策略（file-only hijack + 服务端点） */
     public const TYPE_ROUTING_POLICY = 'routing_policy';
 
@@ -163,6 +169,12 @@ class ControlMessage
     /** Master → CLI：滚动重启进度更新 */
     public const TYPE_RELOAD_PROGRESS = 'reload_progress';
 
+    /** Master → Worker：整机内存压力档位广播（可重建内存回收） */
+    public const TYPE_MEMORY_PRESSURE = 'memory_pressure';
+
+    /** Worker → Master：压力回收回执 */
+    public const TYPE_MEMORY_RECLAIM_REPORT = 'memory_reclaim_report';
+
     // ========== 批量协调消息类型（SOLID: 单一职责，扩展开放）============
 
     /**
@@ -230,6 +242,8 @@ class ControlMessage
     /** 重载并等待完成：Master 滚动重启完成后才返回结果 */
     public const ACTION_RELOAD_WAIT = 'reload_wait';
     public const ACTION_CACHE_CLEAR = 'cache_clear';
+    public const ACTION_CACHE_NAMESPACE_INVALIDATE_V1 = 'cache_namespace_invalidate_v1';
+    public const ACTION_CACHE_NAMESPACE_STATUS_V1 = 'cache_namespace_invalidation_status_v1';
     public const ACTION_STATUS = 'status';
     /** 启用维护模式：启动维护 Worker，准备滚动重启 */
     public const ACTION_MAINTENANCE_ENABLE = 'maintenance_enable';
@@ -475,14 +489,20 @@ class ControlMessage
     /**
      * 构建 ack 消息
      */
-    public static function ack(int $resurrectionPriority = self::RESURRECTION_NONE, string $msgId = ''): string
-    {
+    public static function ack(
+        int $resurrectionPriority = self::RESURRECTION_NONE,
+        string $msgId = '',
+        int $clientId = 0,
+    ): string {
         $data = [
             'type'                  => self::TYPE_ACK,
             'resurrection_priority' => $resurrectionPriority,
         ];
         if ($msgId !== '') {
             $data['msg_id'] = $msgId;
+        }
+        if ($clientId > 0) {
+            $data['client_id'] = $clientId;
         }
 
         return self::encode($data);
@@ -529,6 +549,7 @@ class ControlMessage
             $data['homepage_fpc'] = $readiness['homepage_fpc'];
             $data['dynamic_first_render'] = $readiness['dynamic_first_render'];
             $data['listen_capabilities'] = $readiness['listen_capabilities'];
+            $data['namespace_authority_clock'] = $readiness['namespace_authority_clock'];
         } elseif ($role === self::ROLE_DISPATCHER) {
             $data += DispatcherPolicyControl::readinessSnapshot();
         }
@@ -685,6 +706,54 @@ class ControlMessage
         }
 
         return self::encode($payload);
+    }
+
+    /** @param array<string,mixed> $frame */
+    public static function cacheNamespaceInvalidationV1(array $frame): string
+    {
+        return self::encode([
+            'type' => self::TYPE_CACHE_NAMESPACE_INVALIDATE_V1,
+            'schema_version' => (int)($frame['schema_version'] ?? 0),
+            'operation_id' => (string)($frame['operation_id'] ?? ''),
+            'authority_clock' => (int)($frame['authority_clock'] ?? 0),
+            'changes' => \is_array($frame['changes'] ?? null) ? $frame['changes'] : [],
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     * @param array<string,mixed> $source
+     */
+    public static function cacheNamespaceInvalidationAckV1(array $result, array $source): string
+    {
+        $generations = [];
+        foreach ((array)($result['generations'] ?? []) as $namespace => $generation) {
+            if (!\is_string($namespace) || !\is_int($generation) || $generation < 0) {
+                continue;
+            }
+            $generations[$namespace] = $generation;
+        }
+        \ksort($generations, \SORT_STRING);
+
+        return self::encode([
+            'type' => self::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1,
+            'operation_id' => (string)($result['operation_id'] ?? ''),
+            'success' => (bool)($result['success'] ?? false),
+            'applied' => (bool)($result['applied'] ?? false),
+            'authority_clock' => \max(0, (int)($result['authority_clock'] ?? 0)),
+            'generations' => $generations,
+            'source' => [
+                'client_id' => \max(0, (int)($source['client_id'] ?? 0)),
+                'role' => (string)($source['role'] ?? ''),
+                'worker_id' => \max(0, (int)($source['worker_id'] ?? 0)),
+                'slot_id' => (string)($source['slot_id'] ?? ''),
+                'lease_id' => (string)($source['lease_id'] ?? ''),
+                'slot_generation' => \max(0, (int)($source['slot_generation'] ?? 0)),
+                'pid' => \max(0, (int)($source['pid'] ?? 0)),
+            ],
+            'error_code' => \substr((string)($result['error_code'] ?? ''), 0, 64),
+            'error' => \substr((string)($result['error'] ?? ''), 0, 512),
+        ]);
     }
 
     /**
@@ -883,6 +952,52 @@ class ControlMessage
         if ($reason !== '') {
             $data['reason'] = $reason;
         }
+        return self::encode($data);
+    }
+
+    /**
+     * Master → Worker：整机内存压力档位。
+     */
+    public static function memoryPressure(string $level, int $staggerMsPerWorker = 0, array $extra = []): string
+    {
+        $data = [
+            'type' => self::TYPE_MEMORY_PRESSURE,
+            'level' => \strtolower(\trim($level)),
+            'stagger_ms' => \max(0, $staggerMsPerWorker),
+            'ts' => \time(),
+        ];
+        foreach ($extra as $key => $value) {
+            if (!\is_string($key) || \preg_match('/^[a-zA-Z0-9_]{1,64}$/', $key) !== 1) {
+                continue;
+            }
+            if (\is_scalar($value) || $value === null) {
+                $data[$key] = $value;
+            }
+        }
+
+        return self::encode($data);
+    }
+
+    /**
+     * Worker → Master：回收回执。
+     */
+    public static function memoryReclaimReport(int $reclaimBytes, string $hostLevel, array $extra = []): string
+    {
+        $data = [
+            'type' => self::TYPE_MEMORY_RECLAIM_REPORT,
+            'reclaim_bytes' => \max(0, $reclaimBytes),
+            'host_level_applied' => $hostLevel,
+            'ts' => \time(),
+        ];
+        foreach ($extra as $key => $value) {
+            if (!\is_string($key) || \preg_match('/^[a-zA-Z0-9_]{1,64}$/', $key) !== 1) {
+                continue;
+            }
+            if (\is_scalar($value) || $value === null) {
+                $data[$key] = $value;
+            }
+        }
+
         return self::encode($data);
     }
 

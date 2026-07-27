@@ -96,6 +96,7 @@ class ServerQueryProvider implements QueryProviderInterface
             'fiberStats' => $this->fiberStats($params),
             'fiberSetConfig' => $this->fiberSetConfig($params),
             'fiberReleaseIdle' => $this->fiberReleaseIdle($params),
+            'adminRequest' => $this->adminRequest($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Server 查询器不支持的操作：%{1}', $operation)
             ),
@@ -110,6 +111,23 @@ class ServerQueryProvider implements QueryProviderInterface
             'description' => __('提供 SSL 证书申请等能力'),
             'module'      => 'Weline_Server',
             'operations'  => [
+                [
+                    'name' => 'adminRequest',
+                    'description' => 'Legacy controller bridge via bin-query',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'url', 'type' => 'string', 'required' => true],
+                        ['name' => 'method', 'type' => 'string', 'required' => false],
+                        ['name' => 'headers', 'type' => 'array', 'required' => false],
+                        ['name' => 'body', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                ],
+
                 [
                     'name'        => 'requestCertificate',
                     'description' => __('申请 SSL 证书'),
@@ -204,6 +222,8 @@ class ServerQueryProvider implements QueryProviderInterface
                     'name' => 'attackStats',
                     'description' => __('读取 WLS 攻击统计'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Server::wls_panel_security_logs'],
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 2,
@@ -232,6 +252,8 @@ class ServerQueryProvider implements QueryProviderInterface
                     'name' => 'wlsPerformanceSummary',
                     'description' => __('Read WLS performance summary for the development panel'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Server::wls_panel_dashboard'],
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
@@ -247,6 +269,8 @@ class ServerQueryProvider implements QueryProviderInterface
                     'name' => 'wlsPerformanceRequests',
                     'description' => __('Read recent WLS performance requests for the development panel'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Server::wls_panel_dashboard'],
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
@@ -264,6 +288,8 @@ class ServerQueryProvider implements QueryProviderInterface
                     'name' => 'wlsPerformanceRequestDetail',
                     'description' => __('Read one WLS performance request detail'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Server::wls_panel_dashboard'],
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
@@ -277,6 +303,8 @@ class ServerQueryProvider implements QueryProviderInterface
                     'name' => 'wlsPerformanceServices',
                     'description' => __('Read SessionServer and MemoryServer timing snapshots'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Server::wls_panel_dashboard'],
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
@@ -290,6 +318,8 @@ class ServerQueryProvider implements QueryProviderInterface
                     'name' => 'wlsPerformanceClear',
                     'description' => __('Clear short-lived WLS performance panel traces'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Server::wls_panel_dashboard'],
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 1,
@@ -301,6 +331,8 @@ class ServerQueryProvider implements QueryProviderInterface
                     'name' => 'setHealthAllowCookie',
                     'description' => __('为当前后台浏览器设置 WLS 健康检查放行 Cookie'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Server::wls_panel_dashboard'],
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 1,
@@ -1338,5 +1370,86 @@ class ServerQueryProvider implements QueryProviderInterface
     private function isEligibleWelineLocalHostDomain(string $domain): bool
     {
         return LocalDomainPolicy::isManagedSingleLabelSubdomain($domain);
+    }
+
+    /** @param array<string,mixed> $params */
+    private function adminRequest(array $params): mixed
+    {
+        $url = trim((string)($params['url'] ?? ''));
+        $method = strtoupper(trim((string)($params['method'] ?? 'POST'))) ?: 'POST';
+        $headers = is_array($params['headers'] ?? null) ? $params['headers'] : [];
+        $body = array_key_exists('body', $params) && $params['body'] !== null ? (string)$params['body'] : '';
+        if ($url === '') {
+            return ['success' => false, 'message' => 'Missing URL'];
+        }
+        $parts = parse_url($url);
+        $path = (string)($parts['path'] ?? '');
+        $pathLower = strtolower($path);
+        $markers = ['/server/'];
+        $normalized = $path;
+        foreach ($markers as $marker) {
+            $pos = strpos($pathLower, $marker);
+            if ($pos !== false) {
+                $normalized = substr($path, $pos);
+                break;
+            }
+        }
+        $area = 'Backend';
+        $controllerSeg = 'Index';
+        $actionSeg = 'index';
+        if (preg_match('#^/[a-z0-9_-]+/(backend|admin|frontend)/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
+            $area = ucfirst(strtolower($mm[1]));
+            $controllerSeg = $mm[2];
+            $actionSeg = $mm[3] ?? 'index';
+        } elseif (preg_match('#^/[a-z0-9_-]+/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
+            $controllerSeg = $mm[1];
+            $actionSeg = $mm[2] ?? 'index';
+        } else {
+            return ['success' => false, 'message' => 'Unsupported admin path: ' . $normalized];
+        }
+        $controllerSeg = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $controllerSeg)));
+        $actionSeg = str_replace('-', '', $actionSeg);
+        $ns = 'Weline\Server\Controller';
+        $class = $ns . '\\' . $area . '\\' . $controllerSeg;
+        if (!class_exists($class)) {
+            $classAlt = $ns . '\\' . $controllerSeg;
+            if (class_exists($classAlt)) {
+                $class = $classAlt;
+            } else {
+                return ['success' => false, 'message' => 'Controller missing: ' . $class];
+            }
+        }
+        $queryParams = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $queryParams);
+        }
+        $bodyParams = [];
+        if ($body !== '') {
+            $ct = '';
+            foreach ($headers as $name => $value) {
+                if (strtolower((string)$name) === 'content-type') { $ct = strtolower((string)$value); break; }
+            }
+            if (str_contains($ct, 'application/json') || str_starts_with(ltrim($body), '{')) {
+                $decoded = json_decode($body, true);
+                $bodyParams = is_array($decoded) ? $decoded : [];
+            } else {
+                parse_str($body, $bodyParams);
+                if (!is_array($bodyParams)) { $bodyParams = []; }
+            }
+        }
+        $candidates = [$actionSeg, 'get' . ucfirst($actionSeg), 'post' . ucfirst($actionSeg)];
+        if ($method === 'GET') {
+            array_unshift($candidates, 'get' . ucfirst($actionSeg));
+        } else {
+            array_unshift($candidates, 'post' . ucfirst($actionSeg));
+        }
+        return \Weline\Framework\Service\Query\AdminControllerBridge::invoke(
+            $class,
+            $candidates,
+            $queryParams,
+            $bodyParams,
+            $method,
+            $body
+        );
     }
 }

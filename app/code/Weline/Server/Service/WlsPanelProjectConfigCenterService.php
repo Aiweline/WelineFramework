@@ -79,7 +79,6 @@ class WlsPanelProjectConfigCenterService
         $path = \trim((string)($project['path'] ?? ''));
         $adminUrl = \trim((string)($project['admin'] ?? ''));
         $panelUrl = \trim((string)($project['panel'] ?? ''));
-        $gatewayEnabled = (int)($project['gateway_enabled'] ?? ($type === 'gateway' ? 1 : 0)) === 1;
         $securityPolicyReady = $this->isSecurityPolicyReady($project, $domain);
         $pathReady = $path !== '';
         $adminReady = $adminUrl !== '' || $type === 'current';
@@ -97,15 +96,13 @@ class WlsPanelProjectConfigCenterService
             'path_ready' => $pathReady,
             'admin_ready' => $adminReady,
             'panel_ready' => $panelReady,
-            'gateway_ready' => $gatewayEnabled,
-            'gateway_label' => $gatewayEnabled ? (string)__('Gateway enabled') : (string)__('Gateway disabled'),
+            'edge_label' => (string)__('Nginx 公网入口'),
             'operations' => $operations,
             'readiness' => $this->buildProjectReadiness(
                 $adminReady,
                 $panelReady,
                 $pathReady,
                 $securityPolicyReady,
-                $gatewayEnabled,
                 $operations
             ),
         ];
@@ -167,7 +164,6 @@ class WlsPanelProjectConfigCenterService
         bool $panelReady,
         bool $pathReady,
         bool $securityPolicyReady,
-        bool $gatewayEnabled,
         array $operations
     ): array {
         $coreReadyCount = $this->countTrue([$adminReady, $panelReady, $pathReady, $securityPolicyReady]);
@@ -228,13 +224,11 @@ class WlsPanelProjectConfigCenterService
                         : (string)__('Security links need project identity first.'),
                 ],
                 [
-                    'key' => 'gateway-mode',
-                    'state' => $gatewayEnabled ? 'ready' : 'neutral',
-                    'label' => (string)__('Gateway Mode'),
-                    'value' => $gatewayEnabled ? (string)__('Enabled') : (string)__('Off'),
-                    'summary' => $gatewayEnabled
-                        ? (string)__('Gateway route management is enabled.')
-                        : (string)__('Gateway route management can be enabled from the panel.'),
+                    'key' => 'managed-nginx-edge',
+                    'state' => 'neutral',
+                    'label' => (string)__('Nginx 公网入口'),
+                    'value' => 'Nginx',
+                    'summary' => (string)__('Nginx 是唯一公网边缘，不能跳过其启动。'),
                 ],
             ],
         ];
@@ -396,7 +390,7 @@ class WlsPanelProjectConfigCenterService
         return match ($type) {
             'current' => (string)__('Current project'),
             'registered' => (string)__('Registered project'),
-            'gateway' => (string)__('Gateway route'),
+            'gateway' => (string)__('Managed project'),
             default => (string)__('Managed project'),
         };
     }

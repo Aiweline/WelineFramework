@@ -44,7 +44,7 @@ class WlsPanelProjectRegistryService
             WlsPanelProject::schema_fields_PROJECT_PATH => '',
             WlsPanelProject::schema_fields_PHP_PROFILE => '',
             WlsPanelProject::schema_fields_DATABASE_PROFILE => '',
-            WlsPanelProject::schema_fields_GATEWAY_ENABLED => 1,
+            WlsPanelProject::schema_fields_GATEWAY_ENABLED => 0,
             WlsPanelProject::schema_fields_BACKEND_HOST => '127.0.0.1',
             WlsPanelProject::schema_fields_BACKEND_PORT => '',
             WlsPanelProject::schema_fields_BACKEND_SSL => 0,
@@ -59,6 +59,18 @@ class WlsPanelProjectRegistryService
      */
     public function saveFromPanel(array $input): array
     {
+        if ($this->truthy($input[WlsPanelProject::schema_fields_GATEWAY_ENABLED] ?? 0)) {
+            return [
+                'success' => false,
+                'message' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
+                'project_id' => (int)($input[WlsPanelProject::schema_fields_ID] ?? $input['project_id'] ?? 0),
+                'gateway_synced' => false,
+                'gateway_message' => '',
+                'gateway_applied' => false,
+                'gateway_apply_message' => '',
+            ];
+        }
+
         try {
             $projectId = (int)($input[WlsPanelProject::schema_fields_ID] ?? $input['project_id'] ?? 0);
             $project = $projectId > 0 ? $this->loadProject($projectId) : $this->freshProject();
@@ -73,25 +85,19 @@ class WlsPanelProjectRegistryService
             $project->setData(WlsPanelProject::schema_fields_PROJECT_PATH, $this->stringValue($input, WlsPanelProject::schema_fields_PROJECT_PATH));
             $project->setData(WlsPanelProject::schema_fields_PHP_PROFILE, $this->stringValue($input, WlsPanelProject::schema_fields_PHP_PROFILE));
             $project->setData(WlsPanelProject::schema_fields_DATABASE_PROFILE, $this->stringValue($input, WlsPanelProject::schema_fields_DATABASE_PROFILE));
-            $project->setData(WlsPanelProject::schema_fields_GATEWAY_ENABLED, $this->truthy($input[WlsPanelProject::schema_fields_GATEWAY_ENABLED] ?? 0) ? 1 : 0);
-            $project->setData(WlsPanelProject::schema_fields_BACKEND_HOST, $this->stringValue($input, WlsPanelProject::schema_fields_BACKEND_HOST));
-            $project->setData(WlsPanelProject::schema_fields_BACKEND_PORT, (int)($input[WlsPanelProject::schema_fields_BACKEND_PORT] ?? 0));
-            $project->setData(WlsPanelProject::schema_fields_BACKEND_SSL, $this->truthy($input[WlsPanelProject::schema_fields_BACKEND_SSL] ?? 0) ? 1 : 0);
+            $project->setData(WlsPanelProject::schema_fields_GATEWAY_ENABLED, 0);
             $project->setData(WlsPanelProject::schema_fields_STATUS, $this->normalizeStatus($this->stringValue($input, WlsPanelProject::schema_fields_STATUS)));
             $project->setData(WlsPanelProject::schema_fields_DESCRIPTION, $this->stringValue($input, WlsPanelProject::schema_fields_DESCRIPTION));
             $project->save();
-
-            $gatewayResult = $this->syncGatewayRule($project);
-            $applyResult = $this->applyGatewayConfig($input);
 
             return [
                 'success' => true,
                 'message' => (string)__('Managed project saved.'),
                 'project_id' => (int)$project->getData(WlsPanelProject::schema_fields_ID),
-                'gateway_synced' => (bool)$gatewayResult['success'],
-                'gateway_message' => (string)$gatewayResult['message'],
-                'gateway_applied' => (bool)($applyResult['success'] ?? false),
-                'gateway_apply_message' => (string)($applyResult['message'] ?? ''),
+                'gateway_synced' => false,
+                'gateway_message' => '',
+                'gateway_applied' => false,
+                'gateway_apply_message' => '',
             ];
         } catch (\Throwable $throwable) {
             return [
@@ -121,15 +127,13 @@ class WlsPanelProjectRegistryService
                 return ['success' => false, 'message' => (string)__('Managed project does not exist.')];
             }
 
-            $this->deleteLinkedProxy($project);
             $project->delete();
-            $applyResult = $this->applyGatewayConfig($input);
 
             return [
                 'success' => true,
                 'message' => (string)__('Managed project removed.'),
-                'gateway_applied' => (bool)($applyResult['success'] ?? false),
-                'gateway_apply_message' => (string)($applyResult['message'] ?? ''),
+                'gateway_applied' => false,
+                'gateway_apply_message' => '',
             ];
         } catch (\Throwable $throwable) {
             return ['success' => false, 'message' => $throwable->getMessage()];

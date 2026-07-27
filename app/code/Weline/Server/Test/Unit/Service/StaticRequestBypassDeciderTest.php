@@ -78,4 +78,28 @@ class StaticRequestBypassDeciderTest extends TestCase
             )
         );
     }
+
+    public function testGeneratedSitemapShardIsDeferredToFramework(): void
+    {
+        self::assertTrue(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'sitemaps/default/canonical/sitemap_weline-index-frontend-1e3458908e8954e9_default-37a8eec1ce19687d_1_08424fb3b59d.xml'
+            )
+        );
+        self::assertTrue(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'pub/sitemaps/default/canonical/sitemap.xml'
+            )
+        );
+        self::assertTrue(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'sitemap.xml'
+            )
+        );
+        self::assertTrue(
+            StaticRequestBypassDecider::shouldDeferToFramework(
+                'robots.txt'
+            )
+        );
+    }
 }

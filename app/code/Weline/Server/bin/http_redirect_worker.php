@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+throw new \RuntimeException('WLS HTTP redirect Worker is retired; Nginx exclusively owns HTTP-to-HTTPS redirects.');
+
 /**
  * Weline Server - HTTP 重定向 Worker（仅 HTTPS 启用时由 Master 启动）
  *
