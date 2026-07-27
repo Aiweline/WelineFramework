@@ -13,8 +13,10 @@ use Weline\Server\Service\ServiceOrchestrator;
 /**
  * Dispatcher 服务提供者
  *
- * 负责把项目托管 Nginx 的 loopback HTTP/1.1 回源流量分发到 Worker。
- * 仅在显式选择 Dispatcher 兼容/诊断拓扑时启用；所有平台 auto 都是 Direct。
+ * 负责把入口连接分发到 Worker。Nginx 模式只接收 loopback HTTP/1.1
+ * 回源；纯 WLS 模式可透传公网 TLS/HTTP 连接。
+ * Windows 纯 WLS auto 使用 Dispatcher；托管 Nginx 模式的所有平台
+ * auto 均为 Direct。
  *
  * 优先级：30（在 Worker 之后启动，确保 Worker 就绪后再接收流量）
  */
@@ -70,9 +72,12 @@ class DispatcherProvider extends AbstractServiceProvider
             $workerCount = $this->getAutoCpuCount();
         }
         $workerBasePort = $context->getWorkerBasePort();
+        $edgeAdapterName = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+            ->resolve($context->envConfig)
+            ->name();
 
         $arguments = [
-            $this->resolveBindHost($context),
+            $this->resolveBindHost($context, $edgeAdapterName),
             (string) $port,
             (string) $workerBasePort,
             (string) $workerCount,
@@ -80,6 +85,7 @@ class DispatcherProvider extends AbstractServiceProvider
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
             '--memory-limit=' . $context->getDispatcherMemoryLimit(),
+            '--edge-adapter=' . $edgeAdapterName,
         ];
 
         if ($context->windowMode) {
@@ -98,9 +104,14 @@ class DispatcherProvider extends AbstractServiceProvider
         return $context->mainPort;
     }
 
-    private function resolveBindHost(ServiceContext $context): string
+    private function resolveBindHost(ServiceContext $context, string $edgeAdapterName): string
     {
-        return '127.0.0.1';
+        if ($edgeAdapterName === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+            return '127.0.0.1';
+        }
+
+        $host = \trim((string)$context->host);
+        return $host !== '' ? $host : '127.0.0.1';
     }
 
     public function handleMessage(array $message, ServiceInstance $instance, ServiceOrchestrator $orchestrator): bool

@@ -233,9 +233,17 @@ final class RuntimeStrategyResolver
     ): array {
         ['requested' => $requested, 'source' => $source] = $this->resolveRequestedTopology($config, $args);
         $listenerMode = $this->configuredDirectListenerMode($config);
+        $edge = \is_array($config['edge'] ?? null) ? $config['edge'] : [];
+        $pureWls = \strtolower(\trim((string)(
+            $config['edge_adapter']
+            ?? $edge['adapter']
+            ?? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+        ))) === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
 
         if ($osFamily === 'Windows') {
-            if ($requested === RequestedTopology::Dispatcher) {
+            if ($requested === RequestedTopology::Dispatcher
+                || ($pureWls && $requested === RequestedTopology::Auto)
+            ) {
                 if ($listenerMode !== 'auto') {
                     throw new \RuntimeException(
                         'wls.runtime.listener_mode is valid only for Direct topology; explicit Dispatcher requires auto.'
@@ -246,9 +254,19 @@ final class RuntimeStrategyResolver
                     'requested' => $requested,
                     'effective' => EffectiveTopology::Dispatcher,
                     'source' => $source,
-                    'reason' => 'explicit Dispatcher topology',
-                    'reason_code' => 'explicit_dispatcher',
+                    'reason' => $pureWls && $requested === RequestedTopology::Auto
+                        ? 'pure WLS on Windows selected the single public Dispatcher endpoint'
+                        : 'explicit Dispatcher topology',
+                    'reason_code' => $pureWls && $requested === RequestedTopology::Auto
+                        ? 'windows_pure_wls_auto_dispatcher'
+                        : 'explicit_dispatcher',
                 ];
+            }
+            if ($pureWls) {
+                throw new \RuntimeException(
+                    'Windows pure WLS cannot use per-Worker Direct ports without Nginx; '
+                    . 'remove --direct or explicitly use --dispatcher.'
+                );
             }
             if (!\in_array($listenerMode, ['auto', 'worker_ports'], true)) {
                 throw new \RuntimeException(
@@ -575,11 +593,19 @@ final class RuntimeStrategyResolver
     private function resolveSslEngine(array $config): string
     {
         $ssl = \is_array($config['ssl'] ?? null) ? $config['ssl'] : [];
-        $configuredEngine = \strtolower(\trim((string)($ssl['engine'] ?? 'none')));
-        $configuredEngine = $configuredEngine !== '' ? $configuredEngine : 'none';
+        $edge = \is_array($config['edge'] ?? null) ? $config['edge'] : [];
+        $edgeAdapter = \strtolower(\trim((string)(
+            $config['edge_adapter']
+            ?? $edge['adapter']
+            ?? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+        )));
+        $pureWls = $edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+        $defaultEngine = $pureWls ? 'stream' : 'none';
+        $configuredEngine = \strtolower(\trim((string)($ssl['engine'] ?? $defaultEngine)));
+        $configuredEngine = $configuredEngine !== '' ? $configuredEngine : $defaultEngine;
         if (!\in_array($configuredEngine, ['none', 'stream'], true)) {
             throw new \RuntimeException(
-                (string)__('WLS TLS 引擎已退役；公网 TLS 仅由项目托管 Nginx 处理。请删除 wls.ssl.engine=%{1}。', [
+                (string)__('wls.ssl.engine 仅支持 none/stream；收到 %{1}。', [
                     $configuredEngine,
                 ])
             );
@@ -590,15 +616,15 @@ final class RuntimeStrategyResolver
         } catch (\InvalidArgumentException $exception) {
             throw new \RuntimeException($exception->getMessage(), 0, $exception);
         }
-        if ($tlsSessionCache->enabled()) {
+        if (!$pureWls && $tlsSessionCache->enabled()) {
             throw new \RuntimeException(
-                (string)__('wls.ssl.session_cache=external 已退役；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。')
+                (string)__('Nginx 模式不允许 WLS external TLS Session Cache；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。')
             );
         }
 
-        // "stream" is accepted only as a persisted legacy input. WLS Workers
-        // always use loopback plaintext HTTP/1.1 behind managed Nginx.
-        return 'none';
+        // Managed Nginx terminates public TLS and always uses a plaintext WLS
+        // backend. Explicit pure WLS owns TLS in the PHP Stream SSL engine.
+        return $pureWls ? 'stream' : 'none';
     }
 
     /**

@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 
 /**
- * Retired compatibility class. Nginx is the only supported public edge.
+ * Pure-PHP WLS edge for TLS 1.3, HTTP/2 and HTTP/1.1 fallback.
+ *
+ * HTTP/3 remains owned by the optional managed Nginx edge.
  */
 final class WlsNativeEdgeAdapter implements EdgeAdapterInterface
 {
-    public function __construct()
-    {
-        throw new \RuntimeException('WLS native edge is retired; use Nginx.');
-    }
-
     public function name(): string
     {
         return self::NAME_WLS;
@@ -22,7 +21,7 @@ final class WlsNativeEdgeAdapter implements EdgeAdapterInterface
 
     public function allowsNativeHttp2(): bool
     {
-        return false;
+        return true;
     }
 
     public function allowsNativeHttp3(): bool
@@ -32,25 +31,27 @@ final class WlsNativeEdgeAdapter implements EdgeAdapterInterface
 
     public function expectsPlaintextBackend(): bool
     {
-        return true;
+        return false;
     }
 
     public function onCertificateMaterialUpdated(string $domain, array $paths = []): void
     {
-        throw new \RuntimeException('WLS native certificate reload is retired; use project-managed Nginx.');
+        $domains = $domain !== '' ? [$domain] : [];
+        ObjectManager::getInstance(BroadcastControlDispatchService::class)
+            ->reloadSslCert($domains);
     }
 
     public function doctorSnapshot(): array
     {
         return [
             'adapter' => self::NAME_WLS,
-            'native_http2' => 'retired',
-            'native_http3' => 'retired',
-            'expects_plaintext_backend' => true,
+            'native_http2' => 'active_when_verified',
+            'native_http3' => 'nginx_only',
+            'expects_plaintext_backend' => false,
             'reload_command_configured' => false,
             'reload_command' => '',
             'last_reload' => null,
-            'notes' => 'Retired compatibility adapter; Nginx exclusively owns public TLS and HTTP negotiation.',
+            'notes' => 'Pure WLS owns TLS 1.3 and negotiates HTTP/2 with HTTP/1.1 fallback. HTTP/3 is available only through managed Nginx.',
         ];
     }
 }

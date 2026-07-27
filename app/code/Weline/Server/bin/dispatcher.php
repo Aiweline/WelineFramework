@@ -4,13 +4,15 @@ declare(strict_types=1);
 /**
  * Weline Server - 统一 Dispatcher
  *
- * Nginx loopback HTTP/1.1 代理模式，将请求转发给 Worker 处理。
- * 实现「单回源入口 + 多 Worker 负载均衡」。
+ * 将入口字节流转发给 Worker，实现「单入口 + 多 Worker 负载均衡」。
+ * Nginx 模式接收 loopback HTTP/1.1 回源；纯 WLS 模式透传公网
+ * TLS/HTTP，使 Worker 直接完成 TLS 1.3、ALPN HTTP/2/HTTP/1.1 协商。
  *
  * 用法: php dispatcher.php <host> <port> <worker_base_port> <worker_count> <instance_name> [--name=process_name] [--frontend]
  *
  * 架构:
- *   Nginx → Dispatcher:loopback (H1) → Worker:loopback → 响应回传
+ *   Nginx → Dispatcher:loopback (H1) → Worker:loopback
+ *   Client → Dispatcher:public (TLS/H2/H1 passthrough) → SSL Worker:loopback
  *
  * @author Aiweline
  * @email aiweline@qq.com
@@ -71,6 +73,7 @@ $orchestratorLaunchId = '';
 $masterLeaseFile = '';
 $masterToken = '';
 $protocolEdgeTokenFile = '';
+$edgeAdapterName = 'nginx';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -92,11 +95,17 @@ foreach ($argv as $arg) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--protocol-edge-token-file=')) {
         $protocolEdgeTokenFile = (string)\substr($arg, 27);
+    } elseif (\str_starts_with($arg, '--edge-adapter=')) {
+        $edgeAdapterName = \strtolower(\trim((string)\substr($arg, 15)));
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
+if (!\in_array($edgeAdapterName, ['nginx', 'wls'], true)) {
+    \fwrite(\STDERR, "[Dispatcher] --edge-adapter must be nginx or wls.\n");
+    exit(1);
+}
 $normalizedBindHost = \strtolower(\trim((string)$host));
-if ($normalizedBindHost !== '127.0.0.1') {
+if ($edgeAdapterName === 'nginx' && $normalizedBindHost !== '127.0.0.1') {
     \fwrite(\STDERR, "[Dispatcher] Nginx-only backend must bind to 127.0.0.1.\n");
     exit(1);
 }

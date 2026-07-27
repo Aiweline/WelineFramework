@@ -168,7 +168,9 @@ class Benchmark extends CommandAbstract
             ? 'explicit'
             : match ($benchmarkTargetSurface) {
                 'public_edge' => 'select only a Managed Nginx protocol with live runtime verification, then require the observed response version to match',
-                'wls_endpoint' => 'use HTTP/1.1 for the explicitly selected internal Nginx backend',
+                'wls_endpoint' => (string)($serverConfig['edge_adapter'] ?? '') === 'wls'
+                    ? 'select verified in-process pure WLS HTTP/2, then fall back to HTTP/1.1'
+                    : 'use HTTP/1.1 for the explicitly selected internal Nginx backend',
                 'public_edge_unbound', 'wls_endpoint_unbound', 'attributed_endpoint_unbound'
                     => 'fail closed because the attributed endpoint policy or owner binding is incomplete',
                 default => 'unattributed endpoint: delegate negotiation to libcurl and report the observed version without Managed Nginx attribution',
@@ -420,7 +422,10 @@ class Benchmark extends CommandAbstract
 
         $target = $this->buildInstanceTarget($instanceName, $raw);
         if ($target === null) {
-            $this->printer->error(__('实例 [%{1}] 没有通过 Managed Nginx 进程、owner、upstream 与公网端口身份门禁。', [$instanceName]));
+            $this->printer->error(__(
+                '实例 [%{1}] 没有通过其公网入口身份与协议策略门禁。',
+                [$instanceName],
+            ));
             return null;
         }
 
@@ -496,7 +501,7 @@ class Benchmark extends CommandAbstract
         // benchmark run.
         if ($runningWorkerCount < $expectedWorkerCount) {
             if ($this->probeBenchmarkHealthEndpoint($info)) {
-                $this->printer->note(__('实例 [%{1}] 的 WLS 回源 health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过 Managed Nginx owner 门禁。', [
+                $this->printer->note(__('实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。', [
                     $instanceName,
                     $runningWorkerCount,
                     $expectedWorkerCount,
@@ -799,8 +804,7 @@ class Benchmark extends CommandAbstract
     {
         $endpointHost = \trim((string)($endpoint['host'] ?? ''));
         $port = (int)($endpoint['port'] ?? $endpoint['main_port'] ?? 0);
-        if ($endpointHost === '' || $port < 1 || $port > 65535
-            || (bool)($endpoint['ssl_enabled'] ?? false)) {
+        if ($endpointHost === '' || $port < 1 || $port > 65535) {
             return null;
         }
 
@@ -811,7 +815,52 @@ class Benchmark extends CommandAbstract
         }
 
         $edgeAdapter = \strtolower(\trim((string)($endpoint['edge_adapter'] ?? '')));
-        if ($edgeAdapter !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+        if (!\in_array($edgeAdapter, [
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS,
+        ], true)) {
+            return null;
+        }
+        $selectionData = \is_array($endpoint['http_protocol_selection'] ?? null)
+            ? $endpoint['http_protocol_selection']
+            : [];
+        try {
+            $selection = HttpProtocolSelection::fromArray($selectionData);
+            $selection->assertCompatibleEdgeAdapter($edgeAdapter);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
+            $connectHost = $this->normalizeConnectHost($endpointHost);
+            $authorityHost = $this->normalizeAuthorityHost(
+                (string)($endpoint['public_host'] ?? $endpoint['ssl_domain'] ?? ''),
+                $connectHost,
+            );
+            $sslEnabled = (bool)($endpoint['ssl_enabled'] ?? false);
+
+            return [
+                'host' => $connectHost,
+                'authority_host' => $authorityHost,
+                'port' => $port,
+                'ssl' => $sslEnabled,
+                'target_surface' => 'wls_endpoint',
+                'target_endpoint_role' => 'pure_wls_public',
+                'explicit_transport_resolve' => \strcasecmp($authorityHost, $connectHost) !== 0,
+                'endpoint_host' => $connectHost,
+                'instance' => $name,
+                'worker_count' => (int)($endpoint['count'] ?? $endpoint['worker_count'] ?? 0),
+                'runtime_metadata' => $runtimeMetadata,
+                'edge_adapter' => $edgeAdapter,
+                'http_protocol_selection' => $selection->toArray(),
+                'managed_nginx' => [],
+                'wls_backend' => [
+                    'host' => $connectHost,
+                    'port' => $port,
+                    'ssl' => $sslEnabled,
+                ],
+            ];
+        }
+        if ((bool)($endpoint['ssl_enabled'] ?? false)) {
             return null;
         }
         try {
@@ -837,9 +886,7 @@ class Benchmark extends CommandAbstract
             'worker_count' => (int)($endpoint['count'] ?? $endpoint['worker_count'] ?? 0),
             'runtime_metadata' => $runtimeMetadata,
             'edge_adapter' => $edgeAdapter,
-            'http_protocol_selection' => \is_array($endpoint['http_protocol_selection'] ?? null)
-                ? $endpoint['http_protocol_selection']
-                : [],
+            'http_protocol_selection' => $selection->toArray(),
             'managed_nginx' => $managed,
             'wls_backend' => [
                 'host' => $this->normalizeConnectHost($endpointHost),
@@ -3100,9 +3147,7 @@ class Benchmark extends CommandAbstract
         if (\is_array($selectionData) && $selectionData !== []) {
             try {
                 $endpointSelection = HttpProtocolSelection::fromArray($selectionData);
-                $endpointSelection->assertCompatibleEdgeAdapter(
-                    \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
-                );
+                $endpointSelection->assertCompatibleEdgeAdapter($endpointEdgeAdapter);
             } catch (\Throwable $exception) {
                 $endpointPolicyError = $exception->getMessage();
                 $endpointSelection = null;
@@ -3110,10 +3155,12 @@ class Benchmark extends CommandAbstract
         } elseif ($targetAttributed) {
             $endpointPolicyError = 'persisted http_protocol_selection is missing';
         }
-        $endpointEdgeValid = $endpointEdgeAdapter
-            === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
+        $endpointEdgeValid = \in_array($endpointEdgeAdapter, [
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+            \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS,
+        ], true);
         if ($targetAttributed && !$endpointEdgeValid) {
-            $endpointPolicyError = 'persisted edge_adapter is not nginx';
+            $endpointPolicyError = 'persisted edge_adapter is not nginx or wls';
         }
         if ($targetAttributed && !$targetSurfaceValid) {
             $endpointPolicyError = 'benchmark target surface is missing or invalid';
@@ -3128,7 +3175,10 @@ class Benchmark extends CommandAbstract
         $targetManagedNginx = \is_array($serverConfig['managed_nginx'] ?? null)
             ? $serverConfig['managed_nginx']
             : [];
-        if ($endpointPolicyBound && $requestedTargetSurface === 'public_edge') {
+        if ($endpointPolicyBound
+            && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+            && $requestedTargetSurface === 'public_edge'
+        ) {
             try {
                 $currentManagedNginx = ManagedNginxService::fromEnv()->doctorSnapshot();
             } catch (\Throwable) {
@@ -3176,11 +3226,22 @@ class Benchmark extends CommandAbstract
             : [];
         $clientMultiplexOptionEnabled = \defined('CURLPIPE_MULTIPLEX');
         $explicitTransportResolve = (bool)($serverConfig['explicit_transport_resolve'] ?? false);
+        $wlsAdapters = \is_array($httpProtocolCapabilities['wls_adapters'] ?? null)
+            ? $httpProtocolCapabilities['wls_adapters']
+            : [];
+        $pureWlsMultiplexVerified = $endpointEdgeAdapter
+            === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+            && $requestedTargetSurface === 'wls_endpoint'
+            && (bool)($wlsAdapters['http2']['enabled'] ?? false)
+            && (bool)($wlsAdapters['http2']['runtime_verified'] ?? false);
         $multiplexVerified = $clientMultiplexOptionEnabled
             && $endpointPolicyBound
-            && $requestedTargetSurface === 'public_edge'
-            && ((bool)($managedNginx['http2_runtime_verified'] ?? false)
-                || (bool)($managedNginx['http3_runtime_verified'] ?? false));
+            && (
+                ($requestedTargetSurface === 'public_edge'
+                    && ((bool)($managedNginx['http2_runtime_verified'] ?? false)
+                        || (bool)($managedNginx['http3_runtime_verified'] ?? false)))
+                || $pureWlsMultiplexVerified
+            );
         $explicitRemoteMultiplex = $clientMultiplexOptionEnabled
             && $explicitTransportResolve
             && !$noKeepAlive
@@ -3246,17 +3307,26 @@ class Benchmark extends CommandAbstract
                 && $requestedTargetSurface === 'public_edge'
                 && (bool)($managedNginx['http3_runtime_verified'] ?? false),
             'managed_nginx_generation_required' =>
-                $endpointPolicyBound && $requestedTargetSurface === 'public_edge',
+                $endpointPolicyBound
+                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+                && $requestedTargetSurface === 'public_edge',
             'managed_nginx_expected_generation' =>
-                $endpointPolicyBound && $requestedTargetSurface === 'public_edge'
+                $endpointPolicyBound
+                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+                && $requestedTargetSurface === 'public_edge'
                     ? (string)($targetManagedNginx['owner_config_generation'] ?? '')
                     : '',
             '_managed_nginx_owner_observation' =>
-                $endpointPolicyBound && $requestedTargetSurface === 'public_edge'
+                $endpointPolicyBound
+                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+                && $requestedTargetSurface === 'public_edge'
                     ? $targetManagedNginx : [],
-            'http3_data_plane_reason' => $requestedTargetSurface === 'public_edge'
-                ? (string)($targetPolicy['http3_reason'] ?? 'Managed Nginx HTTP/3 is not runtime verified.')
-                : 'Managed Nginx owns public HTTP/3; the internal WLS backend is HTTP/1.1 only.',
+            'http3_data_plane_reason' => $endpointEdgeAdapter
+                === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                    ? 'Pure WLS HTTP/3 is unavailable; use managed Nginx.'
+                    : ($requestedTargetSurface === 'public_edge'
+                        ? (string)($targetPolicy['http3_reason'] ?? 'Managed Nginx HTTP/3 is not runtime verified.')
+                        : 'Managed Nginx owns public HTTP/3; the internal WLS backend is HTTP/1.1 only.'),
             'http_protocol_capabilities' => $httpProtocolCapabilities,
             'instance_name' => (string)($serverConfig['instance'] ?? ''),
             'target_attribution' => $targetAttribution,
@@ -3355,7 +3425,7 @@ class Benchmark extends CommandAbstract
     ): void
     {
         if (\str_ends_with($targetSurface, '_unbound')) {
-            throw new \RuntimeException((string)__('已归因目标缺少完整的 Managed Nginx owner 或协议运行证据，拒绝开始压测。'));
+            throw new \RuntimeException((string)__('已归因目标缺少完整的边缘身份或协议运行证据，拒绝开始压测。'));
         }
 
         if (\in_array($targetSurface, ['public_edge', 'wls_endpoint'], true)) {
@@ -3373,9 +3443,14 @@ class Benchmark extends CommandAbstract
                 default => '',
             };
             if (!\in_array($requestedProtocol, $allowed, true)) {
+                $binding = \is_array($capabilities['endpoint_policy_binding'] ?? null)
+                    ? $capabilities['endpoint_policy_binding']
+                    : [];
                 $surfaceLabel = $targetSurface === 'public_edge'
                     ? __('Managed Nginx 公网入口')
-                    : __('内部 WLS HTTP/1.1 回源');
+                    : ((string)($binding['edge_adapter'] ?? '') === 'wls'
+                        ? __('纯 WLS 公网入口')
+                        : __('内部 WLS HTTP/1.1 回源'));
                 throw new \RuntimeException((string)__(
                     '%{1} 尚未实测验证 HTTP/%{2}，拒绝把配置能力当作压测证据。',
                     [(string)$surfaceLabel, $requested],
@@ -3421,9 +3496,29 @@ class Benchmark extends CommandAbstract
             ? $surfaces[$targetSurface]
             : [];
         if ($targetSurface === 'wls_endpoint') {
-            return \in_array('http/1.1', (array)($surface['negotiation_order'] ?? []), true)
-                ? ['http/1.1']
+            $order = \is_array($surface['negotiation_order'] ?? null)
+                ? $surface['negotiation_order']
                 : [];
+            if ((string)($surface['role'] ?? '') === 'nginx_backend') {
+                return \in_array('http/1.1', $order, true) ? ['http/1.1'] : [];
+            }
+            $wlsAdapters = \is_array($capabilities['wls_adapters'] ?? null)
+                ? $capabilities['wls_adapters']
+                : [];
+            $verified = [
+                'http/2' => (bool)($wlsAdapters['http2']['enabled'] ?? false)
+                    && (bool)($wlsAdapters['http2']['runtime_verified'] ?? false),
+                'http/1.1' => (bool)($wlsAdapters['http1']['enabled'] ?? false)
+                    && (bool)($wlsAdapters['http1']['runtime_verified'] ?? false),
+            ];
+            $protocols = [];
+            foreach ($order as $protocol) {
+                $protocol = \strtolower(\trim((string)$protocol));
+                if (($verified[$protocol] ?? false) && !\in_array($protocol, $protocols, true)) {
+                    $protocols[] = $protocol;
+                }
+            }
+            return $protocols;
         }
         if ($targetSurface !== 'public_edge'
             || (string)($surface['owner'] ?? '') !== 'nginx'
@@ -3464,7 +3559,7 @@ class Benchmark extends CommandAbstract
             return $requested;
         }
         if (\str_ends_with($targetSurface, '_unbound')) {
-            throw new \RuntimeException((string)__('已归因目标的 Managed Nginx owner 或协议策略未绑定，auto 已拒绝降级猜测。'));
+            throw new \RuntimeException((string)__('已归因目标的边缘身份或协议策略未绑定，auto 已拒绝降级猜测。'));
         }
         if (!\in_array($targetSurface, ['public_edge', 'wls_endpoint'], true)) {
             return 'auto';

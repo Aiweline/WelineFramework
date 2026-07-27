@@ -2,7 +2,7 @@
 
 本目录记录 Weline Server（WLS）的现行架构、运行方式和历史设计。开发与排障优先阅读现行文档；带日期的修复报告和阶段方案只作为历史证据，不作为当前实现契约。
 
-现行公网链路只有一条：项目托管 Nginx 终结 TLS 1.3 与 H2/H1（H3 可用时启用），再以 loopback HTTP/1.1 Keep-Alive 回源 WLS；Gateway、Caddy、WLS-native/TLS 与 Protocol Edge 均不可由当前启动入口到达。
+现行启动提供两条数据面链路。默认链路由项目托管 Nginx 终结 TLS 1.3 与 H2/H1（H3 可用时启用），再以 loopback HTTP/1.1 Keep-Alive 回源 WLS；显式 `server:start --no-nginx` 切换为纯 WLS，WLS 直接终结 TLS 1.3，默认协商 HTTP/2，并为客户端自动回退 HTTP/1.1。纯 WLS 不提供 HTTP/3，跨连接/跨 Worker TLS Session 恢复仍是 pending。Gateway、Caddy 与独立 Protocol Edge 仍不可由当前启动入口到达。
 
 ## 推荐阅读
 
@@ -11,7 +11,7 @@
 3. [IPC 控制通道架构](IPC控制通道架构.md) — REGISTER、READY、lease、heartbeat、route snapshot 和控制命令。
 4. [Dispatcher 分流架构设计](Dispatcher分流架构设计.md) — 数据面转发、路由快照、健康隔离和维护兜底。
 5. [WLS Session/Memory 共享服务架构](WLS_Session共享服务架构.md) — 跨 Worker/实例共享状态 sidecar。
-6. [WLS 模式部署指南](WLS模式部署指南.md) — 启动参数、项目托管 Nginx 唯一公网入口、运维门禁。
+6. [WLS 模式部署指南](WLS模式部署指南.md) — 默认托管 Nginx、`--no-nginx` 纯 WLS 回退、启动参数和运维门禁。
 
 ## 按问题定位
 
@@ -21,7 +21,7 @@
 | Worker 掉线、整池重载、路由为空 | [WLS 运行时架构](WLS架构图.md)、[IPC 控制通道](IPC控制通道架构.md) |
 | 请求转发、Worker 故障转移 | [Dispatcher 分流架构](Dispatcher分流架构设计.md) |
 | TLS 1.3、H2/H1、H3 与 Session 恢复门禁 | [WLS 模式部署指南](WLS模式部署指南.md#5-https--ssl)、[WLS 运行时架构](WLS架构图.md#301-当前-http-协议与连接复用) |
-| 项目托管 Nginx、trusted loopback、统一公网入口 | [WLS 模式部署指南](WLS模式部署指南.md#13-本项目托管-nginx多项目互不干扰)、[域名接入](WLS模式部署指南.md#4-域名接入) |
+| 项目托管 Nginx、纯 WLS 回退、trusted loopback | [WLS 模式部署指南](WLS模式部署指南.md#13-本项目托管-nginx多项目互不干扰)、[域名接入](WLS模式部署指南.md#4-域名接入) |
 | 首页预热、常驻内存、请求长尾 | [WLS 运行时架构](WLS架构图.md) |
 | Session/Memory 服务异常 | [共享服务架构](WLS_Session共享服务架构.md) |
 | SSE/长连接 | [SSE 无阻塞检测方法](SSE无阻塞检测方法.md) |
@@ -36,7 +36,7 @@
 - Worker Fiber 恢复/捕获：`WorkerFiberContextTracker` 必须把目标
   `Fiber` 显式传给 `restoreForFiber()` 与 capture callback；不得退回
   无参上下文切换，否则请求级上下文会在 tick 热路径失配。
-- 项目托管 Nginx owner、配置 generation/digest 与 live endpoint：唯一公网边缘事实源；普通 Session 恢复使用 `fresh-share-two-connection-pair-v1`，graceful reload 连续性另用 `fresh-share-across-nginx-reload-v1` 保留同一个 pre-reload TLS Session。外部 `managed=false`、Caddy、Native/Protocol Edge 都是不可运行的历史材料。
+- Nginx 模式以项目托管 Nginx owner、配置 generation/digest 与 live endpoint 作为公网边缘事实源；普通 Session 恢复使用 `fresh-share-two-connection-pair-v1`，graceful reload 连续性另用 `fresh-share-across-nginx-reload-v1` 保留同一个 pre-reload TLS Session。纯 WLS 模式以 Master 发布的 endpoint、TLS/HTTP policy 和 Worker READY 状态作为运行事实源，不复用 Nginx 的 Session 恢复结论。外部 `managed=false`、Caddy 与独立 Protocol Edge 仍是不可运行的历史材料。
 - SharedState registry：Session/Memory sidecar；只能由认证后的写路径修正。
 - `var/server/instances/*.json`：CLI endpoint 发现，不是运行时共识。
 - PID/端口索引：可重建缓存，不是存活或身份的最终事实源。
@@ -57,7 +57,7 @@
 - `WLS-ISSUES-*`、`WLS-FIXES-*`、`WLS-FINAL-REPORT-*`
 - `WLS-HA-*`、`WLS-MASTER-*`、`WLS-SUPERVISOR-*`
 - `WLS-default-startup-*`、`WLS-DISPATCHER-*`
-- `WLS-EventBuffer-SSL-Worker.md`（WLS TLS 已退役，仅供历史取证）
+- `WLS-EventBuffer-SSL-Worker.md`（EventBuffer TLS Worker 已退役；当前纯 WLS 使用 Stream TLS，本文件仍只供历史取证）
 - `WLS-Gateway使用指南.md`（Gateway 已退役，仅用于识别和迁移旧部署）
 - `wls-panel-plan/` 下的阶段计划和验收证据
 
