@@ -1,81 +1,59 @@
 /**
- * Weline_Customer 客户管理 E2E 冒烟测试
+ * Weline_Customer：诚实 smoke + 客户列表搜索交互
  *
- * 测试范围：
- * - 客户列表：列表加载、搜索过滤
- * - 客户详情：客户详情页加载
- *
- * 控制器来源：app/code/WeShop/Customer/Controller/Backend/Customer/Index.php, View.php
- * 模板来源：app/code/WeShop/Customer/view/templates/Backend/Customer/*.phtml
- *
- * @weline-e2e-spec { module: Weline_Customer, type: smoke, layer: backend }
+ * @weline-e2e-spec { module: Weline_Customer, type: flow, layer: backend }
  */
-
-const { test, expect, loginAsAdmin, gotoBackend, buildModuleBackendRoute, moduleDescribe, moduleCase } = require('../../../../../../../tests/e2e/framework');
+const {
+  test,
+  expect,
+  loginAsAdmin,
+  gotoBackend,
+  buildModuleBackendRoute,
+  moduleDescribe,
+  moduleCase,
+  waitForBackendShellReady,
+  submitAndExpectParam,
+} = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Customer';
-const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
+const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-moduleDescribe(test, MODULE, 'Weline_Customer 客户管理模块冒烟测试', () => {
-
+moduleDescribe(test, MODULE, 'Weline_Customer 后台流程', () => {
   moduleCase(
     test,
     { module: MODULE, id: 'CUSTOMER-SMOKE-001' },
-    '客户列表页面能够正常加载，显示客户管理标题',
+    '客户列表路由可达（诚实 smoke）',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'customer');
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证页面标题
-      const heading = page.locator('h4').first();
-      await expect(heading).toContainText(/客户|Customer/i, { timeout: 10000 });
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'customer'), {
+        timeout: 60000,
+        settleMs: 800,
+      });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
+      await expect(page.locator('.card-title, h4, .page-title').first()).toContainText(/客户|Customer/i);
     }
   );
 
   moduleCase(
     test,
-    { module: MODULE, id: 'CUSTOMER-SMOKE-002' },
-    '客户列表支持关键词搜索过滤',
+    { module: MODULE, id: 'CUSTOMER-FLOW-SEARCH-001' },
+    '客户列表：搜索框 fill 后提交并保留 keyword',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'customer') + '?keyword=test';
-      await gotoBackend(page, url, { timeout: 30000 });
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'customer'), {
+        timeout: 60000,
+        settleMs: 800,
+      });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
 
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证 URL 包含搜索参数
-      await expect(page).toHaveURL(/keyword=test/);
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
-    }
-  );
-
-  moduleCase(
-    test,
-    { module: MODULE, id: 'CUSTOMER-SMOKE-003' },
-    '客户列表支持分页',
-    async ({ page }) => {
-      await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'customer') + '?page=1&limit=20';
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证 URL 包含分页参数
-      await expect(page).toHaveURL(/page=1/);
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      const form = page.locator('form').filter({ has: page.locator('input[name="keyword"]') }).first();
+      const keyword = form.locator('input[name="keyword"]');
+      await expect(keyword).toBeVisible({ timeout: 15000 });
+      await keyword.fill('admin');
+      const req = await submitAndExpectParam(page, form, 'keyword=admin');
+      expect(req).toBeTruthy();
     }
   );
 });

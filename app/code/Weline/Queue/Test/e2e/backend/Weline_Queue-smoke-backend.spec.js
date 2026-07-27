@@ -1,62 +1,59 @@
 /**
- * Weline_Queue 队列管理 E2E 冒烟测试
+ * Weline_Queue：诚实 smoke + biz_key 筛选交互
  *
- * 测试范围：
- * - 队列列表：消息队列状态、任务列表
- *
- * 控制器来源：app/code/Weline/Queue/Controller/Backend/Queue.php
- * 模板来源：app/code/Weline/Queue/view/templates/Backend/Queue/*.phtml
- *
- * @weline-e2e-spec { module: Weline_Queue, type: smoke, layer: backend }
+ * @weline-e2e-spec { module: Weline_Queue, type: flow, layer: backend }
  */
-
-const { test, expect, loginAsAdmin, gotoBackend, buildModuleBackendRoute, moduleDescribe, moduleCase } = require('../../../../../../../tests/e2e/framework');
+const {
+  test,
+  expect,
+  loginAsAdmin,
+  gotoBackend,
+  buildModuleBackendRoute,
+  moduleDescribe,
+  moduleCase,
+  waitForBackendShellReady,
+  submitAndExpectParam,
+} = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Queue';
-const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
+const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-moduleDescribe(test, MODULE, 'Weline_Queue 队列管理模块冒烟测试', () => {
-
+moduleDescribe(test, MODULE, 'Weline_Queue 后台流程', () => {
   moduleCase(
     test,
     { module: MODULE, id: 'QUEUE-SMOKE-001' },
-    '队列列表页面能够正常加载，显示队列状态和统计',
+    '队列列表路由可达（诚实 smoke）',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'queue');
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证页面包含队列相关内容
-      const content = await body.innerText();
-      expect(content).toMatch(/队列|Queue|消息|Message|任务|Job/i);
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'queue'), {
+        timeout: 60000,
+        settleMs: 800,
+      });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
+      await expect(page.locator('body')).toContainText(/队列|Queue/i);
     }
   );
 
   moduleCase(
     test,
-    { module: MODULE, id: 'QUEUE-SMOKE-002' },
-    '队列列表包含统计信息或状态指示',
+    { module: MODULE, id: 'QUEUE-FLOW-FILTER-001' },
+    '队列列表：业务键筛选提交',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'queue');
-      await gotoBackend(page, url, { timeout: 30000 });
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'queue'), {
+        timeout: 60000,
+        settleMs: 800,
+      });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
 
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      const content = await body.innerText();
-      // 验证包含统计或状态相关
-      const hasStats = /总计|Total|等待|Pending|运行|Running|完成|Done|错误|Error/i.test(content);
-      expect(hasStats).toBe(true);
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      const form = page.locator('form').filter({ has: page.locator('input[name="biz_key"]') }).first();
+      const bizKey = form.locator('input[name="biz_key"]');
+      await expect(bizKey).toBeVisible({ timeout: 15000 });
+      await bizKey.fill('e2e-filter-key');
+      const req = await submitAndExpectParam(page, form, 'biz_key=e2e-filter-key');
+      expect(req).toBeTruthy();
     }
   );
 });

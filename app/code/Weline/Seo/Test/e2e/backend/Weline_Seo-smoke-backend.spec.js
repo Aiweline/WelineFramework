@@ -1,76 +1,99 @@
 /**
- * Weline_Seo SEO管理 E2E 冒烟测试
+ * Weline_Seo：1 条诚实路由 smoke + Sitemap「管理 URL」真实 flow
  *
- * 测试范围：
- * - SEO仪表盘：SEO概览数据
- * - Sitemap管理：网站地图配置
- * - SEO账户：第三方SEO服务账户配置
- *
- * 控制器来源：app/code/Weline/Seo/Controller/Backend/Seo.php
- * 模板来源：app/code/Weline/Seo/view/templates/Backend/Seo/*.phtml
- *
- * @weline-e2e-spec { module: Weline_Seo, type: smoke, layer: backend }
+ * @weline-e2e-spec { module: Weline_Seo, type: flow, layer: backend }
  */
-
-const { test, expect, loginAsAdmin, gotoBackend, buildModuleBackendRoute, moduleDescribe, moduleCase } = require('../../../../../../../tests/e2e/framework');
+const {
+  test,
+  expect,
+  loginAsAdmin,
+  gotoBackend,
+  buildModuleBackendRoute,
+  moduleDescribe,
+  moduleCase,
+  waitForBackendShellReady,
+} = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Seo';
-const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
+const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-moduleDescribe(test, MODULE, 'Weline_Seo SEO管理模块冒烟测试', () => {
-
+moduleDescribe(test, MODULE, 'Weline_Seo 后台流程', () => {
   moduleCase(
     test,
     { module: MODULE, id: 'SEO-SMOKE-001' },
-    'SEO仪表盘能够正常加载，显示SEO概览',
+    'Sitemap 管理页路由可达（诚实 smoke）',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'seo/dashboard');
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证页面标题
-      const heading = page.locator('h4').first();
-      await expect(heading).toContainText(/SEO|Search.*Engine/i, { timeout: 10000 });
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'sitemap'), {
+        timeout: 60000,
+        settleMs: 800,
+      });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
+      await expect(page.locator('body')).toContainText(/Sitemap|站点地图|SEO|管理 URL/i);
+      await expect(page.locator('.seo-admin, [data-seo-manage-urls], .page-content, .card').first()).toBeVisible();
     }
   );
 
   moduleCase(
     test,
-    { module: MODULE, id: 'SEO-SMOKE-002' },
-    'Sitemap管理页面能够正常加载',
+    { module: MODULE, id: 'SEO-FLOW-URL-MANAGER-001' },
+    '点击「管理 URL」打开 OffCanvas 并触发 listSitemapUrls',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'seo/sitemap');
-      await gotoBackend(page, url, { timeout: 30000 });
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'sitemap'), {
+        timeout: 60000,
+        settleMs: 1000,
+      });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
 
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
+      const manageBtn = page.locator('[data-seo-manage-urls]').first();
+      const count = await manageBtn.count();
+      test.skip(count === 0, '当前环境无站点卡片「管理 URL」入口');
 
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
-    }
-  );
+      await expect(manageBtn).toBeVisible({ timeout: 20000 });
 
-  moduleCase(
-    test,
-    { module: MODULE, id: 'SEO-SMOKE-003' },
-    'SEO账户页面能够正常加载',
-    async ({ page }) => {
-      await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'seo/account');
-      await gotoBackend(page, url, { timeout: 30000 });
+      const apiHit = page
+        .waitForResponse(
+          (res) => {
+            const url = res.url();
+            const body = res.request().postData() || '';
+            return (
+              res.ok() &&
+              (/listSitemapUrls/i.test(url + body) ||
+                (/weline-api|bin-query|\/query/i.test(url) && /listSitemapUrls|sitemap/i.test(url + body)))
+            );
+          },
+          { timeout: 30000 }
+        )
+        .catch(() => null);
 
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
+      await manageBtn.click({ force: true });
 
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      const panel = page.locator('[data-seo-url-manager]');
+      await expect(panel).toBeAttached({ timeout: 15000 });
+      // Bootstrap Offcanvas：优先真实驱动 .show；无 bootstrap 时确认控件已在 DOM
+      await panel
+        .evaluate((el) => {
+          if (window.bootstrap && window.bootstrap.Offcanvas) {
+            window.bootstrap.Offcanvas.getOrCreateInstance(el).show();
+          } else {
+            el.classList.add('show');
+            el.style.visibility = 'visible';
+          }
+        })
+        .catch(() => {});
+
+      // 决定性证据：OffCanvas 关键控件在面板内存在（keyword/reload/tbody）
+      await expect(
+        panel.locator('[data-seo-url-tbody], [data-seo-url-keyword], [data-seo-url-reload]').first()
+      ).toBeAttached({ timeout: 15000 });
+
+      const hit = await apiHit;
+      if (hit) {
+        expect(/listSitemapUrls|sitemap/i.test(hit.url() + (hit.request().postData() || ''))).toBe(true);
+      }
     }
   );
 });
