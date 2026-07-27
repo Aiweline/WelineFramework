@@ -158,9 +158,16 @@ class Stop extends CommandAbstract
     
     /**
      * Stop per-project managed nginx (if running) before tearing down WLS.
+     *
+     * @param array<string, mixed> $instanceData
      */
-    private function maybeStopManagedNginx(string $instanceName): bool
+    private function maybeStopManagedNginx(string $instanceName, array $instanceData = []): bool
     {
+        $edgeAdapter = \strtolower(\trim((string)($instanceData['edge_adapter'] ?? '')));
+        if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
+            return true;
+        }
+
         try {
             $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
             $result = $service->stopForInstance($instanceName);
@@ -467,8 +474,12 @@ class Stop extends CommandAbstract
 
         $instanceData = $manager->getRawInstanceData($name) ?? [];
         $this->loadedControlTokens[$name] = \trim((string)($instanceData['control_token'] ?? ''));
+        $edgeAdapterName = \strtolower(\trim((string)(
+            $instanceData['edge_adapter']
+            ?? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+        )));
 
-        if (!$this->maybeStopManagedNginx($name) && !$force) {
+        if (!$this->maybeStopManagedNginx($name, $instanceData) && !$force) {
             $this->printer->warning(__('已中止 WLS 停止：请先修复托管 Nginx 停止故障，或显式使用强制停止。'));
             return;
         }
@@ -484,7 +495,7 @@ class Stop extends CommandAbstract
         $masterAvailableForStop = $this->isMasterProcessAvailableForStop($instanceInfo);
         if (!$masterAvailableForStop) {
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
-            $this->showInstanceInfo($instanceInfo);
+            $this->showInstanceInfo($instanceInfo, $edgeAdapterName);
             // Master 失联后子进程脱离 Orchestrator/IPC；必须含 Session/Memory，否则会残留为「逃逸」进程。
             $includeSharedStateCleanup = $this->resolveMasterGoneResidualIncludeSharedState($instanceInfo);
 
@@ -524,7 +535,7 @@ class Stop extends CommandAbstract
         }
         
         // 显示实例信息
-        $this->showInstanceInfo($instanceInfo);
+        $this->showInstanceInfo($instanceInfo, $edgeAdapterName);
         echo "\n";
 
         if (!$fastLocal && $masterAvailableForStop) {
@@ -721,8 +732,12 @@ class Stop extends CommandAbstract
         return !$this->queryStopPidRunning($masterPid);
     }
 
-    protected function showInstanceInfo(ServerInstanceInfo $info): void
+    protected function showInstanceInfo(
+        ServerInstanceInfo $info,
+        string $edgeAdapterName = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
+    ): void
     {
+        $pureWls = $edgeAdapterName === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
         $boxInnerWidth = 62;
         $this->printer->note('╔' . \str_repeat('═', $boxInnerWidth) . '╗');
         $this->printer->note($this->renderStopBoxContent((string) __('停止服务器实例'), $boxInnerWidth, STR_PAD_BOTH));
@@ -730,8 +745,17 @@ class Stop extends CommandAbstract
         $this->printer->note($this->renderStopBoxContent('  ' . __('实例名称：') . $info->name, $boxInnerWidth));
         $this->printer->note($this->renderStopBoxContent('  ' . __('Master PID：') . ($info->masterPid > 0 ? $info->masterPid : __('(未运行)')), $boxInnerWidth));
         $this->printer->note($this->renderStopBoxContent('  ' . __('控制端口：') . ($info->controlPort > 0 ? $info->controlPort : __('(未配置)')), $boxInnerWidth));
-        $this->printer->note($this->renderStopBoxContent('  ' . __('WLS 回源端口：') . $info->getPortRangeDescription(), $boxInnerWidth));
-        $this->printer->note($this->renderStopBoxContent('  ' . __('公网 TLS：') . __('由托管 Nginx 终结'), $boxInnerWidth));
+        $this->printer->note($this->renderStopBoxContent(
+            '  ' . ($pureWls ? __('纯 WLS 公网端口：') : __('WLS 回源端口：')) . $info->getPortRangeDescription(),
+            $boxInnerWidth,
+        ));
+        $tlsOwner = $pureWls
+            ? ($info->sslEnabled ? __('由纯 WLS 直接终结') : __('关闭'))
+            : __('由托管 Nginx 终结');
+        $this->printer->note($this->renderStopBoxContent(
+            '  ' . __('公网 TLS：') . $tlsOwner,
+            $boxInnerWidth,
+        ));
         
         if ($info->httpRedirectPort > 0) {
             $this->printer->note($this->renderStopBoxContent('  ' . __('HTTP 跳转：') . ":{$info->httpRedirectPort} -> :{$info->port}", $boxInnerWidth));

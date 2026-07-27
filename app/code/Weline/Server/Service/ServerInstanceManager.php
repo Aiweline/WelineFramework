@@ -13,6 +13,7 @@ use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
+use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 
@@ -495,21 +496,27 @@ class ServerInstanceManager
                 'Removed WLS endpoint field "gateway.traffic_mode" is not supported; use wls.runtime.topology.'
             );
         }
-        if (\array_key_exists('public_origin', $filtered)) {
-            if (!\is_string($filtered['public_origin'])) {
-                throw new \RuntimeException('WLS endpoint public_origin must be a string.');
-            }
-            $filtered['public_origin'] = ManagedNginxPublicOrigin::normalize($filtered['public_origin']);
-        }
         if (\array_key_exists('edge_adapter', $filtered)) {
             if (!\is_string($filtered['edge_adapter'])) {
                 throw new \RuntimeException('WLS endpoint edge_adapter must be a string.');
             }
             $edgeAdapter = \strtolower(\trim($filtered['edge_adapter']));
-            if ($edgeAdapter !== EdgeAdapterInterface::NAME_NGINX) {
-                throw new \RuntimeException('WLS endpoint edge_adapter must be nginx.');
+            if (!\in_array($edgeAdapter, [
+                EdgeAdapterInterface::NAME_NGINX,
+                EdgeAdapterInterface::NAME_WLS,
+            ], true)) {
+                throw new \RuntimeException('WLS endpoint edge_adapter must be nginx or wls.');
             }
             $filtered['edge_adapter'] = $edgeAdapter;
+        }
+        if (\array_key_exists('public_origin', $filtered)) {
+            if (!\is_string($filtered['public_origin'])) {
+                throw new \RuntimeException('WLS endpoint public_origin must be a string.');
+            }
+            $edgeAdapter = (string)($filtered['edge_adapter'] ?? EdgeAdapterInterface::NAME_NGINX);
+            $filtered['public_origin'] = $edgeAdapter === EdgeAdapterInterface::NAME_WLS
+                ? PureWlsPublicOrigin::normalize($filtered['public_origin'])
+                : ManagedNginxPublicOrigin::normalize($filtered['public_origin']);
         }
         if (\array_key_exists('http_protocol_selection', $filtered)) {
             if (!\is_array($filtered['http_protocol_selection'])) {
@@ -518,7 +525,7 @@ class ServerInstanceManager
             $selection = HttpProtocolSelection::fromArray($filtered['http_protocol_selection']);
             $filtered['http_protocol_selection'] = $selection->toArray();
             if (!\is_string($filtered['edge_adapter'] ?? null)) {
-                throw new \RuntimeException('WLS endpoint protocol selection requires edge_adapter=nginx.');
+                throw new \RuntimeException('WLS endpoint protocol selection requires edge_adapter=nginx or wls.');
             }
             $selection->assertCompatibleEdgeAdapter($filtered['edge_adapter']);
 
@@ -542,7 +549,9 @@ class ServerInstanceManager
             }
             $filtered['protocol_edge_binary'] = \trim($filtered['protocol_edge_binary']);
             if ($filtered['protocol_edge_binary'] !== '') {
-                throw new \RuntimeException('WLS protocol edge binary is retired; Nginx owns public protocols.');
+                throw new \RuntimeException(
+                    'WLS external protocol edge binary is retired; use managed Nginx or in-process pure WLS HTTP/2.'
+                );
             }
         }
 

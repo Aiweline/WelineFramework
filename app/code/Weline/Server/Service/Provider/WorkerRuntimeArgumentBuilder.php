@@ -62,13 +62,16 @@ final class WorkerRuntimeArgumentBuilder
     public static function protocolPolicy(ServiceContext $context, bool $includeHttp3Activation = true): array
     {
         $httpConfig = $context->getConfig('wls.http', []);
-        $selection = \Weline\Server\Service\Runtime\HttpProtocolSelection::fromConfig(
-            ['http' => \is_array($httpConfig) ? $httpConfig : []],
-            $context->sslEnabled,
-        );
         $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
             ->resolve($context->envConfig)
             ->name();
+        $selection = \Weline\Server\Service\Runtime\HttpProtocolSelection::fromConfig(
+            [
+                'edge' => ['adapter' => $edgeAdapter],
+                'http' => \is_array($httpConfig) ? $httpConfig : [],
+            ],
+            $context->sslEnabled,
+        );
         $http3Config = $context->getConfig('wls.http3', []);
         $http3Config = \is_array($http3Config) ? $http3Config : [];
         $http3Enabled = $includeHttp3Activation && (bool)($http3Config['enabled'] ?? false);
@@ -102,8 +105,12 @@ final class WorkerRuntimeArgumentBuilder
 
     public static function publicOrigin(ServiceContext $context): string
     {
-        return ManagedNginxPublicOrigin::normalize(
-            (string)$context->getConfig('wls.public_origin', ''),
-        );
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+            ->resolve($context->envConfig)
+            ->name();
+        $origin = (string)$context->getConfig('wls.public_origin', '');
+        return $edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+            ? \Weline\Server\Service\Edge\PureWlsPublicOrigin::normalize($origin)
+            : ManagedNginxPublicOrigin::normalize($origin);
     }
 }

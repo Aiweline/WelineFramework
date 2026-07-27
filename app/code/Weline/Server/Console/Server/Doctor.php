@@ -77,6 +77,34 @@ class Doctor extends CommandAbstract
         $runtimeVerified = static fn(string $field): bool =>
             $runtimeEvidenceUsable && (bool)($managed[$field] ?? false);
 
+        if ((string)($edge['adapter'] ?? '') === 'wls') {
+            $session = \is_array($policy['tls_session_reuse'] ?? null)
+                ? $policy['tls_session_reuse']
+                : [];
+            $this->printer->note(__('公网协议所有者：纯 WLS；无需 Nginx 或其他边缘进程。'));
+            $this->printer->note(__('纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}', [
+                (string)($public['target_preferred'] ?? 'http/2'),
+                (string)($public['effective_preferred'] ?? __('未验证')),
+                \implode(' -> ', (array)($public['fallback'] ?? [])) ?: __('无'),
+            ]));
+            $this->printer->note(__('纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}', [
+                (bool)($policy['tls13_runtime_verified'] ?? false) ? __('已验证') : __('未验证'),
+                (bool)($policy['alpn_http2'] ?? false) ? __('已验证') : __('未验证'),
+            ]));
+            $this->printer->note(__('纯 WLS HTTP/3：不可用；需要项目托管 Nginx。'));
+            $this->printer->note(__('纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}', [
+                (bool)($session['enabled'] ?? false) ? __('是') : __('否'),
+                (bool)($session['verified'] ?? false) ? __('已验证') : __('pending'),
+                (bool)($session['cross_worker_session_resumption_verified'] ?? false)
+                    ? __('已验证')
+                    : __('pending'),
+            ]));
+            if ((string)($session['reason'] ?? '') !== '') {
+                $this->printer->note(__('TLS Session 说明：%{1}', [(string)$session['reason']]));
+            }
+            return;
+        }
+
         $this->printer->note(__('公网协议所有者：Nginx；WLS 仅提供内部 HTTP/1.1 回源。'));
         if ($runningEndpoint && (!$policyBound || !$ownerBound)) {
             $this->printer->warning(__('运行端点协议或 Managed Nginx owner 尚未完整绑定；下面不会把配置值提升为运行验证。'));
@@ -319,37 +347,40 @@ class Doctor extends CommandAbstract
             : 'runtime_config_preview';
         try {
             if ($runningEndpoint) {
-                if ($endpointEdgeAdapter !== 'nginx') {
-                    throw new \RuntimeException('running endpoint edge_adapter must be nginx');
+                if (!\in_array($endpointEdgeAdapter, ['nginx', 'wls'], true)) {
+                    throw new \RuntimeException('running endpoint edge_adapter must be nginx or wls');
                 }
                 $selectionData = $endpoint['http_protocol_selection'] ?? null;
                 if (!\is_array($selectionData) || $selectionData === []) {
                     throw new \RuntimeException('running endpoint http_protocol_selection is missing');
                 }
                 $httpSelection = HttpProtocolSelection::fromArray($selectionData);
-                $httpSelection->assertCompatibleEdgeAdapter('nginx');
+                $httpSelection->assertCompatibleEdgeAdapter($endpointEdgeAdapter);
                 $endpointPolicyBound = true;
                 $endpointPolicySource = 'running_endpoint';
             } else {
                 $endpointEdgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
                     ->resolveFromWlsSection($config)
                     ->name();
-                if ($endpointEdgeAdapter !== 'nginx') {
-                    throw new \RuntimeException('configured edge_adapter must be nginx');
-                }
-                // Start canonicalizes the private backend after resolving the
-                // public certificate: Nginx owns TLS/protocol negotiation and
-                // WLS is always plaintext HTTP/1.1. Preview that same contract
-                // instead of treating legacy public TLS/http config as Worker
-                // transport evidence.
-                $httpSelection = HttpProtocolSelection::fromConfig(['http' => [
-                    'protocols' => [HttpProtocolSelection::HTTP_1],
-                    'preferred' => HttpProtocolSelection::HTTP_1,
-                    'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
-                    'tls_session_resumption' => false,
-                    'alt_svc' => false,
-                ]], false);
-                $httpSelection->assertCompatibleEdgeAdapter('nginx');
+                $httpSelection = HttpProtocolSelection::fromConfig([
+                    'edge' => ['adapter' => $endpointEdgeAdapter],
+                    'http' => $endpointEdgeAdapter === 'wls'
+                        ? [
+                            'protocols' => [HttpProtocolSelection::HTTP_2, HttpProtocolSelection::HTTP_1],
+                            'preferred' => HttpProtocolSelection::HTTP_2,
+                            'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
+                            'tls_session_resumption' => true,
+                            'alt_svc' => false,
+                        ]
+                        : [
+                            'protocols' => [HttpProtocolSelection::HTTP_1],
+                            'preferred' => HttpProtocolSelection::HTTP_1,
+                            'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
+                            'tls_session_resumption' => false,
+                            'alt_svc' => false,
+                        ],
+                ], $endpointEdgeAdapter === 'wls');
+                $httpSelection->assertCompatibleEdgeAdapter($endpointEdgeAdapter);
             }
         } catch (\Throwable $exception) {
             $httpSelectionError = $exception->getMessage();
@@ -362,7 +393,7 @@ class Doctor extends CommandAbstract
             }
         }
         $diagnostics['protocols'] = (new HttpProtocolCapabilityProbe())->snapshot(
-            'nginx',
+            $endpointEdgeAdapter !== '' ? $endpointEdgeAdapter : 'nginx',
             $httpSelection,
             $endpointPolicyBound,
             $endpointPolicySource,
@@ -389,30 +420,33 @@ class Doctor extends CommandAbstract
             $managed = \is_array($edgeSnapshot['managed_nginx'] ?? null)
                 ? $edgeSnapshot['managed_nginx']
                 : [];
-            $ownerBound = $runningEndpoint
-                && (bool)($managed['managed'] ?? false)
-                && (bool)($managed['installed'] ?? false)
-                && (bool)($managed['running'] ?? false)
-                && (bool)($managed['install_identity_matches'] ?? false)
-                && (bool)($managed['runtime_owner_active'] ?? false)
-                && (bool)($managed['owner_ports_bound'] ?? false)
-                && (bool)($managed['binary_capabilities_ok'] ?? false)
-                && (int)($managed['pid'] ?? 0) > 0
-                && \trim((string)($managed['owner_config_generation'] ?? '')) !== ''
-                && \trim((string)($managed['owner_upstream_host'] ?? '')) !== ''
-                && (int)($managed['owner_listen_http'] ?? 0) > 0
-                && (int)($managed['owner_listen_https'] ?? 0) > 0
-                && \hash_equals($instanceName, (string)($managed['owner_instance'] ?? ''))
-                && (int)($managed['owner_upstream_port'] ?? 0)
-                    === (int)($endpoint['port'] ?? $endpoint['main_port'] ?? 0)
-                && \preg_match(
-                    '/\A[a-f0-9]{64}\z/D',
-                    \strtolower(\trim((string)($managed['owner_config_sha256'] ?? ''))),
-                ) === 1
-                && \preg_match(
-                    '/\A[a-f0-9]{64}\z/D',
-                    \strtolower(\trim((string)($managed['owner_upstream_endpoint_sha256'] ?? ''))),
-                ) === 1;
+            $pureWls = $endpointEdgeAdapter === 'wls';
+            $ownerBound = $pureWls
+                ? ($runningEndpoint && $endpointPolicyBound)
+                : ($runningEndpoint
+                    && (bool)($managed['managed'] ?? false)
+                    && (bool)($managed['installed'] ?? false)
+                    && (bool)($managed['running'] ?? false)
+                    && (bool)($managed['install_identity_matches'] ?? false)
+                    && (bool)($managed['runtime_owner_active'] ?? false)
+                    && (bool)($managed['owner_ports_bound'] ?? false)
+                    && (bool)($managed['binary_capabilities_ok'] ?? false)
+                    && (int)($managed['pid'] ?? 0) > 0
+                    && \trim((string)($managed['owner_config_generation'] ?? '')) !== ''
+                    && \trim((string)($managed['owner_upstream_host'] ?? '')) !== ''
+                    && (int)($managed['owner_listen_http'] ?? 0) > 0
+                    && (int)($managed['owner_listen_https'] ?? 0) > 0
+                    && \hash_equals($instanceName, (string)($managed['owner_instance'] ?? ''))
+                    && (int)($managed['owner_upstream_port'] ?? 0)
+                        === (int)($endpoint['port'] ?? $endpoint['main_port'] ?? 0)
+                    && \preg_match(
+                        '/\A[a-f0-9]{64}\z/D',
+                        \strtolower(\trim((string)($managed['owner_config_sha256'] ?? ''))),
+                    ) === 1
+                    && \preg_match(
+                        '/\A[a-f0-9]{64}\z/D',
+                        \strtolower(\trim((string)($managed['owner_upstream_endpoint_sha256'] ?? ''))),
+                    ) === 1);
             if (\is_array($diagnostics['protocols']['endpoint_policy_binding'] ?? null)) {
                 $diagnostics['protocols']['endpoint_policy_binding']['public_owner_bound'] = $ownerBound;
             }
@@ -426,22 +460,26 @@ class Doctor extends CommandAbstract
                 $publicSurface['effective_preferred'] = null;
                 $publicSurface['fallback'] = [];
                 $publicSurface['verification_required'] = $runningEndpoint
-                    ? 'Managed Nginx owner/upstream identity bound to this running endpoint'
-                    : 'A running WLS endpoint bound to the active Managed Nginx owner';
+                    ? ($pureWls
+                        ? 'running pure WLS endpoint protocol policy'
+                        : 'Managed Nginx owner/upstream identity bound to this running endpoint')
+                    : ($pureWls
+                        ? 'a running pure WLS endpoint'
+                        : 'A running WLS endpoint bound to the active Managed Nginx owner');
                 $publicSurface['tls13_runtime_verified'] = false;
                 $publicSurface['tls_session_resumption_runtime_verified'] = false;
                 $diagnostics['protocols']['default_policy']['surfaces']['public_edge'] = $publicSurface;
             }
             $http['dependency'] = [
                 'status' => $runningEndpoint ? ($ownerBound ? 'ready' : 'unbound') : 'preview',
-                'adapter' => 'nginx',
-                'managed' => (bool)($managed['managed'] ?? false),
-                'running' => (bool)($managed['running'] ?? false),
+                'adapter' => $pureWls ? 'wls' : 'nginx',
+                'managed' => $pureWls ? false : (bool)($managed['managed'] ?? false),
+                'running' => $pureWls ? $runningEndpoint : (bool)($managed['running'] ?? false),
                 'owner_bound' => $ownerBound,
-                'binary' => (string)($managed['binary'] ?? ''),
-                'version' => (string)($managed['binary_version'] ?? ''),
+                'binary' => $pureWls ? PHP_BINARY : (string)($managed['binary'] ?? ''),
+                'version' => $pureWls ? PHP_VERSION : (string)($managed['binary_version'] ?? ''),
             ];
-            if ($runningEndpoint && !$ownerBound) {
+            if ($runningEndpoint && !$ownerBound && !$pureWls) {
                 $diagnostics['status'] = 'unsafe';
                 $diagnostics['warnings'] = \array_values(\array_unique(\array_merge(
                     (array)($diagnostics['warnings'] ?? []),
