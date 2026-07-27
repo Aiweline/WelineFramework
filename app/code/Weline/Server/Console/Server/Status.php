@@ -264,8 +264,11 @@ class Status extends CommandAbstract
         $this->printer->note(__('║                    实例详细信息                                ║'));
         $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
         $this->printer->note(\sprintf('║  ' . __('实例名称：') . '%-50s║', $info->name));
-        $publicEndpoint = $this->resolveManagedNginxPublicEndpoint($info);
-        $addressLabel = $publicEndpoint !== null ? __('Nginx 公网入口') . '：' : __('监听地址：');
+        $publicEndpoint = $this->resolveGatewayPublicEndpoint($name, $info)
+            ?? $this->resolveManagedNginxPublicEndpoint($info);
+        $addressLabel = $this->resolveGatewayPublicEndpoint($name, $info) !== null
+            ? __('WLS 2.0 网关入口') . '：'
+            : ($publicEndpoint !== null ? __('Nginx 公网入口') . '：' : __('监听地址：'));
         $this->printer->note(\sprintf('║  ' . $addressLabel . '%-50s║', $publicEndpoint ?? $info->getListenAddress()));
         $this->printer->note(\sprintf('║  ' . __('端口范围：') . '%-50s║', $info->getPortRangeDescription()));
         $this->printer->note(\sprintf('║  ' . __('Worker 数：') . '%-49s║', (string)$info->workerCount));
@@ -389,6 +392,16 @@ class Status extends CommandAbstract
             . 'schema=v' . RuntimeSelection::ENDPOINT_SCHEMA_VERSION
             . ', metadata=' . (string)($runtime['metadata_source'] ?? '-')
             . ', container=' . ($containerDigest !== '' ? $containerDigest : '-'));
+        $gateway = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
+        if ((string)($gateway['mode'] ?? '') === 'gateway') {
+            $this->printer->note($prefix . __('共享网关：')
+                . (string)($gateway['protocol'] ?? '-')
+                . ', epoch=' . (string)($gateway['epoch'] ?? '-')
+                . ', public=' . (int)($gateway['public_http'] ?? 0)
+                . '/' . (int)($gateway['public_https'] ?? 0));
+        } elseif ((string)($gateway['degraded_reason'] ?? '') !== '') {
+            $this->printer->warning($prefix . __('边缘降级：') . (string)$gateway['degraded_reason']);
+        }
 
         $this->printer->note($prefix . __('选择原因：')
             . '[' . \implode(', ', $selection->reasonCodes) . '] '
@@ -458,7 +471,8 @@ class Status extends CommandAbstract
 
     protected function buildTestCurlTarget(ServerInstanceInfo $info): string
     {
-        $publicEndpoint = $this->resolveManagedNginxPublicEndpoint($info);
+        $publicEndpoint = $this->resolveGatewayPublicEndpoint($info->name, $info)
+            ?? $this->resolveManagedNginxPublicEndpoint($info);
         if ($publicEndpoint !== null) {
             return '-k ' . $publicEndpoint;
         }
@@ -475,6 +489,30 @@ class Status extends CommandAbstract
 
         $target = $scheme . '://' . $host . ':' . $info->port;
         return $info->sslEnabled ? '-k ' . $target : $target;
+    }
+
+    private function resolveGatewayPublicEndpoint(string $instanceName, ServerInstanceInfo $info): ?string
+    {
+        $raw = $this->getInstanceManager()->getRawInstanceData($instanceName);
+        $gateway = \is_array($raw) && \is_array($raw['gateway'] ?? null)
+            ? $raw['gateway']
+            : [];
+        if ((string)($gateway['mode'] ?? '') !== 'gateway'
+            || (string)($gateway['protocol'] ?? '') !== \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL
+        ) {
+            return null;
+        }
+        $port = (int)($gateway['public_https'] ?? 0);
+        if ($port < 1 || $port > 65535) {
+            return null;
+        }
+        $host = \strtolower(\trim((string)($raw['public_host'] ?? $info->host)));
+        if ($host === '' || $host === '0.0.0.0' || $host === '*' || $host === '::') {
+            $host = '127.0.0.1';
+        } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+            $host = '[' . $host . ']';
+        }
+        return 'https://' . $host . ($port === 443 ? '' : ':' . $port);
     }
 
     private function resolveManagedNginxPublicEndpoint(ServerInstanceInfo $info): ?string
