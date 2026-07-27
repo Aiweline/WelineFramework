@@ -182,6 +182,79 @@ function parseGotoOptions(options = {}) {
   };
 }
 
+/**
+ * 后台壳层就绪：等待/强制关闭 #loading 遮罩，避免 click 被 loader/topbar 拦截。
+ * Flow 用例在 gotoBackend 之后、业务交互之前应调用。
+ */
+async function waitForBackendShellReady(page, options = {}) {
+  // 默认仅等 8s：后台 #loading 正常 <2s 消失；若卡住则立即强制隐藏，
+  // 绝不能长时间阻塞（旧默认 90s 会吃满单测 120s 预算 → Target page closed 假失败）。
+  const timeout = Number(options.timeout || 8000);
+  const loading = page.locator('section#loading.loader-section, section#loading');
+  if ((await loading.count().catch(() => 0)) > 0) {
+    await loading
+      .first()
+      .waitFor({ state: 'hidden', timeout })
+      .catch(() => {});
+  }
+  // 无论是否隐藏，最终强制关闭遮罩，保证后续 click 不被拦截。
+  await page
+    .evaluate(() => {
+      document.querySelectorAll('section#loading').forEach((el) => {
+        el.style.display = 'none';
+        el.setAttribute('hidden', 'hidden');
+        el.classList.add('d-none');
+        el.style.pointerEvents = 'none';
+      });
+    })
+    .catch(() => {});
+}
+
+/** 提交表单（绕过遮罩拦截的 pointer 事件） */
+async function submitForm(page, formLocator) {
+  const form = typeof formLocator === 'string' ? page.locator(formLocator).first() : formLocator.first();
+  await form.evaluate((el) => {
+    if (typeof el.requestSubmit === 'function') {
+      el.requestSubmit();
+    } else {
+      el.submit();
+    }
+  });
+}
+
+/**
+ * 提交表单并断言「用户输入被真实带上提交请求」。
+ *
+ * 后台列表表单多为 GET 提交到绝对 action URL，经 e2e proxy 提交后可能落到
+ * 脱离 proxy 前缀的 404 页；因此提交后的页面 DOM 不可靠。真正的决定性证据是
+ * 捕获到一条 URL 携带用户输入参数的请求，证明交互真实生效（去掉 fill/submit 即失败）。
+ *
+ * @returns {Promise<import('@playwright/test').Request>}
+ */
+async function submitAndExpectParam(page, formLocator, paramSubstring, options = {}) {
+  const form = typeof formLocator === 'string' ? page.locator(formLocator).first() : formLocator.first();
+  const timeout = Number(options.timeout || 30000);
+  const [req] = await Promise.all([
+    page.waitForRequest((r) => {
+      let url = r.url();
+      try {
+        url = decodeURIComponent(url);
+      } catch (_e) {
+        /* keep raw */
+      }
+      return url.includes(paramSubstring);
+    }, { timeout }),
+    form.evaluate((el) => {
+      if (typeof el.requestSubmit === 'function') {
+        el.requestSubmit();
+      } else {
+        el.submit();
+      }
+    }),
+  ]);
+  return req;
+}
+
 async function gotoUrl(page, url, options = {}) {
   const {
     gotoOptions,
@@ -525,12 +598,20 @@ async function loginAsAdmin(page, options = {}) {
   await page.locator('input[name="password"], input[type="password"]').first().fill(password);
   const backendPrefixPath = `/${runtime.routes.backend}/`;
 
+  // 登录成功后可能落到 /admin/*，也可能落到模块后台入口
+  // （如 /weline_dashboard/backend/dashboard），不能再硬编码 pathname 必须含 /admin。
   await Promise.all([
     page.waitForURL(url => {
       const pathname = url.pathname || '';
-      return pathname.startsWith(backendPrefixPath)
-        && pathname.includes('/admin')
-        && !pathname.includes('/admin/login');
+      if (!pathname.startsWith(backendPrefixPath)) {
+        return false;
+      }
+      if (pathname.includes('/admin/login')) {
+        return false;
+      }
+      return pathname.includes('/admin')
+        || pathname.includes('/backend/')
+        || /\/weline_[^/]+\//.test(pathname);
     }, {
       timeout,
       waitUntil: 'commit',
@@ -569,5 +650,8 @@ module.exports = {
   gotoBackend,
   gotoFrontend,
   gotoThemePreview,
+  waitForBackendShellReady,
+  submitForm,
+  submitAndExpectParam,
   loginAsAdmin,
 };

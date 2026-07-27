@@ -47,7 +47,7 @@ class Record extends \Weline\Framework\App\Controller\BackendPageController
      */
     public function index(): string
     {
-        $page = (int)($this->request->getParam('page') ?? 1);
+        $page = max(1, (int)($this->request->getParam('page') ?? 1));
         $pageSize = 20;
         
         // 获取筛选条件
@@ -87,15 +87,17 @@ class Record extends \Weline\Framework\App\Controller\BackendPageController
         // 获取总数
         $total = $query->count();
         
-        // 获取分页数据
-        $records = $query->clear()
+        // 获取分页数据（fetch 后用 getItems 取模型对象，避免模板对数组行调用 getId/getData）
+        $query->clear()
             ->order(TranslationRecord::schema_fields_CREATED_AT, 'DESC')
             ->limit($pageSize, ($page - 1) * $pageSize)
             ->select()
             ->fetch();
+        $records = $this->recordModel->getItems();
         
         // 获取所有渠道（用于筛选）
-        $providers = $this->providerModel->clear()->select()->fetch();
+        $this->providerModel->clear()->select()->fetch();
+        $providers = $this->providerModel->getItems();
         
         // 获取统计信息
         $stats = $this->getStatistics();
@@ -241,7 +243,7 @@ class Record extends \Weline\Framework\App\Controller\BackendPageController
         // 平均响应时间
         $avgResponseTime = $this->recordModel->clear()
             ->where(TranslationRecord::schema_fields_STATUS, TranslationRecord::STATUS_SUCCESS)
-            ->avg(TranslationRecord::schema_fields_RESPONSE_TIME) ?? 0;
+            ->avg(TranslationRecord::schema_fields_RESPONSE_TIME) ?: 0;
         
         // 今日统计
         $todayStart = date('Y-m-d 00:00:00');
@@ -281,7 +283,8 @@ class Record extends \Weline\Framework\App\Controller\BackendPageController
         
         // 按渠道统计
         $providerStats = [];
-        $providers = $this->providerModel->clear()->select()->fetch();
+        $this->providerModel->clear()->select()->fetch();
+        $providers = $this->providerModel->getItems();
         foreach ($providers as $provider) {
             $providerId = $provider->getId();
             $providerStats[$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)] = [

@@ -26,7 +26,7 @@ class DatabaseBackupService
     {
         $this->connectionFactory = $connectionFactory;
         $this->connection = $connectionFactory->getConnection();
-        $this->dbType = strtolower($this->connection->getConnector()->getDriverName());
+        $this->dbType = strtolower((string)$this->connection->getConnector()->getConfigProvider()->getDbType());
     }
 
     /**
