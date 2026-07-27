@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge;
 
 /**
- * Nginx public-edge contract. Legacy WLS-native sources remain inert for
- * compatibility archaeology and cannot be selected by runtime orchestration.
+ * Public-edge contract for managed Nginx and explicit pure-WLS fallback.
  */
 interface EdgeAdapterInterface
 {
     public const NAME_NGINX = 'nginx';
 
-    public const NAME_WLS = 'wls'; // Retired compatibility identifier; never selectable.
+    public const NAME_WLS = 'wls';
 
     public function name(): string;
 

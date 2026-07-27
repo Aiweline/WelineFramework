@@ -67,19 +67,22 @@ class WorkerProvider extends AbstractServiceProvider
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
 
         $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve($context->envConfig);
-        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
-            throw new \RuntimeException('Worker refused a non-Nginx public edge adapter.');
-        }
-        $script = $scriptDir . DS . 'worker.php';
-
+        $pureWls = $edgeAdapter->name()
+            === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+        $script = $pureWls && $context->sslEnabled
+            ? $this->resolveSslWorkerScript($scriptDir, $context)
+            : $scriptDir . DS . 'worker.php';
 
         $port = $this->getPort($instanceId, $context);
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
 
-        // Nginx exclusively owns the public listener; WLS is a loopback H1 backend.
+        // Nginx owns a loopback H1 backend. Pure WLS Direct owns the selected
+        // public listener; pure WLS Dispatcher keeps Workers on loopback.
         $direct = $context->isDirect();
         $listenerMode = $context->runtimeSelection->listenerMode;
-        $host = '127.0.0.1';
+        $host = $pureWls && $direct
+            ? ($context->host ?: '127.0.0.1')
+            : '127.0.0.1';
 
         $arguments = [
             $host,
@@ -88,6 +91,14 @@ class WorkerProvider extends AbstractServiceProvider
             $context->instanceName,
         ];
 
+        if ($pureWls && $context->sslEnabled) {
+            if ($context->sslCert === '' || $context->sslKey === '') {
+                throw new \RuntimeException('Pure WLS HTTPS requires certificate and private-key paths.');
+            }
+            $arguments[] = '--ssl-cert=' . $context->sslCert;
+            $arguments[] = '--ssl-key=' . $context->sslKey;
+            $arguments = \array_merge($arguments, WorkerRuntimeArgumentBuilder::protocolPolicy($context));
+        }
 
         $arguments[] = '--control-port=' . $context->controlPort;
         $arguments[] = '--master-pid=' . $context->masterPid;
@@ -112,6 +123,11 @@ class WorkerProvider extends AbstractServiceProvider
 
         $arguments[] = '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver;
 
+        if ($pureWls && $context->sslEnabled) {
+            // Accept TCP first so one long-lived Stream SSL context can select
+            // SNI material and ALPN h2/http/1.1 per connection.
+            $arguments[] = '--defer-ssl';
+        }
 
         return new ServiceCommand(
             script: $script,
@@ -167,5 +183,14 @@ class WorkerProvider extends AbstractServiceProvider
         return false;
     }
 
+    private function resolveSslWorkerScript(string $scriptDir, ServiceContext $context): string
+    {
+        return match ($context->runtimeSelection->sslEngine) {
+            'stream' => $scriptDir . DS . 'worker_ssl.php',
+            default => throw new \InvalidArgumentException(
+                'Pure WLS HTTPS requires wls.ssl.engine=stream.'
+            ),
+        };
+    }
 
 }

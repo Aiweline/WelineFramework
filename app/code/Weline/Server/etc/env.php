@@ -5,11 +5,13 @@ return [
     'router' => 'server',
     'backend_router' => 'server',
     'wls' => [
-        // WLS 只作为 Nginx 私网回源，禁止直接暴露公网监听。
+        // 默认作为 Nginx 私网回源；显式 server:start --no-nginx 时，
+        // 由本次启动生成纯 WLS 公网监听与 TLS/HTTP 策略，不修改此默认配置。
         'bind_host' => '127.0.0.1',
         'http' => [
-            // Public TLS/HTTP negotiation belongs exclusively to Nginx.
-            // WLS is an authenticated private HTTP/1.1 backend.
+            // Nginx 模式固定为私网 HTTP/1.1 回源。
+            // --no-nginx 会在运行时覆盖为 TLS 1.3 + HTTP/2/H1；
+            // HTTP/3 只由 Nginx 提供。
             'protocols' => ['h1'],
             'preferred' => 'h1',
             'protocol_edge' => 'disabled',
@@ -35,8 +37,9 @@ return [
             'require_capability' => false,
             'ack_timeout_sec' => 5.0,
         ],
-        // Nginx 是唯一公网边缘。普通 start 绝不下载或编译；缺少项目隔离
+        // 默认公网边缘为项目托管 Nginx。普通 start 绝不下载或编译；缺少项目隔离
         // 二进制时会失败并提示显式执行 server:nginx:install。
+        // 无法使用 Nginx 的环境可在当次启动显式传入 --no-nginx，纯 WLS 默认 HTTPS。
         'edge' => [
             'adapter' => 'nginx',
             'nginx' => [
