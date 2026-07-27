@@ -11,10 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Controller\Backend;
 
+use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
+use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Payment\Model\PaymentTransaction;
+use Weline\Payment\Service\PaymentObjectScopeService;
+use Weline\Payment\Service\PaymentTransactionAccessService;
 
 #[Acl('Weline_Payment::payment_transaction', '支付交易管理', 'mdi-cash-multiple', '支付交易记录管理', 'Weline_Backend::payment_group')]
 class Transaction extends BackendController
@@ -49,14 +54,35 @@ class Transaction extends BackendController
             $query->where(PaymentTransaction::schema_fields_METHOD_CODE, $methodCode);
         }
         
-        // Clone query for count to avoid breaking the main query chain
-        $countQuery = clone $query;
-        $total = $countQuery->count();
+        $query->order(PaymentTransaction::schema_fields_CREATED_AT, 'DESC')->fetch();
+        $candidates = $transaction->getItems();
+        $transactions = [];
+        $replayGrantVersions = [];
+        $scopeService = ObjectManager::getInstance(PaymentObjectScopeService::class);
+        $guard = ObjectManager::getInstance(BackendObjectAuthorizationGuardInterface::class);
+        foreach ($candidates as $candidate) {
+            if (!$candidate instanceof PaymentTransaction) {
+                continue;
+            }
+            try {
+                $scope = $scopeService->fromPersistedScope(
+                    (string)$candidate->getData(PaymentTransaction::schema_fields_SCOPE),
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!$guard->isAllowed(ObjectAction::LIST, $scope)) {
+                continue;
+            }
+            $transactions[] = $candidate;
+            $replayGrant = $guard->check(ObjectAction::REPLAY, $scope);
+            if ($replayGrant->allowed) {
+                $replayGrantVersions[(int)$candidate->getId()] = $replayGrant->matchedGrantVersion;
+            }
+        }
+        $total = \count($transactions);
         $totalPages = (int)ceil($total / $limit);
-
-        $transactions = $query->order(PaymentTransaction::schema_fields_CREATED_AT, 'DESC')
-            ->limit($limit, ($page - 1) * $limit)
-            ->fetch();
+        $transactions = \array_slice($transactions, ($page - 1) * $limit, $limit);
         
         $this->assign('transactions', $transactions);
         $this->assign('total', $total);
@@ -66,6 +92,7 @@ class Transaction extends BackendController
         $this->assign('keyword', $keyword);
         $this->assign('status', $status);
         $this->assign('method_code', $methodCode);
+        $this->assign('replay_grant_versions', $replayGrantVersions);
         
         return $this->fetch();
     }
@@ -83,14 +110,22 @@ class Transaction extends BackendController
             return $this->redirect('*/backend/transaction/index');
         }
         
-        /** @var PaymentTransaction $transaction */
-        $transaction = ObjectManager::getInstance(PaymentTransaction::class);
-        $transaction->load($id);
-        
-        if (!$transaction->getId()) {
-            $this->getMessageManager()->addError(__('交易记录不存在'));
-            return $this->redirect('*/backend/transaction/index');
+        $access = ObjectManager::getInstance(PaymentTransactionAccessService::class);
+        $record = $access->find((int)$id);
+        try {
+            if ($record === null) {
+                $this->objectAuthorizationGuard()->denyForQuery(
+                    ObjectAction::VIEW,
+                    \Weline\Framework\Runtime\ScopeIdentity::global(),
+                );
+            }
+            $this->objectAuthorizationGuard()->requireForQuery(ObjectAction::VIEW, $record['scope']);
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
         }
+        $transaction = $record['transaction'];
         
         $this->assign('transaction', $transaction);
         
@@ -109,23 +144,47 @@ class Transaction extends BackendController
             return $this->error(__('缺少交易ID'));
         }
         
-        /** @var PaymentTransaction $transaction */
-        $transaction = ObjectManager::getInstance(PaymentTransaction::class);
-        $transaction->load($id);
-        
-        if (!$transaction->getId()) {
-            return $this->error(__('交易记录不存在'));
-        }
-        
         try {
-            /** @var \Weline\Payment\Service\PaymentService $paymentService */
-            $paymentService = ObjectManager::getInstance(\Weline\Payment\Service\PaymentService::class);
-            $paymentService->queryPaymentStatus($transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO));
+            $access = ObjectManager::getInstance(PaymentTransactionAccessService::class);
+            $record = $access->find((int)$id);
+            if ($record === null) {
+                $this->objectAuthorizationGuard()->denyForQuery(
+                    ObjectAction::REPLAY,
+                    \Weline\Framework\Runtime\ScopeIdentity::global(),
+                );
+            }
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::REPLAY,
+                $record['scope'],
+                $this->expectedGrantVersion(),
+            );
+            $access->queryStatus($record['transaction']);
             
             return $this->success(__('支付状态查询成功'));
-        } catch (\Exception $e) {
-            return $this->error(__('查询失败: %{1}', [$e->getMessage()]));
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $this->error($exception->getMessage());
+        } catch (\Throwable) {
+            return $this->error(__('支付状态查询失败'));
         }
     }
-}
 
+    private function objectAuthorizationGuard(): BackendObjectAuthorizationGuardInterface
+    {
+        return ObjectManager::getInstance(BackendObjectAuthorizationGuardInterface::class);
+    }
+
+    private function expectedGrantVersion(): int
+    {
+        $value = $this->request->getParam('expected_grant_version', 0);
+        if (\is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
+    }
+}

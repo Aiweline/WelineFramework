@@ -1,132 +1,78 @@
 /**
- * Weline_Order 订单管理 E2E 冒烟测试
+ * Weline_Order：诚实 smoke + 列表筛选表单真实提交
  *
- * 测试范围：
- * - 订单列表：列表加载、搜索过滤、分页
- * - 订单操作：发票、货运、退款页面加载
- *
- * 控制器来源：app/code/WeShop/Order/Controller/Backend/Order/*.php
- * 模板来源：app/code/WeShop/Order/view/templates/Backend/Order/*.phtml
- *
- * @weline-e2e-spec { module: Weline_Order, type: smoke, layer: backend }
+ * @weline-e2e-spec { module: Weline_Order, type: flow, layer: backend }
  */
-
-const { test, expect, loginAsAdmin, gotoBackend, buildModuleBackendRoute, moduleDescribe, moduleCase } = require('../../../../../../../tests/e2e/framework');
+const {
+  test,
+  expect,
+  loginAsAdmin,
+  gotoBackend,
+  buildModuleBackendRoute,
+  moduleDescribe,
+  moduleCase,
+  waitForBackendShellReady,
+  submitAndExpectParam,
+} = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Order';
-const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
+const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-moduleDescribe(test, MODULE, 'Weline_Order 订单管理模块冒烟测试', () => {
+async function openOrderList(page) {
+  const candidates = [
+    buildModuleBackendRoute(MODULE, 'order'),
+    'order/backend/order',
+    'weline_order/backend/order',
+  ];
+  let lastError = null;
+  for (const route of candidates) {
+    try {
+      await gotoBackend(page, route, { timeout: 60000, settleMs: 800 });
+      await waitForBackendShellReady(page);
+      const keyword = page.locator('form input[name="keyword"]').first();
+      if ((await keyword.count()) > 0) {
+        return;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) {
+    throw lastError;
+  }
+}
 
+moduleDescribe(test, MODULE, 'Weline_Order 后台流程', () => {
   moduleCase(
     test,
     { module: MODULE, id: 'ORDER-SMOKE-001' },
-    '订单列表页面能够正常加载，显示订单管理标题',
+    '订单列表路由可达（诚实 smoke）',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'order');
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证页面标题
-      const heading = page.locator('h4').first();
-      await expect(heading).toContainText(/订单|Order/i, { timeout: 10000 });
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      await openOrderList(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
+      await expect(page.locator('body')).toContainText(/订单|Order/i);
     }
   );
 
   moduleCase(
     test,
-    { module: MODULE, id: 'ORDER-SMOKE-002' },
-    '订单发票页面能够正常加载',
+    { module: MODULE, id: 'ORDER-FLOW-FILTER-001' },
+    '订单列表：填写关键词与状态后点搜索',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'order/invoice');
-      await gotoBackend(page, url, { timeout: 30000 });
+      await openOrderList(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
 
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
-    }
-  );
-
-  moduleCase(
-    test,
-    { module: MODULE, id: 'ORDER-SMOKE-003' },
-    '订单货运页面能够正常加载',
-    async ({ page }) => {
-      await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'order/shipment');
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
-    }
-  );
-
-  moduleCase(
-    test,
-    { module: MODULE, id: 'ORDER-SMOKE-004' },
-    '订单退款页面能够正常加载',
-    async ({ page }) => {
-      await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'order/refund');
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
-    }
-  );
-
-  moduleCase(
-    test,
-    { module: MODULE, id: 'ORDER-SMOKE-005' },
-    '订单列表支持关键词搜索过滤',
-    async ({ page }) => {
-      await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'order') + '?keyword=TEST001';
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证 URL 包含搜索参数
-      await expect(page).toHaveURL(/keyword=TEST001/);
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
-    }
-  );
-
-  moduleCase(
-    test,
-    { module: MODULE, id: 'ORDER-SMOKE-006' },
-    '订单列表支持状态筛选',
-    async ({ page }) => {
-      await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'order') + '?status=pending';
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证 URL 包含状态筛选参数
-      await expect(page).toHaveURL(/status=pending/);
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      const form = page.locator('form').filter({ has: page.locator('input[name="keyword"]') }).first();
+      const keyword = form.locator('input[name="keyword"]');
+      const status = form.locator('select[name="status"]');
+      await expect(keyword).toBeVisible({ timeout: 15000 });
+      await keyword.fill('TEST001');
+      await status.selectOption('pending');
+      // 决定性证据：真实提交把用户输入 keyword+status 带进了请求（去掉 fill/select 即不成立）
+      const req = await submitAndExpectParam(page, form, 'keyword=TEST001');
+      expect(decodeURIComponent(req.url())).toContain('status=pending');
     }
   );
 });

@@ -30,7 +30,7 @@
                                                 </label>
                                                 <input type='number' class='form-control' id='website_id' name="website_id"
                                                        placeholder='@lang{输入网站ID，0表示默认}' 
-                                                       value='@if{url.website_id=>url.website_id}@else{current_website_id}@endif'
+                                                       value='<?= htmlspecialchars((string)($url['website_id'] ?? $current_website_id ?? 0)) ?>'
                                                        min="0" required>
                                                 <div class='valid-tooltip'>
                                                     <lang>网站ID正确</lang>
