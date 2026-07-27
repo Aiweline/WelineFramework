@@ -32,6 +32,37 @@ final class NginxEdgeAdapter implements EdgeAdapterInterface
 
     public function onCertificateMaterialUpdated(string $domain, array $paths = []): void
     {
+        $gateway = new \Weline\Server\Service\Edge\Gateway\GatewayHostManager();
+        $gatewayStatus = $gateway->status();
+        if (($gatewayStatus['ok'] ?? false)
+            && ($gatewayStatus['ready'] ?? false)
+            && ($gatewayStatus['protocol'] ?? '')
+                === \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL
+        ) {
+            $instanceDir = \Weline\Framework\App\Env::VAR_DIR . 'server'
+                . DIRECTORY_SEPARATOR . 'instances';
+            foreach (\glob($instanceDir . DIRECTORY_SEPARATOR . '*.json') ?: [] as $endpointFile) {
+                $raw = @\file_get_contents($endpointFile);
+                $endpoint = \is_string($raw) ? \json_decode($raw, true) : null;
+                if (!\is_array($endpoint)
+                    || (string)($endpoint['gateway']['mode'] ?? '') !== 'gateway'
+                    || (int)($endpoint['master_pid'] ?? 0) < 1
+                ) {
+                    continue;
+                }
+                $instanceName = \trim((string)($endpoint['instance_name'] ?? $endpoint['name'] ?? ''));
+                if ($instanceName === '') {
+                    continue;
+                }
+                $gateway->renew($instanceName);
+                return;
+            }
+            // Cold certificate publication before a project runtime exists is
+            // replayed by the next full register and must not mutate legacy
+            // project Nginx merely because a host gateway is healthy.
+            return;
+        }
+
         $managed = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
         if (!$managed->isEdgeNginxManaged() || !$managed->paths()->isInstalled()) {
             throw new \RuntimeException(

@@ -212,6 +212,23 @@ return [
     'wls' => [
         'host' => '0.0.0.0',
         'port' => 443,
+        // Browser Worker credential authority. local is single-host; redis is
+        // dev/test snapshot-CAS only; database is the per-record durable store.
+        'frontend_worker_session_store_driver' => 'local', // local | redis | database
+        'frontend_worker_credential_store' => [
+            // Required only when the database driver is enabled. Provision a
+            // random 32-byte key outside the repository and encode base64url.
+            'version' => 1,
+            'active_key_id' => 'replace-me',
+            'keys' => [
+                // '2026-q3' => ['status' => 'active', 'key_base64url' => 'replace-with-32-byte-base64url'],
+                // '2026-q2' => ['status' => 'decrypt_only', 'key_base64url' => 'retained-during-rotation'],
+            ],
+            // Production database mode remains fail-closed until operations
+            // records a synchronous/RPO0 topology and completes failover proof.
+            'production_rpo_zero_attested' => false,
+            'production_topology_id' => 'replace-after-rpo0-proof',
+        ],
         // HTTP→HTTPS 重定向固定规则：仅当 HTTPS 主端口=443 时，自动启动 HTTP:80 的独立重定向进程。
         // 若 HTTPS 使用非 443（如 9981），则不启动独立重定向进程。
         'https' => true,
@@ -269,6 +286,43 @@ return [
         'worker_count' => 'auto',
         // Worker/维护 Worker 子进程 PHP memory_limit。纯数字按 MB 处理；支持 512M、1G、-1。
         'worker_memory_limit' => '256M',
+        // 启动期 Worker 数量内存预算（D01–D03/D12）。limit=cgroup max ?? MemTotal；2G 机 hardCap=2。
+        'worker_budget' => [
+            'enabled' => true,
+            'system_reserve_mb' => 550,
+            'wls_base_reserve_mb' => 300,
+            'emergency_reserve_mb' => 200,
+            'low_mem_limit_mb' => 2300,
+            'low_mem_hard_cap' => 2,
+        ],
+        // 运行时整机内存压力控制器（同源 cgroup/Available；Critical 单槽优雅减池；Green 慢恢复）。
+        'memory_pressure' => [
+            'enabled' => true,
+            'sample_interval_sec' => 3,
+            'upgrade_samples' => 3,
+            'green_recover_ratio' => 0.65,
+            'scale_down_cooldown_sec' => 30,
+            'recover_samples' => 10,
+            'recover_cooldown_sec' => 60,
+            'drain_deadline_sec' => 45,
+            'hard_drain_sec' => 120,
+            'exit_stagger_sec' => 20,
+            'leak_signal_periods' => 3,
+            'snapshot_interval_sec' => 300,
+            'swap_growth_mb_per_sample' => 8,
+            'psi_some_avg10_threshold' => 0.20,
+            'reclaim_stagger_ms_per_worker' => 50,
+        ],
+        'memory_guard' => [
+            'runtime_cache_pressure_threshold' => 0.70,
+            'runtime_cache_hard_pressure_threshold' => 0.85,
+            // HTTP/SSL 统一阈值（D22）。
+            'worker_memory_warning_threshold' => 0.80,
+            'worker_memory_drain_threshold' => 0.92,
+        ],
+        'scaling' => [
+            'min_workers' => 1,
+        ],
         // Dispatcher 子进程 PHP memory_limit；不配置时默认跟随 worker_memory_limit。
         'dispatcher_memory_limit' => '256M',
         // WLS Panel mode keeps the independent server panel separate from the
@@ -313,26 +367,26 @@ return [
                 'context_epoch' => '1',
             ],
         ],
-        // 边缘协议终结适配器（整段可省略：未配置时代码默认即为 nginx）。
-        // nginx（默认）：对外由 Nginx 终结 TLS/HTTP2/HTTP3，WLS 建议 --no-ssl 明文回源。
-        // wls：恢复自研 HTTP/2 与可选 native HTTP/3（Protocol/Http2|Http3 代码保留）。
+        // 边缘协议终结适配器（整段可省略：默认纯 PHP WLS，零下载、零编译）。
+        // wls（默认）：自研 HTTP/2 与可用时自动协商的 native HTTP/3。
+        // nginx：显式安装并启用的可选性能边缘；Windows 官方构建仅作兼容验证。
         'edge' => [
-            'adapter' => 'nginx', // 默认 nginx；仅当需要自研边缘时改为 wls
+            'adapter' => 'wls', // 默认 wls；需要外部/托管 Nginx 时显式改为 nginx
             // 证书续签后：托管 Nginx 优先自动 reload；宿主机 Nginx 请配置下方白名单命令。
             // 白名单：nginx -s reload | systemctl reload nginx | /绝对路径/nginx -s reload
             'reload_command' => '', // 宿主机 Nginx 示例：'systemctl reload nginx' 或 'nginx -s reload'
             'reload_timeout_sec' => 30,
-            // 本项目独立 Nginx（安装到 extend/server/nginx）。已有宿主机 Nginx 时设 managed=false，或保持 auto。
+            // 托管 Nginx 必须显式安装并 opt-in；普通 server:start 从不下载或编译它。
             'nginx' => [
-                // auto：自动检测宿主机 Nginx（有则不托管）；true：强制托管；false：强制宿主机反代
-                'managed' => 'auto',
-                // 仅 managed=true 时有效；false 或 CLI --no-nginx 时 server:start 不同启 Nginx
-                'auto_start' => true,
+                // 只有 true 表示 WLS 拥有生命周期；auto/false 不把二进制存在当 live edge。
+                'managed' => false,
+                // 仅 managed=true 时有效；false 或 CLI --no-nginx 时 server:start 不启动 Nginx
+                'auto_start' => false,
                 'listen_http' => null,       // null → 8080 + projectPortOffset（仅托管模式）
                 'listen_https' => null,      // null → 8443 + projectPortOffset（仅托管模式）
                 'server_names' => [],
-                'install_root' => 'extend/server/nginx',
-                'runtime_root' => 'var/server/nginx',
+                'install_root' => null, // Linux 自动按架构隔离；Windows 使用稳定本地目录
+                'runtime_root' => null, // Linux 自动按架构隔离；Windows 使用稳定本地目录
                 // —— 最佳性能默认（匿名页边缘缓存；有 Cookie 跳过）——
                 'edge_cache' => true,
                 'edge_cache_ttl_sec' => 60,
