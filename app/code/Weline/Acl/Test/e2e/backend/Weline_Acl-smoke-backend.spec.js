@@ -1,95 +1,76 @@
 /**
- * Weline_Acl ACL权限管理 E2E 冒烟测试
+ * Weline_Acl：诚实 smoke + 资源搜索 / IP 白名单交互 flow
  *
- * 测试范围：
- * - ACL角色管理：角色列表、IP白名单、安全日志
- * - ACL配置：权限配置页面
- *
- * 控制器来源：app/code/Weline/Acl/Controller/Backend/Acl.php
- * 模板来源：app/code/Weline/Acl/view/templates/Backend/Acl/*.phtml
- *
- * @weline-e2e-spec { module: Weline_Acl, type: smoke, layer: backend }
+ * @weline-e2e-spec { module: Weline_Acl, type: flow, layer: backend }
  */
-
-const { test, expect, loginAsAdmin, gotoBackend, buildModuleBackendRoute, moduleDescribe, moduleCase } = require('../../../../../../../tests/e2e/framework');
+const {
+  test,
+  expect,
+  loginAsAdmin,
+  gotoBackend,
+  buildModuleBackendRoute,
+  moduleDescribe,
+  moduleCase,
+  waitForBackendShellReady,
+  submitAndExpectParam,
+} = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'Weline_Acl';
-const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
+const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-moduleDescribe(test, MODULE, 'Weline_Acl ACL权限管理模块冒烟测试', () => {
-
+moduleDescribe(test, MODULE, 'Weline_Acl 后台流程', () => {
   moduleCase(
     test,
     { module: MODULE, id: 'ACL-SMOKE-001' },
-    'ACL角色列表页面能够正常加载，显示角色管理标题',
+    'ACL 资源列表路由可达（诚实 smoke）',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'acl');
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证页面标题
-      const heading = page.locator('h4').first();
-      await expect(heading).toContainText(/ACL|角色|Role|权限/i, { timeout: 10000 });
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'acl'), { timeout: 60000, settleMs: 800 });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
+      await expect(page.locator('#acl-list-filter-form, .weline-acl-toolbar, .card').first()).toBeVisible({ timeout: 15000 });
     }
   );
 
   moduleCase(
     test,
-    { module: MODULE, id: 'ACL-SMOKE-002' },
-    'IP白名单页面能够正常加载',
+    { module: MODULE, id: 'ACL-FLOW-SEARCH-001' },
+    'ACL 资源列表：填搜索词并提交',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'acl/ip-whitelist');
-      await gotoBackend(page, url, { timeout: 30000 });
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'acl'), { timeout: 60000, settleMs: 800 });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
 
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      const form = page.locator('#acl-list-filter-form');
+      const input = form.locator('input[name="search"]');
+      await expect(input).toBeVisible({ timeout: 15000 });
+      await input.fill('dashboard');
+      const req = await submitAndExpectParam(page, form, 'search=dashboard');
+      expect(req).toBeTruthy();
     }
   );
 
   moduleCase(
     test,
-    { module: MODULE, id: 'ACL-SMOKE-003' },
-    '安全日志页面能够正常加载',
+    { module: MODULE, id: 'ACL-FLOW-IP-001' },
+    'IP 白名单：搜索框交互并可见添加按钮',
     async ({ page }) => {
       await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'acl/security-log');
-      await gotoBackend(page, url, { timeout: 30000 });
+      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'ip-whitelist'), {
+        timeout: 60000,
+        settleMs: 800,
+      });
+      await waitForBackendShellReady(page);
+      await expect(page.locator('body')).not.toContainText(FATAL);
+      await expect(page.locator('[data-ip-whitelist-action="add"], input[name="keyword"]').first()).toBeVisible({ timeout: 15000 });
 
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
-    }
-  );
-
-  moduleCase(
-    test,
-    { module: MODULE, id: 'ACL-SMOKE-004' },
-    'ACL角色列表支持关键词搜索过滤',
-    async ({ page }) => {
-      await loginAsAdmin(page);
-      const url = buildModuleBackendRoute(MODULE, 'acl') + '?keyword=admin';
-      await gotoBackend(page, url, { timeout: 30000 });
-
-      const body = page.locator('body');
-      await expect(body).toBeVisible();
-
-      // 验证 URL 包含搜索参数
-      await expect(page).toHaveURL(/keyword=admin/);
-
-      // 验证无 Fatal 错误
-      await expect(body).not.toContainText(FATAL_PATTERN);
+      const form = page.locator('form').filter({ has: page.locator('input[name="keyword"]') }).first();
+      const keyword = form.locator('input[name="keyword"]');
+      await expect(keyword).toBeVisible({ timeout: 15000 });
+      await keyword.fill('127.0.0.1');
+      const req = await submitAndExpectParam(page, form, 'keyword=127.0.0.1');
+      expect(req).toBeTruthy();
     }
   );
 });

@@ -1714,18 +1714,39 @@ class ObjectManager implements ManagerInterface
      */
     private static array $parameterizedFactories = [
         \Weline\Framework\Cache\AdapterFactory::class,
+        \Weline\Framework\Event\ResourceChange\ResourceChangeFactory::class,
         \Weline\Framework\Session\SessionFactory::class,
+        \Weline\TranslationService\Service\ProviderFactory::class,
     ];
     
     /**
      * 检查是否为需要参数的工厂类
-     * 
+     *
+     * 除显式白名单外：类名以 Factory 结尾且 create() 含必填参数时，也视为参数化工厂，
+     * 避免 ObjectManager 无参调用 create()（如 TranslationService ProviderFactory）。
+     *
      * @param string $class 类名
      * @return bool
      */
     private static function isParameterizedFactory(string $class): bool
     {
-        return in_array($class, self::$parameterizedFactories, true);
+        if (in_array($class, self::$parameterizedFactories, true)) {
+            return true;
+        }
+        if (!str_ends_with($class, 'Factory') || !class_exists($class)) {
+            return false;
+        }
+        try {
+            $method = new \ReflectionMethod($class, 'create');
+        } catch (\ReflectionException) {
+            return false;
+        }
+        foreach ($method->getParameters() as $param) {
+            if (!$param->isOptional() && !$param->isDefaultValueAvailable()) {
+                return true;
+            }
+        }
+        return false;
     }
     
     /**
