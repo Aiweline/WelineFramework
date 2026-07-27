@@ -8,9 +8,9 @@ use Weline\Server\Socket\ListenSocketOptions;
 /**
  * Master-owned POSIX listener shared with Workers through an inherited FD.
  *
- * The Master binds one Nginx-only loopback backend socket and explicitly
- * grants only FD 3 to Worker launchers. Workers compete on the same accept
- * queue and never proxy bytes through the Master.
+ * The Master binds the selected Nginx-backend or pure-WLS address and
+ * explicitly grants only FD 3 to Worker launchers. Workers compete on the
+ * same accept queue and never proxy bytes through the Master.
  */
 final class DirectSharedListener
 {
@@ -26,11 +26,6 @@ final class DirectSharedListener
     public function acquire(string $host, int $port): mixed
     {
         $host = $this->normalizeHost($host);
-        if (!\in_array($host, ['127.0.0.1', '::1'], true)) {
-            throw new \InvalidArgumentException(
-                'Direct shared listener is an Nginx-only backend and must bind to 127.0.0.1 or ::1.'
-            );
-        }
         if ($port <= 0 || $port > 65535) {
             throw new \InvalidArgumentException('Direct shared listener port must be between 1 and 65535.');
         }

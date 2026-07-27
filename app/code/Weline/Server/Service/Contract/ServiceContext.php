@@ -42,44 +42,68 @@ class ServiceContext
         public readonly string $masterLeaseFile = '',
         public readonly string $masterToken = '',
     ) {
+        $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $edge = \is_array($wls['edge'] ?? null) ? $wls['edge'] : [];
+        $edgeAdapter = \strtolower(\trim((string)($edge['adapter'] ?? 'nginx')));
+        if (!\in_array($edgeAdapter, ['nginx', 'wls'], true)) {
+            throw new \InvalidArgumentException('WLS public edge adapter must be nginx or wls.');
+        }
         $normalizedHost = \strtolower(\trim($host, " \t\n\r\0\x0B[]"));
         $loopback = $normalizedHost === 'localhost'
             || $normalizedHost === '::1'
             || (\filter_var($normalizedHost, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false
                 && \str_starts_with($normalizedHost, '127.'));
-        if (!$loopback) {
-            throw new \InvalidArgumentException(
-                'Nginx-only WLS context requires an explicit loopback backend host.'
-            );
-        }
-        if ($sslEnabled || $sslCert !== '' || $sslKey !== '' || $httpRedirectPort !== 0) {
-            throw new \InvalidArgumentException(
-                'Nginx-only WLS context requires plaintext H1 backend workers without redirect listeners.'
-            );
-        }
-        $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
-        $edge = \is_array($wls['edge'] ?? null) ? $wls['edge'] : [];
-        $edgeAdapter = \strtolower(\trim((string)($edge['adapter'] ?? 'nginx')));
-        if ($edgeAdapter !== 'nginx') {
-            throw new \InvalidArgumentException('Nginx is the only supported WLS public edge adapter.');
-        }
-        $nginx = \is_array($edge['nginx'] ?? null) ? $edge['nginx'] : [];
-        if (($nginx['managed'] ?? null) !== true
-            || ($nginx['auto_start'] ?? null) !== true
-        ) {
-            throw new \InvalidArgumentException(
-                'Nginx-only WLS context requires managed=true and auto_start=true.'
-            );
-        }
         $http = \is_array($wls['http'] ?? null) ? $wls['http'] : [];
-        if (($http['protocols'] ?? ['h1']) !== ['h1']
-            || \strtolower(\trim((string)($http['preferred'] ?? 'h1'))) !== 'h1'
-            || \strtolower(\trim((string)($http['protocol_edge'] ?? 'disabled'))) !== 'disabled'
-            || (bool)($http['tls_session_resumption'] ?? false)
-            || (bool)($http['alt_svc'] ?? false)
+        if ($edgeAdapter === 'nginx') {
+            if (!$loopback) {
+                throw new \InvalidArgumentException(
+                    'Nginx WLS context requires an explicit loopback backend host.'
+                );
+            }
+            if ($sslEnabled || $sslCert !== '' || $sslKey !== '' || $httpRedirectPort !== 0) {
+                throw new \InvalidArgumentException(
+                    'Nginx WLS context requires plaintext H1 backend workers without redirect listeners.'
+                );
+            }
+            $nginx = \is_array($edge['nginx'] ?? null) ? $edge['nginx'] : [];
+            if (($nginx['managed'] ?? null) !== true
+                || ($nginx['auto_start'] ?? null) !== true
+            ) {
+                throw new \InvalidArgumentException(
+                    'Nginx WLS context requires managed=true and auto_start=true.'
+                );
+            }
+            if (($http['protocols'] ?? ['h1']) !== ['h1']
+                || \strtolower(\trim((string)($http['preferred'] ?? 'h1'))) !== 'h1'
+                || \strtolower(\trim((string)($http['protocol_edge'] ?? 'disabled'))) !== 'disabled'
+                || (bool)($http['tls_session_resumption'] ?? false)
+                || (bool)($http['alt_svc'] ?? false)
+            ) {
+                throw new \InvalidArgumentException(
+                    'Nginx WLS context requires h1/disabled private backend protocol settings.'
+                );
+            }
+            return;
+        }
+
+        if ($sslEnabled
+            && ($sslCert === '' || $sslKey === '' || $runtimeSelection->sslEngine !== 'stream')
         ) {
             throw new \InvalidArgumentException(
-                'Nginx-only WLS context requires h1/disabled private backend protocol settings.'
+                'Pure WLS HTTPS requires certificate/key material and the PHP Stream SSL engine.'
+            );
+        }
+        if (!$sslEnabled && ($sslCert !== '' || $sslKey !== '')) {
+            throw new \InvalidArgumentException(
+                'Pure WLS HTTP mode must not retain active certificate/key arguments.'
+            );
+        }
+        if ((bool)($http['alt_svc'] ?? false)
+            || \strtolower(\trim((string)($http['protocol_edge'] ?? 'disabled'))) !== 'disabled'
+            || \in_array('h3', (array)($http['protocols'] ?? []), true)
+        ) {
+            throw new \InvalidArgumentException(
+                'Pure WLS supports in-process HTTP/2/HTTP/1.1 only; HTTP/3 and external protocol edges are unavailable.'
             );
         }
     }

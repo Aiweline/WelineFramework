@@ -1,10 +1,6 @@
 <?php
 declare(strict_types=1);
 
-throw new \RuntimeException(
-    'WLS SSL Worker is retired; Nginx terminates TLS and proxies cleartext HTTP/1.1.'
-);
-
 /**
  * Weline Server Worker 独立进程 (SSL/HTTPS)
  * 

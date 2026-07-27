@@ -74,11 +74,12 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
         $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve($context->envConfig);
-        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
-            throw new \RuntimeException('Maintenance Worker refused a non-Nginx public edge adapter.');
-        }
-        $script = $scriptDir . DS . 'worker.php';
-
+        $pureWlsSsl = $edgeAdapter->name()
+            === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+            && $context->sslEnabled;
+        $script = $pureWlsSsl
+            ? $scriptDir . DS . 'worker_ssl.php'
+            : $scriptDir . DS . 'worker.php';
 
         $port = $this->getPort($instanceId, $context);
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
@@ -97,6 +98,17 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             '--memory-limit=' . $context->getWorkerMemoryLimit(),
         ];
 
+        if ($pureWlsSsl) {
+            if ($context->sslCert === '' || $context->sslKey === '') {
+                throw new \RuntimeException('Pure WLS maintenance HTTPS requires certificate and private-key paths.');
+            }
+            $arguments[] = '--ssl-cert=' . $context->sslCert;
+            $arguments[] = '--ssl-key=' . $context->sslKey;
+            $arguments = \array_merge(
+                $arguments,
+                WorkerRuntimeArgumentBuilder::protocolPolicy($context, false),
+            );
+        }
 
         $arguments[] = '--wls-runtime-topology='
             . $context->runtimeSelection->effectiveTopology->value;
@@ -107,6 +119,9 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
 
         $arguments[] = '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver;
 
+        if ($pureWlsSsl) {
+            $arguments[] = '--defer-ssl';
+        }
 
         return new ServiceCommand(
             script: $script,

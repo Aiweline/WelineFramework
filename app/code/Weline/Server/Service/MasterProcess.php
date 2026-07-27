@@ -725,8 +725,8 @@ class MasterProcess
             ? $this->config['edge']
             : [];
         $edgeAdapter = \strtolower(\trim((string)($configuredEdge['adapter'] ?? '')));
-        if ($edgeAdapter !== 'nginx') {
-            throw new \RuntimeException('Master runtime requires persisted edge.adapter=nginx.');
+        if (!\in_array($edgeAdapter, ['nginx', 'wls'], true)) {
+            throw new \RuntimeException('Master runtime requires persisted edge.adapter=nginx or wls.');
         }
         $wls['edge'] = \array_merge(
             \is_array($wls['edge'] ?? null) ? $wls['edge'] : [],
@@ -734,9 +734,13 @@ class MasterProcess
             ['adapter' => $edgeAdapter],
         );
 
-        $publicOrigin = ManagedNginxPublicOrigin::normalize(
-            (string)($this->config['public_origin'] ?? ''),
-        );
+        $publicOrigin = $edgeAdapter === 'wls'
+            ? \Weline\Server\Service\Edge\PureWlsPublicOrigin::normalize(
+                (string)($this->config['public_origin'] ?? ''),
+            )
+            : ManagedNginxPublicOrigin::normalize(
+                (string)($this->config['public_origin'] ?? ''),
+            );
         $wls['public_origin'] = $publicOrigin;
         $configuredHttp = \is_array($this->config['http'] ?? null)
             ? $this->config['http']
@@ -744,13 +748,16 @@ class MasterProcess
         if (\trim((string)($this->config['protocol_edge_binary'] ?? '')) !== ''
             || (bool)($this->config['protocol_edge_enabled'] ?? false)
         ) {
-            throw new \RuntimeException('Master runtime rejects retired WLS/Caddy protocol edges.');
+            throw new \RuntimeException('Master runtime rejects external native/Caddy protocol-edge processes.');
         }
         if ($configuredHttp === []) {
             throw new \RuntimeException('Master runtime requires a persisted wls.http protocol snapshot.');
         }
         $httpSelection = \Weline\Server\Service\Runtime\HttpProtocolSelection::fromConfig(
-            ['http' => $configuredHttp],
+            [
+                'edge' => ['adapter' => $edgeAdapter],
+                'http' => $configuredHttp,
+            ],
             $this->sslEnabled,
         );
         $wls['http'] = \array_merge(
@@ -767,12 +774,14 @@ class MasterProcess
         ]);
         if (\is_array($this->config['http3'] ?? null)) {
             if ((bool)($this->config['http3']['enabled'] ?? false)) {
-                throw new \RuntimeException('WLS native HTTP/3 is retired; Nginx owns HTTP/3.');
+                throw new \RuntimeException('Pure WLS HTTP/3 is unavailable; managed Nginx owns HTTP/3.');
             }
             $wls['http3'] = \array_merge($this->config['http3'], [
                 'enabled' => false,
                 'runtime_verified' => false,
-                'reason' => 'Nginx exclusively owns public HTTP/3.',
+                'reason' => $edgeAdapter === 'wls'
+                    ? 'Pure WLS HTTP/3 is unavailable; use managed Nginx for HTTP/3.'
+                    : 'Managed Nginx owns public HTTP/3.',
             ]);
         }
 

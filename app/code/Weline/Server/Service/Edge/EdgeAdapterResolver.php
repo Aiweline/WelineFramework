@@ -7,7 +7,10 @@ namespace Weline\Server\Service\Edge;
 use Weline\Framework\App\Env;
 
 /**
- * Resolves the only supported public edge adapter.
+ * Resolves the selected public edge adapter.
+ *
+ * Managed Nginx remains the default. Pure WLS is an explicit fallback for
+ * environments where the project-managed Nginx cannot run.
  */
 final class EdgeAdapterResolver
 {
@@ -28,7 +31,9 @@ final class EdgeAdapterResolver
         }
 
         $this->resolvedName = $name;
-        $this->resolved = new NginxEdgeAdapter();
+        $this->resolved = $name === EdgeAdapterInterface::NAME_WLS
+            ? new WlsNativeEdgeAdapter()
+            : new NginxEdgeAdapter();
 
         return $this->resolved;
     }
@@ -47,6 +52,9 @@ final class EdgeAdapterResolver
     public function resolveName(?array $envConfig = null): string
     {
         if ($envConfig === null) {
+            if ($this->currentCliRequestsPureWls()) {
+                return EdgeAdapterInterface::NAME_WLS;
+            }
             $raw = Env::getInstance()->getConfig();
             $envConfig = \is_array($raw) ? $raw : [];
         }
@@ -64,10 +72,28 @@ final class EdgeAdapterResolver
         if ($normalized === '' || $normalized === EdgeAdapterInterface::NAME_NGINX) {
             return EdgeAdapterInterface::NAME_NGINX;
         }
+        if ($normalized === EdgeAdapterInterface::NAME_WLS) {
+            return EdgeAdapterInterface::NAME_WLS;
+        }
 
         throw new \InvalidArgumentException(
-            'wls.edge.adapter=' . $normalized . ' is retired; Nginx is the only supported public edge.'
+            'wls.edge.adapter must be nginx or wls; received "' . $normalized . '".'
         );
+    }
+
+    private function currentCliRequestsPureWls(): bool
+    {
+        if (\PHP_SAPI !== 'cli') {
+            return false;
+        }
+
+        foreach ((array)($_SERVER['argv'] ?? []) as $argument) {
+            if (\in_array((string)$argument, ['--no-nginx', '--no_nginx'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function clearCache(): void
