@@ -167,6 +167,25 @@ class Stop extends CommandAbstract
         if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
             return true;
         }
+        $gatewayRuntime = \is_array($instanceData['gateway'] ?? null)
+            ? $instanceData['gateway']
+            : [];
+        if ((string)($gatewayRuntime['mode'] ?? '')
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+        ) {
+            try {
+                (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
+                    ->drain($instanceName, 300);
+                $this->printer->note(__(
+                    '共享网关：已将当前项目路由置为 DRAINING；网关本身与其他项目保持运行。'
+                ));
+                return true;
+            } catch (\Throwable $throwable) {
+                $this->managedNginxStopFailed = true;
+                $this->printer->warning(__('共享网关路由注销失败：%{1}', [$throwable->getMessage()]));
+                return false;
+            }
+        }
 
         try {
             $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
