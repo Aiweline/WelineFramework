@@ -1,6 +1,6 @@
 # WLS Fiber 并发与维护模式 — 测试设计方案
 
-> 目的：验证「入口基线 + 挂起 Fiber 时 `StateManager::reset($omit)`」在 **维护模式**、**SSE 挂起 + 并发短请求**、**登录态 / 后台** 下无串味、无死锁；为 **omit 白名单** 变更提供回归门槛；为 **P3 SessionFactory 分桶** 预留压测接口。
+> 目的：验证「目标 Fiber 投影 + 入口基线 + 挂起 Fiber 时 `StateManager::reset($omit)` + 失败 Worker 隔离」在 **维护模式**、**SSE 挂起 + 并发短请求**、**登录态 / 后台** 下无串味、无死锁；为 **omit 白名单** 变更提供回归门槛；为 **P3 SessionFactory 分桶** 预留压测接口。
 
 ---
 
@@ -13,11 +13,21 @@
 | L3 E2E | Playwright（已有 `tests/e2e`） | 真实浏览器 Cookie、EventSource、后台 UI | 发版前 / 夜间 |
 | L4 手工 | 清单 + `/_wls/health` | 难自动化边界、运维场景 | 大改 WLS 时 |
 
+### 1.1 P1B-003 冻结并发契约
+
+1. **只恢复目标 Fiber 的进程投影**：`WlsFiberContext::captureForFiber()` 只能捕获已挂起且拥有独立 `Context` 的请求 Fiber；`restoreForFiber()` 必须校验目标 Fiber，仅恢复超全局变量、SSE 兼容投影、URL parser scratch 与已注册静态请求状态快照。目标 Fiber 自己的 `Context`、`HeaderCollector` 和 ObjectManager 请求作用域由 Fiber-local 存储持有，恢复时不得借道事件循环主 Fiber，也不得覆盖主 Fiber 状态。
+2. **已注册静态请求状态随 Fiber 快照**：`StateManager::captureRegisteredStaticState()` 捕获当前已加载、已注册的请求级静态属性；同伴请求可以在自己的边界执行全量静态 reset，原 Fiber 恢复前再通过 `restoreRegisteredStaticState()` 恢复自己的投影。捕获或恢复失败不是可忽略告警，必须进入失败隔离。
+3. **omit 只针对有入口等价清理的已注册回调**：当前白名单仅允许 `request_scoped_objects`、`state_instance`、`router_core_instance`、`controller_instances`、`model_instances`、`observer_instances`、`message_manager_request_state`、`events_manager_observer_cache`、`view_hook_runtime_cache`、`process_url_cache_static`。模块 RequestResetter、`session_instances`、`session_shutdown_queue`、`sse_context`、`request_context`、`db_connection_cleanup`、`request_instance`、`template_instance` 永远不得省略。
+4. **所有 reset step 都要尝试**：`StateManager` 的静态请求状态、单例、每个命名回调、ObjectManager 请求作用域和 HeaderCollector；`ModuleRequestResetterRegistry` 的每个 provider；`RequestContext` 的每个 cleanup callback 与投影清理；`WlsRuntime` 的 Session flush、响应快照、namespace、trace、runtime reset、output、globals、Context leave 和请求阶段释放，均使用独立保护。前一步失败不得阻止后续清理，最终用 `RequestResetException` 汇总阶段与原异常。
+5. **边界失败即隔离排空**：入口 reset、请求 finalization、Fiber 初始捕获/恢复、调度恢复或取消 unwind 任一步失败，都必须请求 `request_*_failure` Worker drain。当前连接按失败类型关闭或返回通用 500，Worker 不再接收新请求并在当前响应后退出，由 Master 补充新 Worker；不得让可能污染的 Worker 继续复用。
+
+上述五条是实现和测试的共同门禁；白名单项、投影字段或失败阶段变化时，必须同时更新 L1/L2 验证与本节。
+
 ---
 
 ## 2. 环境与前置条件
 
-- **实例**：独立测试实例 `php bin/w server:start -p 9502+ -n ai-test-fiber-{id}`，**禁止**默认 9501。
+- **实例**：先选择实际未占用的整数端口 `>=9502`，再执行 `php bin/w server:start ai-test-fiber-{id} -p {integer-port}`，**禁止**默认 9501。
 - **模式**：至少一轮在 `deploy=dev` 下跑（便于 `w_log_debug` / fiber 计数日志）。
 - **Worker**：与线上一致的前端/SSL Worker；Dispatcher 与维护 Worker 路由逻辑需与当前 Master 配置一致。
 - **数据**：固定测试账号（后台）、可选独立 `website_id`，避免污染生产数据。
@@ -111,8 +121,22 @@
 
 **L1 用例建议（ PHPUnit ）**
 
-- 已有：`StateManagerPersistentEntryBaselineTest`、`StateManagerResetOmitTest`。
-- 新增（可选）：`WlsConcurrencyOmitIntegrationTest` — 注册 `WlsConcurrency` provider 返回 `1`，调用 `StateManager::reset($omit)`，断言 **未** 执行某回调（通过探针 callback 计数），且 **session_instances** 探针仍执行。
+- 已有：`WlsConcurrencyTest` 锁定精确白名单并验证每项均已注册；`StateManagerPersistentEntryBaselineTest` 验证入口基线覆盖与关键回调不省略；`StateManagerResetOmitTest` 验证按名 omit 行为。
+- 已有：`StateManagerPeerOmitIntegrationTest` 调用真实 `StateManager::reset($omit)`，验证 RequestContext 与 SSE 仍执行清理，并锁定模块 resetter、Session、DB、Request、Template 等关键回调不在白名单。
+
+### S6 — reset 失败聚合与 Worker 隔离
+
+| 步骤 | 预期 |
+|------|------|
+| 注册一个故意抛错的 reset provider/callback，并在它之后注册成功探针 | 抛错步骤与后续探针都被调用；异常包含边界名与全部失败 stage |
+| 通过独立 WLS 测试实例触发一次真实请求边界失败 | 当前连接关闭或得到通用 500；日志记录 `request_*_failure`；旧 Worker PID 进入 drain 并退出 |
+| 等待 Master 补 Worker 后发新请求 | 新 Worker PID 响应正常；无旧请求的 Session、SSE、RequestContext、模板或静态请求状态残留 |
+
+**失败判据**
+
+- 第一个 reset 异常令后续清理步骤未执行。
+- 失败被日志吞掉，Worker 继续接受新请求。
+- drain 后旧 PID 仍处理新连接，或新 Worker 恢复了事件循环主 Fiber 的请求状态。
 
 ---
 

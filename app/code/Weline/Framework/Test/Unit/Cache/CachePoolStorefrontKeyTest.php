@@ -9,17 +9,19 @@ use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Contract\RememberOptions;
 use Weline\Framework\Cache\Contract\SingleFlightInterface;
 use Weline\Framework\Cache\Pool\CachePool;
+use Weline\Framework\Cache\StorefrontCacheKeyContext;
+use Weline\Framework\Context;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 
 class CachePoolStorefrontKeyTest extends TestCase
 {
     protected function tearDown(): void
     {
-        unset(
-            $_SERVER['WELINE_WEBSITE_CODE'],
-            $_SERVER['WELINE_AREA'],
-            $_SERVER['WELINE_USER_LANG'],
-            $_SERVER['WELINE_USER_CURRENCY']
-        );
+        RequestContext::cleanup();
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
         parent::tearDown();
     }
 
@@ -28,18 +30,14 @@ class CachePoolStorefrontKeyTest extends TestCase
         $adapter = new CachePoolStorefrontSpyAdapter();
         $pool = new CachePool('unit', $adapter, jitterRatio: 0.0);
 
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_a';
-        $_SERVER['WELINE_AREA'] = 'frontend';
-        $_SERVER['WELINE_USER_LANG'] = 'zh_Hans_CN';
-        $_SERVER['WELINE_USER_CURRENCY'] = 'CNY';
+        $this->enterScope('shop_a', 'zh_Hans_CN', 'CNY');
         $pool->set('product:1', 'price-a', 600);
         self::assertSame('price-a', $pool->get('product:1'));
 
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_b';
+        $this->enterScope('shop_b', 'zh_Hans_CN', 'CNY');
         self::assertNull($pool->get('product:1'));
 
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_a';
-        $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+        $this->enterScope('shop_a', 'zh_Hans_CN', 'USD');
         self::assertNull($pool->get('product:1'));
 
         self::assertCount(1, $adapter->store);
@@ -50,9 +48,9 @@ class CachePoolStorefrontKeyTest extends TestCase
         $adapter = new CachePoolStorefrontSpyAdapter();
         $pool = new CachePool('unit', $adapter, jitterRatio: 0.0);
 
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_a';
+        $this->enterScope('shop_a', 'zh_Hans_CN', 'CNY');
         $pool->setCustom('phrase:zh', ['hello' => '你好'], 600);
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_b';
+        $this->enterScope('shop_b', 'zh_Hans_CN', 'CNY');
         self::assertSame(['hello' => '你好'], $pool->getCustom('phrase:zh'));
         self::assertNull($pool->get('phrase:zh'));
     }
@@ -62,14 +60,13 @@ class CachePoolStorefrontKeyTest extends TestCase
         $adapter = new CachePoolStorefrontSpyAdapter();
         $pool = new CachePool('unit', $adapter, jitterRatio: 0.0);
 
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_a';
-        $_SERVER['WELINE_USER_LANG'] = 'zh_Hans_CN';
+        $this->enterScope('shop_a', 'zh_Hans_CN', 'CNY');
         $pool->setCustom('menu', 'zh-menu', 600, lang: true);
 
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_b';
+        $this->enterScope('shop_b', 'zh_Hans_CN', 'CNY');
         self::assertSame('zh-menu', $pool->getCustom('menu', lang: true));
 
-        $_SERVER['WELINE_USER_LANG'] = 'en_US';
+        $this->enterScope('shop_b', 'en_US', 'CNY');
         self::assertNull($pool->getCustom('menu', lang: true));
     }
 
@@ -80,7 +77,6 @@ class CachePoolStorefrontKeyTest extends TestCase
         $flight = new CachePoolStorefrontSpySingleFlight();
         $pool->setSingleFlight($flight);
 
-        $_SERVER['WELINE_WEBSITE_CODE'] = 'shop_a';
         $value = $pool->rememberCustom(
             'dict',
             600,
@@ -95,6 +91,36 @@ class CachePoolStorefrontKeyTest extends TestCase
         self::assertNotSame('dict', $flight->lastAcquireKey);
         self::assertNotEmpty($flight->lastAcquireKey);
         self::assertSame($flight->lastAcquireKey, $flight->lastReleaseKey);
+    }
+
+    private function enterScope(string $website, string $lang, string $currency): void
+    {
+        if (Context::hasCurrent()) {
+            RequestContext::cleanup();
+            Context::leave();
+        }
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]));
+        RequestContext::setId('cache-pool-' . $website . '-' . $lang . '-' . $currency);
+        Context::current()->set('input.server.WELINE_AREA', 'frontend');
+        $identity = ScopeIdentity::channel(
+            $website === 'default' ? 0 : 7,
+            $website,
+            'default',
+            'default',
+            ScopeIdentity::MODE_NORMAL,
+        );
+        RequestContext::installScopeIdentity($identity);
+        RequestContext::setWelineUserLang($lang);
+        RequestContext::setWelineUserCurrency($currency);
+        $fingerprint = hash('sha256', 'namespace|' . $website);
+        StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+            $identity,
+            $lang,
+            $currency,
+            $fingerprint,
+            $fingerprint,
+            true,
+        ));
     }
 }
 

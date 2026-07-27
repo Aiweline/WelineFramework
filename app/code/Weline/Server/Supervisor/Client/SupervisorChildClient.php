@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Supervisor\Client;
 
+use Weline\Server\IPC\ChildControl\BeforeReadyGuardAwareClientInterface;
 use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Policy\DispatcherPolicyControl;
@@ -11,7 +12,7 @@ use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
-final class SupervisorChildClient implements ChildControlClientInterface
+final class SupervisorChildClient implements ChildControlClientInterface, BeforeReadyGuardAwareClientInterface
 {
     /**
      * @var resource|null
@@ -45,6 +46,9 @@ final class SupervisorChildClient implements ChildControlClientInterface
      * @var null|callable(bool, self): void
      */
     private $disconnectHandler = null;
+
+    /** @var null|callable(string): void */
+    private $beforeReadyGuard = null;
 
     /**
      * @var array<string, mixed>|null
@@ -138,6 +142,11 @@ final class SupervisorChildClient implements ChildControlClientInterface
     public function onDisconnect(callable $handler): void
     {
         $this->disconnectHandler = $handler;
+    }
+
+    public function setBeforeReadyGuard(?callable $guard): void
+    {
+        $this->beforeReadyGuard = $guard;
     }
 
     public function setVerboseLog(bool $verbose): void
@@ -254,6 +263,26 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return false;
         }
 
+        if ($this->beforeReadyGuard !== null) {
+            try {
+                ($this->beforeReadyGuard)($role);
+            } catch (\Throwable) {
+                $this->readyConfirmed = false;
+                return false;
+            }
+        }
+
+        if (\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            try {
+                \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Server\Service\Runtime\WorkerNamespaceGenerationApplier::class,
+                )->reconcileBeforeReady();
+            } catch (\Throwable) {
+                $this->readyConfirmed = false;
+                return false;
+            }
+        }
+
         $readiness = match (true) {
             \in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
                 => WorkerReadinessState::snapshot(),
@@ -297,6 +326,25 @@ final class SupervisorChildClient implements ChildControlClientInterface
     public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool
     {
         return $this->send(ControlMessage::workerLoopStarted($workerId, $port, $pid));
+    }
+
+    /** @return array{client_id:int,role:string,worker_id:int,slot_id:string,lease_id:string,slot_generation:int,pid:int} */
+    public function runtimeSourceIdentity(): array
+    {
+        $info = $this->registerInfo ?? [];
+        $role = (string)($info['role'] ?? '');
+        $workerId = \max(0, (int)($info['worker_id'] ?? 0));
+        return [
+            // HybridControlPlaneServer replaces this with its authenticated
+            // synthetic session identity before Orchestrator dispatch.
+            'client_id' => 0,
+            'role' => $role,
+            'worker_id' => $workerId,
+            'slot_id' => $this->buildSlotId($role, $workerId),
+            'lease_id' => $this->leaseId,
+            'slot_generation' => $this->generation,
+            'pid' => \max(0, (int)($info['pid'] ?? 0)),
+        ];
     }
 
     public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool
@@ -450,7 +498,10 @@ final class SupervisorChildClient implements ChildControlClientInterface
                 return false;
             }
             if ($this->readyDesired) {
-                return $this->sendReady();
+                if (!$this->sendReady()) {
+                    $this->close();
+                    return false;
+                }
             }
         }
 

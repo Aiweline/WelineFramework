@@ -30,6 +30,40 @@ final class TlsSessionResumptionLiveVerifier
     private const INSTANCE_CONFIG_READ_ATTEMPTS = 5;
     private const INSTANCE_CONFIG_RETRY_MICROSECONDS = 50_000;
     private const MAX_INSTANCE_CONFIG_BYTES = 1_048_576;
+    private const CALLBACK_TELEMETRY_SCHEMA_VERSION = 1;
+    private const CALLBACK_FAULT_PROBE_PAIRS = 16;
+    private const CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US = [
+        50,
+        100,
+        250,
+        500,
+        1000,
+        2000,
+        5000,
+        10000,
+        20000,
+    ];
+    private const CALLBACK_PHASE_SCALAR_COUNTERS = [
+        'new_cb_total',
+        'get_cb_total',
+        'queued_put_total',
+        'get_ipc_total',
+        'get_ipc_deadline_exceeded_total',
+        'get_ipc_fail_fast_total',
+        'put_ipc_total',
+        'put_ipc_deadline_exceeded_total',
+        'put_ipc_fail_fast_total',
+    ];
+    private const CALLBACK_TRANSPORT_KEYS = [
+        'client_read_buffer_zero',
+        'client_write_buffer_zero',
+        'client_write_buffer_control_supported',
+        'client_tcp_nodelay',
+        'sidecar_read_buffer_zero',
+        'sidecar_write_buffer_zero',
+        'sidecar_write_buffer_control_supported',
+        'sidecar_tcp_nodelay',
+    ];
 
     private readonly IpcControlGateway $gateway;
     private readonly SharedStateServiceRegistry $sharedRegistry;
@@ -37,6 +71,7 @@ final class TlsSessionResumptionLiveVerifier
     private string $expectedCertificateSha256 = '';
     private string $expectedCacheConfigSha256 = '';
     private string $expectedRuntimeIdentitySha256 = '';
+    private int $expectedCallbackTimeoutUs = 0;
     private bool $usePublicTlsDataPath = false;
 
     public function __construct()
@@ -47,7 +82,12 @@ final class TlsSessionResumptionLiveVerifier
 
     /**
      * @param array<string, int|float|string|bool|array> $options Store-normalized options only.
-     * @return array{captured_at:string,scope:array<string,mixed>,proof:array<string,mixed>}
+     * @return array{
+     *   captured_at:string,
+     *   scope:array<string,mixed>,
+     *   proof:array<string,mixed>,
+     *   callback_telemetry:array<string,mixed>
+     * }
      */
     public function verify(string $instanceName, array $options): array
     {
@@ -60,6 +100,9 @@ final class TlsSessionResumptionLiveVerifier
         if (!$cacheConfig->enabled()) {
             throw new \RuntimeException('External TLS Session cache is not enabled.');
         }
+        $this->expectedCallbackTimeoutUs = (int)\round(
+            $cacheConfig->callbackTimeoutSeconds * 1_000_000
+        );
         $this->expectedCacheConfigSha256 = $this->requiredSha256Option(
             $options,
             'expected_config_sha256',
@@ -75,7 +118,7 @@ final class TlsSessionResumptionLiveVerifier
         $sameRounds = $this->optionInt($options, 'same_worker_rounds', 12, 10, 512);
         $crossRounds = $this->optionInt($options, 'cross_worker_rounds', 24, 24, 512);
         $reloadRounds = $this->optionInt($options, 'reload_rounds', 24, 24, 512);
-        $faultRounds = $this->optionInt($options, 'fault_rounds', 200, 40, 1_024);
+        $faultRounds = $this->optionInt($options, 'fault_rounds', 200, 100, 1_024);
         $postRecoveryRounds = $this->optionInt($options, 'post_recovery_rounds', 24, 24, 512);
         $connectTimeoutMs = $this->optionInt($options, 'connect_timeout_ms', 5_000, 250, 30_000);
         $latencyLimitMs = $this->optionFloat(
@@ -147,6 +190,7 @@ final class TlsSessionResumptionLiveVerifier
             $originPort,
             $connectTimeoutSeconds,
         );
+        $this->assertSnapshotTransportReady($continuityBaseline);
         $continuityTarget = $workersAfterReload[\count($workersAfterReload) > 1 ? 1 : 0];
         $continuityResume = $this->connect(
             $this->usePublicTlsDataPath ? $originPort : (int)$continuityTarget['port'],
@@ -166,10 +210,15 @@ final class TlsSessionResumptionLiveVerifier
             $originPort,
             $connectTimeoutSeconds,
         );
+        $this->assertSnapshotTransportReady($continuityAfter);
         $continuityServerDelta = $this->counterDelta(
             $continuityBaseline,
             $continuityAfter,
             'actual_resumed',
+        );
+        $continuityCallbackTelemetry = $this->callbackTelemetryDelta(
+            $continuityBaseline,
+            $continuityAfter,
         );
 
         $postReload = $this->runPairPhase(
@@ -189,6 +238,7 @@ final class TlsSessionResumptionLiveVerifier
             $originPort,
             $connectTimeoutSeconds,
         );
+        $this->assertSnapshotTransportReady($faultBaseline);
         $sidecarBefore = $this->authorizeIsolatedMemorySidecarTermination(
             $instanceName,
             $instanceConfig,
@@ -196,6 +246,10 @@ final class TlsSessionResumptionLiveVerifier
             $workersAfterReload,
         );
         $sidecarFault = null;
+        $faultCallbackTelemetry = null;
+        $faultProbeCacheFailureDelta = 0;
+        $faultProbeDroppedWriteDelta = 0;
+        $faultProbeMissingDelta = 0;
         $sidecarAfter = null;
         $faultFinal = null;
         $faultError = null;
@@ -205,6 +259,35 @@ final class TlsSessionResumptionLiveVerifier
             $faultAttempted = true;
             $this->shutdownAuthorizedMemorySidecar($sidecarBefore, $instanceName);
             $this->waitForMemorySidecarExit($sidecarBefore);
+            $this->assertMemorySidecarStillUnavailable($sidecarBefore);
+            $faultProbeAfter = $this->runSidecarUnavailableCallbackProbe(
+                $instanceName,
+                $workersAfterReload,
+                $sni,
+                $originPort,
+                $connectTimeoutSeconds,
+                $sidecarBefore,
+            );
+            $this->assertMemorySidecarStillUnavailable($sidecarBefore);
+            $faultCallbackTelemetry = $this->callbackTelemetryDelta($faultBaseline, $faultProbeAfter);
+            $faultProbeCacheFailureDelta = $this->counterDelta($faultBaseline, $faultProbeAfter, 'failure');
+            $faultProbeDroppedWriteDelta = $this->counterDelta($faultBaseline, $faultProbeAfter, 'dropped_writes');
+            $faultProbeMissingDelta = $this->counterDelta(
+                $faultBaseline,
+                $faultProbeAfter,
+                'reuse_observation_missing',
+            );
+            $sidecarAfter = $this->waitForMemorySidecarRecovery(
+                $instanceName,
+                $sidecarBefore,
+            );
+            $faultFinal = $this->waitForCacheDrain(
+                $instanceName,
+                $workersAfterReload,
+                $sni,
+                $originPort,
+                $connectTimeoutSeconds,
+            );
             $sidecarFault = $this->runPairPhase(
                 $instanceName,
                 $workersAfterReload,
@@ -213,28 +296,33 @@ final class TlsSessionResumptionLiveVerifier
                 $faultRounds,
                 'cross',
                 $connectTimeoutSeconds,
-                $faultBaseline,
+                $faultFinal,
+                true,
             );
         } catch (\Throwable $throwable) {
             $faultError = $throwable;
         } finally {
             if ($faultAttempted) {
                 try {
-                    $sidecarAfter = $this->waitForMemorySidecarRecovery(
-                        $instanceName,
-                        $sidecarBefore,
-                    );
+                    if (!\is_array($sidecarAfter)) {
+                        $sidecarAfter = $this->waitForMemorySidecarRecovery(
+                            $instanceName,
+                            $sidecarBefore,
+                        );
+                    }
                 } catch (\Throwable $throwable) {
                     $recoveryError = $throwable;
                 }
                 try {
-                    $faultFinal = $this->waitForCacheDrain(
-                        $instanceName,
-                        $workersAfterReload,
-                        $sni,
-                        $originPort,
-                        $connectTimeoutSeconds,
-                    );
+                    if (!\is_array($faultFinal)) {
+                        $faultFinal = $this->waitForCacheDrain(
+                            $instanceName,
+                            $workersAfterReload,
+                            $sni,
+                            $originPort,
+                            $connectTimeoutSeconds,
+                        );
+                    }
                 } catch (\Throwable $throwable) {
                     $recoveryError = $recoveryError === null
                         ? $throwable
@@ -261,10 +349,25 @@ final class TlsSessionResumptionLiveVerifier
         if ($recoveryError !== null) {
             throw $recoveryError;
         }
-        if (!\is_array($sidecarFault) || !\is_array($sidecarAfter) || !\is_array($faultFinal)) {
+        if (!\is_array($sidecarFault)
+            || !\is_array($sidecarAfter)
+            || !\is_array($faultFinal)
+            || !\is_array($faultCallbackTelemetry)
+        ) {
             throw new \RuntimeException('TLS sidecar fault phase did not produce complete recovery evidence.');
         }
-        $sidecarFault = $this->withSnapshotDeltas($sidecarFault, $faultBaseline, $faultFinal);
+        // runSidecarUnavailableCallbackProbe() sealed baseline -> pure fault traffic.
+        // Keep recovery/drain observations out of the sidecar_fault window.
+        if ($faultCallbackTelemetry['get_ipc_deadline_exceeded_total'] !== 0
+            || $faultCallbackTelemetry['put_ipc_deadline_exceeded_total'] !== 0
+        ) {
+            throw new \RuntimeException('TLS callbacks exceeded their IPC deadline during the sidecar fault window.');
+        }
+        if ($faultCallbackTelemetry['get_ipc_fail_fast_total']
+                + $faultCallbackTelemetry['put_ipc_fail_fast_total'] <= 0
+        ) {
+            throw new \RuntimeException('TLS callbacks did not demonstrate fail-fast behavior during the sidecar fault window.');
+        }
 
         $statusAfterFault = $this->readyStatus($instanceName, $instanceConfig);
         $this->assertCriticalProcessesUnchanged(
@@ -324,19 +427,42 @@ final class TlsSessionResumptionLiveVerifier
         $cacheFailureDelta = $same['cache_failure_delta']
             + $initial['cache_failure_delta']
             + $postReload['cache_failure_delta']
+            + $faultProbeCacheFailureDelta
             + $sidecarFault['cache_failure_delta']
             + $postRecovery['cache_failure_delta'];
         $droppedWriteDelta = $same['dropped_write_delta']
             + $initial['dropped_write_delta']
             + $postReload['dropped_write_delta']
+            + $faultProbeDroppedWriteDelta
             + $sidecarFault['dropped_write_delta']
             + $postRecovery['dropped_write_delta'];
         $missingDelta = $same['reuse_observation_missing_delta']
             + $initial['reuse_observation_missing_delta']
             + $postReload['reuse_observation_missing_delta']
+            + $faultProbeMissingDelta
             + $sidecarFault['reuse_observation_missing_delta']
             + $postRecovery['reuse_observation_missing_delta']
             + $this->counterDelta($continuityBaseline, $continuityAfter, 'reuse_observation_missing');
+        $cleanCallbackTelemetry = $this->mergeCallbackTelemetryPhases(
+            $same['callback_telemetry_delta'],
+            $initial['callback_telemetry_delta'],
+            $continuityCallbackTelemetry,
+            $postReload['callback_telemetry_delta'],
+            $postRecovery['callback_telemetry_delta'],
+        );
+        if ($cleanCallbackTelemetry['get_ipc_deadline_exceeded_total'] !== 0
+            || $cleanCallbackTelemetry['put_ipc_deadline_exceeded_total'] !== 0
+        ) {
+            throw new \RuntimeException('Clean TLS callback phases exceeded the configured IPC deadline.');
+        }
+        $callbackTelemetry = [
+            'schema_version' => self::CALLBACK_TELEMETRY_SCHEMA_VERSION,
+            'callback_timeout_us' => $this->expectedCallbackTimeoutUs,
+            'latency_bucket_upper_bounds_us' => self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US,
+            'transport' => $this->verifiedTransportSummary($finalSnapshot),
+            'clean' => $cleanCallbackTelemetry,
+            'sidecar_fault' => $faultCallbackTelemetry,
+        ];
 
         $proof = [
             'same_worker_rounds' => $same['rounds'],
@@ -385,6 +511,7 @@ final class TlsSessionResumptionLiveVerifier
             'captured_at' => \date('c'),
             'scope' => $scope,
             'proof' => $proof,
+            'callback_telemetry' => $callbackTelemetry,
         ];
     }
 
@@ -718,6 +845,7 @@ final class TlsSessionResumptionLiveVerifier
         string $relation,
         float $connectTimeoutSeconds,
         ?array $beforeSnapshot = null,
+        bool $requireTransportReady = true,
     ): array {
         $beforeSnapshot ??= $this->snapshotWorkers(
             $instanceName,
@@ -726,6 +854,9 @@ final class TlsSessionResumptionLiveVerifier
             $originPort,
             $connectTimeoutSeconds,
         );
+        if ($requireTransportReady) {
+            $this->assertSnapshotTransportReady($beforeSnapshot);
+        }
         $uniquePorts = \array_values(\array_unique(\array_map(
             static fn(array $worker): int => (int)($worker['port'] ?? 0),
             $workers,
@@ -826,6 +957,9 @@ final class TlsSessionResumptionLiveVerifier
             $originPort,
             $connectTimeoutSeconds,
         );
+        if ($requireTransportReady) {
+            $this->assertSnapshotTransportReady($afterSnapshot);
+        }
         $result = [
             'rounds' => $accepted,
             'http_success' => $httpSuccess,
@@ -837,6 +971,90 @@ final class TlsSessionResumptionLiveVerifier
         ];
 
         return $this->withSnapshotDeltas($result, $beforeSnapshot, $afterSnapshot);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function runSidecarUnavailableCallbackProbe(
+        string $instanceName,
+        array $workers,
+        string $sni,
+        int $originPort,
+        float $connectTimeoutSeconds,
+        array $sidecarBefore,
+    ): array {
+        if (\count($workers) < 2) {
+            throw new \RuntimeException('TLS sidecar fault callback probe requires at least two READY Workers.');
+        }
+        $uniquePorts = \array_values(\array_unique(\array_map(
+            static fn(array $worker): int => (int)($worker['port'] ?? 0),
+            $workers,
+        )));
+        $deterministic = !$this->usePublicTlsDataPath
+            && \count($uniquePorts) === \count($workers);
+        $accepted = 0;
+        $attempts = 0;
+        $maximumAttempts = $deterministic ? self::CALLBACK_FAULT_PROBE_PAIRS : 512;
+        while ($accepted < self::CALLBACK_FAULT_PROBE_PAIRS && $attempts < $maximumAttempts) {
+            $this->assertMemorySidecarStillUnavailable($sidecarBefore);
+            $sourceIndex = $attempts % \count($workers);
+            $targetIndex = ($sourceIndex + 1) % \count($workers);
+            $sourcePort = $deterministic ? (int)$workers[$sourceIndex]['port'] : $originPort;
+            $targetPort = $deterministic ? (int)$workers[$targetIndex]['port'] : $originPort;
+            $attempts++;
+            $fresh = $this->connect(
+                $sourcePort,
+                $sni,
+                $originPort,
+                null,
+                $connectTimeoutSeconds,
+            );
+            if (!$fresh['healthy'] || !$this->isResumableSession($fresh['session'] ?? null)) {
+                throw new \RuntimeException('TLS sidecar fault callback probe did not produce a healthy resumable Session.');
+            }
+            $session = $fresh['session'];
+            $second = $this->connect(
+                $targetPort,
+                $sni,
+                $originPort,
+                $session,
+                $connectTimeoutSeconds,
+            );
+            unset($session);
+            if (!$second['healthy']) {
+                throw new \RuntimeException('TLS sidecar fault callback probe second handshake was not healthy.');
+            }
+            $this->assertMemorySidecarStillUnavailable($sidecarBefore);
+            $freshWorkerId = (int)($fresh['worker_id'] ?? 0);
+            $secondWorkerId = (int)($second['worker_id'] ?? 0);
+            if ($deterministic
+                && ($freshWorkerId !== (int)($workers[$sourceIndex]['instance_id'] ?? 0)
+                    || $secondWorkerId !== (int)($workers[$targetIndex]['instance_id'] ?? 0))
+            ) {
+                throw new \RuntimeException(
+                    'TLS sidecar fault callback probe private Worker identity changed.'
+                );
+            }
+            if ($freshWorkerId <= 0
+                || $secondWorkerId <= 0
+                || $freshWorkerId === $secondWorkerId
+            ) {
+                continue;
+            }
+            $accepted++;
+        }
+        if ($accepted !== self::CALLBACK_FAULT_PROBE_PAIRS) {
+            throw new \RuntimeException(
+                'TLS sidecar fault callback probe could not collect every cross-Worker pair.'
+            );
+        }
+
+        return $this->snapshotWorkers(
+            $instanceName,
+            $workers,
+            $sni,
+            $originPort,
+            $connectTimeoutSeconds,
+        );
     }
 
     /** @return array<string,mixed> */
@@ -851,6 +1069,7 @@ final class TlsSessionResumptionLiveVerifier
         );
         $phase['cache_failure_delta'] = $this->counterDelta($before, $after, 'failure');
         $phase['dropped_write_delta'] = $this->counterDelta($before, $after, 'dropped_writes');
+        $phase['callback_telemetry_delta'] = $this->callbackTelemetryDelta($before, $after);
 
         return $phase;
     }
@@ -1031,6 +1250,16 @@ final class TlsSessionResumptionLiveVerifier
             'actual_resumed',
             'actual_full_handshake',
             'reuse_observation_missing',
+            'new_cb_total',
+            'get_cb_total',
+            'queued_put_total',
+            'callback_timeout_us',
+            'get_ipc_total',
+            'get_ipc_deadline_exceeded_total',
+            'get_ipc_fail_fast_total',
+            'put_ipc_total',
+            'put_ipc_deadline_exceeded_total',
+            'put_ipc_fail_fast_total',
         ];
         foreach ($requiredCacheCounters as $counter) {
             if (!\array_key_exists($counter, $serverCache) || !\is_numeric($serverCache[$counter])) {
@@ -1041,6 +1270,34 @@ final class TlsSessionResumptionLiveVerifier
                 throw new \RuntimeException('TLS Worker exposed a negative cache counter.');
             }
         }
+        if ($serverCache['callback_timeout_us'] !== $this->expectedCallbackTimeoutUs) {
+            throw new \RuntimeException('TLS Worker callback deadline does not match the verifier config.');
+        }
+        $bounds = $serverCache['latency_bucket_upper_bounds_us'] ?? null;
+        if (!\is_array($bounds)
+            || !\array_is_list($bounds)
+            || $bounds !== self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US
+        ) {
+            throw new \RuntimeException('TLS Worker callback latency bucket contract is invalid.');
+        }
+        $serverCache['get_ipc_latency_bucket_counts'] = $this->normalizeCallbackHistogram(
+            $serverCache['get_ipc_latency_bucket_counts'] ?? null,
+            $serverCache['get_ipc_total'],
+            'GET',
+        );
+        $serverCache['put_ipc_latency_bucket_counts'] = $this->normalizeCallbackHistogram(
+            $serverCache['put_ipc_latency_bucket_counts'] ?? null,
+            $serverCache['put_ipc_total'],
+            'PUT',
+        );
+        $serverCache['reader_transport'] = $this->normalizeCallbackTransport(
+            $serverCache['reader_transport'] ?? null,
+            'reader',
+        );
+        $serverCache['writer_transport'] = $this->normalizeCallbackTransport(
+            $serverCache['writer_transport'] ?? null,
+            'writer',
+        );
         $healthy = \is_array($health)
             && (string)($health['status'] ?? '') === 'healthy'
             && \str_starts_with($response, 'HTTP/1.1 200 ')
@@ -1567,6 +1824,27 @@ final class TlsSessionResumptionLiveVerifier
         );
     }
 
+    private function assertMemorySidecarStillUnavailable(array $previous): void
+    {
+        $previousPort = (int)($previous['port'] ?? 0);
+        if ($previousPort <= 0 || $this->kernelListenerPid($previousPort) > 0) {
+            throw new \RuntimeException('Memory sidecar listener recovered before the fault callback window was sealed.');
+        }
+        $record = $this->sharedRegistry->getRecord('memory_server');
+        $registeredPort = (int)($record['port'] ?? 0);
+        $registeredPid = (int)($record['pid'] ?? 0);
+        $previousPid = (int)($previous['pid'] ?? 0);
+        $previousEnsuredAt = (string)($previous['last_ensured_at'] ?? '');
+        if (($registeredPid > 0 && $registeredPid !== $previousPid)
+            || ($previousEnsuredAt !== ''
+                && (string)($record['last_ensured_at'] ?? '') !== $previousEnsuredAt)
+            || ($registeredPort > 0 && $this->kernelListenerPid($registeredPort) > 0)
+            || ($registeredPid > 0 && Processer::isRunningByPid($registeredPid))
+        ) {
+            throw new \RuntimeException('A Memory sidecar process recovered inside the fault callback window.');
+        }
+    }
+
     private function memoryRecordFingerprint(array $record, string $instanceName): string
     {
         return \hash('sha256', $this->canonicalJson([
@@ -1659,6 +1937,7 @@ final class TlsSessionResumptionLiveVerifier
             if ($this->sumSnapshotCounter($snapshot, 'pending_writes') === 0
                 && $this->sumSnapshotCounter($snapshot, 'inflight_writes') === 0
                 && $this->sumSnapshotCounter($snapshot, 'writer_pending_responses') === 0
+                && $this->snapshotTransportReady($snapshot)
             ) {
                 return $snapshot;
             }
@@ -1700,6 +1979,245 @@ final class TlsSessionResumptionLiveVerifier
             'worker_count' => (int)($instanceConfig['count'] ?? 0),
             'effective_topology' => (string)($runtimeSelection['effective_topology'] ?? ''),
         ]));
+    }
+
+    /** @return list<int> */
+    private function normalizeCallbackHistogram(mixed $value, int $ipcTotal, string $operation): array
+    {
+        $expectedBuckets = \count(self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US) + 1;
+        if (!\is_array($value)
+            || !\array_is_list($value)
+            || \count($value) !== $expectedBuckets
+        ) {
+            throw new \RuntimeException('TLS Worker ' . $operation . ' callback histogram shape is invalid.');
+        }
+        $counts = [];
+        foreach ($value as $count) {
+            if (!\is_int($count) || $count < 0) {
+                throw new \RuntimeException('TLS Worker callback histogram contains an invalid count.');
+            }
+            $counts[] = $count;
+        }
+        if (\array_sum($counts) !== $ipcTotal) {
+            throw new \RuntimeException(
+                'TLS Worker ' . $operation . ' callback histogram does not match its IPC total.'
+            );
+        }
+
+        return $counts;
+    }
+
+    /** @return array<string,bool> */
+    private function normalizeCallbackTransport(mixed $value, string $channel): array
+    {
+        if (!\is_array($value)) {
+            throw new \RuntimeException('TLS Worker ' . $channel . ' transport status is unavailable.');
+        }
+        $keys = \array_keys($value);
+        \sort($keys, SORT_STRING);
+        $expectedKeys = self::CALLBACK_TRANSPORT_KEYS;
+        \sort($expectedKeys, SORT_STRING);
+        if ($keys !== $expectedKeys) {
+            throw new \RuntimeException('TLS Worker ' . $channel . ' transport status shape is invalid.');
+        }
+        foreach (self::CALLBACK_TRANSPORT_KEYS as $key) {
+            if (!\is_bool($value[$key])) {
+                throw new \RuntimeException('TLS Worker transport status must contain booleans.');
+            }
+        }
+
+        $normalized = [];
+        foreach (self::CALLBACK_TRANSPORT_KEYS as $key) {
+            $normalized[$key] = $value[$key];
+        }
+
+        return $normalized;
+    }
+
+    private function assertSnapshotTransportReady(array $snapshot): void
+    {
+        if (!$this->snapshotTransportReady($snapshot)) {
+            throw new \RuntimeException(
+                'TLS cache reader/writer channels did not verify zero read buffers, TCP_NODELAY, and supported write-buffer controls.'
+            );
+        }
+    }
+
+    private function snapshotTransportReady(array $snapshot): bool
+    {
+        if ($snapshot === []) {
+            return false;
+        }
+        foreach ($snapshot as $counters) {
+            if (!\is_array($counters)) {
+                return false;
+            }
+            foreach (['reader_transport', 'writer_transport'] as $channel) {
+                $transport = $counters[$channel] ?? null;
+                if (!\is_array($transport)) {
+                    return false;
+                }
+                if (!$this->callbackTransportReady($transport)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{
+     *   reader:array<string,bool>,
+     *   writer:array<string,bool>
+     * }
+     */
+    private function verifiedTransportSummary(array $snapshot): array
+    {
+        $this->assertSnapshotTransportReady($snapshot);
+        $summary = [];
+        foreach (['reader' => 'reader_transport', 'writer' => 'writer_transport'] as $label => $counter) {
+            $summary[$label] = \array_fill_keys(self::CALLBACK_TRANSPORT_KEYS, true);
+            foreach ($snapshot as $worker) {
+                $transport = \is_array($worker) && \is_array($worker[$counter] ?? null)
+                    ? $worker[$counter]
+                    : [];
+                foreach (self::CALLBACK_TRANSPORT_KEYS as $key) {
+                    $summary[$label][$key] = $summary[$label][$key]
+                        && (($transport[$key] ?? null) === true);
+                }
+            }
+        }
+
+        return $summary;
+    }
+
+    /** @param array<string,bool> $transport */
+    private function callbackTransportReady(array $transport): bool
+    {
+        foreach (['client', 'sidecar'] as $endpoint) {
+            $writeControlSupported = ($transport[$endpoint . '_write_buffer_control_supported'] ?? false) === true;
+            if (($transport[$endpoint . '_read_buffer_zero'] ?? false) !== true
+                || ($transport[$endpoint . '_tcp_nodelay'] ?? false) !== true
+                || ($writeControlSupported
+                    && ($transport[$endpoint . '_write_buffer_zero'] ?? false) !== true)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return array<string, int|list<int>> */
+    private function callbackTelemetryDelta(array $before, array $after): array
+    {
+        $phase = [];
+        foreach (self::CALLBACK_PHASE_SCALAR_COUNTERS as $counter) {
+            $phase[$counter] = $this->counterDelta($before, $after, $counter);
+        }
+        $phase['get_ipc_latency_bucket_counts'] = $this->callbackHistogramDelta(
+            $before,
+            $after,
+            'get_ipc_latency_bucket_counts',
+            $phase['get_ipc_total'],
+        );
+        $phase['put_ipc_latency_bucket_counts'] = $this->callbackHistogramDelta(
+            $before,
+            $after,
+            'put_ipc_latency_bucket_counts',
+            $phase['put_ipc_total'],
+        );
+
+        return $phase;
+    }
+
+    /** @return list<int> */
+    private function callbackHistogramDelta(
+        array $before,
+        array $after,
+        string $counter,
+        int $expectedTotal,
+    ): array {
+        if (\array_keys($before) !== \array_keys($after)) {
+            throw new \RuntimeException('TLS callback histogram Worker identities changed within a phase.');
+        }
+        $bucketCount = \count(self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US) + 1;
+        $delta = \array_fill(0, $bucketCount, 0);
+        foreach ($after as $workerId => $counters) {
+            $previous = $before[$workerId] ?? null;
+            $currentBuckets = \is_array($counters) ? ($counters[$counter] ?? null) : null;
+            $previousBuckets = \is_array($previous) ? ($previous[$counter] ?? null) : null;
+            if (!\is_array($currentBuckets)
+                || !\array_is_list($currentBuckets)
+                || \count($currentBuckets) !== $bucketCount
+                || !\is_array($previousBuckets)
+                || !\array_is_list($previousBuckets)
+                || \count($previousBuckets) !== $bucketCount
+            ) {
+                throw new \RuntimeException('TLS callback histogram snapshot is incomplete.');
+            }
+            foreach ($currentBuckets as $index => $value) {
+                $previousValue = $previousBuckets[$index] ?? null;
+                if (!\is_int($value)
+                    || !\is_int($previousValue)
+                    || $value < 0
+                    || $previousValue < 0
+                    || $value < $previousValue
+                ) {
+                    throw new \RuntimeException('TLS callback histogram reset during verification.');
+                }
+                $delta[$index] += $value - $previousValue;
+            }
+        }
+        if (\array_sum($delta) !== $expectedTotal) {
+            throw new \RuntimeException('TLS callback histogram delta does not match its IPC total delta.');
+        }
+
+        return $delta;
+    }
+
+    /** @return array<string, int|list<int>> */
+    private function mergeCallbackTelemetryPhases(array ...$phases): array
+    {
+        $merged = [];
+        foreach (self::CALLBACK_PHASE_SCALAR_COUNTERS as $counter) {
+            $merged[$counter] = 0;
+        }
+        $bucketCount = \count(self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US) + 1;
+        $merged['get_ipc_latency_bucket_counts'] = \array_fill(0, $bucketCount, 0);
+        $merged['put_ipc_latency_bucket_counts'] = \array_fill(0, $bucketCount, 0);
+        foreach ($phases as $phase) {
+            foreach (self::CALLBACK_PHASE_SCALAR_COUNTERS as $counter) {
+                $value = $phase[$counter] ?? null;
+                if (!\is_int($value) || $value < 0) {
+                    throw new \RuntimeException('TLS callback telemetry phase contains an invalid counter.');
+                }
+                $merged[$counter] += $value;
+            }
+            foreach (['get_ipc_latency_bucket_counts', 'put_ipc_latency_bucket_counts'] as $counter) {
+                $counts = $phase[$counter] ?? null;
+                if (!\is_array($counts)
+                    || !\array_is_list($counts)
+                    || \count($counts) !== $bucketCount
+                ) {
+                    throw new \RuntimeException('TLS callback telemetry phase contains an invalid histogram.');
+                }
+                foreach ($counts as $index => $count) {
+                    if (!\is_int($count) || $count < 0) {
+                        throw new \RuntimeException('TLS callback telemetry histogram count is invalid.');
+                    }
+                    $merged[$counter][$index] += $count;
+                }
+            }
+        }
+        if (\array_sum($merged['get_ipc_latency_bucket_counts']) !== $merged['get_ipc_total']
+            || \array_sum($merged['put_ipc_latency_bucket_counts']) !== $merged['put_ipc_total']
+        ) {
+            throw new \RuntimeException('Merged TLS callback histograms do not match their IPC totals.');
+        }
+
+        return $merged;
     }
 
     private function counterDelta(array $before, array $after, string $counter): int

@@ -29,7 +29,7 @@
 
 use Weline\Framework\App\Debug;
 use Weline\Framework\Cache\CacheManager;
-use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrameworkQueryService;
@@ -108,6 +108,11 @@ if (!function_exists('weline_is_static_file_path')) {
             'geo-feed.xml',
         ];
         if (!\str_contains($path, '/') && \in_array(\strtolower($path), $rootProtocolFiles, true)) {
+            return false;
+        }
+        // Generated sitemap indexes/shards must go through SEO protocol rewrite so
+        // default-website localhost placeholders become the live project origin.
+        if (\preg_match('#^sitemaps/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/[A-Za-z0-9._-]+\.xml$#iD', \strtolower($path)) === 1) {
             return false;
         }
         $arr = \explode('/', $path);
@@ -437,9 +442,12 @@ if (!function_exists('w_msg')) {
      * @param string $content 消息内容
      * @param array $options 可选参数：
      *   - priority: int 优先级 1-10，默认根据 type 自动设定
-     *   - metadata: array 扩展数据
+     *   - metadata: array 扩展数据（scoped / require_authorized_recipients / scope_identity）
      *   - icon: string 图标类名，默认 ri-notification-line
-     *   - notify_users: array 指定通知的用户 ID 列表，空则通知所有订阅者
+     *   - notify_users: array 指定用户 ID；普通通知空=全员；scoped urgent 空=仅审计零广播
+     *   - scope_hash: string Scope 去重哈希（global 或 ScopeIdentity canonical 摘要）
+     *   - scope: string 归属 Scope 三段串（空=全局）
+     *   - dedupe_key: string 会话展示去重键（与 topic+scope_hash 唯一）
      *   - source_module: string 来源模块，自动检测
      */
     function w_msg(
@@ -465,6 +473,9 @@ if (!function_exists('w_msg')) {
                 'is_icon'       => 1,
                 'avatar'        => $options['icon'] ?? 'ri-notification-line',
                 'notify_users'  => $options['notify_users'] ?? [],
+                'scope_hash'    => $options['scope_hash'] ?? null,
+                'scope'         => $options['scope'] ?? null,
+                'dedupe_key'    => $options['dedupe_key'] ?? null,
                 'source_module' => $options['source_module'] ?? '',
             ]
         ];
@@ -472,20 +483,45 @@ if (!function_exists('w_msg')) {
         $eventsManager->dispatch('Weline_Framework_Message::system_notification', $eventData);
     }
 }
+
+if (!function_exists('w_changed')) {
+    /**
+     * 发布显式构造的不可变资源变更。
+     *
+     * 本入口故意不接受 Model/DataObject/任意数组，避免通用事件尝试
+     * 猜测或序列化可变对象图。
+     */
+    function w_changed(
+        \Weline\Framework\Event\ResourceChange\ResourceChange $change
+    ): \Weline\Framework\Event\ResourceChange\ResourceChange {
+        $payload = $change;
+        ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+            ->dispatch(\Weline\Framework\Event\ResourceChange\ResourceChange::EVENT_NAME, $payload);
+        if (!$payload instanceof \Weline\Framework\Event\ResourceChange\ResourceChange) {
+            throw new \LogicException(__('资源变更 Observer 不得替换不可变 ResourceChange DTO'));
+        }
+        return $payload;
+    }
+}
+
 if (!function_exists('w_cache')) {
     /**
      * 获取缓存池
      *
      * @param string $identity 池标识（如 router, config, database）
-     * @return CachePoolInterface
+     * @return NamespaceScopedCachePoolInterface
      */
-    function w_cache(string $identity = 'default'): CachePoolInterface
+    function w_cache(string $identity = 'default'): NamespaceScopedCachePoolInterface
     {
         static $manager = null;
         if ($manager === null) {
             $manager = ObjectManager::getInstance(CacheManager::class);
         }
-        return $manager->pool($identity);
+        $pool = $manager->pool($identity);
+        if (!$pool instanceof NamespaceScopedCachePoolInterface) {
+            throw new \UnexpectedValueException('cache_namespace_capability_missing');
+        }
+        return $pool;
     }
 }
 

@@ -21,6 +21,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
 use Weline\Server\Service\Runtime\RuntimeSelection;
@@ -263,7 +264,9 @@ class Status extends CommandAbstract
         $this->printer->note(__('║                    实例详细信息                                ║'));
         $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
         $this->printer->note(\sprintf('║  ' . __('实例名称：') . '%-50s║', $info->name));
-        $this->printer->note(\sprintf('║  ' . __('监听地址：') . '%-50s║', $info->getListenAddress()));
+        $publicEndpoint = $this->resolveManagedNginxPublicEndpoint($info);
+        $addressLabel = $publicEndpoint !== null ? __('Nginx 公网入口') . '：' : __('监听地址：');
+        $this->printer->note(\sprintf('║  ' . $addressLabel . '%-50s║', $publicEndpoint ?? $info->getListenAddress()));
         $this->printer->note(\sprintf('║  ' . __('端口范围：') . '%-50s║', $info->getPortRangeDescription()));
         $this->printer->note(\sprintf('║  ' . __('Worker 数：') . '%-49s║', (string)$info->workerCount));
         $this->printer->note(\sprintf('║  ' . __('启动时间：') . '%-50s║', $info->startedAt ?: __('unknown')));
@@ -455,6 +458,11 @@ class Status extends CommandAbstract
 
     protected function buildTestCurlTarget(ServerInstanceInfo $info): string
     {
+        $publicEndpoint = $this->resolveManagedNginxPublicEndpoint($info);
+        if ($publicEndpoint !== null) {
+            return '-k ' . $publicEndpoint;
+        }
+
         $scheme = $info->sslEnabled ? 'https' : 'http';
         $host = \strtolower(\trim($info->host));
         if ($host === '' || $host === '0.0.0.0' || $host === '*') {
@@ -467,6 +475,46 @@ class Status extends CommandAbstract
 
         $target = $scheme . '://' . $host . ':' . $info->port;
         return $info->sslEnabled ? '-k ' . $target : $target;
+    }
+
+    private function resolveManagedNginxPublicEndpoint(ServerInstanceInfo $info): ?string
+    {
+        try {
+            $nginx = ManagedNginxService::fromEnv()->doctorSnapshot();
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!(bool)($nginx['runtime_owner_active'] ?? false)
+            || !\hash_equals($info->name, (string)($nginx['owner_instance'] ?? ''))
+        ) {
+            return null;
+        }
+
+        $port = (int)($nginx['listen_https'] ?? 0);
+        if ($port < 1 || $port > 65535) {
+            return null;
+        }
+        $host = '';
+        $serverNames = $nginx['owner_server_names'] ?? [];
+        if (\is_array($serverNames)) {
+            foreach ($serverNames as $serverName) {
+                $candidate = \strtolower(\trim((string)$serverName));
+                if ($candidate !== '' && $candidate !== '_' && !\str_contains($candidate, '*')) {
+                    $host = $candidate;
+                    break;
+                }
+            }
+        }
+        if ($host === '') {
+            $host = \strtolower(\trim($info->host));
+        }
+        if ($host === '' || $host === '0.0.0.0' || $host === '*' || $host === '::') {
+            $host = '127.0.0.1';
+        } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+            $host = '[' . $host . ']';
+        }
+
+        return 'https://' . $host . ($port === 443 ? '' : ':' . $port);
     }
 
     /**

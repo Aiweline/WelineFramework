@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+throw new \RuntimeException(
+    'WLS event-buffer SSL Worker is retired; Nginx is the only TLS terminator.'
+);
+
 /**
  * Experimental WLS HTTPS worker backed by libevent SSL bufferevents.
  *
@@ -821,6 +825,17 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                     }
                     \Weline\Server\Log\WlsLogger::info_("EventBuffer SSL worker entering drain for {$type}");
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_V1:
+                    \Weline\Server\Service\Runtime\WorkerNamespaceInvalidationControlHandler::handle(
+                        $msg,
+                        $ipcClient,
+                        $isMaintenanceWorker
+                            ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE
+                            : \Weline\Server\IPC\ControlMessage::ROLE_WORKER,
+                        $workerId,
+                    );
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_CLEAR:

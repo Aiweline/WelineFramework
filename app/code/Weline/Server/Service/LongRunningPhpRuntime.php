@@ -13,17 +13,28 @@ use Weline\Framework\Console\ConsoleEncoding;
 class LongRunningPhpRuntime
 {
     /**
+     * Unix WLS processes explicitly enable CLI OPcache when the extension is
+     * available so every Master/Worker generation gets the production bytecode
+     * fast path even when the interactive CLI default is disabled.
+     *
      * PHP tracing JIT is process-shared on Windows when CLI OPcache is enabled.
      * Long-running WLS processes start and reload concurrently, and PHP 8.4 can
      * crash in ntdll with 0xC0000005 while publishing/reusing that shared JIT
-     * buffer. Keep bytecode OPcache enabled, but disable only the JIT buffer at
-     * process creation time; runtime ini_set() is too late for this directive.
+     * buffer. Respect the installed bytecode OPcache policy there, but disable
+     * the JIT buffer at process creation time; runtime ini_set() is too late.
      *
      * @return list<string>
      */
     public static function startupCliArguments(): array
     {
         if (\PHP_OS_FAMILY !== 'Windows') {
+            if (\extension_loaded('Zend OPcache') || \function_exists('opcache_get_status')) {
+                return [
+                    '-d',
+                    'opcache.enable_cli=1',
+                ];
+            }
+
             return [];
         }
 
@@ -77,12 +88,8 @@ class LongRunningPhpRuntime
         $script = \basename((string)($_SERVER['argv'][0] ?? $_SERVER['SCRIPT_FILENAME'] ?? ''));
         return \in_array($script, [
             'dispatcher.php',
-            'http_redirect_worker.php',
-            'protocol_edge.php',
             'session_server.php',
             'worker.php',
-            'worker_ssl.php',
-            'worker_ssl_event.php',
         ], true);
     }
 

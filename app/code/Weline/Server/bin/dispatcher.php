@@ -4,13 +4,13 @@ declare(strict_types=1);
 /**
  * Weline Server - 统一 Dispatcher
  *
- * TCP 代理模式，将请求转发给 Worker 处理。
- * 实现「单口入口 + 多 Worker 负载均衡」。
+ * Nginx loopback HTTP/1.1 代理模式，将请求转发给 Worker 处理。
+ * 实现「单回源入口 + 多 Worker 负载均衡」。
  *
  * 用法: php dispatcher.php <host> <port> <worker_base_port> <worker_count> <instance_name> [--name=process_name] [--frontend]
  *
  * 架构:
- *   客户端 → Dispatcher:443 (TCP) → Worker:10443/10444/... → 响应回传
+ *   Nginx → Dispatcher:loopback (H1) → Worker:loopback → 响应回传
  *
  * @author Aiweline
  * @email aiweline@qq.com
@@ -95,6 +95,21 @@ foreach ($argv as $arg) {
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
+$normalizedBindHost = \strtolower(\trim((string)$host));
+if ($normalizedBindHost !== '127.0.0.1') {
+    \fwrite(\STDERR, "[Dispatcher] Nginx-only backend must bind to 127.0.0.1.\n");
+    exit(1);
+}
+if ($controlPort <= 0
+    || $masterPid <= 0
+    || $orchestratorEpoch <= 0
+    || \trim($orchestratorLaunchId) === ''
+    || \trim($masterLeaseFile) === ''
+    || \trim($masterToken) === ''
+) {
+    \fwrite(\STDERR, "[Dispatcher] authenticated Master identity is required.\n");
+    exit(1);
+}
 
 // ========== 初始化 ==========
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;

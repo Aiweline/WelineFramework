@@ -6,7 +6,7 @@ namespace Weline\Framework\System\Process;
 
 use Weline\Framework\System\Process\Driver\ProcessDriverFactory;
 use Weline\Framework\System\Process\Driver\ProcessDriverInterface;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 /**
  * Processer 与进程名规范化的单元测试

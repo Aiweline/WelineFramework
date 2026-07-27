@@ -16,6 +16,7 @@ namespace Weline\Framework\Cache;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CacheManagerInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Cache\Contract\NamespaceScopedCachePoolInterface;
 use Weline\Framework\Cache\Contract\TaggableInterface;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Cache\Pool\TaggableCachePool;
@@ -29,7 +30,7 @@ class CacheManager implements CacheManagerInterface
     /**
      * 池注册表
      * 
-     * @var array<string, CachePoolInterface>
+     * @var array<string, NamespaceScopedCachePoolInterface>
      */
     private array $pools = [];
 
@@ -172,7 +173,7 @@ class CacheManager implements CacheManagerInterface
     /**
      * 创建缓存池
      */
-    private function createPool(string $identity): CachePoolInterface
+    private function createPool(string $identity): NamespaceScopedCachePoolInterface
     {
         $poolConfig = $this->getPoolConfig($identity);
         $driverName = $this->resolveDriver($identity, $poolConfig);

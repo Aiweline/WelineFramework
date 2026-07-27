@@ -168,7 +168,10 @@ class StateManager
     /**
      * 执行静态变量重置
      */
-    private static function resetStaticProperties(): void
+    /**
+     * @param list<array{stage: string, exception: \Throwable}> $failures
+     */
+    private static function resetStaticProperties(array &$failures): void
     {
         foreach (self::$staticResets as $key => $config) {
             try {
@@ -198,6 +201,7 @@ class StateManager
                 
             } catch (\Throwable $e) {
                 w_log_error("[StateManager] Static reset '{$key}' error: " . $e->getMessage());
+                RequestResetException::append($failures, 'static:' . $key, $e);
             }
         }
     }
@@ -205,7 +209,10 @@ class StateManager
     /**
      * 重置注册的单例实例
      */
-    private static function resetSingletonInstances(): void
+    /**
+     * @param list<array{stage: string, exception: \Throwable}> $failures
+     */
+    private static function resetSingletonInstances(array &$failures): void
     {
         if (empty(self::$singletonResets)) {
             return;
@@ -217,6 +224,7 @@ class StateManager
                     \Weline\Framework\Manager\ObjectManager::removeInstance($className);
                 } catch (\Throwable $e) {
                     w_log_error("[StateManager] Singleton reset '{$className}' error: " . $e->getMessage());
+                    RequestResetException::append($failures, 'singleton:' . $className, $e);
                 }
             }
         }
@@ -316,11 +324,13 @@ class StateManager
      */
     public static function reset(?array $omitCallbackNames = null, bool $skipHeaderCollectorReset = false): void
     {
+        $failures = [];
+
         // 1. 重置静态变量
-        self::resetStaticProperties();
+        self::resetStaticProperties($failures);
         
         // 2. 重置单例实例
-        self::resetSingletonInstances();
+        self::resetSingletonInstances($failures);
         
         // 3. 执行所有重置回调
         foreach (self::$resetCallbacks as $name => $callback) {
@@ -331,16 +341,29 @@ class StateManager
                 $callback();
             } catch (\Throwable $e) {
                 w_log_error("[StateManager] Reset callback '{$name}' error: " . $e->getMessage());
+                RequestResetException::append($failures, 'callback:' . $name, $e);
             }
         }
         
         // 4. 清理请求级实例
         self::$requestScopedInstances = [];
-        \Weline\Framework\Manager\ObjectManager::clearCurrentRequestScope();
+        try {
+            \Weline\Framework\Manager\ObjectManager::clearCurrentRequestScope();
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'object_manager:request_scope', $e);
+        }
         
         // 5. 重置 HeaderCollector
         if (!$skipHeaderCollectorReset && \class_exists(\Weline\Framework\Http\HeaderCollector::class, false)) {
-            \Weline\Framework\Http\HeaderCollector::reset();
+            try {
+                \Weline\Framework\Http\HeaderCollector::reset();
+            } catch (\Throwable $e) {
+                RequestResetException::append($failures, 'header_collector', $e);
+            }
+        }
+
+        if ($failures !== []) {
+            throw new RequestResetException('state_manager', $failures);
         }
     }
 
@@ -352,52 +375,75 @@ class StateManager
      */
     public static function runWlsPersistentRequestEntryBaseline(): void
     {
-        if (\class_exists(\Weline\Framework\Session\SessionFactory::class, false)) {
-            \Weline\Framework\Session\SessionFactory::getInstance()->resetRequestInstances();
-        }
-        if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
-            \Weline\Framework\Session\Session::resetRequestState();
-        }
+        $failures = [];
 
-        \Weline\Framework\Manager\ResultManager::resetRequestState();
-
-        \Weline\Framework\View\Template::resetInstance();
-        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
-        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Response::class);
-        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
-        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Router\Core::class);
-
-        $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
-        $removeControllers = [];
-        $removeModels = [];
-        $removeObservers = [];
-        foreach ($instances as $class => $instance) {
-            if ($instance instanceof \Weline\Framework\Controller\Core) {
-                $removeControllers[] = $class;
-            } elseif ($instance instanceof \Weline\Framework\Database\AbstractModel) {
-                $removeModels[] = $class;
-            } elseif ($instance instanceof \Weline\Framework\Event\ObserverInterface) {
-                $removeObservers[] = $class;
+        try {
+            if (\class_exists(\Weline\Framework\Session\SessionFactory::class, false)) {
+                \Weline\Framework\Session\SessionFactory::getInstance()->resetRequestInstances();
             }
-        }
-        foreach ($removeControllers as $class) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance($class);
-        }
-        foreach ($removeModels as $class) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance($class);
-        }
-        foreach ($removeObservers as $class) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'session_factory', $e);
         }
 
-        \Weline\Framework\Manager\ObjectManager::getInstance(
-            ModuleRequestResetterRegistry::class
-        )->resetRequest();
-        if (\class_exists(\Weline\Framework\Manager\MessageManager::class, false)) {
-            \Weline\Framework\Manager\MessageManager::resetRequestState();
+        try {
+            if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
+                \Weline\Framework\Session\Session::resetRequestState();
+            }
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'session_state', $e);
         }
-        if (\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
-            try {
+
+        try {
+            \Weline\Framework\Manager\ResultManager::resetRequestState();
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'result_manager', $e);
+        }
+
+        try {
+            \Weline\Framework\View\Template::resetInstance();
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Response::class);
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Router\Core::class);
+
+            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
+            $removeControllers = [];
+            $removeModels = [];
+            $removeObservers = [];
+            foreach ($instances as $class => $instance) {
+                if ($instance instanceof \Weline\Framework\Controller\Core) {
+                    $removeControllers[] = $class;
+                } elseif ($instance instanceof \Weline\Framework\Database\AbstractModel) {
+                    $removeModels[] = $class;
+                } elseif ($instance instanceof \Weline\Framework\Event\ObserverInterface) {
+                    $removeObservers[] = $class;
+                }
+            }
+            foreach (\array_merge($removeControllers, $removeModels, $removeObservers) as $class) {
+                \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+            }
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'object_manager_entry_baseline', $e);
+        }
+
+        try {
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                ModuleRequestResetterRegistry::class
+            )->resetRequest();
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'module_request_resetters', $e);
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\Manager\MessageManager::class, false)) {
+                \Weline\Framework\Manager\MessageManager::resetRequestState();
+            }
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'message_manager', $e);
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
                 $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
                 $eventsManager = $instances[\Weline\Framework\Event\EventsManager::class] ?? null;
                 if ($eventsManager) {
@@ -407,21 +453,35 @@ class StateManager
                         $eventsManager->clearObserverCache();
                     }
                 }
-            } catch (\Throwable) {
             }
-        }
-        if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
-            \Weline\Framework\View\Taglib::clearStaticCaches();
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
-        }
-        if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
-            \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
-        }
-        if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Hooker::class);
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'events_manager', $e);
         }
 
+        try {
+            if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
+                \Weline\Framework\View\Taglib::clearStaticCaches();
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
+            }
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'taglib', $e);
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
+                \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
+            }
+            if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Hooker::class);
+            }
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'view_hooks', $e);
+        }
+
+        if ($failures !== []) {
+            throw new RequestResetException('persistent_request_entry', $failures);
+        }
     }
     
     /**
@@ -429,12 +489,22 @@ class StateManager
      */
     public static function cleanup(): void
     {
-        self::reset();
-        self::$resetCallbacks = [];
-        self::$instanceScopes = [];
-        self::$objectPool = [];
-        self::$staticResets = [];
-        self::$singletonResets = [];
+        $failure = null;
+        try {
+            self::reset();
+        } catch (\Throwable $throwable) {
+            $failure = $throwable;
+        } finally {
+            self::$resetCallbacks = [];
+            self::$instanceScopes = [];
+            self::$objectPool = [];
+            self::$staticResets = [];
+            self::$singletonResets = [];
+        }
+
+        if ($failure !== null) {
+            throw $failure;
+        }
     }
     
     /**
@@ -463,6 +533,89 @@ class StateManager
     public static function getStaticResets(): array
     {
         return self::$staticResets;
+    }
+
+    /**
+     * Capture the loaded request-level static properties for cooperative
+     * Fiber switching. A peer request may reset these process projections,
+     * so the owning Fiber must restore its snapshot before it resumes.
+     *
+     * @return array<string, mixed>
+     */
+    public static function captureRegisteredStaticState(): array
+    {
+        $snapshot = [];
+        $failures = [];
+        foreach (self::$staticResets as $key => $config) {
+            $className = $config['class'];
+            $propertyName = $config['property'];
+            if (!\class_exists($className, false)) {
+                continue;
+            }
+
+            try {
+                $reflection = new \ReflectionClass($className);
+                if (!$reflection->hasProperty($propertyName)) {
+                    continue;
+                }
+                $property = $reflection->getProperty($propertyName);
+                if (!$property->isStatic() || !$property->isInitialized()) {
+                    continue;
+                }
+                $property->setAccessible(true);
+                $snapshot[$key] = $property->getValue();
+            } catch (\Throwable $e) {
+                w_log_error("[StateManager] Static snapshot '{$key}' error: " . $e->getMessage());
+                RequestResetException::append($failures, 'static:' . $key, $e);
+            }
+        }
+
+        if ($failures !== []) {
+            throw new RequestResetException('fiber_static_capture', $failures);
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     */
+    public static function restoreRegisteredStaticState(array $snapshot): void
+    {
+        $failures = [];
+        foreach (self::$staticResets as $key => $config) {
+            // A class may register request-level static state while another
+            // request Fiber is suspended. That late registration is absent
+            // from the older Fiber snapshot and must restore to its declared
+            // default, never to the peer Fiber's current process projection.
+            $value = \array_key_exists($key, $snapshot)
+                ? $snapshot[$key]
+                : $config['default'];
+
+            try {
+                $className = $config['class'];
+                $propertyName = $config['property'];
+                if (!\class_exists($className, false)) {
+                    continue;
+                }
+                $reflection = new \ReflectionClass($className);
+                if (!$reflection->hasProperty($propertyName)) {
+                    continue;
+                }
+                $property = $reflection->getProperty($propertyName);
+                if (!$property->isStatic()) {
+                    continue;
+                }
+                $property->setAccessible(true);
+                $property->setValue(null, $value);
+            } catch (\Throwable $e) {
+                RequestResetException::append($failures, 'static:' . $key, $e);
+            }
+        }
+
+        if ($failures !== []) {
+            throw new RequestResetException('fiber_static_restore', $failures);
+        }
     }
     
     /**

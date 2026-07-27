@@ -4,13 +4,11 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Server\Model\AttackLog;
-use Weline\Server\Model\ReverseProxy;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 
 class WlsPanelDashboardDataService
 {
     public function __construct(
-        private readonly ReverseProxy $reverseProxy,
         private readonly AttackLog $attackLog,
         private readonly ServerInstanceManager $instanceManager,
         private readonly WlsPanelProjectRegistryService $projectRegistry
@@ -22,61 +20,24 @@ class WlsPanelDashboardDataService
      */
     public function getDashboardData(): array
     {
-        $gateway = $this->collectGateway();
         $security = $this->collectSecurity();
         $runtime = $this->collectRuntime();
         $registeredProjects = $this->collectRegisteredProjects();
-        $projects = $this->buildProjects($gateway['rules'], $registeredProjects['projects']);
+        $projects = $this->buildProjects($registeredProjects['projects']);
 
         return [
             'metrics' => [
                 'managed_projects' => \count($projects),
-                'gateway_rules' => (int)$gateway['total'],
                 'security_events' => (int)$security['events_7d'],
             ],
             'projects' => $projects,
-            'gateway' => $gateway,
             'security' => $security,
             'runtime' => $runtime,
             'errors' => \array_values(\array_filter([
-                $gateway['error'] ?? '',
                 $security['error'] ?? '',
                 $runtime['error'] ?? '',
                 $registeredProjects['error'] ?? '',
             ])),
-        ];
-    }
-
-    /**
-     * @return array{total:int,active:int,inactive:int,rules:array<int,array<string,mixed>>,error:string}
-     */
-    private function collectGateway(): array
-    {
-        try {
-            $rules = $this->reverseProxy->getAllRules();
-        } catch (\Throwable $throwable) {
-            return [
-                'total' => 0,
-                'active' => 0,
-                'inactive' => 0,
-                'rules' => [],
-                'error' => $throwable->getMessage(),
-            ];
-        }
-
-        $active = 0;
-        foreach ($rules as $rule) {
-            if ((string)($rule[ReverseProxy::schema_fields_STATUS] ?? '') === ReverseProxy::STATUS_ACTIVE) {
-                $active++;
-            }
-        }
-
-        return [
-            'total' => \count($rules),
-            'active' => $active,
-            'inactive' => \max(0, \count($rules) - $active),
-            'rules' => \array_values($rules),
-            'error' => '',
         ];
     }
 
@@ -179,11 +140,10 @@ class WlsPanelDashboardDataService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $gatewayRules
      * @param array<int, array<string, mixed>> $registeredProjects
      * @return array<int, array<string, mixed>>
      */
-    private function buildProjects(array $gatewayRules, array $registeredProjects): array
+    private function buildProjects(array $registeredProjects): array
     {
         $projects = [
             [
@@ -201,42 +161,9 @@ class WlsPanelDashboardDataService
             ],
         ];
 
-        $registeredDomains = [];
         foreach ($registeredProjects as $project) {
             $card = $this->projectRegistry->projectToCard($project);
-            $domain = \strtolower(\trim((string)($card['domain'] ?? '')));
-            if ($domain !== '') {
-                $registeredDomains[$domain] = true;
-            }
             $projects[] = $card;
-        }
-
-        foreach ($gatewayRules as $rule) {
-            $domain = \trim((string)($rule[ReverseProxy::schema_fields_DOMAIN] ?? ''));
-            if ($domain === '') {
-                continue;
-            }
-            if (isset($registeredDomains[\strtolower($domain)])) {
-                continue;
-            }
-
-            $target = $this->buildBackendTarget($rule);
-            $status = (string)($rule[ReverseProxy::schema_fields_STATUS] ?? ReverseProxy::STATUS_INACTIVE);
-            $description = \trim((string)($rule[ReverseProxy::schema_fields_DESCRIPTION] ?? ''));
-
-            $projects[] = [
-                'type' => 'gateway',
-                'name' => $description !== '' ? $description : $domain,
-                'domain' => $domain,
-                'status' => $status === ReverseProxy::STATUS_ACTIVE ? (string)__('Active') : (string)__('Inactive'),
-                'path_label' => (string)__('Upstream'),
-                'path' => $target,
-                'backend' => $target,
-                'admin' => $target,
-                'panel' => $target,
-                'php' => '',
-                'db' => '#database-profile',
-            ];
         }
 
         return $projects;
@@ -250,21 +177,5 @@ class WlsPanelDashboardDataService
         }
 
         return $host !== '' ? $host : 'localhost';
-    }
-
-    /**
-     * @param array<string, mixed> $rule
-     */
-    private function buildBackendTarget(array $rule): string
-    {
-        $host = \trim((string)($rule[ReverseProxy::schema_fields_BACKEND_HOST] ?? ''));
-        $port = (int)($rule[ReverseProxy::schema_fields_BACKEND_PORT] ?? 0);
-        $scheme = (bool)($rule[ReverseProxy::schema_fields_BACKEND_SSL] ?? false) ? 'https' : 'http';
-
-        if ($host === '') {
-            return '';
-        }
-
-        return $scheme . '://' . $host . ($port > 0 ? ':' . $port : '');
     }
 }

@@ -19,7 +19,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 use function PHPUnit\Framework\assertTrue;
 
-class CacheTest extends \Weline\Framework\UnitTest\TestCore
+class CacheTest extends \Weline\Framework\Test\TestCore
 {
     public function testMemcachedCache()
     {

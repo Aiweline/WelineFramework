@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Contract;
 
 use Weline\Server\Service\Runtime\EffectiveTopology;
-use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 
 /**
@@ -17,8 +16,6 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
  */
 class ServiceContext
 {
-    private ?bool $protocolEdgeEnabled = null;
-
     public function __construct(
         public readonly string $instanceName,
         public readonly int $epoch,
@@ -44,7 +41,48 @@ class ServiceContext
         public readonly string $controlToken = '',
         public readonly string $masterLeaseFile = '',
         public readonly string $masterToken = '',
-    ) {}
+    ) {
+        $normalizedHost = \strtolower(\trim($host, " \t\n\r\0\x0B[]"));
+        $loopback = $normalizedHost === 'localhost'
+            || $normalizedHost === '::1'
+            || (\filter_var($normalizedHost, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false
+                && \str_starts_with($normalizedHost, '127.'));
+        if (!$loopback) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS context requires an explicit loopback backend host.'
+            );
+        }
+        if ($sslEnabled || $sslCert !== '' || $sslKey !== '' || $httpRedirectPort !== 0) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS context requires plaintext H1 backend workers without redirect listeners.'
+            );
+        }
+        $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $edge = \is_array($wls['edge'] ?? null) ? $wls['edge'] : [];
+        $edgeAdapter = \strtolower(\trim((string)($edge['adapter'] ?? 'nginx')));
+        if ($edgeAdapter !== 'nginx') {
+            throw new \InvalidArgumentException('Nginx is the only supported WLS public edge adapter.');
+        }
+        $nginx = \is_array($edge['nginx'] ?? null) ? $edge['nginx'] : [];
+        if (($nginx['managed'] ?? null) !== true
+            || ($nginx['auto_start'] ?? null) !== true
+        ) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS context requires managed=true and auto_start=true.'
+            );
+        }
+        $http = \is_array($wls['http'] ?? null) ? $wls['http'] : [];
+        if (($http['protocols'] ?? ['h1']) !== ['h1']
+            || \strtolower(\trim((string)($http['preferred'] ?? 'h1'))) !== 'h1'
+            || \strtolower(\trim((string)($http['protocol_edge'] ?? 'disabled'))) !== 'disabled'
+            || (bool)($http['tls_session_resumption'] ?? false)
+            || (bool)($http['alt_svc'] ?? false)
+        ) {
+            throw new \InvalidArgumentException(
+                'Nginx-only WLS context requires h1/disabled private backend protocol settings.'
+            );
+        }
+    }
 
     /**
      * 生成新代际上下文
@@ -131,21 +169,10 @@ class ServiceContext
         return $this->runtimeSelection->isDirect();
     }
 
-    /**
-     * Optional native protocol edge (wls.http.protocol_edge=auto/native).
-     * Nginx remains the default public TLS/H2/H3 terminator when edge adapter is nginx.
-     */
+    /** WLS no longer owns a public protocol edge; Nginx runs outside the service registry. */
     public function isProtocolEdgeEnabled(): bool
     {
-        if ($this->protocolEdgeEnabled !== null) {
-            return $this->protocolEdgeEnabled;
-        }
-
-        $httpConfig = $this->getConfig('wls.http', []);
-        return $this->protocolEdgeEnabled = HttpProtocolSelection::fromConfig(
-            ['http' => \is_array($httpConfig) ? $httpConfig : []],
-            $this->sslEnabled,
-        )->isProtocolEdgeEnabled();
+        return false;
     }
 
     public function isWorkerPublicListener(): bool

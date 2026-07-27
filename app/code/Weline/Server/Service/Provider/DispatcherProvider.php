@@ -3,21 +3,18 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
-use Weline\Framework\App\Env;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
-use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\ServiceOrchestrator;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * Dispatcher 服务提供者
  *
- * 负责将外部流量分发到后端 Worker 进程。
- * 仅在 Windows 或启用 Dispatcher 模式时启用。
+ * 负责把项目托管 Nginx 的 loopback HTTP/1.1 回源流量分发到 Worker。
+ * 仅在显式选择 Dispatcher 兼容/诊断拓扑时启用；所有平台 auto 都是 Direct。
  *
  * 优先级：30（在 Worker 之后启动，确保 Worker 就绪后再接收流量）
  */
@@ -88,9 +85,6 @@ class DispatcherProvider extends AbstractServiceProvider
         if ($context->windowMode) {
             $arguments[] = '--win';
         }
-        if ($context->isProtocolEdgeEnabled()) {
-            $arguments[] = '--protocol-edge-token-file=' . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
-        }
 
         return new ServiceCommand(
             script: $script,
@@ -101,40 +95,12 @@ class DispatcherProvider extends AbstractServiceProvider
 
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
-        if ($context->isProtocolEdgeEnabled()) {
-            return ProtocolEdgeRuntime::dispatcherPort($context);
-        }
         return $context->mainPort;
     }
 
     private function resolveBindHost(ServiceContext $context): string
     {
-        if ($context->isProtocolEdgeEnabled()) {
-            return '127.0.0.1';
-        }
-        $wlsConfig = \is_array($context->envConfig['wls'] ?? null) ? $context->envConfig['wls'] : [];
-        $dispatcherConfig = \is_array($wlsConfig['dispatcher'] ?? null) ? $wlsConfig['dispatcher'] : [];
-
-        foreach ([
-            $dispatcherConfig['bind_host'] ?? null,
-            $wlsConfig['bind_host'] ?? null,
-        ] as $candidate) {
-            $candidate = \trim((string)$candidate);
-            if ($candidate !== '') {
-                return $candidate;
-            }
-        }
-
-        $host = \trim((string)$context->host);
-        if ($host === '' || $host === 'localhost' || LocalDomainPolicy::isManagedLocalDomain($host)) {
-            return '127.0.0.1';
-        }
-
-        if (\filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            return $host;
-        }
-
-        return '0.0.0.0';
+        return '127.0.0.1';
     }
 
     public function handleMessage(array $message, ServiceInstance $instance, ServiceOrchestrator $orchestrator): bool

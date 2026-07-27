@@ -117,6 +117,8 @@ class Processer
      * PowerShell 5.x 对无 BOM 的 .ps1 常按系统 ANSI 解码；BP/参数含中文时会导致 Start-Process 路径错误、PID 回传为空。
      */
     private const WINDOWS_PS1_UTF8_BOM = "\xEF\xBB\xBF";
+    private const WINDOWS_ISOLATED_BATCH_MARKER = '--weline-isolated-child';
+    private const WINDOWS_ISOLATED_BATCH_ID_PREFIX = '--weline-isolated-batch=';
     
     /*----------------------------------------进程名规范化区域------------------------------------------*/
     
@@ -1036,7 +1038,9 @@ class Processer
         array $argv,
         string $cwd,
         string $processIdentity,
-        ?bool $enableLog = null
+        ?bool $enableLog = null,
+        ?string $outputPath = null,
+        ?string $errorPath = null,
     ): int {
         $argv = self::normalizeManagedPhpArgv($argv);
         if ($argv === []) {
@@ -1066,7 +1070,9 @@ class Processer
                 $argv,
                 $resolvedCwd,
                 $processIdentity,
-                $enableLog
+                $enableLog,
+                $outputPath,
+                $errorPath,
             );
             if ($pid <= 0) {
                 throw new \RuntimeException('Windows detached PHP argv launcher did not return a child PID.');
@@ -1080,12 +1086,21 @@ class Processer
         // out-of-process helper that forks + setsid + exec instead.
         $inWlsWorker = \trim((string)(\getenv('WLS_WORKER_ID') ?: ($_ENV['WLS_WORKER_ID'] ?? '') )) !== '';
         $pid = $inWlsWorker
-            ? self::createPosixDetachedPhpArgvOutOfProcess($argv, $resolvedCwd, $processIdentity, $enableLog)
+            ? self::createPosixDetachedPhpArgvOutOfProcess(
+                $argv,
+                $resolvedCwd,
+                $processIdentity,
+                $enableLog,
+                $outputPath,
+                $errorPath,
+            )
             : self::createPosixDetachedPhpArgv(
                 $argv,
                 $resolvedCwd,
                 $processIdentity,
-                $enableLog
+                $enableLog,
+                $outputPath,
+                $errorPath,
             );
         if ($pid <= 0) {
             throw new \RuntimeException('POSIX detached PHP fork/exec did not return a child PID.');
@@ -1104,7 +1119,9 @@ class Processer
         array $argv,
         string $cwd,
         string $processIdentity,
-        ?bool $enableLog
+        ?bool $enableLog,
+        ?string $outputPath,
+        ?string $errorPath,
     ): int {
         $helper = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Framework' . DS
             . 'System' . DS . 'Process' . DS . 'bin' . DS . 'posix_detached_spawn.php';
@@ -1114,10 +1131,15 @@ class Processer
 
         $logEnabled = $enableLog ?? self::isLogEnabled();
         $stdoutPath = '/dev/null';
+        $stderrPath = '/dev/null';
         if ($logEnabled) {
-            $candidate = self::getLogFile($processIdentity);
+            $candidate = $outputPath ?: self::getLogFile($processIdentity);
             if (self::prepareProcessLogFileForWrite($candidate)) {
                 $stdoutPath = $candidate;
+            }
+            $errorCandidate = $errorPath ?: $stdoutPath;
+            if (self::prepareProcessLogFileForWrite($errorCandidate)) {
+                $stderrPath = $errorCandidate;
             }
         }
 
@@ -1125,6 +1147,7 @@ class Processer
             'cwd' => $cwd,
             'argv' => \array_values($argv),
             'stdout' => $stdoutPath,
+            'stderr' => $stderrPath,
         ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
         if (!\is_string($configJson) || $configJson === '') {
             throw new \RuntimeException('POSIX detached spawn config could not be encoded.');
@@ -1230,7 +1253,9 @@ class Processer
         array $argv,
         string $cwd,
         string $processIdentity,
-        ?bool $enableLog
+        ?bool $enableLog,
+        ?string $outputPath,
+        ?string $errorPath,
     ): int {
         $disabledFunctions = \array_map(
             'trim',
@@ -1255,8 +1280,9 @@ class Processer
 
         $logEnabled = $enableLog ?? self::isLogEnabled();
         $stdoutPath = '/dev/null';
+        $stderrPath = '/dev/null';
         if ($logEnabled) {
-            $candidate = self::getLogFile($processIdentity);
+            $candidate = $outputPath ?: self::getLogFile($processIdentity);
             if (self::prepareProcessLogFileForWrite($candidate)) {
                 $stdoutPath = $candidate;
             } else {
@@ -1266,6 +1292,10 @@ class Processer
                     0,
                     'detached fork/exec log unavailable'
                 );
+            }
+            $errorCandidate = $errorPath ?: $stdoutPath;
+            if (self::prepareProcessLogFileForWrite($errorCandidate)) {
+                $stderrPath = $errorCandidate;
             }
         }
 
@@ -1292,7 +1322,7 @@ class Processer
         if (!\is_resource($stdout)) {
             $stdout = @\fopen('/dev/null', 'ab');
         }
-        $stderr = @\fopen($stdoutPath, 'ab');
+        $stderr = @\fopen($stderrPath, 'ab');
         if (!\is_resource($stderr)) {
             $stderr = @\fopen('/dev/null', 'ab');
         }
@@ -1401,7 +1431,9 @@ class Processer
         array $argv,
         string $cwd,
         string $pnameForRegistry,
-        ?bool $enableLog = null
+        ?bool $enableLog = null,
+        ?string $outputPath = null,
+        ?string $errorPath = null,
     ): int {
         if (!IS_WIN || \count($argv) < 2) {
             return 0;
@@ -1419,7 +1451,26 @@ class Processer
         $processInfo = self::ensureProcessName($pnameForRegistry);
         $pname = $processInfo['command'];
 
-        $scriptPath = self::writeWindowsStartScriptArgv($argv, $cwd);
+        if ($enableLog) {
+            $outputPath = $outputPath ?: self::getLogFile($pname);
+            if (!self::prepareProcessLogFileForWrite($outputPath)) {
+                $outputPath = null;
+            }
+            $errorPath = $errorPath ?: (($outputPath ?: self::getLogFile($pname)) . '.stderr.log');
+            if ($outputPath !== null
+                && \strcasecmp(\str_replace('/', '\\', $outputPath), \str_replace('/', '\\', $errorPath)) === 0
+            ) {
+                $errorPath = $outputPath . '.stderr.log';
+            }
+            if (!self::prepareProcessLogFileForWrite($errorPath)) {
+                $errorPath = null;
+            }
+        } else {
+            $outputPath = null;
+            $errorPath = null;
+        }
+
+        $scriptPath = self::writeWindowsStartScriptArgv($argv, $cwd, $outputPath, $errorPath);
         if ($scriptPath === null) {
             return 0;
         }
@@ -1953,7 +2004,8 @@ class Processer
         string $expectedProcessName,
         string $expectedLaunchId = '',
         ?string $expectedPname = null,
-        bool $fresh = false
+        bool $fresh = false,
+        array $requiredLiveArguments = [],
     ): array {
         $processState = self::probeProcessState($pid, $fresh);
         $preflight = self::validateManagedProcessIdentitySnapshot(
@@ -1962,7 +2014,8 @@ class Processer
             $expectedLaunchId,
             $expectedPname,
             $processState,
-            ''
+            '',
+            $requiredLiveArguments,
         );
         if ($processState !== self::PROCESS_STATE_RUNNING
             || ($preflight['reason'] ?? '') !== 'live_identity_unavailable'
@@ -1982,7 +2035,8 @@ class Processer
             $expectedLaunchId,
             $expectedPname,
             $processState,
-            $liveIdentity
+            $liveIdentity,
+            $requiredLiveArguments,
         );
     }
 
@@ -2105,7 +2159,8 @@ class Processer
         string $expectedLaunchId,
         ?string $expectedPname,
         string $processState,
-        string $liveIdentity
+        string $liveIdentity,
+        array $requiredLiveArguments = [],
     ): array {
         $expectedProcessName = \trim($expectedProcessName);
         $expectedLaunchId = \trim($expectedLaunchId);
@@ -2201,6 +2256,32 @@ class Processer
 
         $result['expected_identity_hash'] = \hash('sha256', $expectedProcessName);
         $result['live_identity_hash'] = \hash('sha256', $liveIdentity);
+        if ($requiredLiveArguments !== []) {
+            foreach ($requiredLiveArguments as $argumentName => $expectedValue) {
+                if (!\is_string($argumentName)
+                    || \preg_match('/^[a-z0-9][a-z0-9-]*$/Di', $argumentName) !== 1
+                    || (!\is_scalar($expectedValue) && !$expectedValue instanceof \Stringable)
+                ) {
+                    $result['reason'] = 'expected_required_argument_invalid';
+                    return $result;
+                }
+                $expectedValue = (string)$expectedValue;
+                $values = self::extractCommandLineArgumentValues($liveIdentity, $argumentName);
+                if (\count($values) !== 1 || $values[0] === '') {
+                    $result['reason'] = 'live_required_argument_missing_or_ambiguous';
+                    return $result;
+                }
+                if (!\hash_equals($expectedValue, $values[0])) {
+                    $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
+                    $result['reason'] = 'live_required_argument_mismatch';
+                    return $result;
+                }
+            }
+
+            $result['state'] = self::PROCESS_STATE_RUNNING;
+            $result['reason'] = 'identity_match';
+            return $result;
+        }
         $liveLaunchId = self::extractCommandLineArg($liveIdentity, 'launch-id');
         $liveCanonicalName = self::extractCommandLineArg($liveIdentity, 'name');
 
@@ -2272,14 +2353,16 @@ class Processer
         string $expectedProcessName,
         string $expectedLaunchId = '',
         ?string $expectedPname = null,
-        bool $tree = true
+        bool $tree = true,
+        array $requiredLiveArguments = [],
     ): array {
         $probe = self::probeManagedProcessIdentity(
             $pid,
             $expectedProcessName,
             $expectedLaunchId,
             $expectedPname,
-            true
+            true,
+            $requiredLiveArguments,
         );
         $state = (string) ($probe['state'] ?? self::PROCESS_STATE_UNKNOWN);
         if ($state === self::PROCESS_STATE_EXITED
@@ -2310,7 +2393,8 @@ class Processer
                 $expectedProcessName,
                 $expectedLaunchId,
                 $expectedPname,
-                true
+                true,
+                $requiredLiveArguments,
             );
             $verifiedState = (string) ($verified['state'] ?? self::PROCESS_STATE_UNKNOWN);
             if ($verifiedState === self::PROCESS_STATE_EXITED
@@ -3858,7 +3942,7 @@ class Processer
      * 适用于需要同时启动多个进程的场景（如 WLS 启动多个 Worker）。
      * 使用 Fiber 并发执行 proc_open，减少串行等待时间。
      * 
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, inheritDescriptors?: array<int, resource>}> $commands
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, isolateParentHandles?: bool, windowsArgv?: list<string>, cwd?: string, inheritDescriptors?: array<int, resource>}> $commands
      *        键为标识符，值为命令配置数组
      * @return array<string, int> 标识符 => PID（0 表示启动失败）
      */
@@ -3944,7 +4028,67 @@ class Processer
     }
 
     /**
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, inheritDescriptors?: array<int, resource>}> $commands
+     * Start one arbitrary Windows executable through the existing WMI broker.
+     *
+     * The exact argv never passes through cmd.exe or shell tokenization, and
+     * the WMI-created broker prevents the child from inheriting the caller's
+     * console and remote-exec handles. The returned PID is the Start-Process
+     * child PID; callers with a stronger native identity (for example an
+     * nginx pid file) must keep using that identity as the final authority.
+     *
+     * @param list<string> $argv
+     */
+    public static function createWindowsIsolatedArgv(
+        array $argv,
+        string $cwd,
+        string $processIdentity,
+    ): int {
+        if (!IS_WIN) {
+            throw new \RuntimeException('Windows isolated argv launch is available only on Windows.');
+        }
+        if ($argv === [] || !\array_is_list($argv)) {
+            throw new \InvalidArgumentException('Windows isolated argv launch requires a non-empty argv list.');
+        }
+
+        $normalizedArgv = [];
+        foreach ($argv as $index => $argument) {
+            if (!\is_string($argument) || \preg_match('/[\r\n\0]/', $argument) === 1) {
+                throw new \InvalidArgumentException('Windows isolated argv contains an unsafe argument.');
+            }
+            if ($index === 0 && \trim($argument) === '') {
+                throw new \InvalidArgumentException('Windows isolated argv executable is empty.');
+            }
+            $normalizedArgv[] = $argument;
+        }
+
+        $resolvedCwd = self::resolveWindowsPersistentPath($cwd);
+        if ($resolvedCwd === '' || !\is_dir($resolvedCwd)) {
+            throw new \InvalidArgumentException('Windows isolated argv working directory is unavailable.');
+        }
+        $processIdentity = self::normalizeName($processIdentity);
+        if ($processIdentity === '') {
+            throw new \InvalidArgumentException('Windows isolated argv process identity is empty.');
+        }
+
+        $key = 'windows-isolated-exact-argv';
+        $results = self::batchCreate([
+            $key => [
+                'command' => $key . ' --name=' . $processIdentity,
+                'windowsArgv' => $normalizedArgv,
+                'cwd' => $resolvedCwd,
+                'block' => false,
+                'foreground' => false,
+                'enableLog' => false,
+                'childOwnsPid' => true,
+                'isolateParentHandles' => true,
+            ],
+        ]);
+
+        return (int)($results[$key] ?? 0);
+    }
+
+    /**
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, isolateParentHandles?: bool, windowsArgv?: list<string>, cwd?: string, inheritDescriptors?: array<int, resource>}> $commands
      * @return array<string, int>|null
      */
     private static function tryBatchCreateOptimized(array $commands): ?array
@@ -4818,7 +4962,7 @@ PHP;
     }
 
     /**
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool}> $commands
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, isolateParentHandles?: bool, windowsArgv?: list<string>, cwd?: string}> $commands
      * @return array<string, int>|null
      */
     private static function batchCreateWindows(array $commands): ?array
@@ -4839,6 +4983,7 @@ PHP;
 
         $results = [];
         $batchLaunchItems = [];
+        $requiresParentHandleIsolation = false;
         $phaseStartedAt = \microtime(true);
 
         foreach ($commands as $key => $config) {
@@ -4908,15 +5053,17 @@ PHP;
                 'argument_list' => $argumentList,
                 'exact_argv' => $configuredArgv !== [],
                 'process_name' => $processName,
-                'cwd' => BP,
+                'cwd' => (string)($config['cwd'] ?? BP),
                 'enable_log' => $enableLog,
                 'stdout_log' => $stdoutLog,
                 'stderr_log' => $stderrLog,
                 'block' => $block,
                 'foreground' => $foreground,
                 'child_owns_pid' => (bool) ($config['childOwnsPid'] ?? false),
+                'isolate_parent_handles' => (bool) ($config['isolateParentHandles'] ?? false),
             ];
 
+            $requiresParentHandleIsolation = $requiresParentHandleIsolation || $item['isolate_parent_handles'];
             $batchLaunchItems[] = $item;
         }
 
@@ -4926,14 +5073,26 @@ PHP;
 
         $timings['prepare'] = \microtime(true) - $phaseStartedAt;
 
-        $masterOwnedResults = self::batchCreateWindowsMasterOwned(
-            $batchLaunchItems,
-            $results,
-            $timingStartedAt,
-            $timings,
-        );
+        $masterOwnedResults = $requiresParentHandleIsolation
+            ? null
+            : self::batchCreateWindowsMasterOwned(
+                $batchLaunchItems,
+                $results,
+                $timingStartedAt,
+                $timings,
+            );
         if ($masterOwnedResults !== null) {
             return $masterOwnedResults;
+        }
+
+        if ($requiresParentHandleIsolation) {
+            return self::batchCreateWindowsDetachedHelpers(
+                $batchLaunchItems,
+                $results,
+                $timingStartedAt,
+                $timings,
+                self::resolveWindowsBatchCreateHelperParallelism(\count($batchLaunchItems))
+            );
         }
 
         $waitForResults = \defined('WELINE_BATCH_CREATE_WAIT_RESULTS') && WELINE_BATCH_CREATE_WAIT_RESULTS;
@@ -5080,6 +5239,7 @@ PHP;
         foreach ($launchItems as $item) {
             $arguments = $item['argument_list'] ?? null;
             if (!(bool)($item['child_owns_pid'] ?? false)
+                || (bool)($item['isolate_parent_handles'] ?? false)
                 || (bool)($item['block'] ?? false)
                 || (bool)($item['foreground'] ?? false)
                 || !(bool)($item['exact_argv'] ?? false)
@@ -5374,7 +5534,9 @@ PHP;
 
                     $process = $helper['process'] ?? null;
                     $status = \is_resource($process) ? @\proc_get_status($process) : [];
-                    if (($status['running'] ?? false) === true) {
+                    if ((bool)($helper['isolate_parent_handles'] ?? false)
+                        || ($status['running'] ?? false) === true
+                    ) {
                         $pendingHelpers++;
                     }
                 }
@@ -5443,7 +5605,11 @@ PHP;
                     (string) ($helper['result_path'] ?? ''),
                     (string) ($helper['error_path'] ?? ''),
                     (string) ($helper['stdout_path'] ?? ''),
-                    $rememberLaunchItems
+                    $rememberLaunchItems,
+                    (bool)($helper['isolate_parent_handles'] ?? false),
+                    (string)($helper['isolated_batch_id'] ?? ''),
+                    (int)($helper['isolated_broker_pid'] ?? 0),
+                    (string)($helper['isolated_submission_state'] ?? 'not_required')
                 );
             }
         }
@@ -5469,14 +5635,38 @@ PHP;
 
     /**
      * @param array<int, array<string, mixed>> $launchItems
-     * @return array{helper: array{process: resource, script_path: string, result_path: string, error_path: string, launch_items: array<int, array<string, mixed>>}|null, reason: string}
+     * @return array{helper: array{process: resource, script_path: string, result_path: string, error_path: string, launch_items: array<int, array<string, mixed>>, isolate_parent_handles?: bool, isolated_batch_id?: string, isolated_broker_pid?: int}|null, reason: string}
      */
     private static function openWindowsDetachedBatchHelper(array $launchItems): array
     {
+        $isolateParentHandles = false;
+        foreach ($launchItems as $item) {
+            $isolateParentHandles = $isolateParentHandles
+                || (bool)($item['isolate_parent_handles'] ?? false);
+        }
+
+        $isolatedBatchId = '';
+        $submissionPath = '';
+        if ($isolateParentHandles) {
+            try {
+                $isolatedBatchId = \bin2hex(\random_bytes(16));
+            } catch (\Throwable $exception) {
+                return ['helper' => null, 'reason' => 'isolated batch id allocation failed: ' . $exception->getMessage()];
+            }
+            $submissionPath = (string)(\tempnam(\sys_get_temp_dir(), 'weline-batch-submit-') ?: '');
+        }
+
         $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
         $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
         $stdoutPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-stdout-');
-        if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '' || $stdoutPath === false || $stdoutPath === '') {
+        if (($isolateParentHandles && $submissionPath === '')
+            || $resultPath === false
+            || $resultPath === ''
+            || $errorPath === false
+            || $errorPath === ''
+            || $stdoutPath === false
+            || $stdoutPath === ''
+        ) {
             if (\is_string($resultPath) && $resultPath !== '') {
                 @\unlink($resultPath);
             }
@@ -5486,15 +5676,28 @@ PHP;
             if (\is_string($stdoutPath) && $stdoutPath !== '') {
                 @\unlink($stdoutPath);
             }
+            if ($submissionPath !== '') {
+                @\unlink($submissionPath);
+            }
 
             return ['helper' => null, 'reason' => 'temp file allocation failed'];
         }
 
-        $scriptPath = self::writeWindowsBatchCreateScript($launchItems, $resultPath, $errorPath);
+        $scriptPath = self::writeWindowsBatchCreateScript(
+            $launchItems,
+            $resultPath,
+            $errorPath,
+            $isolateParentHandles,
+            $isolatedBatchId,
+            $submissionPath
+        );
         if ($scriptPath === null) {
             @\unlink($resultPath);
             @\unlink($errorPath);
             @\unlink($stdoutPath);
+            if ($submissionPath !== '') {
+                @\unlink($submissionPath);
+            }
 
             return ['helper' => null, 'reason' => 'PowerShell script write failed'];
         }
@@ -5535,12 +5738,54 @@ PHP;
             @\unlink($resultPath);
             @\unlink($errorPath);
             @\unlink($stdoutPath);
+            if ($submissionPath !== '') {
+                @\unlink($submissionPath);
+            }
 
             return [
                 'helper' => null,
                 'reason' => 'proc_open PowerShell helper failed'
                     . ($lastError !== null ? ': ' . $lastError : ''),
             ];
+        }
+
+        $isolatedBrokerPid = 0;
+        $isolatedSubmissionState = 'not_required';
+        if ($isolateParentHandles) {
+            $submission = self::waitForWindowsIsolatedBatchSubmission(
+                $psProcess,
+                $submissionPath,
+                $stdoutPath,
+                $isolatedBatchId,
+                $scriptPath,
+                2.0
+            );
+            $status = @\proc_get_status($psProcess);
+            self::finishWindowsDetachedHelperProcess($psProcess, $status);
+
+            // Re-read both durable channels after the submitter is closed, then
+            // converge by unique batch identity before classifying ambiguity.
+            $afterClose = self::inspectWindowsIsolatedBatchSubmission(
+                [$submissionPath, $stdoutPath],
+                $isolatedBatchId
+            );
+            if ($afterClose['state'] === 'committed'
+                || ($submission['state'] !== 'committed' && $afterClose['state'] === 'negative_ack')
+            ) {
+                $submission = $afterClose;
+            }
+            $resolvedBrokerPid = self::findWindowsIsolatedBatchBrokerPid($isolatedBatchId, $scriptPath);
+            if ($resolvedBrokerPid > 0) {
+                $submission = ['state' => 'committed', 'broker_pid' => $resolvedBrokerPid];
+            }
+
+            $isolatedSubmissionState = (string)($submission['state'] ?? 'ambiguous');
+            $isolatedBrokerPid = (int)($submission['broker_pid'] ?? 0);
+            @\unlink($submissionPath);
+
+            if ($isolatedSubmissionState !== 'committed') {
+                $isolatedSubmissionState = 'ambiguous';
+            }
         }
 
         return [
@@ -5551,10 +5796,187 @@ PHP;
                 'error_path' => $errorPath,
                 'stdout_path' => $stdoutPath,
                 'launch_items' => $launchItems,
+                'isolate_parent_handles' => $isolateParentHandles,
+                'isolated_batch_id' => $isolatedBatchId,
+                'isolated_broker_pid' => $isolatedBrokerPid,
+                'isolated_submission_state' => $isolatedSubmissionState,
             ],
             'reason' => '',
         ];
     }
+
+    /**
+     * Wait for the short-lived parent submitter to commit a WMI-created broker.
+     *
+     * @param resource $process
+     * @return array{state: string, broker_pid: int}
+     */
+    private static function waitForWindowsIsolatedBatchSubmission(
+        $process,
+        string $submissionPath,
+        string $stdoutPath,
+        string $batchId,
+        string $scriptPath,
+        float $timeoutSeconds
+    ): array {
+        $ambiguous = ['state' => 'ambiguous', 'broker_pid' => 0];
+        if (!\is_resource($process)
+            || \preg_match('/^[a-f0-9]{32}$/D', $batchId) !== 1
+            || $submissionPath === ''
+            || $scriptPath === ''
+        ) {
+            return $ambiguous;
+        }
+
+        $paths = [$submissionPath, $stdoutPath];
+        $deadline = \microtime(true) + \max(0.2, \min(3.0, $timeoutSeconds));
+        do {
+            $observed = self::inspectWindowsIsolatedBatchSubmission($paths, $batchId);
+            if ($observed['state'] === 'committed') {
+                return $observed;
+            }
+            if ($observed['state'] === 'negative_ack') {
+                $brokerPid = self::findWindowsIsolatedBatchBrokerPid($batchId, $scriptPath);
+                return $brokerPid > 0
+                    ? ['state' => 'committed', 'broker_pid' => $brokerPid]
+                    : $observed;
+            }
+
+            $status = @\proc_get_status($process);
+            if (($status['running'] ?? false) !== true) {
+                break;
+            }
+
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
+        } while (\microtime(true) < $deadline);
+
+        $observed = self::inspectWindowsIsolatedBatchSubmission($paths, $batchId);
+        if ($observed['state'] === 'committed') {
+            return $observed;
+        }
+
+        $brokerPid = self::findWindowsIsolatedBatchBrokerPid($batchId, $scriptPath);
+        if ($brokerPid > 0) {
+            return ['state' => 'committed', 'broker_pid' => $brokerPid];
+        }
+
+        return $observed['state'] === 'negative_ack' ? $observed : $ambiguous;
+    }
+
+    /**
+     * @param list<string> $paths
+     * @return array{state: string, broker_pid: int}
+     */
+    private static function inspectWindowsIsolatedBatchSubmission(array $paths, string $batchId): array
+    {
+        $observed = ['state' => 'none', 'broker_pid' => 0];
+        foreach ($paths as $path) {
+            $payload = (string)(@\file_get_contents($path) ?: '');
+            $parsed = self::parseWindowsIsolatedBatchSubmission($payload, $batchId);
+            if ($parsed['state'] === 'committed') {
+                return $parsed;
+            }
+            if ($parsed['state'] === 'ambiguous'
+                || ($parsed['state'] === 'negative_ack' && $observed['state'] === 'none')
+            ) {
+                $observed = $parsed;
+            }
+        }
+
+        return $observed;
+    }
+
+    /**
+     * @return array{state: string, broker_pid: int}
+     */
+    private static function parseWindowsIsolatedBatchSubmission(string $payload, string $batchId): array
+    {
+        $payload = self::normalizeWindowsPowerShellPipeOutput($payload);
+        foreach (\preg_split('/\r\n|\r|\n/', \trim($payload)) ?: [] as $line) {
+            $parts = \explode("\t", \trim((string)$line));
+            if (\count($parts) !== 3 || !\ctype_digit((string)$parts[2])) {
+                continue;
+            }
+
+            if ((string)$parts[0] === 'WELINE_ISOLATED_SUBMIT'
+                && \hash_equals($batchId, (string)$parts[1])
+                && (int)$parts[2] > 0
+            ) {
+                return ['state' => 'committed', 'broker_pid' => (int)$parts[2]];
+            }
+            if (!\hash_equals($batchId, (string)$parts[0])) {
+                continue;
+            }
+
+            $state = (string)$parts[1];
+            $brokerPid = (int)$parts[2];
+            if ($state === 'committed' && $brokerPid > 0) {
+                return ['state' => 'committed', 'broker_pid' => $brokerPid];
+            }
+            if ($state === 'failed' && $brokerPid === 0) {
+                return ['state' => 'negative_ack', 'broker_pid' => 0];
+            }
+            if ($state === 'ambiguous') {
+                return ['state' => 'ambiguous', 'broker_pid' => $brokerPid];
+            }
+        }
+
+        return ['state' => 'none', 'broker_pid' => 0];
+    }
+
+    private static function findWindowsIsolatedBatchBrokerPid(string $batchId, string $scriptPath): int
+    {
+        if (\preg_match('/^[a-f0-9]{32}$/D', $batchId) !== 1 || $scriptPath === '') {
+            return 0;
+        }
+
+        $identityNeedle = self::WINDOWS_ISOLATED_BATCH_ID_PREFIX . $batchId;
+        $normalizedScript = \strtolower(\str_replace('/', '\\', $scriptPath));
+        $candidatePids = [];
+        foreach (['powershell.exe', 'powershell'] as $processName) {
+            foreach (self::getProcessIdsByName($processName) as $candidatePid) {
+                $candidatePids[(int)$candidatePid] = true;
+            }
+        }
+
+        foreach (\array_keys($candidatePids) as $candidatePid) {
+            if ($candidatePid <= 0 || !self::isRunningByPid($candidatePid)) {
+                continue;
+            }
+            $commandLine = self::getProcessCommandLine($candidatePid, true);
+            $normalizedCommand = \strtolower(\str_replace('/', '\\', $commandLine));
+            if (\str_contains($commandLine, $identityNeedle)
+                && \str_contains($normalizedCommand, $normalizedScript)
+            ) {
+                return $candidatePid;
+            }
+        }
+
+        return 0;
+    }
+
+    private static function isWindowsIsolatedBatchBrokerRunning(array $helper): bool
+    {
+        $brokerPid = (int)($helper['isolated_broker_pid'] ?? 0);
+        $batchId = (string)($helper['isolated_batch_id'] ?? '');
+        $scriptPath = (string)($helper['script_path'] ?? '');
+        if ($brokerPid <= 0
+            || \preg_match('/^[a-f0-9]{32}$/D', $batchId) !== 1
+            || $scriptPath === ''
+            || !self::isRunningByPid($brokerPid)
+        ) {
+            return false;
+        }
+
+        $commandLine = self::getProcessCommandLine($brokerPid, true);
+        $identityNeedle = self::WINDOWS_ISOLATED_BATCH_ID_PREFIX . $batchId;
+        return \str_contains($commandLine, $identityNeedle)
+            && \str_contains(
+                \strtolower(\str_replace('/', '\\', $commandLine)),
+                \strtolower(\str_replace('/', '\\', $scriptPath))
+            );
+    }
+
 
     private static function resolveWindowsBatchCreateLaneFallbackBudget(int $itemCount): float
     {
@@ -5729,12 +6151,9 @@ PHP;
             return \max(0.05, \min(8.0, $configured));
         }
 
-        // Windows Start-Process is still parallel, but Parallels/UNC/shared-folder
-        // startups can need several seconds before the helper writes all PID
-        // rows. Returning all-zero PIDs leaves WLS children unmanaged and makes
-        // the Master fail fast while processes are still starting, so keep a
-        // strict but realistic deadline for dispatcher/worker batches.
-        return \min(8.0, \max(2.0, 0.5 + ($pendingCount * 0.75)));
+        // Keep the default non-blocking path strictly sub-second. Slow shared
+        // folders can opt into a larger bounded value through the setting above.
+        return \min(0.6, \max(0.15, 0.08 + ($pendingCount * 0.06)));
     }
 
     /**
@@ -6073,9 +6492,22 @@ PHP;
     /**
      * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
-    private static function writeWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
-    {
-        $script = self::buildWindowsBatchCreateScript($launchItems, $resultPath, $errorPath);
+    private static function writeWindowsBatchCreateScript(
+        array $launchItems,
+        string $resultPath,
+        string $errorPath,
+        bool $isolateParentHandles = false,
+        string $isolatedBatchId = '',
+        string $submissionPath = ''
+    ): ?string {
+        $script = self::buildWindowsBatchCreateScript(
+            $launchItems,
+            $resultPath,
+            $errorPath,
+            $isolateParentHandles,
+            $isolatedBatchId,
+            $submissionPath
+        );
         if ($script === null) {
             return null;
         }
@@ -6086,6 +6518,10 @@ PHP;
         }
 
         $scriptPath = $tmpBase . '.ps1';
+        if ($isolateParentHandles && \preg_match('/["\r\n\0]/', $scriptPath) === 1) {
+            @\unlink($tmpBase);
+            return null;
+        }
         @\unlink($tmpBase);
 
         if (@\file_put_contents($scriptPath, self::WINDOWS_PS1_UTF8_BOM . $script) === false) {
@@ -6427,7 +6863,12 @@ PHP;
      *
      * @param list<string> $argv
      */
-    private static function writeWindowsStartScriptArgv(array $argv, string $workingDir): ?string
+    private static function writeWindowsStartScriptArgv(
+        array $argv,
+        string $workingDir,
+        ?string $outputPath = null,
+        ?string $errorPath = null,
+    ): ?string
     {
         if (\count($argv) < 2) {
             return null;
@@ -6439,6 +6880,17 @@ PHP;
         );
         $projectWorkingDir = self::resolveWindowsPersistentPath($workingDir);
         $workingDir = self::resolveWindowsStartProcessWorkingDirectory($projectWorkingDir);
+        $outputPath = $outputPath === null ? '' : self::resolveWindowsPersistentPath($outputPath);
+        $errorPath = $errorPath === null ? '' : self::resolveWindowsPersistentPath($errorPath);
+        $redirectScript = '';
+        if ($outputPath !== '') {
+            $redirectScript .= "\n    \$startArgs.RedirectStandardOutput = "
+                . self::toPowerShellSingleQuoted($outputPath);
+        }
+        if ($errorPath !== '') {
+            $redirectScript .= "\n    \$startArgs.RedirectStandardError = "
+                . self::toPowerShellSingleQuoted($errorPath);
+        }
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 $phpExe = __PHP__
@@ -6461,7 +6913,7 @@ try {
     }
     if ($argList.Count -gt 0) {
         $startArgs.ArgumentList = $argList
-    }
+    }__REDIRECTS__
     $process = Start-Process @startArgs
     if ($null -ne $process -and [int]$process.Id -gt 0) {
         [Console]::Out.WriteLine([string]$process.Id)
@@ -6476,12 +6928,13 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__PHP__', '__WD__', '__PROJECT_WD__', '__ARGS__'],
+            ['__PHP__', '__WD__', '__PROJECT_WD__', '__ARGS__', '__REDIRECTS__'],
             [
                 self::toPowerShellSingleQuoted((string) $argv[0]),
                 self::toPowerShellSingleQuoted($workingDir),
                 self::toPowerShellSingleQuoted($projectWorkingDir),
                 self::buildPowerShellArrayLiteral(\array_map('strval', \array_slice($argv, 1))),
+                $redirectScript,
             ],
             $template
         );
@@ -6934,7 +7387,11 @@ POWERSHELL;
         string $resultPath,
         string $errorPath,
         string $stdoutPath = '',
-        array $launchItems = []
+        array $launchItems = [],
+        bool $isolateParentHandles = false,
+        string $isolatedBatchId = '',
+        int $isolatedBrokerPid = 0,
+        string $isolatedSubmissionState = 'not_required'
     ): void
     {
         if (!\is_resource($process)) {
@@ -6950,6 +7407,10 @@ POWERSHELL;
             'error_path' => $errorPath,
             'stdout_path' => $stdoutPath,
             'launch_items' => $launchItems,
+            'isolate_parent_handles' => $isolateParentHandles,
+            'isolated_batch_id' => $isolatedBatchId,
+            'isolated_broker_pid' => $isolatedBrokerPid,
+            'isolated_submission_state' => $isolatedSubmissionState,
         ];
     }
 
@@ -6975,6 +7436,41 @@ POWERSHELL;
         $helperTtlSeconds = self::resolveWindowsDetachedBatchHelperTtl();
         $forceDeadline = $force ? $now + 0.1 : null;
         foreach (self::$windowsDetachedBatchHelpers as $key => $helper) {
+            $age = \max(0.0, $now - (float)($helper['started_at'] ?? $now));
+            if ((bool)($helper['isolate_parent_handles'] ?? false)
+                && (string)($helper['isolated_submission_state'] ?? '') === 'ambiguous'
+            ) {
+                $resolvedBrokerPid = self::findWindowsIsolatedBatchBrokerPid(
+                    (string)($helper['isolated_batch_id'] ?? ''),
+                    (string)($helper['script_path'] ?? '')
+                );
+                if ($resolvedBrokerPid > 0) {
+                    $helper['isolated_broker_pid'] = $resolvedBrokerPid;
+                    self::$windowsDetachedBatchHelpers[$key]['isolated_broker_pid'] = $resolvedBrokerPid;
+                }
+                if (!$force && $age < $helperTtlSeconds) {
+                    continue;
+                }
+            }
+
+
+            if ((bool)($helper['isolate_parent_handles'] ?? false)
+                && self::isWindowsIsolatedBatchBrokerRunning($helper)
+            ) {
+                if (!$force && $age < $helperTtlSeconds) {
+                    continue;
+                }
+
+                $brokerPid = (int)($helper['isolated_broker_pid'] ?? 0);
+                if ($brokerPid > 0) {
+                    self::killByPid($brokerPid, true);
+                }
+                if (!$force && self::isWindowsIsolatedBatchBrokerRunning($helper)) {
+                    continue;
+                }
+            }
+
+
             $process = $helper['process'] ?? null;
             if (!\is_resource($process)) {
                 self::recordCompletedWindowsDetachedHelperPids($helper);
@@ -7108,7 +7604,10 @@ POWERSHELL;
             }
 
             if ($stdout !== '') {
-                self::setOutput($command, "[INFO] batchCreate(helper {$reason}) stdout: " . self::truncateText($stdout, 1000) . PHP_EOL, true);
+                $stdoutSummary = \strlen($stdout) > 1000
+                    ? \substr($stdout, 0, 1000) . '...'
+                    : $stdout;
+                self::setOutput($command, "[INFO] batchCreate(helper {$reason}) stdout: " . $stdoutSummary . PHP_EOL, true);
             }
 
             if ($key !== '' && (int) ($pidMap[$key] ?? 0) <= 0 && $reason === 'timeout') {
@@ -7122,19 +7621,168 @@ POWERSHELL;
     }
 
     /**
+     * Snapshot the WLS/PHP safety environment and the user-local profile
+     * identity before crossing the WMI process boundary. Windows treats null
+     * and an empty value as unset; non-empty values are preserved exactly.
+     *
+     * @return array<string, string|null>
+     */
+    private static function collectWindowsIsolatedBatchEnvironment(): array
+    {
+        $criticalNames = [
+            'PHP_INI_SCAN_DIR',
+            'LOCALAPPDATA',
+            'USERPROFILE',
+            'WELINE_PHP_CLI_RUNTIME_PROFILE',
+            'WLS_PHP_RUNTIME_SAFETY_PROFILE',
+        ];
+        $snapshot = \array_fill_keys($criticalNames, null);
+        $processEnvironment = \getenv();
+        $sources = [
+            \is_array($_ENV ?? null) ? $_ENV : [],
+            \is_array($processEnvironment) ? $processEnvironment : [],
+        ];
+
+        foreach ($sources as $source) {
+            foreach ($source as $name => $value) {
+                $normalizedName = \strtoupper(\trim((string)$name));
+                if (\preg_match('/^[A-Z_][A-Z0-9_]*$/D', $normalizedName) !== 1
+                    || (!\str_starts_with($normalizedName, 'WELINE_')
+                        && !\str_starts_with($normalizedName, 'WLS_')
+                        && !\in_array($normalizedName, $criticalNames, true))
+                    || $value === null
+                    || $value === false
+                    || (!\is_scalar($value) && !$value instanceof \Stringable)
+                ) {
+                    continue;
+                }
+
+                $snapshot[$normalizedName] = (string)$value;
+            }
+        }
+
+        \ksort($snapshot);
+        return $snapshot;
+    }
+
+
+    /**
      * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
-    private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
-    {
+    private static function buildWindowsBatchCreateScript(
+        array $launchItems,
+        string $resultPath,
+        string $errorPath,
+        bool $isolateParentHandles = false,
+        string $isolatedBatchId = '',
+        string $submissionPath = ''
+    ): ?string {
         $lines = [
             '$ErrorActionPreference = ' . self::toPowerShellSingleQuoted('Continue'),
             '$resultFile = ' . self::toPowerShellSingleQuoted($resultPath),
             '$errorFile = ' . self::toPowerShellSingleQuoted($errorPath),
-            'Set-Content -LiteralPath $resultFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8',
-            'Set-Content -LiteralPath $errorFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8',
             'function Add-WelineResult([string]$key, [int]$welineProcessId) { Add-Content -LiteralPath $resultFile -Value ($key + "`t" + [string]$welineProcessId) -Encoding UTF8 }',
             'function Add-WelineError([string]$key, [string]$message) { if ($message -ne ' . self::toPowerShellSingleQuoted('') . ') { Add-Content -LiteralPath $errorFile -Value ($key + ": " + $message) -Encoding UTF8 } }',
         ];
+        if ($isolateParentHandles) {
+            $powerShell = self::resolveWindowsPowerShellExecutable();
+            $brokerWorkingDirectory = self::resolveWindowsHelperWorkingDirectory();
+            if (\preg_match('/^[a-f0-9]{32}$/D', $isolatedBatchId) !== 1
+                || $submissionPath === ''
+                || !\is_file($powerShell)
+                || $brokerWorkingDirectory === null
+                || !\is_dir($brokerWorkingDirectory)
+                || \str_starts_with($brokerWorkingDirectory, '\\\\')
+            ) {
+                return null;
+            }
+            foreach ([$powerShell, $brokerWorkingDirectory, $submissionPath, $resultPath, $errorPath] as $strictPath) {
+                if ($strictPath === '' || \preg_match('/["\r\n\0]/', $strictPath) === 1) {
+                    return null;
+                }
+            }
+
+            $launchKeys = [];
+            foreach ($launchItems as $item) {
+                $launchKey = (string)($item['key'] ?? '');
+                if ($launchKey === '') {
+                    return null;
+                }
+                $launchKeys[] = $launchKey;
+            }
+            if ($launchKeys === []) {
+                return null;
+            }
+            $isolatedEnvironment = self::collectWindowsIsolatedBatchEnvironment();
+
+            $lines[] = '$welineBatchId = ' . self::toPowerShellSingleQuoted($isolatedBatchId);
+            $lines[] = '$welineSubmissionFile = ' . self::toPowerShellSingleQuoted($submissionPath);
+            $lines[] = '$welinePowerShell = ' . self::toPowerShellSingleQuoted($powerShell);
+            $lines[] = '$welineWorkingDirectory = ' . self::toPowerShellSingleQuoted($brokerWorkingDirectory);
+            $lines[] = '$welineIsolationMarker = ' . self::toPowerShellSingleQuoted(self::WINDOWS_ISOLATED_BATCH_MARKER);
+            $lines[] = '$welineBatchIdentity = ' . self::toPowerShellSingleQuoted(
+                self::WINDOWS_ISOLATED_BATCH_ID_PREFIX . $isolatedBatchId
+            );
+            $lines[] = 'if ($args.Count -lt 1 -or [string]$args[0] -ne $welineIsolationMarker) {';
+            $lines[] = '    Set-Content -LiteralPath $resultFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8';
+            $lines[] = '    Set-Content -LiteralPath $errorFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8';
+            $lines[] = '    Set-Content -LiteralPath $welineSubmissionFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8';
+            $lines[] = '    try {';
+            $lines[] = '        $welineCommandLine = '
+                . self::toPowerShellSingleQuoted('"')
+                . ' + $welinePowerShell + '
+                . self::toPowerShellSingleQuoted('" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "')
+                . ' + $PSCommandPath + '
+                . self::toPowerShellSingleQuoted('" ')
+                . ' + $welineIsolationMarker + '
+                . self::toPowerShellSingleQuoted(' ')
+                . ' + $welineBatchIdentity';
+            $lines[] = '        $welineProcessClass = [WMIClass]'
+                . self::toPowerShellSingleQuoted('\\\\.\\root\\cimv2:Win32_Process');
+            $lines[] = '        $welineSpawn = $welineProcessClass.Create($welineCommandLine, $welineWorkingDirectory, $null)';
+            $lines[] = '        $welineReturnValue = [int]$welineSpawn.ReturnValue';
+            $lines[] = '        $welineBrokerPid = [int]$welineSpawn.ProcessId';
+            $lines[] = '        if ($null -eq $welineSpawn -or $welineReturnValue -ne 0 -or $welineBrokerPid -le 0) { throw "Win32_Process.Create failed: return=$welineReturnValue pid=$welineBrokerPid" }';
+            $lines[] = '        [Console]::Out.WriteLine('
+                . self::toPowerShellSingleQuoted('WELINE_ISOLATED_SUBMIT')
+                . ' + [char]9 + $welineBatchId + [char]9 + [string]$welineBrokerPid)';
+            $lines[] = '        $welineCommitLine = $welineBatchId + [char]9 + ' . self::toPowerShellSingleQuoted('committed') . ' + [char]9 + [string]$welineBrokerPid';
+            $lines[] = '        $welineCommitTemp = $welineSubmissionFile + ' . self::toPowerShellSingleQuoted('.') . ' + [string]$PID + ' . self::toPowerShellSingleQuoted('.tmp');
+            $lines[] = '        Set-Content -LiteralPath $welineCommitTemp -Value $welineCommitLine -NoNewline -Encoding UTF8 -ErrorAction Stop';
+            $lines[] = '        Move-Item -LiteralPath $welineCommitTemp -Destination $welineSubmissionFile -Force -ErrorAction Stop';
+            $lines[] = '        exit 0';
+            $lines[] = '    } catch {';
+            $lines[] = '        $welineSubmitError = [string]$_.Exception.Message';
+            $lines[] = '        Add-WelineError ' . self::toPowerShellSingleQuoted('__broker__') . ' $welineSubmitError';
+            foreach ($launchKeys as $launchKey) {
+                $lines[] = '        Add-WelineResult ' . self::toPowerShellSingleQuoted($launchKey) . ' 0';
+            }
+            $lines[] = '        try { Set-Content -LiteralPath $welineSubmissionFile -Value ($welineBatchId + [char]9 + ' . self::toPowerShellSingleQuoted('failed') . ' + [char]9 + ' . self::toPowerShellSingleQuoted('0') . ') -NoNewline -Encoding UTF8 } catch {}';
+            $lines[] = '        exit 1';
+            $lines[] = '    }';
+            $lines[] = '}';
+            foreach ($isolatedEnvironment as $environmentName => $environmentValue) {
+                $environmentNameLiteral = self::toPowerShellSingleQuoted($environmentName);
+                if ($environmentValue === null) {
+                    $lines[] = '[System.Environment]::SetEnvironmentVariable('
+                        . $environmentNameLiteral
+                        . ', $null, [System.EnvironmentVariableTarget]::Process)';
+                    continue;
+                }
+
+                $lines[] = '[System.Environment]::SetEnvironmentVariable('
+                    . $environmentNameLiteral
+                    . ', '
+                    . self::toPowerShellSingleQuoted($environmentValue)
+                    . ', [System.EnvironmentVariableTarget]::Process)';
+            }
+
+        }
+
+        $lines[] = 'Set-Content -LiteralPath $resultFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8';
+        $lines[] = 'Set-Content -LiteralPath $errorFile -Value ' . self::toPowerShellSingleQuoted('') . ' -NoNewline -Encoding UTF8';
+
+
 
         foreach ($launchItems as $item) {
             $key = (string) ($item['key'] ?? '');
@@ -7146,6 +7794,7 @@ POWERSHELL;
                 $argumentList
             );
             $startProcessCwd = self::resolveWindowsBatchChildWorkingDirectory($cwd);
+            $argumentLine = self::buildWindowsCommandLineFromArgv($arguments);
             $foreground = !empty($item['foreground']);
             $stdoutLog = (string) ($item['stdout_log'] ?? '');
             $stderrLog = (string) ($item['stderr_log'] ?? '');
@@ -7170,8 +7819,9 @@ POWERSHELL;
             if ($redirectChildOutput && $stderrLog !== '') {
                 $lines[] = '    $startArgs.RedirectStandardError = ' . self::toPowerShellSingleQuoted($stderrLog);
             }
-            $lines[] = '    $argList = ' . self::buildPowerShellArrayLiteral($arguments);
-            $lines[] = '    if ($argList.Count -gt 0) { $startArgs.ArgumentList = $argList }';
+            if ($argumentLine !== '') {
+                $lines[] = '    $startArgs.ArgumentList = ' . self::toPowerShellSingleQuoted($argumentLine);
+            }
             $lines[] = '    $p = Start-Process @startArgs';
             $lines[] = '    Add-WelineResult ' . self::toPowerShellSingleQuoted($key) . ' ([int]$p.Id)';
             $lines[] = '} catch {';
@@ -7855,7 +8505,17 @@ POWERSHELL;
 
         $processInfo = self::batchGetProcessInfo(\array_values($validPids));
         foreach ($validPids as $pid) {
-            $result[$pid] = (bool) ($processInfo[$pid]['exists'] ?? false);
+            if (\array_key_exists($pid, $processInfo)) {
+                $result[$pid] = (bool)($processInfo[$pid]['exists'] ?? false);
+                continue;
+            }
+            try {
+                $result[$pid] = self::getDriver()->isRunningByPid($pid);
+            } catch (\Throwable) {
+                // A missing/failed snapshot is not proof of process exit. Keep
+                // lifecycle callers fail closed instead of releasing the PID.
+                $result[$pid] = true;
+            }
         }
 
         return $result;
@@ -8858,6 +9518,35 @@ POWERSHELL;
         }
 
         return '';
+    }
+
+    /** @return list<string> */
+    private static function extractCommandLineArgumentValues(string $commandLine, string $name): array
+    {
+        if ($commandLine === ''
+            || $name === ''
+            || \preg_match('/^[a-z0-9][a-z0-9-]*$/Di', $name) !== 1
+        ) {
+            return [];
+        }
+
+        $pattern = "/(?:^|\\s)--" . \preg_quote($name, '/')
+            . "(?:=|\\s+)(?:\"([^\"]+)\"|'([^']+)'|([^\\s\"']+))(?=\\s|$)/i";
+        if (\preg_match_all($pattern, $commandLine, $matches, \PREG_SET_ORDER) < 1) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($matches as $match) {
+            foreach ([1, 2, 3] as $index) {
+                if (isset($match[$index]) && $match[$index] !== '') {
+                    $values[] = (string)$match[$index];
+                    break;
+                }
+            }
+        }
+
+        return $values;
     }
 
     /**

@@ -421,6 +421,11 @@ final class RuntimePolicyCompiler
         $trustedProxyCidrs = \array_merge(
             $trustedProxyCidrs,
             (array)($acceptGate['trusted_proxy_cidrs'] ?? []),
+            // Nginx-only WLS binds the private backend to loopback. These are
+            // transport peers, not client identities; trusting them is what
+            // permits the managed Nginx scheme and client-IP facts to survive
+            // the plaintext H1 hop without trusting public spoofed headers.
+            ['127.0.0.0/8', '::1/128'],
         );
 
         $whitelistCidrs = [];

@@ -5,28 +5,28 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge\Nginx;
 
 /**
- * Downloads and installs a pinned nginx build into extend/server/nginx for this project.
+ * Downloads and installs pinned Nginx into the project's isolated local install root.
  *
  * Platform matrix:
  * - Darwin/Linux: build from official source tarball into project prefix
  * - Windows: extract official nginx.zip (nginx.exe at install root)
  *
- * Ordinary server:start with managed=true will call ensureInstalled when the
- * binary is missing (Darwin/Linux source build, Windows zip). Explicit
- * server:nginx:install / --install-nginx remains available for force reinstall.
+ * Installation is explicit. Ordinary server:start remains pure PHP and never
+ * downloads or compiles Nginx. server:nginx:install performs the opt-in install
+ * or force reinstall.
  */
 final class ManagedNginxInstaller
 {
-    public const VERSION = '1.26.3';
+    public const VERSION = '1.30.4';
 
-    public const SOURCE_URL = 'https://nginx.org/download/nginx-1.26.3.tar.gz';
+    public const SOURCE_URL = 'https://nginx.org/download/nginx-1.30.4.tar.gz';
 
-    public const SOURCE_SHA256 = '69ee2b237744036e61d24b836668aad3040dda461fe6f570f1787eab570c75aa';
+    public const SOURCE_SHA256 = '4261dc90e9e47c1c4041276e9aaa3d48ebe2e664f728e14fa95ae6c67d57a08b';
 
-    public const WINDOWS_ZIP_URL = 'https://nginx.org/download/nginx-1.26.3.zip';
+    public const WINDOWS_ZIP_URL = 'https://nginx.org/download/nginx-1.30.4.zip';
 
     /** Official Windows zip SHA-256 (nginx.org release package). */
-    public const WINDOWS_ZIP_SHA256 = '39ca13277b361910f9e463a7e958e11566f7ede8a6f0df08a21b659ca92f3662';
+    public const WINDOWS_ZIP_SHA256 = '159294214d403f34f0bb4ae598801ab1f6a0d8c8da707f8f08748e294a222a01';
 
     public function __construct(private readonly ManagedNginxPaths $paths = new ManagedNginxPaths())
     {
@@ -37,11 +37,20 @@ final class ManagedNginxInstaller
      */
     public function ensureInstalled(bool $force = false): array
     {
-        if (!$force && $this->paths->isInstalled() && $this->manifestMatches()) {
+        if (!$force && $this->paths->isInstalled()) {
+            if ($this->manifestMatches()) {
+                return [
+                    'ok' => true,
+                    'message' => 'managed nginx already installed',
+                    'manifest' => $this->readManifest() ?? [],
+                    'platform' => \PHP_OS_FAMILY,
+                ];
+            }
             return [
-                'ok' => true,
-                'message' => 'managed nginx already installed',
-                'manifest' => $this->readManifest() ?? [],
+                'ok' => false,
+                'message' => 'managed nginx binary exists but its pinned manifest does not match '
+                    . self::VERSION
+                    . '; stop the managed edge, then run php bin/w server:nginx:install --force',
                 'platform' => \PHP_OS_FAMILY,
             ];
         }
@@ -58,6 +67,19 @@ final class ManagedNginxInstaller
         };
     }
 
+    /**
+     * @return array{installed:bool,manifest_matches:bool,expected_version:string,manifest:array<string,mixed>|null}
+     */
+    public function installationStatus(): array
+    {
+        return [
+            'installed' => $this->paths->isInstalled(),
+            'manifest_matches' => $this->paths->isInstalled() && $this->manifestMatches(),
+            'expected_version' => self::VERSION,
+            'manifest' => $this->readManifest(),
+        ];
+    }
+
     private function manifestMatches(): bool
     {
         $manifest = $this->readManifest();
@@ -70,10 +92,36 @@ final class ManagedNginxInstaller
         if (!\hash_equals(\PHP_OS_FAMILY, (string)($manifest['platform'] ?? ''))) {
             return false;
         }
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            $buildFlags = \is_array($manifest['build_flags'] ?? null)
+                ? $manifest['build_flags']
+                : [];
+            if (($buildFlags['has_pcre'] ?? false) !== true
+                || ($buildFlags['without_rewrite'] ?? true) !== false
+            ) {
+                return false;
+            }
+        }
+        $binaryArchitecture = $this->binaryArchitecture($this->paths->binary());
+        if ($binaryArchitecture === ''
+            || !\hash_equals($binaryArchitecture, (string)($manifest['arch'] ?? ''))
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && !\hash_equals($binaryArchitecture, $this->normalizeArchitecture((string)\php_uname('m'))))
+        ) {
+            return false;
+        }
         $expected = \PHP_OS_FAMILY === 'Windows' ? self::WINDOWS_ZIP_SHA256 : self::SOURCE_SHA256;
         $actual = (string)($manifest['artifact_sha256'] ?? $manifest['source_sha256'] ?? '');
+        $expectedBinarySha256 = \strtolower((string)($manifest['binary_sha256'] ?? ''));
+        $actualBinarySha256 = \is_file($this->paths->binary())
+            ? \hash_file('sha256', $this->paths->binary())
+            : false;
 
-        return $actual !== '' && \hash_equals(\strtolower($expected), \strtolower($actual));
+        return $actual !== ''
+            && \hash_equals(\strtolower($expected), \strtolower($actual))
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $expectedBinarySha256) === 1
+            && \is_string($actualBinarySha256)
+            && \hash_equals($expectedBinarySha256, \strtolower($actualBinarySha256));
     }
 
     /**
@@ -98,10 +146,21 @@ final class ManagedNginxInstaller
         if (!\is_dir($root) && !@\mkdir($root, 0755, true) && !\is_dir($root)) {
             throw new \RuntimeException('Unable to create nginx install root: ' . $root);
         }
-        \file_put_contents(
-            $this->paths->manifestFile(),
-            \json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        $this->writeManifestFile($this->paths->manifestFile(), $manifest);
+    }
+
+    /**
+     * @param array<string,mixed> $manifest
+     */
+    private function writeManifestFile(string $file, array $manifest): void
+    {
+        $json = \json_encode(
+            $manifest,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         );
+        if (\file_put_contents($file, $json, LOCK_EX) === false) {
+            throw new \RuntimeException('Unable to write managed nginx install manifest.');
+        }
     }
 
     /**
@@ -159,8 +218,15 @@ final class ManagedNginxInstaller
         }
 
         $deps = $this->resolveUnixBuildFlags();
+        if (!$deps['has_pcre']) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx build refused: PCRE and the HTTP rewrite module are required.',
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
         $configure = './configure --prefix=' . \escapeshellarg($prefix)
-            . ' --with-http_ssl_module --with-http_v2_module'
+            . ' --with-http_ssl_module --with-http_v2_module --with-http_v3_module'
             . ($deps['configure_extra'] !== '' ? ' ' . $deps['configure_extra'] : '');
         if ($deps['cc_opts'] !== []) {
             $configure .= ' --with-cc-opt=' . \escapeshellarg(\implode(' ', \array_values(\array_unique($deps['cc_opts']))));
@@ -191,19 +257,33 @@ final class ManagedNginxInstaller
         }
 
         @\chmod($this->paths->binary(), 0755);
+        $binarySha256 = \hash_file('sha256', $this->paths->binary());
+        if (!\is_string($binarySha256)) {
+            return ['ok' => false, 'message' => 'unable to hash installed nginx binary', 'platform' => \PHP_OS_FAMILY];
+        }
+        $binaryArchitecture = $this->binaryArchitecture($this->paths->binary());
+        if ($binaryArchitecture === '') {
+            return ['ok' => false, 'message' => 'unable to identify installed nginx binary architecture', 'platform' => \PHP_OS_FAMILY];
+        }
         $manifest = [
             'version' => self::VERSION,
             'source_url' => self::SOURCE_URL,
             'artifact_sha256' => self::SOURCE_SHA256,
             'source_sha256' => self::SOURCE_SHA256,
             'platform' => \PHP_OS_FAMILY,
-            'arch' => \php_uname('m'),
+            'arch' => $binaryArchitecture,
+            'php_process_arch' => $this->normalizeArchitecture((string)\php_uname('m')),
             'prefix' => $prefix,
             'binary' => $this->paths->binary(),
+            'binary_sha256' => $binarySha256,
             'build_flags' => [
+                'http_v2_module' => true,
+                'http_v3_module' => true,
                 'has_pcre' => $deps['has_pcre'],
                 'has_openssl' => $deps['has_openssl'],
-                'without_rewrite_gzip' => !$deps['has_pcre'],
+                'has_zlib' => $deps['has_zlib'],
+                'without_rewrite' => false,
+                'without_gzip' => !$deps['has_zlib'],
             ],
             'installed_at' => \date('c'),
         ];
@@ -237,6 +317,14 @@ final class ManagedNginxInstaller
                 'message' => 'missing build tools: ' . \implode(', ', $missing) . '. ' . $this->unixFailureHint(),
             ];
         }
+        if (!$this->hasPcreHeaders([])) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx requires PCRE development headers because the isolated config uses '
+                    . 'the HTTP rewrite module. ' . $this->unixFailureHint(),
+            ];
+        }
+
         return ['ok' => true, 'message' => 'ok'];
     }
 
@@ -246,13 +334,17 @@ final class ManagedNginxInstaller
      *   ld_opts:list<string>,
      *   configure_extra:string,
      *   has_pcre:bool,
-     *   has_openssl:bool
+     *   has_openssl:bool,
+     *   has_zlib:bool
      * }
      */
     private function resolveUnixBuildFlags(): array
     {
-        // Newer clang treats some nginx 1.26 string initializers as errors.
-        $ccOpts = ['-Wno-error', '-Wno-error=unterminated-string-initialization'];
+        $ccOpts = ['-Wno-error'];
+        // Apple Clang exposes this warning switch; GCC rejects the switch itself.
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $ccOpts[] = '-Wno-error=unterminated-string-initialization';
+        }
         $ldOpts = [];
         $includeDirs = [];
         $libDirs = [];
@@ -321,19 +413,20 @@ final class ManagedNginxInstaller
 
         $hasOpenssl = $this->hasOpensslHeaders($includeDirs);
         $hasPcre = $this->hasPcreHeaders($includeDirs);
+        $hasZlib = $this->hasZlibHeaders($includeDirs);
 
-        $configureExtra = '';
-        if (!$hasPcre) {
-            // Edge reverse-proxy MVP can run without rewrite/gzip when PCRE is absent.
-            $configureExtra = '--without-http_rewrite_module --without-http_gzip_module';
+        $configureOptions = [];
+        if (!$hasZlib) {
+            $configureOptions[] = '--without-http_gzip_module';
         }
 
         return [
             'cc_opts' => $ccOpts,
             'ld_opts' => $ldOpts,
-            'configure_extra' => $configureExtra,
+            'configure_extra' => \implode(' ', $configureOptions),
             'has_pcre' => $hasPcre,
             'has_openssl' => $hasOpenssl,
+            'has_zlib' => $hasZlib,
         ];
     }
 
@@ -372,6 +465,36 @@ final class ManagedNginxInstaller
             || $this->brewPrefix('pcre2') !== null;
     }
 
+    /**
+     * @param list<string> $includeDirs
+     */
+    private function hasZlibHeaders(array $includeDirs): bool
+    {
+        foreach ($includeDirs as $dir) {
+            if (\is_file($dir . '/zlib.h')) {
+                return true;
+            }
+        }
+        return \is_file('/usr/include/zlib.h')
+            || \is_file('/usr/local/include/zlib.h')
+            || $this->macOsSdkHeaderExists('zlib.h')
+            || $this->pkgExists('zlib')
+            || $this->brewPrefix('zlib') !== null;
+    }
+
+    private function macOsSdkHeaderExists(string $header): bool
+    {
+        if (\PHP_OS_FAMILY !== 'Darwin' || !$this->commandExists('xcrun')) {
+            return false;
+        }
+        $output = [];
+        $code = 0;
+        @\exec('xcrun --show-sdk-path 2>/dev/null', $output, $code);
+        $sdk = $code === 0 ? \trim((string)($output[0] ?? '')) : '';
+
+        return $sdk !== '' && \is_file($sdk . '/usr/include/' . \ltrim($header, '/'));
+    }
+
     private function unixFailureHint(): string
     {
         return match (\PHP_OS_FAMILY) {
@@ -379,7 +502,7 @@ final class ManagedNginxInstaller
             'Linux' => 'Install build tools and headers, e.g. apt: build-essential libssl-dev libpcre3-dev zlib1g-dev'
                 . ' | dnf/yum: gcc make openssl-devel pcre-devel zlib-devel'
                 . ' | apk: build-base openssl-dev pcre-dev zlib-dev',
-            default => 'Install a C toolchain, OpenSSL headers, and optionally PCRE.',
+            default => 'Install a C toolchain plus OpenSSL and PCRE development headers.',
         };
     }
 
@@ -388,6 +511,13 @@ final class ManagedNginxInstaller
      */
     private function installWindows(bool $force): array
     {
+        if (!$this->commandExists('powershell') || !\function_exists('iconv')) {
+            return [
+                'ok' => false,
+                'message' => 'Windows managed nginx lifecycle requires powershell.exe and the PHP iconv extension',
+                'platform' => 'Windows',
+            ];
+        }
         if (!\class_exists(\ZipArchive::class) && !$this->commandExists('powershell') && !$this->commandExists('tar')) {
             return [
                 'ok' => false,
@@ -396,84 +526,116 @@ final class ManagedNginxInstaller
             ];
         }
 
-        $cacheDir = $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'var'
-            . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'nginx-build';
-        if (!\is_dir($cacheDir) && !@\mkdir($cacheDir, 0755, true) && !\is_dir($cacheDir)) {
-            return ['ok' => false, 'message' => 'unable to create build cache: ' . $cacheDir, 'platform' => 'Windows'];
-        }
-        $zip = $cacheDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION . '.zip';
-        try {
-            $this->downloadFile(self::WINDOWS_ZIP_URL, $zip);
-            $this->assertSha256($zip, self::WINDOWS_ZIP_SHA256);
-        } catch (\Throwable $e) {
-            return ['ok' => false, 'message' => $e->getMessage(), 'platform' => 'Windows'];
-        }
-
-        $extractDir = $cacheDir . DIRECTORY_SEPARATOR . 'win-extract';
-        if (\is_dir($extractDir)) {
-            $this->removeTree($extractDir);
-        }
-        @\mkdir($extractDir, 0755, true);
-        try {
-            $this->extractZip($zip, $extractDir);
-        } catch (\Throwable $e) {
-            return ['ok' => false, 'message' => $e->getMessage(), 'platform' => 'Windows'];
-        }
-
-        $nested = $extractDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION;
-        if (!\is_dir($nested)) {
-            // Some extractions nest differently; pick first directory containing nginx.exe
-            $nested = $this->findWindowsNginxRoot($extractDir) ?? $extractDir;
-        }
         $prefix = $this->paths->installRoot();
-        if (\is_dir($prefix) && $force) {
-            $this->removeTree($prefix);
+        $localRoot = \dirname($prefix);
+        $cacheDir = $localRoot . DIRECTORY_SEPARATOR . 'installer-cache';
+        if (!\is_dir($cacheDir) && !@\mkdir($cacheDir, 0755, true) && !\is_dir($cacheDir)) {
+            return ['ok' => false, 'message' => 'unable to create local installer cache: ' . $cacheDir, 'platform' => 'Windows'];
         }
-        if (!\is_dir($prefix) && !@\mkdir($prefix, 0755, true) && !\is_dir($prefix)) {
-            return ['ok' => false, 'message' => 'unable to create install prefix', 'platform' => 'Windows'];
-        }
-        $this->copyTree($nested, $prefix);
-        if (!$this->paths->isInstalled()) {
+        if (\is_dir($prefix) && !$force) {
             return [
                 'ok' => false,
-                'message' => 'windows nginx.exe missing after extract under ' . $prefix,
+                'message' => 'incomplete Windows nginx install root exists; rerun with --force after confirming it is not running',
                 'platform' => 'Windows',
             ];
         }
-        $manifest = [
-            'version' => self::VERSION,
-            'source_url' => self::WINDOWS_ZIP_URL,
-            'artifact_sha256' => self::WINDOWS_ZIP_SHA256,
-            'source_sha256' => self::WINDOWS_ZIP_SHA256,
-            'platform' => 'Windows',
-            'arch' => \php_uname('m'),
-            'prefix' => $prefix,
-            'binary' => $this->paths->binary(),
-            'installed_at' => \date('c'),
-            'note' => 'Official nginx.org Windows zip is typically x86/x64; on ARM Windows use x64 PHP emulation if needed.',
-        ];
-        $this->writeManifest($manifest);
-        return [
-            'ok' => true,
-            'message' => 'managed nginx installed from windows zip',
-            'manifest' => $manifest,
-            'platform' => 'Windows',
-        ];
+
+        $zip = $cacheDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION . '.zip';
+        $extractDir = '';
+        $candidate = '';
+        try {
+            $this->downloadFile(self::WINDOWS_ZIP_URL, $zip);
+            $this->assertSha256($zip, self::WINDOWS_ZIP_SHA256);
+
+            $token = \bin2hex(\random_bytes(8));
+            $extractDir = $cacheDir . DIRECTORY_SEPARATOR . 'win-extract-' . $token;
+            $candidate = $localRoot . DIRECTORY_SEPARATOR . 'install-candidate-' . $token;
+            $this->resetDirectory($extractDir);
+            $this->extractZip($zip, $extractDir);
+
+            $nested = $extractDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION;
+            if (!\is_dir($nested)) {
+                // Some extractions nest differently; pick first directory containing nginx.exe.
+                $nested = $this->findWindowsNginxRoot($extractDir) ?? $extractDir;
+            }
+
+            $this->resetDirectory($candidate);
+            $this->copyTree($nested, $candidate);
+            $candidateBinary = $candidate . DIRECTORY_SEPARATOR . 'nginx.exe';
+            if (!\is_file($candidateBinary)) {
+                throw new \RuntimeException('windows nginx.exe missing from validated install candidate');
+            }
+            $binarySha256 = \hash_file('sha256', $candidateBinary);
+            if (!\is_string($binarySha256)) {
+                throw new \RuntimeException('unable to hash Windows nginx install candidate');
+            }
+            $binaryArchitecture = $this->binaryArchitecture($candidateBinary);
+            if ($binaryArchitecture === '') {
+                throw new \RuntimeException('unable to identify Windows nginx install candidate architecture');
+            }
+            $manifest = [
+                'version' => self::VERSION,
+                'source_url' => self::WINDOWS_ZIP_URL,
+                'artifact_sha256' => self::WINDOWS_ZIP_SHA256,
+                'source_sha256' => self::WINDOWS_ZIP_SHA256,
+                'platform' => 'Windows',
+                'arch' => $binaryArchitecture,
+                'php_process_arch' => $this->normalizeArchitecture((string)\php_uname('m')),
+                'prefix' => $prefix,
+                'binary' => $prefix . DIRECTORY_SEPARATOR . 'nginx.exe',
+                'binary_sha256' => $binarySha256,
+                'build_flags' => [
+                    'http_v2_module' => true,
+                    'http_v3_module' => false,
+                    'http_v3_reason' => 'ngx_http_v3_module is not supported on Win32',
+                ],
+                'installed_at' => \date('c'),
+                'note' => 'Official nginx.org Windows zip is typically x86/x64; on ARM Windows use x64 PHP emulation if needed.',
+            ];
+            $this->writeManifestFile(
+                $candidate . DIRECTORY_SEPARATOR . \basename($this->paths->manifestFile()),
+                $manifest,
+            );
+            $this->publishWindowsCandidate($candidate, $prefix);
+
+            return [
+                'ok' => true,
+                'message' => 'managed nginx installed from windows zip',
+                'manifest' => $manifest,
+                'platform' => 'Windows',
+            ];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'message' => $e->getMessage(), 'platform' => 'Windows'];
+        } finally {
+            if ($extractDir !== '') {
+                $this->removeTree($extractDir);
+            }
+            if ($candidate !== '') {
+                $this->removeTree($candidate);
+            }
+        }
     }
 
     private function extractZip(string $zip, string $destination): void
     {
+        $failures = [];
         if (\class_exists(\ZipArchive::class)) {
             $zipArchive = new \ZipArchive();
-            if ($zipArchive->open($zip) !== true) {
-                throw new \RuntimeException('unable to open windows nginx zip');
-            }
-            if (!$zipArchive->extractTo($destination)) {
+            $opened = $zipArchive->open($zip);
+            if ($opened === true && $zipArchive->extractTo($destination)) {
                 $zipArchive->close();
-                throw new \RuntimeException('unable to extract windows nginx zip via ZipArchive');
+                return;
             }
-            $zipArchive->close();
-            return;
+            if ($opened === true) {
+                $status = \method_exists($zipArchive, 'getStatusString')
+                    ? $zipArchive->getStatusString()
+                    : 'status=' . (string)$zipArchive->status . ', statusSys=' . (string)$zipArchive->statusSys;
+                $zipArchive->close();
+                $failures[] = 'ZipArchive extract failed (' . $status . ')';
+            } else {
+                $failures[] = 'ZipArchive open failed (code=' . (string)$opened . ')';
+            }
+            $this->resetDirectory($destination);
         }
         if ($this->commandExists('tar')) {
             $cmd = 'tar -xf ' . \escapeshellarg($zip) . ' -C ' . \escapeshellarg($destination);
@@ -483,22 +645,98 @@ final class ManagedNginxInstaller
             if ($code === 0) {
                 return;
             }
+            $failures[] = 'tar failed: ' . \trim(\implode("\n", $out));
+            $this->resetDirectory($destination);
         }
         if ($this->commandExists('powershell') || $this->commandExists('powershell.exe')) {
-            $ps = 'powershell -NoProfile -Command "Expand-Archive -LiteralPath '
-                . \str_replace('"', '""', $zip)
+            $script = 'Expand-Archive -LiteralPath '
+                . $this->powerShellLiteral($zip)
                 . ' -DestinationPath '
-                . \str_replace('"', '""', $destination)
-                . ' -Force"';
+                . $this->powerShellLiteral($destination)
+                . ' -Force';
+            $encoded = \iconv('UTF-8', 'UTF-16LE', $script);
+            if (!\is_string($encoded)) {
+                throw new \RuntimeException('unable to encode PowerShell Expand-Archive command');
+            }
+            $ps = 'powershell -NoProfile -NonInteractive -EncodedCommand ' . \base64_encode($encoded);
             $out = [];
             $code = 0;
             @\exec($ps . ' 2>&1', $out, $code);
             if ($code === 0) {
                 return;
             }
-            throw new \RuntimeException('Expand-Archive failed: ' . \trim(\implode("\n", $out)));
+            $failures[] = 'Expand-Archive failed: ' . \trim(\implode("\n", $out));
         }
-        throw new \RuntimeException('no zip extractor available');
+        throw new \RuntimeException(
+            $failures === []
+                ? 'no zip extractor available'
+                : 'unable to extract windows nginx zip: ' . \implode(' | ', $failures),
+        );
+    }
+
+    private function powerShellLiteral(string $value): string
+    {
+        return "'" . \str_replace("'", "''", $value) . "'";
+    }
+
+    private function resetDirectory(string $dir): void
+    {
+        if (\is_dir($dir)) {
+            $this->removeTree($dir);
+        }
+        if (\is_dir($dir) || (!@\mkdir($dir, 0755, true) && !\is_dir($dir))) {
+            throw new \RuntimeException('unable to prepare local nginx installer directory: ' . $dir);
+        }
+    }
+
+    private function publishWindowsCandidate(string $candidate, string $prefix): void
+    {
+        $rollback = \dirname($prefix) . DIRECTORY_SEPARATOR . 'install-rollback-' . \bin2hex(\random_bytes(8));
+        $hadPrevious = \is_dir($prefix);
+        if ($hadPrevious && !@\rename($prefix, $rollback)) {
+            throw new \RuntimeException('unable to stage existing Windows nginx install for rollback');
+        }
+
+        try {
+            if (!@\rename($candidate, $prefix)) {
+                throw new \RuntimeException('unable to atomically publish Windows nginx install candidate');
+            }
+            if (!$this->paths->isInstalled() || !$this->manifestMatches()) {
+                throw new \RuntimeException('published Windows nginx install failed binary/manifest validation');
+            }
+        } catch (\Throwable $e) {
+            if (\is_dir($prefix)) {
+                $this->removeTree($prefix);
+            }
+            if (\is_dir($prefix)) {
+                throw new \RuntimeException(
+                    'Windows nginx install failed and the invalid candidate could not be removed'
+                    . ($hadPrevious ? '; rollback remains at ' . $rollback : '')
+                    . ': '
+                    . $e->getMessage(),
+                    0,
+                    $e,
+                );
+            }
+            if ($hadPrevious && !@\rename($rollback, $prefix)) {
+                throw new \RuntimeException(
+                    'Windows nginx install failed and rollback restoration failed; previous install remains at '
+                    . $rollback
+                    . ': '
+                    . $e->getMessage(),
+                    0,
+                    $e,
+                );
+            }
+            throw $e;
+        }
+
+        if ($hadPrevious) {
+            $this->removeTree($rollback);
+            if (\is_dir($rollback)) {
+                throw new \RuntimeException('Windows nginx install succeeded but rollback cleanup failed: ' . $rollback);
+            }
+        }
     }
 
     private function findWindowsNginxRoot(string $root): ?string
@@ -603,6 +841,94 @@ final class ManagedNginxInstaller
         return \max(1, $nproc > 0 ? $nproc : 2);
     }
 
+    private function binaryArchitecture(string $binary): string
+    {
+        if (!\is_file($binary)) {
+            return '';
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $handle = @\fopen($binary, 'rb');
+            if (!\is_resource($handle)) {
+                return '';
+            }
+            $header = @\fread($handle, 64);
+            if (!\is_string($header) || \strlen($header) < 64 || \substr($header, 0, 2) !== 'MZ') {
+                @\fclose($handle);
+                return '';
+            }
+            $offset = \unpack('Voffset', \substr($header, 0x3c, 4));
+            $peOffset = (int)($offset['offset'] ?? 0);
+            if ($peOffset <= 0 || @\fseek($handle, $peOffset) !== 0) {
+                @\fclose($handle);
+                return '';
+            }
+            $pe = @\fread($handle, 6);
+            @\fclose($handle);
+            if (!\is_string($pe) || \strlen($pe) < 6 || \substr($pe, 0, 4) !== "PE\0\0") {
+                return '';
+            }
+            $machine = \unpack('vmachine', \substr($pe, 4, 2));
+            return match ((int)($machine['machine'] ?? 0)) {
+                0x8664 => 'x86_64',
+                0xaa64 => 'arm64',
+                0x014c => 'x86',
+                default => '',
+            };
+        }
+        $header = @\file_get_contents($binary, false, null, 0, 32);
+        if (\is_string($header) && \strlen($header) >= 20) {
+            if (\substr($header, 0, 4) === "\x7fELF") {
+                $format = \ord($header[5]) === 2 ? 'n' : 'v';
+                $machine = \unpack($format . 'machine', \substr($header, 18, 2));
+                $detected = match ((int)($machine['machine'] ?? 0)) {
+                    62 => 'x86_64',
+                    183 => 'arm64',
+                    3 => 'x86',
+                    default => '',
+                };
+                if ($detected !== '') {
+                    return $detected;
+                }
+            }
+            $magic = \bin2hex(\substr($header, 0, 4));
+            if ($magic === 'cffaedfe' || $magic === 'cefaedfe') {
+                $cpu = \unpack('Vcpu', \substr($header, 4, 4));
+                $detected = match ((int)($cpu['cpu'] ?? 0)) {
+                    0x0100000c => 'arm64',
+                    0x01000007 => 'x86_64',
+                    7 => 'x86',
+                    default => '',
+                };
+                if ($detected !== '') {
+                    return $detected;
+                }
+            }
+        }
+        $output = [];
+        $code = 0;
+        @\exec('file -b ' . \escapeshellarg($binary) . ' 2>/dev/null', $output, $code);
+        if ($code !== 0) {
+            return '';
+        }
+        $description = \strtolower(\implode(' ', $output));
+        return match (true) {
+            \str_contains($description, 'arm64'), \str_contains($description, 'aarch64') => 'arm64',
+            \str_contains($description, 'x86-64'), \str_contains($description, 'x86_64') => 'x86_64',
+            \str_contains($description, '80386'), \str_contains($description, 'i386') => 'x86',
+            default => '',
+        };
+    }
+
+    private function normalizeArchitecture(string $architecture): string
+    {
+        return match (\strtolower(\trim($architecture))) {
+            'amd64', 'x86_64', 'x64' => 'x86_64',
+            'arm64', 'aarch64' => 'arm64',
+            'x86', 'i386', 'i686' => 'x86',
+            default => \strtolower(\trim($architecture)),
+        };
+    }
+
     private function commandExists(string $name): bool
     {
         if (\PHP_OS_FAMILY === 'Windows') {
@@ -676,14 +1002,20 @@ final class ManagedNginxInstaller
             $target = $dst . DIRECTORY_SEPARATOR . $iterator->getSubPathName();
             if ($item->isDir()) {
                 if (!\is_dir($target)) {
-                    @\mkdir($target, 0755, true);
+                    if (!@\mkdir($target, 0755, true) && !\is_dir($target)) {
+                        throw new \RuntimeException('unable to create nginx install directory: ' . $target);
+                    }
                 }
             } else {
                 $parent = \dirname($target);
                 if (!\is_dir($parent)) {
-                    @\mkdir($parent, 0755, true);
+                    if (!@\mkdir($parent, 0755, true) && !\is_dir($parent)) {
+                        throw new \RuntimeException('unable to create nginx install directory: ' . $parent);
+                    }
                 }
-                @\copy($item->getPathname(), $target);
+                if (!@\copy($item->getPathname(), $target)) {
+                    throw new \RuntimeException('unable to copy managed nginx file: ' . $target);
+                }
             }
         }
     }

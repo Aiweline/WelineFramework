@@ -416,6 +416,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ControlMessage::ROLE_WORKER => [
                 ...$policyAcks,
                 ControlMessage::TYPE_CACHE_CLEAR_ACK,
+                ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1,
                 ControlMessage::TYPE_POLICY_STATE_DELTA,
                 ControlMessage::TYPE_HTTP3_ROUTE_ACTIVATED,
                 ControlMessage::TYPE_DRAINING_COMPLETE,
@@ -433,6 +434,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ControlMessage::ROLE_MAINTENANCE => [
                 ...$policyAcks,
                 ControlMessage::TYPE_CACHE_CLEAR_ACK,
+                ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1,
                 ControlMessage::TYPE_POLICY_STATE_DELTA,
                 ControlMessage::TYPE_DRAINING_COMPLETE,
                 ControlMessage::TYPE_EXITED,
@@ -488,6 +490,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ControlMessage::TYPE_POLICY_COMMITTED_ACK,
             ControlMessage::TYPE_POLICY_ROLLBACK_ACK,
             ControlMessage::TYPE_CACHE_CLEAR_ACK,
+            ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1,
             ControlMessage::TYPE_HTTP3_ROUTE_ACTIVATED,
             ControlMessage::TYPE_DRAINING_COMPLETE,
             ControlMessage::TYPE_EXITED,
@@ -540,6 +543,26 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ];
         }
 
+        if ($type === ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1) {
+            $generations = [];
+            foreach (\array_slice((array)($message['generations'] ?? []), 0, 64, true) as $namespace => $generation) {
+                if (\is_string($namespace) && \is_int($generation) && $generation >= 0) {
+                    $generations[$namespace] = $generation;
+                }
+            }
+            \ksort($generations, \SORT_STRING);
+            $message = [
+                'type' => $type,
+                'operation_id' => \substr((string)($message['operation_id'] ?? ''), 0, 36),
+                'success' => (bool)($message['success'] ?? false),
+                'applied' => (bool)($message['applied'] ?? false),
+                'authority_clock' => \max(0, (int)($message['authority_clock'] ?? 0)),
+                'generations' => $generations,
+                'error_code' => \substr((string)($message['error_code'] ?? ''), 0, 64),
+                'error' => \substr((string)($message['error'] ?? ''), 0, 512),
+            ];
+        }
+
         $message['source_instance'] = $session->instance;
         $message['source_role'] = $session->role;
         $message['source_pid'] = $session->pid;
@@ -548,6 +571,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         $message['source_slot_id'] = $session->slotId;
         $message['source_lease_id'] = $session->leaseId;
         $message['source_generation'] = $session->generation;
+        $message['source_client_id'] = $this->toSupervisorClientId($session->id);
 
         if (\in_array($type, [
             ControlMessage::TYPE_POLICY_STATE_DELTA,
@@ -568,6 +592,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ControlMessage::TYPE_FIBER_POOL_STATS,
             ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
             ControlMessage::TYPE_CACHE_CLEAR_ACK,
+            ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_ACK_V1,
         ], true)) {
             $message['worker_id'] = $session->workerId;
         } elseif ($type === ControlMessage::TYPE_LOG) {
@@ -758,6 +783,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             'homepage_fpc',
             'dynamic_first_render',
             'listen_capabilities',
+            'namespace_authority_clock',
         ] as $field) {
             if (\array_key_exists($field, $pending)) {
                 $message[$field] = $pending[$field];

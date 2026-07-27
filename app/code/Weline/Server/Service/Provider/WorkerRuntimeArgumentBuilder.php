@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedStateRuntimeOptions;
 use Weline\Server\Service\SharedStateRuntimeScope;
@@ -57,40 +58,52 @@ final class WorkerRuntimeArgumentBuilder
         ];
     }
 
+    /** @return string[] */
+    public static function protocolPolicy(ServiceContext $context, bool $includeHttp3Activation = true): array
+    {
+        $httpConfig = $context->getConfig('wls.http', []);
+        $selection = \Weline\Server\Service\Runtime\HttpProtocolSelection::fromConfig(
+            ['http' => \is_array($httpConfig) ? $httpConfig : []],
+            $context->sslEnabled,
+        );
+        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+            ->resolve($context->envConfig)
+            ->name();
+        $http3Config = $context->getConfig('wls.http3', []);
+        $http3Config = \is_array($http3Config) ? $http3Config : [];
+        $http3Enabled = $includeHttp3Activation && (bool)($http3Config['enabled'] ?? false);
+        $http3RuntimeVerified = $http3Enabled && (bool)($http3Config['runtime_verified'] ?? false);
+        $snapshot = [
+            'schema_version' => 1,
+            'instance_name' => $context->instanceName,
+            'edge_adapter' => $edgeAdapter,
+            'http_protocol_selection' => $selection->toArray(),
+            'http3' => [
+                'enabled' => $http3Enabled,
+                'runtime_verified' => $http3RuntimeVerified,
+                'reason' => $includeHttp3Activation
+                    ? (string)($http3Config['reason'] ?? '')
+                    : 'HTTP/3 is disabled for the maintenance Worker.',
+                'native_digest' => (string)($http3Config['native_digest'] ?? ''),
+                'fingerprint' => (string)($http3Config['fingerprint'] ?? ''),
+            ],
+        ];
+        $json = \json_encode(
+            $snapshot,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+        );
+        $encoded = \rtrim(\strtr(\base64_encode($json), '+/', '-_'), '=');
+
+        return [
+            '--wls-http-policy=' . $encoded,
+            '--wls-http-policy-sha256=' . \hash('sha256', $json),
+        ];
+    }
+
     public static function publicOrigin(ServiceContext $context): string
     {
-        $scheme = $context->sslEnabled ? 'https' : 'http';
-        $rawHost = \trim((string)($context->publicHost ?: $context->host ?: '127.0.0.1'));
-        $rawIpv6 = \trim($rawHost, '[]');
-        if (!\str_contains($rawHost, '://')
-            && \filter_var($rawIpv6, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)
-        ) {
-            $parts = ['host' => $rawIpv6];
-        } else {
-            $candidate = \str_contains($rawHost, '://') ? $rawHost : $scheme . '://' . $rawHost;
-            try {
-                $parts = \parse_url($candidate);
-            } catch (\ValueError) {
-                $parts = [];
-            }
-        }
-        if (!\is_array($parts)) {
-            $parts = [];
-        }
-
-        $host = \trim((string)($parts['host'] ?? ''));
-        if ($host === '') {
-            $host = '127.0.0.1';
-        }
-        $authority = \filter_var($host, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)
-            ? '[' . \trim($host, '[]') . ']'
-            : $host;
-        $port = isset($parts['port']) ? (int)$parts['port'] : $context->mainPort;
-        $defaultPort = $context->sslEnabled ? 443 : 80;
-        if ($port > 0 && $port <= 65535 && $port !== $defaultPort) {
-            $authority .= ':' . $port;
-        }
-
-        return $scheme . '://' . $authority;
+        return ManagedNginxPublicOrigin::normalize(
+            (string)$context->getConfig('wls.public_origin', ''),
+        );
     }
 }

@@ -270,24 +270,48 @@ function wlsCountActiveFibersForAdmission(array $activeFibers): int
 /**
  * 进入 Fiber 请求上下文；有其他挂起请求 Fiber 时，省略会破坏同伴状态的 reset 回调。
  */
-if (!\function_exists('wlsFiberRequestContextEnter')) {
-function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
+if (!\function_exists('wlsSharedFiberRequestContextEnter')) {
+function wlsSharedFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
 {
-    $omitCallbacks = null;
-    if (
-        \Weline\Framework\Runtime\Runtime::isPersistent()
-        && \Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
-    ) {
-        $omitCallbacks = \Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers();
-    }
-    \Weline\Framework\Runtime\StateManager::reset($omitCallbacks);
+    // Establish a Fiber-owned Context before any resetter can consult
+    // RequestContext. Without this, Context::getCurrent() falls back to the
+    // event-loop main Context and a new request can erase process-main state.
+    \Weline\Framework\Context::enter(new \Weline\Framework\Context([
+        'meta' => ['type' => 'request', 'mode' => 'wls'],
+    ]));
 
-    \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
-    \Weline\Framework\Http\Sse\SseContext::reset();
-    \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
-    \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
-    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
+    $failures = [];
+    $omitCallbacks = null;
+    try {
+        if (
+            \Weline\Framework\Runtime\Runtime::isPersistent()
+            && \Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
+        ) {
+            $omitCallbacks = \Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers();
+        }
+        \Weline\Framework\Runtime\StateManager::reset($omitCallbacks);
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'state_manager', $e);
+    }
+
+    try {
+        \Weline\Framework\Runtime\RequestContext::cleanup();
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'request_context', $e);
+    }
+    try {
+        \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'url_parser_scratch', $e);
+    }
+    try {
+        \Weline\Framework\Http\Sse\SseContext::reset();
+        \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
+        \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
+        \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'sse_context', $e);
+    }
 
     $resolvedConnectionId = $connectionId;
     if ($resolvedConnectionId === null && \is_resource($conn)) {
@@ -304,28 +328,92 @@ function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId 
     \Weline\Framework\Runtime\RequestContext::setConnectionId(
         $resolvedConnectionId === null ? null : (string)$resolvedConnectionId
     );
+
+    if ($failures !== []) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+            'request_entry_reset_failure'
+        );
+        throw new \Weline\Framework\Runtime\RequestResetException(
+            'worker_request_enter',
+            $failures,
+        );
+    }
+}
+}
+
+if (!\function_exists('wlsFiberRequestContextEnter')) {
+function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
+{
+    wlsSharedFiberRequestContextEnter($conn, $connectionId);
 }
 }
 
 /**
  * Fiber 请求结束后统一清台（响应已完成/连接已关闭后调用）。
  */
-if (!\function_exists('wlsFiberRequestContextLeave')) {
-function wlsFiberRequestContextLeave(): void
+if (!\function_exists('wlsSharedFiberRequestContextLeave')) {
+function wlsSharedFiberRequestContextLeave(): void
 {
-    if (\session_status() === PHP_SESSION_ACTIVE) {
-        @\session_write_close();
+    $failures = [];
+    try {
+        if (\session_status() === PHP_SESSION_ACTIVE) {
+            @\session_write_close();
+        }
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'native_session_close', $e);
     }
-    \Weline\Framework\Http\Sse\SseContext::reset();
-    \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Request::class);
+    try {
+        \Weline\Framework\Http\Sse\SseContext::reset();
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'sse_context', $e);
+    }
+
+    $fiber = \Fiber::getCurrent();
+    $hasOwnedContext = $fiber === null
+        ? \Weline\Framework\Context::getCurrent() !== null
+        : \Weline\Framework\Context::getForFiber($fiber) !== null;
+    if ($hasOwnedContext) {
+        try {
+            \Weline\Framework\Runtime\RequestContext::cleanup();
+        } catch (\Throwable $e) {
+            \Weline\Framework\Runtime\RequestResetException::append($failures, 'request_context', $e);
+        }
+    }
+    try {
+        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Request::class);
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'request_instance', $e);
+    }
     try {
         $resolvedClass = \Weline\Framework\Manager\ObjectManager::parserClass(\Weline\Framework\Http\Request::class);
         if ($resolvedClass !== \Weline\Framework\Http\Request::class) {
             \Weline\Framework\Manager\ObjectManager::removeInstance($resolvedClass);
         }
-    } catch (\Throwable) {
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'resolved_request_instance', $e);
     }
+    try {
+        \Weline\Framework\Context::leave();
+    } catch (\Throwable $e) {
+        \Weline\Framework\Runtime\RequestResetException::append($failures, 'context_leave', $e);
+    }
+
+    if ($failures !== []) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+            'request_leave_cleanup_failure'
+        );
+        throw new \Weline\Framework\Runtime\RequestResetException(
+            'worker_request_leave',
+            $failures,
+        );
+    }
+}
+}
+
+if (!\function_exists('wlsFiberRequestContextLeave')) {
+function wlsFiberRequestContextLeave(): void
+{
+    wlsSharedFiberRequestContextLeave();
 }
 }
 
@@ -347,10 +435,87 @@ function wlsDrainPostResponseTasks(
     }
 
     $maxTasks = (int)(\Weline\Framework\App\Env::get('wls.post_response_task_max_per_drain', 1) ?: 1);
-    \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
-        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8),
-        \max(1, $maxTasks)
-    );
+    try {
+        \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
+            (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8),
+            \max(1, $maxTasks)
+        );
+    } catch (\Throwable $throwable) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+            'post_response_cleanup_failure'
+        );
+        \Weline\Server\Log\WlsLogger::error_(
+            'Post-response cleanup failed; Worker quarantine requested: ' . $throwable->getMessage()
+        );
+    }
+}
+}
+
+/**
+ * Unwind a suspended request Fiber so its Runtime and Worker finally blocks
+ * execute before the connection state and request scope are discarded.
+ */
+if (!\function_exists('wlsUnwindRequestFiberForCancellation')) {
+function wlsUnwindRequestFiberForCancellation(
+    \Fiber $fiber,
+    mixed $fiberContext = null,
+    string $reason = 'request_cancelled',
+): bool {
+    if ($fiber->isTerminated()) {
+        return true;
+    }
+    if (!$fiber->isSuspended()) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+            'request_fiber_cancel_not_suspended'
+        );
+        return false;
+    }
+
+    try {
+        if ($fiberContext !== null && \method_exists($fiberContext, 'restoreForFiber')) {
+            $fiberContext->restoreForFiber($fiber);
+        }
+        $fiber->throw(new \Weline\Framework\Runtime\RequestExitException());
+    } catch (\Weline\Framework\Runtime\RequestExitException) {
+        // Expected control flow after request finally blocks have unwound.
+    } catch (\Throwable $throwable) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+            'request_fiber_cancel_failure'
+        );
+        \Weline\Server\Log\WlsLogger::error_(
+            'Request Fiber cancellation failed (' . $reason . '): ' . $throwable->getMessage()
+        );
+    }
+
+    if (!$fiber->isTerminated()) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+            'request_fiber_cancel_incomplete'
+        );
+        \Weline\Server\Log\WlsLogger::error_(
+            'Request Fiber remained suspended after cancellation: ' . $reason
+        );
+        return false;
+    }
+
+    return true;
+}
+}
+
+if (!\function_exists('wlsCaptureSuspendedRequestFiberOrQuarantine')) {
+function wlsCaptureSuspendedRequestFiberOrQuarantine(\Fiber $fiber): \Weline\Framework\Runtime\WlsFiberContext
+{
+    try {
+        return \Weline\Framework\Runtime\WlsFiberContext::captureForFiber($fiber);
+    } catch (\Throwable $throwable) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+            'request_fiber_initial_capture_failure'
+        );
+        \Weline\Server\Log\WlsLogger::error_(
+            'Initial Request Fiber capture failed; Worker quarantine requested: '
+            . $throwable->getMessage()
+        );
+        throw $throwable;
+    }
 }
 }
 
@@ -575,4 +740,3 @@ function wlsApproxMemoryValueSize(mixed $value, int $depth = 0, int &$visited = 
     return $size;
 }
 }
-

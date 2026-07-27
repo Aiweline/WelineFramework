@@ -1,4 +1,10 @@
 <?php
+declare(strict_types=1);
+
+throw new \RuntimeException(
+    'WLS Gateway is retired; Nginx is the only public edge.'
+);
+
 /**
  * WLS Gateway 启动脚本
  *

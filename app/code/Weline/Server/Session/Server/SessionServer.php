@@ -54,6 +54,7 @@ final class SessionServer
 
     /** Dedicated RAM-only TLS cache. It is never created by the persistent Session role. */
     private ?TlsSessionCacheStore $tlsSessionCacheStore = null;
+    private ?string $tlsSessionCacheIntegrationSha256 = null;
 
     /** 运行状态 */
     private bool $running = false;
@@ -110,6 +111,8 @@ final class SessionServer
         $this->gcInterval = (int)($config['gc_interval'] ?? 300);
         $this->store = new SessionStore($config);
         if ($this->serviceRole === 'memory_server') {
+            $this->tlsSessionCacheIntegrationSha256 =
+                (new \Weline\Server\Service\Runtime\TlsSessionResumptionEvidenceStore())->integrationSha256();
             $tlsConfig = \is_array($config['tls_session_cache'] ?? null)
                 ? $config['tls_session_cache']
                 : [];
@@ -563,6 +566,12 @@ final class SessionServer
             'addr' => $peerName ?? 'unknown',
             'authenticated' => $this->authToken === null,
             'tls_cache_channel' => false,
+            'tls_cache_transport' => [
+                'read_buffer_zero' => false,
+                'write_buffer_zero' => false,
+                'write_buffer_control_supported' => false,
+                'tcp_nodelay' => false,
+            ],
             'consumer_code' => '',
             'instance_name' => '',
             'owner_type' => 'instance',
@@ -880,7 +889,7 @@ final class SessionServer
                 : SessionProtocol::encodeTlsError('Invalid or over-budget TLS session', 'TLS_CACHE_REJECTED'),
             SessionProtocol::CMD_TLS_SESSION_REMOVE => $this->removeTlsSession($contextHex, $sessionIdHex),
             SessionProtocol::CMD_TLS_SESSION_STATS => SessionProtocol::encodeTlsSuccess(
-                $this->tlsSessionCacheStore->stats(),
+                $this->tlsSessionCacheStats($clientId),
             ),
             default => SessionProtocol::encodeTlsError('Unknown TLS cache command', 'TLS_CACHE_COMMAND_UNKNOWN'),
         };
@@ -894,6 +903,24 @@ final class SessionServer
 
         // OpenSSL removal is advisory; a missing entry is the requested final state.
         return SessionProtocol::encodeTlsSuccess();
+    }
+
+    /** @return array<string, mixed> */
+    private function tlsSessionCacheStats(int $clientId): array
+    {
+        $stats = $this->tlsSessionCacheStore?->stats() ?? [];
+        $transport = \is_array($this->clients[$clientId]['tls_cache_transport'] ?? null)
+            ? $this->clients[$clientId]['tls_cache_transport']
+            : [];
+        $stats['transport'] = [
+            'read_buffer_zero' => (bool)($transport['read_buffer_zero'] ?? false),
+            'write_buffer_zero' => (bool)($transport['write_buffer_zero'] ?? false),
+            'write_buffer_control_supported' => (bool)($transport['write_buffer_control_supported'] ?? false),
+            'tcp_nodelay' => (bool)($transport['tcp_nodelay'] ?? false),
+        ];
+        $stats['transport_schema_version'] = 2;
+        $stats['integration_sha256'] = (string)$this->tlsSessionCacheIntegrationSha256;
+        return $stats;
     }
 
     private function isTlsSessionCacheCommand(string $cmd): bool
@@ -1325,6 +1352,9 @@ final class SessionServer
         if ($this->authToken === null) {
             $this->clients[$clientId]['authenticated'] = true;
             $this->clients[$clientId]['tls_cache_channel'] = $tlsCacheChannel;
+            if ($tlsCacheChannel) {
+                $this->tuneTlsSessionCacheTransport($clientId);
+            }
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Auth disabled'));
             return;
         }
@@ -1332,6 +1362,9 @@ final class SessionServer
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
             $this->clients[$clientId]['tls_cache_channel'] = $tlsCacheChannel;
+            if ($tlsCacheChannel) {
+                $this->tuneTlsSessionCacheTransport($clientId);
+            }
             $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
             $this->logDebug("Client authenticated: {$addr} (id={$clientId})");
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Authenticated'));
@@ -1341,6 +1374,42 @@ final class SessionServer
             $this->sendToClient($clientId, SessionProtocol::encodeError('Invalid token', 'AUTH_FAILED'));
             $this->disconnectClient($clientId);
         }
+    }
+
+    private function tuneTlsSessionCacheTransport(int $clientId): void
+    {
+        $socket = $this->clients[$clientId]['socket'] ?? null;
+        if (!\is_resource($socket)) {
+            return;
+        }
+        $readBufferZero = @\stream_set_read_buffer($socket, 0) === 0;
+        $writeBufferResult = @\stream_set_write_buffer($socket, 0);
+        $writeBufferControlSupported = $writeBufferResult === 0;
+        $writeBufferZero = $writeBufferControlSupported;
+        $tcpNoDelay = false;
+        $tcpLevel = \defined('SOL_TCP')
+            ? (int)\constant('SOL_TCP')
+            : (\defined('IPPROTO_TCP') ? (int)\constant('IPPROTO_TCP') : null);
+        if ($tcpLevel !== null
+            && \defined('TCP_NODELAY')
+            && \function_exists('socket_import_stream')
+            && \function_exists('socket_set_option')
+            && \function_exists('socket_get_option')
+        ) {
+            $nativeSocket = @\socket_import_stream($socket);
+            if ($nativeSocket !== false) {
+                $option = (int)\constant('TCP_NODELAY');
+                $set = @\socket_set_option($nativeSocket, $tcpLevel, $option, 1);
+                $value = $set ? @\socket_get_option($nativeSocket, $tcpLevel, $option) : false;
+                $tcpNoDelay = $set && (int)$value !== 0;
+            }
+        }
+        $this->clients[$clientId]['tls_cache_transport'] = [
+            'read_buffer_zero' => $readBufferZero,
+            'write_buffer_zero' => $writeBufferZero,
+            'write_buffer_control_supported' => $writeBufferControlSupported,
+            'tcp_nodelay' => $tcpNoDelay,
+        ];
     }
     
     /**

@@ -11,6 +11,9 @@ use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Edge\EdgeAdapterInterface;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 
 /**
@@ -291,8 +294,9 @@ class ServerInstanceManager
 
             $info = $this->buildInstanceInfo($name, $rawData);
             if ($this->isStaleInstanceRecord($name, $rawData, $info)) {
-                $this->cleanupStaleInstanceArtifacts($name, $rawData);
-                $cleaned++;
+                if ($this->cleanupStaleInstanceArtifacts($name, $rawData)) {
+                    $cleaned++;
+                }
             }
         }
 
@@ -459,9 +463,10 @@ class ServerInstanceManager
             'policy_digest', 'container_registry_digest', 'orchestrator_mode',
             'control_plane_mode', 'supervisor_enabled', 'supervisor_reason',
             'supervisor_channel', 'supervisor_endpoint', 'control_port', 'control_token',
-            'control_token_created_at', 'epoch', 'master_epoch', 'host', 'public_host',
+            'control_token_created_at', 'epoch', 'master_epoch', 'host', 'public_host', 'public_origin',
             'port', 'main_port', 'count', 'daemon', 'ssl_enabled', 'ssl_cert', 'ssl_key',
-            'http3',
+            'http3', 'edge_adapter', 'http_protocol_selection',
+            'protocol_edge_enabled', 'protocol_edge_binary',
             'dispatcher_port', 'worker_port', 'worker_base_port', 'worker_memory_limit',
             'dispatcher_memory_limit', 'session_server_port', 'session_server_token_file_name',
             'memory_server_port', 'memory_server_token_file_name', 'shared_state', 'gateway',
@@ -489,6 +494,56 @@ class ServerInstanceManager
             throw new \RuntimeException(
                 'Removed WLS endpoint field "gateway.traffic_mode" is not supported; use wls.runtime.topology.'
             );
+        }
+        if (\array_key_exists('public_origin', $filtered)) {
+            if (!\is_string($filtered['public_origin'])) {
+                throw new \RuntimeException('WLS endpoint public_origin must be a string.');
+            }
+            $filtered['public_origin'] = ManagedNginxPublicOrigin::normalize($filtered['public_origin']);
+        }
+        if (\array_key_exists('edge_adapter', $filtered)) {
+            if (!\is_string($filtered['edge_adapter'])) {
+                throw new \RuntimeException('WLS endpoint edge_adapter must be a string.');
+            }
+            $edgeAdapter = \strtolower(\trim($filtered['edge_adapter']));
+            if ($edgeAdapter !== EdgeAdapterInterface::NAME_NGINX) {
+                throw new \RuntimeException('WLS endpoint edge_adapter must be nginx.');
+            }
+            $filtered['edge_adapter'] = $edgeAdapter;
+        }
+        if (\array_key_exists('http_protocol_selection', $filtered)) {
+            if (!\is_array($filtered['http_protocol_selection'])) {
+                throw new \RuntimeException('WLS endpoint http_protocol_selection must be an array.');
+            }
+            $selection = HttpProtocolSelection::fromArray($filtered['http_protocol_selection']);
+            $filtered['http_protocol_selection'] = $selection->toArray();
+            if (!\is_string($filtered['edge_adapter'] ?? null)) {
+                throw new \RuntimeException('WLS endpoint protocol selection requires edge_adapter=nginx.');
+            }
+            $selection->assertCompatibleEdgeAdapter($filtered['edge_adapter']);
+
+            if (\array_key_exists('protocol_edge_enabled', $filtered)
+                && !\is_bool($filtered['protocol_edge_enabled'])
+            ) {
+                throw new \RuntimeException('WLS endpoint protocol_edge_enabled must be a boolean.');
+            }
+            if (\array_key_exists('protocol_edge_enabled', $filtered)
+                && $filtered['protocol_edge_enabled'] !== $selection->isCaddyProtocolEdge()
+            ) {
+                throw new \RuntimeException(
+                    'WLS endpoint protocol_edge_enabled does not match http_protocol_selection.'
+                );
+            }
+            $filtered['protocol_edge_enabled'] = $selection->isCaddyProtocolEdge();
+        }
+        if (\array_key_exists('protocol_edge_binary', $filtered)) {
+            if (!\is_string($filtered['protocol_edge_binary'])) {
+                throw new \RuntimeException('WLS endpoint protocol_edge_binary must be a string.');
+            }
+            $filtered['protocol_edge_binary'] = \trim($filtered['protocol_edge_binary']);
+            if ($filtered['protocol_edge_binary'] !== '') {
+                throw new \RuntimeException('WLS protocol edge binary is retired; Nginx owns public protocols.');
+            }
         }
 
         return $filtered;
@@ -636,10 +691,37 @@ class ServerInstanceManager
             return false;
         }
 
+        // A concurrent start transaction owns every endpoint publication for
+        // the next generation. An exiting Master must not mutate it.
+        if ($this->isStartLockHeld($name)) {
+            return true;
+        }
+
+        // A Windows restart can observe the old Master process for a short
+        // period after its control port and child services have drained. If a
+        // new Master has already claimed the same instance, the old Master's
+        // finally block must not zero the new endpoint record.
+        if ($this->hasSupersedingLiveMasterGeneration($name, $masterPid)) {
+            return true;
+        }
+
         $exitTimestamp = \time();
         $exitAt = \date('Y-m-d H:i:s', $exitTimestamp);
 
-        $this->atomicUpdateJson($file, function (array $data) use ($masterPid, $exitTimestamp, $exitAt): array {
+        $superseded = false;
+
+        $this->atomicUpdateJson($file, function (array $data) use (
+            $masterPid,
+            $exitTimestamp,
+            $exitAt,
+            &$superseded
+        ): array {
+            $recordedMasterPid = (int)($data['master_pid'] ?? $data['pid'] ?? 0);
+            if ($recordedMasterPid > 0 && $recordedMasterPid !== $masterPid) {
+                $superseded = true;
+                return $data;
+            }
+
             $data['pid'] = 0;
             $data['master_pid'] = 0;
             $data['master_enabled'] = false;
@@ -653,6 +735,10 @@ class ServerInstanceManager
             return $this->filterEndpointRecord($data);
         });
 
+        if ($superseded || $this->hasSupersedingLiveMasterGeneration($name, $masterPid)) {
+            return true;
+        }
+
         $rawData = $this->getRawInstanceData($name);
         if ($rawData === null) {
             return false;
@@ -660,11 +746,28 @@ class ServerInstanceManager
 
         $runningPids = $this->collectRunningTrackedPids($name, $rawData, [$masterPid]);
         if ($runningPids === []) {
-            $this->cleanupStaleInstanceArtifacts($name, $rawData);
-            return false;
+            $cleaned = $this->cleanupStaleInstanceArtifacts(
+                $name,
+                $rawData,
+                $masterPid,
+                $exitTimestamp
+            );
+            return !$cleaned;
         }
 
-        $this->atomicUpdateJson($file, function (array $data) use ($runningPids, $exitTimestamp, $exitAt): array {
+        $this->atomicUpdateJson($file, function (array $data) use (
+            $runningPids,
+            $exitTimestamp,
+            $exitAt,
+            $masterPid
+        ): array {
+            if ((int)($data['master_pid'] ?? 0) > 0
+                || (int)($data['master_exited_pid'] ?? 0) !== $masterPid
+                || (int)($data['master_exited_timestamp'] ?? 0) !== $exitTimestamp
+            ) {
+                return $data;
+            }
+
             $data['lifecycle_state'] = 'master_exited_children_retained';
             $data['retained_pids'] = $runningPids;
             $data['retained_pid_count'] = \count($runningPids);
@@ -676,6 +779,59 @@ class ServerInstanceManager
         });
 
         return true;
+    }
+
+    /**
+     * Return true when a concurrent start transaction or a different, live
+     * Master generation owns this instance. The start lock, endpoint record,
+     * and heartbeat lease are checked because any publication may win the
+     * restart race first.
+     */
+    public function hasSupersedingLiveMasterGeneration(string $name, int $masterPid): bool
+    {
+        if ($this->isStartLockHeld($name)) {
+            return true;
+        }
+
+        $processName = MasterProcess::getMasterProcessName($name);
+        $rawData = $this->getRawInstanceData($name);
+        $recordedMasterPid = (int)($rawData['master_pid'] ?? $rawData['pid'] ?? 0);
+        if ($recordedMasterPid > 0
+            && $recordedMasterPid !== $masterPid
+            && Processer::isManagedProcessRunning(
+                $recordedMasterPid,
+                $processName,
+                '',
+                '--name=' . $processName
+            )
+        ) {
+            return true;
+        }
+
+        $lease = (new MasterLeaseManager())->read(MasterLeaseManager::pathForInstance($name));
+        if (!\is_array($lease)
+            || (string)($lease['instance'] ?? '') !== $name
+            || (string)($lease['state'] ?? '') !== MasterLeaseManager::STATE_RUNNING
+        ) {
+            return false;
+        }
+
+        $leasePid = (int)($lease['master_pid'] ?? 0);
+        $updatedAt = (float)($lease['updated_at'] ?? 0.0);
+        if ($leasePid <= 0
+            || $leasePid === $masterPid
+            || $updatedAt <= 0.0
+            || (\microtime(true) - $updatedAt) > MasterLeaseManager::HEARTBEAT_STALE_SEC
+        ) {
+            return false;
+        }
+
+        return Processer::isManagedProcessRunning(
+            $leasePid,
+            $processName,
+            '',
+            '--name=' . $processName
+        );
     }
 
     /**
@@ -1037,39 +1193,77 @@ class ServerInstanceManager
     }
 
     /**
-     * 清理陈旧实例留下的文件痕迹
+     * 清理陈旧实例留下的文件痕迹。
+     *
+     * @return bool true when cleanup was committed; false when a concurrent
+     * start/new Master generation owns the record.
      */
-    private function cleanupStaleInstanceArtifacts(string $name, array $rawData): void
-    {
-        // Recheck immediately before destructive cleanup. This closes the
-        // startup window where endpoint metadata is visible a few milliseconds
-        // before the PID index, while the Master lease is already authoritative.
-        if ($this->readLiveMasterLease($name, $rawData) !== null) {
-            return;
+    private function cleanupStaleInstanceArtifacts(
+        string $name,
+        array $rawData,
+        ?int $expectedExitedMasterPid = null,
+        ?int $expectedExitTimestamp = null
+    ): bool {
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        if (!\is_dir($lockDir) && !@\mkdir($lockDir, 0755, true) && !\is_dir($lockDir)) {
+            return false;
         }
 
-        $trackedPids = $this->collectTrackedPids($name, $rawData);
-        foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
-            Processer::removePidFile($processName);
+        $lockFile = $lockDir . 'start_' . $name . '.lock';
+        $lockHandle = @\fopen($lockFile, 'c');
+        if ($lockHandle === false) {
+            return false;
+        }
+        if (!@\flock($lockHandle, \LOCK_EX | \LOCK_NB)) {
+            @\fclose($lockHandle);
+            return false;
         }
 
-        $pidFile = $this->getPidFile($name);
-        if (\is_file($pidFile)) {
-            @\unlink($pidFile);
-        }
+        try {
+            $currentData = $this->getRawInstanceData($name);
+            if ($currentData === null) {
+                return false;
+            }
 
-        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
-        if (\is_file($lockFile)) {
-            @\unlink($lockFile);
-        }
+            if ($expectedExitedMasterPid !== null
+                && ((int)($currentData['master_pid'] ?? 0) > 0
+                    || (int)($currentData['master_exited_pid'] ?? 0) !== $expectedExitedMasterPid
+                    || ($expectedExitTimestamp !== null
+                        && (int)($currentData['master_exited_timestamp'] ?? 0) !== $expectedExitTimestamp))
+            ) {
+                return false;
+            }
 
-        $exceptionFile = MasterProcess::getServiceExceptionFile($name);
-        if (\is_file($exceptionFile)) {
-            @\unlink($exceptionFile);
-        }
+            // Always validate the current endpoint epoch against the current
+            // lease. An old snapshot can reject a healthy new lease by epoch
+            // mismatch and must never authorize destructive cleanup.
+            $rawData = $currentData;
+            if ($this->readLiveMasterLease($name, $rawData) !== null) {
+                return false;
+            }
 
-        $this->markInstanceRecordStopped($this->getInstanceFile($name), 'stale_cleanup');
-        Processer::cleanupStalePidFilesForPids($trackedPids);
+            $trackedPids = $this->collectTrackedPids($name, $rawData);
+            foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
+                Processer::removePidFile($processName);
+            }
+
+            $pidFile = $this->getPidFile($name);
+            if (\is_file($pidFile)) {
+                @\unlink($pidFile);
+            }
+
+            $exceptionFile = MasterProcess::getServiceExceptionFile($name);
+            if (\is_file($exceptionFile)) {
+                @\unlink($exceptionFile);
+            }
+
+            $this->markInstanceRecordStopped($this->getInstanceFile($name), 'stale_cleanup');
+            Processer::cleanupStalePidFilesForPids($trackedPids);
+            return true;
+        } finally {
+            @\flock($lockHandle, \LOCK_UN);
+            @\fclose($lockHandle);
+        }
     }
 
     /**
@@ -1976,11 +2170,21 @@ class ServerInstanceManager
                 return false;
             }
 
-            if (PHP_OS_FAMILY === 'Windows') {
-                @\unlink($file);
+            // PHP 8.4 can atomically replace an existing file on Windows.
+            // Never unlink the committed JSON first: a transient Defender or
+            // filesystem rename failure must leave the previous generation
+            // readable instead of deleting the instance authority entirely.
+            $renameAttempts = PHP_OS_FAMILY === 'Windows' ? 5 : 1;
+            $success = false;
+            for ($attempt = 0; $attempt < $renameAttempts; $attempt++) {
+                $success = @\rename($tempFile, $file);
+                if ($success) {
+                    break;
+                }
+                if ($attempt + 1 < $renameAttempts) {
+                    SchedulerSystem::usleep(10_000);
+                }
             }
-
-            $success = @\rename($tempFile, $file);
             if (!$success) {
                 @\unlink($tempFile);
             }
@@ -2050,11 +2254,20 @@ class ServerInstanceManager
                 return false;
             }
 
-            if (PHP_OS_FAMILY === 'Windows') {
-                @\unlink($file);
+            // Keep the committed JSON in place until replacement succeeds.
+            // Windows PHP 8.4 supports replacing an existing target; bounded
+            // retries cover transient filesystem/Defender sharing windows.
+            $renameAttempts = PHP_OS_FAMILY === 'Windows' ? 5 : 1;
+            $success = false;
+            for ($attempt = 0; $attempt < $renameAttempts; $attempt++) {
+                $success = @\rename($tempFile, $file);
+                if ($success) {
+                    break;
+                }
+                if ($attempt + 1 < $renameAttempts) {
+                    SchedulerSystem::usleep(10_000);
+                }
             }
-
-            $success = @\rename($tempFile, $file);
             if (!$success) {
                 @\unlink($tempFile);
             }

@@ -11,7 +11,8 @@ use Weline\Framework\Runtime\WlsConcurrency;
 
 /**
  * 挂起 Fiber 场景下 {@see WlsConcurrency::callbackNamesOmittableWithPeerFibers} 不得包含
- * request_context / sse_context / session_instances，否则 finally 会漏清关键状态。
+ * module_request_resetters / Session / SSE / RequestContext / DB / Request / Template，
+ * 否则 finally 会漏清关键请求边界状态。
  */
 final class StateManagerPeerOmitIntegrationTest extends TestCase
 {
@@ -35,12 +36,23 @@ final class StateManagerPeerOmitIntegrationTest extends TestCase
     public function testOmitListExcludesCriticalCallbacks(): void
     {
         $omit = WlsConcurrency::callbackNamesOmittableWithPeerFibers();
-        self::assertNotContains('request_context', $omit);
-        self::assertNotContains('sse_context', $omit);
-        self::assertNotContains('session_instances', $omit);
-        self::assertNotContains('session_shutdown_queue', $omit);
-        self::assertNotContains('db_connection_cleanup', $omit);
-        self::assertNotContains('request_instance', $omit);
+        $property = new \ReflectionProperty(StateManager::class, 'resetCallbacks');
+        $callbacks = $property->getValue();
+        self::assertIsArray($callbacks);
+
+        foreach ([
+            'module_request_resetters',
+            'session_instances',
+            'session_shutdown_queue',
+            'sse_context',
+            'request_context',
+            'db_connection_cleanup',
+            'request_instance',
+            'template_instance',
+        ] as $callbackName) {
+            self::assertArrayHasKey($callbackName, $callbacks);
+            self::assertNotContains($callbackName, $omit);
+        }
     }
 
     public function testResetWithOmitStillRunsRequestContextCleanup(): void

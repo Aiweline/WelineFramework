@@ -157,6 +157,35 @@ $guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
 }
 </style>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_server) return;
+  g.__bqAdmin_server=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['server']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('server').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
 const STATUS_API_URL = '<?= $statusApiUrl ?>';
 const START_API_URL = '<?= $startApiUrl ?>';
@@ -274,7 +303,7 @@ function handleServerManagerClick(event) {
 
 async function loadServerData() {
     try {
-        const response = await fetch(STATUS_API_URL, {
+        const response = await bqAdmin['server'](STATUS_API_URL, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -746,12 +775,11 @@ async function loadSessionList() {
     if (!body) return;
     body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
     try {
-        const response = await fetch(SESSION_LIST_API_URL + '?limit=50', {
+        const data = await bqAdmin[\'server\'](SESSION_LIST_API_URL + '?limit=50', {
             method: 'GET',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (!data.success) {
             throw new Error(data.message || '<?= __('加载失败') ?>');
         }
@@ -808,12 +836,11 @@ async function showSessionDetail(encodedSessionId) {
     idEl.textContent = sessionId;
 
     try {
-        const response = await fetch(SESSION_DETAIL_API_URL + '?session_id=' + encodeURIComponent(sessionId), {
+        const data = await bqAdmin[\'server\'](SESSION_DETAIL_API_URL + '?session_id=' + encodeURIComponent(sessionId), {
             method: 'GET',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
         });
-        const data = await response.json();
         loadingEl.classList.add('d-none');
         if (!data.success || !Array.isArray(data.data) || !data.data.length) {
             emptyEl.classList.remove('d-none');
@@ -858,13 +885,12 @@ async function destroySession(encodedSessionId) {
     });
     if (!confirmed) return;
     try {
-        const response = await fetch(SESSION_DESTROY_API_URL, {
+        const data = await bqAdmin[\'server\'](SESSION_DESTROY_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body: 'session_id=' + encodeURIComponent(sessionId),
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('Session 已销毁') ?>');
             loadSessionList();
@@ -879,12 +905,11 @@ async function destroySession(encodedSessionId) {
 
 async function persistSessionStore() {
     try {
-        const response = await fetch(SESSION_PERSIST_API_URL, {
+        const data = await bqAdmin[\'server\'](SESSION_PERSIST_API_URL, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('Session 持久化成功') ?>');
             loadServerData();
@@ -906,13 +931,12 @@ async function gcSessionStore() {
     if (input === null) return;
     const maxLifetime = Number(input || 3600);
     try {
-        const response = await fetch(SESSION_GC_API_URL, {
+        const data = await bqAdmin[\'server\'](SESSION_GC_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body: 'max_lifetime=' + encodeURIComponent(maxLifetime),
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('Session GC 执行成功') ?>');
             loadSessionList();
@@ -930,12 +954,11 @@ async function loadMemoryNamespaces() {
     if (!body) return;
     body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
     try {
-        const response = await fetch(MEMORY_NAMESPACES_API_URL + '?limit=300', {
+        const data = await bqAdmin[\'server\'](MEMORY_NAMESPACES_API_URL + '?limit=300', {
             method: 'GET',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (!data.success) {
             throw new Error(data.message || '<?= __('加载失败') ?>');
         }
@@ -975,12 +998,11 @@ async function loadMemoryNamespaceDetail(encodedNamespace) {
     if (!body) return;
     body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
     try {
-        const response = await fetch(MEMORY_NAMESPACE_DETAIL_API_URL + '?namespace=' + encodeURIComponent(namespace) + '&limit=100', {
+        const data = await bqAdmin[\'server\'](MEMORY_NAMESPACE_DETAIL_API_URL + '?namespace=' + encodeURIComponent(namespace) + '&limit=100', {
             method: 'GET',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (!data.success) {
             throw new Error(data.message || '<?= __('加载失败') ?>');
         }
@@ -1078,13 +1100,12 @@ async function clearMemoryNamespace(encodedNamespace) {
     });
     if (!confirmed) return;
     try {
-        const response = await fetch(MEMORY_NAMESPACE_CLEAR_API_URL, {
+        const data = await bqAdmin[\'server\'](MEMORY_NAMESPACE_CLEAR_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body: 'namespace=' + encodeURIComponent(namespace),
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('命名空间已清空') ?>');
             loadMemoryNamespaces();
@@ -1101,13 +1122,12 @@ async function deleteMemoryKey(encodedNamespace, encodedKey) {
     const namespace = decodeURIComponent(encodedNamespace);
     const key = decodeURIComponent(encodedKey);
     try {
-        const response = await fetch(MEMORY_KEY_DELETE_API_URL, {
+        const data = await bqAdmin[\'server\'](MEMORY_KEY_DELETE_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body: 'namespace=' + encodeURIComponent(namespace) + '&key=' + encodeURIComponent(key),
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('缓存键已删除') ?>');
             loadMemoryNamespaceDetail(encodedNamespace);
@@ -1122,12 +1142,11 @@ async function deleteMemoryKey(encodedNamespace, encodedKey) {
 
 async function persistMemoryStore() {
     try {
-        const response = await fetch(MEMORY_PERSIST_API_URL, {
+        const data = await bqAdmin[\'server\'](MEMORY_PERSIST_API_URL, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('内存服务持久化成功') ?>');
             loadServerData();
@@ -1149,13 +1168,12 @@ async function gcMemoryStore() {
     if (input === null) return;
     const maxLifetime = Number(input || 3600);
     try {
-        const response = await fetch(MEMORY_GC_API_URL, {
+        const data = await bqAdmin[\'server\'](MEMORY_GC_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body: 'max_lifetime=' + encodeURIComponent(maxLifetime),
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('内存服务 GC 执行成功') ?>');
             loadMemoryNamespaces();
@@ -1172,7 +1190,7 @@ async function startServer(instance) {
     BackendToast.info('<?= __('正在启动...') ?>');
     
     try {
-        const response = await fetch(START_API_URL, {
+        const data = await bqAdmin[\'server\'](START_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -1181,8 +1199,6 @@ async function startServer(instance) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-        
-        const data = await response.json();
         BackendToast.success(data.message || '<?= __('启动成功') ?>');
         setTimeout(loadServerData, 1000);
         
@@ -1195,7 +1211,7 @@ async function stopServer(instance) {
     BackendToast.info('<?= __('正在停止...') ?>');
     
     try {
-        const response = await fetch(STOP_API_URL, {
+        const data = await bqAdmin[\'server\'](STOP_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -1204,8 +1220,6 @@ async function stopServer(instance) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-        
-        const data = await response.json();
         BackendToast.success(data.message || '<?= __('停止成功') ?>');
         setTimeout(loadServerData, 500);
         
@@ -1218,7 +1232,7 @@ async function restartServer(instance) {
     BackendToast.info('<?= __('正在重启...') ?>');
     
     try {
-        const response = await fetch(RESTART_API_URL, {
+        const data = await bqAdmin[\'server\'](RESTART_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -1227,8 +1241,6 @@ async function restartServer(instance) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-        
-        const data = await response.json();
         BackendToast.success(data.message || '<?= __('重启成功') ?>');
         setTimeout(loadServerData, 1500);
         
@@ -1241,7 +1253,7 @@ async function reloadServer(instance) {
     BackendToast.info('<?= __('正在热重载...') ?>');
 
     try {
-        const response = await fetch(RELOAD_API_URL, {
+        const data = await bqAdmin[\'server\'](RELOAD_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -1250,8 +1262,6 @@ async function reloadServer(instance) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || '<?= __('热重载命令已发送') ?>');
         } else {
@@ -1278,7 +1288,7 @@ async function toggleMaintenance(instance, enabled) {
 
     BackendToast.info(actionText + '...');
     try {
-        const response = await fetch(apiUrl, {
+        const data = await bqAdmin[\'server\'](apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -1287,7 +1297,6 @@ async function toggleMaintenance(instance, enabled) {
             body: 'instance=' + encodeURIComponent(instance),
             credentials: 'same-origin'
         });
-        const data = await response.json();
         if (data.success) {
             BackendToast.success(data.message || actionText + '<?= __('成功') ?>');
         } else {
@@ -1313,7 +1322,7 @@ function startNewServer() {
 
         const body = 'instance=default' + (workers ? '&workers=' + encodeURIComponent(workers) : '');
 
-        fetch(START_API_URL, {
+        bqAdmin['server'](START_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',

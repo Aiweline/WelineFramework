@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Weline\Server\Cache\Adapter;
 
 use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
+use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
 use Weline\Framework\Cache\Contract\MemoryStoreInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
 use Weline\Server\Service\MemoryStateFacade;
 
-class WlsMemoryAdapter implements AtomicCacheAdapterInterface, MemoryStoreInterface, StatsInterface
+class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealthInterface, MemoryStoreInterface, StatsInterface
 {
     /**
      * @var array<string, array{hits:int, misses:int}>
@@ -201,9 +202,19 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, MemoryStoreInterf
             } else {
                 $this->setLocalCache($key, $value);
             }
+        } else {
+            // Another Worker won the CAS. Drop the stale local snapshot so a
+            // bounded retry reads the current shared value instead of spinning
+            // forever on the same expected value.
+            unset($this->localCache[$key]);
         }
 
         return $result;
+    }
+
+    public function isAvailable(): bool
+    {
+        return !$this->isLocalMemoryUnderPressure() && !$this->isRemoteUnavailable();
     }
 
     /**

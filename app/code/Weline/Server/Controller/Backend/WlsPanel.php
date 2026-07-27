@@ -38,7 +38,7 @@ class WlsPanel extends BackendController
     #[Acl('Weline_Server::wls_panel_gateway', '查看 WLS 面板网关', 'mdi-router-network', '查看 WLS 面板网关', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getGateway(): string
     {
-        return $this->renderPanel('gateway', (string)__('WLS 网关'));
+        return $this->renderPanel('nginx', (string)__('Nginx 公网入口'));
     }
 
     #[Acl('Weline_Server::wls_panel_plugin', '查看 WLS 面板插件', 'mdi-puzzle-outline', '查看 WLS 面板插件页面', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
@@ -160,50 +160,18 @@ class WlsPanel extends BackendController
     #[Acl('Weline_Server::wls_panel_gateway_apply', '应用 WLS 网关路由', 'mdi-router-network', '应用 WLS 网关路由', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postGatewayApply(): string
     {
-        /** @var WlsPanelGatewaySettingsService $gatewaySettings */
-        $gatewaySettings = ObjectManager::getInstance(WlsPanelGatewaySettingsService::class);
-        $result = $gatewaySettings->applyRoutes((array)$this->request->getPost());
-
-        $params = [
-            'gateway_instance' => (string)($result['selected_instance'] ?? $this->request->getPost('gateway_instance', '')),
-        ];
-        if (!empty($result['success'])) {
-            $params['panel_notice'] = 'gateway_applied';
-        } else {
-            $params['panel_error'] = (string)($result['message'] ?? __('网关路由应用失败。'));
-        }
-
-        $this->redirectToGatewayPanel($params);
+        $this->redirectToGatewayPanel([
+            'panel_error' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
+        ]);
         return '';
     }
 
     #[Acl('Weline_Server::wls_panel_gateway_save', '保存 WLS 网关配置', 'mdi-content-save-cog-outline', '保存 WLS 网关配置', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postGatewaySave(): string
     {
-        /** @var WlsPanelGatewaySettingsService $gatewaySettings */
-        $gatewaySettings = ObjectManager::getInstance(WlsPanelGatewaySettingsService::class);
-        $result = $gatewaySettings->saveConfiguration((array)$this->request->getPost());
-
-        $params = [
-            'gateway_instance' => (string)($result['selected_instance'] ?? $this->request->getPost('gateway_instance', '')),
-        ];
-        if (!empty($result['success'])) {
-            $params['panel_notice'] = 'gateway_saved';
-            $warnings = [];
-            if (!empty($result['gateway_apply_message']) && empty($result['gateway_applied'])) {
-                $warnings[] = (string)$result['gateway_apply_message'];
-            }
-            if (!empty($result['runtime_action_message']) && empty($result['runtime_action_success'])) {
-                $warnings[] = (string)$result['runtime_action_message'];
-            }
-            if ($warnings !== []) {
-                $params['panel_error'] = \implode(' ', \array_unique($warnings));
-            }
-        } else {
-            $params['panel_error'] = (string)($result['message'] ?? __('网关模式配置保存失败。'));
-        }
-
-        $this->redirectToGatewayPanel($params);
+        $this->redirectToGatewayPanel([
+            'panel_error' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
+        ]);
         return '';
     }
 

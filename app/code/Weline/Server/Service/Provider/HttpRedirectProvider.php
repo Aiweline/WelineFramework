@@ -36,12 +36,7 @@ class HttpRedirectProvider extends AbstractServiceProvider
 
     public function isEnabled(ServiceContext $context): bool
     {
-        if (!$context->sslEnabled) {
-            return false;
-        }
-
-        $httpRedirectPort = $this->resolvePort($context);
-        return $httpRedirectPort > 0;
+        return false;
     }
 
     public function getInstanceCount(ServiceContext $context): int
@@ -72,6 +67,8 @@ class HttpRedirectProvider extends AbstractServiceProvider
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
+        throw new \RuntimeException('WLS HTTP redirect provider is retired; Nginx owns public redirects.');
+
         $script = $scriptDir . DS . 'http_redirect_worker.php';
 
         $httpPort = $this->getPort($instanceId, $context);

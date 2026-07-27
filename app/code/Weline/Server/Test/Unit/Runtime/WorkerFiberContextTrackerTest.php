@@ -12,18 +12,22 @@ final class WorkerFiberContextTrackerTest extends TestCase
     {
         $contextA = new class {
             public int $restoreCount = 0;
+            public ?\Fiber $restoredFiber = null;
 
-            public function restore(): void
+            public function restoreForFiber(\Fiber $fiber): void
             {
                 $this->restoreCount++;
+                $this->restoredFiber = $fiber;
             }
         };
         $contextB = new class {
             public int $restoreCount = 0;
+            public ?\Fiber $restoredFiber = null;
 
-            public function restore(): void
+            public function restoreForFiber(\Fiber $fiber): void
             {
                 $this->restoreCount++;
+                $this->restoredFiber = $fiber;
             }
         };
 
@@ -41,6 +45,8 @@ final class WorkerFiberContextTrackerTest extends TestCase
 
         self::assertSame(0, $contextA->restoreCount);
         self::assertSame(1, $contextB->restoreCount);
+        self::assertNull($contextA->restoredFiber);
+        self::assertSame($fiberB, $contextB->restoredFiber);
     }
 
     public function testCaptureRefreshesOnlySuspendedFiberThatJustResumed(): void
@@ -65,13 +71,18 @@ final class WorkerFiberContextTrackerTest extends TestCase
             ],
         ];
 
+        $capturedFiber = null;
         $updated = WorkerFiberContextTracker::capture(
             $activeFibers,
             $fiberA,
-            static fn (): string => 'ctx-a-after',
+            static function (\Fiber $fiber) use (&$capturedFiber): string {
+                $capturedFiber = $fiber;
+                return 'ctx-a-after';
+            },
             123456
         );
 
+        self::assertSame($fiberA, $capturedFiber);
         self::assertSame('ctx-a-after', $updated[101]['context']);
         self::assertSame(123456, $updated[101]['suspended_at']);
         self::assertSame(123456, $updated[101]['last_activity']);

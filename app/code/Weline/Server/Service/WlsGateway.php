@@ -10,17 +10,8 @@ use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
 
 /**
- * WLS Gateway - 多项目统一入口反向代理
- *
- * 基于 SNI（Server Name Indication）实现域名路由：
- * - 监听 443 端口
- * - 根据 SSL 握手中的域名，转发到对应项目的内网端口
- * - 支持动态添加/移除项目
- * - 支持 IPC 动态路由更新
- *
- * 使用场景：
- * 1. 开发环境：多个项目共享 443 端口
- * 2. 生产环境：单 IP 多域名部署
+ * 已退役的 WLS Gateway 历史实现。
+ * 项目托管 Nginx 是唯一公网边缘，start() 始终 fail closed，不会创建监听。
  */
 class WlsGateway
 {
@@ -528,59 +519,7 @@ class WlsGateway
      */
     public function start(): void
     {
-        echo "WLS Gateway 启动中...\n";
-        echo "监听: {$this->listenHost}:{$this->listenPort}\n";
-        echo "路由规则:\n";
-        foreach ($this->routes as $domain => $backend) {
-            echo "  {$domain} => {$backend['host']}:{$backend['port']}\n";
-        }
-
-        // 如果启用动态路由，先连接 IPC
-        if ($this->dynamicRoutingEnabled && $this->ipcClient) {
-            echo "动态路由已启用\n";
-        }
-
-        $this->masterGuard?->assertAliveOrExit('Gateway listen 前 Master 自治检查');
-
-        // 创建 TCP Socket
-        $socket = stream_socket_server(
-            "tcp://{$this->listenHost}:{$this->listenPort}",
-            $errno,
-            $errstr,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
-        );
-
-        if (!$socket) {
-            throw new \RuntimeException("无法启动 Gateway: {$errstr} ({$errno})");
-        }
-
-        stream_set_blocking($socket, false);
-        $this->sendReady();
-
-        echo "Gateway 已启动，等待连接...\n";
-
-        // 事件循环
-        while ($this->running) {
-            // 检查 IPC 消息
-            $this->checkIpcMessages();
-            if (!$this->running) {
-                break;
-            }
-            $this->checkMasterPidAlive();
-            if (!$this->running) {
-                break;
-            }
-
-            // 接受客户端连接
-            $client = @stream_socket_accept($socket, 0);
-            if ($client) {
-                $this->handleClient($client);
-            }
-
-            $this->waitForActivity($socket);
-        }
-
-        fclose($socket);
+        throw new \RuntimeException((string)__('Nginx 是唯一公网边缘，不能跳过其启动。'));
     }
 
     /**
