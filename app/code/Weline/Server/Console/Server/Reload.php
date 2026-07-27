@@ -324,7 +324,7 @@ class Reload extends CommandAbstract
             'waiting_exit' => __('等待旧进程退出'),
             'removing_from_dispatcher' => __('从 Dispatcher 摘除'),
             'stopping' => __('停止中'),
-            'rejoin_dispatcher' => __('回加 Dispatcher'),
+            'rejoin_routing_pool' => __('回加运行路由池'),
             default => $stage,
         };
         
@@ -355,8 +355,8 @@ class Reload extends CommandAbstract
             return (string) __('第 %{1}/%{2} 批：等待 Worker [%{3}] 就绪', [$m[1], $m[2], $m[3]]);
         }
 
-        if (\preg_match('/^Batch\s+(\d+)\/(\d+):\s+workers\s+\[([^\]]*)\]\s+rejoined dispatcher$/i', $text, $m)) {
-            return (string) __('第 %{1}/%{2} 批：Worker [%{3}] 已回加 Dispatcher', [$m[1], $m[2], $m[3]]);
+        if (\preg_match('/^Batch\s+(\d+)\/(\d+):\s+workers\s+\[([^\]]*)\]\s+are READY, rejoining active routing pool$/i', $text, $m)) {
+            return (string) __('第 %{1}/%{2} 批：Worker [%{3}] 已就绪，正在回加运行路由池', [$m[1], $m[2], $m[3]]);
         }
 
         return $message;
@@ -581,6 +581,7 @@ class Reload extends CommandAbstract
                 __('默认行为') => __('默认等待重载完成并显示进度；只有 -n 会立即返回'),
                 __('-f 强制模式') => __('批量重启：直接杀死所有 Worker，属于停机型更新，快速但会中断请求'),
                 __('-n 不等待') => __('发送命令后立即返回，适合脚本调用'),
+                __('优雅排水三态') => __('完成=退出码0且滚动重启完成；保留排水=仍有在途写/半包请求时非零并提示 live old Workers；空闲 keep-alive 会在 Worker 软期限主动关闭，不再单独构成失败'),
                 __('适用场景') => __('修改了 Worker 代码、业务代码、模板、配置等'),
                 __('不适用场景') => __('修改了 Dispatcher、Master 代码或启动参数（需用 server:start -r）'),
             ],

@@ -8,9 +8,12 @@ use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Timeouts;
+use Weline\Server\Service\Runtime\NamespaceInvalidationProtocol;
 
 class IpcControlGateway implements IpcControlGatewayInterface
 {
+    private ?NamespaceInvalidationProtocol $namespaceInvalidationProtocol = null;
+
     public function command(
         string $instanceName,
         string $action,
@@ -76,6 +79,65 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
+    public function cacheNamespaceInvalidateV1(
+        string $instanceName,
+        int $authorityClock,
+        array $changes,
+        string $requestId = '',
+        float $timeout = 0.1,
+        ?string $operationId = null,
+    ): array {
+        try {
+            $frame = $this->namespaceInvalidationProtocol()->buildFrame(
+                $authorityClock,
+                $changes,
+                $operationId,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => $throwable->getMessage(),
+                'data' => [
+                    'accepted' => false,
+                    'error_code' => \property_exists($throwable, 'errorCode')
+                        ? (string)$throwable->errorCode
+                        : 'frame_invalid',
+                ],
+            ];
+        }
+
+        return $this->boundedNamespaceCommand(
+            $instanceName,
+            ControlMessage::ACTION_CACHE_NAMESPACE_INVALIDATE_V1,
+            [
+                'frame' => $frame,
+                'request_id' => \substr($requestId, 0, 128),
+            ],
+            $timeout,
+        );
+    }
+
+    public function cacheNamespaceInvalidationStatusV1(
+        string $instanceName,
+        string $operationId,
+        float $timeout = 0.1,
+    ): array {
+        if (\preg_match(NamespaceInvalidationProtocol::OPERATION_ID_PATTERN, $operationId) !== 1) {
+            return [
+                'success' => false,
+                'message' => (string)__('缓存命名空间失效操作 ID 无效。'),
+                'data' => ['error_code' => 'operation_id_invalid'],
+            ];
+        }
+
+        return $this->boundedNamespaceCommand(
+            $instanceName,
+            ControlMessage::ACTION_CACHE_NAMESPACE_STATUS_V1,
+            ['operation_id' => $operationId],
+            $timeout,
+        );
+    }
+
     public function setMaintenanceMode(
         string $instanceName,
         bool $enabled,
@@ -126,13 +188,13 @@ class IpcControlGateway implements IpcControlGatewayInterface
      */
     public function proxyApply(string $instanceName = 'default', array $routes = [], float $timeout = 5.0): array
     {
-        return $this->command(
-            $instanceName,
-            ControlMessage::ACTION_PROXY_APPLY,
-            '',
-            ['routes' => \array_values($routes)],
-            $timeout
-        );
+        unset($instanceName, $routes, $timeout);
+
+        return [
+            'success' => false,
+            'message' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
+            'data' => ['routes' => 0, 'gateways' => 0, 'targets' => []],
+        ];
     }
 
     public function securityUnblock(string $instanceName = 'default', ?string $ip = null, bool $clearAll = false): array
@@ -784,5 +846,80 @@ class IpcControlGateway implements IpcControlGatewayInterface
         } finally {
             @\fclose($conn);
         }
+    }
+
+    /** @return array{success:bool,message:string,data:array} */
+    private function boundedNamespaceCommand(
+        string $instanceName,
+        string $action,
+        array $payload,
+        float $timeout,
+    ): array {
+        $timeout = \max(0.02, \min(0.1, $timeout));
+        $startedAt = \microtime(true);
+        $requestId = ControlCommandResult::requestId($action);
+        $payload['msg_id'] = $requestId;
+        $endpoint = $this->resolveControlEndpoint($instanceName);
+        $port = (int)$endpoint['port'];
+        if ($port <= 0) {
+            return ControlCommandResult::normalize([
+                'success' => false,
+                'message' => (string)__('实例 %{1} 的 Master 未运行，无法通过 IPC 控制。', [$instanceName]),
+                'data' => ['accepted' => false, 'error_code' => 'runtime_not_present'],
+            ], $instanceName, $action, $requestId, true);
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $connectBudget = \max(0.01, \min(0.05, $timeout));
+        $connection = @\stream_socket_client(
+            "tcp://127.0.0.1:{$port}",
+            $errno,
+            $errstr,
+            $connectBudget,
+        );
+        if (!\is_resource($connection)) {
+            return ControlCommandResult::normalize([
+                'success' => false,
+                'message' => (string)__('连接控制端口失败：%{1}', [$errstr ?: 'unknown']),
+                'data' => ['accepted' => false, 'error_code' => 'connect_failed', 'errno' => $errno],
+            ], $instanceName, $action, $requestId, true);
+        }
+
+        try {
+            $command = ControlMessage::command(
+                $action,
+                '',
+                $payload,
+                (string)$endpoint['control_token'],
+            );
+            $written = @\fwrite($connection, $command);
+            if ($written !== \strlen($command)) {
+                return ControlCommandResult::normalize([
+                    'success' => false,
+                    'message' => (string)__('缓存命名空间失效控制帧未完整写入。'),
+                    'data' => ['accepted' => false, 'error_code' => 'send_failed'],
+                ], $instanceName, $action, $requestId, true);
+            }
+            $remaining = $timeout - (\microtime(true) - $startedAt);
+            if ($remaining <= 0.0) {
+                return ControlCommandResult::normalize([
+                    'success' => false,
+                    'message' => (string)__('缓存命名空间失效接收超时。'),
+                    'data' => ['accepted' => false, 'error_code' => 'accept_timeout'],
+                ], $instanceName, $action, $requestId, true);
+            }
+            $result = $this->readCommandResult($connection, $remaining);
+            return ControlCommandResult::normalize($result, $instanceName, $action, $requestId, true);
+        } finally {
+            @\fclose($connection);
+        }
+    }
+
+    private function namespaceInvalidationProtocol(): NamespaceInvalidationProtocol
+    {
+        return $this->namespaceInvalidationProtocol ??= new NamespaceInvalidationProtocol(
+            new \Weline\Framework\Cache\Namespace\NamespacePath(),
+        );
     }
 }

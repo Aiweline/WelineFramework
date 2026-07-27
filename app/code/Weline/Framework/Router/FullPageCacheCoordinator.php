@@ -8,18 +8,28 @@ use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
+use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
+use Weline\Framework\Cache\Namespace\NamespaceKeyDecorator;
+use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Cache\StorefrontCacheKeyContext;
+use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
-use Weline\Framework\Http\Cookie;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\Security\SecurityHeaderPolicyService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\InternalHomepagePrime;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeProviderResolution;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Runtime\StorefrontScopeInstallerInterface;
 use Weline\Framework\Session\Auth\AreaConfig;
+use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionFactory;
 
 final class FullPageCacheCoordinator
@@ -43,14 +53,13 @@ final class FullPageCacheCoordinator
     private const PROCESS_FPC_MAX_BYTES = 33554432;
     private const PROCESS_FORMATTED_FPC_MAX_ITEMS = 192;
     private const PROCESS_FORMATTED_FPC_MAX_BYTES = 16777216;
-    private const FRONTEND_LOGIN_SESSION_NEGATIVE_TTL_SECONDS = 30.0;
     private const FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS = 1.0;
     private const FRONTEND_LOGIN_SESSION_CACHE_MAX_ITEMS = 1024;
     private const INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY = 'wls.fpc.internal_homepage_receipt';
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
     private const VARIANT_PAYLOAD_KEY = 'fpc_variant';
-    private const FPC_CACHE_SCHEMA_VERSION = '20260717-compact-response-payload-v1';
+    private const FPC_CACHE_SCHEMA_VERSION = '20260722-scope-variant-v2';
 
     /**
      * @var array<string, bool>
@@ -91,6 +100,12 @@ final class FullPageCacheCoordinator
         'x-powered-by' => true,
         'set-cookie' => true,
         'x-weline-fpc' => true,
+        'x-frame-options' => true,
+        'x-content-type-options' => true,
+        'x-xss-protection' => true,
+        'content-security-policy' => true,
+        'content-security-policy-report-only' => true,
+        'access-control-allow-origin' => true,
     ];
 
     /**
@@ -110,6 +125,10 @@ final class FullPageCacheCoordinator
 
     private ?CacheManager $cacheManager;
     private ?CachePoolInterface $cachePool;
+    private ?NamespaceKeyDecorator $namespaceKeyDecorator;
+    private ?RuntimeProviderResolver $runtimeProviderResolver;
+    private ?StorefrontCacheKeyContextResolver $storefrontCacheKeyContextResolver;
+    private ?RuntimeProviderResolution $storefrontProviderResolution = null;
 
     /** @var array<string, array<string, mixed>> */
     private static array $processFpcPayloadCache = [];
@@ -139,10 +158,24 @@ final class FullPageCacheCoordinator
     /** @var array<string, float> */
     private static array $frontendLoginSessionCacheExpiresAt = [];
 
-    public function __construct(?CacheManager $cacheManager = null, ?CachePoolInterface $cachePool = null)
-    {
+    public function __construct(
+        ?CacheManager $cacheManager = null,
+        ?CachePoolInterface $cachePool = null,
+        ?NamespaceGenerationRepository $namespaceGenerationRepository = null,
+        ?NamespaceKeyDecorator $namespaceKeyDecorator = null,
+        ?NamespacePath $namespacePath = null,
+        ?RuntimeProviderResolver $runtimeProviderResolver = null,
+        ?StorefrontCacheKeyContextResolver $storefrontCacheKeyContextResolver = null,
+    ) {
         $this->cacheManager = $cacheManager;
         $this->cachePool = $cachePool;
+        $this->namespaceKeyDecorator = $namespaceKeyDecorator;
+        $this->runtimeProviderResolver = $runtimeProviderResolver;
+        $this->storefrontCacheKeyContextResolver = $storefrontCacheKeyContextResolver
+            ?? ($namespaceGenerationRepository instanceof NamespaceGenerationRepository
+                && $namespacePath instanceof NamespacePath
+                ? new StorefrontCacheKeyContextResolver($namespaceGenerationRepository, $namespacePath)
+                : null);
     }
 
     public function getCachedResponse(string $method = 'GET', bool $processOnly = false): ?Response
@@ -292,15 +325,15 @@ final class FullPageCacheCoordinator
         string $method = 'GET'
     ): void {
         $method = $this->normalizeBuildMethod($method);
+        if (!$this->canPublishResponse($response, $method)) {
+            return;
+        }
+
         $variant = null;
         if ($this->isFrontendResponseCacheAllowed($method)) {
             $variant = $this->buildCurrentFpcVariant();
             $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
             $this->ensureVaryHeader($response, 'Cookie');
-        }
-
-        if (!$this->canPublishResponse($response, $method)) {
-            return;
         }
 
         $fullUri = $this->getCacheKeyFullUri();
@@ -438,7 +471,7 @@ final class FullPageCacheCoordinator
             return false;
         }
 
-        return !$this->hasLoggedInFrontendSession() || $this->canUsePrivateSessionFpc();
+        return !$this->hasLoggedInFrontendSession() && $this->hasCompleteFrozenStorefrontScope();
     }
 
     public function canBuildCachedResponse(string $method = 'GET'): bool
@@ -451,7 +484,8 @@ final class FullPageCacheCoordinator
 
         return $this->normalizeHttpMethod($method) === 'GET'
             && $this->isFrontendResponseCacheAllowed($method)
-            && (!$this->hasLoggedInFrontendSession() || $this->canUsePrivateSessionFpc());
+            && !$this->hasLoggedInFrontendSession()
+            && $this->hasCompleteFrozenStorefrontScope();
     }
 
     public function canPublishResponse(Response $response, string $method = 'GET'): bool
@@ -464,12 +498,12 @@ final class FullPageCacheCoordinator
             return false;
         }
 
-        return $this->canUsePrivateSessionFpc() || !$this->responseDeclaresPrivateCache($response);
+        return $this->responseAllowsSharedPageCache($response);
     }
 
     public function canUsePrivateSessionCachedResponse(): bool
     {
-        return $this->canUsePrivateSessionFpc();
+        return false;
     }
 
     public function shouldBypassForDynamicFirstRender(): bool
@@ -604,6 +638,8 @@ final class FullPageCacheCoordinator
         self::$processFormattedFpcExpiresAt = [];
         self::$processFormattedFpcBytes = [];
         self::$processFormattedFpcTotalBytes = 0;
+        self::$frontendLoginSessionCache = [];
+        self::$frontendLoginSessionCacheExpiresAt = [];
     }
 
     private function getStaleCachedResponse(string $method): ?Response
@@ -720,6 +756,8 @@ final class FullPageCacheCoordinator
             || !KeyBuilder::isValidFullPageCacheKey($fullUri)
             || $this->isEditorOrPreviewRequest($fullUri)
             || $this->isExcludedFrontendPath($fullUri)
+            || $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri)
+            || !$this->legacyPreRouterFpcAllowed()
         ) {
             return false;
         }
@@ -747,12 +785,104 @@ final class FullPageCacheCoordinator
     }
 
     /**
+     * Rehydrate the exact anonymous FPC entry published by an internal
+     * homepage prime. Unlike the public pre-router fast path, this method does
+     * not reconstruct Store/Channel scope from raw cookies: it accepts only a
+     * receipt whose cache key matches its SHA-256 identity digest.
+     *
+     * @param array<string, mixed> $receipt
+     */
+    public function warmProcessCacheForInternalReceipt(
+        array $receipt,
+        bool $forceSharedRead = false
+    ): bool {
+        $cacheKey = $this->internalHomepageReceiptCacheKey($receipt);
+        if ($cacheKey === null) {
+            return false;
+        }
+        if (!$forceSharedRead && $this->getProcessCachedPayload($cacheKey) !== null) {
+            return true;
+        }
+
+        $cached = $this->cache()->get($cacheKey);
+        if (\is_array($cached)) {
+            $cached = $this->hydrateSharedPayload($cached);
+        }
+        $body = \is_array($cached) ? ($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? null) : null;
+        if (!\is_string($body) || $body === '') {
+            return false;
+        }
+
+        $cached = $this->prepareCachedPayloadForFastHit($cacheKey, $cached, $body, true);
+        if ($cached === null) {
+            return false;
+        }
+
+        $this->setProcessCachedPayload($cacheKey, $cached);
+        $this->deleteProcessCachedFormattedResponse($this->buildFormattedFastHttpCacheKey($cacheKey));
+        return $this->getProcessCachedPayload($cacheKey) !== null;
+    }
+
+    /**
+     * Format only the process-local entry identified by an internal receipt.
+     * It never falls back to Shared L2, stale data, rendering, or a public
+     * pre-router scope guess, so READY proves the preceding exact rehydrate.
+     *
+     * @param array<string, mixed> $receipt
+     * @return array{response:string,source:string,bytes:int}|null
+     */
+    public function getFormattedProcessCachedResponseForInternalReceipt(
+        array $receipt,
+        bool $keepAlive = false
+    ): ?array {
+        $cacheKey = $this->internalHomepageReceiptCacheKey($receipt);
+        if ($cacheKey === null) {
+            return null;
+        }
+
+        $cached = $this->getProcessCachedPayload($cacheKey);
+        if (!\is_array($cached)) {
+            return null;
+        }
+        $body = (string)($cached[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '');
+        if ($body === '') {
+            return null;
+        }
+        $cached = $this->prepareCachedPayloadForFastHit($cacheKey, $cached, $body, false);
+        if ($cached === null) {
+            return null;
+        }
+
+        $variant = $cached[self::VARIANT_PAYLOAD_KEY] ?? [];
+        if (!\is_array($variant)) {
+            return null;
+        }
+        $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
+        $response = Response::fromContent($body, $statusCode, 'text/html; charset=utf-8');
+        $this->applyCachedHeaders($response, $cached[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] ?? []);
+        $response->setHeader('X-Weline-FPC', 'HIT');
+        $response->setHeader('X-Wls-Performance-Fpc-Hit', '1');
+        $response->setHeader('X-Wls-Performance-Fpc-Source', 'process');
+        $response->setHeader('X-Wls-Performance-Fpc-Variant', $this->variantDebugToken($variant));
+        $response->setHeader('X-Wls-Performance-Urlparser', '0');
+        $response->setHeader('X-Wls-Performance-Urlparserapply', '0');
+        $this->ensureVaryHeader($response, 'Cookie');
+        $response->markTelemetryPrepared();
+
+        return [
+            'response' => $response->toHttpString($keepAlive),
+            'source' => 'process',
+            'bytes' => \strlen($body),
+        ];
+    }
+
+    /**
      * Return the exact anonymous FPC identity used by the current homepage
      * prime. Public requests can never obtain this receipt: the predicate
      * requires transport-injected server markers which HTTP headers cannot
      * create on their own.
      *
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
      */
     public function currentInternalHomepageWarmupReceipt(): ?array
     {
@@ -791,7 +921,7 @@ final class FullPageCacheCoordinator
      * produce a different receipt.
      *
      * @param array<string, mixed> $variant
-     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string}|null
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
      */
     private function buildInternalHomepageWarmupReceipt(
         string $fullUri,
@@ -816,7 +946,43 @@ final class FullPageCacheCoordinator
             'method' => 'GET',
             'cookie_header' => $cookieHeader,
             'identity_digest' => \hash('sha256', $unifiedCacheKey),
+            'cache_key' => $unifiedCacheKey,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $receipt
+     */
+    private function internalHomepageReceiptCacheKey(array $receipt): ?string
+    {
+        if ((int)($receipt['version'] ?? 0) !== 1
+            || \strtoupper(\trim((string)($receipt['method'] ?? ''))) !== 'GET'
+        ) {
+            return null;
+        }
+
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim((string)($receipt['full_uri'] ?? '')));
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)
+            || $this->isEditorOrPreviewRequest($fullUri)
+            || $this->isExcludedFrontendPath($fullUri)
+            || $this->cookieHeaderHasLoggedInFrontendSession(
+                (string)($receipt['cookie_header'] ?? ''),
+                $fullUri,
+            )
+        ) {
+            return null;
+        }
+
+        $cacheKey = \strtolower(\trim((string)($receipt['cache_key'] ?? '')));
+        $identityDigest = \strtolower(\trim((string)($receipt['identity_digest'] ?? '')));
+        if (\preg_match('/^[a-f0-9]{16}$/D', $cacheKey) !== 1
+            || \preg_match('/^[a-f0-9]{64}$/D', $identityDigest) !== 1
+            || !\hash_equals($identityDigest, \hash('sha256', $cacheKey))
+        ) {
+            return null;
+        }
+
+        return $cacheKey;
     }
 
     /**
@@ -853,11 +1019,9 @@ final class FullPageCacheCoordinator
         if (\stripos($acceptHeader, 'text/event-stream') !== false) {
             return null;
         }
-        $loggedInFrontendSession = $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader);
-        $privateSessionToken = $this->privateSessionFpcEnabled() && $loggedInFrontendSession
-            ? $this->privateSessionTokenFromCookieHeader($cookieHeader)
-            : '';
-        if ($loggedInFrontendSession && $privateSessionToken === '') {
+        $loggedInFrontendSession = $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri);
+        $privateSessionToken = '';
+        if ($loggedInFrontendSession || !$this->legacyPreRouterFpcAllowed()) {
             return null;
         }
         if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
@@ -1051,6 +1215,10 @@ final class FullPageCacheCoordinator
         if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
             return false;
         }
+        if ($this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri)
+            || !$this->legacyPreRouterFpcAllowed()) {
+            return false;
+        }
 
         $variant = $this->buildFpcVariantFromCookieHeader($cookieHeader, $fullUri);
         $cacheKey = $this->buildUnifiedFpcCacheKey($fullUri, $this->normalizeCacheMethod($method), $variant);
@@ -1080,6 +1248,11 @@ final class FullPageCacheCoordinator
         }
 
         if ((bool)WelineEnv::get('is_static_file', false) || (bool)WelineEnv::get('is_backend', false)) {
+            return false;
+        }
+        if (trim((string)(Context::getCurrent()?->server('HTTP_AUTHORIZATION', '')
+            ?: WelineEnv::server('HTTP_AUTHORIZATION', '')
+            ?: WelineEnv::get('server.http_authorization', ''))) !== '') {
             return false;
         }
 
@@ -1245,12 +1418,19 @@ final class FullPageCacheCoordinator
             return $cached;
         }
 
-        $cookieHeader = (string)(WelineEnv::server('HTTP_COOKIE', '') ?: WelineEnv::get('server.http_cookie', ''));
-        if ($cookieHeader === '' && !Runtime::isPersistent() && isset($_COOKIE['WELINE_SESSID'])) {
-            $sessionId = (string)$_COOKIE['WELINE_SESSID'];
-            $cookieHeader = $sessionId === '' ? '' : 'WELINE_SESSID=' . \rawurlencode($sessionId);
+        $cookieHeader = (string)(
+            Context::getCurrent()?->server('HTTP_COOKIE', '')
+            ?: WelineEnv::server('HTTP_COOKIE', '')
+            ?: WelineEnv::get('server.http_cookie', '')
+        );
+        $cookieName = SessionCookieNameResolver::resolve();
+        if ($cookieHeader === '' && !Runtime::isPersistent() && isset($_COOKIE[$cookieName])) {
+            $sessionId = (string)$_COOKIE[$cookieName];
+            $cookieHeader = $sessionId === ''
+                ? ''
+                : \rawurlencode($cookieName) . '=' . \rawurlencode($sessionId);
         }
-        if ($cookieHeader === '' || \stripos($cookieHeader, 'WELINE_SESSID=') === false) {
+        if ($cookieHeader === '') {
             RequestContext::set($cacheKey, false);
             return false;
         }
@@ -1260,14 +1440,41 @@ final class FullPageCacheCoordinator
         return $loggedIn;
     }
 
-    private function cookieHeaderHasLoggedInFrontendSession(string $cookieHeader): bool
+    private function sessionCookieNameForFullUri(string $fullUri = ''): string
     {
-        $sessionId = (string)($this->parseCookieHeader($cookieHeader)['WELINE_SESSID'] ?? '');
-        if ($sessionId === '') {
+        $fullUri = trim($fullUri);
+        if ($fullUri === '') {
+            return SessionCookieNameResolver::resolve();
+        }
+        try {
+            $parts = parse_url($fullUri);
+        } catch (\ValueError) {
+            return SessionCookieNameResolver::resolve();
+        }
+        if (!is_array($parts)) {
+            return SessionCookieNameResolver::resolve();
+        }
+        $host = trim((string)($parts['host'] ?? ''));
+        if ($host === '') {
+            return SessionCookieNameResolver::resolve();
+        }
+        $authority = str_contains($host, ':') ? '[' . trim($host, '[]') . ']' : $host;
+        if (isset($parts['port'])) {
+            $authority .= ':' . (int)$parts['port'];
+        }
+        return SessionCookieNameResolver::resolve($authority);
+    }
+
+    private function cookieHeaderHasLoggedInFrontendSession(string $cookieHeader, string $fullUri = ''): bool
+    {
+        $cookies = $this->parseCookieHeader($cookieHeader);
+        $cookieName = $this->sessionCookieNameForFullUri($fullUri);
+        if (!array_key_exists($cookieName, $cookies)) {
             return false;
         }
+        $sessionId = (string)$cookies[$cookieName];
         if (!\preg_match('/^[a-f0-9]{32}$/i', $sessionId)) {
-            return false;
+            return true;
         }
 
         $now = \microtime(true);
@@ -1279,7 +1486,6 @@ final class FullPageCacheCoordinator
         try {
             $sessionData = SessionFactory::getInstance()->createStorage('wls')->read($sessionId);
             if ($sessionData === []) {
-                $this->rememberFrontendLoginSessionState($sessionId, false);
                 return false;
             }
 
@@ -1288,7 +1494,9 @@ final class FullPageCacheCoordinator
             $loginId = $sessionData[$areaConfig->getLoginIdKey()] ?? null;
 
             $loggedIn = $loginName !== null && $loginName !== '' && $loginId !== null && $loginId !== '';
-            $this->rememberFrontendLoginSessionState($sessionId, $loggedIn);
+            if ($loggedIn) {
+                $this->rememberFrontendLoginSessionState($sessionId);
+            }
             return $loggedIn;
         } catch (\Throwable) {
             // If session state is unavailable, prefer correctness over serving a public cache to a logged-in user.
@@ -1296,7 +1504,7 @@ final class FullPageCacheCoordinator
         }
     }
 
-    private function rememberFrontendLoginSessionState(string $sessionId, bool $loggedIn): void
+    private function rememberFrontendLoginSessionState(string $sessionId): void
     {
         if (\count(self::$frontendLoginSessionCache) >= self::FRONTEND_LOGIN_SESSION_CACHE_MAX_ITEMS) {
             $oldestSessionId = \array_key_first(self::$frontendLoginSessionCache);
@@ -1305,19 +1513,68 @@ final class FullPageCacheCoordinator
             }
         }
 
-        self::$frontendLoginSessionCache[$sessionId] = $loggedIn;
+        self::$frontendLoginSessionCache[$sessionId] = true;
         self::$frontendLoginSessionCacheExpiresAt[$sessionId] = \microtime(true)
-            + ($loggedIn ? self::FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS : self::FRONTEND_LOGIN_SESSION_NEGATIVE_TTL_SECONDS);
+            + self::FRONTEND_LOGIN_SESSION_POSITIVE_TTL_SECONDS;
     }
 
-    private function responseDeclaresPrivateCache(Response $response): bool
+    private function responseAllowsSharedPageCache(Response $response): bool
     {
+        $contentType = $response->getHeader('Content-Type');
+        if (is_array($contentType)) {
+            $contentType = implode(',', array_map('strval', $contentType));
+        }
+        $contentType = strtolower((string)$contentType);
+        if ($contentType === ''
+            || (!str_contains($contentType, 'text/html')
+            && !str_contains($contentType, 'application/xhtml+xml')
+            )
+        ) {
+            return false;
+        }
+
         $cacheControl = $response->getHeader('Cache-Control');
         if (\is_array($cacheControl)) {
             $cacheControl = \implode(',', \array_map('strval', $cacheControl));
         }
+        foreach (explode(',', strtolower((string)$cacheControl)) as $directive) {
+            $directive = trim($directive);
+            if ($directive === 'private'
+                || str_starts_with($directive, 'private=')
+                || $directive === 'no-store'
+                || str_starts_with($directive, 'no-store=')
+                || $directive === 'no-cache'
+                || str_starts_with($directive, 'no-cache=')
+                || preg_match('/^(?:s-)?max-age\s*=\s*0+$/D', $directive) === 1
+            ) {
+                return false;
+            }
+        }
 
-        return \stripos((string)$cacheControl, 'private') !== false;
+        $pragma = $response->getHeader('Pragma');
+        if (is_array($pragma)) {
+            $pragma = implode(',', array_map('strval', $pragma));
+        }
+        if (in_array('no-cache', array_map('trim', explode(',', strtolower((string)$pragma))), true)) {
+            return false;
+        }
+
+        if ($response->getHeader('Set-Cookie') !== null || $response->getCookies() !== []) {
+            return false;
+        }
+
+        $vary = $response->getHeader('Vary');
+        if (is_array($vary)) {
+            $vary = implode(',', array_map('strval', $vary));
+        }
+        foreach (explode(',', strtolower((string)$vary)) as $field) {
+            $field = trim($field);
+            if ($field !== '' && !in_array($field, ['cookie', 'accept-encoding'], true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function getUnifiedCachedResponse(string $method, bool $processOnly = false): ?Response
@@ -1325,7 +1582,14 @@ final class FullPageCacheCoordinator
         $cacheKey = $this->getUnifiedCacheKey($method);
         $cachePayloadFetched = false;
         $cachePayloadUpdated = false;
-        $cached = $this->getProcessCachedPayload($cacheKey);
+        // The fenced READY prime must prove that a shared entry exists or
+        // republish it. A process-only hit can outlive a transient shared
+        // publish and would otherwise make every later receipt rehydrate fail.
+        $forceSharedPrime = InternalHomepagePrime::isCurrentRequest();
+        if ($forceSharedPrime) {
+            $processOnly = false;
+        }
+        $cached = $forceSharedPrime ? null : $this->getProcessCachedPayload($cacheKey);
         $cacheSource = 'process';
         if ($cached === null) {
             if ($processOnly) {
@@ -1562,7 +1826,11 @@ final class FullPageCacheCoordinator
 
     private function buildFormattedFastHttpCacheKey(string $cacheKey): string
     {
-        return $cacheKey . self::FAST_HTTP_GZIP_KEEPALIVE_SUFFIX;
+        $headers = (new SecurityHeaderPolicyService())->resolveCurrentResponseHeaders();
+        \ksort($headers, \SORT_STRING);
+        $securityVariant = \substr(\hash('sha256', \serialize($headers)), 0, 16);
+
+        return $cacheKey . self::FAST_HTTP_GZIP_KEEPALIVE_SUFFIX . ':' . $securityVariant;
     }
 
     private function withFormattedResponseConnection(string $http, bool $keepAlive): string
@@ -1626,53 +1894,61 @@ final class FullPageCacheCoordinator
 
     private function applyCachedHeaders(Response $response, mixed $headers): void
     {
-        if (!\is_array($headers)) {
-            return;
-        }
-
         $normalized = [];
-        $isList = \array_is_list($headers);
-        if ($isList) {
-            foreach ($headers as $headerLine) {
-                if (!\is_string($headerLine) || !\str_contains($headerLine, ':')) {
-                    continue;
-                }
+        if (\is_array($headers)) {
+            $isList = \array_is_list($headers);
+            if ($isList) {
+                foreach ($headers as $headerLine) {
+                    if (!\is_string($headerLine) || !\str_contains($headerLine, ':')) {
+                        continue;
+                    }
 
-                [$name, $value] = \explode(':', $headerLine, 2);
-                $name = \trim($name);
-                if ($this->shouldSkipHeader($name)) {
-                    continue;
-                }
+                    [$name, $value] = \explode(':', $headerLine, 2);
+                    $name = \trim($name);
+                    if ($this->shouldSkipHeader($name)) {
+                        continue;
+                    }
 
-                $headerValue = \trim($value);
-                if (!isset($normalized[$name])) {
-                    $normalized[$name] = $headerValue;
-                    continue;
-                }
+                    $headerValue = \trim($value);
+                    if (!isset($normalized[$name])) {
+                        $normalized[$name] = $headerValue;
+                        continue;
+                    }
 
-                if (\is_array($normalized[$name])) {
-                    $normalized[$name][] = $headerValue;
-                    continue;
-                }
+                    if (\is_array($normalized[$name])) {
+                        $normalized[$name][] = $headerValue;
+                        continue;
+                    }
 
-                $normalized[$name] = [$normalized[$name], $headerValue];
-            }
-        } else {
-            foreach ($headers as $name => $value) {
-                if (!\is_string($name) || $this->shouldSkipHeader($name)) {
-                    continue;
+                    $normalized[$name] = [$normalized[$name], $headerValue];
                 }
+            } else {
+                foreach ($headers as $name => $value) {
+                    if (!\is_string($name) || $this->shouldSkipHeader($name)) {
+                        continue;
+                    }
 
-                if (\is_array($value)) {
-                    $normalized[$name] = \array_values(\array_map('strval', $value));
-                } else {
-                    $normalized[$name] = (string)$value;
+                    if (\is_array($value)) {
+                        $normalized[$name] = \array_values(\array_map('strval', $value));
+                    } else {
+                        $normalized[$name] = (string)$value;
+                    }
                 }
             }
         }
 
         foreach ($normalized as $name => $value) {
             $response->setHeaders([$name => $value]);
+        }
+
+        $securityHeaders = (new SecurityHeaderPolicyService())->resolveCurrentResponseHeaders();
+        foreach ($securityHeaders as $name => $value) {
+            if (\strcasecmp($name, 'Vary') === 0) {
+                $this->ensureVaryHeader($response, $value);
+                continue;
+            }
+
+            $response->setHeader($name, $value);
         }
     }
 
@@ -1869,6 +2145,20 @@ final class FullPageCacheCoordinator
     {
         WelineEnv::set('response.from_cache', true, 'FullPageCacheCoordinator cache hit');
 
+        // Early FPC responses intentionally bypass App::run_after. Give
+        // request-scoped response decorators a narrow hook without replaying
+        // unrelated normal-response observers or mutating the cached payload.
+        $eventManager = ObjectManager::getInstance(EventsManager::class);
+        if ($eventManager->hasObservers('Weline_Framework_Fpc::cache_hit_response')) {
+            $eventData = ['response' => $response];
+            $eventManager->dispatch('Weline_Framework_Fpc::cache_hit_response', $eventData);
+            $decorated = $eventData['response'] ?? null;
+            if (!$decorated instanceof Response) {
+                throw new \RuntimeException(__('FPC 命中响应装饰器返回了无效响应'));
+            }
+            $response = $decorated;
+        }
+
         return $response;
     }
 
@@ -1897,7 +2187,15 @@ final class FullPageCacheCoordinator
     {
         return KeyBuilder::build(
             'router',
-            'fpc-lock:' . $fullUri . ':' . $this->variantSuffix($variant) . ':' . $this->normalizeBuildMethod($method)
+            $this->decorateFpcLogicalKey(
+                'fpc-lock:'
+                . $fullUri
+                . ':'
+                . $this->variantSuffix($variant)
+                . ':'
+                . $this->normalizeBuildMethod($method),
+                $fullUri,
+            )
         );
     }
 
@@ -1913,14 +2211,15 @@ final class FullPageCacheCoordinator
     {
         return KeyBuilder::build(
             'router',
-            self::SCHEMA_NEUTRAL_STALE_CACHE_PREFIX
-            . $fullUri
-            . ':'
-            . self::FPC_CACHE_SCHEMA_VERSION
-            . ':'
-            . $this->variantSuffixWithoutSchema($variant)
-            . ':'
-            . \strtoupper($this->normalizeBuildMethod($method) ?: 'GET')
+            $this->decorateFpcLogicalKey(
+                self::SCHEMA_NEUTRAL_STALE_CACHE_PREFIX
+                . $fullUri
+                . ':'
+                . $this->variantSuffixWithoutSchema($variant)
+                . ':'
+                . \strtoupper($this->normalizeBuildMethod($method) ?: 'GET'),
+                $fullUri,
+            )
         );
     }
 
@@ -2088,7 +2387,8 @@ final class FullPageCacheCoordinator
 
     private function privateSessionFpcEnabled(): bool
     {
-        return (bool)Env::get('wls.performance.fpc_private_session_enabled', true);
+        // P1a 固定策略：登录用户整页缓存硬旁路，配置不得重新开启。
+        return false;
     }
 
     private function privateSessionFpcTtlSeconds(): int
@@ -2103,17 +2403,22 @@ final class FullPageCacheCoordinator
 
     private function canUsePrivateSessionFpc(): bool
     {
-        return $this->privateSessionFpcEnabled()
-            && $this->hasLoggedInFrontendSession()
-            && $this->currentPrivateSessionToken() !== '';
+        return false;
     }
 
     private function currentPrivateSessionToken(): string
     {
-        $cookieHeader = (string)(WelineEnv::server('HTTP_COOKIE', '') ?: WelineEnv::get('server.http_cookie', ''));
-        if ($cookieHeader === '' && !Runtime::isPersistent() && isset($_COOKIE['WELINE_SESSID'])) {
-            $sessionId = (string)$_COOKIE['WELINE_SESSID'];
-            $cookieHeader = $sessionId === '' ? '' : 'WELINE_SESSID=' . \rawurlencode($sessionId);
+        $cookieHeader = (string)(
+            Context::getCurrent()?->server('HTTP_COOKIE', '')
+            ?: WelineEnv::server('HTTP_COOKIE', '')
+            ?: WelineEnv::get('server.http_cookie', '')
+        );
+        $cookieName = SessionCookieNameResolver::resolve();
+        if ($cookieHeader === '' && !Runtime::isPersistent() && isset($_COOKIE[$cookieName])) {
+            $sessionId = (string)$_COOKIE[$cookieName];
+            $cookieHeader = $sessionId === ''
+                ? ''
+                : \rawurlencode($cookieName) . '=' . \rawurlencode($sessionId);
         }
         if ($cookieHeader === '') {
             return '';
@@ -2124,7 +2429,8 @@ final class FullPageCacheCoordinator
 
     private function privateSessionTokenFromCookieHeader(string $cookieHeader): string
     {
-        $sessionId = (string)($this->parseCookieHeader($cookieHeader)['WELINE_SESSID'] ?? '');
+        $cookieName = $this->sessionCookieNameForFullUri($this->getRawFullUri());
+        $sessionId = (string)($this->parseCookieHeader($cookieHeader)[$cookieName] ?? '');
         if ($sessionId === '' || !\preg_match('/^[a-f0-9]{32}$/i', $sessionId)) {
             return '';
         }
@@ -2180,30 +2486,14 @@ final class FullPageCacheCoordinator
      */
     private function buildCurrentFpcVariant(): array
     {
-        $lang = (string)(
-            WelineEnv::get('user.lang', '')
-            ?: WelineEnv::server('WELINE_USER_LANG', '')
-            ?: Cookie::get('WELINE_USER_LANG', '')
-            ?: Cookie::get('WELINE-WEBSITE-LANG', self::DEFAULT_LANG)
-        );
-        $currency = (string)(
-            WelineEnv::get('user.currency', '')
-            ?: WelineEnv::server('WELINE_USER_CURRENCY', '')
-            ?: Cookie::get('WELINE_USER_CURRENCY', '')
-            ?: Cookie::get('WELINE_WEBSITE_CURRENCY', self::DEFAULT_CURRENCY)
-        );
-
-        $variant = [
-            'lang' => $this->normalizeVariantLang($lang),
-            'currency' => $this->normalizeVariantCurrency($currency),
-        ];
-        if ($this->privateSessionFpcEnabled() && $this->hasLoggedInFrontendSession()) {
-            $sessionToken = $this->currentPrivateSessionToken();
-            if ($sessionToken !== '') {
-                $variant['session'] = $sessionToken;
-            }
+        $context = $this->currentStorefrontCacheKeyContext();
+        if (!$context->cacheable) {
+            throw new \LogicException(__('Storefront 缓存上下文尚未完成版本冻结'));
         }
-        return $this->mergePathVariant($variant, $this->getRawFullUri());
+        return $this->variantFromStorefrontContext($context, [
+            'lang' => $this->normalizeVariantLang($context->lang),
+            'currency' => $this->normalizeVariantCurrency($context->currency),
+        ]);
     }
 
     /**
@@ -2221,13 +2511,14 @@ final class FullPageCacheCoordinator
                 (string)($cookies['WELINE_USER_CURRENCY'] ?? $cookies['WELINE_WEBSITE_CURRENCY'] ?? self::DEFAULT_CURRENCY)
             ),
         ];
-        if ($this->privateSessionFpcEnabled() && $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader)) {
-            $sessionToken = $this->privateSessionTokenFromCookieHeader($cookieHeader);
-            if ($sessionToken !== '') {
-                $variant['session'] = $sessionToken;
-            }
+        $context = $this->currentStorefrontCacheKeyContext();
+        if (!$context->cacheable) {
+            throw new \LogicException(__('Storefront 缓存上下文尚未完成版本冻结'));
         }
-        return $this->mergePathVariant($variant, $fullUri);
+        return $this->mergePathVariant(
+            $this->variantFromStorefrontContext($context, $variant),
+            $fullUri,
+        );
     }
 
     /**
@@ -2237,8 +2528,44 @@ final class FullPageCacheCoordinator
     {
         return KeyBuilder::build(
             'router',
-            'unified-fpc:' . $fullUri . ':' . $this->variantSuffix($variant) . ':' . \strtoupper($method ?: 'GET')
+            $this->decorateFpcLogicalKey(
+                'unified-fpc:'
+                . $fullUri
+                . ':'
+                . $this->variantSuffix($variant)
+                . ':'
+                . \strtoupper($method ?: 'GET'),
+                $fullUri,
+            )
         );
+    }
+
+    /**
+     * NamespaceGenerationSnapshot freezes the complete storefront version
+     * vector for the current request/Fiber, so a build cannot switch versions
+     * between lock acquisition, payload publication and receipt capture.
+     */
+    private function decorateFpcLogicalKey(string $logicalKey, string $fullUri): string
+    {
+        return $this->namespaceKeyDecorator()->decorate($logicalKey, $this->fpcNamespaceFingerprint($fullUri));
+    }
+
+    private function fpcNamespaceFingerprint(string $fullUri): string
+    {
+        $context = $this->currentStorefrontCacheKeyContext();
+        if (!$context->cacheable || $context->namespaceFingerprint === null) {
+            throw new \LogicException(__('FPC 缺少已冻结的 Storefront 命名空间指纹'));
+        }
+        return $context->namespaceFingerprint;
+    }
+
+    private function namespaceKeyDecorator(): NamespaceKeyDecorator
+    {
+        if ($this->namespaceKeyDecorator === null) {
+            $this->namespaceKeyDecorator = ObjectManager::getInstance(NamespaceKeyDecorator::class);
+        }
+
+        return $this->namespaceKeyDecorator;
     }
 
     /**
@@ -2259,12 +2586,120 @@ final class FullPageCacheCoordinator
     {
         $suffix = 'lang=' . $this->normalizeVariantLang((string)($variant['lang'] ?? ''))
             . '|currency=' . $this->normalizeVariantCurrency((string)($variant['currency'] ?? ''));
-        $sessionToken = $this->privateSessionTokenFromVariant($variant);
-        if ($sessionToken !== '') {
-            $suffix .= '|session=' . $sessionToken;
+        foreach ([
+            'scope_state',
+            'scope_kind',
+            'website',
+            'store',
+            'channel',
+            'store_mode',
+            'context_version',
+            'cache_version',
+        ] as $field) {
+            if (isset($variant[$field]) && (string)$variant[$field] !== '') {
+                $suffix .= '|' . $field . '=' . \rawurlencode((string)$variant[$field]);
+            }
         }
 
         return $suffix;
+    }
+
+    /** @param array<string, string> $variant @return array<string, string> */
+    private function variantFromStorefrontContext(
+        StorefrontCacheKeyContext $context,
+        array $variant,
+    ): array
+    {
+        $dimensions = $context->keyDimensions();
+        $variant['scope_state'] = $dimensions['scope_state'];
+        $variant['scope_kind'] = $dimensions['scope_kind'];
+        $variant['website'] = $dimensions['website'];
+        $variant['store'] = $dimensions['store'];
+        $variant['channel'] = $dimensions['channel'];
+        $variant['store_mode'] = $dimensions['store_mode'];
+        $variant['context_version'] = $dimensions['context_version'];
+        $variant['cache_version'] = $dimensions['cache_key_fingerprint'];
+        return $variant;
+    }
+
+    private function hasCompleteFrozenStorefrontScope(): bool
+    {
+        $provider = $this->storefrontScopeProviderResolution();
+        if ($provider->status === RuntimeProviderResolution::CONFIGURED_UNAVAILABLE) {
+            return false;
+        }
+        $context = $this->currentStorefrontCacheKeyContext();
+        if ($provider->status === RuntimeProviderResolution::NOT_CONFIGURED) {
+            return $context->cacheable;
+        }
+        $identity = RequestContext::scopeIdentity();
+        return $context->hasCompleteFrozenScope()
+            && $identity instanceof \Weline\Framework\Runtime\ScopeIdentity
+            && $context->scopeIdentity?->equals($identity);
+    }
+
+    private function legacyPreRouterFpcAllowed(): bool
+    {
+        // Raw Worker requests have no request-local frozen generation vector.
+        // Keep them paused even for a Framework-only install; App-level FPC can
+        // still use the legacy default context after Context::enter().
+        return Context::hasCurrent()
+            && $this->storefrontScopeProviderResolution()->status === RuntimeProviderResolution::NOT_CONFIGURED;
+    }
+
+    private function currentStorefrontCacheKeyContext(): StorefrontCacheKeyContext
+    {
+        $current = StorefrontCacheKeyContext::current();
+        if ($current instanceof StorefrontCacheKeyContext && $current->cacheable) {
+            $provider = $this->storefrontScopeProviderResolution();
+            $identity = RequestContext::scopeIdentity();
+            if ($provider->status === RuntimeProviderResolution::NOT_CONFIGURED
+                || ($identity instanceof \Weline\Framework\Runtime\ScopeIdentity
+                    && $current->scopeIdentity?->equals($identity))
+            ) {
+                return $current;
+            }
+        }
+        $provider = $this->storefrontScopeProviderResolution();
+        if ($provider->status === RuntimeProviderResolution::NOT_CONFIGURED) {
+            return $this->storefrontCacheKeyContextResolver()->freezeLegacyDefault();
+        }
+        return $this->storefrontCacheKeyContextResolver()->freezeCurrent();
+    }
+
+    private function storefrontCacheKeyContextResolver(): StorefrontCacheKeyContextResolver
+    {
+        if ($this->storefrontCacheKeyContextResolver === null) {
+            $this->storefrontCacheKeyContextResolver = ObjectManager::getInstance(
+                StorefrontCacheKeyContextResolver::class,
+            );
+        }
+        return $this->storefrontCacheKeyContextResolver;
+    }
+
+    private function storefrontScopeProviderResolution(): RuntimeProviderResolution
+    {
+        if ($this->storefrontProviderResolution instanceof RuntimeProviderResolution) {
+            return $this->storefrontProviderResolution;
+        }
+        try {
+            return $this->storefrontProviderResolution = $this->runtimeProviderResolver()
+                ->resolveDetailed(StorefrontScopeInstallerInterface::class);
+        } catch (\Throwable $exception) {
+            return $this->storefrontProviderResolution = new RuntimeProviderResolution(
+                RuntimeProviderResolution::CONFIGURED_UNAVAILABLE,
+                errorCode: 'storefront_provider_resolution_failed',
+                error: $exception->getMessage(),
+            );
+        }
+    }
+
+    private function runtimeProviderResolver(): RuntimeProviderResolver
+    {
+        if ($this->runtimeProviderResolver === null) {
+            $this->runtimeProviderResolver = ObjectManager::getInstance(RuntimeProviderResolver::class);
+        }
+        return $this->runtimeProviderResolver;
     }
 
     /**
@@ -2304,12 +2739,44 @@ final class FullPageCacheCoordinator
         $pathVariant = $this->extractPathVariant($fullUri);
         if (($pathVariant['lang'] ?? '') !== '') {
             $variant['lang'] = $this->normalizeVariantLang((string)$pathVariant['lang']);
+        } else {
+            // Unprefixed URLs represent the website default language. Do not let
+            // WELINE_USER_LANG fork `/` into a second locale cache entry — that
+            // makes the language switcher say 简体中文 while FPC still serves English.
+            $websiteLang = $this->resolveWebsiteDefaultLangForUnprefixedFpc();
+            if ($websiteLang !== '') {
+                $variant['lang'] = $this->normalizeVariantLang($websiteLang);
+            }
         }
         if (($pathVariant['currency'] ?? '') !== '') {
             $variant['currency'] = $this->normalizeVariantCurrency((string)$pathVariant['currency']);
         }
 
         return $variant;
+    }
+
+    private function resolveWebsiteDefaultLangForUnprefixedFpc(): string
+    {
+        try {
+            $code = \trim((string)\Weline\Framework\Env\WelineEnv::get('website.language', ''));
+            if ($code !== '') {
+                return $code;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            $code = \trim((string)(
+                \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_LANGUAGE', '')
+                ?: \Weline\Framework\Env\WelineEnv::server('WELINE-WEBSITE-LANG', '')
+            ));
+            if ($code !== '') {
+                return $code;
+            }
+        } catch (\Throwable) {
+        }
+
+        return self::DEFAULT_LANG;
     }
 
     /**

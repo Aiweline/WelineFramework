@@ -14,23 +14,63 @@ namespace Weline\Server\Service\Runtime;
 final class HttpProtocolCapabilityProbe
 {
     /** @return array<string, mixed> */
-    public function snapshot(): array
+    public function snapshot(
+        ?string $edgeAdapterName = null,
+        ?HttpProtocolSelection $httpProtocolSelection = null,
+        bool $endpointPolicyBound = false,
+        string $policySource = 'runtime_capability',
+        ?array $endpointHttp3Activation = null,
+    ): array
     {
         $curl = \function_exists('curl_version') ? (array)\curl_version() : [];
-        $ffiRuntime = $this->probeFfiRuntime();
-        $nghttp2 = $this->probeNativeLibrary('nghttp2', 'nghttp2_strerror');
-        $nghttp3 = $this->probeNativeLibrary('nghttp3', 'nghttp3_strerror');
-        $ngtcp2 = $this->probeNativeLibrary('ngtcp2', 'ngtcp2_strerror');
-        $ngtcp2CryptoOssl = $this->probeNativeLibrary('ngtcp2_crypto_ossl', 'ngtcp2_crypto_ossl_configure_server_session');
-        $tlsAlpn = (new TlsAlpnRuntimeProbe())->snapshot();
-        $streamAlpn = $this->streamAcceptsAlpnOption();
-        $udpSocket = $this->probeUdpSocketRuntime();
-        $quicTransportAdapter = $this->probeWlsQuicTransportAdapter();
-        $http2AdapterSelfTest = $this->http2AdapterSelfTest();
-        $http2Configured = $streamAlpn && (bool)($tlsAlpn['configured'] ?? false);
-        $http3Readiness = $this->buildHttp3Readiness(
-            $curl, $ffiRuntime, $nghttp3, $ngtcp2, $ngtcp2CryptoOssl, $udpSocket, $quicTransportAdapter
-        );
+        $retiredReason = 'WLS native protocol transports are retired; Nginx owns public protocols.';
+        $ffiRuntime = ['available' => false, 'reason' => $retiredReason];
+        $retiredLibrary = [
+            'available' => false,
+            'path' => '',
+            'ffi_loadable' => false,
+            'reason' => $retiredReason,
+        ];
+        $nghttp2 = $retiredLibrary;
+        $nghttp3 = $retiredLibrary;
+        $ngtcp2 = $retiredLibrary;
+        $ngtcp2CryptoOssl = $retiredLibrary;
+        $tlsAlpn = [
+            'configured' => false,
+            'runtime_verified' => false,
+            'tls13_runtime_verified' => false,
+            'reason' => $retiredReason,
+        ];
+        $streamAlpn = false;
+        $udpSocket = ['available' => false, 'reason' => $retiredReason];
+        $quicTransportAdapter = [
+            'available' => false,
+            'adapter' => 'retired',
+            'reason' => $retiredReason,
+            'capabilities' => [
+                'runtime_self_test' => false,
+                'worker_policy_dispatch' => false,
+                'h3_alt_svc_advertising' => false,
+            ],
+            'missing' => ['nginx_public_edge'],
+        ];
+        $http2AdapterSelfTest = [
+            'ok' => false,
+            'runtime_verified' => false,
+            'multiplexing_verified' => false,
+            'max_concurrent_streams' => 0,
+            'checks' => [],
+            'reason' => $retiredReason,
+        ];
+        $http2Configured = false;
+        $http3Readiness = [
+            'ready' => false,
+            'checks' => [],
+            'client_checks' => [],
+            'missing' => ['nginx_public_edge'],
+            'install_hints' => [],
+            'summary' => $retiredReason,
+        ];
         $wlsAdapters = $this->buildWlsAdapterSnapshot(
             $http2Configured,
             $tlsAlpn,
@@ -38,14 +78,65 @@ final class HttpProtocolCapabilityProbe
             $http3Readiness,
             $quicTransportAdapter
         );
-        $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve();
+        $edgeResolver = new \Weline\Server\Service\Edge\EdgeAdapterResolver();
+        $hostRuntimeWlsAdapters = $wlsAdapters;
+        $edgeAdapter = $edgeAdapterName === null
+            ? $edgeResolver->resolve()
+            : $edgeResolver->resolve([
+                'wls' => ['edge' => ['adapter' => $edgeAdapterName]],
+            ]);
+        if ($httpProtocolSelection !== null) {
+            $httpProtocolSelection->assertCompatibleEdgeAdapter($edgeAdapter->name());
+        }
+
         $wlsAdapters = $this->applyEdgeAdapterGate($wlsAdapters, $edgeAdapter);
-        $tlsSessionReuse = (new TlsSessionResumptionCapabilityProbe())->snapshot($wlsAdapters);
-        $defaultPolicy = $this->buildDefaultPolicy($curl, $wlsAdapters, $tlsSessionReuse, $tlsAlpn, $edgeAdapter);
+        if ($httpProtocolSelection !== null) {
+            $wlsAdapters = $this->applyProtocolSelectionGate($wlsAdapters, $httpProtocolSelection);
+        }
+        if ($endpointPolicyBound || $endpointHttp3Activation !== null) {
+            $wlsAdapters = $this->applyEndpointHttp3ActivationGate(
+                $wlsAdapters,
+                $endpointHttp3Activation,
+            );
+        }
+        if (\str_ends_with($policySource, '_unbound')) {
+            foreach (['http1', 'http2', 'http3'] as $adapterKey) {
+                $wlsAdapters[$adapterKey]['enabled'] = false;
+                $wlsAdapters[$adapterKey]['endpoint_policy_bound'] = false;
+                $wlsAdapters[$adapterKey]['reason'] = 'Running endpoint protocol policy is unbound.';
+            }
+        }
+        $tlsSessionReuse = [
+            'tls_1_3_server' => false,
+            'stream' => [],
+            'reason' => 'WLS Worker TLS is retired; Nginx owns TLS session resumption.',
+        ];
+        $edgeSnapshot = $edgeAdapter->doctorSnapshot();
+        $defaultPolicy = $this->buildDefaultPolicy(
+            $curl,
+            $wlsAdapters,
+            $tlsSessionReuse,
+            $tlsAlpn,
+            $edgeAdapter,
+            $httpProtocolSelection,
+            $endpointPolicyBound,
+            $policySource,
+            $edgeSnapshot,
+        );
 
         return [
             'default_policy' => $defaultPolicy,
-            'edge' => $edgeAdapter->doctorSnapshot(),
+            'edge' => $edgeSnapshot,
+            'endpoint_policy_binding' => [
+                'bound' => $endpointPolicyBound
+                    && $edgeAdapterName !== null
+                    && $httpProtocolSelection !== null,
+                'source' => $policySource,
+                'edge_adapter' => $edgeAdapterName,
+                'http_protocol_selection' => $httpProtocolSelection?->toArray(),
+                'endpoint_http3_activation' => $endpointHttp3Activation,
+            ],
+            'host_runtime_wls_adapters' => $hostRuntimeWlsAdapters,
             'tls_alpn' => $tlsAlpn,
             'php' => [
                 'version' => \PHP_VERSION,
@@ -92,18 +183,197 @@ final class HttpProtocolCapabilityProbe
         array $wlsAdapters,
         array $tlsResumption,
         array $tlsAlpn,
-        ?\Weline\Server\Service\Edge\EdgeAdapterInterface $edgeAdapter = null
+        ?\Weline\Server\Service\Edge\EdgeAdapterInterface $edgeAdapter = null,
+        ?HttpProtocolSelection $httpProtocolSelection = null,
+        bool $endpointPolicyBound = false,
+        string $policySource = 'runtime_capability',
+        array $edgeSnapshot = [],
     ): array
     {
-        $effective = $this->selectEffectiveHttpVersion($curl, $wlsAdapters);
         $http2Ready = (bool)($wlsAdapters['http2']['enabled'] ?? false);
         $http3Ready = (bool)($wlsAdapters['http3']['enabled'] ?? false);
-        $http3ClientReady = \defined('CURL_HTTP_VERSION_3ONLY')
+        $http2ClientReady = \defined('CURL_HTTP_VERSION_2_0')
+            && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP2');
+        $http3ClientReady = \defined('CURL_HTTP_VERSION_3')
             && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP3');
         $http3AutoReady = $http3Ready && $http3ClientReady;
         $edgeIsNginx = $edgeAdapter !== null
             && $edgeAdapter->name() === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
-        $targetPreferred = $edgeIsNginx ? 'http/1.1' : 'http/2';
+        $edgeIsCaddy = $httpProtocolSelection?->isCaddyProtocolEdge() ?? false;
+        $edgeIsExternal = $edgeIsNginx || $edgeIsCaddy;
+        $managedNginx = $edgeIsNginx && \is_array($edgeSnapshot['managed_nginx'] ?? null)
+            ? $edgeSnapshot['managed_nginx']
+            : [];
+        $nginxPublicOrder = \is_array($managedNginx['public_protocols'] ?? null)
+            && $managedNginx['public_protocols'] !== []
+            ? \array_values($managedNginx['public_protocols'])
+            : ['http/2', 'http/1.1'];
+        $nginxHttp3Configured = (bool)($managedNginx['http3_configured'] ?? false);
+        $nginxHttp3RuntimeVerified = (bool)($managedNginx['http3_runtime_verified'] ?? false);
+        $nginxHttp2RuntimeVerified = (bool)($managedNginx['http2_runtime_verified'] ?? false);
+        $nginxHttp1RuntimeVerified = (bool)($managedNginx['http1_runtime_verified'] ?? false);
+        $nginxSameWorkerSessionResumptionVerified = (bool)(
+            $managedNginx['tls_session_resumption_same_worker_runtime_verified'] ?? false
+        );
+        $nginxCrossWorkerSessionResumptionVerified = (bool)(
+            $managedNginx['tls_session_resumption_cross_worker_runtime_verified'] ?? false
+        );
+        $configuredProtocols = $httpProtocolSelection?->protocols ?? HttpProtocolSelection::DEFAULT_PROTOCOLS;
+        $configuredPreferred = $httpProtocolSelection?->preferred ?? HttpProtocolSelection::HTTP_1;
+        $orderedProtocols = [
+            $configuredPreferred,
+            ...\array_values(\array_filter(
+                $configuredProtocols,
+                static fn(string $protocol): bool => $protocol !== $configuredPreferred,
+            )),
+        ];
+        $publicConfiguredOrder = \array_map(
+            static fn(string $protocol): string => match ($protocol) {
+                HttpProtocolSelection::HTTP_3 => 'http/3',
+                HttpProtocolSelection::HTTP_2 => 'http/2',
+                default => 'http/1.1',
+            },
+            $orderedProtocols,
+        );
+        $targetPreferred = $edgeIsExternal
+            ? 'http/1.1'
+            : match ($configuredPreferred) {
+                HttpProtocolSelection::HTTP_3 => 'http/3',
+                HttpProtocolSelection::HTTP_2 => 'http/2',
+                default => 'http/1.1',
+            };
+        if ($edgeIsExternal) {
+            $negotiationOrder = ['http/1.1'];
+        } else {
+            $negotiationOrder = [];
+            foreach ($orderedProtocols as $protocol) {
+                if ($protocol === HttpProtocolSelection::HTTP_3 && $http3AutoReady) {
+                    $negotiationOrder[] = 'http/3';
+                } elseif ($protocol === HttpProtocolSelection::HTTP_2
+                    && $http2Ready
+                    && $http2ClientReady
+                ) {
+                    $negotiationOrder[] = 'http/2';
+                } elseif ($protocol === HttpProtocolSelection::HTTP_1) {
+                    $negotiationOrder[] = 'http/1.1';
+                }
+            }
+        }
+        $fallback = \array_slice($negotiationOrder, 1);
+        $effectivePreferred = $negotiationOrder[0] ?? null;
+        $failClosedUnbound = \str_ends_with($policySource, '_unbound');
+        if ($failClosedUnbound) {
+            $targetPreferred = null;
+            $effectivePreferred = null;
+            $fallback = [];
+            $negotiationOrder = [];
+        }
+        $wlsEndpointSurface = [
+            'owner' => 'wls',
+            'role' => $edgeIsNginx
+                ? 'nginx_backend'
+                : ($edgeIsCaddy ? 'caddy_backend' : 'public_and_wls_endpoint'),
+            'target_preferred' => $targetPreferred,
+            'effective_preferred' => $effectivePreferred,
+            'fallback' => $fallback,
+            'negotiation_order' => $negotiationOrder,
+            'policy_bound' => $endpointPolicyBound,
+            'policy_source' => $policySource,
+            'configured_protocols' => $configuredProtocols,
+            'capability_verified' => !$failClosedUnbound && $negotiationOrder !== [],
+            'runtime_verified' => false,
+            'observed_preferred' => null,
+            'verification_required' => 'live endpoint protocol probe',
+        ];
+        if ($edgeIsNginx) {
+            $nginxEffectivePreferred = $nginxHttp3RuntimeVerified
+                ? 'http/3'
+                : ($nginxHttp2RuntimeVerified
+                    ? 'http/2'
+                    : ($nginxHttp1RuntimeVerified ? 'http/1.1' : null));
+            $effectiveIndex = $nginxEffectivePreferred === null
+                ? false
+                : \array_search($nginxEffectivePreferred, $nginxPublicOrder, true);
+            $nginxFallback = \is_int($effectiveIndex)
+                ? \array_slice($nginxPublicOrder, $effectiveIndex + 1)
+                : [];
+            $publicEdgeSurface = [
+                'owner' => 'nginx',
+                'role' => 'public_https',
+                'target_preferred' => $nginxPublicOrder[0] ?? 'http/2',
+                'effective_preferred' => $nginxEffectivePreferred,
+                'fallback' => $nginxFallback,
+                'negotiation_order' => $nginxPublicOrder,
+                'runtime_verified' => $nginxHttp2RuntimeVerified
+                    && $nginxHttp1RuntimeVerified
+                    && (!$nginxHttp3Configured || $nginxHttp3RuntimeVerified),
+                'capability_verified' => (bool)($managedNginx['binary_capabilities_ok'] ?? false)
+                    && (bool)($managedNginx['http2_module'] ?? false),
+                'observed_preferred' => $nginxEffectivePreferred,
+                'verification_required' => $nginxHttp3Configured && !$nginxHttp3RuntimeVerified
+                    ? 'live public HTTP/3 QUIC request'
+                    : 'managed Nginx lifecycle ALPN probes',
+                'http3_when_available' => $nginxHttp3Configured,
+                'http3_reason' => (string)($managedNginx['http3_reason'] ?? ''),
+                'tls13_runtime_verified' => (bool)($managedNginx['tls13_runtime_verified'] ?? false),
+                'tls_session_cache_shared' => (bool)($managedNginx['tls_session_cache_shared'] ?? false),
+                'tls_session_tickets' => (bool)($managedNginx['tls_session_tickets'] ?? false),
+                'tls_session_ticket_keys_shared' => (bool)($managedNginx['tls_session_ticket_keys_shared'] ?? false),
+                'tls_session_resumption_runtime_verified' => (bool)(
+                    $managedNginx['tls_session_resumption_runtime_verified'] ?? false
+                ),
+                'tls_session_resumption_reload_continuity_verified' => (bool)(
+                    $managedNginx['tls_session_resumption_reload_continuity_verified'] ?? false
+                ),
+            ];
+        } elseif ($edgeIsCaddy) {
+            $publicEdgeSurface = [
+                'owner' => 'caddy',
+                'role' => 'public_https',
+                'target_preferred' => $publicConfiguredOrder[0] ?? null,
+                'effective_preferred' => null,
+                'fallback' => \array_slice($publicConfiguredOrder, 1),
+                'negotiation_order' => $publicConfiguredOrder,
+                'policy_bound' => $endpointPolicyBound,
+                'policy_source' => $policySource,
+                'runtime_verified' => false,
+                'capability_verified' => false,
+                'observed_preferred' => null,
+                'verification_required' => 'live Caddy public HTTPS/QUIC probe',
+                'http3_when_available' => \in_array('http/3', $publicConfiguredOrder, true),
+                'http3_reason' => 'Caddy owns public HTTP negotiation; live endpoint evidence is required before automatic benchmark selection.',
+            ];
+        } else {
+            $publicEdgeSurface = [
+                ...$wlsEndpointSurface,
+                'role' => 'public_https',
+                'http3_when_available' => \in_array(
+                    HttpProtocolSelection::HTTP_3,
+                    $configuredProtocols,
+                    true,
+                )
+                    && ($httpProtocolSelection?->altSvc ?? true)
+                    && !$failClosedUnbound,
+            ];
+        }
+        if ($failClosedUnbound) {
+            $publicEdgeSurface = [
+                'owner' => null,
+                'role' => 'public_https',
+                'target_preferred' => null,
+                'effective_preferred' => null,
+                'fallback' => [],
+                'negotiation_order' => [],
+                'policy_bound' => false,
+                'policy_source' => $policySource,
+                'runtime_verified' => false,
+                'capability_verified' => false,
+                'observed_preferred' => null,
+                'verification_required' => 'persisted endpoint protocol policy',
+                'http3_when_available' => false,
+                'http3_reason' => 'Running endpoint protocol policy is unbound.',
+            ];
+        }
         $streamTls = \is_array($tlsResumption['stream'] ?? null) ? $tlsResumption['stream'] : [];
         $sharedContextSessionReuseVerified = (bool)($streamTls['shared_ssl_context'] ?? false)
             && (bool)($streamTls['stream_context_ticket_callback_supported'] ?? false)
@@ -133,107 +403,121 @@ final class HttpProtocolCapabilityProbe
             && (bool)($http3Capabilities['tls_cross_worker_session_resumption_verified'] ?? false);
 
         return [
+            'policy_schema_version' => 2,
+            'legacy_policy_scope' => 'wls_endpoint',
+            'surfaces' => [
+                'public_edge' => $publicEdgeSurface,
+                'wls_endpoint' => $wlsEndpointSurface,
+            ],
             'target_preferred' => $targetPreferred,
-            'effective_preferred' => 'http/' . $effective,
-            'fallback' => $http3AutoReady ? ['http/2', 'http/1.1'] : ['http/1.1'],
-            'negotiation_order' => $edgeIsNginx
-                ? ['http/1.1']
-                : ($http3AutoReady
-                    ? ['http/3', 'http/2', 'http/1.1']
-                    : ['http/2', 'http/1.1']),
-            'http3_when_available' => !$edgeIsNginx,
+            'effective_preferred' => $effectivePreferred,
+            'fallback' => $fallback,
+            'negotiation_order' => $negotiationOrder,
+            'endpoint_policy_bound' => $endpointPolicyBound,
+            'endpoint_policy_source' => $policySource,
+            'http_protocol_selection' => $httpProtocolSelection?->toArray(),
+            'http3_when_available' => !$failClosedUnbound
+                && ($edgeIsNginx
+                    ? $nginxHttp3Configured
+                    : (\in_array(HttpProtocolSelection::HTTP_3, $configuredProtocols, true)
+                        && ($httpProtocolSelection?->altSvc ?? true))),
             'edge_adapter' => $edgeAdapter?->name() ?? \Weline\Server\Service\Edge\EdgeAdapterResolver::DEFAULT_ADAPTER,
-            'http3_runtime_ready' => $http3Ready,
+            'http3_runtime_ready' => $nginxHttp3RuntimeVerified,
             'http3_client_ready' => $http3ClientReady,
-            'http3_selection' => $http3AutoReady
-                ? 'automatically prefer the verified HTTP/3 QUIC/UDP data plane, then fall back to HTTP/2 and HTTP/1.1'
-                : ($http3Ready
-                    ? 'advertise Alt-Svc, but keep HTTP/2 as the effective client default until this cURL build can issue strict HTTP/3 requests'
-                    : 'do not advertise HTTP/3 until the WLS QUIC/UDP adapter is runtime-ready'),
+            'http3_selection' => $edgeIsNginx
+                ? ($nginxHttp3Configured
+                    ? ($nginxHttp3RuntimeVerified
+                        ? 'Nginx HTTP/3 is runtime verified by an owner-bound HTTP/3-only QUIC request; negotiation prefers HTTP/3, then HTTP/2 and HTTP/1.1.'
+                        : 'Nginx advertises HTTP/3 through HTTPS-only Alt-Svc; runtime readiness remains false until an owner-bound HTTP/3-only QUIC request succeeds.')
+                    : 'Nginx serves verified HTTP/2 with HTTP/1.1 fallback and does not advertise HTTP/3.')
+                : ($http3AutoReady
+                    ? 'automatically prefer the verified HTTP/3 QUIC/UDP data plane, then use only the verified TCP fallbacks in negotiation_order'
+                    : ($http3Ready
+                        ? 'advertise Alt-Svc, but keep the verified TCP protocol as the effective client default until this cURL build supports fallback-capable HTTP/3 requests'
+                        : 'do not advertise HTTP/3 until the WLS QUIC/UDP adapter is runtime-ready')),
             'tls13_server' => (bool)($tlsResumption['tls_1_3_server'] ?? false),
             'tls13_server_supported' => (bool)($tlsResumption['tls_1_3_server'] ?? false),
-            'tls13_runtime_verified' => (bool)($tlsAlpn['tls13_runtime_verified'] ?? false),
-            'alpn_http2' => $http2Ready,
+            'tls13_runtime_verified' => $edgeIsNginx
+                ? (bool)($managedNginx['tls13_runtime_verified'] ?? false)
+                : (bool)($tlsAlpn['tls13_runtime_verified'] ?? false),
+            'alpn_http2' => $edgeIsNginx ? $nginxHttp2RuntimeVerified : $http2Ready,
             'tls_session_reuse' => [
-                'supported' => $sessionReuseSupported,
-                'verified' => $sessionReuseVerified,
-                'enabled' => (bool)($streamTls['external_cache_configured'] ?? false),
-                'active_verified' => $externalStatefulSessionReuseVerified,
-                'transport' => 'tcp',
-                'data_plane' => 'php_stream_ssl',
-                'external_stateful_session_api_min_php' => (string)($streamTls['external_stateful_session_api_min_php'] ?? '8.6.0'),
-                'external_stateful_session_api_available' => (bool)($streamTls['external_stateful_session_api_available'] ?? false),
-                'external_cache_api_disables_stateless_tickets' => (bool)($streamTls['external_cache_api_disables_stateless_tickets'] ?? false),
-                'external_cache_mode' => (string)($streamTls['external_cache_mode'] ?? 'off'),
-                'external_cache_config_valid' => (bool)($streamTls['external_cache_config_valid'] ?? true),
-                'external_cache_configured' => (bool)($streamTls['external_cache_configured'] ?? false),
-                'external_cache_worker_eligible' => (bool)($streamTls['external_cache_worker_eligible'] ?? false),
-                'external_cache_dedicated_ram_store' => (bool)($streamTls['external_cache_dedicated_ram_store'] ?? false),
-                'external_cache_callback_connects_or_retries' => (bool)($streamTls['external_cache_callback_connects_or_retries'] ?? false),
-                'external_cache_runtime_mechanism_verified' => (bool)($streamTls['external_cache_runtime_mechanism_verified'] ?? false),
-                'external_cache_runtime_verified' => (bool)($streamTls['external_cache_runtime_verified'] ?? false),
-                'durable_evidence_verified' => (bool)($streamTls['external_cache_durable_evidence_verified'] ?? false),
-                'active_config_matches_evidence' => (bool)($streamTls['external_cache_active_config_matches_evidence'] ?? false),
-                'current_scope_evaluated' => (bool)($streamTls['external_cache_current_scope_evaluated'] ?? false),
-                'current_scope_matches_evidence' => (bool)($streamTls['external_cache_current_scope_matches_evidence'] ?? false),
-                'runtime_prerelease' => (bool)($streamTls['external_cache_runtime_prerelease'] ?? true),
-                'php_release_channel' => (string)($streamTls['external_cache_php_release_channel'] ?? 'unknown'),
-                'tls13_stateful_ticket_expected' => (bool)($streamTls['tls13_stateful_ticket_expected'] ?? false),
-                'stateless_ticket_key_ring' => (bool)($streamTls['stateless_ticket_key_ring'] ?? false),
-                'session_ticket_configured' => (bool)($streamTls['session_ticket_configured'] ?? false),
-                'session_id_context_configured_by_worker' => (bool)($streamTls['session_id_context_configured_by_worker'] ?? false),
-                'server_session_reuse_observable' => (bool)($streamTls['server_session_reuse_observable'] ?? false),
-                'same_worker_session_resumption_verified' => (bool)($streamTls['same_worker_session_resumption_verified'] ?? false),
-                'cross_worker_session_resumption_verified' => (bool)($streamTls['cross_worker_session_resumption_verified'] ?? false),
-                'reload_continuity_verified' => (bool)($streamTls['reload_continuity_verified'] ?? false),
-                'sidecar_recovery_verified' => (bool)($streamTls['sidecar_recovery_verified'] ?? false),
-                'performance_baseline_verified' => (bool)($streamTls['performance_baseline_verified'] ?? false),
-                'resumption_tls_p95_ms' => \is_numeric($streamTls['resumption_tls_p95_ms'] ?? null)
-                    ? (float)$streamTls['resumption_tls_p95_ms']
-                    : null,
-                'diagnostic_resumption_tls_p95_limit_ms' => \is_numeric(
-                    $streamTls['diagnostic_resumption_tls_p95_limit_ms'] ?? null
-                ) ? (float)$streamTls['diagnostic_resumption_tls_p95_limit_ms'] : null,
-                'production_resumption_tls_p95_limit_ms' => (float)(
-                    $streamTls['production_resumption_tls_p95_limit_ms'] ?? 50.0
+                'owner' => 'nginx',
+                'supported' => (bool)($managedNginx['tls_session_ticket_keys_shared'] ?? false),
+                'verified' => (bool)($managedNginx['tls_session_resumption_runtime_verified'] ?? false),
+                'enabled' => (bool)($managedNginx['tls_session_cache_shared'] ?? false)
+                    && (bool)($managedNginx['tls_session_tickets'] ?? false),
+                'active_verified' => (bool)(
+                    $managedNginx['tls_session_resumption_runtime_verified'] ?? false
                 ),
-                'resumption_latency_gate_verified' => (bool)($streamTls['resumption_latency_gate_verified'] ?? false),
-                'production_platform_matrix_verified' => (bool)($streamTls['production_platform_matrix_verified'] ?? false),
-                'production_ready' => (bool)($streamTls['production_ready'] ?? false),
-                'cross_worker_ticket_key_ring' => false,
-                'cross_worker_ticket_reuse_verified' => false,
-                'evidence' => \is_array($streamTls['external_cache_evidence'] ?? null)
-                    ? $streamTls['external_cache_evidence']
-                    : [],
-                'reason' => (string)($streamTls['reason'] ?? 'TLS 1.3 and ALPN HTTP/2 are available, but PHP stream SSL has not verified reusable cross-connection sessions.'),
+                'transport' => 'nginx_public_tls',
+                'data_plane' => 'nginx',
+                'ticket_model' => 'nginx_shared_ssl_session_cache_and_tickets',
+                'session_cache_shared' => (bool)($managedNginx['tls_session_cache_shared'] ?? false),
+                'session_ticket_configured' => (bool)($managedNginx['tls_session_tickets'] ?? false),
+                'cross_worker_ticket_key_ring' => (bool)(
+                    $managedNginx['tls_session_ticket_keys_shared'] ?? false
+                ),
+                'same_worker_session_resumption_verified' => (bool)(
+                    $nginxSameWorkerSessionResumptionVerified
+                ),
+                'cross_worker_session_resumption_verified' => (bool)(
+                    $nginxCrossWorkerSessionResumptionVerified
+                ),
+                'cross_worker_ticket_reuse_verified' => (bool)(
+                    $nginxCrossWorkerSessionResumptionVerified
+                ),
+                'reload_continuity_verified' => (bool)(
+                    $managedNginx['tls_session_resumption_reload_continuity_verified'] ?? false
+                ),
+                'reload_continuity_proof_model' => (string)(
+                    $managedNginx['tls_session_resumption_reload_continuity_proof_model'] ?? ''
+                ),
+                'early_data_disabled' => true,
+                'reason' => (bool)(
+                    $managedNginx['tls_session_resumption_reload_continuity_verified'] ?? false
+                )
+                    ? 'Nginx TLS session resumption has live same/cross Worker and reload-continuity evidence.'
+                    : (
+                        (bool)($managedNginx['tls_session_resumption_runtime_verified'] ?? false)
+                            ? 'Nginx TLS session resumption has live reconnect evidence; reload continuity is not yet verified.'
+                            : 'Nginx shared cache and tickets may be configured, but live Reused evidence is still required.'
+                    ),
             ],
             'http3_tls_session_resumption' => [
-                'supported' => $http3TicketRingSupported,
-                'verified' => $http3SessionResumptionVerified,
+                'owner' => 'nginx',
+                'supported' => false,
+                'verified' => false,
                 'transport' => 'quic/udp',
-                'data_plane' => 'native_http3_quic',
-                'ticket_model' => 'stateless_shared_key_ring',
-                'stateless_ticket_key_ring' => $http3TicketRingSupported,
-                'cross_context_verified' => (bool)($http3Capabilities['tls_cross_context_session_resumption_verified'] ?? false),
-                'rotation_continuity_verified' => (bool)($http3Capabilities['tls_ticket_rotation_continuity_verified'] ?? false),
-                'server_session_reuse_observable' => (bool)($http3Capabilities['tls_server_session_reuse_observable'] ?? false),
-                'early_data_disabled' => (bool)($http3Capabilities['tls_early_data_disabled'] ?? false),
-                'reason' => $http3SessionResumptionVerified
-                    ? 'Native HTTP/3 verified a full handshake plus Ticket issuance, independent SSL_CTX resumption through the rotated previous key, and true server-side reuse counters; 0-RTT remains disabled.'
-                    : 'HTTP/3 TLS resumption requires the verified native ticket-ring callback and two-handshake server-side proof.',
+                'data_plane' => 'nginx_http3',
+                'ticket_model' => 'nginx_shared_ssl_session_cache_and_tickets',
+                'early_data_disabled' => true,
+                'reason' => 'Nginx HTTP/3 session resumption remains pending until QUIC-specific resumption evidence exists.',
             ],
             'cross_worker_session_ticket' => [
-                'supported' => $http3CrossWorkerSupported,
-                'verified' => $http3CrossWorkerVerified,
-                'transport' => 'http3_quic_only',
-                'ticket_model' => 'stateless_shared_key_ring',
-                'requires' => 'native HTTP/3 SSL_CTX ticket key ring shared by all Workers',
-                'reason' => $http3CrossWorkerVerified
-                    ? 'Native HTTP/3 uses the same acknowledged ticket-ring epoch/digest in every Worker and has verified cross-context server-side session reuse; this does not apply to TCP HTTP/2 or HTTP/1.1.'
-                    : 'Cross-Worker Ticket reuse is pending until a live instance proves every READY Worker acknowledged the same epoch/digest and resumed handshakes reached more than one Worker; it must not be inferred from the native cross-context self-test, Keep-Alive, HTTP/2 multiplexing, or Alt-Svc.',
+                'owner' => 'nginx',
+                'supported' => (bool)($managedNginx['tls_session_ticket_keys_shared'] ?? false),
+                'verified' => $nginxCrossWorkerSessionResumptionVerified,
+                'transport' => 'nginx_public_tls',
+                'ticket_model' => 'nginx_shared_ssl_session_cache_and_tickets',
+                'requires' => 'live reconnect evidence against a multi-worker Nginx owner generation',
+                'reason' => $nginxCrossWorkerSessionResumptionVerified
+                    ? 'Live Nginx reconnect evidence verified session reuse.'
+                    : 'Cross-worker Nginx session reuse remains pending until live Reused evidence succeeds.',
             ],
-            'tls_session_resumption' => $tlsResumption,
-            'selection_rule' => 'prefer verified HTTP/3 automatically when both HTTPS client and WLS QUIC data plane are ready; otherwise use HTTP/2 as the default TCP protocol and fall back to HTTP/1.1; report session resumption per data plane because native HTTP/3 proof does not enable PHP Stream TCP resumption',
+            'tls_session_resumption' => [
+                'owner' => 'nginx',
+                'configured' => (bool)($managedNginx['tls_session_cache_shared'] ?? false)
+                    && (bool)($managedNginx['tls_session_tickets'] ?? false),
+                'runtime_verified' => (bool)(
+                    $managedNginx['tls_session_resumption_runtime_verified'] ?? false
+                ),
+                'reload_continuity_verified' => (bool)(
+                    $managedNginx['tls_session_resumption_reload_continuity_verified'] ?? false
+                ),
+            ],
+            'selection_rule' => 'Nginx exclusively selects verified public HTTP protocols; WLS remains a loopback HTTP/1.1 backend.',
+
         ];
     }
 
@@ -243,7 +527,7 @@ final class HttpProtocolCapabilityProbe
      */
     private function selectEffectiveHttpVersion(array $curl, array $wlsAdapters): string
     {
-        $curlHttp3 = \defined('CURL_HTTP_VERSION_3ONLY')
+        $curlHttp3 = \defined('CURL_HTTP_VERSION_3')
             && $this->curlFeatureEnabled($curl, 'CURL_VERSION_HTTP3');
         if ($curlHttp3
             && (bool)($wlsAdapters['http3']['enabled'] ?? false)
@@ -352,7 +636,9 @@ final class HttpProtocolCapabilityProbe
     }
 
     /**
-     * Keep native protocol implementations, but disable negotiation when edge adapter is nginx.
+    /**
+     * WLS exposes only a private H1 backend; Nginx public capabilities are
+     * reported separately from managed_nginx owner evidence.
      *
      * @param array<string, mixed> $wlsAdapters
      * @return array<string, mixed>
@@ -361,32 +647,109 @@ final class HttpProtocolCapabilityProbe
         array $wlsAdapters,
         \Weline\Server\Service\Edge\EdgeAdapterInterface $edgeAdapter
     ): array {
+        if ($edgeAdapter->name() !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX) {
+            throw new \RuntimeException('Nginx is the only supported WLS public edge adapter.');
+        }
         $wlsAdapters['edge_adapter'] = $edgeAdapter->name();
-        if ($edgeAdapter->allowsNativeHttp2() && $edgeAdapter->allowsNativeHttp3()) {
-            $wlsAdapters['http2']['edge_status'] = 'active_when_verified';
-            $wlsAdapters['http3']['edge_status'] = 'active_when_verified';
-            return $wlsAdapters;
-        }
-
-        if (!$edgeAdapter->allowsNativeHttp2()) {
-            $wlsAdapters['http2']['enabled'] = false;
-            $wlsAdapters['http2']['edge_status'] = 'retained_inactive';
-            $wlsAdapters['http2']['reason'] = 'Native HTTP/2 retained but inactive because wls.edge.adapter='
-                . $edgeAdapter->name()
-                . '; set wls.edge.adapter=wls to enable WLS negotiation.';
-        }
-        if (!$edgeAdapter->allowsNativeHttp3()) {
-            $wlsAdapters['http3']['enabled'] = false;
-            $wlsAdapters['http3']['runtime_verified'] = false;
-            $wlsAdapters['http3']['edge_status'] = 'retained_inactive';
-            $wlsAdapters['http3']['reason'] = 'Native HTTP/3 retained but inactive because wls.edge.adapter='
-                . $edgeAdapter->name()
-                . '; Nginx should terminate HTTP/3, or set wls.edge.adapter=wls.';
+        $wlsAdapters['http1']['configured_for_instance'] = true;
+        $wlsAdapters['http1']['endpoint_role'] = 'nginx_plaintext_backend';
+        foreach (['http2', 'http3'] as $adapterKey) {
+            $wlsAdapters[$adapterKey]['configured_for_instance'] = false;
+            $wlsAdapters[$adapterKey]['enabled'] = false;
+            $wlsAdapters[$adapterKey]['runtime_verified'] = false;
+            $wlsAdapters[$adapterKey]['edge_status'] = 'external_nginx_owner';
+            $wlsAdapters[$adapterKey]['reason'] =
+                'Nginx owns public protocol negotiation; WLS is a loopback HTTP/1.1 backend.';
         }
 
         return $wlsAdapters;
     }
 
+    /**
+     * Bind the immutable H1-only backend selection without probing retired
+     * native/Caddy protocol candidates.
+     *
+     * @param array<string, mixed> $wlsAdapters
+     * @return array<string, mixed>
+     */
+    private function applyProtocolSelectionGate(
+        array $wlsAdapters,
+        HttpProtocolSelection $selection,
+    ): array {
+        $selection->assertCompatibleEdgeAdapter('nginx');
+        $wlsAdapters['http_protocol_selection'] = $selection->toArray();
+        $wlsAdapters['http1']['configured_for_instance'] = true;
+        $wlsAdapters['http1']['endpoint_role'] = 'nginx_plaintext_backend';
+        foreach (['http2', 'http3'] as $adapterKey) {
+            $wlsAdapters[$adapterKey]['configured_for_instance'] = false;
+            $wlsAdapters[$adapterKey]['enabled'] = false;
+            $wlsAdapters[$adapterKey]['runtime_verified'] = false;
+            $wlsAdapters[$adapterKey]['edge_status'] = 'external_nginx_owner';
+            $wlsAdapters[$adapterKey]['reason'] =
+                'Nginx owns public protocol negotiation; WLS backend selection is HTTP/1.1 only.';
+        }
+
+        return $wlsAdapters;
+    }
+
+
+    /**
+     * Bind host HTTP/3 capability to this immutable endpoint generation.
+     *
+     * @param array<string,mixed> $wlsAdapters
+     * @param array<string,mixed>|null $activation
+     * @return array<string,mixed>
+     */
+    private function applyEndpointHttp3ActivationGate(
+        array $wlsAdapters,
+        ?array $activation,
+    ): array {
+        $http3 = \is_array($wlsAdapters['http3'] ?? null) ? $wlsAdapters['http3'] : [];
+        $http3['endpoint_activation'] = $activation;
+        $http3['instance_activation_verified'] = false;
+        if (!\is_array($activation)
+            || !\is_bool($activation['enabled'] ?? null)
+            || !\is_bool($activation['runtime_verified'] ?? null)
+        ) {
+            $http3['enabled'] = false;
+            $http3['runtime_verified'] = false;
+            $http3['reason'] = 'Endpoint HTTP/3 activation snapshot is missing or invalid.';
+            $wlsAdapters['http3'] = $http3;
+            return $wlsAdapters;
+        }
+
+        $enabled = $activation['enabled'];
+        $runtimeVerified = $activation['runtime_verified'];
+        if (!$enabled) {
+            $reason = \trim((string)($activation['reason'] ?? ''));
+            $http3['enabled'] = false;
+            $http3['runtime_verified'] = false;
+            $http3['reason'] = !$runtimeVerified && $reason !== ''
+                ? $reason
+                : 'Disabled endpoint HTTP/3 activation metadata is invalid.';
+            $wlsAdapters['http3'] = $http3;
+            return $wlsAdapters;
+        }
+
+        $digest = \strtolower(\trim((string)($activation['native_digest'] ?? '')));
+        $fingerprint = \strtolower(\trim((string)($activation['fingerprint'] ?? '')));
+        if (!$runtimeVerified
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $fingerprint) !== 1
+        ) {
+            $http3['enabled'] = false;
+            $http3['runtime_verified'] = false;
+            $http3['reason'] = 'Enabled endpoint HTTP/3 activation lacks verified native identity.';
+            $wlsAdapters['http3'] = $http3;
+            return $wlsAdapters;
+        }
+
+        $http3['instance_activation_verified'] = true;
+        $http3['instance_native_digest'] = $digest;
+        $http3['instance_fingerprint'] = $fingerprint;
+        $wlsAdapters['http3'] = $http3;
+        return $wlsAdapters;
+    }
 
     /** @return array{available:bool,reason:string} */
     private function probeUdpSocketRuntime(): array

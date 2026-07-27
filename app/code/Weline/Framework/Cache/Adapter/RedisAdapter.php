@@ -14,15 +14,18 @@ declare(strict_types=1);
 namespace Weline\Framework\Cache\Adapter;
 
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
+use Weline\Framework\Cache\Contract\AtomicCacheAdapterInterface;
+use Weline\Framework\Cache\Contract\CacheAdapterHealthInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
 
-class RedisAdapter implements CacheAdapterInterface, StatsInterface
+class RedisAdapter implements CacheAdapterInterface, AtomicCacheAdapterInterface, CacheAdapterHealthInterface, StatsInterface
 {
     private ?\Redis $redis = null;
     private string $identity;
     private string $prefix;
     private array $config;
     private bool $connected = false;
+    private bool $lastOperationFailed = false;
 
     private int $hits = 0;
     private int $misses = 0;
@@ -37,6 +40,7 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
     public function get(string $key): mixed
     {
         if (!$this->connect()) {
+            $this->lastOperationFailed = true;
             return null;
         }
 
@@ -44,13 +48,20 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
             $value = $this->redis->get($this->prefix . $key);
             
             if ($value === false) {
+                $this->lastOperationFailed = false;
                 $this->misses++;
                 return null;
             }
-            
+
+            $allowedClasses = $this->config['unserialize_allowed_classes'] ?? true;
+            if (!\is_bool($allowedClasses) && !\is_array($allowedClasses)) {
+                $allowedClasses = false;
+            }
+            $this->lastOperationFailed = false;
             $this->hits++;
-            return unserialize($value);
+            return \unserialize($value, ['allowed_classes' => $allowedClasses]);
         } catch (\Throwable $e) {
+            $this->markUnavailable();
             $this->misses++;
             return null;
         }
@@ -59,6 +70,7 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
     public function set(string $key, mixed $value, int $ttl = 0): bool
     {
         if (!$this->connect()) {
+            $this->lastOperationFailed = true;
             return false;
         }
 
@@ -67,11 +79,16 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
             $value = serialize($value);
 
             if ($ttl > 0) {
-                return $this->redis->setex($key, $ttl, $value);
+                $result = $this->redis->setex($key, $ttl, $value);
+                $this->lastOperationFailed = false;
+                return $result;
             }
-            
-            return $this->redis->set($key, $value);
+
+            $result = $this->redis->set($key, $value);
+            $this->lastOperationFailed = false;
+            return $result;
         } catch (\Throwable $e) {
+            $this->markUnavailable();
             return false;
         }
     }
@@ -79,12 +96,16 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
     public function delete(string $key): bool
     {
         if (!$this->connect()) {
+            $this->lastOperationFailed = true;
             return false;
         }
 
         try {
-            return $this->redis->del($this->prefix . $key) >= 0;
+            $result = $this->redis->del($this->prefix . $key) >= 0;
+            $this->lastOperationFailed = false;
+            return $result;
         } catch (\Throwable $e) {
+            $this->markUnavailable();
             return false;
         }
     }
@@ -92,6 +113,7 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
     public function clear(): bool
     {
         if (!$this->connect()) {
+            $this->lastOperationFailed = true;
             return false;
         }
 
@@ -101,9 +123,11 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
             if (!empty($keys)) {
                 $this->redis->del($keys);
             }
-            
+
+            $this->lastOperationFailed = false;
             return true;
         } catch (\Throwable $e) {
+            $this->markUnavailable();
             return false;
         }
     }
@@ -111,12 +135,61 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
     public function has(string $key): bool
     {
         if (!$this->connect()) {
+            $this->lastOperationFailed = true;
             return false;
         }
 
         try {
-            return $this->redis->exists($this->prefix . $key) > 0;
+            $result = $this->redis->exists($this->prefix . $key) > 0;
+            $this->lastOperationFailed = false;
+            return $result;
         } catch (\Throwable $e) {
+            $this->markUnavailable();
+            return false;
+        }
+    }
+
+    public function compareAndSet(string $key, mixed $expected, mixed $value, int $ttl = 0): bool
+    {
+        if (!$this->connect()) {
+            $this->lastOperationFailed = true;
+            return false;
+        }
+
+        $script = <<<'LUA'
+local current = redis.call('GET', KEYS[1])
+if ARGV[1] == '1' then
+    if current ~= false then
+        return 0
+    end
+elseif current == false or current ~= ARGV[2] then
+    return 0
+end
+
+if ARGV[3] == '1' then
+    redis.call('DEL', KEYS[1])
+elseif tonumber(ARGV[5]) > 0 then
+    redis.call('SET', KEYS[1], ARGV[4], 'EX', tonumber(ARGV[5]))
+else
+    redis.call('SET', KEYS[1], ARGV[4])
+end
+return 1
+LUA;
+
+        try {
+            $result = $this->redis->eval($script, [
+                $this->prefix . $key,
+                $expected === null ? '1' : '0',
+                $expected === null ? '' : \serialize($expected),
+                $value === null ? '1' : '0',
+                $value === null ? '' : \serialize($value),
+                (string)\max(0, $ttl),
+            ], 1);
+
+            $this->lastOperationFailed = false;
+            return (int)$result === 1;
+        } catch (\Throwable) {
+            $this->markUnavailable();
             return false;
         }
     }
@@ -174,8 +247,17 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
                 return false;
             }
 
+            $readTimeout = (float)($this->config['read_timeout'] ?? 0.0);
+            if ($readTimeout > 0 && \defined('Redis::OPT_READ_TIMEOUT')) {
+                $this->redis->setOption(\Redis::OPT_READ_TIMEOUT, $readTimeout);
+            }
+
             if (!empty($this->config['password'])) {
-                $this->redis->auth($this->config['password']);
+                $username = \trim((string)($this->config['username'] ?? ''));
+                $credentials = $username !== ''
+                    ? [$username, (string)$this->config['password']]
+                    : (string)$this->config['password'];
+                $this->redis->auth($credentials);
             }
 
             if (isset($this->config['database'])) {
@@ -183,9 +265,10 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
             }
 
             $this->connected = true;
+            $this->lastOperationFailed = false;
             return true;
         } catch (\Throwable $e) {
-            $this->redis = null;
+            $this->markUnavailable();
             return false;
         }
     }
@@ -204,5 +287,17 @@ class RedisAdapter implements CacheAdapterInterface, StatsInterface
     public function isConnected(): bool
     {
         return $this->connected;
+    }
+
+    public function isAvailable(): bool
+    {
+        return $this->connected && !$this->lastOperationFailed;
+    }
+
+    private function markUnavailable(): void
+    {
+        $this->lastOperationFailed = true;
+        $this->connected = false;
+        $this->redis = null;
     }
 }

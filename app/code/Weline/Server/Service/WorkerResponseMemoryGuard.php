@@ -99,6 +99,11 @@ final class WorkerResponseMemoryGuard
         return $reason;
     }
 
+    public static function hasDrainAfterResponseRequest(): bool
+    {
+        return self::$drainAfterResponseReason !== null;
+    }
+
     public static function sseWriteBufferWouldExceed(int $currentBufferedBytes, int $appendBytes): bool
     {
         if ($appendBytes <= 0) {
@@ -237,6 +242,16 @@ final class WorkerResponseMemoryGuard
             \Weline\Framework\System\Process\Processer::clearPortCache();
             \Weline\Framework\System\Process\Processer::clearLogEnabledCache();
             $compactions['cleared_process_caches']++;
+        }
+
+        // D14: FPC process L1 is last-resort reclaimable under hard pressure only.
+        if ($aggressive
+            && (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, false)
+                || \class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class, true))
+        ) {
+            \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
+            $compactions['cleared_process_caches']++;
+            $compactions['fpc_process_cache_cleared'] = 1;
         }
 
         return $compactions;

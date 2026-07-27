@@ -164,7 +164,7 @@ $panelTitle = match ($activePage) {
     'security_policy' => __('项目安全策略'),
     'security_audit' => __('策略审计'),
     'projects' => __('项目'),
-    'gateway' => __('网关'),
+    'nginx' => __('Nginx 公网入口'),
     'plugin' => $panelPluginViewerLabel !== '' ? $panelPluginViewerLabel : __('插件能力'),
     default => __('仪表盘'),
 };
@@ -502,7 +502,7 @@ $wlsInstalledPluginsUrl = $appStoreInstalledUrl . '?' . http_build_query([
 $navItems = [
     ['key' => 'dashboard', 'label' => __('仪表盘'), 'url' => $dashboardUrl],
     ['key' => 'projects', 'label' => __('项目'), 'url' => $projectsUrl],
-    ['key' => 'gateway', 'label' => __('网关'), 'url' => $gatewayUrl],
+    ['key' => 'nginx', 'label' => __('Nginx 公网入口'), 'url' => $gatewayUrl],
     [
         'key' => 'security',
         'label' => __('安全'),
@@ -520,10 +520,10 @@ $navItems = [
 
 $quickActions = [
     [
-        'title' => __('网关站点'),
-        'meta' => __('优先直连监听，代理兜底'),
+        'title' => __('Nginx 公网入口'),
+        'meta' => __('公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源'),
         'url' => $gatewayUrl,
-        'status' => __('%{1}/%{2} 已启用', [$gatewayActiveCount, $gatewayTotalCount]),
+        'status' => __('公网协议所有者：Nginx；WLS 仅提供内部 HTTP/1.1 回源。'),
         'tone' => 'green',
     ],
     [
@@ -2211,8 +2211,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     <strong><?= $managedProjectCount ?></strong>
                 </article>
                 <article>
-                    <span><?= __('网关规则') ?></span>
-                    <strong><?= $gatewayRuleCount ?></strong>
+                    <span><?= __('Nginx 公网入口') ?></span>
+                    <strong>Nginx</strong>
                 </article>
                 <article>
                     <span><?= __('WLS 插件') ?></span>
@@ -2497,7 +2497,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                 <div class="wls-section-head">
                     <div>
                         <span class="wls-shell-kicker"><?= __('运维') ?></span>
-                        <h2><?= __('网关、安全、运行时') ?></h2>
+                        <h2><?= __('Nginx 公网入口') ?> · <?= __('安全') ?> · <?= __('WLS 运行时') ?></h2>
                     </div>
                     <a class="wls-secondary-button" href="<?= $escapeHtml($attackLogUrl) ?>"><?= __('攻击日志') ?></a>
                 </div>
@@ -2512,6 +2512,19 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                 </div>
             </section>
 
+        <?php elseif ($activePage === 'nginx'): ?>
+            <section class="wls-section" id="nginx-public-edge">
+                <div class="wls-section-head">
+                    <div>
+                        <span class="wls-shell-kicker"><?= __('公网协议') ?></span>
+                        <h2><?= __('Nginx 公网入口') ?></h2>
+                    </div>
+                </div>
+                <div class="wls-empty-state">
+                    <strong><?= __('Nginx 是唯一公网边缘，不能跳过其启动。') ?></strong>
+                    <span><?= __('公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源') ?></span>
+                </div>
+            </section>
         <?php elseif ($activePage === 'gateway'): ?>
             <section class="wls-section" id="gateway-settings">
                 <div class="wls-section-head">
@@ -2866,6 +2879,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     </div>
                     <form method="post" action="<?= $escapeHtml($projectSaveUrl) ?>" aria-labelledby="wls-project-editor-title">
                         <input type="hidden" name="project_id" value="<?= $projectFormId ?>">
+                        <input type="hidden" name="gateway_enabled" value="0">
                         <div class="wls-form-grid">
                             <label class="wls-form-field">
                                 <span><?= __('项目名称') ?></span>
@@ -2902,40 +2916,6 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                     <option value="inactive" <?= $projectFormStatus === 'inactive' ? 'selected' : '' ?>><?= __('停用') ?></option>
                                 </select>
                             </label>
-                            <label class="wls-checkbox-field">
-                                <input type="hidden" name="gateway_enabled" value="0">
-                                <input type="checkbox" name="gateway_enabled" value="1" <?= $projectFormGatewayEnabled ? 'checked' : '' ?>>
-                                <span><?= __('启用网关') ?></span>
-                            </label>
-                            <label class="wls-form-field">
-                                <span><?= __('网关目标') ?></span>
-                                <select name="gateway_instance" <?= $gatewayAmbiguousTargets ? 'required' : '' ?>>
-                                    <option value=""><?= __('自动选择网关') ?></option>
-                                    <?php foreach ($gatewayTargetInstances as $instance): ?>
-                                        <?php
-                                        $instanceName = (string)($instance['name'] ?? '');
-                                        $listenLabel = trim((string)($instance['listen'] ?? ''));
-                                        $optionLabel = $instanceName . ($listenLabel !== '' ? ' - ' . $listenLabel : '');
-                                        ?>
-                                        <option value="<?= $escapeHtml($instanceName) ?>" <?= $selectedGatewayInstance === $instanceName ? 'selected' : '' ?>>
-                                            <?= $escapeHtml($optionLabel) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <label class="wls-form-field">
-                                <span><?= __('后台主机') ?></span>
-                                <input type="text" name="backend_host" value="<?= $escapeHtml($projectFormValue('backend_host', '127.0.0.1')) ?>">
-                            </label>
-                            <label class="wls-form-field">
-                                <span><?= __('后台端口') ?></span>
-                                <input type="number" min="1" max="65535" name="backend_port" value="<?= $escapeHtml($projectFormValue('backend_port')) ?>">
-                            </label>
-                            <label class="wls-checkbox-field">
-                                <input type="hidden" name="backend_ssl" value="0">
-                                <input type="checkbox" name="backend_ssl" value="1" <?= $projectFormBackendSsl ? 'checked' : '' ?>>
-                                <span><?= __('后台 SSL') ?></span>
-                            </label>
                             <label class="wls-form-field wls-form-wide">
                                 <span><?= __('描述') ?></span>
                                 <textarea name="description" rows="3"><?= $escapeHtml($projectFormValue('description')) ?></textarea>
@@ -2943,7 +2923,6 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </div>
                         <div class="wls-form-actions">
                             <button class="wls-primary-button" type="submit"><?= __('保存项目') ?></button>
-                            <a class="wls-secondary-button" href="<?= $gatewayLegacyUrl ?>"><?= __('高级网关') ?></a>
                         </div>
                     </form>
                 </div>
@@ -3002,7 +2981,6 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                 $configName = (string)($configProject['name'] ?? __('项目'));
                                 $configIdentity = (string)($configItem['identity'] ?? ($configProject['domain'] ?? ''));
                                 $configTypeLabel = (string)($configItem['type_label'] ?? __('托管项目'));
-                                $configGatewayLabel = (string)($configItem['gateway_label'] ?? __('网关已停用'));
                                 $configSafeContext = (string)($configItem['safe_context_label'] ?? __('本地上下文'));
                                 $configSecurityPolicyReady = !empty($configItem['security_policy_ready']);
                                 ?>
@@ -3049,7 +3027,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                         <div class="wls-list-primary is-compact">
                                             <span><?= __('安全上下文') ?></span>
                                             <code><?= $escapeHtml($configSafeContext) ?></code>
-                                            <span><?= $escapeHtml($configGatewayLabel) ?></span>
+                                            <span><?= __('Nginx 公网入口') ?></span>
                                             <span><?= !empty($configItem['path_ready']) ? __('路径就绪') : __('路径缺失') ?></span>
                                         </div>
                                     </td>
@@ -3087,7 +3065,6 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                             <?php if ($configSecurityPolicyReady): ?>
                                                 <a href="<?= $escapeHtml($configLinks['security-policy']) ?>" data-wls-config-action="security-policy"><?= __('策略') ?></a>
                                             <?php endif; ?>
-                                            <a href="<?= $escapeHtml($configLinks['gateway']) ?>" data-wls-config-action="gateway"><?= __('网关') ?></a>
                                         </div>
                                     </td>
                                 </tr>
@@ -3127,7 +3104,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                 <th><?= __('实例') ?></th>
                                 <th><?= __('域名') ?></th>
                                 <th><?= __('状态') ?></th>
-                                <th><?= __('网关') ?></th>
+                                <th><?= __('Nginx 公网入口') ?></th>
                                 <th><?= __('路径') ?></th>
                                 <th><?= __('操作') ?></th>
                             </tr>
@@ -3173,7 +3150,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             $projectPath,
                             $projectPhpLabel,
                             $projectDbLabel,
-                            $projectGatewayEnabled === 1 ? 'gateway enabled' : 'gateway disabled',
+                            'nginx public edge',
                         ])));
                         $projectDetailId = 'wls-project-detail-' . $projectIndex;
                         ?>
@@ -3196,9 +3173,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <span class="wls-status-pill <?= $projectGatewayEnabled === 1 ? 'is-on' : 'is-off' ?>">
-                                    <?= $projectGatewayEnabled === 1 ? __('已启用') : __('已停用') ?>
-                                </span>
+                                <span class="wls-status-pill is-on">Nginx</span>
                             </td>
                             <td>
                                 <span class="wls-project-path-cell">
@@ -3243,8 +3218,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                             </a>
                                         </div>
                                         <div>
-                                            <span class="wls-meta-label"><?= __('网关') ?></span>
-                                            <span class="wls-meta-value"><?= $projectGatewayEnabled === 1 ? __('已启用') : __('已停用') ?></span>
+                                            <span class="wls-meta-label"><?= __('Nginx 公网入口') ?></span>
+                                            <span class="wls-meta-value">Nginx</span>
                                         </div>
                                     </div>
                                     <div class="wls-project-actions">
@@ -3266,7 +3241,6 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                     <a href="<?= $buildPanelProjectUrl(['edit_project_id' => $projectId]) ?>"><?= __('编辑') ?></a>
                                     <form class="wls-delete-form" method="post" action="<?= $escapeHtml($projectDeleteUrl) ?>">
                                         <input type="hidden" name="project_id" value="<?= $projectId ?>">
-                                        <input type="hidden" name="gateway_instance" value="<?= $escapeHtml($selectedGatewayInstance) ?>">
                                         <button class="wls-link-button" type="submit"><?= __('删除') ?></button>
                                     </form>
                                 <?php endif; ?>

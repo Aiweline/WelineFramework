@@ -68,78 +68,11 @@ class WlsPanelGatewaySettingsService
      */
     public function saveConfiguration(array $input): array
     {
-        try {
-            $enabled = $this->truthy($input['gateway_enabled'] ?? false);
-            $listen = $this->normalizeListenAddress((string)($input['gateway_listen'] ?? ''));
-            $previousConfig = $this->getGatewayModeConfig();
-            $previousRequestedTopology = (string)($previousConfig['requested_topology'] ?? self::TOPOLOGY_AUTO);
-            $requestedTopology = $this->normalizeRequestedTopology(
-                (string)($input['runtime_topology'] ?? self::TOPOLOGY_AUTO)
-            );
-            if (PHP_OS_FAMILY === 'Windows' && $requestedTopology === self::TOPOLOGY_DIRECT) {
-                throw new \InvalidArgumentException(
-                    (string)__('Windows WLS only supports dispatcher topology; direct topology is unavailable.')
-                );
-            }
-
-            $env = Env::getInstance();
-            $savedEnabled = $env->setConfig('wls.gateway.enabled', $enabled);
-            $savedListen = $env->setConfig('wls.gateway.listen', $listen);
-            $savedTopology = $env->setConfig('wls.runtime.topology', $requestedTopology);
-            if (!$savedEnabled || !$savedListen || !$savedTopology) {
-                return [
-                    'success' => false,
-                    'message' => (string)__('Gateway configuration could not be saved.'),
-                    'selected_instance' => (string)($input['gateway_instance'] ?? ''),
-                ];
-            }
-
-            $runtimeAction = $this->normalizeRuntimeAction((string)($input['runtime_action'] ?? self::RUNTIME_ACTION_RELOAD));
-            $applyResult = ['success' => false, 'message' => '', 'selected_instance' => ''];
-            if ($enabled && $this->truthy($input['apply_routes'] ?? true)) {
-                $applyResult = $this->applyRoutes($input);
-            }
-            $selectedInstance = \trim((string)($applyResult['selected_instance'] ?? ''));
-            if ($selectedInstance === '') {
-                $selectedInstance = $this->resolveSelectedRuntimeInstance($input);
-            }
-
-            $runtimeResult = $this->applyRuntimeAction($runtimeAction, $selectedInstance, $requestedTopology);
-            $restartSucceeded = $runtimeAction === self::RUNTIME_ACTION_RESTART
-                && (bool)($runtimeResult['success'] ?? false);
-            $topologyChanged = $previousRequestedTopology !== $requestedTopology;
-            $topologyRestartRequired = $topologyChanged && !$restartSucceeded;
-            if ($topologyRestartRequired) {
-                $runtimeResult = $this->appendRuntimeWarning(
-                    $runtimeResult,
-                    (string)__('WLS topology changes require a target WLS restart before the listener topology changes.')
-                );
-            }
-
-            return [
-                'success' => true,
-                'message' => (string)__('Gateway configuration saved.'),
-                'selected_instance' => $selectedInstance,
-                'listen' => $listen,
-                'enabled' => $enabled,
-                'requested_topology' => $requestedTopology,
-                'requested_topology_changed' => $topologyChanged,
-                'requested_topology_restart_required' => $topologyRestartRequired,
-                'runtime_action' => $runtimeAction,
-                'runtime_action_blocked' => false,
-                'runtime_action_success' => (bool)($runtimeResult['success'] ?? false),
-                'runtime_action_message' => (string)($runtimeResult['message'] ?? ''),
-                'restart_required' => $topologyRestartRequired,
-                'gateway_applied' => (bool)($applyResult['success'] ?? false),
-                'gateway_apply_message' => (string)($applyResult['message'] ?? ''),
-            ];
-        } catch (\Throwable $throwable) {
-            return [
-                'success' => false,
-                'message' => $throwable->getMessage(),
-                'selected_instance' => (string)($input['gateway_instance'] ?? ''),
-            ];
-        }
+        return [
+            'success' => false,
+            'message' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
+            'selected_instance' => \trim((string)($input['gateway_instance'] ?? '')),
+        ];
     }
 
     /**
@@ -148,31 +81,12 @@ class WlsPanelGatewaySettingsService
      */
     public function applyRoutes(array $input): array
     {
-        $requestedInstance = \trim((string)($input['gateway_instance'] ?? $input['wls_instance'] ?? $input['instance'] ?? ''));
-        $settings = $this->getSettingsData($requestedInstance);
-        $selectedInstance = \trim((string)($settings['selected_instance'] ?? ''));
-
-        if ($requestedInstance === '' && !empty($settings['ambiguous_gateway_targets'])) {
-            return [
-                'success' => false,
-                'message' => (string)__('Select a Gateway instance before applying routes.'),
-                'data' => [
-                    'routes' => (int)($settings['active_route_count'] ?? 0),
-                    'gateways' => (int)($settings['running_gateway_instance_count'] ?? 0),
-                ],
-            ];
-        }
-
-        if ($selectedInstance === '') {
-            $selectedInstance = 'default';
-        }
-
-        $routes = $this->buildActiveRoutes();
-        $result = $this->ipcControlGateway->proxyApply($selectedInstance, $routes);
-        $result['selected_instance'] = $selectedInstance;
-        $result['route_count'] = \count($routes);
-
-        return $result;
+        return [
+            'success' => false,
+            'message' => (string)__('WLS 公网边缘固定使用 Nginx；已拒绝非 Nginx 适配器。'),
+            'selected_instance' => \trim((string)($input['gateway_instance'] ?? $input['wls_instance'] ?? $input['instance'] ?? '')),
+            'route_count' => 0,
+        ];
     }
 
     /**
@@ -613,9 +527,9 @@ class WlsPanelGatewaySettingsService
     private function topologyHint(string $topology): string
     {
         return match ($this->normalizeRequestedTopology($topology)) {
-            self::TOPOLOGY_DIRECT => (string)__('Use the verified native direct listener: SO_REUSEPORT on Linux or a shared listener on macOS.'),
-            self::TOPOLOGY_DISPATCHER => (string)__('Use the WLS Dispatcher listener and route traffic to internal workers.'),
-            default => (string)__('Let WLS choose Direct on supported Linux/macOS systems and Dispatcher on Windows.'),
+            self::TOPOLOGY_DIRECT => (string)__('所有平台都由项目托管 Nginx 直接负载到 Worker：Windows 使用独立 worker_ports，Linux 自动优先 reuseport 并在能力不可用时回退 shared_fd，macOS 使用 shared_fd。'),
+            self::TOPOLOGY_DISPATCHER => (string)__('仅在显式兼容或诊断时使用 WLS Dispatcher；公网入口仍由项目托管 Nginx 提供。'),
+            default => (string)__('所有平台的 Auto 都选择 Direct：Windows 使用 Nginx 均衡的独立 Worker 端口，Linux 优先已验证 reuseport 并回退 shared_fd，macOS 使用 shared_fd。'),
         };
     }
 

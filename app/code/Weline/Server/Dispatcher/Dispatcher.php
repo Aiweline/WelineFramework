@@ -53,6 +53,11 @@ class Dispatcher
     private const CLIENT_TCP_KEEPALIVE_PROBES = 3;
     private const MASTER_PID_CHECK_INTERVAL_SEC = 5;
     private const MASTER_PID_DEAD_THRESHOLD = 1;
+    /**
+     * Official Windows PHP builds use FD_SETSIZE=256. Keep margin for PHP's
+     * sentinel check and shard only the Dispatcher select sets that exceed it.
+     */
+    private const WINDOWS_SELECT_BATCH_SIZE = 240;
 
     /**
      * 服务器 socket
@@ -74,6 +79,7 @@ class Dispatcher
      * Bound each accept burst so active tunnels can flush between fresh connects.
      */
     private int $maxAcceptPerLoop = 64;
+    private bool $windowsSelectShardingReported = false;
 
     /** Digest-aware L4 gate ownership for public Dispatcher sockets. */
     private ConnectionAcceptGatePool $connectionAcceptGates;
@@ -448,6 +454,9 @@ class Dispatcher
         $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (\is_file($instanceFile)) {
             $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
+            if (\is_array($instData) && (string)($instData['edge_adapter'] ?? '') === 'nginx') {
+                return false;
+            }
             if (\is_array($instData) && !empty($instData['protocol_edge_enabled'])) {
                 return false;
             }
@@ -466,6 +475,9 @@ class Dispatcher
             return false;
         }
 
+        if ((string)($configData['edge_adapter'] ?? '') === 'nginx') {
+            return false;
+        }
         if (\array_key_exists('ssl_enabled', $configData)) {
             return !empty($configData['ssl_enabled']);
         }
@@ -2091,7 +2103,13 @@ class Dispatcher
             return;
         }
         
-        $changed = @\socket_select($readSockets, $writeSockets, $exceptSockets, $timeout, $microTimeout);
+        $changed = $this->selectReadySockets(
+            $readSockets,
+            $writeSockets,
+            $exceptSockets,
+            $timeout,
+            $microTimeout,
+        );
         
         if ($changed === false || $changed === 0) {
             return;
@@ -2143,6 +2161,92 @@ class Dispatcher
             }
         }
 
+    }
+
+    /**
+     * Windows PHP's fixed FD_SETSIZE cannot hold one client and one Worker
+     * socket for 128+ proxied connections in a single fd_set. Poll bounded
+     * batches and merge the ready sockets so Dispatcher remains pure PHP and
+     * does not silently stall every tunnel after socket_select() returns false.
+     *
+     * @param array<int, \Socket|resource> $readSockets
+     * @param array<int, \Socket|resource> $writeSockets
+     * @param array<int, \Socket|resource> $exceptSockets
+     */
+    private function selectReadySockets(
+        array &$readSockets,
+        array &$writeSockets,
+        array &$exceptSockets,
+        int $timeoutSeconds,
+        int $timeoutMicroseconds,
+    ): int|false {
+        $largestSet = \max(
+            \count($readSockets),
+            \count($writeSockets),
+            \count($exceptSockets),
+        );
+        if (\PHP_OS_FAMILY !== 'Windows' || $largestSet <= self::WINDOWS_SELECT_BATCH_SIZE) {
+            return @\socket_select(
+                $readSockets,
+                $writeSockets,
+                $exceptSockets,
+                $timeoutSeconds,
+                $timeoutMicroseconds,
+            );
+        }
+
+        if (!$this->windowsSelectShardingReported) {
+            $this->windowsSelectShardingReported = true;
+            $this->log(
+                'Windows socket_select fd_set capacity reached; enabling bounded pure-PHP select sharding',
+                'INFO',
+            );
+        }
+
+        $readBatches = \array_chunk($readSockets, self::WINDOWS_SELECT_BATCH_SIZE);
+        $writeBatches = \array_chunk($writeSockets, self::WINDOWS_SELECT_BATCH_SIZE);
+        $exceptBatches = \array_chunk($exceptSockets, self::WINDOWS_SELECT_BATCH_SIZE);
+        $batchCount = \max(
+            \count($readBatches),
+            \count($writeBatches),
+            \count($exceptBatches),
+        );
+        $readyRead = [];
+        $readyWrite = [];
+        $readyExcept = [];
+
+        for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
+            $readBatch = $readBatches[$batchIndex] ?? [];
+            $writeBatch = $writeBatches[$batchIndex] ?? [];
+            $exceptBatch = $exceptBatches[$batchIndex] ?? [];
+            $changed = @\socket_select($readBatch, $writeBatch, $exceptBatch, 0, 0);
+            if ($changed === false) {
+                $readSockets = [];
+                $writeSockets = [];
+                $exceptSockets = [];
+                return false;
+            }
+            if ($changed === 0) {
+                continue;
+            }
+
+            \array_push($readyRead, ...$readBatch);
+            \array_push($readyWrite, ...$writeBatch);
+            \array_push($readyExcept, ...$exceptBatch);
+        }
+
+        $readSockets = $readyRead;
+        $writeSockets = $readyWrite;
+        $exceptSockets = $readyExcept;
+        $readyCount = \count($readyRead) + \count($readyWrite) + \count($readyExcept);
+        if ($readyCount === 0) {
+            $waitMicroseconds = ($timeoutSeconds * 1_000_000) + $timeoutMicroseconds;
+            if ($waitMicroseconds > 0) {
+                SchedulerSystem::usleep($waitMicroseconds);
+            }
+        }
+
+        return $readyCount;
     }
 
     /**
@@ -2326,8 +2430,12 @@ class Dispatcher
                 && $this->fastTlsPathEnabled
                 && $this->isAcceptedClientTlsHandshake($clientSocket);
 
-            // ACME HTTP-01 must be answered before any HTTP->HTTPS redirect or worker routing.
-            if (!$fastTlsPath && $this->tryServeAcmeHttp01Challenge($clientSocket, $connId, $clientIp)) {
+            // Managed Nginx forwards ACME HTTP-01 to the Worker path. Keep the
+            // inline shortcut only when Dispatcher itself owns HTTPS; probing
+            // every plaintext Nginx upstream connection would serialize accept.
+            if ($this->httpsEnabled
+                && !$fastTlsPath
+                && $this->tryServeAcmeHttp01Challenge($clientSocket, $connId, $clientIp)) {
                 $accepted++;
                 continue;
             }

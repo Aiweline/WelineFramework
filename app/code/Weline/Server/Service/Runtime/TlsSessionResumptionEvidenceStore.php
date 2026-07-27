@@ -15,9 +15,14 @@ use Weline\Framework\App\Env;
  */
 final class TlsSessionResumptionEvidenceStore
 {
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
     public const KIND = 'tcp_tls_external_stateful_session_resumption';
 
+    private const LEGACY_SCHEMA_VERSION = 2;
+    private const CALLBACK_TELEMETRY_SCHEMA_VERSION = 1;
+    private const CALLBACK_CLEAN_P95_LIMIT_US = 2000;
+    private const CALLBACK_CLEAN_P99_LIMIT_US = 5000;
+    private const CALLBACK_FAULT_MIN_GET_SAMPLES = 16;
     private const MAX_EVIDENCE_FILES = 64;
     private const MAX_PERFORMANCE_REPORTS = 16;
     private const MAX_EVIDENCE_BYTES = 1_048_576;
@@ -41,6 +46,7 @@ final class TlsSessionResumptionEvidenceStore
         'app/code/Weline/Server/Service/SharedStateServiceRegistry.php',
         'app/code/Weline/Server/Service/WlsWorkerGlobals.php',
         'app/code/Weline/Server/Session/Server/SessionServer.php',
+        'app/code/Weline/Server/Session/Server/SessionProtocol.php',
         'app/code/Weline/Server/Session/Server/TlsSessionCacheStore.php',
         'app/code/Weline/Server/bin/session_server.php',
         'app/code/Weline/Server/bin/worker_ssl.php',
@@ -54,6 +60,22 @@ final class TlsSessionResumptionEvidenceStore
 
     /** @var list<string> */
     private const DOCUMENT_KEYS = [
+        'schema_version',
+        'kind',
+        'captured_at',
+        'runtime',
+        'bindings',
+        'config',
+        'verification',
+        'scope',
+        'proof',
+        'callback_telemetry',
+        'performance_reports',
+        'evidence_sha256',
+    ];
+
+    /** @var list<string> */
+    private const LEGACY_DOCUMENT_KEYS = [
         'schema_version',
         'kind',
         'captured_at',
@@ -143,6 +165,57 @@ final class TlsSessionResumptionEvidenceStore
         'captured_at',
         'scope',
         'proof',
+        'callback_telemetry',
+    ];
+
+    /** @var list<int> */
+    private const CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US = [
+        50,
+        100,
+        250,
+        500,
+        1000,
+        2000,
+        5000,
+        10000,
+        20000,
+    ];
+
+    /** @var list<string> */
+    private const CALLBACK_TELEMETRY_KEYS = [
+        'schema_version',
+        'callback_timeout_us',
+        'latency_bucket_upper_bounds_us',
+        'transport',
+        'clean',
+        'sidecar_fault',
+    ];
+
+    /** @var list<string> */
+    private const CALLBACK_PHASE_KEYS = [
+        'new_cb_total',
+        'get_cb_total',
+        'queued_put_total',
+        'get_ipc_total',
+        'get_ipc_deadline_exceeded_total',
+        'get_ipc_fail_fast_total',
+        'put_ipc_total',
+        'put_ipc_deadline_exceeded_total',
+        'put_ipc_fail_fast_total',
+        'get_ipc_latency_bucket_counts',
+        'put_ipc_latency_bucket_counts',
+    ];
+
+    /** @var list<string> */
+    private const CALLBACK_TRANSPORT_KEYS = [
+        'client_read_buffer_zero',
+        'client_write_buffer_zero',
+        'client_write_buffer_control_supported',
+        'client_tcp_nodelay',
+        'sidecar_read_buffer_zero',
+        'sidecar_write_buffer_zero',
+        'sidecar_write_buffer_control_supported',
+        'sidecar_tcp_nodelay',
     ];
 
     /** @var list<string> */
@@ -509,17 +582,29 @@ final class TlsSessionResumptionEvidenceStore
         $this->assertExactKeys($facts, self::FACT_KEYS, 'verifier facts');
         $scope = \is_array($facts['scope'] ?? null) ? $facts['scope'] : [];
         $proof = \is_array($facts['proof'] ?? null) ? $facts['proof'] : [];
+        $callbackTelemetry = \is_array($facts['callback_telemetry'] ?? null)
+            ? $facts['callback_telemetry']
+            : [];
         $this->assertScope($scope);
         if (!\hash_equals($instanceName, (string)$scope['instance_name'])) {
             throw new \RuntimeException('TLS verifier scope does not match the requested WLS instance.');
         }
         $this->assertProofSchema($proof);
         $this->assertProofMatchesOptions($proof, $normalizedOptions);
+        $this->assertCallbackTelemetrySchema($callbackTelemetry);
+        $this->assertCallbackTelemetryMatchesConfig($callbackTelemetry, $config);
         $proofAssessment = $this->assessProof($proof);
         if (!$proofAssessment['verified']) {
             throw new \RuntimeException(
                 'TLS Session Resumption proof did not pass: '
                 . \implode('; ', $proofAssessment['failure_reasons'])
+            );
+        }
+        $callbackTelemetryAssessment = $this->assessCallbackTelemetry($callbackTelemetry);
+        if (!$callbackTelemetryAssessment['verified']) {
+            throw new \RuntimeException(
+                'TLS callback telemetry did not pass: '
+                . \implode('; ', $callbackTelemetryAssessment['failure_reasons'])
             );
         }
 
@@ -562,6 +647,7 @@ final class TlsSessionResumptionEvidenceStore
             'verification' => $verification,
             'scope' => $scope,
             'proof' => $proof,
+            'callback_telemetry' => $callbackTelemetry,
             'performance_reports' => $this->normalizePerformanceReports(
                 $normalizedOptions['performance_reports'],
                 $scope,
@@ -704,8 +790,19 @@ final class TlsSessionResumptionEvidenceStore
             $this->configSha256($config),
             \strtolower((string)($bindings['config_sha256'] ?? ''))
         );
+        $schemaVersion = (int)($document['schema_version'] ?? 0);
+        $currentSchema = $schemaVersion === self::SCHEMA_VERSION;
         $proof = \is_array($document['proof'] ?? null) ? $document['proof'] : [];
         $proofAssessment = $this->assessProof($proof);
+        $callbackTelemetry = $currentSchema && \is_array($document['callback_telemetry'] ?? null)
+            ? $document['callback_telemetry']
+            : [];
+        $callbackTelemetryAssessment = $currentSchema
+            ? $this->assessCallbackTelemetry($callbackTelemetry)
+            : [
+                'verified' => false,
+                'failure_reasons' => ['legacy_callback_telemetry_missing'],
+            ];
         $capturedTimestamp = \strtotime((string)($document['captured_at'] ?? '')) ?: 0;
         $integrityFailures = \array_values(\array_unique($integrityFailures));
         $evidenceIntegrityValid = $integrityFailures === [];
@@ -713,7 +810,8 @@ final class TlsSessionResumptionEvidenceStore
             && $runtimeMatches
             && $integrationMatches
             && $verifierMatches
-            && $proofAssessment['verified'];
+            && $proofAssessment['verified']
+            && $callbackTelemetryAssessment['verified'];
         // No active instance scope is available on a global runtime read.
         // The just-completed live-verifier path may set this via withCurrentScope().
         $activeRuntimeVerified = false;
@@ -731,9 +829,13 @@ final class TlsSessionResumptionEvidenceStore
         $reason = match (true) {
             !$evidenceIntegrityValid => 'TLS evidence failed integrity validation: '
                 . \implode(', ', $integrityFailures),
+            !$currentSchema =>
+                'Legacy TLS evidence schema v2 is readable, but it lacks fixed callback telemetry and cannot verify the current mechanism.',
             !$integrationMatches || !$verifierMatches =>
                 'TLS evidence belongs to an older WLS integration or verifier revision.',
             !$proofAssessment['verified'] => 'TLS evidence facts no longer satisfy the verifier gates.',
+            !$callbackTelemetryAssessment['verified'] =>
+                'TLS callback telemetry no longer satisfies the fixed deadline and transport gates.',
             !$configMatches || !$config->enabled() =>
                 'This runtime has verified TLS resumption evidence, but the active external-cache configuration does not match it.',
             !$resumptionLatencyVerified =>
@@ -748,6 +850,7 @@ final class TlsSessionResumptionEvidenceStore
             'evidence_integrity_valid' => $evidenceIntegrityValid,
             'evidence_path' => $this->relativePath($path),
             'evidence_sha256' => $expectedDigest,
+            'schema_version' => $schemaVersion,
             'captured_at' => (string)($document['captured_at'] ?? ''),
             'captured_timestamp' => $capturedTimestamp,
             'runtime_identity_matches' => $runtimeMatches,
@@ -767,6 +870,9 @@ final class TlsSessionResumptionEvidenceStore
             'sidecar_recovery_verified' => (bool)$proofAssessment['sidecar_recovery_verified'],
             'performance_baseline_verified' => $performanceBaselineVerified,
             'resumption_latency_gate_verified' => $resumptionLatencyVerified,
+            'callback_telemetry_verified' => $runtimeMechanismVerified
+                && (bool)$callbackTelemetryAssessment['verified'],
+            'callback_telemetry' => $callbackTelemetry,
             'production_platform_matrix_verified' => false,
             'platforms_verified' => [],
             'platform_families_verified' => [],
@@ -774,7 +880,8 @@ final class TlsSessionResumptionEvidenceStore
             'proof_summary' => $proofAssessment['summary'],
             'failure_reasons' => \array_values(\array_unique(\array_merge(
                 $integrityFailures,
-                $proofAssessment['failure_reasons']
+                $proofAssessment['failure_reasons'],
+                $callbackTelemetryAssessment['failure_reasons'],
             ))),
             'reason' => $reason,
         ];
@@ -1011,6 +1118,268 @@ final class TlsSessionResumptionEvidenceStore
                 );
             }
         }
+    }
+
+    /** @param array<string, mixed> $telemetry */
+    private function assertCallbackTelemetrySchema(array $telemetry): void
+    {
+        $this->assertExactKeys($telemetry, self::CALLBACK_TELEMETRY_KEYS, 'callback telemetry');
+        if (($telemetry['schema_version'] ?? null) !== self::CALLBACK_TELEMETRY_SCHEMA_VERSION) {
+            throw new \InvalidArgumentException('TLS callback telemetry schema version is invalid.');
+        }
+        if (!\is_int($telemetry['callback_timeout_us'] ?? null)
+            || $telemetry['callback_timeout_us'] <= 0
+        ) {
+            throw new \InvalidArgumentException('TLS callback timeout must be a positive integer.');
+        }
+        $bounds = $telemetry['latency_bucket_upper_bounds_us'] ?? null;
+        if (!\is_array($bounds)
+            || !\array_is_list($bounds)
+            || $bounds !== self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US
+        ) {
+            throw new \InvalidArgumentException('TLS callback latency bucket boundaries are invalid.');
+        }
+
+        $transport = \is_array($telemetry['transport'] ?? null) ? $telemetry['transport'] : [];
+        $this->assertExactKeys($transport, ['reader', 'writer'], 'callback transport');
+        foreach (['reader', 'writer'] as $channel) {
+            $status = \is_array($transport[$channel] ?? null) ? $transport[$channel] : [];
+            $this->assertExactKeys($status, self::CALLBACK_TRANSPORT_KEYS, $channel . ' transport');
+            foreach (self::CALLBACK_TRANSPORT_KEYS as $key) {
+                if (!\is_bool($status[$key])) {
+                    throw new \InvalidArgumentException(
+                        'TLS callback transport status must contain booleans.'
+                    );
+                }
+            }
+        }
+
+        foreach (['clean', 'sidecar_fault'] as $phaseName) {
+            $phase = \is_array($telemetry[$phaseName] ?? null) ? $telemetry[$phaseName] : [];
+            $this->assertCallbackTelemetryPhase($phase, $phaseName);
+        }
+    }
+
+    /** @param array<string, mixed> $phase */
+    private function assertCallbackTelemetryPhase(array $phase, string $phaseName): void
+    {
+        $this->assertExactKeys($phase, self::CALLBACK_PHASE_KEYS, $phaseName . ' callback phase');
+        foreach (\array_diff(self::CALLBACK_PHASE_KEYS, [
+            'get_ipc_latency_bucket_counts',
+            'put_ipc_latency_bucket_counts',
+        ]) as $key) {
+            if (!\is_int($phase[$key]) || $phase[$key] < 0) {
+                throw new \InvalidArgumentException(
+                    'TLS callback phase counter must be a non-negative integer: ' . $key
+                );
+            }
+        }
+        $bucketCount = \count(self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US) + 1;
+        foreach ([
+            'get_ipc_latency_bucket_counts' => 'get_ipc_total',
+            'put_ipc_latency_bucket_counts' => 'put_ipc_total',
+        ] as $histogramKey => $totalKey) {
+            $counts = $phase[$histogramKey] ?? null;
+            if (!\is_array($counts)
+                || !\array_is_list($counts)
+                || \count($counts) !== $bucketCount
+            ) {
+                throw new \InvalidArgumentException(
+                    'TLS callback histogram must use the fixed bucket count: ' . $histogramKey
+                );
+            }
+            foreach ($counts as $count) {
+                if (!\is_int($count) || $count < 0) {
+                    throw new \InvalidArgumentException(
+                        'TLS callback histogram count must be a non-negative integer.'
+                    );
+                }
+            }
+            if (\array_sum($counts) !== $phase[$totalKey]) {
+                throw new \InvalidArgumentException(
+                    'TLS callback histogram count does not match its IPC total: ' . $histogramKey
+                );
+            }
+        }
+        if ($phase['get_ipc_deadline_exceeded_total'] + $phase['get_ipc_fail_fast_total']
+                > $phase['get_ipc_total']
+            || $phase['put_ipc_deadline_exceeded_total'] + $phase['put_ipc_fail_fast_total']
+                > $phase['put_ipc_total']
+        ) {
+            throw new \InvalidArgumentException(
+                'TLS callback deadline/fail-fast counts exceed their IPC totals.'
+            );
+        }
+        if ($phase['get_ipc_total'] > $phase['get_cb_total']) {
+            throw new \InvalidArgumentException('TLS callback GET IPC total exceeds the GET callback total.');
+        }
+        if ($phase['put_ipc_total'] > $phase['new_cb_total']) {
+            throw new \InvalidArgumentException('TLS callback PUT IPC total exceeds the new-session callback total.');
+        }
+        if ($phase['queued_put_total'] > $phase['new_cb_total']) {
+            throw new \InvalidArgumentException('TLS callback queued PUT total exceeds the new-session callback total.');
+        }
+    }
+
+    /** @param array<string, mixed> $telemetry */
+    private function assertCallbackTelemetryMatchesConfig(
+        array $telemetry,
+        TlsSessionCacheConfig $config,
+    ): void {
+        $expectedTimeoutUs = (int)\round($config->callbackTimeoutSeconds * 1_000_000);
+        if (($telemetry['callback_timeout_us'] ?? null) !== $expectedTimeoutUs) {
+            throw new \InvalidArgumentException(
+                'TLS callback telemetry deadline does not match the external-cache configuration.'
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $telemetry
+     * @return array{verified:bool,failure_reasons:list<string>}
+     */
+    private function assessCallbackTelemetry(array $telemetry): array
+    {
+        try {
+            $this->assertCallbackTelemetrySchema($telemetry);
+        } catch (\Throwable) {
+            return ['verified' => false, 'failure_reasons' => ['callback_telemetry_schema']];
+        }
+
+        $failures = [];
+        $clean = $telemetry['clean'];
+        if ($clean['get_ipc_deadline_exceeded_total'] !== 0
+            || $clean['put_ipc_deadline_exceeded_total'] !== 0
+        ) {
+            $failures[] = 'callback_clean_phase_deadline';
+        }
+        if ($clean['get_ipc_fail_fast_total'] !== 0
+            || $clean['put_ipc_fail_fast_total'] !== 0
+        ) {
+            $failures[] = 'callback_clean_phase_fail_fast';
+        }
+        foreach ([
+            ['get_ipc_total', 'get_ipc_latency_bucket_counts', 'get'],
+            ['put_ipc_total', 'put_ipc_latency_bucket_counts', 'put'],
+        ] as [$totalKey, $histogramKey, $operation]) {
+            if (!$this->callbackHistogramPercentileAtMost(
+                $clean,
+                $totalKey,
+                $histogramKey,
+                0.95,
+                self::CALLBACK_CLEAN_P95_LIMIT_US,
+            )) {
+                $failures[] = 'callback_clean_' . $operation . '_p95';
+            }
+            if (!$this->callbackHistogramPercentileAtMost(
+                $clean,
+                $totalKey,
+                $histogramKey,
+                0.99,
+                self::CALLBACK_CLEAN_P99_LIMIT_US,
+            )) {
+                $failures[] = 'callback_clean_' . $operation . '_p99';
+            }
+        }
+        $fault = $telemetry['sidecar_fault'];
+        if ($fault['get_ipc_deadline_exceeded_total'] !== 0
+            || $fault['put_ipc_deadline_exceeded_total'] !== 0
+        ) {
+            $failures[] = 'callback_fault_phase_deadline';
+        }
+        if ($fault['get_ipc_fail_fast_total'] + $fault['put_ipc_fail_fast_total'] <= 0) {
+            $failures[] = 'callback_fault_phase_fail_fast_missing';
+        }
+        if ($fault['get_ipc_total'] < self::CALLBACK_FAULT_MIN_GET_SAMPLES
+            || $fault['get_ipc_fail_fast_total'] < self::CALLBACK_FAULT_MIN_GET_SAMPLES
+        ) {
+            $failures[] = 'callback_fault_phase_get_sample_count';
+        }
+        if ($fault['put_ipc_total'] <= 0 || $fault['put_ipc_fail_fast_total'] <= 0) {
+            $failures[] = 'callback_fault_phase_put_probe_missing';
+        }
+        foreach ([
+            ['get_ipc_total', 'get_ipc_latency_bucket_counts', 'get'],
+            ['put_ipc_total', 'put_ipc_latency_bucket_counts', 'put'],
+        ] as [$totalKey, $histogramKey, $operation]) {
+            if (($fault[$totalKey] ?? 0) <= 0) {
+                continue;
+            }
+            if (!$this->callbackHistogramPercentileAtMost(
+                $fault,
+                $totalKey,
+                $histogramKey,
+                0.95,
+                self::CALLBACK_CLEAN_P95_LIMIT_US,
+            )) {
+                $failures[] = 'callback_fault_' . $operation . '_p95';
+            }
+            if (!$this->callbackHistogramPercentileAtMost(
+                $fault,
+                $totalKey,
+                $histogramKey,
+                0.99,
+                self::CALLBACK_CLEAN_P99_LIMIT_US,
+            )) {
+                $failures[] = 'callback_fault_' . $operation . '_p99';
+            }
+        }
+        foreach (['reader', 'writer'] as $channel) {
+            if (!$this->callbackTransportReady($telemetry['transport'][$channel])) {
+                $failures[] = 'callback_' . $channel . '_transport';
+            }
+        }
+
+        return [
+            'verified' => $failures === [],
+            'failure_reasons' => \array_values(\array_unique($failures)),
+        ];
+    }
+
+    /** @param array<string,bool> $transport */
+    private function callbackTransportReady(array $transport): bool
+    {
+        foreach (['client', 'sidecar'] as $endpoint) {
+            $writeControlSupported = ($transport[$endpoint . '_write_buffer_control_supported'] ?? false) === true;
+            if (($transport[$endpoint . '_read_buffer_zero'] ?? false) !== true
+                || ($transport[$endpoint . '_tcp_nodelay'] ?? false) !== true
+                || ($writeControlSupported
+                    && ($transport[$endpoint . '_write_buffer_zero'] ?? false) !== true)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param array<string, mixed> $phase */
+    private function callbackHistogramPercentileAtMost(
+        array $phase,
+        string $totalKey,
+        string $histogramKey,
+        float $percentile,
+        int $limitUs,
+    ): bool {
+        $total = $phase[$totalKey] ?? null;
+        $counts = $phase[$histogramKey] ?? null;
+        if (!\is_int($total) || $total <= 0 || !\is_array($counts)) {
+            return false;
+        }
+        $required = (int)\ceil($total * $percentile);
+        $withinLimit = 0;
+        foreach (self::CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US as $index => $upperBound) {
+            if ($upperBound > $limitUs) {
+                break;
+            }
+            $count = $counts[$index] ?? null;
+            if (!\is_int($count) || $count < 0) {
+                return false;
+            }
+            $withinLimit += $count;
+        }
+
+        return $withinLimit >= $required;
     }
 
     /**
@@ -1287,6 +1656,7 @@ final class TlsSessionResumptionEvidenceStore
                 || (string)($runtime['php_release_channel'] ?? '') !== 'stable'
                 || !(bool)($assessment['performance_baseline_verified'] ?? false)
                 || !(bool)($assessment['resumption_latency_gate_verified'] ?? false)
+                || !(bool)($assessment['callback_telemetry_verified'] ?? false)
             ) {
                 continue;
             }
@@ -1909,10 +2279,14 @@ final class TlsSessionResumptionEvidenceStore
     private function documentSchemaFailures(array $document, string $path): array
     {
         $failures = [];
-        if (!$this->hasExactKeys($document, self::DOCUMENT_KEYS)) {
+        $schemaVersion = $document['schema_version'] ?? null;
+        $currentSchema = $schemaVersion === self::SCHEMA_VERSION;
+        $legacySchema = $schemaVersion === self::LEGACY_SCHEMA_VERSION;
+        $expectedDocumentKeys = $legacySchema ? self::LEGACY_DOCUMENT_KEYS : self::DOCUMENT_KEYS;
+        if (!$this->hasExactKeys($document, $expectedDocumentKeys)) {
             $failures[] = 'document_schema_keys';
         }
-        if (($document['schema_version'] ?? null) !== self::SCHEMA_VERSION) {
+        if (!$currentSchema && !$legacySchema) {
             $failures[] = 'schema_version_mismatch';
         }
         if (($document['kind'] ?? null) !== self::KIND) {
@@ -1960,6 +2334,23 @@ final class TlsSessionResumptionEvidenceStore
             $this->assertProofSchema($proof);
         } catch (\Throwable) {
             $failures[] = 'proof_schema';
+        }
+        if ($currentSchema) {
+            $callbackTelemetry = \is_array($document['callback_telemetry'] ?? null)
+                ? $document['callback_telemetry']
+                : [];
+            try {
+                $this->assertCallbackTelemetrySchema($callbackTelemetry);
+            } catch (\Throwable) {
+                $failures[] = 'callback_telemetry_schema';
+            }
+            if (!\in_array('callback_telemetry_schema', $failures, true)
+                && $this->configSchemaValid($config)
+                && $callbackTelemetry['callback_timeout_us']
+                    !== (int)\round((float)$config['callback_timeout_ms'] * 1000)
+            ) {
+                $failures[] = 'callback_telemetry_config_mismatch';
+            }
         }
         if ($this->verificationSchemaValid($verification)
             && !\in_array('proof_schema', $failures, true)
@@ -2451,6 +2842,7 @@ final class TlsSessionResumptionEvidenceStore
             'evidence_integrity_valid' => false,
             'evidence_path' => '',
             'evidence_sha256' => '',
+            'schema_version' => 0,
             'runtime_identity_matches' => false,
             'runtime_prerelease' => (bool)$this->currentRuntimeIdentity()['php_prerelease'],
             'runtime_matrix_key' => $this->platformMatrixKey($this->currentRuntimeIdentity()),
@@ -2468,6 +2860,8 @@ final class TlsSessionResumptionEvidenceStore
             'sidecar_recovery_verified' => false,
             'performance_baseline_verified' => false,
             'resumption_latency_gate_verified' => false,
+            'callback_telemetry_verified' => false,
+            'callback_telemetry' => [],
             'production_platform_matrix_verified' => false,
             'platforms_verified' => [],
             'platform_families_verified' => [],

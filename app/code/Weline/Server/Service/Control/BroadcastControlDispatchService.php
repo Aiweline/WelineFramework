@@ -62,6 +62,85 @@ class BroadcastControlDispatchService
     }
 
     /**
+     * Accept namespace invalidation on each live Master without waiting for
+     * Worker ACKs. Each instance gets at most 100ms and the whole call 500ms.
+     *
+     * @return array<string,mixed>
+     */
+    public function cacheNamespaceInvalidateV1(
+        int $authorityClock,
+        array $changes,
+        ?string $instanceName = null,
+        string $requestId = '',
+    ): array {
+        $startedAt = \microtime(true);
+        $deadline = $startedAt + 0.5;
+        $failedByInstance = [];
+        $skippedByInstance = [];
+        $targets = $this->resolveRunningInstances($instanceName, $failedByInstance, $skippedByInstance);
+        $attempted = [];
+        $succeeded = [];
+        $resultsByInstance = [];
+        $operationsByInstance = [];
+
+        foreach ($targets as $target) {
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0.0) {
+                $failedByInstance[$target] = 'namespace_accept_total_budget_exceeded';
+                continue;
+            }
+            $attempted[] = $target;
+            try {
+                $result = $this->ipcControlGateway->cacheNamespaceInvalidateV1(
+                    $target,
+                    $authorityClock,
+                    $changes,
+                    $requestId,
+                    \min(0.1, $remaining),
+                );
+            } catch (\Throwable) {
+                $failedByInstance[$target] = 'dispatch_exception';
+                continue;
+            }
+            $resultsByInstance[$target] = $result;
+            $data = \is_array($result['data'] ?? null) ? $result['data'] : [];
+            $operationId = \trim((string)($data['operation_id'] ?? ''));
+            if (($result['success'] ?? false) === true
+                && ($data['accepted'] ?? false) === true
+                && $operationId !== ''
+            ) {
+                $succeeded[] = $target;
+                $operationsByInstance[$target] = $operationId;
+                continue;
+            }
+            $failedByInstance[$target] = (string)($data['error_code'] ?? $result['message'] ?? 'accept_failed');
+        }
+
+        if ($targets === [] && ($instanceName === null || \trim($instanceName) === '')) {
+            $skippedByInstance['*'] = $skippedByInstance['*'] ?? 'runtime_not_present';
+        }
+        $explicitTarget = $instanceName !== null && \trim($instanceName) !== '';
+        $success = $explicitTarget
+            ? ($attempted !== [] && $failedByInstance === [])
+            : $failedByInstance === [];
+
+        return [
+            'success' => $success,
+            'completed' => false,
+            'attempted' => $attempted,
+            'succeeded' => $succeeded,
+            'operations_by_instance' => $operationsByInstance,
+            'failed_by_instance' => $failedByInstance,
+            'skipped_by_instance' => $skippedByInstance,
+            'results_by_instance' => $resultsByInstance,
+            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 3),
+            'message' => $success
+                ? (string)__('可用 WLS 实例已接收缓存命名空间失效操作。')
+                : (string)__('部分目标 WLS 实例未接收缓存命名空间失效操作。'),
+        ];
+    }
+
+    /**
      * @return array{
      *     success:bool,
      *     attempted:array<int,string>,

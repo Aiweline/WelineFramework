@@ -175,6 +175,10 @@ final class WorkerFullPageCacheFastPath
     /** @param array<string, string> $headers */
     private function mustBypass(array $headers): bool
     {
+        if (trim((string)($headers['authorization'] ?? '')) !== '') {
+            return true;
+        }
+
         foreach (self::BYPASS_HEADERS as $name) {
             if ($this->truthy((string)($headers[$name] ?? ''))) {
                 return true;

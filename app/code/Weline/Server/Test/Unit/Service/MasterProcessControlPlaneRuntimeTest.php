@@ -7,6 +7,8 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
@@ -106,7 +108,18 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
         self::assertTrue($hybrid->start('127.0.0.1', 0));
 
         $this->writePrivate($master, 'instanceName', $instanceName);
-        $this->writePrivate($master, 'mode', MasterProcess::MODE_LEGACY);
+        $master->setRuntimeSelection(RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'direct',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'shared_fd',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]));
         $this->writePrivate($master, 'mainPort', 18080);
         $this->writePrivate($master, 'controlPort', $hybrid->getPort());
         $this->writePrivate($master, 'orchestrator', new class($hybrid) extends ServiceOrchestrator {
@@ -116,6 +129,21 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
                 return $this->server;
             }
         });
+
+        $httpProtocolSelection = HttpProtocolSelection::fromConfig([
+            'http' => [
+                'protocols' => [HttpProtocolSelection::HTTP_1],
+                'preferred' => HttpProtocolSelection::HTTP_1,
+                'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
+                'alt_svc' => false,
+            ],
+        ], true)->toArray();
+        (new ServerInstanceManager())->saveInstance($instanceName, [
+            'edge_adapter' => 'nginx',
+            'http_protocol_selection' => $httpProtocolSelection,
+            'protocol_edge_enabled' => false,
+            'protocol_edge_binary' => '',
+        ]);
 
         try {
             $master->saveMasterInfo('bootstrapping');
@@ -129,6 +157,10 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             self::assertIsString($data['supervisor_endpoint'] ?? null);
             self::assertNotSame('', $data['supervisor_endpoint'] ?? '');
             self::assertSame($hybrid->getPort(), $data['control_port'] ?? null);
+            self::assertSame('nginx', $data['edge_adapter'] ?? null);
+            self::assertSame($httpProtocolSelection, $data['http_protocol_selection'] ?? null);
+            self::assertFalse((bool)($data['protocol_edge_enabled'] ?? true));
+            self::assertSame('', $data['protocol_edge_binary'] ?? null);
         } finally {
             $hybrid->close();
             $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';

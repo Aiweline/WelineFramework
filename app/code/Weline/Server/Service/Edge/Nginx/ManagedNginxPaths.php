@@ -11,6 +11,10 @@ use Weline\Framework\App\Env;
  */
 final class ManagedNginxPaths
 {
+    public const DEFAULT_UPSTREAM_KEEPALIVE_TIMEOUT_SEC = 5;
+    public const MIN_UPSTREAM_KEEPALIVE_TIMEOUT_SEC = 1;
+    public const MAX_UPSTREAM_KEEPALIVE_TIMEOUT_SEC = 300;
+
     public function __construct(
         private readonly ?string $projectRoot = null,
         private readonly ?array $edgeNginxConfig = null,
@@ -30,23 +34,22 @@ final class ManagedNginxPaths
      */
     public function config(): array
     {
-        if (\is_array($this->edgeNginxConfig)) {
-            return $this->edgeNginxConfig;
+        $config = \is_array($this->edgeNginxConfig) ? $this->edgeNginxConfig : null;
+        if (!\is_array($config)) {
+            $env = Env::getInstance()->getConfig();
+            $config = \is_array($env) && \is_array($env['wls']['edge']['nginx'] ?? null)
+                ? $env['wls']['edge']['nginx']
+                : [];
         }
-        $env = Env::getInstance()->getConfig();
-        if (!\is_array($env)) {
-            return [];
-        }
-        return \is_array($env['wls']['edge']['nginx'] ?? null)
-            ? $env['wls']['edge']['nginx']
-            : [];
+
+        return $this->applyProcessOverrides($config);
     }
 
     /**
      * Resolved managed flag.
      *
-     * - explicit true/false: honor config
-     * - missing / empty / "auto": detect host Nginx; host present → false, else true
+     * - explicit true: WLS owns an opt-in managed Nginx lifecycle
+     * - false/missing/auto: external or disabled; binary presence is not live edge readiness
      */
     public function managedEnabled(): bool
     {
@@ -57,7 +60,7 @@ final class ManagedNginxPaths
         if ($mode === 'false') {
             return false;
         }
-        return !$this->hostNginxPresent();
+        return false;
     }
 
     /**
@@ -103,27 +106,39 @@ final class ManagedNginxPaths
     {
         $cfg = $this->config();
         if (\array_key_exists('auto_start', $cfg)) {
-            return $this->toBool($cfg['auto_start'], true);
+            return $this->toBool($cfg['auto_start'], false);
         }
-        return true;
+        return false;
     }
 
     public function installRoot(): string
     {
-        $rel = \trim((string)($this->config()['install_root'] ?? 'extend/server/nginx'));
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return $this->windowsLocalRoot() . DIRECTORY_SEPARATOR . 'install';
+        }
+        $default = \PHP_OS_FAMILY === 'Linux'
+            ? 'extend/server/nginx-' . $this->platformScope()
+            : 'extend/server/nginx';
+        $rel = \trim((string)($this->config()['install_root'] ?? $default));
         $rel = \str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $rel);
         if ($rel === '' || \str_starts_with($rel, DIRECTORY_SEPARATOR) || \preg_match('#^[A-Za-z]:#', $rel) === 1) {
-            $rel = 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'nginx';
+            $rel = \str_replace('/', DIRECTORY_SEPARATOR, $default);
         }
         return $this->projectRoot() . DIRECTORY_SEPARATOR . $rel;
     }
 
     public function runtimeRoot(): string
     {
-        $rel = \trim((string)($this->config()['runtime_root'] ?? 'var/server/nginx'));
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return $this->windowsLocalRoot() . DIRECTORY_SEPARATOR . 'runtime';
+        }
+        $default = \PHP_OS_FAMILY === 'Linux'
+            ? 'var/server/nginx-' . $this->platformScope()
+            : 'var/server/nginx';
+        $rel = \trim((string)($this->config()['runtime_root'] ?? $default));
         $rel = \str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $rel);
         if ($rel === '' || \str_starts_with($rel, DIRECTORY_SEPARATOR) || \preg_match('#^[A-Za-z]:#', $rel) === 1) {
-            $rel = 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'nginx';
+            $rel = \str_replace('/', DIRECTORY_SEPARATOR, $default);
         }
         return $this->projectRoot() . DIRECTORY_SEPARATOR . $rel;
     }
@@ -151,6 +166,21 @@ final class ManagedNginxPaths
     public function pidFile(): string
     {
         return $this->runDir() . DIRECTORY_SEPARATOR . 'nginx.pid';
+    }
+
+    public function lifecycleLockFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR . 'managed-nginx.lifecycle.lock';
+    }
+
+    public function ownerFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR . 'managed-nginx.owner.json';
+    }
+
+    public function ownerIntentFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR . 'managed-nginx.owner.intent.json';
     }
 
     public function binary(): string
@@ -243,6 +273,17 @@ final class ManagedNginxPaths
         return \max(16, \min(1024, $n));
     }
 
+    public function upstreamKeepaliveTimeoutSec(): int
+    {
+        $cfg = $this->config();
+        $seconds = (int)($cfg['upstream_keepalive_timeout_sec']
+            ?? self::DEFAULT_UPSTREAM_KEEPALIVE_TIMEOUT_SEC);
+        return \max(
+            self::MIN_UPSTREAM_KEEPALIVE_TIMEOUT_SEC,
+            \min(self::MAX_UPSTREAM_KEEPALIVE_TIMEOUT_SEC, $seconds)
+        );
+    }
+
     public function workerConnections(): int
     {
         $cfg = $this->config();
@@ -290,6 +331,59 @@ final class ManagedNginxPaths
         }
     }
 
+    /**
+     * Process-scoped overrides exist for isolated validation and container/VM
+     * deployments. They never relax managed/auto-start ownership and are
+     * inherited by Master, reload, doctor and stop commands.
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function applyProcessOverrides(array $config): array
+    {
+        foreach ([
+            'listen_http' => 'WLS_NGINX_LISTEN_HTTP',
+            'listen_https' => 'WLS_NGINX_LISTEN_HTTPS',
+        ] as $key => $environmentName) {
+            $raw = \getenv($environmentName);
+            if ($raw === false || \trim((string)$raw) === '') {
+                continue;
+            }
+            $normalized = \trim((string)$raw);
+            if (!\ctype_digit($normalized)) {
+                throw new \RuntimeException($environmentName . ' must be an integer port.');
+            }
+            $port = (int)$normalized;
+            if ($port < 1 || $port > 65535) {
+                throw new \RuntimeException($environmentName . ' must be in 1..65535.');
+            }
+            $config[$key] = $port;
+        }
+
+        foreach ([
+            'install_root' => 'WLS_NGINX_INSTALL_ROOT',
+            'runtime_root' => 'WLS_NGINX_RUNTIME_ROOT',
+        ] as $key => $environmentName) {
+            $raw = \getenv($environmentName);
+            if ($raw === false || \trim((string)$raw) === '') {
+                continue;
+            }
+            $normalized = \str_replace(\chr(92), '/', \trim((string)$raw));
+            $segments = \explode('/', $normalized);
+            if ($normalized === ''
+                || \str_starts_with($normalized, '/')
+                || \preg_match('/^[A-Za-z]:/', $normalized) === 1
+                || \in_array('..', $segments, true)
+                || \str_contains($normalized, \chr(0))
+            ) {
+                throw new \RuntimeException($environmentName . ' must be a project-relative path without traversal.');
+            }
+            $config[$key] = $normalized;
+        }
+
+        return $config;
+    }
+
     private function toBool(mixed $value, bool $default): bool
     {
         if (\is_bool($value)) {
@@ -303,5 +397,31 @@ final class ManagedNginxPaths
             return $default;
         }
         return \in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function platformScope(): string
+    {
+        $arch = \strtolower((string)\php_uname('m'));
+        $arch = \preg_replace('/[^a-z0-9._-]+/', '-', $arch) ?: 'unknown';
+
+        return \strtolower(\PHP_OS_FAMILY) . '-' . $arch;
+    }
+
+    private function windowsLocalRoot(): string
+    {
+        $base = \trim((string)(\getenv('LOCALAPPDATA') ?: \getenv('TEMP') ?: \sys_get_temp_dir()));
+        if ($base === '') {
+            throw new \RuntimeException('Windows managed nginx requires LOCALAPPDATA or TEMP.');
+        }
+        $projectIdentity = \substr(
+            \Weline\Server\Service\MasterProcess::getProjectIdentityHash(),
+            0,
+            20,
+        );
+
+        return \rtrim($base, '/\\')
+            . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'ManagedNginx'
+            . DIRECTORY_SEPARATOR . $projectIdentity;
     }
 }

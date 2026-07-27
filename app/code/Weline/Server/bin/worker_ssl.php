@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+throw new \RuntimeException(
+    'WLS SSL Worker is retired; Nginx terminates TLS and proxies cleartext HTTP/1.1.'
+);
+
 /**
  * Weline Server Worker 独立进程 (SSL/HTTPS)
  * 
@@ -173,6 +177,9 @@ $orchestratorGeneration = 0;
 $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
+$isMaintenanceWorker = false;
+$wlsHttpPolicyEncoded = '';
+$wlsHttpPolicySha256 = '';
 
 // 先提取位置参数（跳过以 -- 开头的参数）
 $positionalArgs = [];
@@ -277,6 +284,10 @@ foreach ($argv as $arg) {
         $orchestratorLeaseId = \trim((string)\substr($arg, 11));
     } elseif (\str_starts_with($arg, '--slot-generation=')) {
         $orchestratorGeneration = (int)\substr($arg, 18);
+    } elseif (\str_starts_with($arg, '--wls-http-policy=')) {
+        $wlsHttpPolicyEncoded = \trim((string)\substr($arg, \strlen('--wls-http-policy=')));
+    } elseif (\str_starts_with($arg, '--wls-http-policy-sha256=')) {
+        $wlsHttpPolicySha256 = \strtolower(\trim((string)\substr($arg, \strlen('--wls-http-policy-sha256='))));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
     }
@@ -291,8 +302,18 @@ if (!\in_array($wlsListenerMode, ['single', 'reuseport', 'shared_fd'], true)) {
     \fwrite(\STDERR, "--wls-listener-mode must be single, reuseport, or shared_fd.\n");
     exit(1);
 }
+$privateListenerRequired = $isMaintenanceWorker;
+$privateListenerHost = \strtolower(\trim((string)$host));
+if ($privateListenerRequired
+    && ($wlsListenerMode !== 'single' || !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true))
+) {
+    \fwrite(\STDERR, "Private SSL Worker requires a loopback single listener.\n");
+    exit(1);
+}
 if (($wlsRuntimeTopology === 'dispatcher' && $wlsListenerMode !== 'single')
-    || ($wlsRuntimeTopology === 'direct' && $wlsListenerMode === 'single')
+    || ($wlsRuntimeTopology === 'direct'
+        && $wlsListenerMode === 'single'
+        && !$privateListenerRequired)
 ) {
     \fwrite(\STDERR, "Listener mode does not match the selected WLS topology.\n");
     exit(1);
@@ -364,6 +385,80 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 // Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
+
+$wlsEndpointEdge = '';
+$wlsEndpointHttpSelection = null;
+$wlsEndpointHttp3Activation = null;
+try {
+    if ($wlsHttpPolicyEncoded === ''
+        || \strlen($wlsHttpPolicyEncoded) > 32768
+        || \preg_match('/\A[A-Za-z0-9_-]+\z/D', $wlsHttpPolicyEncoded) !== 1
+        || \preg_match('/\A[a-f0-9]{64}\z/D', $wlsHttpPolicySha256) !== 1
+    ) {
+        throw new \RuntimeException('Worker immutable HTTP policy argv is missing or invalid.');
+    }
+    $padding = (4 - (\strlen($wlsHttpPolicyEncoded) % 4)) % 4;
+    $wlsHttpPolicyJson = \base64_decode(
+        \strtr($wlsHttpPolicyEncoded, '-_', '+/') . \str_repeat('=', $padding),
+        true,
+    );
+    if (!\is_string($wlsHttpPolicyJson)
+        || !\hash_equals($wlsHttpPolicySha256, \hash('sha256', $wlsHttpPolicyJson))
+    ) {
+        throw new \RuntimeException('Worker immutable HTTP policy digest mismatch.');
+    }
+    $wlsHttpPolicy = \json_decode($wlsHttpPolicyJson, true, 32, JSON_THROW_ON_ERROR);
+    if (!\is_array($wlsHttpPolicy)
+        || (int)($wlsHttpPolicy['schema_version'] ?? 0) !== 1
+        || !\hash_equals($instanceName, (string)($wlsHttpPolicy['instance_name'] ?? ''))
+    ) {
+        throw new \RuntimeException('Worker immutable HTTP policy identity is invalid.');
+    }
+    $wlsEndpointEdge = \strtolower(\trim((string)($wlsHttpPolicy['edge_adapter'] ?? '')));
+    $selectionData = $wlsHttpPolicy['http_protocol_selection'] ?? null;
+    $http3Activation = $wlsHttpPolicy['http3'] ?? null;
+    if (!\in_array($wlsEndpointEdge, ['nginx', 'wls'], true)
+        || !\is_array($selectionData)
+        || !\is_array($http3Activation)
+        || !\is_bool($http3Activation['enabled'] ?? null)
+        || !\is_bool($http3Activation['runtime_verified'] ?? null)
+    ) {
+        throw new \RuntimeException('Worker immutable HTTP policy fields are invalid.');
+    }
+    $wlsEndpointHttpSelection =
+        \Weline\Server\Service\Runtime\HttpProtocolSelection::fromArray($selectionData);
+    $wlsEndpointHttpSelection->assertCompatibleEdgeAdapter($wlsEndpointEdge);
+    if ($wlsEndpointHttpSelection->isCaddyProtocolEdge()) {
+        throw new \RuntimeException('SSL Worker cannot own a Caddy protocol-edge endpoint.');
+    }
+    $wlsEndpointHttp3Activation = $http3Activation;
+    $http3Activated = $http3Activation['enabled'] && $http3Activation['runtime_verified'];
+    if ($http3Activation['enabled'] !== $http3Activation['runtime_verified']
+        || $http3Activated !== $wlsHttp3Enabled
+    ) {
+        throw new \RuntimeException('Worker HTTP/3 argv does not match endpoint activation.');
+    }
+    if ($http3Activated) {
+        $activationDigest = \strtolower(\trim((string)($http3Activation['native_digest'] ?? '')));
+        $activationFingerprint = \strtolower(\trim((string)($http3Activation['fingerprint'] ?? '')));
+        if ($wlsEndpointEdge !== 'wls'
+            || !$wlsEndpointHttpSelection->isNativeProtocolEdge()
+            || !$wlsEndpointHttpSelection->supports(
+                \Weline\Server\Service\Runtime\HttpProtocolSelection::HTTP_3,
+            )
+            || !$wlsEndpointHttpSelection->altSvc
+            || !\hash_equals($wlsHttp3ExpectedNativeDigest, $activationDigest)
+            || !\hash_equals($wlsHttp3ExpectedNativeFingerprint, $activationFingerprint)
+        ) {
+            throw new \RuntimeException('Worker HTTP/3 activation is outside the endpoint protocol policy.');
+        }
+    } elseif (\trim((string)($http3Activation['reason'] ?? '')) === '') {
+        throw new \RuntimeException('Disabled Worker HTTP/3 activation requires a reason.');
+    }
+} catch (\Throwable $throwable) {
+    \fwrite(\STDERR, 'Worker refused immutable HTTP policy: ' . $throwable->getMessage() . "\n");
+    exit(1);
+}
 
 if ($wlsHttp3Enabled) {
     $pinnedHttp3Manifest = \Weline\Server\Protocol\Http3\NativeTransportLibrary::pinManifest(
@@ -1417,17 +1512,61 @@ $socket = null;
 $reusePortBound = false;
 $sharedListenerBound = false;
 $sharedListenerSocket = null;
-$wlsHttpProtocolCapabilities = \class_exists(\Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe::class)
-    ? (new \Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe())->snapshot()
-    : [];
+try {
+    $wlsHttpProtocolCapabilities =
+        (new \Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe())->snapshot(
+            $wlsEndpointEdge,
+            $wlsEndpointHttpSelection,
+            true,
+            'running_endpoint',
+            $wlsEndpointHttp3Activation,
+        );
+} catch (\Throwable $throwable) {
+    WlsLogger::error_('Worker refused immutable HTTP protocol policy: ' . $throwable->getMessage());
+    exit(1);
+}
 $wlsHttpAdapters = \is_array($wlsHttpProtocolCapabilities['wls_adapters'] ?? null)
     ? $wlsHttpProtocolCapabilities['wls_adapters']
     : [];
-$wlsHttp2NegotiationEnabled = (bool)($wlsHttpAdapters['http2']['enabled'] ?? false);
+$wlsConfiguredTcpProtocols = [
+    $wlsEndpointHttpSelection->preferred,
+    ...\array_values(\array_filter(
+        $wlsEndpointHttpSelection->protocols,
+        static fn(string $protocol): bool =>
+            $protocol !== $wlsEndpointHttpSelection->preferred,
+    )),
+];
+$wlsTlsAlpnList = [];
+foreach ($wlsConfiguredTcpProtocols as $configuredProtocol) {
+    if ($configuredProtocol === \Weline\Server\Service\Runtime\HttpProtocolSelection::HTTP_2
+        && (bool)($wlsHttpAdapters['http2']['enabled'] ?? false)
+    ) {
+        $wlsTlsAlpnList[] = 'h2';
+    } elseif ($configuredProtocol === \Weline\Server\Service\Runtime\HttpProtocolSelection::HTTP_1
+        && (bool)($wlsHttpAdapters['http1']['enabled'] ?? false)
+    ) {
+        $wlsTlsAlpnList[] = 'http/1.1';
+    }
+}
+$wlsHttp2NegotiationEnabled = \in_array('h2', $wlsTlsAlpnList, true);
+$wlsHttp1NegotiationEnabled = \in_array('http/1.1', $wlsTlsAlpnList, true);
 $wlsHttp3NegotiationEnabled = (bool)($wlsHttpAdapters['http3']['enabled'] ?? false);
-$wlsTlsAlpnProtocols = $wlsHttp2NegotiationEnabled ? 'h2,http/1.1' : 'http/1.1';
+if ($wlsTlsAlpnList === [] && !$wlsHttp3Enabled) {
+    WlsLogger::error_('Worker endpoint has no verified active HTTP protocol.');
+    exit(1);
+}
+$wlsTlsAlpnProtocols = $wlsTlsAlpnList !== []
+    ? \implode(',', $wlsTlsAlpnList)
+    : 'wls-no-tcp-http';
+if ($wlsHttp3Enabled && !$wlsHttp3NegotiationEnabled) {
+    WlsLogger::error_('Worker HTTP/3 activation failed the current native capability gate.');
+    exit(1);
+}
 if ($wlsHttp3Enabled && $wlsHttp3NegotiationEnabled) {
-    WlsLogger::info_('HTTP/3 native capability verified; TCP ALPN remains h2/http/1.1 and QUIC h3 will bind after warmup.');
+    WlsLogger::info_(
+        'HTTP/3 native capability verified; TCP ALPN=' . $wlsTlsAlpnProtocols
+        . ' and QUIC h3 will bind after warmup.'
+    );
 }
 $wlsTlsSessionCacheRuntime = null;
 if ($wlsTlsSessionCacheConfig->enabled()) {
@@ -1864,6 +2003,9 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
     $wlsTlsSessionCacheRuntime
 ): void {
     if ($readyGateWorkerBootstrapWarmupCompleted) {
+        if ($runtimeError === null && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+            $runtime->assertFrontendWorkerCredentialStoreReady();
+        }
         return;
     }
     if ($isMaintenanceWorker) {
@@ -1946,8 +2088,8 @@ $memoryWarningThreshold = $normalizeMemoryThreshold(
     0.80
 );
 $baseMemoryDrainThreshold = $normalizeMemoryThreshold(
-    $memoryGuardConfig['worker_memory_drain_threshold'] ?? 0.94,
-    0.94
+    $memoryGuardConfig['worker_memory_drain_threshold'] ?? 0.92,
+    0.92
 );
 $memoryDrainJitter = $normalizeMemoryThreshold(
     $memoryGuardConfig['worker_memory_drain_jitter'] ?? 0.01,
@@ -1960,6 +2102,17 @@ $memoryDrainThreshold = \min(
         $baseMemoryDrainThreshold + (\max(0, $workerId - 1) % 5) * $memoryDrainJitter
     )
 );
+$configuredMaxRequests = $wlsEnv['worker_max_requests']
+    ?? $wlsEnv['max_request']
+    ?? 0;
+$maxRequestsBase = \is_numeric($configuredMaxRequests) ? \max(0, (int)$configuredMaxRequests) : 0;
+$configuredRecycleStagger = $wlsEnv['worker_recycle_stagger_requests'] ?? 10000;
+$recycleStaggerRequests = \is_numeric($configuredRecycleStagger)
+    ? \max(0, (int)$configuredRecycleStagger)
+    : 10000;
+$maxRequests = $maxRequestsBase > 0
+    ? $maxRequestsBase + (\max(0, $workerId - 1) * $recycleStaggerRequests)
+    : 0;
 $maxRequestHeaderBytes = 65536;
 $maxRequestBodyBytes = 16 * 1024 * 1024;
 $maxBufferedRequestBytes = $maxRequestHeaderBytes + $maxRequestBodyBytes;
@@ -2352,6 +2505,33 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     WlsLogger::info_("收到 reload 命令，已清除 opcache 并关闭监听 socket，开始排水（最多等待 {$maxDrainTime} 秒）...");
                     break;
                     
+                case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_NAMESPACE_INVALIDATE_V1:
+                    \Weline\Server\Service\Runtime\WorkerNamespaceInvalidationControlHandler::handle(
+                        $msg,
+                        $ipcClient,
+                        $isMaintenanceWorker
+                            ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE
+                            : \Weline\Server\IPC\ControlMessage::ROLE_WORKER,
+                        $workerId,
+                    );
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_MEMORY_PRESSURE:
+                    $hostLevel = (string)($msg['level'] ?? 'green');
+                    $staggerMs = \max(0, (int)($msg['stagger_ms'] ?? 0));
+                    $slotDelay = $staggerMs > 0 ? ($workerId * $staggerMs) : 0;
+                    \Weline\Server\Service\Memory\WorkerHostPressureApplier::apply($hostLevel, $slotDelay);
+                    $reclaimBytes = \Weline\Server\Service\Memory\WorkerHostPressureApplier::consumeReclaimBytes();
+                    $ipcClient?->send(\Weline\Server\IPC\ControlMessage::memoryReclaimReport(
+                        $reclaimBytes,
+                        \Weline\Server\Service\Memory\WorkerHostPressureApplier::getHostLevel(),
+                        [
+                            'worker_id' => $workerId,
+                            'skip_count' => \Weline\Server\Service\Memory\WorkerHostPressureApplier::getReclaimSkipCount(),
+                        ]
+                    ));
+                    break;
+
                 case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_CLEAR:
                     $requestedCacheEpoch = \max(0, (int)($msg['cache_epoch'] ?? 0));
                     if ($requestedCacheEpoch > 0 && $requestedCacheEpoch < $cacheClearEpoch) {
@@ -2599,6 +2779,17 @@ if ($controlPort > 0 || $supervisorEnabled) {
             $instanceName
         );
     }
+    $kernel->setBeforeReadyGuard(
+        static function (string $role) use (&$runtime, &$runtimeError): void {
+            if ($role !== \Weline\Server\IPC\ControlMessage::ROLE_WORKER) {
+                return;
+            }
+            if ($runtimeError !== null || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime) {
+                throw new \RuntimeException('Worker runtime is unavailable for the READY credential-store guard.');
+            }
+            $runtime->assertFrontendWorkerCredentialStoreReady();
+        }
+    );
     $ipcClient = $kernel->getClient();
     $wlsStartupTrace('ready_gate_warmup_begin', ['control_port' => $controlPort]);
     $runReadyGateWorkerBootstrapWarmup();
@@ -3001,6 +3192,47 @@ $darwinSharedAcceptBusyUntilNs = 0;
 $tlsSessionCacheNextMaintainAt = 0.0;
 $tlsSessionCacheTokenReloadNotBefore = 0.0;
 $tlsSessionCacheTokenReloadRequiredSince = 0.0;
+
+/**
+ * 取消一个连接上的全部请求 Fiber；HTTP/1 使用 connId，HTTP/2 使用 (connId, streamId)。
+ *
+ * @param array<int|string,array<string,mixed>> $activeFibers
+ */
+if (!\function_exists('wlsCancelActiveFibersForConnection')) {
+function wlsCancelActiveFibersForConnection(
+    array &$activeFibers,
+    int $connectionId,
+    \Weline\Server\Scheduler\FiberScheduler $fiberScheduler,
+    int &$activeRequests
+): int {
+    $cancelled = 0;
+    foreach (\Weline\Server\Protocol\Http2\MultiplexScheduler::keysForConnection(
+        $activeFibers,
+        $connectionId
+    ) as $fiberKey) {
+        if (!\array_key_exists($fiberKey, $activeFibers)) {
+            continue;
+        }
+        $state = $activeFibers[$fiberKey];
+        unset($activeFibers[$fiberKey]);
+        $fiber = \is_array($state) ? ($state['fiber'] ?? null) : null;
+        if ($fiber instanceof \Fiber) {
+            $fiberScheduler->cancelTimersForFiber($fiber);
+            wlsUnwindRequestFiberForCancellation(
+                $fiber,
+                \is_array($state) ? ($state['context'] ?? null) : null,
+                'tls_connection_closed',
+            );
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
+            $fiberScheduler->unregisterFiber();
+        }
+        $activeRequests = \max(0, $activeRequests - 1);
+        $cancelled++;
+    }
+
+    return $cancelled;
+}
+}
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
@@ -3676,6 +3908,19 @@ while (true) {
                     "SSL Worker memory pressure {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
                     . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB), start drain to avoid OOM reset"
                 );
+                $plannedExitReason = 'memory_pressure_drain'
+                    . ":worker={$workerId}"
+                    . ",memory={$afterMb}MB"
+                    . ",before={$beforeMb}MB"
+                    . ",allocated={$afterAllocatedMb}MB"
+                    . ",before_allocated={$beforeAllocatedMb}MB"
+                    . ",limit={$wlsMemoryLimit}"
+                    . ',threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
+                    . ",requests={$requestCount}";
+                $wlsWorkerGracefulExitReason = $plannedExitReason;
+                if ($ipcClient && $ipcClient->isConnected()) {
+                    @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
+                }
                 $shouldExit = true;
                 $ipcDraining = true;
                 $drainStartTime = \time();
@@ -3697,6 +3942,23 @@ while (true) {
                 "SSL Worker memory high: " . \round($currentMemoryUsed / 1024 / 1024, 1)
                 . 'MB used (' . \round($currentMemory / 1024 / 1024, 1) . 'MB allocated)'
             );
+        }
+    }
+
+    if ($maxRequests > 0 && $requestCount >= $maxRequests && !$shouldExit) {
+        WlsLogger::info_("SSL Worker 已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，触发优雅重启");
+        $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
+        $wlsWorkerGracefulExitReason = $plannedExitReason;
+        if ($ipcClient && $ipcClient->isConnected()) {
+            @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
+        }
+        $shouldExit = true;
+        $ipcDraining = true;
+        $drainStartTime = \time();
+        if ($socket && \is_resource($socket)) {
+            @\fclose($socket);
+            $socket = null;
+            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
         }
     }
 
@@ -4147,7 +4409,7 @@ while (true) {
                             'http3_stream_id' => $http3StreamId,
                             'rawRequest' => $rawRequest,
                             'handleStartTime' => $policyStartedAt,
-                            'context' => \Weline\Framework\Runtime\WlsFiberContext::capture(),
+                            'context' => wlsCaptureSuspendedRequestFiberOrQuarantine($requestFiber),
                             'suspended_at' => \time(),
                             'last_activity' => \time(),
                             'is_long_lived' => false,
@@ -4214,11 +4476,24 @@ while (true) {
             $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
                 $activeFibers,
                 $fiber,
-                static fn () => \Weline\Framework\Runtime\WlsFiberContext::capture()
+                static fn (\Fiber $targetFiber) => \Weline\Framework\Runtime\WlsFiberContext::captureForFiber(
+                    $targetFiber
+                )
             );
             wlsResetLongRunningExecutionLimit();
+        },
+        static function (\Fiber $fiber, \Throwable $failure): void {
+            \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+                'request_fiber_resume_failure'
+            );
+            WlsLogger::error_(
+                'TLS Request Fiber resume/capture failed; Worker quarantine requested: '
+                . $failure->getMessage()
+                . ' fiber=' . \spl_object_id($fiber)
+            );
         }
     );
+    wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
     foreach ($activeFibers as $afKey => $afData) {
         $af = $afData['fiber'] ?? null;
         if (!($af instanceof \Fiber)) {
@@ -4228,9 +4503,6 @@ while (true) {
         $afConnId = \Weline\Server\Protocol\Http2\MultiplexScheduler::connectionId($afKey, $afData);
         $afStreamId = \Weline\Server\Protocol\Http2\MultiplexScheduler::streamId($afKey, $afData);
         if ($af->isTerminated()) {
-            if (isset($afData['context'])) {
-                $afData['context']->restore(false);
-            }
             $afResponse = '';
             try {
                 $afResponse = (string)($af->getReturn() ?? '');
@@ -4334,6 +4606,11 @@ while (true) {
             $releaseFiberSsl = $releaseStateSsl['fiber'] ?? null;
             if ($releaseFiberSsl instanceof \Fiber) {
                 $fiberScheduler->cancelTimersForFiber($releaseFiberSsl);
+                wlsUnwindRequestFiberForCancellation(
+                    $releaseFiberSsl,
+                    $releaseStateSsl['context'] ?? null,
+                    'http3_idle_or_heartbeat_timeout',
+                );
                 \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($releaseFiberSsl);
                 $fiberScheduler->unregisterFiber();
             }
@@ -4358,6 +4635,11 @@ while (true) {
                 $releaseFiberSsl = \is_array($releaseStateSsl) ? ($releaseStateSsl['fiber'] ?? null) : null;
                 if ($releaseFiberSsl instanceof \Fiber) {
                     $fiberScheduler->cancelTimersForFiber($releaseFiberSsl);
+                    wlsUnwindRequestFiberForCancellation(
+                        $releaseFiberSsl,
+                        \is_array($releaseStateSsl) ? ($releaseStateSsl['context'] ?? null) : null,
+                        'tls_idle_or_heartbeat_timeout',
+                    );
                     \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($releaseFiberSsl);
                     $fiberScheduler->unregisterFiber();
                     $activeRequests = \max(0, $activeRequests - 1);
@@ -4732,9 +5014,43 @@ while (true) {
             continue;
         }
         
+        if (($connectionProtocols[$connId] ?? 'pending') === 'pending') {
+            $streamMetadata = @\stream_get_meta_data($conn);
+            $cryptoMetadata = \is_array($streamMetadata['crypto'] ?? null)
+                ? $streamMetadata['crypto']
+                : [];
+            $negotiatedAlpn = \strtolower(\trim((string)($cryptoMetadata['alpn_protocol'] ?? '')));
+
+            if ($negotiatedAlpn === 'h2' && $wlsHttp2NegotiationEnabled) {
+                $connectionProtocols[$connId] = 'h2';
+                $http2ConnectionAdapters[$connId] ??= new \Weline\Server\Protocol\Http2\ConnectionAdapter();
+            } elseif (($negotiatedAlpn === 'http/1.1' || $negotiatedAlpn === '')
+                && $wlsHttp1NegotiationEnabled
+            ) {
+                // A TLS client that omits ALPN may use the HTTP/1.1 fallback
+                // only when the immutable endpoint policy explicitly enables it.
+                $connectionProtocols[$connId] = 'http/1.1';
+            } else {
+                // Never infer HTTP/2 from decrypted bytes. The application
+                // protocol is fixed by the completed TLS ALPN negotiation.
+                safeCloseStream($conn);
+                unset(
+                    $connections[$connId],
+                    $requestBuffers[$connId],
+                    $connectionLastActivity[$connId],
+                    $connectionProtocols[$connId],
+                    $http2ConnectionAdapters[$connId],
+                    $http2PendingRequests[$connId]
+                );
+                continue;
+            }
+        }
         $bufferedFrame = null;
         $isHttp2Connection = ($connectionProtocols[$connId] ?? 'http/1.1') === 'h2';
-        if (!$isHttp2Connection && isset($connectionPeerIps[$connId]) && ($requestBuffers[$connId] ?? '') !== '') {
+        if (!$isHttp2Connection
+            && ($connectionProtocols[$connId] ?? '') === 'http/1.1'
+            && isset($connectionPeerIps[$connId])
+            && ($requestBuffers[$connId] ?? '') !== '') {
             $bufferedFrame = wlsParseHttpRequestFrame(
                 $requestBuffers[$connId],
                 $maxRequestHeaderBytes,
@@ -4751,33 +5067,6 @@ while (true) {
             && (!\is_array($bufferedFrame) || ($bufferedFrame['status'] ?? '') === 'incomplete')
         ) {
             $data = @\fread($conn, 65535);
-        }
-        if (!$isHttp2Connection
-            && $wlsHttp2NegotiationEnabled
-            && ($connectionProtocols[$connId] ?? 'pending') === 'pending'
-            && \is_string($data)
-            && $data !== ''
-        ) {
-            $http2Preface = \Weline\Server\Protocol\Http2\FrameCodec::CLIENT_CONNECTION_PREFACE;
-            $protocolProbe = (string)($requestBuffers[$connId] ?? '') . $data;
-            $prefaceIsStillPossible = \str_starts_with($http2Preface, $protocolProbe);
-            $prefaceIsComplete = \str_starts_with($protocolProbe, $http2Preface);
-
-            if ($prefaceIsStillPossible && \strlen($protocolProbe) < \strlen($http2Preface)) {
-                $requestBuffers[$connId] = $protocolProbe;
-                $connectionLastActivity[$connId] = \time();
-                continue;
-            }
-
-            unset($requestBuffers[$connId]);
-            $data = $protocolProbe;
-            if ($prefaceIsComplete) {
-                $connectionProtocols[$connId] = 'h2';
-                $isHttp2Connection = true;
-                $http2ConnectionAdapters[$connId] ??= new \Weline\Server\Protocol\Http2\ConnectionAdapter();
-            } else {
-                $connectionProtocols[$connId] = 'http/1.1';
-            }
         }
         
         // fread 返回 false 表示错误
@@ -4941,6 +5230,11 @@ while (true) {
                         $resetFiber = \is_array($resetState) ? ($resetState['fiber'] ?? null) : null;
                         if ($resetFiber instanceof \Fiber) {
                             $fiberScheduler->cancelTimersForFiber($resetFiber);
+                            wlsUnwindRequestFiberForCancellation(
+                                $resetFiber,
+                                \is_array($resetState) ? ($resetState['context'] ?? null) : null,
+                                'http2_stream_reset',
+                            );
                             \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($resetFiber);
                             $fiberScheduler->unregisterFiber();
                             $activeRequests = \max(0, $activeRequests - 1);
@@ -4962,6 +5256,11 @@ while (true) {
                         $closingFiber = \is_array($closingState) ? ($closingState['fiber'] ?? null) : null;
                         if ($closingFiber instanceof \Fiber) {
                             $fiberScheduler->cancelTimersForFiber($closingFiber);
+                            wlsUnwindRequestFiberForCancellation(
+                                $closingFiber,
+                                \is_array($closingState) ? ($closingState['context'] ?? null) : null,
+                                'http2_connection_error',
+                            );
                             \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($closingFiber);
                             $fiberScheduler->unregisterFiber();
                             $activeRequests = \max(0, $activeRequests - 1);
@@ -5816,7 +6115,7 @@ while (true) {
                 'http2_adapter' => $fiberHttp2Adapter,
                 'rawRequest' => $rawRequest,
                 'handleStartTime' => $handleStartTime,
-                'context' => \Weline\Framework\Runtime\WlsFiberContext::capture(),
+                'context' => wlsCaptureSuspendedRequestFiberOrQuarantine($requestFiber),
                 'suspended_at' => \time(),
                 'last_activity' => \time(),
                 'is_long_lived' => $isLongLived,
@@ -5942,42 +6241,6 @@ if (!\function_exists('wlsCountActiveFibersForAdmission')) {
 
         return $count;
     }
-}
-
-/**
- * 取消一个连接上的全部请求 Fiber；HTTP/1 使用 connId，HTTP/2 使用 (connId, streamId)。
- *
- * @param array<int|string,array<string,mixed>> $activeFibers
- */
-if (!\function_exists('wlsCancelActiveFibersForConnection')) {
-function wlsCancelActiveFibersForConnection(
-    array &$activeFibers,
-    int $connectionId,
-    \Weline\Server\Scheduler\FiberScheduler $fiberScheduler,
-    int &$activeRequests
-): int {
-    $cancelled = 0;
-    foreach (\Weline\Server\Protocol\Http2\MultiplexScheduler::keysForConnection(
-        $activeFibers,
-        $connectionId
-    ) as $fiberKey) {
-        if (!\array_key_exists($fiberKey, $activeFibers)) {
-            continue;
-        }
-        $state = $activeFibers[$fiberKey];
-        unset($activeFibers[$fiberKey]);
-        $fiber = \is_array($state) ? ($state['fiber'] ?? null) : null;
-        if ($fiber instanceof \Fiber) {
-            $fiberScheduler->cancelTimersForFiber($fiber);
-            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
-            $fiberScheduler->unregisterFiber();
-        }
-        $activeRequests = \max(0, $activeRequests - 1);
-        $cancelled++;
-    }
-
-    return $cancelled;
-}
 }
 
 function wlsSslAcceptNewConnections(
@@ -6863,30 +7126,7 @@ function logSslHandshakeFailure(string $peerName, int $connId, string $errorMsg)
  */
 function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId = null): void
 {
-    // 关键修复：Fiber 启动时必须完全重置所有请求级状态，防止复用上一个 Fiber 的残留状态
-    // 这是 WLS 多 Fiber 并发的核心隔离点：每个新 Fiber 必须从干净的全局状态开始
-    \Weline\Framework\Runtime\StateManager::reset();
-
-    \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
-    \Weline\Framework\Http\Sse\SseContext::reset();
-    \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
-    \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
-    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
-
-    $resolvedConnectionId = $connectionId;
-    if ($resolvedConnectionId === null && \is_resource($conn)) {
-        $resolvedConnectionId = \get_resource_id($conn);
-    }
-
-    $context = \Weline\Framework\Context::current();
-    $context->set('meta.type', 'request');
-    $context->set('meta.mode', 'wls');
-    $context->set('runtime.connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->set('runtime.chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('connection_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    $context->setRuntimeAttr('chain_id', $resolvedConnectionId === null ? '' : (string)$resolvedConnectionId);
-    \Weline\Framework\Runtime\RequestContext::setConnectionId($resolvedConnectionId === null ? null : (string)$resolvedConnectionId);
+    wlsSharedFiberRequestContextEnter($conn, $connectionId);
 }
 
 /**
@@ -6894,19 +7134,7 @@ function wlsFiberRequestContextEnter(mixed $conn, int|string|null $connectionId 
  */
 function wlsFiberRequestContextLeave(): void
 {
-    if (\session_status() === PHP_SESSION_ACTIVE) {
-        @\session_write_close();
-    }
-    \Weline\Framework\Http\Sse\SseContext::reset();
-    \Weline\Framework\Runtime\RequestContext::cleanup();
-    \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Request::class);
-    try {
-        $resolvedClass = \Weline\Framework\Manager\ObjectManager::parserClass(\Weline\Framework\Http\Request::class);
-        if ($resolvedClass !== \Weline\Framework\Http\Request::class) {
-            \Weline\Framework\Manager\ObjectManager::removeInstance($resolvedClass);
-        }
-    } catch (\Throwable) {
-    }
+    wlsSharedFiberRequestContextLeave();
 }
 
 /**

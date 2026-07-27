@@ -38,6 +38,14 @@ final class StaticRequestBypassDecider
             return true;
         }
 
+        // Sitemap shards live under pub/sitemaps/ but MUST go through SEO protocol
+        // rendering so default-site localhost <loc> placeholders are rewritten to
+        // the live request origin (and store-mode hard gates can apply).
+        if (self::isSeoProtocolStaticBypass($candidateUri)
+            || self::isSeoProtocolStaticBypass($requestUri)) {
+            return true;
+        }
+
         $isThemeViewAsset = \str_contains($candidateUri, '/view/theme/frontend/')
             || \str_contains($candidateUri, '/view/theme/backend/');
         if (!$isThemeViewAsset) {
@@ -91,6 +99,34 @@ final class StaticRequestBypassDecider
 
         return \str_starts_with($path, 'media/image/')
             || \str_starts_with($path, 'media/file/');
+    }
+
+    /**
+     * SEO protocol paths that may also exist as files under pub/ (especially
+     * generated sitemap shards). Serving them as raw static bytes would skip
+     * ProtocolRouteRewrite → SitemapProtocolRenderer loopback rewrite.
+     */
+    private static function isSeoProtocolStaticBypass(string $uri): bool
+    {
+        $uri = \trim(\str_replace('\\', '/', $uri), '/');
+        if ($uri === '') {
+            return false;
+        }
+
+        $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
+        $path = \strtolower(\trim(\str_replace('\\', '/', $path), '/'));
+        if ($path === '') {
+            return false;
+        }
+
+        if (\str_starts_with($path, 'pub/')) {
+            $path = \substr($path, 4);
+        }
+
+        return $path === 'robots.txt'
+            || $path === 'robots.xml'
+            || $path === 'sitemap.xml'
+            || \str_starts_with($path, 'sitemaps/');
     }
 
     private static function isExplicitPreviewRequest(string $uri): bool

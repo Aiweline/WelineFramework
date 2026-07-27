@@ -19,6 +19,8 @@ use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\HttpProtocolSelection;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\ServiceOrchestrator;
@@ -307,13 +309,23 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: true,
             sslCert: 'cert.pem',
             sslKey: 'key.pem',
-            mode: 'legacy',
+            runtimeSelection: RuntimeSelection::fromArray([
+                'requested_topology' => 'auto',
+                'effective_topology' => 'direct',
+                'topology_source' => 'unit-test',
+                'os_family' => PHP_OS_FAMILY,
+                'event_loop_driver' => 'select',
+                'ssl_engine' => 'stream',
+                'listener_mode' => 'shared_fd',
+                'policy_compatible' => true,
+                'reason_codes' => ['unit_test'],
+                'reason' => 'unit test runtime selection',
+            ]),
             daemon: false,
             debug: false,
             windowMode: true,
             envConfig: [],
             httpRedirectPort: 80,
-            dispatcherEnabled: true,
             workerCount: 4,
             workerBasePort: 16894,
             workerPort: 16895,
@@ -327,8 +339,19 @@ class ServiceOrchestratorStartupTest extends TestCase
         };
 
         try {
+            $httpProtocolSelection = HttpProtocolSelection::fromConfig([
+                'http' => [
+                    'protocols' => [HttpProtocolSelection::HTTP_1],
+                    'preferred' => HttpProtocolSelection::HTTP_1,
+                    'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
+                ],
+            ], true)->toArray();
             ServerInstanceManager::atomicWriteJsonStatic($instanceFile, [
                 'lifecycle_state' => 'starting',
+                'edge_adapter' => 'nginx',
+                'http_protocol_selection' => $httpProtocolSelection,
+                'protocol_edge_enabled' => false,
+                'protocol_edge_binary' => '',
             ], 5);
 
             $orchestrator->markReady($context, 10);
@@ -340,12 +363,141 @@ class ServiceOrchestratorStartupTest extends TestCase
             self::assertTrue((bool)($data['master_enabled'] ?? false));
             self::assertSame('running', $data['startup_phase'] ?? null);
             self::assertSame(10, $data['server_ready_service_count'] ?? null);
+            self::assertSame('nginx', $data['edge_adapter'] ?? null);
+            self::assertSame($httpProtocolSelection, $data['http_protocol_selection'] ?? null);
+            self::assertFalse((bool)($data['protocol_edge_enabled'] ?? true));
+            self::assertSame('', $data['protocol_edge_binary'] ?? null);
         } finally {
             if (\is_file($instanceFile)) {
                 @\unlink($instanceFile);
             }
             if (\is_file($instanceFile . '.lock')) {
                 @\unlink($instanceFile . '.lock');
+            }
+        }
+    }
+
+    public function testDirectRuntimeReadyHonorsExplicitHomepageFailOpenOnly(): void
+    {
+        $context = new ServiceContext(
+            instanceName: 'ut-homepage-fail-open',
+            epoch: 1,
+            controlPort: 26896,
+            masterPid: 60285,
+            host: '127.0.0.1',
+            mainPort: 18096,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: RuntimeSelection::fromArray([
+                'requested_topology' => 'direct',
+                'effective_topology' => 'direct',
+                'topology_source' => 'unit-test',
+                'os_family' => PHP_OS_FAMILY,
+                'event_loop_driver' => 'select',
+                'ssl_engine' => 'stream',
+                'listener_mode' => 'shared_fd',
+                'policy_compatible' => true,
+                'reason_codes' => ['unit_test'],
+                'reason' => 'unit test runtime selection',
+            ]),
+            daemon: false,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'edge' => [
+                        'adapter' => 'nginx',
+                        'nginx' => [
+                            'managed' => true,
+                            'auto_start' => true,
+                        ],
+                    ],
+                    'http' => [
+                        'protocols' => ['h1'],
+                        'preferred' => 'h1',
+                        'protocol_edge' => 'disabled',
+                        'tls_session_resumption' => false,
+                        'alt_svc' => false,
+                    ],
+                ],
+            ],
+            workerCount: 1,
+            workerBasePort: 18096,
+            workerPort: 18096,
+            publicHost: 'example.test',
+        );
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'runtimePolicyPublishedDigest', self::TEST_POLICY_DIGEST);
+        $this->writePrivate($orchestrator, 'containerRegistryDigest', self::TEST_CONTAINER_DIGEST);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: 1,
+            port: 18096,
+            state: ServiceInstance::STATE_READY,
+        );
+        $worker->setMeta('policy_digest', self::TEST_POLICY_DIGEST);
+        $worker->setMeta('container_registry_digest', self::TEST_CONTAINER_DIGEST);
+        $worker->setMeta('topology', 'direct');
+        $worker->setMeta('warmup_state', 'warm');
+        $worker->setMeta('homepage_fpc', [
+            'hit' => false,
+            'fpc_status' => '',
+            'source' => '',
+            'full_uri' => 'https://example.test/',
+            'http_status' => 500,
+        ]);
+        $worker->setMeta('readiness_protocol_version', WorkerReadinessState::READINESS_PROTOCOL_VERSION);
+        $worker->setMeta('readiness_capabilities', [
+            WorkerReadinessState::CAPABILITY_DYNAMIC_FIRST_RENDER_PROOF,
+            WorkerReadinessState::CAPABILITY_COMPILED_CONTAINER_DIGEST,
+        ]);
+        $worker->setMeta('dynamic_first_render', [
+            'ready' => true,
+            'host' => 'example.test',
+            'path' => '/',
+            'status_code' => 200,
+            'body_length' => 1024,
+            'elapsed_ms' => 5.0,
+            'target_ms' => 70.0,
+            'attempts' => 1,
+            'fpc_status' => 'MISS',
+            'cache' => 'bypass',
+            'reason' => 'rendered',
+        ]);
+        $worker->setMeta('listen_capabilities', [
+            'bound' => true,
+            'shared_listener' => true,
+            'inherited_fd' => 9,
+            'mode' => 'shared_fd',
+            'event_loop' => 'select',
+            'ssl_engine' => 'stream',
+        ]);
+        $worker->setMeta('worker_loop_started_at', \microtime(true));
+
+        $previous = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
+        try {
+            \putenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN=0');
+            self::assertFalse($this->invokePrivateWithArgs(
+                $orchestrator,
+                'isDirectReloadWorkerRuntimeReady',
+                [$worker],
+            ));
+
+            \putenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN=1');
+            self::assertTrue($this->invokePrivateWithArgs(
+                $orchestrator,
+                'isDirectReloadWorkerRuntimeReady',
+                [$worker],
+            ));
+        } finally {
+            if ($previous === false) {
+                \putenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
+            } else {
+                \putenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN=' . $previous);
             }
         }
     }

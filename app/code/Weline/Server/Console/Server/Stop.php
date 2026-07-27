@@ -62,8 +62,11 @@ class Stop extends CommandAbstract
     private array $residualPrefixPidsCache = [];
     /** @var array<string, list<int>> */
     private array $directForceStopCandidatePidsCache = [];
+    /** @var array<string, string> */
+    private array $loadedControlTokens = [];
     private bool $lastResidualCleanupComplete = true;
     private bool $lastIpcStopFlowStillActive = false;
+    private bool $managedNginxStopFailed = false;
 
     /**
      * Keep the historical one-argument protected extension point compatible;
@@ -103,6 +106,7 @@ class Stop extends CommandAbstract
     public function execute(array $args = [], array $data = [])
     {
         $this->resetStopRuntimeCaches();
+        $this->managedNginxStopFailed = false;
 
         // 欢迎语
         $this->printWelcome();
@@ -125,17 +129,17 @@ class Stop extends CommandAbstract
 
         if ($stopAll) {
             $this->stopAllInstances($force, $fastLocal);
-            return;
+            return $this->managedNginxStopFailed ? 1 : 0;
         }
 
         if ($instancePrefix !== '') {
             $this->stopInstancesByPrefix($instancePrefix, $force, $fastLocal);
-            return;
+            return $this->managedNginxStopFailed ? 1 : 0;
         }
 
         if (\count($instanceNames) > 1) {
             $this->stopNamedInstances($instanceNames, $force, $fastLocal, $restartCleanup);
-            return;
+            return $this->managedNginxStopFailed ? 1 : 0;
         }
 
         $instanceName = $instanceNames[0];
@@ -149,28 +153,28 @@ class Stop extends CommandAbstract
         } finally {
             $this->releaseStopLock();
         }
+        return $this->managedNginxStopFailed ? 1 : 0;
     }
     
     /**
      * Stop per-project managed nginx (if running) before tearing down WLS.
      */
-    private function maybeStopManagedNginx(): void
+    private function maybeStopManagedNginx(string $instanceName): bool
     {
         try {
             $service = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
-            if (!$service->paths()->managedEnabled()) {
-                return;
-            }
-            $status = $service->doctorSnapshot();
-            if (!(bool)($status['running'] ?? false) && !(bool)($status['installed'] ?? false)) {
-                return;
-            }
-            $result = $service->stop();
+            $result = $service->stopForInstance($instanceName);
             if ($result['ok'] ?? false) {
                 $this->printer->note(__('托管 Nginx：%{1}', [(string)$result['message']]));
+                return true;
             }
+            $this->managedNginxStopFailed = true;
+            $this->printer->warning(__('托管 Nginx 停止失败：%{1}', [(string)($result['message'] ?? __('未知'))]));
+            return false;
         } catch (\Throwable $e) {
+            $this->managedNginxStopFailed = true;
             $this->printer->warning(__('托管 Nginx 停止异常：%{1}', [$e->getMessage()]));
+            return false;
         }
     }
 
@@ -276,6 +280,7 @@ class Stop extends CommandAbstract
         $this->recoverableManagedPidsCache = [];
         $this->residualPrefixPidsCache = [];
         $this->directForceStopCandidatePidsCache = [];
+        $this->loadedControlTokens = [];
         $this->lastResidualCleanupComplete = true;
         $this->lastIpcStopFlowStillActive = false;
     }
@@ -438,13 +443,15 @@ class Stop extends CommandAbstract
             return;
         }
 
-        $this->maybeStopManagedNginx();
-
         // 通过 ServerInstanceManager 获取实例信息（统一入口）
         $manager = $this->getInstanceManager();
         $instanceInfo = $manager->getInstanceInfo($name, false);
         
         if ($instanceInfo === null) {
+            if (!$this->maybeStopManagedNginx($name) && !$force) {
+                $this->printer->warning(__('已中止残留清理：请先修复托管 Nginx 停止故障，或显式使用强制停止。'));
+                return;
+            }
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
             if ($this->hasRecoverableManagedProcessHint($name) || $this->hasRecoverableConfiguredPortHint($name)) {
                 $recovered = $this->cleanupRecoverableProcessesWithoutInstanceFile($name);
@@ -457,10 +464,18 @@ class Stop extends CommandAbstract
             // 清理可能残留的启动锁（如上次 server:start 崩溃遗留），便于后续启动
             return;
         }
+
+        $instanceData = $manager->getRawInstanceData($name) ?? [];
+        $this->loadedControlTokens[$name] = \trim((string)($instanceData['control_token'] ?? ''));
+
+        if (!$this->maybeStopManagedNginx($name) && !$force) {
+            $this->printer->warning(__('已中止 WLS 停止：请先修复托管 Nginx 停止故障，或显式使用强制停止。'));
+            return;
+        }
         
         $masterPid = $instanceInfo->masterPid;
         $controlPort = $instanceInfo->controlPort;
-        $startupPhase = $this->resolveInstanceStartupPhase($manager->getRawInstanceData($name) ?? []);
+        $startupPhase = $this->resolveInstanceStartupPhase($instanceData);
         
         $this->printer->setup(__('停止 Weline Server'));
         echo "\n";
@@ -575,6 +590,15 @@ class Stop extends CommandAbstract
         $ipcSuccess = $this->sendStopViaIpcAndWait($name, $controlPort, $masterPid, $force);
         
         if ($ipcSuccess) {
+            $remainingPids = $this->collectRunningResidualPids(
+                $this->collectFastLocalResidualPids($name, $instanceInfo)
+            );
+            if ($remainingPids !== []) {
+                $this->lastResidualCleanupComplete = false;
+                $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
+                return;
+            }
+
             $this->printer->success(__('所有子进程已完整退出 ✓'));
             // Master IPC is the runtime authority. Once Master reports a full
             // stop, do not run the expensive local prefix/port residual scan on
@@ -688,7 +712,13 @@ class Stop extends CommandAbstract
 
         $pidIndex = Processer::readPidIndex();
 
-        return !isset($pidIndex[$masterPid]);
+        if (isset($pidIndex[$masterPid])) {
+            return false;
+        }
+
+        // The index is only a discovery cache. Its disappearance does not prove
+        // that the operating-system process has exited.
+        return !$this->queryStopPidRunning($masterPid);
     }
 
     protected function showInstanceInfo(ServerInstanceInfo $info): void
@@ -700,8 +730,8 @@ class Stop extends CommandAbstract
         $this->printer->note($this->renderStopBoxContent('  ' . __('实例名称：') . $info->name, $boxInnerWidth));
         $this->printer->note($this->renderStopBoxContent('  ' . __('Master PID：') . ($info->masterPid > 0 ? $info->masterPid : __('(未运行)')), $boxInnerWidth));
         $this->printer->note($this->renderStopBoxContent('  ' . __('控制端口：') . ($info->controlPort > 0 ? $info->controlPort : __('(未配置)')), $boxInnerWidth));
-        $this->printer->note($this->renderStopBoxContent('  ' . __('监听地址：') . $info->getListenAddress(), $boxInnerWidth));
-        $this->printer->note($this->renderStopBoxContent('  ' . __('SSL 状态：') . ($info->sslEnabled ? __('已启用 (HTTPS)') : __('未启用 (HTTP)')), $boxInnerWidth));
+        $this->printer->note($this->renderStopBoxContent('  ' . __('WLS 回源端口：') . $info->getPortRangeDescription(), $boxInnerWidth));
+        $this->printer->note($this->renderStopBoxContent('  ' . __('公网 TLS：') . __('由托管 Nginx 终结'), $boxInnerWidth));
         
         if ($info->httpRedirectPort > 0) {
             $this->printer->note($this->renderStopBoxContent('  ' . __('HTTP 跳转：') . ":{$info->httpRedirectPort} -> :{$info->port}", $boxInnerWidth));
@@ -807,6 +837,7 @@ class Stop extends CommandAbstract
             $remainingPids = $this->collectRunningResidualPids($candidatePids);
 
             if (empty($remainingPids) && empty($remainingPorts)) {
+                $this->cleanupStaleRecoverableProcessPidFilesForPids($candidatePids);
                 if ($totalKilled > 0) {
                     $this->printer->success(__('  已清理 %{1} 个残留进程', [$totalKilled]));
                     if ($attempt > 1) {
@@ -860,8 +891,6 @@ class Stop extends CommandAbstract
         $killedByPrefix = $allowPrefixFallback
             ? $this->terminateCurrentInstanceProcessPrefixes($name, $includeSharedState)
             : 0;
-
-        $this->cleanupStaleRecoverableProcessPidFilesForPids($pids);
 
         $totalKilled = $killedByPid + $killedByPrefix;
         if (!$quiet) {
@@ -1046,11 +1075,14 @@ class Stop extends CommandAbstract
 
         $selection = RuntimeSelection::fromEndpoint($record);
         $direct = $selection->isDirect();
+        $directWorkerPorts = $direct && $selection->listenerMode === 'worker_ports';
         $ports = [];
 
-        $recordFields = $direct
-            ? ['port', 'main_port', 'control_port', 'http_redirect_port']
-            : ['port', 'main_port', 'dispatcher_port', 'worker_port', 'worker_base_port', 'control_port', 'http_redirect_port'];
+        $recordFields = $directWorkerPorts
+            ? ['port', 'main_port', 'worker_port', 'control_port', 'http_redirect_port']
+            : ($direct
+                ? ['port', 'main_port', 'control_port', 'http_redirect_port']
+                : ['port', 'main_port', 'dispatcher_port', 'worker_port', 'worker_base_port', 'control_port', 'http_redirect_port']);
         foreach ($recordFields as $field) {
             $port = (int)($record[$field] ?? 0);
             if ($port > 0) {
@@ -1058,9 +1090,10 @@ class Stop extends CommandAbstract
             }
         }
 
-        if (!$direct) {
+        if (!$direct || $directWorkerPorts) {
             $count = \max(1, (int)($record['count'] ?? 1));
-            foreach (['worker_base_port', 'worker_port'] as $baseField) {
+            $workerBaseFields = $directWorkerPorts ? ['worker_port'] : ['worker_base_port', 'worker_port'];
+            foreach ($workerBaseFields as $baseField) {
                 $basePort = (int)($record[$baseField] ?? 0);
                 if ($basePort <= 0 || $count <= 1) {
                     continue;
@@ -1171,7 +1204,6 @@ class Stop extends CommandAbstract
             SchedulerSystem::usleep(200000);
         }
 
-        $this->cleanupStaleRecoverableProcessPidFilesForPids($candidatePids);
         $remaining = $this->collectRunningResidualPids($candidatePids);
         if ($remaining !== []) {
             $this->printer->warning(__('  Fast-local cleanup still has residual process ids: %{1}', [
@@ -1179,6 +1211,8 @@ class Stop extends CommandAbstract
             ]));
             return;
         }
+
+        $this->cleanupStaleRecoverableProcessPidFilesForPids($candidatePids);
 
         if ($killed > 0) {
             $this->printer->success(__('  Fast-local cleanup terminated %{1} residual processes.', [$killed]));
@@ -1581,6 +1615,10 @@ class Stop extends CommandAbstract
         if ($controlPort <= 0) {
             return false;
         }
+        $controlToken = $this->loadedControlTokens[$instanceName] ?? '';
+        if ($controlToken === '') {
+            return false;
+        }
         
         // 连接 IPC
         $host = '127.0.0.1';
@@ -1600,8 +1638,6 @@ class Stop extends CommandAbstract
         
         // 发送 STOP 命令（msg_id 与 Master ACK / trace 对齐）
         $traceId = 'cli-stop-' . \getmypid() . '-' . \time();
-        $endpoint = MasterProcess::getMasterEndpoint($instanceName);
-        $controlToken = (string)($endpoint['control_token'] ?? '');
         $stopMsg = \Weline\Server\IPC\ControlMessage::command(
             \Weline\Server\IPC\ControlMessage::ACTION_STOP,
             '',
@@ -1827,7 +1863,9 @@ class Stop extends CommandAbstract
             return $this->waitForMasterExit($masterPid);
         }
 
-        $this->waitForMasterPidIndexCleanupAfterFinalProgress($masterPid);
+        if (!$this->waitForMasterPidIndexCleanupAfterFinalProgress($masterPid)) {
+            return $this->waitForMasterExit($masterPid);
+        }
         $this->ipcMsg('Master 停止协议已完成（控制面已关闭）✓', 'success');
 
         return true;
@@ -2407,6 +2445,7 @@ class Stop extends CommandAbstract
 
         return \str_contains($name, 'php')
             || \str_contains($name, 'cmd.exe')
+            || \str_starts_with($name, 'weline-wls-')
             || \str_contains($name, 'powershell')
             || \str_contains($name, 'pwsh');
     }
@@ -3350,7 +3389,11 @@ class Stop extends CommandAbstract
                 }
                 echo "\n";
             }
-            $this->printer->success(__('所有 Weline Server 实例已停止'));
+            if ($this->managedNginxStopFailed) {
+                $this->printer->warning(__('部分实例因托管 Nginx 停止失败而未完成，命令将返回非零状态。'));
+            } else {
+                $this->printer->success(__('所有 Weline Server 实例已停止'));
+            }
         }
 
         if ($cliStatus) {
@@ -3425,7 +3468,11 @@ class Stop extends CommandAbstract
             echo "\n";
         }
 
-        $this->printer->success(__('前缀 [%{1}] 匹配的实例已处理完成。', [$prefix]));
+        if ($this->managedNginxStopFailed) {
+            $this->printer->warning(__('部分前缀实例未完成停止，命令将返回非零状态。'));
+        } else {
+            $this->printer->success(__('前缀 [%{1}] 匹配的实例已处理完成。', [$prefix]));
+        }
     }
 
     /**

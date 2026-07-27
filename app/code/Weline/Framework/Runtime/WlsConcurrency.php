@@ -9,9 +9,11 @@ namespace Weline\Framework\Runtime;
  * Worker 在存在挂起请求 Fiber（如 SSE suspend）时，{@see getOtherSuspendedRequestFiberCount()} 大于 0。
  * 当 {@see getOtherSuspendedRequestFiberCount()} 大于 0 时，{@see WlsRuntime::reset()} 会对 {@see StateManager::reset()}
  * 传入 {@see callbackNamesOmittableWithPeerFibers()}，跳过已由 {@see StateManager::runWlsPersistentRequestEntryBaseline()}
- * 覆盖且不宜在「他 Fiber 仍挂起」时重复执行的回调；Session/SseContext/RequestContext/DB 等仍在 finally 全量清理。
+ * 覆盖且不宜在「他 Fiber 仍挂起」时重复执行的回调；模块 resetter、Session、SseContext、RequestContext、
+ * DB、Request 与 Template 等请求边界回调仍在 finally 全量清理。
  *
- * 数据层：多 Fiber 共享 DB 连接池时，若在事务未提交前 yield，理论上可能交叉；业务侧应避免长事务跨 yield。
+ * 已注册静态请求状态由 {@see WlsFiberContext::captureForFiber()} 随目标 Fiber 捕获/恢复；模块请求状态必须
+ * 收敛到 Fiber-local {@see RequestContext}。DB 清理不在 omit 白名单，事务也不得跨协作式 yield。
  *
  * 静态审计（本地可重复执行，结果需人工分类是否为「请求级」）：
  * `rg "private static \\$" app/code -g"*.php"`，对命中类检查是否已 registerStaticReset / reset 回调。
@@ -73,7 +75,11 @@ final class WlsConcurrency
     }
 
     /**
-     * {@see StateManager::reset()} 可按名跳过的回调（供实验或后续 peer 感知策略使用）。
+     * {@see StateManager::reset()} 可按名跳过的回调。
+     *
+     * 每一项都必须同时满足：由 {@see StateManager::registerFrameworkResets()} 实际注册，且在
+     * {@see StateManager::runWlsPersistentRequestEntryBaseline()} 或同一请求入口已有等价清理。
+     * Fiber RequestContext 中的模块状态不属于此白名单。
      *
      * @return list<string>
      */
@@ -86,17 +92,9 @@ final class WlsConcurrency
             'controller_instances',
             'model_instances',
             'observer_instances',
-            'slot_renderer_cache',
-            'theme_config_blocks',
-            'theme_data_request_state',
-            'preview_token_request_state',
-            'menu_render_service',
-            'acl_taglib_reset',
             'message_manager_request_state',
             'events_manager_observer_cache',
-            'widget_taglib_cache',
             'view_hook_runtime_cache',
-            'virtual_theme_context',
             'process_url_cache_static',
         ];
     }

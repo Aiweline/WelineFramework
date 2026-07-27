@@ -7,30 +7,25 @@ namespace Weline\Server\Service\Provider;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
-use Weline\Server\Service\MasterProcess;
-use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
- * Public HTTP/3, HTTP/2 and HTTP/1.1 transport adapter.
- *
- * This process owns only TLS/QUIC and connection multiplexing. Every request
- * is forwarded to WorkerPolicyKernel, which remains the sole L7 policy owner.
+ * Retired compatibility provider. Public protocol termination belongs to Nginx.
  */
 final class ProtocolEdgeProvider extends AbstractServiceProvider
 {
     public function getRole(): string
     {
-        return ProtocolEdgeRuntime::ROLE;
+        return 'protocol_edge_retired';
     }
 
     public function getDisplayName(): string
     {
-        return 'HTTP Protocol Edge';
+        return 'Retired HTTP Protocol Edge';
     }
 
     public function isEnabled(ServiceContext $context): bool
     {
-        return $context->isProtocolEdgeEnabled();
+        return false;
     }
 
     public function getInstanceCount(ServiceContext $context): int
@@ -50,61 +45,24 @@ final class ProtocolEdgeProvider extends AbstractServiceProvider
 
     public function getReloadStrategy(): string
     {
-        // Code reloads keep the established public TLS/QUIC listener and its
-        // connections alive. Instance-isolated ticket keys preserve TLS 1.3
-        // resumption while the Worker generation changes underneath it.
+        // Provider is permanently disabled and retained only for stale class references.
         return 'none';
     }
 
     public function requiresStartupReadyBarrier(): bool
     {
-        return true;
+        return false;
     }
 
     public function isCriticalRole(): bool
     {
-        return true;
+        return false;
     }
 
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
-        $selection = ProtocolEdgeRuntime::selection($context);
-        $binary = ProtocolEdgeRuntime::resolveBinary($context);
-        if ($binary === '') {
-            throw new \RuntimeException('The verified WLS protocol-edge binary is unavailable to Master.');
-        }
-
-        $configFile = ProtocolEdgeRuntime::writeConfig($context);
-        $tokenFile = ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
-        $script = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin' . DS . 'protocol_edge.php';
-        $processName = MasterProcess::buildScopedProcessName(
-            ProtocolEdgeRuntime::PROCESS_NAME_PREFIX,
-            $context->instanceName,
-        );
-        $arguments = [
-            $context->instanceName,
-            (string)$context->mainPort,
-            ($selection->isNativeProtocolEdge() ? '--edge-binary=' : '--caddy-binary=') . $binary,
-            '--config=' . $configFile,
-            '--pid-file=' . ProtocolEdgeRuntime::pidFile($context->instanceName),
-            '--token-file=' . $tokenFile,
-            '--tls-session-resumption=' . ($selection->tlsSessionResumption ? '1' : '0'),
-            '--public-host=' . (string)($context->publicHost ?: $context->host),
-            '--admin-address=127.0.0.1:' . ProtocolEdgeRuntime::adminPort($context),
-            '--control-port=' . $context->controlPort,
-            '--master-pid=' . $context->masterPid,
-        ];
-        foreach (ProtocolEdgeRuntime::upstreams($context) as $upstream) {
-            $arguments[] = '--upstream=' . $upstream;
-        }
-        if ($context->windowMode) {
-            $arguments[] = '--win';
-        }
-
-        return new ServiceCommand(
-            script: $script,
-            arguments: $arguments,
-            processName: $processName,
+        throw new \RuntimeException(
+            'WLS protocol edge is retired; Nginx is the only supported public protocol terminator.'
         );
     }
 

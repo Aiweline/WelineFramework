@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestResetException;
 use Weline\Framework\Runtime\Runtime;
 
 final class RequestContextFiberStorageTest extends TestCase
@@ -184,5 +185,32 @@ final class RequestContextFiberStorageTest extends TestCase
         self::assertTrue($fiberA->isTerminated());
         self::assertSame(['fiber-b', 'fiber-a'], $calls);
         self::assertSame('', $fiberA->getReturn());
+    }
+
+    public function testCleanupAttemptsEveryCallbackAndClearsStateBeforeReportingFailure(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::set('probe', 'stale');
+        RequestContext::setWelineWebsiteCode('site-a');
+        $afterFailureCalls = 0;
+        RequestContext::onCleanup(
+            static fn () => throw new \RuntimeException('cleanup probe failed'),
+            'failure-probe',
+        );
+        RequestContext::onCleanup(static function () use (&$afterFailureCalls): void {
+            ++$afterFailureCalls;
+        }, 'after-failure-probe');
+
+        try {
+            RequestContext::cleanup();
+            self::fail('Expected RequestContext cleanup to report its callback failure.');
+        } catch (RequestResetException $exception) {
+            self::assertStringContainsString('cleanup_callback:failure-probe', $exception->getMessage());
+        }
+
+        self::assertSame(1, $afterFailureCalls);
+        self::assertFalse(RequestContext::has('probe'));
+        self::assertSame('', RequestContext::getWelineWebsiteCode());
+        self::assertFalse(RequestContext::isInitialized());
     }
 }

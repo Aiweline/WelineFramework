@@ -159,7 +159,9 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
     {
         WorkerResponseMemoryGuard::requestDrainAfterResponse('fiber_output_buffer_overflow');
 
+        self::assertTrue(WorkerResponseMemoryGuard::hasDrainAfterResponseRequest());
         self::assertSame('fiber_output_buffer_overflow', WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+        self::assertFalse(WorkerResponseMemoryGuard::hasDrainAfterResponseRequest());
         self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
     }
 

@@ -32,6 +32,9 @@ class Start implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        $this->printer->error('console:server:start: ' . __('Nginx 是唯一公网边缘，不能跳过其启动。'));
+        return 1;
+
         $host = $args['host'] ?? $args['h'] ?? '127.0.0.1';
         $port = (int) ($args['port'] ?? $args['p'] ?? 9981);
         
@@ -592,60 +595,17 @@ class Start implements CommandInterface
      */
     public function tip(): string
     {
-        return '启用PHP内置本地WebServer服务。开发专用，请勿用于生产环境。默认后台运行。-r/--force：重启（先停后起）；-f/--foreground：前台运行。';
+        return (string)__('Nginx 是唯一公网边缘，不能跳过其启动。');
     }
 
     public function help(): array|string
     {
-        return '
-════════════════════════════════════════════════════════════════════════════════
-命令名称: server:start
-════════════════════════════════════════════════════════════════════════════════
-
-📖 描述：
-    启用PHP内置本地WebServer服务
-    开发专用，请勿用于生产环境
-    默认后台运行，可指定前台运行模式
-    
-    ⚡ 重要变更：
-    现在默认后台运行！
-    如需前台运行，请使用 -f 或 --foreground 参数
-
-🎯 基本语法：
-    php bin/w server:start [选项]
-
-🔧 常用选项：
-    -r, --force             重启（先停止现有服务器再启动，即强制重启）
-    -f, --foreground        前台运行（实时查看日志输出）
-    --host=<主机>           指定主机地址（默认：127.0.0.1；直连外网用 --host 0.0.0.0；-h 保留给帮助）
-    -p, --port=<端口>       指定端口（默认：9981）
-    --help                  显示此帮助信息
-
-📋 使用方式：
-
-1️⃣ 默认启动（后台运行）：
-    php bin/w server:start                # 默认后台运行
-    php bin/w server:start -p 8080        # 指定端口后台运行
-
-2️⃣ 前台运行（查看实时日志）：
-    php bin/w server:start -f             # 前台运行，实时查看日志
-    php bin/w server:start --foreground   # 前台运行（完整参数名）
-
-3️⃣ 重启（先停后起）：
-    php bin/w server:start -r             # 重启（-r = 先停后起）
-    php bin/w server:start --force        # 同上（完整参数名）
-    php bin/w server:start -r -f          # 重启并前台运行（-f = 前台）
-
-4️⃣ 自定义配置：
-    php bin/w server:start --host 0.0.0.0 -p 8080    # 监听所有网卡，端口8080
-
-💡 提示：
-    - 后台模式：适合日常开发，不阻塞终端
-    - 前台模式：适合调试，可以实时查看请求日志
-    - 使用 "php bin/w server:stop" 停止后台运行的服务器
-    - 使用 "php bin/w server:status" 查看服务器状态
-
-════════════════════════════════════════════════════════════════════════════════
-';
+        return \Weline\Framework\Console\CommandHelper::formatHelp(
+            'console:server:start',
+            $this->tip(),
+            [],
+            [],
+            []
+        );
     }
 }

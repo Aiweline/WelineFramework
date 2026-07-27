@@ -7,7 +7,7 @@ namespace Weline\Server\Service\Edge;
 use Weline\Framework\App\Env;
 
 /**
- * Resolves the active edge adapter. Invalid values fail closed to nginx.
+ * Resolves the only supported public edge adapter.
  */
 final class EdgeAdapterResolver
 {
@@ -28,9 +28,7 @@ final class EdgeAdapterResolver
         }
 
         $this->resolvedName = $name;
-        $this->resolved = $name === EdgeAdapterInterface::NAME_WLS
-            ? new WlsNativeEdgeAdapter()
-            : new NginxEdgeAdapter();
+        $this->resolved = new NginxEdgeAdapter();
 
         return $this->resolved;
     }
@@ -53,7 +51,8 @@ final class EdgeAdapterResolver
             $envConfig = \is_array($raw) ? $raw : [];
         }
 
-        // 未配置 / 空字符串 → nginx（无需在 env.php 写 edge 段）
+        // 未配置 / 空字符串 → 项目隔离 Nginx。普通 start 只复用已安装二进制，
+        // 绝不下载或编译；安装必须由 server:nginx:install 显式完成。
         if (!\array_key_exists('edge', \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [])
             || !\array_key_exists('adapter', \is_array($envConfig['wls']['edge'] ?? null) ? $envConfig['wls']['edge'] : [])
         ) {
@@ -65,21 +64,10 @@ final class EdgeAdapterResolver
         if ($normalized === '' || $normalized === EdgeAdapterInterface::NAME_NGINX) {
             return EdgeAdapterInterface::NAME_NGINX;
         }
-        if ($normalized === EdgeAdapterInterface::NAME_WLS) {
-            return EdgeAdapterInterface::NAME_WLS;
-        }
 
-        if (\function_exists('w_msg')) {
-            w_msg(
-                'wls_edge_adapter_invalid',
-                'warning',
-                __('WLS 边缘适配器配置无效'),
-                __('wls.edge.adapter=%{1} 无效，已回退为 nginx。', [$normalized]),
-                ['configured' => $normalized]
-            );
-        }
-
-        return EdgeAdapterInterface::NAME_NGINX;
+        throw new \InvalidArgumentException(
+            'wls.edge.adapter=' . $normalized . ' is retired; Nginx is the only supported public edge.'
+        );
     }
 
     public function clearCache(): void

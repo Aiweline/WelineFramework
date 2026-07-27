@@ -50,10 +50,9 @@ final class AsyncBizAdapters
     {
         $startedAt = \microtime(true);
         try {
-            // Fiber is cooperative; cold framework dispatch must enter from the scheduler, not from start().
-            if (\Weline\Framework\Runtime\SchedulerSystem::isSchedulerActive()) {
-                \Weline\Framework\Runtime\SchedulerSystem::yield();
-            }
+            // The scheduler already owns entry into the request Fiber. Yielding
+            // again at this framework boundary would suspend a cold request
+            // before its callback and can enqueue the response path twice.
             return $callback();
         } finally {
             $elapsedMs = (\microtime(true) - $startedAt) * 1000;
@@ -65,4 +64,3 @@ final class AsyncBizAdapters
         }
     }
 }
-

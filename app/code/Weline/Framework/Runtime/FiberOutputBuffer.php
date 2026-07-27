@@ -27,6 +27,9 @@ final class FiberOutputBuffer
     /** @var list<FiberOutputCaptureFrame> */
     private static array $mainBufferStack = [];
 
+    /** @var list<int> Native output-buffer baselines owned by non-persistent captures. */
+    private static array $nonPersistentCaptureBaselines = [];
+
     private static ?int $memoryLimitBytes = null;
 
     private static int $missingFrameWarnings = 0;
@@ -92,6 +95,7 @@ final class FiberOutputBuffer
     public static function beginCapture(): void
     {
         if (!Runtime::isPersistent()) {
+            self::$nonPersistentCaptureBaselines[] = \ob_get_level();
             \ob_start();
             return;
         }
@@ -113,7 +117,28 @@ final class FiberOutputBuffer
     public static function endCapture(): string
     {
         if (!Runtime::isPersistent()) {
-            return (string)\ob_get_clean();
+            $baseline = \array_pop(self::$nonPersistentCaptureBaselines);
+            if (!\is_int($baseline) || \ob_get_level() <= $baseline) {
+                return '';
+            }
+
+            // A legacy include may leak a nested native buffer. Fold only the
+            // layers created above this capture into our owned layer; never
+            // consume a caller/PHPUnit/FPM buffer below the recorded baseline.
+            while (\ob_get_level() > $baseline + 1) {
+                $before = \ob_get_level();
+                $nested = \ob_get_clean();
+                if (\ob_get_level() >= $before) {
+                    return '';
+                }
+                if (\is_string($nested) && $nested !== '') {
+                    echo $nested;
+                }
+            }
+
+            return \ob_get_level() === $baseline + 1
+                ? (string)\ob_get_clean()
+                : '';
         }
 
         self::flushInstalledBufferIntoCurrentFrame();
@@ -153,8 +178,15 @@ final class FiberOutputBuffer
     public static function discardCapture(): void
     {
         if (!Runtime::isPersistent()) {
-            while (\ob_get_level() > 0) {
-                \ob_end_clean();
+            $baseline = \array_pop(self::$nonPersistentCaptureBaselines);
+            if (!\is_int($baseline)) {
+                return;
+            }
+            while (\ob_get_level() > $baseline) {
+                $before = \ob_get_level();
+                if (!@\ob_end_clean() || \ob_get_level() >= $before) {
+                    break;
+                }
             }
             return;
         }
@@ -185,6 +217,15 @@ final class FiberOutputBuffer
     public static function resetCurrent(): void
     {
         if (!Runtime::isPersistent()) {
+            while (self::$nonPersistentCaptureBaselines !== []) {
+                $baseline = \array_pop(self::$nonPersistentCaptureBaselines);
+                while (\is_int($baseline) && \ob_get_level() > $baseline) {
+                    $before = \ob_get_level();
+                    if (!@\ob_end_clean() || \ob_get_level() >= $before) {
+                        break 2;
+                    }
+                }
+            }
             return;
         }
 
@@ -211,7 +252,8 @@ final class FiberOutputBuffer
     public static function hasActiveCapture(): bool
     {
         if (!Runtime::isPersistent()) {
-            return \ob_get_level() > 0;
+            $baseline = self::$nonPersistentCaptureBaselines[\array_key_last(self::$nonPersistentCaptureBaselines)] ?? null;
+            return \is_int($baseline) && \ob_get_level() > $baseline;
         }
 
         $fiber = \Fiber::getCurrent();

@@ -122,7 +122,7 @@ final class WorkerPolicyKernel
 
     private float $lastStateReconnectAttempt = 0.0;
 
-    /** Empty for native public/direct and legacy Dispatcher transports. */
+    /** Empty for Direct and explicit compatibility/diagnostic Dispatcher transports. */
     private string $protocolEdgeToken = '';
 
     private function __construct(
@@ -142,8 +142,11 @@ final class WorkerPolicyKernel
     {
         $instanceName = \trim($instanceName) !== '' ? \trim($instanceName) : 'default';
         $topology = \strtolower(\trim($topology));
+        if ($topology === 'auto') {
+            $topology = 'direct';
+        }
         if (!\in_array($topology, ['direct', 'dispatcher'], true)) {
-            $topology = PHP_OS_FAMILY === 'Windows' ? 'dispatcher' : 'direct';
+            throw new \InvalidArgumentException('Worker policy topology must be auto, direct, or dispatcher.');
         }
         $_SERVER['WLS_RUNTIME_TOPOLOGY'] = $topology;
         $_ENV['WLS_RUNTIME_TOPOLOGY'] = $topology;

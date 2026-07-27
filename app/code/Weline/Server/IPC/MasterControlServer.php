@@ -867,7 +867,7 @@ class MasterControlServer implements ControlPlaneServerInterface
         $this->clients[$clientId]['resurrection_priority'] = $priority;
 
         // 发送 ACK
-        $this->sendTo($clientId, ControlMessage::ack($priority));
+        $this->sendTo($clientId, ControlMessage::ack($priority, '', $clientId));
     }
 
     /**

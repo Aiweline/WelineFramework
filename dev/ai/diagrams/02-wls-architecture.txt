@@ -6,14 +6,14 @@
 │ Process Model (Cross-platform)                                                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-POSIX Auto Direct + HTTPS Protocol Edge:
+POSIX Auto Direct + Project-managed Nginx:
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          Master Process (PID 1000)                        │
 │  Role: Registry, policy/config digest, hot reload, orphan detection      │
 └────┬─────────────────────────────────────────────────────────────────────┘
      │
-     ├─▶ WLS Native Protocol Edge ◀── Client h3/QUIC, h2/h1 ALPN
-     │        │ private h1 keep-alive pool + instance token
+     ├─▶ Managed Nginx ◀── TLS 1.3, h2/h1; HTTP/3-only WLS health gate or pending
+     │        │ loopback plaintext h1 keep-alive
      │        ├─▶ READY Worker-1 (PID 1001)
      │        ├─▶ READY Worker-2 (PID 1002)
      │        └─▶ READY Worker-N (PID 100N)
@@ -21,29 +21,42 @@ POSIX Auto Direct + HTTPS Protocol Edge:
      ├─▶ SessionServer (PID 1101) ──▶ Shared Session storage
      └─▶ MemoryServer (PID 1102)  ──▶ Shared memory/cache/policy state
 
-Direct means no WLS Dispatcher. Protocol Edge owns only TLS/QUIC, ALPN,
-session tickets and multiplexing; WorkerPolicyKernel owns all L7 rules/FPC.
+Direct means no WLS Dispatcher. Project-managed Nginx exclusively owns TLS,
+ALPN, multiplexing and tickets; WorkerPolicyKernel owns all L7 rules/FPC.
 
-Windows Auto Dispatcher + HTTPS Protocol Edge:
+Windows Auto Direct + Project-managed Nginx:
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          Master Process (PID 2000)                        │
 │  Role: Registry, policy/config digest, monitoring                        │
 └────┬─────────────────────────────────────────────────────────────────────┘
      │
-     ├─▶ WLS Native Protocol Edge ◀── Client h3/QUIC, h2/h1 ALPN
-     │        │ private h1 keep-alive + instance token
-     │        ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                       Dispatcher Process (PID 2001)                       │
-│  Role: global L4 gate, READY routing, backpressure; no per-request rules │
-└────┬─────────────────────────────────────────────────────────────────────┘
-     │
-     ├─▶ Worker-1 (PID 2002) ──┐
-     ├─▶ Worker-2 (PID 2003)   ├─▶ Handle business logic
-     ├─▶ Worker-N (PID 200N) ──┘
+     ├─▶ Managed Nginx ◀── TLS 1.3, h2/h1; HTTP/3-only WLS health gate or pending
+     │        │ loopback plaintext h1 keep-alive; Nginx upstream balancing
+     │        ├─▶ READY Worker-1 (PID 2001, worker_port_1)
+     │        ├─▶ READY Worker-2 (PID 2002, worker_port_2)
+     │        └─▶ READY Worker-N (PID 200N, worker_port_N)
      │
      ├─▶ SessionServer (PID 2101)
      └─▶ MemoryServer (PID 2102)
+
+WLS TLS, worker_ssl, ProtocolEdge, Caddy and Native transports are retired
+and unreachable; they are not configuration choices or fallback paths.
+
+Managed Nginx ingress invariants:
+  • H2/H1 runtime readiness requires separate fresh requests through Nginx to
+    /_wls/health?detail=1, with exact HTTP version, owner/backend identity and
+    config generation. TLS/ALPN or configuration alone is not runtime proof.
+  • HTTP/3 readiness requires an owner-bound HTTP/3-only fresh QUIC request
+    through Nginx to the same health endpoint. A local Nginx response or edge
+    cache hit is invalid.
+  • Upstream authority is $http_host, or $host:$server_port when HTTP/3 leaves
+    $http_host empty; Host + X-Forwarded-Proto/Port reconstruct public origin.
+  • RuntimePolicyBundle always trusts 127.0.0.0/8 and ::1/128 as proxy transport
+    peers, never as business whitelist entries.
+  • Only the loopback-allowlisted /_wls/ location propagates an exact client
+    Connection: close for fresh H1 distribution gates. Business traffic keeps
+    upstream connections reusable except an exact websocket Upgrade tunnel;
+    WebSocket itself remains outside the current 101/frame release matrix.
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ IPC Architecture (NDJSON over TCP)                                           │
@@ -58,14 +71,13 @@ Master (127.0.0.1:control_port)
    ├─▶ reload          Hot reload code
    ├─▶ restart         Restart process
    ├─▶ stop            Stop process
-   ├─▶ ssl_cert_reload SSL cert reload (supports domains param)
    ├─▶ config_update   Config update
    └─▶ status          Status query
 
 Message format examples:
 {"action":"register","role":"worker","pid":1001,"process_kind":"framework"}
 {"action":"heartbeat","pid":1001,"timestamp":1234567890}
-{"action":"ssl_cert_reload","domains":["example.com","www.example.com"]}
+{"action":"config_update","epoch":42}
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Process Identity                                                              │
@@ -154,34 +166,44 @@ Implementation:
   • Server\IPC\MasterOrphanGuard (WLS implementation)
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ SSL Certificate Dynamic Loading                                              │
+│ Project-managed Nginx TLS Certificate Lifecycle                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 Flow:
-  1. Database stores certificates (domain → cert/key)
-  2. Worker loads from DB to memory on startup
-  3. After adding/updating cert, call Master API:
-     POST /wls/ssl/reload?domains[]=example.com
-  4. Master broadcasts ssl_cert_reload message to all Workers
-  5. Worker clears specified domain cache, reloads from DB
+  1. Certificate files are published under app/etc/ssl/{domain}/
+  2. ManagedNginxConfigWriter builds an isolated candidate config
+  3. The installed Nginx binary must pass nginx -t
+  4. Config is atomically published, then Nginx starts or reloads
+  5. A certificate-bound TLS 1.3 handshake is verified
+  6. Fresh H2 and H1 requests must reach owner-bound real WLS health
+  7. H3, when verifier support exists, must reach real WLS health over HTTP/3-only
+  8. A failed rollback stops Nginx unless the committed live generation is proven
 
-Negative cache clearing:
-  • Global reload: Clear all cache + reload mapping table
-  • Targeted reload: Clear only specified domains' negative cache + memory cache
+Session boundary:
+  • Shared session cache/tickets are enabled in Nginx
+  • Proof model: fresh-share-two-connection-pair-v1
+  • Each pair owns a new SSL share: one fresh issuer + one fresh-TCP probe
+  • At least 8 valid probes, failed=0, resumed handshake P95 <= 50ms
+  • Same/cross-worker results bind each issuer/probe PID pair; cross-worker is
+    not_applicable only when the effective Nginx worker count is one
+  • HTTP/3/QUIC session resumption remains unverified
+
+WLS Workers never load certificates and never terminate TLS.
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Service Providers                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-All WLS child processes extend AbstractServiceProvider:
+Current WLS child processes extend AbstractServiceProvider:
 
 WorkerProvider          → HTTP Worker (handle requests)
-DispatcherProvider      → Windows Dispatcher (request distribution)
-ProtocolEdgeProvider    → Public h3/h2/h1, TLS/QUIC and session reuse
+DispatcherProvider      → Explicit compatibility/diagnostic loopback H1 Dispatcher
 SessionServerProvider   → Session shared service
 MemoryServerProvider    → Memory cache service
 MaintenanceWorkerProvider → Cron tasks (cleanup, stats)
-HttpRedirectProvider    → HTTP redirect service
+
+Managed Nginx is owned by ManagedNginxService, not a WLS child Provider.
+ProtocolEdgeProvider, HttpRedirectProvider, worker_ssl and Native transports are retired.
 
 Each Provider implements:
   • start()           → Start service

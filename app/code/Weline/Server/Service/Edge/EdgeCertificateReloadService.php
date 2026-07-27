@@ -13,6 +13,13 @@ final class EdgeCertificateReloadService
 {
     public const LAST_RESULT_RELATIVE = 'server/ssl_edge_reload_last.json';
 
+    public function __construct()
+    {
+        throw new \RuntimeException(
+            'External Nginx reload commands are retired; use the project-managed Nginx lifecycle.'
+        );
+    }
+
     /**
      * @return array{
      *   attempted:bool,

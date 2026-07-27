@@ -238,10 +238,21 @@ class FiberScheduler
     /**
      * @param callable|null $beforeResume 在 resume 前调用，接收 Fiber 参数
      */
-    public function tick(?callable $beforeResume = null, ?float $maxExecutionMs = null, ?callable $afterResume = null): void
+    public function tick(
+        ?callable $beforeResume = null,
+        ?float $maxExecutionMs = null,
+        ?callable $afterResume = null,
+        ?callable $onResumeFailure = null,
+    ): void
     {
         $startAt = $maxExecutionMs !== null ? \microtime(true) : 0.0;
-        $this->resumeDueIoWaiters($beforeResume, $maxExecutionMs, $afterResume, $startAt);
+        $this->resumeDueIoWaiters(
+            $beforeResume,
+            $maxExecutionMs,
+            $afterResume,
+            $onResumeFailure,
+            $startAt,
+        );
 
         if (empty($this->timers)) {
             return;
@@ -269,7 +280,7 @@ class FiberScheduler
 
             /** @var \Fiber $fiber */
             $fiber = $timer['fiber'];
-            $this->resumeFiber($fiber, null, $beforeResume, $afterResume);
+            $this->resumeFiber($fiber, null, $beforeResume, $afterResume, $onResumeFailure);
         }
     }
 
@@ -281,6 +292,7 @@ class FiberScheduler
         ?callable $beforeResume,
         ?float $maxExecutionMs,
         ?callable $afterResume,
+        ?callable $onResumeFailure,
         float $startAt
     ): void {
         if ($this->ioWaiters === []) {
@@ -313,7 +325,13 @@ class FiberScheduler
             }
 
             unset($this->ioWaiters[$id]);
-            $this->resumeFiber($waiter['fiber'], $waiter['result'] === true, $beforeResume, $afterResume);
+            $this->resumeFiber(
+                $waiter['fiber'],
+                $waiter['result'] === true,
+                $beforeResume,
+                $afterResume,
+                $onResumeFailure,
+            );
         }
     }
 
@@ -321,7 +339,8 @@ class FiberScheduler
         \Fiber $fiber,
         mixed $resumeValue,
         ?callable $beforeResume,
-        ?callable $afterResume
+        ?callable $afterResume,
+        ?callable $onResumeFailure,
     ): void {
         if (!$fiber->isSuspended()) {
             return;
@@ -338,6 +357,13 @@ class FiberScheduler
         } catch (RequestExitException) {
             // Fiber ended via request-exit path.
         } catch (\Throwable $e) {
+            if ($onResumeFailure !== null) {
+                try {
+                    $onResumeFailure($fiber, $e);
+                } catch (\Throwable) {
+                    // Failure reporting must not mask the original scheduler error.
+                }
+            }
             \Weline\Framework\App\Env::log_error(
                 'wls/fiber_scheduler',
                 'FiberScheduler::tick resume error: ' . $e->getMessage()

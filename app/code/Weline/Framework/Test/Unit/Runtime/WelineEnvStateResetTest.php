@@ -74,6 +74,22 @@ final class WelineEnvStateResetTest extends TestCase
         self::assertNull(WelineEnv::get('custom.shadow', null));
     }
 
+    public function testResetCanClearEnvStateWithoutLeavingNestedWlsContext(): void
+    {
+        $context = new Context([
+            'meta' => ['id' => 'outer-worker-context'],
+        ]);
+        Context::enter($context);
+        WelineEnv::set('custom.shadow', '/request-value', 'unit-test');
+
+        WelineEnv::getInstance()->reset(false);
+
+        self::assertSame($context, Context::getCurrent());
+        self::assertSame('outer-worker-context', Context::current()->get('meta.id'));
+        self::assertNull(RequestContext::get('env.custom.shadow'));
+        self::assertSame('/request-value', WelineEnv::get('custom.shadow', null));
+    }
+
     public function testRestoreReplaysCapturedParameterStateWithoutReReadingCurrentGlobals(): void
     {
         $_GET = ['foo' => 'from-snapshot'];

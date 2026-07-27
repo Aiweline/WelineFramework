@@ -20,63 +20,32 @@ final class RuntimeStrategyResolver
         $loop = \is_array($config['loop'] ?? null) ? $config['loop'] : [];
         $strategy = $this->normalizeStrategy($config['runtime_strategy'] ?? ($runtime['strategy'] ?? self::STRATEGY_AUTO));
         $requestedWorkerCount = $config['worker_count_requested'] ?? ($config['worker_count'] ?? 'auto');
-        $workerCount = $this->resolveWorkerCount(
-            $config['worker_count'] ?? 'auto',
+        $workerCountInput = \is_string($requestedWorkerCount)
+            && \strtolower(\trim($requestedWorkerCount)) === 'auto'
+                ? 'auto'
+                : ($config['worker_count'] ?? $requestedWorkerCount);
+        $workerMemoryLimitMb = \Weline\Server\Service\Memory\WorkerMemoryBudgetCalculator::memoryLimitToMb(
+            $config['worker_memory_limit'] ?? '256M'
+        );
+        $workerCountResult = $this->resolveWorkerCountDetailed(
+            $workerCountInput,
             (string)($config['mode'] ?? 'io'),
             $strategy,
-            $profile
+            $profile,
+            $workerMemoryLimitMb
         );
+        $workerCount = $workerCountResult['count'];
         $topology = $this->resolveTopology($config, $args, $profile);
         $eventLoop = $this->resolveEventLoopDriver(
             (string)($config['event_loop'] ?? ($loop['driver'] ?? 'auto')),
             $profile
         );
         $sslEngine = $this->resolveSslEngine($config);
-        $extensions = $profile->get('extensions', []);
-        $sslRequired = empty($config['no_ssl']) && ($config['https'] ?? true) !== false;
-        try {
-            $tlsSessionCache = TlsSessionCacheConfig::fromSslConfig(
-                \is_array($config['ssl'] ?? null) ? $config['ssl'] : []
-            );
-        } catch (\InvalidArgumentException $exception) {
-            throw new \RuntimeException($exception->getMessage(), 0, $exception);
-        }
-        if ($sslRequired && $tlsSessionCache->enabled()) {
-            TlsSessionCacheRuntime::assertApiAvailable();
-            if ($sslEngine !== 'stream') {
-                throw new \RuntimeException(
-                    'wls.ssl.session_cache=external requires wls.ssl.engine=stream and the defer-SSL per-connection SNI path.'
-                );
-            }
-        }
-        if ($sslRequired
-            && \is_array($extensions)
-            && \array_key_exists('openssl', $extensions)
-            && !$profile->hasExtension('openssl')
-        ) {
-            throw new \RuntimeException(
-                'WLS HTTPS requires the PHP OpenSSL extension in the current PHP binary (' . PHP_BINARY . '); '
-                . 'install/enable openssl or explicitly use --no-ssl.'
-            );
-        }
-        if ($topology['effective'] === EffectiveTopology::Dispatcher && $sslEngine === 'event_buffer') {
-            throw new \RuntimeException(
-                'wls.ssl.engine=event_buffer is not compatible with the authenticated PROXY v2 Dispatcher backend: '
-                . 'the current EventBuffer worker starts TLS before it can consume the required backend preface. '
-                . 'Use wls.ssl.engine=stream; WLS will not silently corrupt or downgrade the TLS connection.'
-            );
-        }
         if ($topology['effective'] === EffectiveTopology::Direct) {
-            if ($sslEngine === 'event_buffer') {
+            if ($topology['listener_mode'] !== 'worker_ports' && $eventLoop['driver'] !== 'event') {
                 throw new \RuntimeException(
-                    'WLS direct topology does not support wls.ssl.engine=event_buffer; '
-                    . 'use the stream SSL engine or explicitly select --dispatcher.'
-                );
-            }
-            if ($eventLoop['driver'] !== 'event') {
-                throw new \RuntimeException(
-                    'WLS direct topology requires the PHP event extension and event loop; '
-                    . 'install/enable ext-event or explicitly select --dispatcher.'
+                    'WLS shared-listener Direct topology requires the PHP event extension and event loop; '
+                    . 'install/enable ext-event, use Windows worker_ports, or explicitly select --dispatcher.'
                 );
             }
         }
@@ -104,12 +73,16 @@ final class RuntimeStrategyResolver
             'runtime_strategy' => $strategy,
             'status' => $this->resolveStatus($warnings, $topology, $eventLoop, $supervisor),
             'worker_count' => $workerCount,
-            'worker_count_reason' => $this->workerCountReason(
-                $requestedWorkerCount,
-                (string)($config['mode'] ?? 'io'),
-                $profile,
-                $strategy
-            ),
+            'worker_count_reason' => $workerCountResult['reason'] !== ''
+                ? $workerCountResult['reason']
+                : $this->workerCountReason(
+                    $requestedWorkerCount,
+                    (string)($config['mode'] ?? 'io'),
+                    $profile,
+                    $strategy
+                ),
+            'budget_ceiling' => $workerCountResult['budget_ceiling'],
+            'worker_budget' => $workerCountResult['budget'],
             'event_loop_reason' => $eventLoop['reason'],
             'supervisor_enabled' => $supervisor['enabled'],
             'supervisor_reason' => $supervisor['reason'],
@@ -118,54 +91,136 @@ final class RuntimeStrategyResolver
         ];
     }
 
-    public function resolveWorkerCount(mixed $workerCount, string $mode, string $strategy, WlsRuntimeProfile $profile): int
-    {
+    public function resolveWorkerCount(
+        mixed $workerCount,
+        string $mode,
+        string $strategy,
+        WlsRuntimeProfile $profile,
+        int $workerMemoryLimitMb = 256
+    ): int {
+        return $this->resolveWorkerCountDetailed(
+            $workerCount,
+            $mode,
+            $strategy,
+            $profile,
+            $workerMemoryLimitMb
+        )['count'];
+    }
+
+    /**
+     * @return array{
+     *   count:int,
+     *   budget_ceiling:int,
+     *   reason:string,
+     *   budget:?array<string, mixed>
+     * }
+     */
+    public function resolveWorkerCountDetailed(
+        mixed $workerCount,
+        string $mode,
+        string $strategy,
+        WlsRuntimeProfile $profile,
+        int $workerMemoryLimitMb = 256
+    ): array {
         $strategy = $this->normalizeStrategy($strategy);
         if (\is_int($workerCount) && $workerCount > 0) {
-            return $workerCount;
+            return [
+                'count' => $workerCount,
+                'budget_ceiling' => $workerCount,
+                'reason' => 'explicit worker count',
+                'budget' => null,
+            ];
         }
         if (\is_string($workerCount) && \ctype_digit($workerCount) && (int)$workerCount > 0) {
-            return (int) $workerCount;
+            $explicit = (int)$workerCount;
+            return [
+                'count' => $explicit,
+                'budget_ceiling' => $explicit,
+                'reason' => 'explicit worker count',
+                'budget' => null,
+            ];
         }
 
+        $cpuBased = $this->resolveCpuBasedWorkerCount($mode, $strategy, $profile);
+        $calculator = new \Weline\Server\Service\Memory\WorkerMemoryBudgetCalculator();
+        if ($calculator->isEnabled()) {
+            $limitMb = $profile->memoryMb() ?? 0;
+            $limitSource = $profile->memoryLimitSource();
+            if ($limitMb <= 0) {
+                return [
+                    'count' => \max(1, $cpuBased),
+                    'budget_ceiling' => \max(1, $cpuBased),
+                    'reason' => 'auto worker count without memory capacity; cpu_based=' . $cpuBased,
+                    'budget' => null,
+                ];
+            }
+            $budget = $calculator->calculate(
+                $cpuBased,
+                $limitMb,
+                $limitSource,
+                $workerMemoryLimitMb,
+                $strategy
+            );
+
+            return [
+                'count' => $budget['desired'],
+                'budget_ceiling' => $budget['budget_ceiling'],
+                'reason' => $budget['reason'],
+                'budget' => $budget,
+            ];
+        }
+
+        // Legacy fallback when worker_budget.enabled=false.
+        $count = $cpuBased;
+        $memoryMb = $profile->memoryMb();
+        if ($memoryMb !== null && $memoryMb > 0) {
+            $memoryCap = \max(1, (int)\floor($memoryMb / 512));
+            $count = \min($count, \max(2, $memoryCap));
+        }
+
+        $count = \max(1, $count);
+        return [
+            'count' => $count,
+            'budget_ceiling' => $count,
+            'reason' => '',
+            'budget' => null,
+        ];
+    }
+
+    private function resolveCpuBasedWorkerCount(string $mode, string $strategy, WlsRuntimeProfile $profile): int
+    {
+        $strategy = $this->normalizeStrategy($strategy);
         $cpu = $profile->cpuCores();
         $mode = \strtolower(\trim($mode)) === 'cpu' ? 'cpu' : 'io';
 
         if ($profile->isWindows()) {
-            $base = $mode === 'cpu' ? $cpu : (int) \ceil($cpu / 2);
+            $base = $mode === 'cpu' ? $cpu : (int)\ceil($cpu / 2);
             $count = \min(\max(2, $base), 8);
             if ($strategy === self::STRATEGY_PERFORMANCE) {
                 $count = \min(\max($count, $cpu), 12);
             }
-        } elseif ($profile->isDarwin()) {
-            // WLS workers execute PHP application code synchronously inside each process.
-            // On heterogeneous Apple Silicon, scheduling one hot worker per performance
-            // core avoids efficiency-core spill and the context-switch penalty observed
-            // when logical CPUs are multiplied as if all cores had equal throughput.
-            $count = \min(\max(1, $profile->performanceCpuCores()), 16);
-        } else {
-            $count = $mode === 'cpu' ? $cpu : $cpu * 2;
-            if ($strategy === self::STRATEGY_STABILITY) {
-                $count = $mode === 'cpu' ? $cpu : (int) \ceil($cpu * 1.5);
-            }
-            $count = \min(\max(2, $count), 16);
+
+            return \max(1, $count);
         }
 
-        $memoryMb = $profile->memoryMb();
-        if ($memoryMb !== null && $memoryMb > 0) {
-            $memoryCap = \max(1, (int) \floor($memoryMb / 512));
-            $count = \min($count, \max(2, $memoryCap));
+        if ($profile->isDarwin()) {
+            return \min(\max(1, $profile->performanceCpuCores()), 16);
         }
 
-        return \max(1, $count);
+        $count = $mode === 'cpu' ? $cpu : $cpu * 2;
+        if ($strategy === self::STRATEGY_STABILITY) {
+            $count = $mode === 'cpu' ? $cpu : (int)\ceil($cpu * 1.5);
+        }
+
+        return \min(\max(2, $count), 16);
     }
 
     /**
      * Resolve the platform topology contract without probing optional runtime
      * dependencies. This is the single pre-install source used by server:start:
-     * POSIX auto/direct must ultimately become Direct or fail closed, while an
-     * explicit POSIX Dispatcher remains Dispatcher even when ext-event cannot
-     * be installed.
+     * Auto/direct always stays Direct or fails closed. POSIX uses a verified
+     * shared listener, while Windows uses one loopback port per Worker so Nginx
+     * can balance directly without a PHP Dispatcher hop.
      *
      * @param array<string, mixed> $config
      * @param array<int|string, mixed> $args
@@ -177,35 +232,56 @@ final class RuntimeStrategyResolver
         string $osFamily = PHP_OS_FAMILY,
     ): array {
         ['requested' => $requested, 'source' => $source] = $this->resolveRequestedTopology($config, $args);
+        $listenerMode = $this->configuredDirectListenerMode($config);
 
         if ($osFamily === 'Windows') {
-            if ($requested === RequestedTopology::Direct) {
+            if ($requested === RequestedTopology::Dispatcher) {
+                if ($listenerMode !== 'auto') {
+                    throw new \RuntimeException(
+                        'wls.runtime.listener_mode is valid only for Direct topology; explicit Dispatcher requires auto.'
+                    );
+                }
+
+                return [
+                    'requested' => $requested,
+                    'effective' => EffectiveTopology::Dispatcher,
+                    'source' => $source,
+                    'reason' => 'explicit Dispatcher topology',
+                    'reason_code' => 'explicit_dispatcher',
+                ];
+            }
+            if (!\in_array($listenerMode, ['auto', 'worker_ports'], true)) {
                 throw new \RuntimeException(
-                    'Windows supports only WLS Dispatcher topology; --direct is not supported.'
+                    'Windows Direct requires wls.runtime.listener_mode=auto or worker_ports.'
                 );
             }
 
             return [
                 'requested' => $requested,
-                'effective' => EffectiveTopology::Dispatcher,
+                'effective' => EffectiveTopology::Direct,
                 'source' => $source,
                 'reason' => $requested === RequestedTopology::Auto
-                    ? 'auto selected Dispatcher because Windows requires TCP passthrough'
-                    : 'explicit Dispatcher topology',
+                    ? 'auto selected Nginx-balanced per-Worker loopback ports on Windows'
+                    : 'explicit Direct topology with Nginx-balanced per-Worker loopback ports',
                 'reason_code' => $requested === RequestedTopology::Auto
-                    ? 'windows_auto_dispatcher'
-                    : 'explicit_dispatcher',
+                    ? 'windows_auto_direct_worker_ports'
+                    : 'windows_explicit_direct_worker_ports',
             ];
         }
 
         if (!\in_array($osFamily, ['Linux', 'Darwin'], true)) {
             throw new \RuntimeException(
-                'WLS supports only Windows Dispatcher or Linux/macOS Direct and Dispatcher topologies; '
+                'WLS supports Windows and Linux/macOS Direct plus explicit Dispatcher topology; '
                 . 'the current platform "' . $osFamily . '" is unsupported.'
             );
         }
 
         if ($requested === RequestedTopology::Dispatcher) {
+            if ($listenerMode !== 'auto') {
+                throw new \RuntimeException(
+                    'wls.runtime.listener_mode is valid only for Direct topology; explicit Dispatcher requires auto.'
+                );
+            }
             return [
                 'requested' => $requested,
                 'effective' => EffectiveTopology::Dispatcher,
@@ -268,36 +344,110 @@ final class RuntimeStrategyResolver
             );
         }
 
-        if (!$profile->supportsDirectListener()) {
-            $probe = $profile->directListenerProbe();
-            $reason = \trim((string)($probe['reason'] ?? 'The direct listener capability probe failed.'));
-            throw new \RuntimeException(
-                'WLS direct topology requires a verified load-balanced listener capability. '
-                . $reason . ' Install the required runtime dependencies or explicitly select --dispatcher.'
-            );
-        }
-
-        $listenerMode = $profile->directListenerMode();
-        if (!\in_array($listenerMode, ['reuseport', 'shared_fd'], true)) {
-            throw new \RuntimeException(
-                'WLS direct topology capability probe returned no usable listener strategy; explicitly select --dispatcher.'
-            );
-        }
-        $listenerLabel = $listenerMode === 'shared_fd'
-            ? 'Master-owned shared listener FD'
-            : 'SO_REUSEPORT';
+        $listenerMode = $this->resolveDirectListenerMode(
+            $this->configuredDirectListenerMode($config),
+            $profile,
+        );
+        $listenerLabel = match ($listenerMode) {
+            'shared_fd' => 'Master-owned shared listener FD',
+            'reuseport' => 'SO_REUSEPORT',
+            'worker_ports' => 'Nginx-balanced per-Worker loopback ports',
+            default => $listenerMode,
+        };
+        $platformLabel = $profile->isWindows()
+            ? 'Windows'
+            : ($profile->isLinux() ? 'Linux' : 'macOS');
 
         return $this->topologyResult(
             $requested,
             EffectiveTopology::Direct,
             $source,
             $requested === RequestedTopology::Auto
-                ? 'auto selected ' . $listenerLabel . ' direct topology on Linux/macOS'
+                ? 'auto selected ' . $listenerLabel . ' direct topology on ' . $platformLabel
                 : 'explicit direct topology with verified ' . $listenerLabel . ' support',
-            $requested === RequestedTopology::Auto ? 'posix_auto_direct' : 'explicit_direct',
+            $intent['reason_code'],
             [],
             $listenerMode,
         );
+    }
+
+    /**
+     * Linux auto prefers a verified SO_REUSEPORT listener for kernel-level
+     * connection distribution and falls back to the Master-owned shared FD.
+     * macOS keeps the shared FD; explicit listener modes remain available.
+     */
+    private function resolveDirectListenerMode(string $requested, WlsRuntimeProfile $profile): string
+    {
+        if ($profile->isWindows()) {
+            if (!\in_array($requested, ['auto', 'worker_ports'], true)) {
+                throw new \RuntimeException(
+                    'Windows Direct requires wls.runtime.listener_mode=auto or worker_ports.'
+                );
+            }
+
+            return 'worker_ports';
+        }
+
+        if ($requested === 'worker_ports') {
+            throw new \RuntimeException(
+                'wls.runtime.listener_mode=worker_ports is supported only on Windows Direct topology.'
+            );
+        }
+        if ($requested === 'reuseport') {
+            if (!$profile->isLinux()) {
+                throw new \RuntimeException(
+                    'Explicit wls.runtime.listener_mode=reuseport is supported only on Linux Direct topology.'
+                );
+            }
+            if (!$profile->supportsReusePort()) {
+                $probe = $profile->reusePortProbe();
+                $reason = \trim((string)($probe['reason'] ?? 'The SO_REUSEPORT capability probe failed.'));
+                throw new \RuntimeException(
+                    'Explicit wls.runtime.listener_mode=reuseport requires verified SO_REUSEPORT support. '
+                    . $reason
+                );
+            }
+
+            return 'reuseport';
+        }
+        if ($requested === 'auto' && $profile->isLinux() && $profile->supportsReusePort()) {
+            return 'reuseport';
+        }
+
+        $probe = $profile->directListenerProbe();
+        $sharedFdSupported = $profile->supportsDirectListener()
+            && $profile->directListenerMode() === 'shared_fd';
+        if (!$sharedFdSupported) {
+            $reason = \trim((string)($probe['reason'] ?? 'The shared-listener capability probe failed.'));
+            $prefix = $requested === 'shared_fd'
+                ? 'Explicit wls.runtime.listener_mode=shared_fd requires verified inherited-FD support. '
+                : 'WLS direct topology requires a verified Master-owned shared listener. ';
+            throw new \RuntimeException(
+                $prefix . $reason
+                . ' Install the required runtime dependencies, explicitly configure listener_mode=reuseport, '
+                . 'or explicitly select --dispatcher.'
+            );
+        }
+
+        return 'shared_fd';
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function configuredDirectListenerMode(array $config): string
+    {
+        $runtime = \is_array($config['runtime'] ?? null) ? $config['runtime'] : [];
+        $requested = \strtolower(\trim((string)($runtime['listener_mode'] ?? 'auto')));
+        $requested = $requested !== '' ? $requested : 'auto';
+        if (!\in_array($requested, ['auto', 'shared_fd', 'reuseport', 'worker_ports'], true)) {
+            throw new \RuntimeException(
+                'wls.runtime.listener_mode must be one of auto/shared_fd/reuseport/worker_ports; received "'
+                . $requested . '".'
+            );
+        }
+
+        return $requested;
     }
 
     /**
@@ -425,15 +575,30 @@ final class RuntimeStrategyResolver
     private function resolveSslEngine(array $config): string
     {
         $ssl = \is_array($config['ssl'] ?? null) ? $config['ssl'] : [];
-        $engine = \strtolower(\trim((string)($ssl['engine'] ?? 'stream')));
-        $engine = $engine !== '' ? $engine : 'stream';
-        if (!\in_array($engine, ['stream', 'event_buffer'], true)) {
+        $configuredEngine = \strtolower(\trim((string)($ssl['engine'] ?? 'none')));
+        $configuredEngine = $configuredEngine !== '' ? $configuredEngine : 'none';
+        if (!\in_array($configuredEngine, ['none', 'stream'], true)) {
             throw new \RuntimeException(
-                'wls.ssl.engine must be stream or event_buffer; received "' . $engine . '".'
+                (string)__('WLS TLS 引擎已退役；公网 TLS 仅由项目托管 Nginx 处理。请删除 wls.ssl.engine=%{1}。', [
+                    $configuredEngine,
+                ])
             );
         }
 
-        return $engine;
+        try {
+            $tlsSessionCache = TlsSessionCacheConfig::fromSslConfig($ssl);
+        } catch (\InvalidArgumentException $exception) {
+            throw new \RuntimeException($exception->getMessage(), 0, $exception);
+        }
+        if ($tlsSessionCache->enabled()) {
+            throw new \RuntimeException(
+                (string)__('wls.ssl.session_cache=external 已退役；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。')
+            );
+        }
+
+        // "stream" is accepted only as a persisted legacy input. WLS Workers
+        // always use loopback plaintext HTTP/1.1 behind managed Nginx.
+        return 'none';
     }
 
     /**

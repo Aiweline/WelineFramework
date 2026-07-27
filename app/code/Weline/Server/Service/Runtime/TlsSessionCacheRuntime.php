@@ -52,6 +52,7 @@ final class TlsSessionCacheRuntime
     private int $localHitCount = 0;
     private int $sharedHitCount = 0;
     private int $failureCount = 0;
+    private int $queuedPutCount = 0;
     private int $actualResumedCount = 0;
     private int $actualFullHandshakeCount = 0;
     private int $reuseObservationMissingCount = 0;
@@ -80,7 +81,9 @@ final class TlsSessionCacheRuntime
             throw new \InvalidArgumentException('TLS external session cache received an invalid Memory sidecar port.');
         }
         $this->configurationSha256 = $config->sha256();
-        $this->runtimeIdentitySha256 = (new TlsSessionResumptionEvidenceStore())->runtimeIdentitySha256();
+        $evidenceStore = new TlsSessionResumptionEvidenceStore();
+        $this->runtimeIdentitySha256 = $evidenceStore->runtimeIdentitySha256();
+        $integrationSha256 = $evidenceStore->integrationSha256();
 
         $projectIdentity = \defined('BP')
             ? \Weline\Server\Service\MasterProcess::getProjectIdentityHash()
@@ -107,6 +110,7 @@ final class TlsSessionCacheRuntime
             $config->readyTimeoutSeconds,
             $config->reconnectCooldownSeconds,
             $storeConfigFingerprint,
+            $integrationSha256,
             $tokenState,
         );
         $this->writerClient = new TlsSessionCacheClient(
@@ -117,6 +121,7 @@ final class TlsSessionCacheRuntime
             $config->readyTimeoutSeconds,
             $config->reconnectCooldownSeconds,
             $storeConfigFingerprint,
+            $integrationSha256,
             $tokenState,
         );
     }
@@ -129,6 +134,7 @@ final class TlsSessionCacheRuntime
             || !\extension_loaded('openssl')
             || !\extension_loaded('sockets')
             || !\function_exists('socket_import_stream')
+            || !\function_exists('socket_set_option')
             || !\function_exists('socket_get_option')
             || !\defined('SOL_SOCKET')
             || !\defined('SO_ERROR')
@@ -303,14 +309,20 @@ final class TlsSessionCacheRuntime
         $this->certificateDigests = [];
     }
 
-    /** @return array<string, int|string> */
+    /** @return array<string, mixed> */
     public function counters(): array
     {
+        $readerTelemetry = $this->client->callbackTelemetry();
+        $writerTelemetry = $this->writerClient->callbackTelemetry();
+        $getTelemetry = \is_array($readerTelemetry['get'] ?? null) ? $readerTelemetry['get'] : [];
+        $putTelemetry = \is_array($writerTelemetry['put'] ?? null) ? $writerTelemetry['put'] : [];
         return [
             'configuration_sha256' => $this->configurationSha256,
             'runtime_identity_sha256' => $this->runtimeIdentitySha256,
             'new' => $this->newCount,
+            'new_cb_total' => $this->newCount,
             'get' => $this->getCount,
+            'get_cb_total' => $this->getCount,
             'local_hit' => $this->localHitCount,
             'shared_hit' => $this->sharedHitCount,
             'failure' => $this->failureCount,
@@ -321,6 +333,19 @@ final class TlsSessionCacheRuntime
             'inflight_write_bytes' => $this->inflightWriteBytes,
             'writer_pending_responses' => $this->writerClient->pendingResponseCount(),
             'dropped_writes' => $this->droppedWriteCount,
+            'queued_put_total' => $this->queuedPutCount,
+            'callback_timeout_us' => (int)\round($this->config->callbackTimeoutSeconds * 1_000_000),
+            'latency_bucket_upper_bounds_us' => (array)($readerTelemetry['bucket_upper_bounds_us'] ?? []),
+            'get_ipc_total' => (int)($getTelemetry['total'] ?? 0),
+            'get_ipc_deadline_exceeded_total' => (int)($getTelemetry['deadline_exceeded'] ?? 0),
+            'get_ipc_fail_fast_total' => (int)($getTelemetry['fail_fast'] ?? 0),
+            'get_ipc_latency_bucket_counts' => (array)($getTelemetry['latency_bucket_counts'] ?? []),
+            'put_ipc_total' => (int)($putTelemetry['total'] ?? 0),
+            'put_ipc_deadline_exceeded_total' => (int)($putTelemetry['deadline_exceeded'] ?? 0),
+            'put_ipc_fail_fast_total' => (int)($putTelemetry['fail_fast'] ?? 0),
+            'put_ipc_latency_bucket_counts' => (array)($putTelemetry['latency_bucket_counts'] ?? []),
+            'reader_transport' => (array)($readerTelemetry['transport'] ?? []),
+            'writer_transport' => (array)($writerTelemetry['transport'] ?? []),
             'actual_resumed' => $this->actualResumedCount,
             'actual_full_handshake' => $this->actualFullHandshakeCount,
             'reuse_observation_missing' => $this->reuseObservationMissingCount,
@@ -542,14 +567,16 @@ final class TlsSessionCacheRuntime
             return;
         }
 
-        $this->queueWrite($contextHex . ':' . $sessionIdHex, [
+        if ($this->queueWrite($contextHex . ':' . $sessionIdHex, [
             'op' => 'put',
             'ctx' => $contextHex,
             'sid' => $sessionIdHex,
             'der' => $derBase64,
             'created_at' => $createdAt,
             'expires_at' => $expiresAt,
-        ]);
+        ])) {
+            $this->queuedPutCount++;
+        }
     }
 
     private function loadSession(string $contextHex, string $sessionId): ?object
@@ -629,13 +656,13 @@ final class TlsSessionCacheRuntime
     /**
      * @param array{op:string,ctx:string,sid:string,der?:string,created_at?:int,expires_at?:int} $operation
      */
-    private function queueWrite(string $key, array $operation): void
+    private function queueWrite(string $key, array $operation): bool
     {
         $bytes = \strlen((string)($operation['der'] ?? '')) + \strlen($key) + 256;
         if ($bytes > self::MAX_PENDING_WRITE_BYTES) {
             $this->droppedWriteCount++;
             $this->failureCount++;
-            return;
+            return false;
         }
         if (isset($this->pendingWrites[$key])) {
             $this->pendingWriteBytes = \max(
@@ -665,11 +692,12 @@ final class TlsSessionCacheRuntime
         ) {
             $this->droppedWriteCount++;
             $this->failureCount++;
-            return;
+            return false;
         }
         $operation['bytes'] = $bytes;
         $this->pendingWrites[$key] = $operation;
         $this->pendingWriteBytes += $bytes;
+        return true;
     }
 
     private function putLocal(

@@ -67,6 +67,8 @@ final class TlsSessionResumptionCapabilityProbe
                 'sidecar_recovery_verified' => false,
                 'performance_baseline_verified' => false,
                 'resumption_latency_gate_verified' => false,
+                'callback_telemetry_verified' => false,
+                'callback_telemetry' => [],
                 'production_platform_matrix_verified' => false,
                 'runtime_prerelease' => (bool)\preg_match('/(?:dev|alpha|beta|rc)/i', PHP_VERSION),
                 'proof_summary' => [],
@@ -166,6 +168,11 @@ final class TlsSessionResumptionCapabilityProbe
                 'diagnostic_resumption_tls_p95_limit_ms' => $diagnosticResumptionTlsP95LimitMs,
                 'production_resumption_tls_p95_limit_ms' => self::PRODUCTION_RESUMPTION_TLS_P95_LIMIT_MS,
                 'resumption_latency_gate_verified' => (bool)($externalCacheEvidence['resumption_latency_gate_verified'] ?? false),
+                'callback_telemetry_verified' => $externalCacheMechanismVerified
+                    && (bool)($externalCacheEvidence['callback_telemetry_verified'] ?? false),
+                'callback_telemetry' => \is_array($externalCacheEvidence['callback_telemetry'] ?? null)
+                    ? $externalCacheEvidence['callback_telemetry']
+                    : [],
                 'production_platform_matrix_verified' => (bool)($externalCacheEvidence['production_platform_matrix_verified'] ?? false),
                 'production_ready' => (bool)($externalCacheEvidence['production_ready'] ?? false),
                 'cross_worker_ticket_key_ring' => false,

@@ -99,14 +99,21 @@ final class PostResponseTaskQueue
 
     private static function cleanupRestoredContext(): void
     {
+        $failures = [];
         try {
             StateManager::reset();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'state_manager', $e);
         }
 
         try {
             Context::leave();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            RequestResetException::append($failures, 'context_leave', $e);
+        }
+
+        if ($failures !== []) {
+            throw new RequestResetException('post_response_task', $failures);
         }
     }
 }

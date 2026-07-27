@@ -47,10 +47,10 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
 4. Never use default port `9501` for AI validation.
 5. Validate only the requested runtime surface:
    - `server:start`
-   - `server:reload` or `server:restart -r`
+   - `server:reload {instance}` or `server:start {instance} -r`
    - worker / SSE / Session Server behavior when applicable
    - route reachability needed by the handoff
-   - `server:stop -n {instance-name}` cleanup, or explicit manual-acceptance handoff
+   - `server:stop {instance-name}` cleanup, or explicit manual-acceptance handoff
 6. Always report instance name, port, PID/status evidence when available, logs/errors, and cleanup proof or manual-acceptance handoff.
 7. If cleanup fails after automated validation, return `FAIL` and notify `@Weline-技术主管` immediately.
 8. Do not leave test instances unmanaged at session end; manual-acceptance handoff must include URL/name/port/status/stop command.

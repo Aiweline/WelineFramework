@@ -34,7 +34,7 @@ final class ProtocolEdgeRuntime
 
     public static function isEnabled(ServiceContext $context): bool
     {
-        return self::selection($context)->isProtocolEdgeEnabled();
+        return self::selection($context)->isCaddyProtocolEdge();
     }
 
     public static function runtimeDirectory(string $instanceName): string
@@ -259,7 +259,7 @@ final class ProtocolEdgeRuntime
      */
     public static function upstreams(ServiceContext $context): array
     {
-        if ($context->isDispatcherEnabled()) {
+        if ($context->isDispatcher()) {
             return ['127.0.0.1:' . self::dispatcherPort($context)];
         }
 
@@ -664,7 +664,7 @@ final class ProtocolEdgeRuntime
         ServiceContext $context,
         ?array $publishedUpstreams,
     ): array {
-        if ($context->isDispatcherEnabled() || $publishedUpstreams === null) {
+        if ($context->isDispatcher() || $publishedUpstreams === null) {
             return self::upstreams($context);
         }
 

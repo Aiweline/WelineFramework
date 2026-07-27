@@ -10,9 +10,9 @@ declare(strict_types=1);
  * @email aiweline@qq.com
  */
 
-namespace Weline\Server\Controller\Frontend;
+namespace Weline\Server\Controller;
 
-use Weline\Framework\Controller\PcController;
+use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Runtime\SchedulerSystem;
 
@@ -23,7 +23,7 @@ use Weline\Framework\Runtime\SchedulerSystem;
  * - GET /server/sse-test/stream - 测试 SSE 流式输出
  * - GET /server/sse-test/index - SSE 测试页面
  */
-class SseTest extends PcController
+class SseTest extends FrontendController
 {
     /**
      * SSE 测试页面

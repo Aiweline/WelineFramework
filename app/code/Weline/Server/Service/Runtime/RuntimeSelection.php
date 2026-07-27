@@ -107,18 +107,30 @@ final readonly class RuntimeSelection
         }
 
         $listenerMode = self::requiredString($data, 'listener_mode');
-        if ($effective->isDirect() && !\in_array($listenerMode, ['reuseport', 'shared_fd'], true)) {
-            throw new \RuntimeException('Direct runtime_selection.listener_mode must be reuseport or shared_fd.');
+        if ($effective->isDirect() && !\in_array($listenerMode, ['reuseport', 'shared_fd', 'worker_ports'], true)) {
+            throw new \RuntimeException(
+                'Direct runtime_selection.listener_mode must be reuseport, shared_fd, or worker_ports.'
+            );
         }
         if ($effective->isDispatcher() && $listenerMode !== 'single') {
             throw new \RuntimeException('Dispatcher runtime_selection.listener_mode must be single.');
+        }
+
+        $osFamily = self::requiredString($data, 'os_family');
+        if ($effective->isDirect()
+            && (($osFamily === 'Windows') !== ($listenerMode === 'worker_ports'))
+        ) {
+            throw new \RuntimeException(
+                'Windows Direct requires runtime_selection.listener_mode=worker_ports; '
+                . 'worker_ports is not valid for POSIX Direct runtimes.'
+            );
         }
 
         return new self(
             requestedTopology: $requested,
             effectiveTopology: $effective,
             source: self::requiredString($data, 'topology_source'),
-            osFamily: self::requiredString($data, 'os_family'),
+            osFamily: $osFamily,
             eventLoopDriver: self::requiredString($data, 'event_loop_driver'),
             sslEngine: self::requiredString($data, 'ssl_engine'),
             listenerMode: $listenerMode,

@@ -69,6 +69,28 @@ final class WlsRuntimeProfile
         return \is_int($memory) && $memory > 0 ? $memory : null;
     }
 
+    public function memoryTotalMb(): ?int
+    {
+        $memory = $this->get('memory_total_mb', $this->get('memory_mb'));
+        return \is_int($memory) && $memory > 0 ? $memory : null;
+    }
+
+    public function memoryCgroupMaxMb(): ?int
+    {
+        $memory = $this->get('memory_cgroup_max_mb');
+        return \is_int($memory) && $memory > 0 ? $memory : null;
+    }
+
+    public function memoryLimitSource(): string
+    {
+        $source = \trim((string)$this->get('memory_limit_source', ''));
+        if ($source !== '') {
+            return $source;
+        }
+
+        return $this->memoryCgroupMaxMb() !== null ? 'cgroup' : 'memtotal';
+    }
+
     public function hasExtension(string $name): bool
     {
         $extensions = $this->get('extensions', []);
@@ -100,8 +122,11 @@ final class WlsRuntimeProfile
     public function directListenerMode(): string
     {
         $mode = \strtolower(\trim((string)$this->get('direct_listener_mode', '')));
-        if (\in_array($mode, ['reuseport', 'shared_fd'], true)) {
+        if (\in_array($mode, ['reuseport', 'shared_fd', 'worker_ports'], true)) {
             return $mode;
+        }
+        if ($this->isWindows() && $this->supportsDirectListener()) {
+            return 'worker_ports';
         }
         if ($this->isDarwin()) {
             return 'shared_fd';
