@@ -35,7 +35,7 @@ $deleteUrl = $this->getBackendUrl('multipass/backend/identity-provider/delete');
                 <h5 class="card-title mb-0"><?= __('添加官网登录提供方') ?></h5>
             </div>
             <div class="card-body">
-                <form method="post" action="<?= $saveUrl ?>">
+                <w:form method="post" action="@var($saveUrl)" csrf="off">
                     <?= $this->getFormKey('multipass_identity_provider_save') ?>
                     <div class="mb-3">
                         <label class="form-label"><?= __('名称') ?> <span class="text-danger">*</span></label>
@@ -89,7 +89,7 @@ $deleteUrl = $this->getBackendUrl('multipass/backend/identity-provider/delete');
                     <button class="btn btn-primary" type="submit">
                         <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
                     </button>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>
@@ -108,7 +108,7 @@ $deleteUrl = $this->getBackendUrl('multipass/backend/identity-provider/delete');
                 <?php else: ?>
                     <?php foreach ($providers as $provider): ?>
                         <div class="border rounded p-3 mb-3">
-                            <form method="post" action="<?= $saveUrl ?>">
+                            <w:form method="post" action="@var($saveUrl)" csrf="off">
                                 <?= $this->getFormKey('multipass_identity_provider_update_' . $provider->getId()) ?>
                                 <input type="hidden" name="provider_id" value="<?= (int)$provider->getId() ?>">
                                 <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
@@ -169,14 +169,14 @@ $deleteUrl = $this->getBackendUrl('multipass/backend/identity-provider/delete');
                                 <button class="btn btn-sm btn-primary" type="submit">
                                     <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
                                 </button>
-                            </form>
-                            <form class="mt-2" method="post" action="<?= $deleteUrl ?>">
+                            </w:form>
+                            <w:form class="mt-2" method="post" action="@var($deleteUrl)" csrf="off">
                                 <?= $this->getFormKey('multipass_identity_provider_delete_' . $provider->getId()) ?>
                                 <input type="hidden" name="provider_id" value="<?= (int)$provider->getId() ?>">
                                 <button class="btn btn-sm btn-outline-danger" type="submit">
                                     <i class="mdi mdi-delete"></i> <?= __('删除') ?>
                                 </button>
-                            </form>
+                            </w:form>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>

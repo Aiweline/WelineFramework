@@ -659,7 +659,7 @@ small.text-muted {
         var catalogId = catalog.id ? String(catalog.id) : '';
         var catalogName = catalog.name || '';
         
-        var html = '<form id="catalog-edit-form">' +
+        var html = '<form id="catalog-edit-form" data-weline-form="1" data-weline-form-intent="developer.catalog.edit" data-weline-form-captcha="auto">' +
             '<input type="hidden" name="id" id="catalog_id" value="' + escapeHtmlAttribute(catalogId) + '">' +
             '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(catalog.pid ? String(catalog.pid) : '0') + '">' +
             '<div class="mb-3"><label for="catalog_name" class="form-label">' + i18n.categoryName + ' <span class="text-danger">*</span></label>' +
@@ -690,7 +690,7 @@ small.text-muted {
             }
         }
         
-        var html = '<form id="catalog-edit-form">' +
+        var html = '<form id="catalog-edit-form" data-weline-form="1" data-weline-form-intent="developer.catalog.create" data-weline-form-captcha="auto">' +
             '<input type="hidden" name="id" id="catalog_id" value="">' +
             '<input type="hidden" name="pid" id="catalog_pid" value="' + escapeHtmlAttribute(parentId || '0') + '">' +
             '<div class="mb-3"><label for="catalog_name" class="form-label">' + i18n.categoryName + ' <span class="text-danger">*</span></label>' +

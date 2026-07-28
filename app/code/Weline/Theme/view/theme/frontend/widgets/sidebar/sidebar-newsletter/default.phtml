@@ -40,7 +40,7 @@ $widgetId = 'sidebar-newsletter-' . uniqid();
         <p class="widget-description"><?= htmlspecialchars($description) ?></p>
     <?php endif; ?>
     
-    <form class="newsletter-form" action="/newsletter/subscribe" method="post">
+    <w:form class="newsletter-form" action="/newsletter/subscribe" method="post">
         <input type="email" 
                name="email" 
                class="newsletter-input" 
@@ -49,7 +49,7 @@ $widgetId = 'sidebar-newsletter-' . uniqid();
         <button type="submit" class="newsletter-submit">
             <?= htmlspecialchars($buttonText) ?>
         </button>
-    </form>
+    </w:form>
     
     <p class="newsletter-privacy">
         <i class="ri-shield-check-line"></i>

@@ -25,12 +25,12 @@ $layoutType = $this->getData('layoutType') ?: ($themeData['layoutType'] ?? null)
 
             <!-- 搜索框 -->
             <div class="header-search">
-                <form action="<?= $frontendUrl ?>search" method="get" class="search-form">
+                <w:form action="@var($frontendUrl)search" method="get" class="search-form">
                     <input type="text" name="q" class="search-input" placeholder="<?= __('搜索商品...') ?>" autocomplete="off">
                     <button type="submit" class="search-button" title="<?= __('搜索') ?>">
                         <i class="fas fa-search"></i>
                     </button>
-                </form>
+                </w:form>
             </div>
 
             <!-- 右侧功能区 -->

@@ -20,7 +20,7 @@ $originToken = (string)($this->getData('originToken') ?? '');
 <!-- 表单 -->
 <div class="card">
     <div class="card-body">
-        <form id="accountForm" method="post" action="@backend-url('*/backend/account/save')">
+        <w:form id="accountForm" method="post" action="@backend-url('*/backend/account/save')">
             <input type="hidden" name="id" value="<?= ($account && $account->getData('account_id')) ? (string)$account->getData('account_id') : '' ?>">
             
             <div class="row mb-3">
@@ -145,7 +145,7 @@ $originToken = (string)($this->getData('originToken') ?? '');
                     </a>
                 </div>
             </div>
-        </form>
+        </w:form>
     </div>
 </div>
 

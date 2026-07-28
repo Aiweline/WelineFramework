@@ -498,7 +498,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 <div class="alert alert-info py-2 small" id="social-account-scope-note">
                     <?= __('从平台库添加时，保存后会自动绑定到当前配置范围。') ?>
                 </div>
-                <form id="weline-social-account-form" class="d-grid gap-3">
+                <w:form id="weline-social-account-form" class="d-grid gap-3">
                     <input type="hidden" name="account_id" value="">
                     <div>
                         <label class="form-label" for="social-platform-code-trigger"><?= __('平台') ?></label>
@@ -593,7 +593,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                         <button class="btn btn-outline-secondary" type="button" id="social-account-reset"><?= __('清空表单') ?></button>
                     </div>
                     <div class="small social-status" id="social-account-status"></div>
-                </form>
+                </w:form>
             </div>
             <div class="col-xl-8">
                 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -653,7 +653,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
             </div>
             <span class="badge bg-info-subtle text-info"><?= __('不在这里保存任何凭据') ?></span>
         </div>
-        <form id="weline-social-scope-account-form" class="d-grid gap-3">
+        <w:form id="weline-social-scope-account-form" class="d-grid gap-3">
             <div class="row g-3">
                 <div class="col-lg-4">
                     <label class="form-label"><?= __('当前范围') ?></label>
@@ -690,14 +690,14 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 </button>
                 <span class="small social-status ms-2" id="social-scope-account-status"></span>
             </div>
-        </form>
+        </w:form>
     </section>
 
     <section class="workband mb-3 d-none" data-social-panel="creative">
         <div class="row g-4">
             <div class="col-lg-5">
                 <h5 class="mb-3"><?= __('生成融媒体创意') ?></h5>
-                <form id="weline-social-creative-form" class="d-grid gap-3">
+                <w:form id="weline-social-creative-form" class="d-grid gap-3">
                     <input class="form-control" name="title" placeholder="<?= $h((string)__('创意标题')) ?>">
                     <textarea class="form-control" name="prompt" rows="5" placeholder="<?= $h((string)__('输入产品、活动、受众和发布目标')) ?>"></textarea>
                     <label class="form-check">
@@ -706,7 +706,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                     </label>
                     <button class="btn btn-primary" type="submit"><?= __('生成创意草稿') ?></button>
                     <div class="small social-status" id="social-creative-status"></div>
-                </form>
+                </w:form>
             </div>
             <div class="col-lg-7">
                 <h5 class="mb-3"><?= __('最近草稿') ?></h5>
@@ -724,7 +724,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
 
     <section class="workband mb-3 d-none" data-social-panel="publish">
         <h5 class="mb-3"><?= __('一键发布') ?></h5>
-        <form id="weline-social-publish-form" class="row g-3">
+        <w:form id="weline-social-publish-form" class="row g-3">
             <div class="col-lg-3">
                 <label class="form-label"><?= __('草稿 ID') ?></label>
                 <input class="form-control" type="number" name="draft_id" min="1" value="<?= (int)($drafts[0]['draft_id'] ?? 0) ?>">
@@ -759,7 +759,7 @@ $socialConfigCenterHref = $socialConfigCenterUrl
                 <span class="small text-muted ms-2"><?= __('默认按当前范围配置的社媒账户发布内容。') ?></span>
                 <span class="small social-status ms-2" id="social-publish-status"></span>
             </div>
-        </form>
+        </w:form>
     </section>
 
     <section class="workband mb-3 d-none" data-social-panel="records">

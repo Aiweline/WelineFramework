@@ -38,7 +38,7 @@ $backendBase = $this->getBackendUrl('geo/backend/platform');
                 <h5 class="card-title mb-0"><?= $account->getId() ? __('编辑账户') : __('添加账户') ?></h5>
             </div>
             <div class="card-body">
-                <form method="post" action="<?= $backendBase ?>/accountSave">
+                <w:form method="post" action="@var($backendBase)/accountSave">
                     <input type="hidden" name="id" value="<?= $account->getId() ?>">
                     <input type="hidden" name="platform_id" value="<?= $platform ? $platform->getId() : 0 ?>">
                     
@@ -85,7 +85,7 @@ $backendBase = $this->getBackendUrl('geo/backend/platform');
                         <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
                         <a href="<?= $backendBase ?>/account?platform_id=<?= $platform ? $platform->getId() : 0 ?>" class="btn btn-secondary"><?= __('返回') ?></a>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

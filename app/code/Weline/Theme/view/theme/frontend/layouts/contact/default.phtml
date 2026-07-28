@@ -400,10 +400,10 @@ $mailHref = 'mailto:' . $contactEmail;
                         <w:hook>
                             Weline_Theme::frontend::layouts::contact::form
                             <else/>
-                            <section class="contact-layout__section" aria-labelledby="contact-form-title">
+                            <section class="contact-layout__section" aria-labelledby="contact-form-title" weline-code="theme.contact.contact_form_title">
                                 <h2 id="contact-form-title"><?= __('发送消息') ?></h2>
                                 <p class="contact-layout__note"><?= __('请尽量提供完整背景，减少客服再次确认基础信息的等待时间。') ?></p>
-                                <form class="contact-layout__form contact-layout__form--spaced" action="<?= $escape($contactUrl) ?>" method="post">
+                                <w:form class="contact-layout__form contact-layout__form--spaced" action="@var($contactUrl)" method="post">
                                     <div class="contact-layout__field">
                                         <label for="contact-name"><?= __('姓名') ?></label>
                                         <input id="contact-name" name="name" type="text" autocomplete="name">
@@ -419,7 +419,7 @@ $mailHref = 'mailto:' . $contactEmail;
                                     <button class="contact-layout__button contact-layout__button--primary" type="submit">
                                         <?= __('提交请求') ?>
                                     </button>
-                                </form>
+                                </w:form>
                             </section>
                         </w:hook>
                     </w:slot>

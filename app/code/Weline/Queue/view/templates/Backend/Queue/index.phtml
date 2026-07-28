@@ -36,14 +36,14 @@
                 <div class="weline-queue-toolbar d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div class="weline-queue-search d-flex align-items-center flex-wrap gap-2">
-                            <form method="get" action="@backend-url('*/backend/queue')" class="d-flex align-items-center gap-1 mb-0">
+                            <w:form method="get" action="@backend-url('*/backend/queue')" class="d-flex align-items-center gap-1 mb-0">
                                 <if condition="module"><input type="hidden" name="module" value="{{module}}"/></if>
                                 <if condition="status"><input type="hidden" name="status" value="{{status}}"/></if>
                                 <if condition="q"><input type="hidden" name="q" value="{{q}}"/></if>
                                 <input type="text" name="biz_key" class="form-control form-control-sm" style="width:200px;max-width:40vw;"
                                        placeholder="@lang{业务键精确筛选}" value="{{biz_key}}"/>
                                 <button type="submit" class="btn btn-sm btn-outline-secondary"><lang>筛选</lang></button>
-                            </form>
+                            </w:form>
                             <block class='Weline\Component\Block\Form\Search' id='queue-search'
                                    action='*/backend/queue'
                                    vars="req"

@@ -341,7 +341,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form id="editForm">
+                <w:form id="editForm">
                     <div class="modal-body">
                         <input type="hidden" name="subject_id" value="<?= (int)($subject['subject_id'] ?? 0) ?>">
                         <input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>">
@@ -393,7 +393,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                             <lang>保存</lang>
                         </button>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

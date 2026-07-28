@@ -122,11 +122,22 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
 
     <div class="card mb-3">
         <div class="card-body">
-            <form method="get" action="<?= $h($formAction) ?>" class="weline-pixel-archive-list-toolbar" id="pixel-archive-list-filter-form">
-                <div>
-                    <label class="form-label" for="archive-filter-website"><lang>站点 ID（必填）</lang></label>
-                    <input type="text" name="websiteId" id="archive-filter-website" class="form-control" required
-                           value="<?= $h($selectedWebsite) ?>" placeholder="0">
+            <w:form method="get" action="@var($formAction)" class="weline-pixel-archive-list-toolbar" id="pixel-archive-list-filter-form">
+                <div class="weline-pixel-website-filter">
+                    <label class="form-label" for="archive-filter-website_trigger"><lang>站点（必填）</lang></label>
+                    <w:websites:website:select
+                        id="archive-filter-website"
+                        name="websiteId"
+                        value="selectedWebsite"
+                        display="selectedWebsiteDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        clearable="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                        class="weline-pixel-website-select"
+                    />
                 </div>
                 <div>
                     <label class="form-label" for="archive-filter-event"><lang>事件</lang></label>
@@ -197,7 +208,7 @@ $nextUrl = ($pageCount > 0 && $page < $pageCount)
                     </button>
                     <a href="<?= $h($resetUrl) ?>" class="btn btn-outline-secondary"><lang>重置</lang></a>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 

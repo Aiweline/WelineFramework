@@ -613,7 +613,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                         </div>
                     </div>
                 <?php endif; ?>
-                <form class="row g-2 mb-3" method="get" action="<?= $this->getBackendUrl('cms/backend/page/listing') ?>">
+                <w:form class="row g-2 mb-3" method="get" action="@var($this->getBackendUrl('cms/backend/page/listing'))">
                     <div class="col-md-3">
                         <input class="form-control" type="search" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="<?= htmlspecialchars((string)__('搜索标题或路径')) ?>">
                     </div>
@@ -656,7 +656,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                             </a>
                         </div>
                     </div>
-                </form>
+                </w:form>
 
                 <?php if (empty($siteGroups)): ?>
                     <div class="text-center text-muted py-5"><?= __('暂无站点') ?></div>
@@ -712,7 +712,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
 
                         <div class="cms-site-group__body" id="<?= htmlspecialchars($siteBodyId) ?>" data-cms-collapse-panel<?= $siteExpanded ? '' : ' hidden' ?>>
                             <div class="cms-path-grid">
-                                <form class="cms-site-group__new-path" method="post" action="<?= $this->getBackendUrl('cms/backend/page/save-path-group') ?>">
+                                <w:form class="cms-site-group__new-path" method="post" action="@var($this->getBackendUrl('cms/backend/page/save-path-group'))">
                                     <input type="hidden" name="website_id" value="<?= $siteId ?>">
                                     <input type="hidden" name="website_code" value="<?= htmlspecialchars($siteCode) ?>">
                                     <div class="cms-create-title">
@@ -722,7 +722,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                     <input class="form-control" type="text" name="path_group" required placeholder="<?= htmlspecialchars((string)__('新建一级 path，例如 blog')) ?>">
                                     <input class="form-control" type="text" name="path_group_alias" placeholder="<?= htmlspecialchars((string)__('显示别名，例如 博客')) ?>">
                                     <button class="btn btn-outline-primary w-100" type="submit"><?= __('创建') ?></button>
-                                </form>
+                                </w:form>
 
                                 <?php if (empty($pathGroups)): ?>
                                     <div class="cms-empty-tile"><?= __('当前站点暂无一级 path，请先新建。') ?></div>
@@ -775,7 +775,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                     <i class="mdi mdi-content-copy"></i>
                                                     <?= __('拷贝') ?>
                                                 </summary>
-                                                <form class="cms-copy-panel" method="post" action="<?= $this->getBackendUrl('cms/backend/page/copy-path-group') ?>">
+                                                <w:form class="cms-copy-panel" method="post" action="@var($this->getBackendUrl('cms/backend/page/copy-path-group'))">
                                                     <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
                                                     <input type="hidden" name="source_website_id" value="<?= $siteId ?>">
                                                     <input type="hidden" name="source_path_group" value="<?= htmlspecialchars($groupPath) ?>">
@@ -793,9 +793,9 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                         <i class="mdi mdi-check"></i>
                                                         <?= __('确认拷贝') ?>
                                                     </button>
-                                                </form>
+                                                </w:form>
                                             </details>
-                                            <form method="post" action="<?= $this->getBackendUrl('cms/backend/page/delete-path-group') ?>">
+                                            <w:form method="post" action="@var($this->getBackendUrl('cms/backend/page/delete-path-group'))">
                                                 <input type="hidden" name="group_id" value="<?= (int)($group['group_id'] ?? 0) ?>">
                                                 <input type="hidden" name="website_id" value="<?= $siteId ?>">
                                                 <input type="hidden" name="path_group" value="<?= htmlspecialchars($groupPath) ?>">
@@ -803,7 +803,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                     <i class="mdi mdi-folder-remove-outline"></i>
                                                     <?= __('移入回收站') ?>
                                                 </button>
-                                            </form>
+                                            </w:form>
                                         </div>
                                     </div>
 
@@ -871,7 +871,7 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                                     <i class="mdi mdi-content-copy"></i>
                                                                     <?= __('拷贝') ?>
                                                                 </summary>
-                                                                <form class="cms-copy-panel" method="post" action="<?= $this->getBackendUrl('cms/backend/page/copy') ?>">
+                                                                <w:form class="cms-copy-panel" method="post" action="@var($this->getBackendUrl('cms/backend/page/copy'))">
                                                                     <input type="hidden" name="page_id" value="<?= $pageId ?>">
                                                                     <input type="hidden" name="source_website_id" value="<?= (int)($page['website_id'] ?? $siteId) ?>">
                                                                     <input type="hidden" name="source_path_group" value="<?= htmlspecialchars((string)($page['path_group'] ?? $groupPath)) ?>">
@@ -889,15 +889,15 @@ body[data-bs-theme="dark"] .cms-status-disabled,
                                                                         <i class="mdi mdi-check"></i>
                                                                         <?= __('确认拷贝') ?>
                                                                     </button>
-                                                                </form>
+                                                                </w:form>
                                                             </details>
-                                                            <form method="post" action="<?= $this->getBackendUrl('cms/backend/page/delete') ?>">
+                                                            <w:form method="post" action="@var($this->getBackendUrl('cms/backend/page/delete'))">
                                                                 <input type="hidden" name="page_id" value="<?= $pageId ?>">
                                                                 <button class="btn btn-sm btn-outline-danger" type="submit">
                                                                     <i class="mdi mdi-delete-outline"></i>
                                                                     <?= __('移入回收站') ?>
                                                                 </button>
-                                                            </form>
+                                                            </w:form>
                                                         </div>
                                                     </article>
                                                 <?php endforeach; ?>

@@ -204,10 +204,12 @@ $renderField = function($field) use ($formData, $layout) {
     </div>
     <?php endif; ?>
     
-    <form class="backend-data-form backend-data-form--<?= htmlspecialchars($layout) ?>" 
-          action="<?= htmlspecialchars($action) ?>" 
-          method="<?= $method === 'GET' ? 'GET' : 'POST' ?>"
-          <?= $ajax ? 'data-ajax-form' : '' ?>>
+    <w:form class="backend-data-form backend-data-form--@var($layout)"
+            action="@var($action)"
+            method="@var($method === 'GET' ? 'GET' : 'POST')"
+            data-ajax-form="@var($ajax ? '1' : false)"
+            csrf="off"
+>
         
         <csrf/>
         
@@ -272,7 +274,7 @@ $renderField = function($field) use ($formData, $layout) {
             </a>
             <?php endif; ?>
         </div>
-    </form>
+    </w:form>
 </div>
 
 <style>

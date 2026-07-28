@@ -1434,7 +1434,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <div class="wfm-context-value"><?= $escapeHtml($pathPolicyConfig['updated_at'] ?? __('未保存')) ?></div>
                         </div>
                     </div>
-                    <form class="wfm-write-form" method="post" action="<?= $escapeHtml($pathPolicySaveUrl) ?>" data-wfm-path-policy-form>
+                    <w:form class="wfm-write-form" method="post" action="@var($pathPolicySaveUrl)" data-wfm-path-policy-form csrf="off">
                         <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1520,8 +1520,8 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <i class="mdi mdi-shield-check-outline"></i>
                             <span><?= $escapeHtml(__('保存路径策略')) ?></span>
                         </button>
-                    </form>
-                    <form class="wfm-write-form wfm-policy-reset" method="post" action="<?= $escapeHtml($pathPolicyResetUrl) ?>" data-wfm-path-policy-reset-form>
+                    </w:form>
+                    <w:form class="wfm-write-form wfm-policy-reset" method="post" action="@var($pathPolicyResetUrl)" data-wfm-path-policy-reset-form csrf="off">
                         <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1552,7 +1552,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <i class="mdi mdi-shield-refresh-outline"></i>
                             <span><?= $escapeHtml(__('恢复默认策略')) ?></span>
                         </button>
-                    </form>
+                    </w:form>
                 </div>
             </div>
         </section>
@@ -1752,7 +1752,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Create directory')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('非破坏性')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($createDirectoryUrl) ?>" data-wfm-create-directory-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($createDirectoryUrl)" data-wfm-create-directory-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1773,7 +1773,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-folder-plus-outline"></i>
                                 <span><?= $escapeHtml(__('创建目录')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card" id="wfm-save-text-card">
                         <div class="wfm-card-head">
@@ -1786,7 +1786,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <?= $escapeHtml($previewSourceEdit ? __('保存源码前仍需要勾选确认并输入 SAVE_SOURCE。') : __('保存前仍需要勾选确认并输入 SAVE_TEXT。')) ?>
                             </div>
                         <?php endif; ?>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($saveTextUrl) ?>" data-wfm-save-text-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($saveTextUrl)" data-wfm-save-text-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1879,14 +1879,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-content-save-outline"></i>
                                 <span><?= $escapeHtml($previewSourceEdit ? __('保存源码') : __('保存文本')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Upload file')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('5 MB')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" enctype="multipart/form-data" action="<?= $escapeHtml($uploadUrl) ?>" data-wfm-upload-form>
+                        <w:form class="wfm-write-form" method="post" enctype="multipart/form-data" action="@var($uploadUrl)" data-wfm-upload-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1917,14 +1917,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-upload-outline"></i>
                                 <span><?= $escapeHtml(__('Upload file')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Rename entry')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Same folder')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($renameUrl) ?>" data-wfm-rename-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($renameUrl)" data-wfm-rename-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1953,14 +1953,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-form-textbox"></i>
                                 <span><?= $escapeHtml(__('Rename entry')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Compress entry')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Bounded ZIP')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($compressUrl) ?>" data-wfm-compress-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($compressUrl)" data-wfm-compress-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1990,14 +1990,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-archive-arrow-down-outline"></i>
                                 <span><?= $escapeHtml(__('Compress entry')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Delete entry')) ?></h3>
                             <span class="wfm-status danger"><?= $escapeHtml(__('Bounded delete')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($deleteUrl) ?>" data-wfm-delete-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($deleteUrl)" data-wfm-delete-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2026,7 +2026,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-delete-outline"></i>
                                 <span><?= $escapeHtml(__('Delete entry')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                 </div>
             </div>
@@ -2094,7 +2094,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue ZIP compression')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Async')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($compressQueueUrl) ?>" data-wfm-compress-queue-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($compressQueueUrl)" data-wfm-compress-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2124,14 +2124,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-progress-clock"></i>
                                 <span><?= $escapeHtml(__('Create queue')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Create source file')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Source policy')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceCreateUrl) ?>" data-wfm-source-create-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($sourceCreateUrl)" data-wfm-source-create-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2173,14 +2173,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-file-plus-outline"></i>
                                 <span><?= $escapeHtml(__('Create source file')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Rename source file')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Source policy')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceRenameUrl) ?>" data-wfm-source-rename-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($sourceRenameUrl)" data-wfm-source-rename-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2217,14 +2217,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-file-edit-outline"></i>
                                 <span><?= $escapeHtml(__('Rename source file')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Trash source file')) ?></h3>
                             <span class="wfm-status warning"><?= $escapeHtml(__('Recoverable')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceTrashUrl) ?>" data-wfm-source-trash-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($sourceTrashUrl)" data-wfm-source-trash-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2257,14 +2257,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-delete-clock-outline"></i>
                                 <span><?= $escapeHtml(__('Trash source file')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source trash')) ?></h3>
                             <span class="wfm-status warning"><?= $escapeHtml(__('Source queue')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceTrashQueueUrl) ?>" data-wfm-source-trash-queue-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($sourceTrashQueueUrl)" data-wfm-source-trash-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2297,14 +2297,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-progress-clock"></i>
                                 <span><?= $escapeHtml(__('Create source trash queue')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source archive')) ?></h3>
                             <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceArchiveQueueUrl) ?>" data-wfm-source-archive-queue-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($sourceArchiveQueueUrl)" data-wfm-source-archive-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2337,14 +2337,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-archive-arrow-down-outline"></i>
                                 <span><?= $escapeHtml(__('Create source archive queue')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source directory archive')) ?></h3>
                             <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceArchiveTreeQueueUrl) ?>" data-wfm-source-archive-tree-queue-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($sourceArchiveTreeQueueUrl)" data-wfm-source-archive-tree-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2371,14 +2371,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-folder-zip-outline"></i>
                                 <span><?= $escapeHtml(__('Create source directory archive queue')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source selection archive')) ?></h3>
                             <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceArchiveSelectionQueueUrl) ?>" data-wfm-source-archive-selection-queue-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($sourceArchiveSelectionQueueUrl)" data-wfm-source-archive-selection-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2411,14 +2411,14 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-archive-check-outline"></i>
                                 <span><?= $escapeHtml(__('Create source selection archive queue')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue recoverable trash')) ?></h3>
                             <span class="wfm-status warning"><?= $escapeHtml(__('Recoverable')) ?></span>
                         </div>
-                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($trashQueueUrl) ?>" data-wfm-trash-queue-form>
+                        <w:form class="wfm-write-form" method="post" action="@var($trashQueueUrl)" data-wfm-trash-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2443,7 +2443,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <i class="mdi mdi-delete-clock-outline"></i>
                                 <span><?= $escapeHtml(__('Create recoverable queue')) ?></span>
                             </button>
-                        </form>
+                        </w:form>
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
@@ -2481,7 +2481,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                             <div class="wfm-help"><?= $escapeHtml($queueItem['result']) ?></div>
                                         <?php endif; ?>
                                         <?php if ((string)($queueItem['can_restore'] ?? '') === '1'): ?>
-                                            <form class="wfm-inline-action-form" method="post" action="<?= $escapeHtml($trashRestoreUrl) ?>" data-wfm-trash-restore-form>
+                                            <w:form class="wfm-inline-action-form" method="post" action="@var($trashRestoreUrl)" data-wfm-trash-restore-form csrf="off">
                                                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                                                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                                                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2496,7 +2496,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                     <i class="mdi mdi-restore"></i>
                                                     <span><?= $escapeHtml(__('Restore')) ?></span>
                                                 </button>
-                                            </form>
+                                            </w:form>
                                         <?php endif; ?>
                                     </article>
                                 <?php endforeach; ?>
@@ -2550,7 +2550,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                             <div class="wfm-help"><?= $escapeHtml($trashItem['process']) ?></div>
                                         <?php endif; ?>
                                         <?php if ((string)($trashItem['can_restore'] ?? '') === '1'): ?>
-                                            <form class="wfm-inline-action-form" method="post" action="<?= $escapeHtml($trashRestoreUrl) ?>" data-wfm-trash-restore-form>
+                                            <w:form class="wfm-inline-action-form" method="post" action="@var($trashRestoreUrl)" data-wfm-trash-restore-form csrf="off">
                                                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                                                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                                                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2565,10 +2565,10 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                     <i class="mdi mdi-restore"></i>
                                                     <span><?= $escapeHtml(__('Restore')) ?></span>
                                                 </button>
-                                            </form>
+                                            </w:form>
                                         <?php endif; ?>
                                         <?php if ((string)($trashItem['can_purge'] ?? '') === '1'): ?>
-                                            <form class="wfm-inline-action-form is-danger" method="post" action="<?= $escapeHtml($trashPurgeUrl) ?>" data-wfm-trash-purge-form>
+                                            <w:form class="wfm-inline-action-form is-danger" method="post" action="@var($trashPurgeUrl)" data-wfm-trash-purge-form csrf="off">
                                                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                                                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                                                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2589,7 +2589,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                                     <i class="mdi mdi-delete-forever-outline"></i>
                                                     <span><?= $escapeHtml(__('永久清理')) ?></span>
                                                 </button>
-                                            </form>
+                                            </w:form>
                                         <?php endif; ?>
                                     </article>
                                 <?php endforeach; ?>
@@ -2629,7 +2629,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                     <strong><?= (int)($operationLogSummary['failed'] ?? 0) ?></strong>
                 </div>
             </div>
-            <form class="wfm-log-filters" method="get" action="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>" aria-label="<?= $escapeHtml(__('Audit Filters')) ?>">
+            <w:form class="wfm-log-filters" method="get" action="@var($buildFileManagerRouteUrl('audit'))" aria-label="@var(__('Audit Filters'))">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.read') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                 <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -2684,7 +2684,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                         <span class="wfm-help"><?= $escapeHtml(__('Latest')) ?>: <?= $escapeHtml($operationLogSummary['latest_time']) ?></span>
                     <?php endif; ?>
                 </div>
-            </form>
+            </w:form>
             <?php if ($operationLogs): ?>
                 <div class="wfm-log-list">
                     <?php foreach ($operationLogs as $log): ?>

@@ -712,7 +712,7 @@
             </div>
             
             <div id="manualTab" class="tab-content">
-                <form id="addForm" data-twofa-submit="add-account">
+                <w:form id="addForm" data-twofa-submit="add-account">
                     <div class="form-group">
                         <label>账户名称 *</label>
                         <input type="text" name="name" required placeholder="例如：Gmail">
@@ -733,7 +733,7 @@
                         <button type="button" class="btn btn-secondary" data-twofa-action="close-modal" data-modal-id="addModal">取消</button>
                         <button type="submit" class="btn btn-primary">添加</button>
                     </div>
-                </form>
+                </w:form>
             </div>
             
             <div id="uriTab" class="tab-content">
@@ -762,7 +762,7 @@
                 
                 <!-- URI导入 -->
                 <div id="uriImportTab" class="import-tab-content">
-                    <form id="importForm" data-twofa-submit="import-account">
+                    <w:form id="importForm" data-twofa-submit="import-account">
                         <div class="form-group">
                             <label>otpauth:// URI</label>
                             <textarea name="uri" rows="4" required placeholder="例如：otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example"></textarea>
@@ -772,7 +772,7 @@
                             <button type="button" class="btn btn-secondary" data-twofa-action="close-modal" data-modal-id="addModal">取消</button>
                             <button type="submit" class="btn btn-primary">导入</button>
                         </div>
-                    </form>
+                    </w:form>
                 </div>
             </div>
         </div>

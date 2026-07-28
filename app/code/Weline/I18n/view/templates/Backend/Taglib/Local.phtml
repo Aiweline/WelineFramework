@@ -20,7 +20,7 @@
                            action='*/backend/taglib/local' method='get' keyword='search' value=''
                            placeholder='@lang{请输入关键词}'></block>
                 </div>
-                <form id="localTranslationForm" role='form' class='needs-validation' novalidate=''
+                <w:form id="localTranslationForm" role='form' class='needs-validation' novalidate=''
                       action='{{action}}' method='post' data-async-action='taglib-local-save'>
                     <!--基础信息-->
                     <div class='row form-group'>
@@ -62,7 +62,7 @@
                             <lang>提交</lang>
                         </button>
                     </div>
-                </form>
+                </w:form>
                 {{local_pagination}}
             </div>
         </div>

@@ -82,7 +82,7 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
             <div class="account-card__body">
                 <div class="account-card__alert account-card__alert--success" id="profileSuccessMsg"></div>
                 <div class="account-card__alert account-card__alert--danger" id="profileErrorMsg"></div>
-                <form id="profileForm" class="account-form">
+                <w:form id="profileForm" class="account-form">
                     <div class="account-form__group account-form__group--wide">
                         <label class="account-form__label"><lang>账户标识</lang></label>
                         <div class="account-identity" id="accountIdentity">
@@ -115,7 +115,7 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
                             <i class="ri-save-line"></i> <lang>保存更改</lang>
                         </button>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>
@@ -130,7 +130,7 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
                 <div class="account-card__alert account-card__alert--success" id="securitySuccessMsg"></div>
                 <div class="account-card__alert account-card__alert--danger" id="securityErrorMsg"></div>
 
-                <form id="securityForm" class="account-form">
+                <w:form id="securityForm" class="account-form">
                     <div class="account-form__group account-form__group--medium">
                         <label for="old_password" class="account-form__label"><lang>原密码</lang></label>
                         <input type="password" class="account-form__input" id="old_password" name="old_password"
@@ -159,7 +159,7 @@ if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
                             <i class="ri-lock-password-line"></i> <lang>修改密码</lang>
                         </button>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

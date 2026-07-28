@@ -200,7 +200,7 @@ $totalAccounts = count($accounts);
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title"><?= __('从 Websites 开通邮箱域名') ?></h5>
-                    <form id="mail-domain-create-form" method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/create-domain') ?>">
+                    <w:form id="mail-domain-create-form" method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/create-domain'))">
                         <div class="mb-3">
                             <label class="form-label" for="mail-domain-search"><?= __('搜索 Websites 域名') ?></label>
                             <input id="mail-domain-search" class="form-control" autocomplete="off" placeholder="example.com">
@@ -231,7 +231,7 @@ $totalAccounts = count($accounts);
                             </div>
                         </div>
                         <button id="mail-domain-submit" class="btn btn-primary" type="submit"><?= __('开通邮箱域名') ?></button>
-                    </form>
+                    </w:form>
                 </div>
             </div>
         </div>
@@ -277,21 +277,21 @@ $totalAccounts = count($accounts);
                                         <td><span class="badge <?= $statusBadge($status) ?>"><?= $escape($status) ?></span></td>
                                         <td>
                                             <div class="d-flex flex-wrap gap-1">
-                                                <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/set-domain-status') ?>">
+                                                <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/set-domain-status'))">
                                                     <input type="hidden" name="domain_id" value="<?= $domainId ?>">
                                                     <input type="hidden" name="status" value="active">
                                                     <button class="btn btn-sm btn-success" type="submit"><?= __('开启') ?></button>
-                                                </form>
-                                                <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/set-domain-status') ?>">
+                                                </w:form>
+                                                <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/set-domain-status'))">
                                                     <input type="hidden" name="domain_id" value="<?= $domainId ?>">
                                                     <input type="hidden" name="status" value="suspended">
                                                     <button class="btn btn-sm btn-outline-warning" type="submit"><?= __('停用') ?></button>
-                                                </form>
-                                                <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/set-domain-status') ?>">
+                                                </w:form>
+                                                <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/set-domain-status'))">
                                                     <input type="hidden" name="domain_id" value="<?= $domainId ?>">
                                                     <input type="hidden" name="status" value="pending">
                                                     <button class="btn btn-sm btn-outline-secondary" type="submit"><?= __('待同步') ?></button>
-                                                </form>
+                                                </w:form>
                                             </div>
                                         </td>
                                     </tr>
@@ -310,7 +310,7 @@ $totalAccounts = count($accounts);
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title"><?= __('创建邮箱账号') ?></h5>
-                    <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/create-account') ?>">
+                    <w:form method="post" action="@var($this->getBackendUrl('weline_mail/backend/index/create-account'))">
                         <div class="mb-3">
                             <label class="form-label" for="mail-account-domain-select"><?= __('邮箱域名') ?></label>
                             <select id="mail-account-domain-select" class="form-select" name="domain_id" required>
@@ -360,7 +360,7 @@ $totalAccounts = count($accounts);
                             <div class="form-text"><?= __('Fake 域名会自动建议开启，真实域名默认待同步。') ?></div>
                         </div>
                         <button class="btn btn-primary" type="submit"><?= __('创建邮箱账号') ?></button>
-                    </form>
+                    </w:form>
                 </div>
             </div>
         </div>
@@ -428,7 +428,7 @@ $totalAccounts = count($accounts);
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title"><?= __('DNS 检测') ?></h5>
-                    <form class="row gy-2 gx-2 align-items-end" method="get" action="<?= $this->getBackendUrl('weline_mail/backend/index') ?>">
+                    <w:form class="row gy-2 gx-2 align-items-end" method="get" action="@var($this->getBackendUrl('weline_mail/backend/index'))">
                         <div class="col-md-5">
                             <label class="form-label"><?= __('邮箱域名') ?></label>
                             <input class="form-control" name="domain" value="<?= $escape($dnsResult['domain'] ?? '') ?>" placeholder="example.com">
@@ -440,7 +440,7 @@ $totalAccounts = count($accounts);
                         <div class="col-md-2">
                             <button class="btn btn-secondary w-100" type="submit"><?= __('检测') ?></button>
                         </div>
-                    </form>
+                    </w:form>
                     <?php if ($dnsResult): ?>
                         <div class="table-responsive mt-3">
                             <table class="table table-sm">

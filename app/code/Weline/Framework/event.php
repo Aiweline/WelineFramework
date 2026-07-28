@@ -244,6 +244,31 @@ return [
         'description' => __('在模板完成渲染（输出HTML）之后触发，允许其他模块对最终HTML进行分析、提取静态资源、注入追踪代码等操作。注意：此时不应再出现PHP代码，只能处理纯HTML字符串。'),
         'doc' => 'template/模板渲染后.md',
     ],
+    'Weline_Framework::view::form::prepare' => [
+        'name' => __('框架表单准备'),
+        'description' => __('w:form 输出开始标签前触发；观察者只能在白名单内调整表单属性。'),
+        'doc' => 'view/w-form.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'attributes' => ['type' => 'array', 'required' => true, 'description' => '已规范化的白名单表单属性'],
+            'intent' => ['type' => 'string', 'required' => true, 'description' => '稳定业务意图'],
+            'form_id' => ['type' => 'string', 'required' => true, 'description' => '表单 DOM ID'],
+        ],
+    ],
+    'Weline_Framework::view::form::before_close' => [
+        'name' => __('框架表单关闭前'),
+        'description' => __('w:form 结束标签输出前触发；扩展模块可追加隐藏字段或安全验证组件。'),
+        'doc' => 'view/w-form.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'attributes' => ['type' => 'array', 'required' => true, 'description' => '已规范化的白名单表单属性'],
+            'intent' => ['type' => 'string', 'required' => true, 'description' => '稳定业务意图'],
+            'form_id' => ['type' => 'string', 'required' => true, 'description' => '表单 DOM ID'],
+            'html' => ['type' => 'string', 'required' => true, 'description' => '扩展模块追加的 HTML'],
+        ],
+    ],
     
     // ========== 控制器事件 ==========
     'Weline_Framework_Controller::fetch_file_before' => [

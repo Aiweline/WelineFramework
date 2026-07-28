@@ -17,7 +17,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_HEX_QUOT
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
-<form id="dir-config-form">
+<w:form id="dir-config-form">
     <?php if ($meta_id): ?>
         <input type="hidden" name="meta_id" value="<?= (int)$meta_id ?>">
     <?php endif; ?>
@@ -890,4 +890,4 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
     <input type="hidden" name="path" value="<?= htmlspecialchars($path) ?>">
     <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
-</form>
+</w:form>

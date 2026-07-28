@@ -51,7 +51,7 @@ $keyword = $keyword ?? '';
     <div class="col-xl-12">
         <div class="card">
             <div class="card-body">
-                <form method="get" action="<?= $this->getBackendUrl('*/backend/access-log') ?>" class="row g-3">
+                <w:form method="get" action="@var($this->getBackendUrl('*/backend/access-log'))" class="row g-3">
                     <div class="col-md-9">
                         <label class="form-label"><lang>关键词</lang></label>
                         <input type="text" class="form-control" name="keyword" value="<?= htmlspecialchars($keyword) ?>" 
@@ -68,7 +68,7 @@ $keyword = $keyword ?? '';
                             </a>
                         </div>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

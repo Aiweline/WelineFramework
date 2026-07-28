@@ -413,7 +413,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             <div class="card">
                 <div class="card-title"><?= __('数据库配置') ?></div>
                 
-                <form id="form-db">
+                <w:form id="form-db" csrf="off">
                     <input type="hidden" name="form_key" value="<?= $form_key ?>">
                     
                     <div class="form-group">
@@ -465,7 +465,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                         <label class="form-label"><?= __('表前缀') ?></label>
                         <input type="text" class="form-input" name="prefix" value="w_">
                     </div>
-                </form>
+                </w:form>
 
                 <div class="inline-message" id="db-message" role="status" aria-live="polite" hidden></div>
                 
@@ -481,7 +481,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             <div class="card">
                 <div class="card-title"><?= __('管理员设置') ?></div>
                 
-                <form id="form-admin">
+                <w:form id="form-admin" csrf="off">
                     <input type="hidden" name="form_key" value="<?= $form_key ?>">
                     
                     <div class="form-group">
@@ -494,7 +494,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                         <label class="form-label"><?= __('API 后台入口密钥（留空自动生成）') ?></label>
                         <input type="text" class="form-input" name="api_admin_key" placeholder="<?= __('例如：api_secret_key') ?>">
                     </div>
-                </form>
+                </w:form>
 
                 <div class="inline-message" id="install-message" role="alert" aria-live="assertive" hidden></div>
                 

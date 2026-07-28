@@ -189,7 +189,7 @@ $fileName = $data['name'] ?? ucfirst($file);
             <button type="button" class="btn btn-secondary" data-variable-action="reset"><lang>重置为默认值</lang></button>
         </div>
         
-        <form id="variable-form">
+        <w:form id="variable-form">
             <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>">
             <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
             <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
@@ -284,7 +284,7 @@ $fileName = $data['name'] ?? ucfirst($file);
                     <lang>重置为默认值</lang>
                 </button>
             </div>
-        </form>
+        </w:form>
         
         <!-- 预览iframe -->
         <iframe id="preview-iframe" class="preview-iframe hidden" src=""></iframe>
