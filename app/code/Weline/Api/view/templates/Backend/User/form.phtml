@@ -44,7 +44,7 @@ $isEdit = !empty($user) && $user->getId();
                 <p class='card-title-desc'>
                     <?= $isEdit ? __('编辑API用户信息') : __('创建新的API用户，系统将自动生成API Key和Secret') ?>
                 </p>
-                <form id="api-user-form" class='needs-validation' action="{{action}}" method="post" novalidate>
+                <w:form id="api-user-form" class='needs-validation' action="{{action}}" method="post" novalidate>
                     <input type='hidden' name="user_id" value='<?= $isEdit ? $user->getId() : 0 ?>'>
                     
                     <div class='row'>
@@ -171,12 +171,12 @@ $isEdit = !empty($user) && $user->getId();
                             </div>
                             
                             <div class='mb-3'>
-                                <form action="@backend-url('*/api/backend/user/regenerate-credentials')" method="post" class="d-inline">
+                                <w:form action="@backend-url('*/api/backend/user/regenerate-credentials')" method="post" class="d-inline">
                                     <input type='hidden' name='id' value='<?= $user->getId() ?>'>
                                     <button type='submit' class='btn btn-warning ajax-confirm'>
                                         <lang>重新生成API凭证</lang>
                                     </button>
-                                </form>
+                                </w:form>
                                 <small class="form-text text-muted d-block mt-2">
                                     <lang>重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。</lang>
                                 </small>
@@ -195,7 +195,7 @@ $isEdit = !empty($user) && $user->getId();
                             </a>
                         </div>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div> <!-- end col -->

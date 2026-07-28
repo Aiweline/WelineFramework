@@ -63,7 +63,7 @@ foreach ($variables as $varName => $var) {
                     </div>
                     
                     <!-- 变量配置表单 -->
-                    <form id="color-palette-variables-form">
+                    <w:form id="color-palette-variables-form">
                         <input type="hidden" name="theme_id" value="<?= $themeId ?>">
                         <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
@@ -130,7 +130,7 @@ foreach ($variables as $varName => $var) {
                                 </div>
                             </div>
                         <?php endforeach; ?>
-                    </form>
+                    </w:form>
                 <?php endif; ?>
             </div>
             <div class="modal-footer">

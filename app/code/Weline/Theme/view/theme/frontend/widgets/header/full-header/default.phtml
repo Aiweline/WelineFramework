@@ -95,7 +95,7 @@ $widgetId = 'full-header-' . uniqid();
             <!-- 搜索框区域 -->
             <?php if ($showSearch): ?>
             <div class="header-search">
-                <form action="<?= $block->getUrl('search') ?>" method="get" class="search-form">
+                <w:form action="@var($block->getUrl('search'))" method="get" class="search-form">
                     <div class="search-input-wrapper">
                         <input type="text" 
                                name="q" 
@@ -109,7 +109,7 @@ $widgetId = 'full-header-' . uniqid();
                     <div class="search-suggestions" style="display:none;">
                         <!-- 搜索建议由JS动态填充 -->
                     </div>
-                </form>
+                </w:form>
             </div>
             <?php endif; ?>
             

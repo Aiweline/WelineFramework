@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Captcha\Provider;
 
 use Weline\Captcha\Interface\CaptchaProviderInterface;
+use Weline\Captcha\Service\LocalChallengeImage;
 
 /**
  * 备用验证码提供者（图形验证码）
@@ -16,16 +17,13 @@ class FallbackCaptcha implements CaptchaProviderInterface
      */
     public function generate(array $options = []): array
     {
-        // 生成随机验证码
-        $code = $this->generateRandomCode(4);
-        $token = uniqid('captcha_', true);
-        
-        // TODO: 生成验证码图片
-        // 这里可以生成图形验证码图片并返回 base64 编码
+        $length = \max(5, \min(6, (int)($options['length'] ?? 6)));
+        $code = $this->generateRandomCode($length);
+        $token = bin2hex(random_bytes(24));
         
         return [
-            'code' => $code,
-            'image' => null, // 图形验证码的 base64 编码
+            'code_hash' => password_hash(strtoupper($code), PASSWORD_DEFAULT),
+            'image' => LocalChallengeImage::dataUri($code),
             'token' => $token,
         ];
     }
@@ -48,10 +46,10 @@ class FallbackCaptcha implements CaptchaProviderInterface
      */
     protected function generateRandomCode(int $length = 4): string
     {
-        $characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $characters = '23456789';
         $code = '';
         for ($i = 0; $i < $length; $i++) {
-            $code .= $characters[rand(0, strlen($characters) - 1)];
+            $code .= $characters[random_int(0, strlen($characters) - 1)];
         }
         return $code;
     }

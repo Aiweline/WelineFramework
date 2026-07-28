@@ -331,7 +331,7 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form id="requestForm">
+                <w:form id="requestForm">
                     <div class="mb-3">
                         <label class="form-label"><?= __('域名') ?> <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="domain" required 
@@ -352,7 +352,7 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
                         </select>
                         <small class="text-muted"><?= __('默认使用 Let\'s Encrypt，LiteSSL 可用于特定合规场景') ?></small>
                     </div>
-                </form>
+                </w:form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>

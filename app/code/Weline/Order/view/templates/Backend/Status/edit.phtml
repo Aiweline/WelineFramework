@@ -29,7 +29,8 @@ $isNew = !$status || !$status->getId();
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <form id="weline-order-status-form" method="post" action="<?= $this->getBackendUrl('order/backend/status/save') ?>">
+                <w:form id="weline-order-status-form" method="post" action="@var($this->getBackendUrl('order/backend/status/save'))">
+                    <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <?php if ($status && $status->getId()): ?>
                         <input type="hidden" name="id" value="<?= $status->getId() ?>">
                     <?php endif; ?>
@@ -153,7 +154,7 @@ $isNew = !$status || !$status->getId();
                             <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
                         </a>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

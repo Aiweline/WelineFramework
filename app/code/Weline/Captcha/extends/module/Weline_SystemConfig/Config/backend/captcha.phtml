@@ -1,0 +1,39 @@
+<?php
+/**
+ * @meta.title {default="人机验证",description="统一表单人机验证与 Google reCAPTCHA Enterprise 配置"}
+ * @meta.description {default="人机验证始终启用；Google 未配置完整时自动使用一次性本地图形挑战。"}
+ * @config.area {backend}
+ * @config.sort {20}
+ * @config.acl {Weline_Captcha::config}
+ */
+?>
+
+<w:config:group code="captcha_google_enterprise" label="Google reCAPTCHA Enterprise" description="未启用或配置不完整时使用本地图形验证码；完整启用后远端失败会拒绝提交，不会静默降级。" sort="20">
+    <w:config:field key="captcha/google/enabled" label="启用 Google Enterprise" type="switch" value-type="bool" default="0" scope="global,website" />
+    <w:config:field key="captcha/google/project_id" label="Google Cloud Project ID" type="text" value-type="string" default="" scope="global,website" validation="max:128" />
+    <w:config:field key="captcha/google/site_key" label="Enterprise Site Key" type="text" value-type="string" default="" scope="global,website" sensitive="0" validation="max:255" />
+    <w:config:field key="captcha/google/api_key" label="Enterprise API Key（可选）" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+    <w:config:field key="captcha/google/allowed_domains" label="允许域名" description="逗号或换行分隔；留空时仅接受当前请求域名，支持 *.example.com。" type="textarea" value-type="string" default="" scope="global,website" validation="max:4000" />
+    <w:config:field key="captcha/google/score_threshold" label="最低风险分数" type="number" value-type="float" default="0.5" scope="global,website" validation="min:0|max:1" />
+    <w:config:field key="captcha/google/token_max_age" label="Token 最大年龄（秒）" type="number" value-type="int" default="120" scope="global,website" validation="min:30|max:600" />
+</w:config:group>
+
+<w:config:group code="captcha_google_oauth" label="Google 一键授权" description="OAuth 使用 state、PKCE 和 cloud-platform Scope；授权账户需具备 reCAPTCHA Enterprise Key 管理权限。" sort="30">
+    <w:config:field key="captcha/google/oauth_client_id" label="OAuth Client ID" type="text" value-type="string" default="" scope="global" validation="max:255" />
+    <w:config:field key="captcha/google/oauth_client_secret" label="OAuth Client Secret" type="password" value-type="string" default="" scope="global" sensitive="1" validation="max:512" />
+    <w:config:field key="captcha/google/access_token" label="OAuth Access Token" type="password" value-type="string" default="" scope="global" sensitive="1" validation="max:4096" />
+    <w:config:field key="captcha/google/refresh_token" label="OAuth Refresh Token" type="password" value-type="string" default="" scope="global" sensitive="1" validation="max:4096" />
+    <w:config:adapter code="captcha.google.oauth" label="授权 Google" description="进入 Google OAuth 授权，回调后选择并绑定当前配置 Scope 的 Project。" backend-url="captcha/backend/google/authorize" action-label="授权 Google" />
+    <w:config:adapter code="captcha.google.projects" label="选择 Google Project" description="从授权账户可访问的 Project 中选择，并自动创建或绑定当前网站域名的 Enterprise Key。" backend-url="captcha/backend/google/projects" action-label="选择 Project" />
+    <w:config:adapter code="captcha.google.test" label="Google 连接测试" description="检查 OAuth Token 与 Cloud Resource Manager Project 读取权限。" backend-url="captcha/backend/google/test" action-label="测试连接" />
+    <w:config:adapter code="captcha.google.revoke" label="撤销 Google 授权" description="撤销远端 Token，并清除本地 Access Token 与 Refresh Token。" backend-url="captcha/backend/google/revoke" action-label="撤销授权" />
+    <w:config:adapter code="captcha.google.console" label="Google reCAPTCHA Enterprise 控制台" external-url="https://console.cloud.google.com/security/recaptcha" target="_blank" action-label="打开控制台" />
+</w:config:group>
+
+<w:config:group code="captcha_legacy" label="旧版 Captcha 兼容配置" description="升级时仅在对应新键为空时迁入；保留一版供旧 CaptchaProviderInterface/CaptchaService 读取和排查。" sort="90">
+    <w:config:field key="captcha/legacy/v2_site_key" label="旧 Google reCAPTCHA v2 Site Key" type="text" value-type="string" default="" scope="global" validation="max:255" />
+    <w:config:field key="captcha/legacy/v2_secret_key" label="旧 Google reCAPTCHA v2 Secret" type="password" value-type="string" default="" scope="global" sensitive="1" validation="max:512" />
+    <w:config:field key="captcha/legacy/v3_site_key" label="旧 Google reCAPTCHA v3 Site Key" type="text" value-type="string" default="" scope="global" validation="max:255" />
+    <w:config:field key="captcha/legacy/v3_secret_key" label="旧 Google reCAPTCHA v3 Secret" type="password" value-type="string" default="" scope="global" sensitive="1" validation="max:512" />
+    <w:config:field key="captcha/legacy/v3_threshold" label="旧 Google reCAPTCHA v3 阈值" type="number" value-type="float" default="0.5" scope="global" validation="min:0|max:1" />
+</w:config:group>

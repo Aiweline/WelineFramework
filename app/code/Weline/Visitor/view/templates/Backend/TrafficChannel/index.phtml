@@ -96,13 +96,13 @@ $landingUrls = $landing_urls ?? [];
                                         <button type="button" class="btn btn-sm btn-outline-success js-copy-landing"
                                                 data-url="<?= $h($landingUrl) ?>"><lang>复制链接</lang></button>
                                     <?php endif; ?>
-                                    <form method="post" action="<?= $h($toggleUrl) ?>" class="d-inline">
+                                    <w:form method="post" action="@var($toggleUrl)" class="d-inline">
                                         <input type="hidden" name="id" value="<?= $h((string)$channelId) ?>"/>
                                         <input type="hidden" name="enabled" value="<?= $enabled ? '0' : '1' ?>"/>
                                         <button type="submit" class="btn btn-sm btn-outline-secondary">
                                             <?= $enabled ? $h(__('停用')) : $h(__('启用')) ?>
                                         </button>
-                                    </form>
+                                    </w:form>
                                 <?php endif; ?>
                             </td>
                         </tr>

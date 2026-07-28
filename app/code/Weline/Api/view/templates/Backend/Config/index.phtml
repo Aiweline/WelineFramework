@@ -13,7 +13,7 @@ $config = $this->getData('config') ?? [];
         <p class="text-muted"><?= __('配置API令牌刷新周期等参数') ?></p>
     </div>
 
-    <form id="api-config-form" method="post" action="<?= $this->getBackendUrl('*/backend/config/save') ?>">
+    <w:form id="api-config-form" method="post" action="@var($this->getBackendUrl('*/backend/config/save'))">
         <div class="card">
             <div class="card-header">
                 <h3><?= __('令牌刷新配置') ?></h3>
@@ -122,7 +122,7 @@ $config = $this->getData('config') ?? [];
                 <?= __('返回') ?>
             </a>
         </div>
-    </form>
+    </w:form>
 </div>
 
 <style>

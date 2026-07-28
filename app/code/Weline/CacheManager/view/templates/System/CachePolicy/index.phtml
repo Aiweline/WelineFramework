@@ -79,7 +79,7 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
         <p><?= __('这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。') ?></p>
     </section>
 
-    <form id="cache-policy-form" method="post" action="<?= htmlspecialchars($saveUrl) ?>">
+    <w:form id="cache-policy-form" method="post" action="@var($saveUrl)">
         <section class="cache-policy-card">
             <h3><?= __('页面片段缓存') ?></h3>
             <p><?= __('控制首页、分类页、商品页主内容旁路缓存时间。') ?></p>
@@ -145,9 +145,38 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
             <button type="submit" id="cache-policy-submit"><?= __('保存策略并清理缓存') ?></button>
             <span id="cache-policy-message" class="cache-policy-message"></span>
         </div>
-    </form>
+    </w:form>
 </div>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_cache_manager) return;
+  g.__bqAdmin_cache_manager=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['cache_manager']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('cache_manager').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
     (function () {
         var form = document.getElementById('cache-policy-form');

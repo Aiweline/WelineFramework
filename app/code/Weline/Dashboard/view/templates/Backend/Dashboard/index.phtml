@@ -152,7 +152,7 @@ if ($activeWebsiteName === '') {
             <?php endif; ?>
 
                 <div class="w-dashboard-panel" data-dashboard-form="create" hidden>
-                    <form data-dashboard-create-form>
+                    <w:form data-dashboard-create-form>
                         <label>
                             <span><?= __('视图名称') ?></span>
                             <input type="text" name="name" maxlength="120" required value="<?= htmlspecialchars((string)__('我的概览')) ?>">
@@ -162,27 +162,27 @@ if ($activeWebsiteName === '') {
                             <span><?= __('创建后公开') ?></span>
                         </label>
                         <button type="submit" class="w-dashboard-btn primary"><?= __('创建') ?></button>
-                    </form>
+                    </w:form>
                 </div>
 
                 <div class="w-dashboard-panel" data-dashboard-form="rename" hidden>
-                    <form data-dashboard-rename-form>
+                    <w:form data-dashboard-rename-form>
                         <label>
                             <span><?= __('新名称') ?></span>
                             <input type="text" name="name" maxlength="120" required value="<?= htmlspecialchars((string)($activeView['name'] ?? '')) ?>">
                         </label>
                         <button type="submit" class="w-dashboard-btn primary"><?= __('保存名称') ?></button>
-                    </form>
+                    </w:form>
                 </div>
 
                 <div class="w-dashboard-panel danger" data-dashboard-form="delete" hidden>
-                    <form data-dashboard-delete-form>
+                    <w:form data-dashboard-delete-form>
                         <label class="w-dashboard-checkbox">
                             <input type="checkbox" name="ack" required>
                             <span><?= __('我知道删除会同时移除这个视图的布局数据') ?></span>
                         </label>
                         <button type="submit" class="w-dashboard-btn danger"><?= __('删除视图') ?></button>
-                    </form>
+                    </w:form>
                 </div>
 
                 <div class="w-dashboard-status" data-dashboard-status hidden></div>

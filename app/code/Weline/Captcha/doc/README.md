@@ -8,16 +8,22 @@
 开发前先读：
 
 1. `app/code/Weline/Captcha/doc/AI-INDEX.md`
-2. `dev/ai/diagrams/08-module-docs-index.txt`
-3. `dev/ai/global-constraints.md`
-4. `app/code/Weline/Theme/doc/AI-INDEX.md`
-5. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+2. `app/code/Weline/Captcha/doc/google-enterprise-and-w-form.md`
+3. `dev/ai/diagrams/08-module-docs-index.txt`
+4. `dev/ai/global-constraints.md`
+5. `app/code/Weline/Theme/doc/AI-INDEX.md`
+6. `app/code/Weline/Frontend/doc/AI-INDEX.md`
 
 ## 模块定位
 
 - 模块代码：`Weline_Captcha`
 - 目录：`app/code/Weline/Captcha`
-- 当前状态：结构化模块概览已补齐；稳定业务规则仍应继续沉淀到本模块 `doc/`。
+- 默认实现：Google reCAPTCHA Enterprise；Google 未启用或配置不完整时强制使用一次性
+  本地图形挑战，不提供全局关闭验证码的状态。
+- 框架接入：观察 `Weline_Framework::view::form::before_close`，为 POST `<w:form>` 的
+  默认 `captcha=auto` 注入挑战。服务端必须通过 `CaptchaManagerInterface` 复验。
+- 兼容面：旧 `CaptchaProviderInterface` / `CaptchaService` 保留；旧独立配置只在
+  SystemConfig 对应键为空时迁移，不覆盖管理员新配置。
 
 ## 代码面概览
 
@@ -48,6 +54,7 @@
 
 ## 本模块文档资产
 
+- `app/code/Weline/Captcha/doc/google-enterprise-and-w-form.md`
 - `app/code/Weline/Captcha/doc/event/失败次数超限.md`
 - `app/code/Weline/Captcha/doc/event/验证码验证前.md`
 - `app/code/Weline/Captcha/doc/event/验证码验证后.md`

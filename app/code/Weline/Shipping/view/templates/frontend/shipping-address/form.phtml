@@ -12,7 +12,7 @@ $isEdit = $address && $address->getId();
         </a>
     </div>
 
-    <form id="addressForm" method="POST" action="<?= $frontendUrl ?>shipping/address/save">
+    <w:form id="addressForm" method="POST" action="@var($frontendUrl)shipping/address/save">
         <?php if ($isEdit): ?>
             <input type="hidden" name="shipping_address_id" value="<?= $address->getId() ?>">
         <?php endif; ?>
@@ -90,7 +90,7 @@ $isEdit = $address && $address->getId();
                 <?= __('取消') ?>
             </a>
         </div>
-    </form>
+    </w:form>
 </div>
 
 <style>

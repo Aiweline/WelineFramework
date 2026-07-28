@@ -51,12 +51,12 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
         <!-- 搜索框（Logo下方） -->
         <?php if ($showSearch): ?>
             <div class="header-search-centered">
-                <form action="/search" method="get" class="search-form">
+                <w:form action="/search" method="get" class="search-form">
                     <input type="text" name="q" class="search-input" placeholder="<?= __('搜索商品...') ?>" autocomplete="off">
                     <button type="submit" class="search-button" title="<?= __('搜索') ?>">
                         <i class="fas fa-search"></i>
                     </button>
-                </form>
+                </w:form>
             </div>
         <?php endif; ?>
 

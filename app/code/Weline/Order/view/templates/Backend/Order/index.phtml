@@ -49,7 +49,7 @@ $backendBase = $this->getBackendUrl('order/backend/order/index');
                 </div>
             </div>
             <div class="card-body">
-                <form method="get" action="<?= $backendBase ?>" class="mb-3">
+                <w:form method="get" action="@var($backendBase)" class="mb-3">
                     <div class="row g-3">
                         <div class="col-md-3">
                             <input type="text" name="keyword" class="form-control" 
@@ -94,7 +94,7 @@ $backendBase = $this->getBackendUrl('order/backend/order/index');
                             </a>
                         </div>
                     </div>
-                </form>
+                </w:form>
 
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover">

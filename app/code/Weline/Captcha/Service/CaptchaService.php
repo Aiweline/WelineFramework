@@ -37,16 +37,21 @@ class CaptchaService
         // 生成验证码
         $result = $provider->generate($options);
         
-        // 保存验证码结果
+        // 保存验证码结果。本地答案只保存不可逆摘要，绝不返回给浏览器。
+        $storedCode = (string)($result['code_hash'] ?? '');
+        if ($storedCode === '' && (string)($result['code'] ?? '') !== '') {
+            $storedCode = password_hash(strtoupper(trim((string)$result['code'])), PASSWORD_DEFAULT);
+        }
         /** @var CaptchaResult $captchaResult */
         $captchaResult = ObjectManager::getInstance(CaptchaResult::class);
         $captchaResult->clearData()
             ->setData('token', $result['token'] ?? '')
-            ->setData('code', $result['code'] ?? '')
+            ->setData('code', $storedCode)
             ->setData('type', $type)
             ->setData('expires_at', date('Y-m-d H:i:s', time() + 300)) // 5分钟过期
+            ->setData('created_at', date('Y-m-d H:i:s'))
             ->save();
-        
+        unset($result['code'], $result['code_hash']);
         return $result;
     }
     
@@ -81,11 +86,14 @@ class CaptchaService
             return false;
         }
         
-        // 验证码比较（不区分大小写）
-        $storedCode = strtolower(trim($captchaResult->getData('code') ?? ''));
-        $inputCode = strtolower(trim($code));
-        
-        if ($storedCode !== $inputCode) {
+        $type = (string)$captchaResult->getData(CaptchaResult::schema_fields_TYPE);
+        $provider = $this->getProvider($type);
+        $storedCode = (string)$captchaResult->getData(CaptchaResult::schema_fields_CODE);
+        $verified = str_starts_with($type, 'google_recaptcha')
+            ? ($provider?->verify($token, $code) ?? false)
+            : password_verify(strtoupper(trim($code)), $storedCode);
+
+        if (!$verified) {
             $this->recordFailedAttempt($ip);
             $captchaResult->delete(); // 验证失败后删除
             return false;
@@ -151,8 +159,18 @@ class CaptchaService
      */
     protected function getProvider(string $type): ?CaptchaProviderInterface
     {
-        // 根据类型返回相应的提供者
-        // 这里可以根据配置动态加载提供者
+        $normalized = \strtolower(\trim($type));
+        $known = [
+            'google_recaptcha_v2' => \Weline\Captcha\Provider\GoogleRecaptchaV2::class,
+            'google_recaptcha_v3' => \Weline\Captcha\Provider\GoogleRecaptchaV3::class,
+            'fallback' => \Weline\Captcha\Provider\FallbackCaptcha::class,
+            'image' => \Weline\Captcha\Provider\FallbackCaptcha::class,
+        ];
+        if (isset($known[$normalized])) {
+            return ObjectManager::getInstance($known[$normalized]);
+        }
+
+        // 保留第三方按旧命名约定动态注册的兼容路径。
         try {
             $providerClass = "Weline\\Captcha\\Provider\\" . ucfirst($type) . "Captcha";
             if (class_exists($providerClass)) {

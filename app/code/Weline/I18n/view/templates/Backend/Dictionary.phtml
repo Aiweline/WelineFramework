@@ -146,7 +146,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 
         <div class="card i18n-admin-card">
             <div class="card-body">
-                <form method="get" action="@backend-url('*/backend/dictionary')" class="row g-3 align-items-end i18n-admin-form">
+                <w:form method="get" action="@backend-url('*/backend/dictionary')" class="row g-3 align-items-end i18n-admin-form">
                     <div class="col-xl-4 col-md-6">
                         <label class="form-label"><?= __('目标语言') ?></label>
                         <w:i18n:language:select
@@ -176,7 +176,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                             <a href="@backend-url('*/backend/dictionary')?locale_code=<?= urlencode($localeCode) ?>" class="btn btn-outline-secondary"><?= __('重置') ?></a>
                         </div>
                     </div>
-                </form>
+                </w:form>
 
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-4">
                     <div class="i18n-admin-meta">
@@ -278,7 +278,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 <div class="modal fade" id="dictionary-add-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="@backend-url('*/backend/dictionary/add')" class="i18n-admin-form" data-async-action="dictionary-add">
+            <w:form method="post" action="@backend-url('*/backend/dictionary/add')" class="i18n-admin-form" data-async-action="dictionary-add">
                 <div class="modal-header">
                     <h5 class="modal-title"><?= __('添加翻译') ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
@@ -315,7 +315,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
                     <button type="submit" class="btn btn-primary"><?= __('提交') ?></button>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 </div>
@@ -323,7 +323,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 <div class="modal fade" id="dictionary-edit-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="@backend-url('*/backend/dictionary/edit')" class="i18n-admin-form" data-async-action="dictionary-edit">
+            <w:form method="post" action="@backend-url('*/backend/dictionary/edit')" class="i18n-admin-form" data-async-action="dictionary-edit">
                 <div class="modal-header">
                     <h5 class="modal-title"><?= __('编辑') ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
@@ -360,7 +360,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
                     <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 </div>
@@ -368,7 +368,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
 <div class="modal fade" id="dictionary-import-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="@backend-url('*/backend/dictionary/importCsv')" enctype="multipart/form-data" class="i18n-admin-form">
+            <w:form method="post" action="@backend-url('*/backend/dictionary/importCsv')" enctype="multipart/form-data" class="i18n-admin-form">
                 <div class="modal-header">
                     <h5 class="modal-title"><?= __('导入CSV') ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
@@ -388,7 +388,7 @@ $readValue = static function ($item, string $key, mixed $default = null): mixed 
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
                     <button type="submit" class="btn btn-primary"><?= __('提交') ?></button>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 </div>

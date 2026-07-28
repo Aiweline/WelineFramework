@@ -537,30 +537,62 @@ $typeCount = count($typeStats);
         <div class="weline-acl-toolbar-row">
             <!-- 搜索框 -->
             <div class="weline-acl-search-box">
-                <form action="@backend-url('*/backend/acl')" method="get" class="weline-acl-search-form">
+                <w:form action="@var($listBaseUrl)" method="get" class="weline-acl-search-form" id="acl-list-filter-form">
                     <div class="weline-acl-search-input">
                         <i class="mdi mdi-magnify"></i>
-                        <input type="text" name="search" value="<?php echo htmlspecialchars($this->request->getGet('search') ?: ''); ?>" placeholder="<?php echo __('搜索权限名称、ID、路由...'); ?>">
+                        <input type="text" name="search" value="<?php echo htmlspecialchars($currentSearch); ?>" placeholder="<?php echo $isTagDimension ? __('搜索权限名称、ID、标签...') : __('搜索权限名称、ID、路由...'); ?>">
                     </div>
                     <button type="submit" class="weline-acl-search-btn">
                         <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
                     </button>
-                </form>
+                </w:form>
             </div>
             
-            <!-- 筛选器 -->
+            <!-- 筛选器：模块维只用模块；标签维只用标签 -->
             <div class="weline-acl-filters">
-                <select id="acl-filter-type" class="weline-acl-filter-select" data-acl-filter="type">
+                <select id="acl-filter-type" class="weline-acl-filter-select" name="type" form="acl-list-filter-form" onchange="this.form.submit()">
                     <option value=""><?php echo __('所有类型'); ?></option>
-                    <option value="menus"><?php echo __('菜单'); ?></option>
-                    <option value="pc"><?php echo __('接口'); ?></option>
-                </select>
-                <select id="acl-filter-module" class="weline-acl-filter-select" data-acl-filter="module">
-                    <option value=""><?php echo __('所有模块'); ?></option>
-                    <?php foreach (array_keys($moduleStats) as $module): ?>
-                    <option value="<?php echo htmlspecialchars($module); ?>"><?php echo htmlspecialchars($module); ?> (<?php echo $moduleStats[$module]; ?>)</option>
+                    <?php foreach ($filterTypes as $filterType): ?>
+                    <option value="<?php echo htmlspecialchars((string)$filterType); ?>" <?php echo $currentType === (string)$filterType ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars(\Weline\Acl\Service\Resource\AclResourcePresentation::typeLabel((string)$filterType)); ?>
+                        (<?php echo (int)($typeStats[$filterType] ?? 0); ?>)
+                    </option>
                     <?php endforeach; ?>
                 </select>
+                <?php if ($isTagDimension):
+                    $acl_tag_filter_empty = __('所有标签');
+                    $acl_tag_filter_placeholder = __('搜索标签');
+                    $acl_tag_filter_value = $currentTagsValue;
+                    $acl_tag_filter_options_json = (string)($this->getData('acl_tag_filter_options_json') ?: '[]');
+                ?>
+                <w:acl:tag:select
+                    id="acl-filter-tags"
+                    name="tags"
+                    value="acl_tag_filter_value"
+                    options="acl_tag_filter_options_json"
+                    empty-label="acl_tag_filter_empty"
+                    placeholder="acl_tag_filter_placeholder"
+                    class="weline-acl-tag-filter"
+                    form="acl-list-filter-form"
+                    on-change="var f=document.getElementById('acl-list-filter-form'); if(f){f.requestSubmit ? f.requestSubmit() : f.submit();}"
+                />
+                <?php else:
+                    $acl_module_filter_empty = __('所有模块');
+                    $acl_module_filter_placeholder = __('搜索模块名称');
+                ?>
+                <w:module-manager:module:select
+                    id="acl-filter-module"
+                    name="module"
+                    value="current_module"
+                    allow-empty="true"
+                    clearable="true"
+                    empty-label="acl_module_filter_empty"
+                    placeholder="acl_module_filter_placeholder"
+                    class="weline-acl-module-filter"
+                    form="acl-list-filter-form"
+                    on-change="var f=document.getElementById('acl-list-filter-form'); if(f){f.requestSubmit ? f.requestSubmit() : f.submit();}"
+                />
+                <?php endif; ?>
             </div>
         </div>
     </div>

@@ -43,7 +43,7 @@ $params = $component['params'] ?? [];
                     <?php endif; ?>
                     
                     <!-- 参数配置表单 -->
-                    <form id="component-params-form">
+                    <w:form id="component-params-form">
                         <input type="hidden" name="theme_id" value="<?= $themeId ?>">
                         <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
@@ -126,7 +126,7 @@ $params = $component['params'] ?? [];
                                 </div>
                             <?php endforeach; ?>
                         </div>
-                    </form>
+                    </w:form>
                 <?php endif; ?>
             </div>
             <div class="modal-footer">

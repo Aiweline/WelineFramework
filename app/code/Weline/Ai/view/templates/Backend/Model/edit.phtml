@@ -72,7 +72,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 </div>
 
 <div class="model-edit-container<?= !$isEdit ? ' is-quick-create' : '' ?>">
-    <form action="<?= $this->getBackendUrl('*/backend/model/save') ?>" method="post" id="model-form">
+    <w:form action="@var($this->getBackendUrl('*/backend/model/save'))" method="post" id="model-form">
         <?php if ($isEdit): ?>
             <input type="hidden" name="id" value="<?= $model->getId() ?>">
         <?php endif; ?>
@@ -702,7 +702,7 @@ if (!empty($displayConfig)) {
                 </button>
             </div>
         </div>
-    </form>
+    </w:form>
 </div>
 
 <!-- SweetAlert2 CSS -->

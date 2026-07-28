@@ -819,16 +819,16 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                            href="<?= htmlspecialchars($wlsInstalledPluginsUrl, ENT_QUOTES, 'UTF-8') ?>">
                             <?= __('已安装应用') ?>
                         </a>
-                        <form class="wls-inline-action-form"
+                        <w:form class="wls-inline-action-form"
                               method="post"
-                              action="<?= htmlspecialchars($pluginRefreshUrl, ENT_QUOTES, 'UTF-8') ?>"
+                              action="@var($pluginRefreshUrl)"
                               data-wls-plugin-refresh-form>
                             <button class="wls-secondary-button"
                                     type="submit"
                                     data-wls-plugin-refresh>
                                 <?= __('刷新面板插件') ?>
                             </button>
-                        </form>
+                        </w:form>
                     </div>
                 </section>
                 <section class="wls-installed-plugin-section"
@@ -1150,9 +1150,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <span><?= __('可在项目卡片点击编辑策略，或在日志过滤器中选择明确的项目范围。') ?></span>
                         </div>
                     <?php else: ?>
-                        <form class="wls-domain-policy-form"
+                        <w:form class="wls-domain-policy-form"
                               method="post"
-                              action="<?= $escapeHtml($securityRulesSaveUrl) ?>">
+                              action="@var($securityRulesSaveUrl)">
                             <input type="hidden" name="save_mode" value="domain_override">
                             <input type="hidden" name="security_scope" value="<?= $escapeHtml($domainPolicyScope) ?>">
                             <input type="hidden" name="security_domain" value="<?= $escapeHtml($domainPolicyDomain) ?>">
@@ -1533,7 +1533,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                     </button>
                                 <?php endif; ?>
                             </div>
-                        </form>
+                        </w:form>
                     <?php endif; ?>
                 </section>
                 <?php endif; ?>
@@ -1552,7 +1552,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </div>
                         <span class="wls-status-pill"><?= __('最近变更') ?></span>
                     </div>
-                    <form class="wls-filter-bar wls-security-audit-filter" method="get" action="<?= $escapeHtml($securityAuditUrl) ?>">
+                    <w:form class="wls-filter-bar wls-security-audit-filter" method="get" action="@var($securityAuditUrl)">
                         <input type="hidden" name="security_scope" value="<?= $escapeHtml((string)($securityFilters['scope'] ?? 'all')) ?>">
                         <input type="hidden" name="security_instance" value="<?= $escapeHtml((string)($securityFilters['instance'] ?? '')) ?>">
                         <input type="hidden" name="security_ip" value="<?= $escapeHtml((string)($securityFilters['ip'] ?? '')) ?>">
@@ -1626,7 +1626,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <button class="wls-primary-button" type="submit"><?= __('应用审计过滤') ?></button>
                             <a class="wls-secondary-button" href="<?= $escapeHtml($securityAuditUrl) ?>"><?= __('重置审计') ?></a>
                         </div>
-                    </form>
+                    </w:form>
                     <?php if ($securityPolicyAudit === []): ?>
                         <div class="wls-empty-state">
                             <strong><?= __('还没有策略变更记录。') ?></strong>
@@ -1699,10 +1699,10 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     $ipWhitelistRule = $ruleEditor('ip_whitelist');
                     $protectedPathsRule = $ruleEditor('protected_paths');
                     ?>
-                    <form class="wls-security-rules-form"
+                    <w:form class="wls-security-rules-form"
                           data-wls-security-rules-form
                           method="post"
-                          action="<?= $escapeHtml($securityRulesSaveUrl) ?>">
+                          action="@var($securityRulesSaveUrl)">
                         <div class="wls-form-title-row">
                             <div>
                                 <h3><?= __('公共规则编辑器') ?></h3>
@@ -2040,7 +2040,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <div class="wls-form-actions">
                             <button class="wls-primary-button" type="submit"><?= __('保存安全规则') ?></button>
                         </div>
-                    </form>
+                    </w:form>
                     <section class="wls-security-rule-summary" aria-label="<?= __('安全规则摘要') ?>">
                         <div class="wls-form-title-row">
                             <div>
@@ -2071,7 +2071,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </div>
                         <a class="wls-secondary-button" href="<?= $escapeHtml($attackLogUrl) ?>"><?= __('打开完整日志') ?></a>
                     </div>
-                    <form class="wls-filter-bar wls-security-log-filter" method="get" action="<?= $escapeHtml($securityLogsUrl) ?>">
+                    <w:form class="wls-filter-bar wls-security-log-filter" method="get" action="@var($securityLogsUrl)">
                         <label>
                             <span><?= __('项目范围') ?></span>
                             <select name="security_scope">
@@ -2143,7 +2143,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <button class="wls-primary-button" type="submit"><?= __('应用过滤') ?></button>
                             <a class="wls-secondary-button" href="<?= $escapeHtml($securityLogsUrl) ?>"><?= __('重置') ?></a>
                         </div>
-                    </form>
+                    </w:form>
                     <?php if ($securityRecentAttacks === []): ?>
                         <div class="wls-empty-state">
                             <strong><?= __('未找到攻击事件。') ?></strong>
@@ -2567,7 +2567,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <strong><?= $escapeHtml($gatewayEffectiveTopologyLabel !== '' ? $gatewayEffectiveTopologyLabel : __('未知')) ?></strong>
                     </article>
                 </div>
-                <form class="wls-gateway-config-form" method="post" action="<?= $escapeHtml($gatewaySaveUrl) ?>">
+                <w:form class="wls-gateway-config-form" method="post" action="@var($gatewaySaveUrl)">
                     <div class="wls-form-title-row">
                         <div>
                             <h3><?= __('网关模式配置') ?></h3>
@@ -2667,8 +2667,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     <div class="wls-form-actions">
                         <button class="wls-primary-button" type="submit"><?= __('保存网关模式') ?></button>
                     </div>
-                </form>
-                <form class="wls-gateway-apply-form" method="post" action="<?= $escapeHtml($gatewayApplyUrl) ?>">
+                </w:form>
+                <w:form class="wls-gateway-apply-form" method="post" action="@var($gatewayApplyUrl)">
                     <label class="wls-form-field">
                         <span><?= __('网关目标') ?></span>
                         <select name="gateway_instance" <?= $gatewayAmbiguousTargets ? 'required' : '' ?>>
@@ -2688,7 +2688,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     <div class="wls-form-actions">
                         <button class="wls-primary-button" type="submit"><?= __('立即应用路由') ?></button>
                     </div>
-                </form>
+                </w:form>
                 <?php if ($gatewayInstances === []): ?>
                     <div class="wls-empty-state">
                         <strong><?= __('未发现 WLS 实例。') ?></strong>
@@ -2877,7 +2877,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <a href="<?= $buildPanelProjectUrl() ?>"><?= __('清除编辑') ?></a>
                         <?php endif; ?>
                     </div>
-                    <form method="post" action="<?= $escapeHtml($projectSaveUrl) ?>" aria-labelledby="wls-project-editor-title">
+                    <w:form method="post" action="@var($projectSaveUrl)" aria-labelledby="wls-project-editor-title">
                         <input type="hidden" name="project_id" value="<?= $projectFormId ?>">
                         <input type="hidden" name="gateway_enabled" value="0">
                         <div class="wls-form-grid">
@@ -2924,7 +2924,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <div class="wls-form-actions">
                             <button class="wls-primary-button" type="submit"><?= __('保存项目') ?></button>
                         </div>
-                    </form>
+                    </w:form>
                 </div>
                 <?php endif; ?>
                 <?php if ($projectConfigItems !== []): ?>
@@ -3239,10 +3239,10 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                    data-wls-project-operation="deploy"><?= __('部署') ?></a>
                                 <?php if ($projectType === 'registered' && $projectId > 0): ?>
                                     <a href="<?= $buildPanelProjectUrl(['edit_project_id' => $projectId]) ?>"><?= __('编辑') ?></a>
-                                    <form class="wls-delete-form" method="post" action="<?= $escapeHtml($projectDeleteUrl) ?>">
+                                    <w:form class="wls-delete-form" method="post" action="@var($projectDeleteUrl)">
                                         <input type="hidden" name="project_id" value="<?= $projectId ?>">
                                         <button class="wls-link-button" type="submit"><?= __('删除') ?></button>
-                                    </form>
+                                    </w:form>
                                 <?php endif; ?>
                                     </div>
                                 </div>

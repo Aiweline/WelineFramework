@@ -358,7 +358,7 @@ $defaultNavItemsFactory = static function (): array {
                          data-wslot-accept="layout-header-search,layout-global-header-search,header-search,search"
                          data-wslot-exclusive="true"
                          data-wslot-position="header">
-                        <form action="/search" method="get" class="header-search-form">
+                        <w:form action="/search" method="get" class="header-search-form">
                             <w:hook>
                                 Weline_Theme::frontend::partials::header::search-form-before
                                 <else/>
@@ -387,7 +387,7 @@ $defaultNavItemsFactory = static function (): array {
                             <button type="submit" class="search-submit-btn" title="<lang>搜索</lang>" aria-label="<lang>搜索</lang>">
                                 <!-- SVG 图标通过 CSS ::after 伪元素添加 -->
                             </button>
-                        </form>
+                        </w:form>
                         <!-- 搜索建议容器 -->
                         <div class="search-suggestions" id="search-suggestions" role="listbox" aria-label="<lang>搜索建议</lang>" aria-hidden="true">
                             <div class="search-suggestions-header"><lang>搜索建议</lang></div>

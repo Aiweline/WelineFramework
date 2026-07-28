@@ -794,9 +794,9 @@ $themeLabels = json_encode(
             <p class="wpm-section-note">
                 <?= $escapeHtml(__('Save project-specific PHP configuration. The php.ini section previews exactly what will be written before apply.')) ?>
             </p>
-            <form method="post"
-                  action="<?= $escapeHtml($profileSaveUrl) ?>"
-                  data-wpm-project-profile-form>
+            <w:form method="post"
+                  action="@var($profileSaveUrl)"
+                  data-wpm-project-profile-form csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                 <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
@@ -878,7 +878,7 @@ $themeLabels = json_encode(
                         </button>
                     </div>
                 </div>
-            </form>
+            </w:form>
         </section>
         <?php endif; ?>
 
@@ -941,9 +941,9 @@ $themeLabels = json_encode(
                 </div>
             <?php endif; ?>
 
-            <form method="post"
-                  action="<?= $escapeHtml($iniApplyUrl) ?>"
-                  data-wpm-ini-apply-form>
+            <w:form method="post"
+                  action="@var($iniApplyUrl)"
+                  data-wpm-ini-apply-form csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                 <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
@@ -977,12 +977,12 @@ $themeLabels = json_encode(
                         </button>
                     </div>
                 </div>
-            </form>
+            </w:form>
 
             <?php if ($iniLatestBackup !== []): ?>
-                <form method="post"
-                      action="<?= $escapeHtml($iniRollbackUrl) ?>"
-                      data-wpm-ini-rollback-form>
+                <w:form method="post"
+                      action="@var($iniRollbackUrl)"
+                      data-wpm-ini-rollback-form csrf="off">
                     <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                     <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                     <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
@@ -1021,7 +1021,7 @@ $themeLabels = json_encode(
                             </button>
                         </div>
                     </div>
-                </form>
+                </w:form>
             <?php endif; ?>
         </section>
         <?php endif; ?>
@@ -1037,8 +1037,8 @@ $themeLabels = json_encode(
                 <?= $escapeHtml(__('Preview install or remove intent, then run only the guarded bundled Windows adapter when every path, DLL, and managed-block rule passes.')) ?>
             </p>
 
-            <form method="get"
-                  action="<?= $escapeHtml($phpPageUrl('extensions')) ?>"
+            <w:form method="get"
+                  action="@var($phpPageUrl('extensions'))"
                   data-wpm-extension-plan-form>
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                 <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
@@ -1070,7 +1070,7 @@ $themeLabels = json_encode(
                         <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Extension Plan')) ?>
                     </button>
                 </div>
-            </form>
+            </w:form>
 
             <?php foreach ($extensionErrors as $extensionError): ?>
                 <div class="wpm-alert is-danger" style="margin-top:16px"><?= $escapeHtml($extensionError) ?></div>
@@ -1160,10 +1160,10 @@ $themeLabels = json_encode(
                 </div>
             <?php endif; ?>
 
-            <form method="post"
-                  action="<?= $escapeHtml($extensionExecuteUrl) ?>"
+            <w:form method="post"
+                  action="@var($extensionExecuteUrl)"
                   data-wpm-extension-execute-form
-                  data-wpm-extension-can-execute="<?= !empty($extensionPlan['can_execute']) ? '1' : '0' ?>">
+                  data-wpm-extension-can-execute="@var(!empty($extensionPlan['can_execute']) ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                 <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
@@ -1206,7 +1206,7 @@ $themeLabels = json_encode(
                         <?php endif; ?>
                     </div>
                 </div>
-            </form>
+            </w:form>
 
             <h3 class="wpm-section-title" style="margin-top:18px"><?= $escapeHtml(__('Loaded Extensions')) ?></h3>
             <div class="wpm-chip-list">

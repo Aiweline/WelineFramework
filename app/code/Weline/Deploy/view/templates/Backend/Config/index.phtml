@@ -49,7 +49,7 @@ $webhookTagPostCurl = $webhookUrl !== ''
     ? "curl -s -X POST '" . $webhookUrl . "' -H 'Content-Type: application/json' -H 'Authorization: Bearer 你的密钥' --data '{\"ref\":\"refs/tags/v1.0.0\"}'"
     : '';
 ?>
-<form method="post" action="<?= $saveUrl ?>" class="weline-deploy-config">
+<w:form method="post" action="@var($saveUrl)" class="weline-deploy-config">
     <w:backend:card>
         <w:slot:header>
             <h5 class="mb-0"><?= __('部署配置') ?></h5>
@@ -609,4 +609,4 @@ $webhookTagPostCurl = $webhookUrl !== ''
             });
         })();
     </script>
-</form>
+</w:form>

@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Captcha',
     __DIR__,
-    '1.0.0',
-    '人机验证模块 - 提供Google reCAPTCHA v2/v3验证和备用图形验证码功能',
-    ['Weline_Framework']
+    '1.0.1',
+    '统一人机验证模块 - 默认支持 Google reCAPTCHA Enterprise 与一次性本地图形挑战',
+    ['Weline_Framework', 'Weline_SystemConfig']
 );

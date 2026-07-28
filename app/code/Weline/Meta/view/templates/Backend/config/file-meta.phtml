@@ -97,7 +97,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                     <h5 class="mb-0"><?= __('筛选条件') ?></h5>
                                 </div>
                                 <div class="card-body">
-                                    <form id="meta-filter-form" class="meta-filter-form">
+                                    <w:form id="meta-filter-form" class="meta-filter-form">
                                         <div class="row g-3">
                                             <div class="col-md-2">
                                                 <label class="form-label small"><?= __('命名空间') ?></label>
@@ -177,7 +177,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                                 </button>
                                             </div>
                                         </div>
-                                    </form>
+                                    </w:form>
                                 </div>
                             </div>
                         </div>
@@ -818,7 +818,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         html += '</div>';
         html += '</div>';
 
-        html += '<form id="meta-file-form" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-area="' + escapeAttr(meta.area || params.get('area') || '') + '">';
+        html += '<form id="meta-file-form" data-weline-form="1" data-weline-form-intent="meta.file" data-weline-form-captcha="auto" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-area="' + escapeAttr(meta.area || params.get('area') || '') + '">';
         html += '<input type="hidden" name="meta_identify" value="' + escapeAttr(meta.meta_identify || '') + '">';
         html += '<input type="hidden" name="scope" value="' + escapeAttr(params.get('scope') || 'default') + '">';
         html += '<input type="hidden" name="area" value="' + escapeAttr(meta.area || params.get('area') || '') + '">';
@@ -959,7 +959,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 const translations = data.translations || [];
 
                 let html = '';
-                html += '<form id="metaParamTranslationForm">';
+                html += '<form id="metaParamTranslationForm" data-weline-form="1" data-weline-form-intent="meta.parameter.translation" data-weline-form-captcha="auto">';
                 html += '<input type="hidden" name="meta_identify" value="' + escapeAttr(data.meta_identify || translationState.metaIdentify) + '">';
                 html += '<input type="hidden" name="param" value="' + escapeAttr(data.param || translationState.param) + '">';
                 html += '<input type="hidden" name="scope" value="' + escapeAttr(data.scope || translationState.scope) + '">';
@@ -1119,7 +1119,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 const fieldLabel = data.field === 'name' ? '<?= __('名称') ?>' : '<?= __('描述') ?>';
 
                 let html = '';
-                html += '<form id="metaNameDescriptionTranslationForm">';
+                html += '<form id="metaNameDescriptionTranslationForm" data-weline-form="1" data-weline-form-intent="meta.description.translation" data-weline-form-captcha="auto">';
                 html += '<input type="hidden" name="meta_identify" value="' + escapeAttr(data.meta_identify || '') + '">';
                 html += '<input type="hidden" name="field" value="' + escapeAttr(data.field || '') + '">';
                 html += '<input type="hidden" name="scope" value="' + escapeAttr(data.scope || 'default') + '">';

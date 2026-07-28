@@ -2,11 +2,14 @@
 
 return [
     "name" => 'Weline_Captcha',
-    "version" => '1.0.0',
+    "version" => '1.0.1',
     "requires" => [
         'Weline_Framework' => '*',
+        'Weline_SystemConfig' => '*',
     ],
     "optional" => [
     ],
-    "provides" => [],
+    "provides" => [
+        \Weline\Captcha\Api\CaptchaManagerInterface::class => \Weline\Captcha\Service\CaptchaManager::class,
+    ],
 ];
