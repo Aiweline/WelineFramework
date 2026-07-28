@@ -85,7 +85,7 @@ flowchart LR
 
 `get_edit_bundle` 返回 `request_id/query_id`、project/index revision、freshness、任务摘要/摘要 Hash、精确 `regions[]`、文件/内容 Hash、行号、符号影响摘要和最多 3 个匹配 Skill 位置。已知 `paths[]` 时先完成 `explicit_paths_refresh`，再一次物化 scoped chunks 并跳过全局 FTS/trigram/sparse；`on_demand_index` 返回本次核对路径、实际变化、耗时和刷新后 revision。多符号影响批量查 definitions/relation graph；`performance` 只返回紧凑阶段计时、cache 命中和 SQL 往返数。
 
-推荐调用协议是“一次精确读 + 一次本地写”：AI 把任务、全部已知路径和符号一次传给 `get_edit_bundle`，直接收到所需区域；模型只返回 Replacement 操作，再调用一次 `apply_compact_edit`。后者保留 Seal/Token/HEAD/Hash 边界，先 Apply 和固定验证，再对最终状态只索引一次；失败默认回滚。兼容工具仍可通过 `WELINE_MCP_TOOL_PROFILE=full` 独立诊断，但不应退化为逐文件读取或多阶段 AI 往返。
+推荐调用协议是“每批一次精确读 + 一次本地写”：AI 把任务、当前批次剩余的全部已知路径和符号传给 `get_edit_bundle`，直接收到所需区域；模型只返回 Replacement 操作，再调用一次 `apply_compact_edit`。每个 Plan 限 1–50 个操作；完整任务超过 50 个操作时，AI 必须按依赖顺序自动拆成不超过 50 个操作的连续批次，每批成功后重新获取剩余工作的最新 bundle、Hash 和 index revision，直到原始任务全部完成，不得因单调用上限截断、遗漏或延期。`apply_compact_edit` 保留 Seal/Token/HEAD/Hash 边界，先 Apply 和固定验证，再对当前批次最终状态只索引一次；失败默认回滚。兼容工具仍可通过 `WELINE_MCP_TOOL_PROFILE=full` 独立诊断，但不应退化为逐文件读取或无约束的多阶段 AI 往返。
 
 ## 自动学习技能投影
 

@@ -11,7 +11,7 @@ Weline MCP 是专为 Codex 打造的本地项目智能、批量编码与自学�
 - Project Intelligence：持久索引代码、文档、符号关系、项目规则和 Skill，按 Token Budget 返回真正相关的有界片段、上下游影响和匹配知识。
 - Evidence-backed Learning：从用户纠正和经过测试、构建、静态检查、浏览器或运行时验证的结果中提取经验，完成证据复核、作用域判断、判重、冲突与成熟度管理，再生成项目级或模块级 `SKILL.md`。
 
-主流程收敛为：**一次 `get_edit_bundle` 批量取全，一次 `apply_compact_edit` 批量提交。**
+主流程收敛为：**每个编辑批次一次 `get_edit_bundle` 批量取全、一次 `apply_compact_edit` 批量提交；单批最多 50 个操作，超出时自动连续分批。**
 
 正常运行只依赖 PHP 8.2+、SQLite 扩展和 Git。Composer 与 Node.js 是可选发行入口；Node 包只是无依赖启动壳，最终仍由同一 PHP STDIO Server 接管。每个 canonical Git root 使用独立的 `project.sqlite`，不会跨项目串代码、知识、经验或 Skill。
 
@@ -22,7 +22,7 @@ Weline MCP 是专为 Codex 打造的本地项目智能、批量编码与自学�
 能减少重复扫描、工具往返和上下文 Token。首次由 MCP 本地读取符合规则的 Git 文件并建立持久索引；后续主路径固定为“一次读、一次写”：
 
 1. AI 调用一次 `get_edit_bundle`，同时提交任务、已知路径和符号；MCP 先对每个显式 `paths[]` 做内容 Hash 定点刷新，再只返回命中的代码/文档区域、Hash、影响摘要和 Skill 位置，不返回整文件。
-2. Codex 只生成这些区域的 `edit-plan.v1` Replacement，再调用一次 `apply_compact_edit`；PHP 按 project-relative path 排序获取跨进程文件锁，在锁内完成 Seal、原子写入、固定验证、定点重索引和失败自动回滚，结束路径立即释放全部锁。
+2. Codex 只生成这些区域的 `edit-plan.v1` Replacement，再调用一次 `apply_compact_edit`；每个 Plan 必须包含 1–50 个操作。完整任务超过 50 个操作时，Codex 按依赖顺序自动拆成不超过 50 个操作的连续批次：每批成功后，携带剩余全部已知路径和受影响符号重新调用 `get_edit_bundle`，基于最新区域、Hash 与索引 revision 生成下一批，直到原始任务全部完成。不得仅因单调用上限截断、遗漏或留待以后处理。PHP 按 project-relative path 排序获取跨进程文件锁，在锁内完成 Seal、原子写入、固定验证、定点重索引和失败自动回滚，结束路径立即释放全部锁。
 
 一个 Plan 可以同时包含多个文件，也可以包含同一文件的多个非重叠操作。同一路径的操作先按原始 byte range 倒序合并成唯一 postimage；重叠或共享边界含义不明确时返回 `EDIT_RANGE_OVERLAP`。当存在多个不同目标文件且 PHP CLI 提供 PCNTL 时，MCP 最多使用 4 个本地子进程并行写入各自的同目录临时文件；父进程复核全部 postimage Hash 后，再按路径顺序执行原子 `rename`。单文件、Windows 或无 PCNTL 环境自动使用相同语义的串行 staging。
 

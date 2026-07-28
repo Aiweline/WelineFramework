@@ -411,7 +411,7 @@ final class IntelligenceService
                 'confidence' => $item['confidence'] ?? 0,
             ], $learning);
             $bundle['routing'] = [
-                'next' => 'Return only replacements for these guarded regions; use apply_compact_edit once to write, validate, and reindex locally.',
+                'next' => 'Return only replacements for these guarded regions. Each apply_compact_edit plan contains 1 to 50 operations. If the complete task needs more than 50, automatically split it into dependency-ordered batches of at most 50; after each successful batch, call get_edit_bundle for all remaining known paths and affected symbols, create a fresh plan from the latest guards, and continue until the original task is complete. Never truncate or defer work solely because of the per-call limit.',
                 'scan_required' => false,
                 'whole_file_read_required' => false,
             ];
