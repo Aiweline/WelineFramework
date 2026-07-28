@@ -42,7 +42,7 @@ $widgetId = 'footer-newsletter-' . uniqid();
         <?php endif; ?>
     </div>
     
-    <form class="newsletter-form" action="/newsletter/subscribe" method="post">
+    <w:form class="newsletter-form" action="/newsletter/subscribe" method="post">
         <div class="w-form-group">
             <input type="email" 
                    name="email" 
@@ -53,7 +53,7 @@ $widgetId = 'footer-newsletter-' . uniqid();
                 <?= htmlspecialchars($buttonText) ?>
             </button>
         </div>
-    </form>
+    </w:form>
 </div>
 
 <style>

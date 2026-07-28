@@ -1564,7 +1564,7 @@ CSS;
         html += '</div>';
         html += '</div>';
 
-        html += '<form id="' + uniqueId + '-meta-file-form" data-meta-identify="' + (meta.meta_identify || '') + '" data-area="' + (meta.area || params.get('area') || '') + '">';
+        html += '<form id="' + uniqueId + '-meta-file-form" data-weline-form="1" data-weline-form-intent="meta.file" data-weline-form-captcha="auto" data-meta-identify="' + (meta.meta_identify || '') + '" data-area="' + (meta.area || params.get('area') || '') + '">';
         html += '<input type="hidden" name="meta_identify" value="' + (meta.meta_identify || '') + '">';
         html += '<input type="hidden" name="scope" value="' + (params.get('scope') || 'default') + '">';
         html += '<input type="hidden" name="area" value="' + (meta.area || params.get('area') || '') + '">';
@@ -1723,7 +1723,7 @@ CSS;
                 // 渲染翻译表单的函数
                 const renderParamTranslationForm = (translations) => {
                     let html = '';
-                    html += '<form id="' + uniqueId + '-metaParamTranslationForm">';
+                    html += '<form id="' + uniqueId + '-metaParamTranslationForm" data-weline-form="1" data-weline-form-intent="meta.parameter.translation" data-weline-form-captcha="auto">';
                     html += '<input type="hidden" name="meta_identify" value="' + (data.meta_identify || translationState.metaIdentify) + '">';
                     html += '<input type="hidden" name="param" value="' + (data.param || translationState.param) + '">';
                     html += '<input type="hidden" name="scope" value="' + (data.scope || translationState.scope) + '">';
@@ -1916,7 +1916,7 @@ CSS;
                 // 渲染翻译表单的函数
                 const renderNameDescTranslationForm = (translations) => {
                     let html = '';
-                    html += '<form id="' + uniqueId + '-metaNameDescriptionTranslationForm">';
+                    html += '<form id="' + uniqueId + '-metaNameDescriptionTranslationForm" data-weline-form="1" data-weline-form-intent="meta.description.translation" data-weline-form-captcha="auto">';
                     html += '<input type="hidden" name="meta_identify" value="' + (data.meta_identify || '') + '">';
                     html += '<input type="hidden" name="field" value="' + (data.field || '') + '">';
                     html += '<input type="hidden" name="scope" value="' + (data.scope || 'default') + '">';

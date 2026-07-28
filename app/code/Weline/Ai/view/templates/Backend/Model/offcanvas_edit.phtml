@@ -205,7 +205,7 @@ if (!is_string($modelCodeJsFallback)) {
         </h5>
     </div>
 
-    <form id="modelEditForm" method="post" action="<?= $this->getUrl('*/backend/model/save') ?>">
+    <w:form id="modelEditForm" method="post" action="@var($this->getUrl('*/backend/model/save'))" csrf="off">
 
             <!-- 隐藏字段 -->
             <?php if ($isEdit): ?>
@@ -786,7 +786,7 @@ if (!empty($displayConfig)) {
 
             </div><!-- 关闭 row -->
 
-    </form>
+    </w:form>
 </div>
 
 <?php if ($isEdit): ?>

@@ -40,7 +40,8 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                 <h5 class="card-title mb-0"><?= $isEdit ? __('编辑订单') : __('新建订单') ?></h5>
             </div>
             <div class="card-body">
-                <form method="post" action="<?= $this->getBackendUrl('order/backend/order/save') ?>">
+                <w:form method="post" action="@var($this->getBackendUrl('order/backend/order/save'))">
+                    <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="order_id" value="<?= $orderId ?>">
                     <?php endif; ?>
@@ -146,7 +147,7 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                         <a href="<?= $this->getBackendUrl('order/backend/order/index') ?>" class="btn btn-secondary"><?= __('取消') ?></a>
                         <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

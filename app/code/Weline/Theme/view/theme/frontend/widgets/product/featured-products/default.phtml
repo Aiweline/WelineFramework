@@ -156,7 +156,7 @@ $widgetId = 'featured-products-' . uniqid();
                                 <div class="product-cart">
                                     <?php if ($product['stock'] > 0): ?>
                                         <?php $cartProductId = (int) ($product['product_id'] ?? $product['id'] ?? 0); ?>
-                                        <form class="product-add-to-cart-form" action="<?= $this->getUrl('cart/frontend/cart/add') ?>" method="post">
+                                        <w:form class="product-add-to-cart-form" action="@var($this->getUrl('cart/frontend/cart/add'))" method="post">
                                             <input type="hidden" name="product_id" value="<?= $cartProductId ?>">
                                             <input type="hidden" name="qty" value="1">
                                             <input type="hidden" name="redirect" value="/cart">
@@ -168,7 +168,7 @@ $widgetId = 'featured-products-' . uniqid();
                                             <i class="ri-shopping-cart-line weline-pixel::add_to_cart"></i>
                                             <span class="weline-pixel::add_to_cart"><?= __('加入购物车') ?></span>
                                             </button>
-                                        </form>
+                                        </w:form>
                                     <?php else: ?>
                                         <button class="btn-out-of-stock" disabled>
                                             <span><?= __('暂时缺货') ?></span>

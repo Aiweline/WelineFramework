@@ -280,7 +280,7 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
 
 <div class="trash-admin">
     <div class="trash-card trash-filter-card mb-3">
-        <form class="trash-filter" method="get" action="<?= $this->getBackendUrl('trash/backend/item/listing') ?>">
+        <w:form class="trash-filter" method="get" action="@var($this->getBackendUrl('trash/backend/item/listing'))">
             <input class="form-control trash-search" type="search" name="search" value="<?= $esc($search) ?>" placeholder="<?= $esc(__('搜索标题、实体或 code')) ?>">
             <select class="form-select trash-type" name="code">
                 <option value=""><?= __('全部类型') ?></option>
@@ -300,7 +300,7 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                 <i class="mdi mdi-magnify"></i>
                 <?= __('筛选') ?>
             </button>
-        </form>
+        </w:form>
     </div>
 
     <div class="trash-card p-0 trash-desktop-table">
@@ -353,13 +353,13 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                                     <?= __('详情') ?>
                                 </a>
                                 <?php if ($open): ?>
-                                    <form method="post" action="<?= $this->getBackendUrl('trash/backend/item/restore') ?>">
+                                    <w:form method="post" action="@var($this->getBackendUrl('trash/backend/item/restore'))">
                                         <input type="hidden" name="trash_id" value="<?= $trashId ?>">
                                         <button class="btn btn-sm btn-outline-success" type="submit">
                                             <i class="mdi mdi-restore"></i>
                                             <?= __('恢复') ?>
                                         </button>
-                                    </form>
+                                    </w:form>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -410,13 +410,13 @@ body[data-bs-theme="dark"] .trash-admin .trash-status-pill {
                             <?= __('详情') ?>
                         </a>
                         <?php if ($open): ?>
-                            <form method="post" action="<?= $this->getBackendUrl('trash/backend/item/restore') ?>">
+                            <w:form method="post" action="@var($this->getBackendUrl('trash/backend/item/restore'))">
                                 <input type="hidden" name="trash_id" value="<?= $trashId ?>">
                                 <button class="btn btn-sm btn-outline-success" type="submit">
                                     <i class="mdi mdi-restore"></i>
                                     <?= __('恢复') ?>
                                 </button>
-                            </form>
+                            </w:form>
                         <?php endif; ?>
                     </div>
                 </div>

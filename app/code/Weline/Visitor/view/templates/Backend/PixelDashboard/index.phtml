@@ -243,18 +243,22 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
 
     <div class="card mb-3">
         <div class="card-body">
-            <form method="get" action="<?= $h($this->getBackendUrlPath('visitor/backend/pixel-dashboard/index')) ?>" class="weline-pixel-toolbar">
-                <div>
-                    <label class="form-label"><lang>站点</lang></label>
-                    <select name="websiteId" class="form-select">
-                        <option value="" <?= $selectedWebsite === '' ? 'selected' : '' ?>><lang>全部站点</lang></option>
-                        <?php foreach ($websiteOptions as $option): ?>
-                            <?php $siteId = (string)($option['id'] ?? ''); ?>
-                            <option value="<?= $h($siteId) ?>" <?= $selectedWebsite === $siteId ? 'selected' : '' ?>>
-                                <?= $h($option['label'] ?? __('站点 %{1}', [$siteId])) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+            <w:form method="get" action="@var($this->getBackendUrlPath('visitor/backend/pixel-dashboard/index'))" class="weline-pixel-toolbar" id="pixel-index-filter-form">
+                <div class="weline-pixel-website-filter">
+                    <label class="form-label" for="index-filter-website_trigger"><lang>站点</lang></label>
+                    <w:websites:website:select
+                        id="index-filter-website"
+                        name="websiteId"
+                        value="selectedWebsite"
+                        display="selectedWebsiteDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                        class="weline-pixel-website-select"
+                    />
                 </div>
                 <div>
                     <label class="form-label"><lang>事件</lang></label>
@@ -293,7 +297,7 @@ $eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
                         <lang>重置</lang>
                     </a>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 

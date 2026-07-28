@@ -21,11 +21,11 @@ class CaptchaResult extends Model
 
     #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'ID')]
     public const schema_fields_ID = 'id';
-    #[Col('varchar', 100, nullable: false, comment: '令牌')]
+    #[Col('varchar', 128, nullable: false, comment: '一次性挑战令牌或远端令牌摘要')]
     public const schema_fields_TOKEN = 'token';
-    #[Col('varchar', 50, nullable: false, comment: '验证码')]
+    #[Col('varchar', 255, nullable: false, comment: '本地挑战的不可逆摘要')]
     public const schema_fields_CODE = 'code';
-    #[Col('varchar', 50, nullable: false, comment: '类型')]
+    #[Col('varchar', 64, nullable: false, comment: '验证码提供者')]
     public const schema_fields_TYPE = 'type';
     #[Col('datetime', nullable: false, comment: '过期时间')]
     public const schema_fields_EXPIRES_AT = 'expires_at';

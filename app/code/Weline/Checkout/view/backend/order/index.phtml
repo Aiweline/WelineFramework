@@ -15,7 +15,7 @@ $keyword = $this->getData('keyword') ?: '';
     <h1><?= __('订单管理') ?></h1>
     
     <div class="filters">
-        <form method="get" action="<?= $this->getBackendUrl('checkout/backend/order/index') ?>">
+        <w:form method="get" action="@var($this->getBackendUrl('checkout/backend/order/index'))">
             <div class="filter-group">
                 <label><?= __('订单状态') ?>:</label>
                 <select name="status">
@@ -43,7 +43,7 @@ $keyword = $this->getData('keyword') ?: '';
             </div>
             
             <button type="submit" class="btn btn-primary"><?= __('搜索') ?></button>
-        </form>
+        </w:form>
     </div>
     
     <div class="order-list">

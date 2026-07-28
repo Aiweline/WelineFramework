@@ -203,7 +203,7 @@ $cachePageConfigJson = \json_encode(
                 <div class="weline-cache-summary-line"><lang>当前显示</lang> <strong id="cache-filtered-total"><?= $formatCount($summary['filtered_total'] ?? \count($cacheItems)) ?></strong> / <strong id="cache-total-reference"><?= $formatCount($summary['total'] ?? \count($cacheItems)) ?></strong></div>
             </div>
 
-            <form method="get" action="<?= $this->getBackendUrl('admin/system/cache') ?>" class="weline-cache-filters">
+            <w:form method="get" action="@var($this->getBackendUrl('admin/system/cache'))" class="weline-cache-filters">
                 <div class="weline-cache-field">
                     <label for="cache-search"><lang>搜索</lang></label>
                     <input id="cache-search" class="weline-cache-input" type="text" name="search" value="<?= htmlspecialchars((string)($filterSearch ?? '')) ?>" placeholder="<?= __('例如 identity、适配器、模块、说明') ?>">
@@ -236,7 +236,7 @@ $cachePageConfigJson = \json_encode(
                     <button type="submit" class="weline-cache-btn weline-cache-btn--primary"><i class="ri-search-line"></i><lang>应用筛选</lang></button>
                     <a class="weline-cache-btn weline-cache-btn--secondary" href="<?= $this->getBackendUrl('admin/system/cache') ?>"><i class="ri-restart-line"></i><lang>重置</lang></a>
                 </div>
-            </form>
+            </w:form>
         </section>
 
         <section class="weline-cache-panel">

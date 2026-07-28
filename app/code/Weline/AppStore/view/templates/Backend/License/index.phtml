@@ -169,14 +169,14 @@ $renewAction = $this->getBackendUrl('*/backend/license/renew');
                         <td>
                             <?php if ($row['license_key'] !== ''): ?>
                                 <div class="d-flex flex-wrap gap-2">
-                                    <form method="post" action="<?= htmlspecialchars($validateAction, ENT_QUOTES, 'UTF-8') ?>">
+                                    <w:form method="post" action="@var($validateAction)">
                                         <input type="hidden" name="license_key" value="<?= htmlspecialchars($row['license_key'], ENT_QUOTES, 'UTF-8') ?>">
                                         <button class="btn btn-sm btn-outline-primary" type="submit">
                                             <i class="bi bi-shield-check me-1"></i><?= __('校验') ?>
                                         </button>
-                                    </form>
+                                    </w:form>
                                     <?php if (!in_array($row['status'], ['active', 'valid'], true)): ?>
-                                        <form method="post" action="<?= htmlspecialchars($activateAction, ENT_QUOTES, 'UTF-8') ?>">
+                                        <w:form method="post" action="@var($activateAction)">
                                             <input type="hidden" name="license_key" value="<?= htmlspecialchars($row['license_key'], ENT_QUOTES, 'UTF-8') ?>">
                                             <?php if ($row['domain'] !== ''): ?>
                                                 <input type="hidden" name="domain" value="<?= htmlspecialchars($row['domain'], ENT_QUOTES, 'UTF-8') ?>">
@@ -184,14 +184,14 @@ $renewAction = $this->getBackendUrl('*/backend/license/renew');
                                             <button class="btn btn-sm btn-primary" type="submit">
                                                 <i class="bi bi-check-circle me-1"></i><?= __('激活') ?>
                                             </button>
-                                        </form>
+                                        </w:form>
                                     <?php endif; ?>
-                                    <form method="post" action="<?= htmlspecialchars($renewAction, ENT_QUOTES, 'UTF-8') ?>">
+                                    <w:form method="post" action="@var($renewAction)">
                                         <input type="hidden" name="license_key" value="<?= htmlspecialchars($row['license_key'], ENT_QUOTES, 'UTF-8') ?>">
                                         <button class="btn btn-sm btn-outline-secondary" type="submit">
                                             <i class="bi bi-arrow-repeat me-1"></i><?= __('续订') ?>
                                         </button>
-                                    </form>
+                                    </w:form>
                                 </div>
                             <?php else: ?>
                                 <span class="text-muted small"><?= __('缺少许可证 Key，无法操作') ?></span>

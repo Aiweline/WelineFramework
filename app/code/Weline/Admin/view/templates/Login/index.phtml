@@ -1876,7 +1876,7 @@ for ($loginInkIndex = 0; $loginInkIndex < $loginInkStrokeCount; $loginInkIndex++
                             <w:hook name="Weline_Admin::backend::partials::login::providers"/>
                         </div>
 
-                        <form class="weline-admin-login-form" action="<?= htmlspecialchars((string) $this->getData('post_url'), ENT_QUOTES, 'UTF-8') ?>" method="post" data-login-form>
+                        <w:form class="weline-admin-login-form" action="@var($loginPostUrl)" method="post" data-login-form csrf="off">
                             <?= $this->getFormKey($this->getData('post_url')) ?>
                             <?php if ((string)$this->getData('return_url') !== ''): ?>
                             <input type="hidden"
@@ -1966,7 +1966,7 @@ for ($loginInkIndex = 0; $loginInkIndex < $loginInkStrokeCount; $loginInkIndex++
                                     <?= __('登录中') ?>
                                 </span>
                             </button>
-                        </form>
+                        </w:form>
 
                         <div class="weline-admin-login-support">
                             <div class="weline-admin-login-support-tags">

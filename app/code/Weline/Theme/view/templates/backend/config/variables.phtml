@@ -106,7 +106,7 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             <button type="button" class="btn-save" data-variables-action="apply-palette"><lang>应用色盘</lang></button>
         </div>
         
-        <form id="variables-form">
+        <w:form id="variables-form">
             <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>">
             <input type="hidden" name="area" value="<?= htmlspecialchars($area) ?>">
             <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
@@ -142,13 +142,16 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             <div style="margin-top: 20px;">
                 <button type="button" class="btn-save" data-variables-action="save"><lang>保存配置</lang></button>
             </div>
-        </form>
+        </w:form>
     </div>
     
     <!-- SweetAlert2 CSS -->
     <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
     <!-- SweetAlert2 JS -->
-    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+    <script>
+(function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
+</script>
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         document.addEventListener('click', function(event) {
             const actionButton = event.target.closest('[data-variables-action]');

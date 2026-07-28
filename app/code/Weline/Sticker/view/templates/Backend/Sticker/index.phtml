@@ -44,7 +44,7 @@ $modules = $this->getData('modules') ?: [];
                                 <span class="badge bg-primary"><?= __('总数：%{1}', [$total]) ?></span>
                             </div>
                             <div>
-                                <form method="get" class="d-inline-flex gap-2">
+                                <w:form method="get" class="d-inline-flex gap-2">
                                     <input type="text" name="search" class="form-control form-control-sm" 
                                            placeholder="<?= __('搜索模块名、文件路径') ?>" 
                                            value="<?= htmlspecialchars($search) ?>">
@@ -70,7 +70,7 @@ $modules = $this->getData('modules') ?: [];
                                     <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="btn btn-sm btn-secondary">
                                         <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
                                     </a>
-                                </form>
+                                </w:form>
                             </div>
                         </div>
                     </div>

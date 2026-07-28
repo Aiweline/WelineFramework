@@ -1043,10 +1043,10 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
             <?php if ($profiles === []): ?>
                 <div class="wdb-empty"><?= $escapeHtml(__('A database profile is required before running a health probe.')) ?></div>
             <?php else: ?>
-                <form class="wdb-test-form"
+                <w:form class="wdb-test-form"
                       method="post"
-                      action="<?= $escapeHtml($healthProbeUrl) ?>"
-                      data-wdb-health-probe-form>
+                      action="@var($healthProbeUrl)"
+                      data-wdb-health-probe-form csrf="off">
                     <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                     <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                     <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1082,7 +1082,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                         </button>
                     </div>
                     <p class="wdb-field-help"><?= $escapeHtml(__('The active health probe executes one SELECT 1 check, records a sanitized audit event, and never writes schema, data, env.php, or WLS runtime state.')) ?></p>
-                </form>
+                </w:form>
             <?php endif; ?>
         </section>
         <?php endif; ?>
@@ -1206,7 +1206,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 </span>
             </div>
 
-            <form class="wdb-form" method="post" action="<?= $escapeHtml($profileSaveUrl) ?>" data-wdb-project-profile-form>
+            <w:form class="wdb-form" method="post" action="@var($profileSaveUrl)" data-wdb-project-profile-form csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1354,7 +1354,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 <button class="wdb-save-button" type="submit">
                     <span class="mdi mdi-content-save-cog-outline"></span><?= $escapeHtml(__('Save Project Profile')) ?>
                 </button>
-            </form>
+            </w:form>
 
             <?php if ($auditRecords !== []): ?>
                 <div class="wdb-profile-detail" data-wdb-audit-log>
@@ -1413,7 +1413,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 </span>
             </div>
 
-            <form class="wdb-form" method="get" action="<?= $escapeHtml($dbPageUrl('lifecycle')) ?>" data-wdb-lifecycle-plan-form>
+            <w:form class="wdb-form" method="get" action="@var($dbPageUrl('lifecycle'))" data-wdb-lifecycle-plan-form>
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                 <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -1463,7 +1463,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                         <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Lifecycle Plan')) ?>
                     </button>
                 </div>
-            </form>
+            </w:form>
 
             <?php foreach ($lifecycleErrors as $lifecycleError): ?>
                 <div class="wdb-alert is-danger" style="margin-top:16px"><?= $escapeHtml($lifecycleError) ?></div>
@@ -1556,11 +1556,11 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 </div>
             <?php endif; ?>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($lifecycleExecuteUrl) ?>"
+                  action="@var($lifecycleExecuteUrl)"
                   data-wdb-lifecycle-execute-form
-                  data-wdb-lifecycle-can-execute="<?= $lifecycleCanExecute ? '1' : '0' ?>">
+                  data-wdb-lifecycle-can-execute="@var($lifecycleCanExecute ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1610,7 +1610,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                         </button>
                     </div>
                 </div>
-            </form>
+            </w:form>
         </section>
         <?php endif; ?>
 
@@ -1629,7 +1629,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 </span>
             </div>
 
-            <form class="wdb-form" method="get" action="<?= $escapeHtml($dbPageUrl('backup-plan')) ?>" data-wdb-backup-plan-form>
+            <w:form class="wdb-form" method="get" action="@var($dbPageUrl('backup-plan'))" data-wdb-backup-plan-form>
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                 <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -1680,7 +1680,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                         <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Backup Plan')) ?>
                     </button>
                 </div>
-            </form>
+            </w:form>
 
             <?php foreach ($backupErrors as $backupError): ?>
                 <div class="wdb-alert is-danger" style="margin-top:16px"><?= $escapeHtml($backupError) ?></div>
@@ -1706,11 +1706,11 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 <?php endforeach; ?>
             </ol>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  action="@var($backupExecuteUrl)"
                   data-wdb-backup-execute-form
-                  data-wdb-backup-can-execute="<?= $backupCanExecute ? '1' : '0' ?>">
+                  data-wdb-backup-can-execute="@var($backupCanExecute ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1760,13 +1760,13 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 </div>
                 <p class="wdb-field-help"><?= $escapeHtml(__('Restore, migration import, and SQL apply use their own confirmation cards; this backup button only writes a database dump and audit metadata.')) ?></p>
-            </form>
+            </w:form>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  action="@var($backupExecuteUrl)"
                   data-wdb-restore-rollback-form
-                  data-wdb-restore-can-rollback="<?= $restoreRollbackCanExecute ? '1' : '0' ?>">
+                  data-wdb-restore-can-rollback="@var($restoreRollbackCanExecute ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1841,13 +1841,13 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 </div>
                 <p class="wdb-field-help"><?= $escapeHtml(__('Rollback never accepts arbitrary paths; WLS checks the audit record, artifact metadata, checksum, driver, and database before executing.')) ?></p>
-            </form>
+            </w:form>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  action="@var($backupExecuteUrl)"
                   data-wdb-restore-preflight-form
-                  data-wdb-restore-can-preflight="<?= $backupCanPreflight ? '1' : '0' ?>">
+                  data-wdb-restore-can-preflight="@var($backupCanPreflight ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1897,13 +1897,13 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 </div>
                 <p class="wdb-field-help"><?= $escapeHtml(__('Use this preflight before restore execution; it never modifies the target database.')) ?></p>
-            </form>
+            </w:form>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  action="@var($backupExecuteUrl)"
                   data-wdb-restore-execute-form
-                  data-wdb-restore-can-execute="<?= $backupCanRestoreExecute ? '1' : '0' ?>">
+                  data-wdb-restore-can-execute="@var($backupCanRestoreExecute ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1991,13 +1991,13 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 </div>
                 <p class="wdb-field-help"><?= $escapeHtml(__('Restore execution supports MySQL/MariaDB .sql and .sql.gz artifacts, PostgreSQL .dump and .backup artifacts, and PostgreSQL plain SQL artifacts only behind RESET_PG_SCHEMA public-schema reset. Migration import and WLS reload are separate guarded paths; project health probes are read-only.')) ?></p>
-            </form>
+            </w:form>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  action="@var($backupExecuteUrl)"
                   data-wdb-migration-preflight-form
-                  data-wdb-migration-can-preflight="<?= $backupCanMigrationPreflight ? '1' : '0' ?>">
+                  data-wdb-migration-can-preflight="@var($backupCanMigrationPreflight ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2047,13 +2047,13 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 </div>
                 <p class="wdb-field-help"><?= $escapeHtml(__('Preflight is read-only. MySQL/MariaDB migration import is offered in a separate card and requires RUN_DB_MIGRATION before any database change can happen.')) ?></p>
-            </form>
+            </w:form>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  action="@var($backupExecuteUrl)"
                   data-wdb-migration-execute-form
-                  data-wdb-migration-can-execute="<?= $backupCanMigrationExecute ? '1' : '0' ?>">
+                  data-wdb-migration-can-execute="@var($backupCanMigrationExecute ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2118,13 +2118,13 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 </div>
                 <p class="wdb-field-help"><?= $escapeHtml(__('This slice does not run project code migrations, schema diff generators, WLS reload, or arbitrary SQL; it imports only a verified .sql or .sql.gz backup artifact from the WLS backup directory.')) ?></p>
-            </form>
+            </w:form>
 
-            <form class="wdb-form wdb-execution-guard"
+            <w:form class="wdb-form wdb-execution-guard"
                   method="post"
-                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  action="@var($backupExecuteUrl)"
                   data-wdb-sql-apply-form
-                  data-wdb-sql-can-apply="<?= $backupCanSqlApplyExecute ? '1' : '0' ?>">
+                  data-wdb-sql-can-apply="@var($backupCanSqlApplyExecute ? '1' : '0')" csrf="off">
                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2178,7 +2178,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 </div>
                 <p class="wdb-field-help"><?= $escapeHtml(__('SQL apply never accepts arbitrary paths or inline SQL; it only reads safe artifact names inside var/backups/wls/db-manager/database.')) ?></p>
-            </form>
+            </w:form>
         </section>
         <?php endif; ?>
 
@@ -2255,7 +2255,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 <?php endif; ?>
 
-                <form class="wdb-form" method="post" action="<?= $escapeHtml($envApplyUrl) ?>" data-wdb-env-apply-form>
+                <w:form class="wdb-form" method="post" action="@var($envApplyUrl)" data-wdb-env-apply-form csrf="off">
                     <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                     <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                     <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2289,10 +2289,10 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                             </button>
                         </div>
                     </div>
-                </form>
+                </w:form>
 
                 <?php if ($envLatestBackup !== []): ?>
-                    <form class="wdb-form" method="post" action="<?= $escapeHtml($envRollbackUrl) ?>" data-wdb-env-rollback-form>
+                    <w:form class="wdb-form" method="post" action="@var($envRollbackUrl)" data-wdb-env-rollback-form csrf="off">
                         <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2327,7 +2327,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                                 </button>
                             </div>
                         </div>
-                    </form>
+                    </w:form>
                 <?php endif; ?>
             <?php endif; ?>
         </section>
@@ -2381,7 +2381,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                     </div>
                 <?php endif; ?>
 
-                <form class="wdb-form" method="post" action="<?= $escapeHtml($slaveCreateUrl) ?>" data-wdb-slave-create-form>
+                <w:form class="wdb-form" method="post" action="@var($slaveCreateUrl)" data-wdb-slave-create-form csrf="off">
                     <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                     <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                     <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2421,7 +2421,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                             </button>
                         </div>
                     </div>
-                </form>
+                </w:form>
 
                 <div class="wdb-execution-guard">
                     <h3 class="wdb-panel-title"><?= $escapeHtml(__('Existing Slave Profiles')) ?></h3>
@@ -2448,7 +2448,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                                         <p class="wdb-field-label"><?= $escapeHtml(__('User')) ?></p>
                                         <div class="wdb-context-value"><?= $escapeHtml(($slaveProfile['username'] ?? '') ?: '-') ?></div>
                                     </div>
-                                    <form class="wdb-inline-form" method="post" action="<?= $escapeHtml($slaveRemoveUrl) ?>" data-wdb-slave-remove-form>
+                                    <w:form class="wdb-inline-form" method="post" action="@var($slaveRemoveUrl)" data-wdb-slave-remove-form csrf="off">
                                         <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2467,7 +2467,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                                         <button class="wdb-danger-button" type="submit" <?= empty($slavePlan['can_remove']) ? 'disabled' : '' ?>>
                                             <span class="mdi mdi-database-minus-outline"></span><?= $escapeHtml(__('Remove')) ?>
                                         </button>
-                                    </form>
+                                    </w:form>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -2489,7 +2489,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
             <?php if ($profiles === []): ?>
                 <div class="wdb-empty"><?= $escapeHtml(__('A database profile is required before testing.')) ?></div>
             <?php else: ?>
-                <form class="wdb-test-form" method="post" action="<?= $escapeHtml($testConnectionUrl) ?>">
+                <w:form class="wdb-test-form" method="post" action="@var($testConnectionUrl)" csrf="off">
                     <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                     <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
                     <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2526,7 +2526,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                             <?= $escapeHtml($selectedProfile['driver_status']['extension'] ?? '') ?>
                         </div>
                     <?php endif; ?>
-                </form>
+                </w:form>
             <?php endif; ?>
         </section>
         <?php endif; ?>

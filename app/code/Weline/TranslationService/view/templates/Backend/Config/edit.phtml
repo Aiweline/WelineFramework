@@ -15,7 +15,7 @@ $config = $provider ? $provider->getConfig() : [];
         <h1><?= $isEdit ? __('编辑渠道配置') : __('添加渠道配置') ?></h1>
     </div>
 
-    <form method="post" action="<?= $this->getBackendUrl('*/backend/config/save') ?>">
+    <w:form method="post" action="@var($this->getBackendUrl('*/backend/config/save'))">
         <?php if ($isEdit): ?>
             <input type="hidden" name="provider_id" value="<?= $provider->getId() ?>">
         <?php endif; ?>
@@ -239,7 +239,7 @@ $config = $provider ? $provider->getConfig() : [];
                 <i class="mdi mdi-close"></i> <?= __('取消') ?>
             </a>
         </div>
-    </form>
+    </w:form>
 </div>
 
 <script>

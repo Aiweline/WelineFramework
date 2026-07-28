@@ -131,7 +131,7 @@ $renderAddressCard = static function (array $address, string $contactLabel) use 
 $renderAddressForm = static function (string $idField, string $typeLabel, string $contactLabel): void {
     ?>
     <div class="account-address-form-wrap" data-address-form-wrap hidden>
-        <form class="account-address-form" data-address-form>
+        <w:form class="account-address-form" data-address-form>
             <input type="hidden" name="<?= $idField ?>" value="">
             <input type="hidden" name="is_enabled" value="1">
             <header class="account-address-form__header">
@@ -172,12 +172,12 @@ $renderAddressForm = static function (string $idField, string $typeLabel, string
                 <button type="submit" class="account-address-form__submit"><lang>保存地址</lang></button>
                 <button type="button" class="account-address-form__cancel" data-address-cancel><lang>取消</lang></button>
             </div>
-        </form>
+        </w:form>
     </div>
     <?php
 };
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section" id="shipping-address-section" data-account-section="shipping-address" hidden>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="shipping-address-section" data-account-section="shipping-address" hidden weline-code="shipping.hook.account_sidebar_content.shipping_address_section">
     <div class="account-card account-address-panel" data-address-panel="shipping" data-id-field="shipping_address_id">
         <textarea hidden readonly data-address-seed><?= $json($shippingPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">

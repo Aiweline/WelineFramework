@@ -57,7 +57,7 @@ $keyword = $keyword ?? '';
     <div class="col-xl-12">
         <div class="card">
             <div class="card-body">
-                <form method="get" action="<?= $this->getBackendUrl('customer/backend/customer/index') ?>" class="row g-3 align-items-end">
+                <w:form method="get" action="@var($this->getBackendUrl('customer/backend/customer/index'))" class="row g-3 align-items-end">
                     <div class="col-md-9">
                         <label class="form-label"><?= __('搜索关键字') ?></label>
                         <input type="text" class="form-control" name="keyword" value="<?= htmlspecialchars($keyword) ?>"
@@ -74,7 +74,7 @@ $keyword = $keyword ?? '';
                             </a>
                         </div>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>
@@ -226,7 +226,7 @@ $keyword = $keyword ?? '';
                 <h5 class="modal-title" id="customerModalTitle"><?= __('新增客户') ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="customerForm">
+            <w:form id="customerForm">
                 <div class="modal-body">
                     <input type="hidden" name="user_id" id="customer_id" value="0">
                     <div class="row g-3">
@@ -266,7 +266,7 @@ $keyword = $keyword ?? '';
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal"><?= __('取消') ?></button>
                     <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 </div>
@@ -279,7 +279,7 @@ $keyword = $keyword ?? '';
                 <h5 class="modal-title"><?= __('重置密码') ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="passwordForm">
+            <w:form id="passwordForm">
                 <div class="modal-body">
                     <input type="hidden" name="user_id" id="password_user_id">
                     <div class="mb-3">
@@ -297,7 +297,7 @@ $keyword = $keyword ?? '';
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal"><?= __('关闭') ?></button>
                     <button type="submit" class="btn btn-primary"><?= __('提交') ?></button>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 </div>

@@ -15,7 +15,7 @@ $configText = [
     </div>
     
     <div class="config-form">
-        <form id="config-form">
+        <w:form id="config-form">
             <div class="form-group">
                 <label><?= __('启用客服服务') ?></label>
                 <select name="config[enabled]" class="form-control">
@@ -67,10 +67,22 @@ $configText = [
                     <?= __('保存配置') ?>
                 </button>
             </div>
-        </form>
+        </w:form>
     </div>
 </div>
 
+<script>
+function csAdmin(url, options){
+  options=options||{};
+  var body=options.body;
+  if(body && typeof FormData!=='undefined' && body instanceof FormData){
+    var p=new URLSearchParams(); body.forEach(function(v,k){p.append(k,String(v));}); body=p.toString();
+  } else if(body && typeof body!=='string'){ try{body=JSON.stringify(body);}catch(e){body='';} }
+  var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''}); };
+  if(window.Weline&&window.Weline.load) return window.Weline.load('api').then(run);
+  return Promise.resolve(run(window.Weline.Api));
+}
+</script>
 <script>
 const customerServiceConfigText = <?= json_encode($configText, $jsonForScriptFlags) ?>;
 const customerServiceConfigSaveUrl = <?= json_encode($this->getBackendUrl('customerservice/backend/config/save'), $jsonForScriptFlags) ?>;

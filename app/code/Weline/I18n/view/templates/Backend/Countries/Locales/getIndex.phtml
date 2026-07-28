@@ -96,7 +96,7 @@ if ($search !== '') {
             </div>
         </div>
 
-        <form method="get" action="@backend-url('*/backend/countries/locales')" class="row g-3 align-items-end">
+        <w:form method="get" action="@backend-url('*/backend/countries/locales')" class="row g-3 align-items-end">
             <input type="hidden" name="country_code" value="<?= htmlspecialchars($countryCode, ENT_QUOTES, 'UTF-8') ?>">
             <div class="col-lg-6">
                 <label class="form-label mb-1"><?= __('搜索') ?></label>
@@ -114,7 +114,7 @@ if ($search !== '') {
                     </a>
                 </div>
             </div>
-        </form>
+        </w:form>
     </div>
 </div>
 
@@ -182,54 +182,54 @@ if ($search !== '') {
                                     <?php endif; ?>
 
                                     <?php if (!$isInstall): ?>
-                                        <form method="post"
+                                        <w:form method="post"
                                               action="@backend-url('*/backend/countries/locales/install')"
                                               data-async-action="locale-install"
-                                              data-async-success-message="<?= htmlspecialchars(__('区域已安装，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
-                                              data-confirm-message="<?= htmlspecialchars(__('确定安装 %{1} 吗？', [$code]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-async-success-message="@var(__('区域已安装，当前位置已保留。'))"
+                                              data-confirm-message="@var(__('确定安装 %{1} 吗？', [$code]))"
                                               data-confirm-type="info">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
                                             <button type="submit" class="btn btn-sm btn-outline-primary" data-async-submit-label="<?= htmlspecialchars(__('安装中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已安装'), ENT_QUOTES, 'UTF-8') ?>"><?= __('安装') ?></button>
-                                        </form>
+                                        </w:form>
                                     <?php elseif (!$isActive): ?>
-                                        <form method="post"
+                                        <w:form method="post"
                                               action="@backend-url('*/backend/countries/locales/active')"
                                               data-async-action="locale-activate"
-                                              data-async-success-message="<?= htmlspecialchars(__('区域已激活，当前位置已保留。'), ENT_QUOTES, 'UTF-8') ?>"
-                                              data-confirm-message="<?= htmlspecialchars(__('确定启用 %{1} 吗？所属国家会同步启用。', [$code]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-async-success-message="@var(__('区域已激活，当前位置已保留。'))"
+                                              data-confirm-message="@var(__('确定启用 %{1} 吗？所属国家会同步启用。', [$code]))"
                                               data-confirm-type="success">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
                                             <button type="submit" class="btn btn-sm btn-outline-success" data-async-submit-label="<?= htmlspecialchars(__('激活中…'), ENT_QUOTES, 'UTF-8') ?>" data-async-complete-label="<?= htmlspecialchars(__('已激活'), ENT_QUOTES, 'UTF-8') ?>"><?= __('激活') ?></button>
-                                        </form>
+                                        </w:form>
                                     <?php endif; ?>
 
                                     <?php if ($isActive): ?>
-                                        <form method="post"
+                                        <w:form method="post"
                                               action="@backend-url('*/backend/countries/locales/disable')"
                                               data-async-action="locale-deactivate"
-                                              data-async-complete-label="<?= htmlspecialchars(__('已停用'), ENT_QUOTES, 'UTF-8') ?>"
-                                              data-confirm-message="<?= htmlspecialchars(__('确定停用 %{1} 吗？所属国家状态会自动同步。', [$code]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-async-complete-label="@var(__('已停用'))"
+                                              data-confirm-message="@var(__('确定停用 %{1} 吗？所属国家状态会自动同步。', [$code]))"
                                               data-confirm-type="warning">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
                                             <button type="submit" class="btn btn-sm btn-outline-warning"><?= __('停用') ?></button>
-                                        </form>
+                                        </w:form>
                                     <?php endif; ?>
 
                                     <?php if ($isInstall): ?>
-                                        <form method="post"
+                                        <w:form method="post"
                                               action="@backend-url('*/backend/countries/locales/uninstall')"
                                               data-async-action="locale-uninstall"
-                                              data-async-complete-label="<?= htmlspecialchars(__('已卸载'), ENT_QUOTES, 'UTF-8') ?>"
-                                              data-async-active-label="<?= htmlspecialchars(__('未激活'), ENT_QUOTES, 'UTF-8') ?>"
-                                              data-confirm-message="<?= htmlspecialchars(__('确定卸载 %{1} 吗？语言包和缓存会同步清理。', [$code]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-async-complete-label="@var(__('已卸载'))"
+                                              data-async-active-label="@var(__('未激活'))"
+                                              data-confirm-message="@var(__('确定卸载 %{1} 吗？语言包和缓存会同步清理。', [$code]))"
                                               data-confirm-type="danger">
                                             <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= $renderHiddenFields($preserve) ?>
                                             <button type="submit" class="btn btn-sm btn-outline-danger"><?= __('卸载') ?></button>
-                                        </form>
+                                        </w:form>
                                     <?php endif; ?>
                                 </div>
                             </td>

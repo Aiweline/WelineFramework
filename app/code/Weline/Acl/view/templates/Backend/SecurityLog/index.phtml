@@ -54,7 +54,7 @@ $getEventTypeBadgeClass = function ($eventType) {
     <div class="col-xl-12">
         <div class="card">
             <div class="card-body">
-                <form method="get" action="<?= $this->getBackendUrl('*/backend/security-log') ?>" class="row g-3">
+                <w:form method="get" action="@var($this->getBackendUrl('*/backend/security-log'))" class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label"><lang>事件类型</lang></label>
                         <select class="form-select" name="event_type">
@@ -82,7 +82,7 @@ $getEventTypeBadgeClass = function ($eventType) {
                             </a>
                         </div>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

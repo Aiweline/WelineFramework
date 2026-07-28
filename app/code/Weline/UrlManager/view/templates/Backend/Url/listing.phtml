@@ -29,7 +29,7 @@ $currentQ = $this->getData('current_q') ?? '';
                 <p class='card-title-desc text-muted mb-4'>
                     <?= __('管理系统中可访问的 URL，可为关键页面设置更友好的自定义地址，提升 SEO 和可读性。') ?>
                 </p>
-                <form method="get" action="@backend-url('url-manager/backend/url/listing')" class="url-listing-search mb-4">
+                <w:form method="get" action="@backend-url('url-manager/backend/url/listing')" class="url-listing-search mb-4">
                     <div class="input-group" style="max-width: 360px;">
                         <input type="text" class="form-control" name="q" value="<?= htmlspecialchars((string)($currentQ ?? '')) ?>"
                                placeholder="<?= __('按路径搜索…') ?>">
@@ -37,7 +37,7 @@ $currentQ = $this->getData('current_q') ?? '';
                             <i class="ri-search-line"></i> <?= __('搜索') ?>
                         </button>
                     </div>
-                </form>
+                </w:form>
                 <div class='table-responsive'>
                     <table class='table table-hover mb-0'>
                         <thead class="table-light">

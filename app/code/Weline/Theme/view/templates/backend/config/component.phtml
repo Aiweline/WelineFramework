@@ -205,7 +205,7 @@ use Weline\Framework\Event\EventsManager;
         <?php if (!empty($meta['params'])): ?>
         <div class="component-params">
             <h3><?= __('组件参数') ?></h3>
-            <form id="componentParamsForm" method="post" action="<?= $this->getUrl('theme/backend/config/component/saveParams') ?>">
+            <w:form id="componentParamsForm" method="post" action="@var($this->getUrl('theme/backend/config/component/saveParams'))">
                 <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>">
                 <input type="hidden" name="component" value="<?= htmlspecialchars($component ?? '') ?>">
                 <input type="hidden" name="area" value="<?= htmlspecialchars($area ?? 'frontend') ?>">
@@ -334,11 +334,14 @@ use Weline\Framework\Event\EventsManager;
                         <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
                     </button>
                 </div>
-            </form>
+            </w:form>
             <!-- SweetAlert2 CSS -->
             <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
             <!-- SweetAlert2 JS -->
-            <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+            <script>
+(function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
+</script>
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
             <script>
                 document.addEventListener('click', function(event) {
                     const resetButton = event.target.closest('[data-component-reset]');

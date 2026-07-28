@@ -39,7 +39,7 @@ $createdField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_CREATED_
 
 <div class="row mb-3">
     <div class="col-12">
-        <form method="get" class="d-flex flex-nowrap gap-2 align-items-center">
+        <w:form method="get" class="d-flex flex-nowrap gap-2 align-items-center">
             <input type="text" name="search" class="form-control form-control-sm" style="max-width:220px;" placeholder="<?= __('搜索域名') ?>" value="<?= htmlspecialchars($search) ?>">
             <select name="status" class="form-select form-select-sm" style="max-width:120px;">
                 <?php foreach ($statusList as $k => $v): ?>
@@ -48,7 +48,7 @@ $createdField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_CREATED_
             </select>
             <button type="submit" class="btn btn-sm btn-primary flex-shrink-0"><i class="mdi mdi-magnify"></i> <?= __('搜索') ?></button>
             <a href="<?= $this->getBackendUrl('*/backend/provisioning/index') ?>" class="btn btn-sm btn-secondary flex-shrink-0"><i class="mdi mdi-refresh"></i> <?= __('重置') ?></a>
-        </form>
+        </w:form>
     </div>
 </div>
 

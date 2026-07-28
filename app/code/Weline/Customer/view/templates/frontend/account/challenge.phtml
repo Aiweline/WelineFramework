@@ -308,7 +308,7 @@ $loginUrl = (string) $this->getUrl('customer/account/login');
         <template>Weline_Component::message.phtml</template>
     </div>
 
-    <form action="<?= htmlspecialchars($challengeAction, ENT_QUOTES) ?>" method="post" class="auth-form__body" data-challenge-form novalidate>
+    <w:form action="@var($challengeAction)" method="post" class="auth-form__body" data-challenge-form novalidate csrf="off">
         <?= $this->getFormKey($challengeAction) ?>
         <input type="hidden" name="challenge_token" value="<?= htmlspecialchars($challengeToken, ENT_QUOTES) ?>">
 
@@ -370,7 +370,7 @@ $loginUrl = (string) $this->getUrl('customer/account/login');
             </svg>
             <span data-submit-label><lang>验证并继续</lang></span>
         </button>
-    </form>
+    </w:form>
 
     <footer class="auth-form__footer">
         <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>" class="auth-form__footer-link">
