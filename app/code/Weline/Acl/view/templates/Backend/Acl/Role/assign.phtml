@@ -953,19 +953,19 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 </ul>
             </div>
         </div>
-        
-        <!-- 保存表单 -->
-        <div class="weline-acl-save-form">
-            <form action="@backend-url('*/backend/acl/role/assign')" id="aclForm" method="post" style="display: flex; gap: 8px;">
-                <input type="hidden" name="role_id" value="{{assign_role.role_id}}">
-                <a href="@backend-url('*/backend/acl/role')" class="weline-acl-action-btn">
-                    <i class="mdi mdi-arrow-left"></i> <lang>返回列表</lang>
-                </a>
-                <button type='submit' id='save_button' class='weline-acl-action-btn success'>
-                    <i class="mdi mdi-content-save-outline"></i> <lang>保存权限配置</lang>
-                </button>
-            </form>
-        </div>
+    </div>
+
+    <!-- 保存表单（菜单维/标签维共用） -->
+    <div class="weline-acl-save-form">
+        <w:form action="@backend-url('*/backend/acl/role/assign')" id="aclForm" method="post" style="display: flex; gap: 8px;">
+            <input type="hidden" name="role_id" value="{{assign_role.role_id}}">
+            <a href="@backend-url('*/backend/acl/role')" class="weline-acl-action-btn">
+                <i class="mdi mdi-arrow-left"></i> <lang>返回列表</lang>
+            </a>
+            <button type='submit' id='save_button' class='weline-acl-action-btn success'>
+                <i class="mdi mdi-content-save-outline"></i> <lang>保存权限配置</lang>
+            </button>
+        </w:form>
     </div>
 </div>
 

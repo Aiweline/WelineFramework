@@ -13,7 +13,8 @@ interface CaptchaProviderInterface
      * 生成验证码
      * 
      * @param array $options 选项
-     * @return array ['code' => string, 'image' => string|null, 'token' => string]
+     * @return array ['code_hash' => string|null, 'image' => string|null, 'token' => string]
+     * Implementations must never expose a plaintext local answer.
      */
     public function generate(array $options = []): array;
     

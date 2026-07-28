@@ -120,8 +120,9 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                 <?php if (!empty($availableTransitions)): ?>
                     <div class="mt-3">
                         <h6><?= __('状态操作') ?>:</h6>
-                        <form method="post" action="<?= $this->getBackendUrl('order/backend/order/updateStatus') ?>" class="d-inline">
+                        <w:form method="post" action="@var($this->getBackendUrl('order/backend/order/updateStatus'))" class="d-inline">
                             <input type="hidden" name="order_id" value="<?= $orderId ?>">
+                            <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                             <select name="status" class="form-select d-inline-block" style="width: auto;">
                                 <?php foreach ($availableTransitions as $transition): ?>
                                     <option value="<?= htmlspecialchars($transition) ?>"><?= htmlspecialchars(Order::getStatusLabel($transition)) ?></option>
@@ -129,7 +130,7 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                             </select>
                             <input type="text" name="comment" class="form-control d-inline-block" style="width: 200px;" placeholder="<?= __('备注') ?>">
                             <button type="submit" class="btn btn-primary btn-sm"><?= __('更新状态') ?></button>
-                        </form>
+                        </w:form>
                     </div>
                 <?php endif; ?>
             </div>

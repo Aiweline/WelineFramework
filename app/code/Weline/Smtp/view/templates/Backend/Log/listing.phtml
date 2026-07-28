@@ -87,18 +87,18 @@
                                 <td>{{log.create_time}}</td>
                                 <td>{{log.update_time}}</td>
                                 <td>
-                                    <form action="@backend-url('*/backend/log/delete')" method='post'>
+                                    <w:form action="@backend-url('*/backend/log/delete')" method='post'>
                                         <input type='hidden' name='log_id' value='{{log.id}}'>
                                         <button class='btn btn-danger'>
                                             <lang>删除</lang>
                                         </button>
-                                    </form>
-                                    <form action="@backend-url('*/backend/log')" method='get'>
+                                    </w:form>
+                                    <w:form action="@backend-url('*/backend/log')" method='get'>
                                         <input type='hidden' name='log_id' value='{{log.id}}'>
                                         <button class='btn btn-primary'>
                                             <lang>阅读</lang>
                                         </button>
-                                    </form>
+                                    </w:form>
                                 </td>
                             </tr>
                         </foreach>

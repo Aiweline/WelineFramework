@@ -50,7 +50,7 @@ $layoutPlaceholder = __('请选择或搜索布局...');
 
 <div class="cms-page-workbench">
     <div class="col-12">
-        <form class="cms-page-settings-bar" method="post" action="<?= $this->getBackendUrl('cms/backend/page/save') ?>">
+        <w:form class="cms-page-settings-bar" method="post" action="@var($this->getBackendUrl('cms/backend/page/save'))">
             <input type="hidden" name="page_id" value="<?= $pageId ?>">
             <div class="cms-page-settings-grid <?= $hasPathGroupContext ? 'has-path-context' : 'needs-path-context' ?>">
                 <?php if ($hasPathGroupContext): ?>
@@ -139,7 +139,7 @@ $layoutPlaceholder = __('请选择或搜索布局...');
                     <?php endif; ?>
                 </div>
             </div>
-        </form>
+        </w:form>
     </div>
 
     <div class="col-12">

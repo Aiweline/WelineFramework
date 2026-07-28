@@ -53,7 +53,7 @@ $queryParams = function ($overrides = []) use ($filter) {
     <div class="col-12">
         <div class="card weline-nc-filter-card">
             <div class="card-body py-3">
-                <form method="get" action="<?= $baseUrl ?>" class="weline-nc-filter-form row g-2 align-items-end">
+                <w:form method="get" action="@var($baseUrl)" class="weline-nc-filter-form row g-2 align-items-end">
                     <input type="hidden" name="page" value="1">
                     <div class="col-12 col-md-4">
                         <label class="form-label small mb-1"><lang>关键词</lang></label>
@@ -83,7 +83,7 @@ $queryParams = function ($overrides = []) use ($filter) {
                         </button>
                         <a href="<?= $baseUrl ?>" class="btn btn-outline-secondary btn-sm"><lang>重置</lang></a>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

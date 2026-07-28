@@ -166,7 +166,7 @@ $help = static function (string $text) use ($tr): string {
                     </div>
                 </div>
 
-                <form id="documentTranslationConfigForm">
+                <w:form id="documentTranslationConfigForm" csrf="off">
                     <input type="hidden" name="form_key" value="<?=htmlspecialchars($this->getFormKeyValue())?>">
                     <div class="row g-4">
                         <div class="col-lg-7">
@@ -354,7 +354,7 @@ $help = static function (string $text) use ($tr): string {
                         <button type="button" class="btn btn-outline-success doc-translation-action" data-action="translation-run"><?=htmlspecialchars($tr('立即入队并执行'))?></button>
                         <button type="button" class="btn btn-outline-warning doc-translation-action" data-action="translation-retry"><?=htmlspecialchars($tr('重试失败'))?></button>
                     </div>
-                </form>
+                </w:form>
 
                 <div class="row g-3 mt-4">
                     <div class="col-lg-5">

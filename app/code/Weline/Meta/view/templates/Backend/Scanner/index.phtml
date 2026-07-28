@@ -103,7 +103,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                     </div>
                     <span class="badge bg-light text-dark"><?= __('异步/队列友好') ?></span>
                 </div>
-                <form action="<?= $scanAction ?>" method="post" class="needs-validation" novalidate>
+                <w:form action="@var($scanAction)" method="post" class="needs-validation" novalidate>
                     <div class="mb-3">
                         <label class="form-label"><?= __('扫描路径') ?></label>
                         <input type="text" class="form-control" required name="scan_path"
@@ -133,7 +133,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                             <i class="ri-arrow-left-line me-1"></i><?= __('返回列表') ?>
                         </a>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>
@@ -147,7 +147,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                     </div>
                     <span class="badge bg-soft-success text-success"><?= __('实时结果') ?></span>
                 </div>
-                <form action="<?= $directAction ?>" method="post" class="needs-validation" novalidate>
+                <w:form action="@var($directAction)" method="post" class="needs-validation" novalidate>
                     <div class="mb-3">
                         <label class="form-label"><?= __('扫描路径') ?></label>
                         <input type="text" class="form-control" required name="scan_path"
@@ -182,7 +182,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                             <i class="ri-database-2-line me-1"></i><?= __('查看元数据') ?>
                         </a>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

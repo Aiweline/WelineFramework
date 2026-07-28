@@ -341,10 +341,10 @@ $search = $this->getData('search') ?? '';
                     <?= __('菜单树') ?>
                 </h5>
                 <div class="weline-menu-tree-actions">
-                    <form class="weline-menu-tree-search" method="get" action="">
+                    <w:form class="weline-menu-tree-search" method="get" action="">
                         <input type="text" name="search" placeholder="<?= __('搜索菜单...') ?>" value="<?= htmlspecialchars($search) ?>">
                         <button type="submit" class="search-btn"><i class="mdi mdi-magnify"></i></button>
-                    </form>
+                    </w:form>
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="weline-menu-expand-all">
                         <i class="mdi mdi-unfold-more-horizontal"></i> <?= __('展开全部') ?>
                     </button>
@@ -493,7 +493,7 @@ $search = $this->getData('search') ?? '';
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form class="weline-menu-edit-form" id="menuEditForm">
+                <w:form class="weline-menu-edit-form" id="menuEditForm">
                     <input type="hidden" name="menu_id" id="menu_id">
                     <div class="row">
                         <div class="col-md-6">
@@ -575,7 +575,7 @@ $search = $this->getData('search') ?? '';
                             </div>
                         </div>
                     </div>
-                </form>
+                </w:form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>

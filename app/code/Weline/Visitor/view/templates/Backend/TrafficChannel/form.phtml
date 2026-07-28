@@ -32,7 +32,7 @@ $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
 
     <div class="card">
         <div class="card-body">
-            <form method="post" action="<?= $h($action) ?>" id="traffic-channel-form">
+            <w:form method="post" action="@var($action)" id="traffic-channel-form">
                 <input type="hidden" name="enabled_present" value="1"/>
                 <?php if ($isEdit): ?>
                     <input type="hidden" name="id" value="<?= $h((string)($form['id'] ?? 0)) ?>"/>
@@ -152,7 +152,7 @@ $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
                     <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
                     <a class="btn btn-outline-secondary" href="<?= $h($indexUrl) ?>"><lang>取消</lang></a>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 </div>

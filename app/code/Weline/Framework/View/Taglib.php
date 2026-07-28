@@ -1223,6 +1223,65 @@ class Taglib
                         };
                     }
             ],
+            'form' => [
+                // Only the explicit <w:form> source tag enters the framework
+                // form pipeline. The renderer still emits a native <form>.
+                'w_only' => true,
+                'tag-start' => 1,
+                'tag-end' => 1,
+                'attr' => [
+                    'attributes' => 0,
+                    'id' => 0,
+                    'method' => 0,
+                    'action' => 0,
+                    'class' => 0,
+                    'enctype' => 0,
+                    'autocomplete' => 0,
+                    'name' => 0,
+                    'target' => 0,
+                    'rel' => 0,
+                    'accept-charset' => 0,
+                    'role' => 0,
+                    'style' => 0,
+                    'novalidate' => 0,
+                    'intent' => 0,
+                    'csrf' => 0,
+                    'captcha' => 0,
+                ],
+                // Dynamic parent templates are emitted through
+                // renderRuntimeTag(). That path needs final HTML rather than a
+                // second layer of PHP source code.
+                'runtime_callback' => static function (
+                    Template $template,
+                    string $tagKey,
+                    array $attributes,
+                    string $content,
+                ): string {
+                    return \Weline\Framework\View\Form\FormRenderer::renderRuntime(
+                        $template,
+                        $attributes,
+                        $content,
+                    );
+                },
+                'callback' => static function ($tag_key, $config, $tag_data, $attributes): string {
+                    if ($tag_key === 'tag-end') {
+                        return self::PHP_OPEN_TAG
+                            . '=\\Weline\\Framework\\View\\Form\\FormRenderer::close()'
+                            . self::PHP_CLOSE_TAG;
+                    }
+                    if ($tag_key !== 'tag-start') {
+                        return '';
+                    }
+
+                    $attributes = \is_array($attributes) ? $attributes : [];
+                    $compiledAttributes = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
+                    return self::PHP_OPEN_TAG . 'php ' . $compiledAttributes
+                        . ' $Taglib__form_attributes = json_decode($Taglib__json, true);'
+                        . ' echo \\Weline\\Framework\\View\\Form\\FormRenderer::open('
+                        . 'is_array($Taglib__form_attributes) ? $Taglib__form_attributes : []'
+                        . '); ' . self::PHP_CLOSE_TAG;
+                },
+            ],
             'var' => [
                 'tag' => 1,
                 'callback' =>
@@ -2421,6 +2480,9 @@ class Taglib
         $reordered_tags = [];
         foreach ($tags as $tag => $tag_data) {
             $reordered_tags["w:$tag"] = $tag_data;  // w:标签优先
+            if (!empty($tag_data['w_only'])) {
+                continue;
+            }
             $reordered_tags[$tag] = $tag_data;      // 原始标签紧随其后
         }
         $tags = $reordered_tags;
@@ -3937,6 +3999,10 @@ class Taglib
         $tagData = ($tagKey === '@tag()' || $tagKey === '@tag{}')
             ? [$inlineContent, $inlineContent]
             : [$this->buildRuntimeRawTag($tagName, $rawAttributes, $content, $tagKey), $rawAttributes, $content];
+
+        if (isset($config['runtime_callback']) && \is_callable($config['runtime_callback'])) {
+            return $config['runtime_callback']($template, $tagKey, $attributes, $content, $tagData);
+        }
 
         return $config['callback']($tagKey, $config, $tagData, $attributes);
     }

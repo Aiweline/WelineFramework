@@ -27,7 +27,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <!-- 表单 -->
 <div class="card">
     <div class="card-body">
-        <form id="domainForm" method="post" action="<?= $this->getBackendUrl('*/backend/domain/save') ?>">
+        <w:form id="domainForm" method="post" action="@var($this->getBackendUrl('*/backend/domain/save'))">
             <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
             
             <div class="row mb-3">
@@ -132,7 +132,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     </a>
                 </div>
             </div>
-        </form>
+        </w:form>
     </div>
 </div>
 

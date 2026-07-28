@@ -185,7 +185,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
 
         <!-- 搜索框 -->
         <div class="search-box">
-            <form method="get" action="<?= $this->getUrl('*/backend/embed', $baseParams) ?>">
+            <w:form method="get" action="@var($this->getUrl('*/backend/embed', $baseParams))">
                 <?php if ($module): ?><input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>"><?php endif; ?>
                 <?php if ($scope): ?><input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>"><?php endif; ?>
                 <div class="row align-items-end">
@@ -214,7 +214,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                         </a>
                     </div>
                 </div>
-            </form>
+            </w:form>
         </div>
 
         <!-- 主体列表 -->
@@ -297,7 +297,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form id="addSubjectForm">
+                <w:form id="addSubjectForm">
                     <div class="modal-body">
                         <input type="hidden" name="module" value="<?= htmlspecialchars($module) ?>">
                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
@@ -346,7 +346,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                             <lang>保存</lang>
                         </button>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

@@ -65,7 +65,7 @@ $themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $them
                     <div class="col-12">
                         <div class="card mb-0">
                             <div class="card-body py-2">
-                                <form method="get" action="<?= $this->getUrl('theme/backend/config/layout/edit') ?>" id="theme-edit-form" class="row g-2 align-items-center">
+                                <w:form method="get" action="@var($this->getUrl('theme/backend/config/layout/edit'))" id="theme-edit-form" class="row g-2 align-items-center">
                                     <div class="col-auto">
                                         <label class="form-label mb-0 small"><?= __('主题') ?>:</label>
                                     </div>
@@ -109,7 +109,7 @@ $themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $them
                                             <i class="mdi mdi-refresh"></i> <?= __('加载') ?>
                                         </button>
                                     </div>
-                                </form>
+                                </w:form>
                             </div>
                         </div>
                     </div>

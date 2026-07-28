@@ -50,7 +50,7 @@ $status = $this->getData('status');
                 <div class="row">
                     <div class="col-12">
                         <div class="search-box">
-                            <form method="get" action="<?= $this->getUrl('*/backend/dashboard/subject') ?>">
+                            <w:form method="get" action="@var($this->getUrl('*/backend/dashboard/subject'))">
                                 <div class="row align-items-end">
                                     <div class="col-md-4">
                                         <label class="form-label"><lang>搜索主体</lang></label>
@@ -77,7 +77,7 @@ $status = $this->getData('status');
                                         </a>
                                     </div>
                                 </div>
-                            </form>
+                            </w:form>
                         </div>
                     </div>
                 </div>

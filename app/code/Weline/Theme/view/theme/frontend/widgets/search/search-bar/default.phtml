@@ -30,7 +30,7 @@ $widgetId = 'search-bar-' . uniqid();
 ?>
 
 <div class="widget-search-bar style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>">
-    <form action="<?= htmlspecialchars($actionUrl) ?>" method="get" class="search-form">
+    <w:form action="@var($actionUrl)" method="get" class="search-form">
         <div class="search-input-group">
             <input type="search" 
                    name="q" 
@@ -48,7 +48,7 @@ $widgetId = 'search-bar-' . uniqid();
                 </button>
             <?php endif; ?>
         </div>
-    </form>
+    </w:form>
 </div>
 
 <style>

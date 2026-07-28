@@ -57,7 +57,7 @@ $currentAccesses = $this->getData('current_accesses') ?? [];
                     <b class="text-info"><?= htmlspecialchars($userRole->getRoleName() ?? '') ?></b>
                 </p>
                 <div class='button-items mb-1 mt-1'>
-                    <form action="{{action}}" id="aclForm" method="post">
+                    <w:form action="{{action}}" id="aclForm" method="post">
                         <input type="hidden" name="user_id" value="<?= $user->getId() ?>">
                         <button type='submit' id='save_button'
                                 class='btn btn-primary waves-effect waves-light'>
@@ -66,7 +66,7 @@ $currentAccesses = $this->getData('current_accesses') ?? [];
                         <a href="@backend-url('*/api/backend/user/edit')?id=<?= $user->getId() ?>" class='btn btn-secondary'>
                             <lang>返回</lang>
                         </a>
-                    </form>
+                    </w:form>
                 </div>
                 <div id='acl' class='acl-container' style="max-height: 600px; overflow-y: auto;">
                     <ul>

@@ -77,7 +77,7 @@ $displayName = (string)($module['display_name'] ?? $module['name'] ?? '');
             </div>
         </div>
     <?php elseif ($moduleId > 0 && $licenseKey !== ''): ?>
-        <form method="post" action="<?= $esc($installAction) ?>">
+        <w:form method="post" action="@var($installAction)">
             <?php if ($wlsPanelReturn): ?>
                 <input type="hidden" name="wls_panel_return" value="1">
             <?php endif; ?>
@@ -132,6 +132,6 @@ $displayName = (string)($module['display_name'] ?? $module['name'] ?? '');
                     </button>
                 </div>
             </div>
-        </form>
+        </w:form>
     <?php endif; ?>
 </div>

@@ -31,7 +31,7 @@ $hotWords = ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
 ?>
 
 <div class="widget-header-search" data-autocomplete="<?= $autoComplete ? 'true' : 'false' ?>">
-    <form action="/search" method="get" class="search-form">
+    <w:form action="/search" method="get" class="search-form">
         <div class="search-input-wrapper">
             <?php if ($searchType !== 'all'): ?>
                 <input type="hidden" name="type" value="<?= htmlspecialchars($searchType) ?>">
@@ -53,7 +53,7 @@ $hotWords = ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
                 </div>
             <?php endif; ?>
         </div>
-    </form>
+    </w:form>
     
     <?php if ($showHotWords && !empty($hotWords)): ?>
         <div class="hot-words">

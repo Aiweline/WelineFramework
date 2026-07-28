@@ -521,13 +521,13 @@ foreach ($adapters as $a) {
     </div>
 </div>
 
-<form id="batchModelBindingForm"
+<w:form id="batchModelBindingForm"
       method="post"
-      action="<?= $this->getBackendUrl('*/backend/adapter/batchSaveModelBindings') ?>"
+      action="@var($this->getBackendUrl('*/backend/adapter/batchSaveModelBindings'))"
       class="d-none">
     <input type="hidden" name="ids" id="batchModelBindingIds" value="">
     <input type="hidden" name="model_bindings" id="batchModelBindingPayload" value="">
-</form>
+</w:form>
 
 <script>
 (function() {

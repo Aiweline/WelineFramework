@@ -28,7 +28,7 @@ $isIframe = $this->request->getGet('isIframe');
                 <?= __('复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。') ?>
             </div>
 
-            <form id="copy-form">
+            <w:form id="copy-form">
                 <input type="hidden" name="id" value="<?= $model->getId() ?>">
                 
                 <!-- 原始模型信息 -->
@@ -216,7 +216,7 @@ $isIframe = $this->request->getGet('isIframe');
                         <i class="mdi mdi-content-copy"></i> <?= __('确认复制') ?>
                     </button>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 </div>

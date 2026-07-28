@@ -77,7 +77,7 @@ $confirmMessages = [
             <h3><?= __('筛选条件') ?></h3>
         </div>
         <div class="card-body">
-            <form method="get" action="<?= $this->getBackendUrl('*/backend/record') ?>">
+            <w:form method="get" action="@var($this->getBackendUrl('*/backend/record'))">
                 <div class="row">
                     <div class="col-md-3">
                         <div class="mb-3">
@@ -149,7 +149,7 @@ $confirmMessages = [
                         </div>
                     </div>
                 </div>
-            </form>
+            </w:form>
         </div>
     </div>
 

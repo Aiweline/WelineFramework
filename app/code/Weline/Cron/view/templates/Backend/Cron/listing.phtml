@@ -236,21 +236,21 @@
                                             <i class="mdi mdi-text-box-outline"></i> <lang>日志</lang>
                                         </button>
                                         <if condition="task.status === 'block'">
-                                            <form action="@backend-url('*/backend/cron/unlock')" method="post" class="d-inline">
+                                            <w:form action="@backend-url('*/backend/cron/unlock')" method="post" class="d-inline" csrf="off">
                                                 <csrf/>
                                                 <input type="hidden" name="task_id" value="{{task.id}}">
                                                 <button type="submit" class="btn btn-outline-success weline-cron-action-btn" title="@lang{解锁}">
                                                     <i class="mdi mdi-lock-open"></i> <lang>解锁</lang>
                                                 </button>
-                                            </form>
+                                            </w:form>
                                         <else/>
-                                            <form action="@backend-url('*/backend/cron/lock')" method="post" class="d-inline">
+                                            <w:form action="@backend-url('*/backend/cron/lock')" method="post" class="d-inline" csrf="off">
                                                 <csrf/>
                                                 <input type="hidden" name="task_id" value="{{task.id}}">
                                                 <button type="submit" class="btn btn-outline-warning weline-cron-action-btn" title="@lang{锁定}">
                                                     <i class="mdi mdi-lock"></i> {{task.block_unlock_timeout}}<lang>分钟</lang>
                                                 </button>
-                                            </form>
+                                            </w:form>
                                         </if>
                                     </div>
                                 </td>

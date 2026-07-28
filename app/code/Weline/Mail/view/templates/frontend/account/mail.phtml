@@ -78,7 +78,7 @@ $statusLabels = [
                     <p><?= __('当前没有已开启的邮箱域名，请稍后再试。') ?></p>
                 </div>
             <?php else: ?>
-                <form class="weline-mail-account__form" method="post" action="<?= $escape($applyUrl) ?>">
+                <w:form class="weline-mail-account__form" method="post" action="@var($applyUrl)">
                     <?php if ($fakeMode): ?>
                         <input type="hidden" name="mail_fake" value="1">
                     <?php endif; ?>
@@ -106,7 +106,7 @@ $statusLabels = [
                             <i class="ri-mail-add-line" aria-hidden="true"></i> <?= __('申请邮箱账号') ?>
                         </button>
                     </div>
-                </form>
+                </w:form>
             <?php endif; ?>
         </div>
     </div>
@@ -133,15 +133,15 @@ $statusLabels = [
                             <span class="weline-mail-account__badge"><?= $statusLabels[$status] ?? $escape($status) ?></span>
                             <div class="weline-mail-account__actions">
                                 <?php if ($status !== 'suspended'): ?>
-                                    <form method="post" action="<?= $escape($suspendUrl) ?>">
+                                    <w:form method="post" action="@var($suspendUrl)">
                                         <input type="hidden" name="account_id" value="<?= $accountId ?>">
                                         <button type="submit" class="account-form__btn account-form__btn--secondary"><?= __('暂停') ?></button>
-                                    </form>
+                                    </w:form>
                                 <?php else: ?>
-                                    <form method="post" action="<?= $escape($resumeUrl) ?>">
+                                    <w:form method="post" action="@var($resumeUrl)">
                                         <input type="hidden" name="account_id" value="<?= $accountId ?>">
                                         <button type="submit" class="account-form__btn account-form__btn--secondary"><?= __('恢复') ?></button>
-                                    </form>
+                                    </w:form>
                                 <?php endif; ?>
                             </div>
                         </article>
@@ -159,18 +159,18 @@ $statusLabels = [
             </header>
             <div class="account-card__body">
                 <div class="weline-mail-client">
-                    <section class="weline-mail-client__compose">
+                    <section class="weline-mail-client__compose" weline-code="mail.account.mail.section_1">
                         <div class="weline-mail-client__bar">
                             <div>
                                 <strong><?= $escape($selectedEmail) ?></strong>
                                 <span><?= __('Fake 模式已启用，可进行本地收发信冒烟。') ?></span>
                             </div>
-                            <form method="post" action="<?= $escape($receiveTestUrl) ?>">
+                            <w:form method="post" action="@var($receiveTestUrl)">
                                 <input type="hidden" name="account_id" value="<?= $selectedAccountId ?>">
                                 <button type="submit" class="account-form__btn account-form__btn--secondary"><?= __('收取测试邮件') ?></button>
-                            </form>
+                            </w:form>
                         </div>
-                        <form class="weline-mail-client__form" method="post" action="<?= $escape($sendUrl) ?>">
+                        <w:form class="weline-mail-client__form" method="post" action="@var($sendUrl)">
                             <input type="hidden" name="account_id" value="<?= $selectedAccountId ?>">
                             <div class="account-form__group">
                                 <label class="account-form__label" for="mail_to_email"><?= __('收件人') ?></label>
@@ -189,10 +189,10 @@ $statusLabels = [
                                     <i class="ri-send-plane-line" aria-hidden="true"></i> <?= __('发送测试邮件') ?>
                                 </button>
                             </div>
-                        </form>
+                        </w:form>
                     </section>
 
-                    <section class="weline-mail-client__folders">
+                    <section class="weline-mail-client__folders" weline-code="mail.account.mail.section_2">
                         <div class="weline-mail-client__folder">
                             <h3><?= __('收件箱') ?></h3>
                             <?php if ($inboxMessages === []): ?>

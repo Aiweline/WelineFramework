@@ -5,8 +5,8 @@
     <menu source="Weline_Captcha::config"
          name="captcha_config"
          title="验证码配置"
-         action="captcha/backend/config"
-         parent="Weline_Backend::user_permission_group"
+         action="weline_systemconfig/backend/config?module=Weline_Captcha&amp;area=backend"
+         parent="Weline_Backend::system_config_group"
          icon="mdi mdi-shield-check"
          order="100"/>
 </menus>

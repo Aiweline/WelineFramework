@@ -84,14 +84,14 @@ $isEditorPreview = $this->getData('_editor_preview') ||
                     <p class="popup-description"><?= htmlspecialchars($description) ?></p>
                 <?php endif; ?>
                 
-                <form class="popup-form" action="/newsletter/subscribe" method="post">
+                <w:form class="popup-form" action="/newsletter/subscribe" method="post">
                     <input type="email" 
                            name="email" 
                            class="popup-input" 
                            placeholder="<?= __('请输入您的邮箱') ?>"
                            required>
                     <button type="submit" class="popup-submit"><?= htmlspecialchars($buttonText) ?></button>
-                </form>
+                </w:form>
                 
                 <p class="popup-note">
                     <i class="ri-shield-check-line"></i>

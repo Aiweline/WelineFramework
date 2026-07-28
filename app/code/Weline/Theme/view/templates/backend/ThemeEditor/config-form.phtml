@@ -45,7 +45,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
     </div>
 </div>
 
-<form class="config-form" id="widgetConfigForm" data-layout-id="<?= $widget['layout_id'] ?? '' ?>">
+<w:form class="config-form" id="widgetConfigForm" data-layout-id="@var($widget['layout_id'] ?? '')">
     <?php if (empty($params)): ?>
         <p class="text-muted"><?= __('该部件暂无可配置参数') ?></p>
     <?php else: ?>
@@ -193,4 +193,4 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
             </div>
         <?php endforeach; ?>
     <?php endif; ?>
-</form>
+</w:form>

@@ -43,7 +43,7 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
             <div class='card-body'>
                 <h4 class='card-title'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></h4>
                 
-                <form class='needs-validation' novalidate action="<?= $action ?>" method="post">
+                <w:form class='needs-validation' novalidate action="@var($action)" method="post">
                     <?php if ($isEdit): ?>
                         <input type='hidden' name='currency_id' value='<?= $currency->getId() ?>'>
                     <?php endif; ?>
@@ -201,7 +201,7 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
                         <button type='submit' class='btn btn-primary'><lang>保存</lang></button>
                         <a href="@backend-url('currency/backend/currency/index')" class='btn btn-secondary'><lang>取消</lang></a>
                     </div>
-                </form>
+                </w:form>
             </div>
         </div>
     </div>

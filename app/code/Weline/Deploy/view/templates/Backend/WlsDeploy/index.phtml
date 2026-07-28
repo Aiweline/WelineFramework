@@ -1154,7 +1154,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                     </span>
                 </div>
                 <div class="wdep-panel-body">
-                    <form class="wdep-form" method="post" action="<?= $escapeHtml($profileSaveUrl) ?>">
+                    <w:form class="wdep-form" method="post" action="@var($profileSaveUrl)">
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                         <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -1283,7 +1283,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                                 <?= $escapeHtml(__('保存 Profile')) ?>
                             </button>
                         </div>
-                    </form>
+                    </w:form>
                 </div>
             </article>
         </section>
@@ -1304,7 +1304,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                         <span class="wdep-pill <?= $preflightStatus === 'ok' ? 'is-ok' : ($preflightStatus === 'danger' ? 'is-danger' : 'is-warning') ?>">
                             <?= $escapeHtml($preflightLabel) ?>
                         </span>
-                        <form method="post" action="<?= $escapeHtml($preflightRunUrl) ?>" data-wls-deploy-preflight-form>
+                        <w:form method="post" action="@var($preflightRunUrl)" data-wls-deploy-preflight-form>
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                             <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -1312,7 +1312,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                             <button type="submit" class="wdep-button" data-wls-deploy-preflight-run>
                                 <?= $escapeHtml(__('执行预检')) ?>
                             </button>
-                        </form>
+                        </w:form>
                     </div>
                 </div>
                 <div class="wdep-panel-body">
@@ -1360,7 +1360,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                                 </div>
                             <?php endif; ?>
                         </div>
-                        <form class="wdep-rollback-form" method="post" action="<?= $escapeHtml($rollbackRunUrl) ?>" data-wls-deploy-rollback-form>
+                        <w:form class="wdep-rollback-form" method="post" action="@var($rollbackRunUrl)" data-wls-deploy-rollback-form>
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                             <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -1379,7 +1379,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                             >
                                 <?= $escapeHtml(__('Run Rollback')) ?>
                             </button>
-                        </form>
+                        </w:form>
                     </div>
                 </div>
             </article>
@@ -1402,7 +1402,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                     </span>
                 </div>
                 <div class="wdep-panel-body">
-                    <form class="wdep-replay-form" method="post" action="<?= $escapeHtml($webhookReplayUrl) ?>" data-wls-webhook-replay-form>
+                    <w:form class="wdep-replay-form" method="post" action="@var($webhookReplayUrl)" data-wls-webhook-replay-form>
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                         <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -1424,7 +1424,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                                 <?= $escapeHtml(__('分支示例')) ?> · <span class="wdep-code"><?= $escapeHtml($webhookReplay['sample_branch_ref'] ?? 'refs/heads/main') ?></span>
                             </button>
                         </div>
-                    </form>
+                    </w:form>
 
                     <?php if (!empty($webhookReplay['has_result'])): ?>
                         <div class="wdep-summary wdep-replay-result" data-wls-webhook-replay-result data-status="<?= $escapeHtml($webhookReplayStatus) ?>" data-reason="<?= $escapeHtml($webhookReplayReason) ?>">
@@ -1481,7 +1481,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                     </span>
                 </div>
                 <div class="wdep-panel-body">
-                    <form class="wdep-replay-form" method="post" action="<?= $escapeHtml($manualPlanUrl) ?>" data-wls-manual-plan-form>
+                    <w:form class="wdep-replay-form" method="post" action="@var($manualPlanUrl)" data-wls-manual-plan-form>
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                         <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -1521,7 +1521,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                                 <?= $escapeHtml(__('Run Release')) ?>
                             </button>
                         </div>
-                    </form>
+                    </w:form>
 
                     <?php if (!empty($manualPlan['has_result'])): ?>
                         <div class="wdep-summary wdep-replay-result" data-wls-manual-plan-result data-status="<?= $escapeHtml($manualPlanStatus) ?>" data-reason="<?= $escapeHtml($manualPlanReason) ?>">
