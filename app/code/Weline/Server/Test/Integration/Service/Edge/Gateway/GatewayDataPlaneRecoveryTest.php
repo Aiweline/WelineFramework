@@ -334,6 +334,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         $keyAuthorization = $challengeToken . '.' . \str_repeat('A', 43);
         $challengeSync = $acmeClient->projectRequest('acme-challenge-sync', [
             'project_uuid' => $acme['project_uuid'],
+            'challenge_generation' => 1,
             'challenges' => [[
                 'domain' => $acme['domain'],
                 'token' => $challengeToken,
@@ -385,6 +386,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         );
         $challengeClear = $acmeClient->projectRequest('acme-challenge-sync', [
             'project_uuid' => $acme['project_uuid'],
+            'challenge_generation' => 2,
             'challenges' => [],
         ]);
         self::assertTrue($challengeClear['ok'], \json_encode($challengeClear));

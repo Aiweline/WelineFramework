@@ -1309,6 +1309,12 @@ final class WlsEdgeGatewayController
     private function syncAcmeChallenges(array $payload): array
     {
         $projectUuid = \strtolower(\trim((string)($payload['project_uuid'] ?? '')));
+        $challengeGeneration = (int)($payload['challenge_generation'] ?? 0);
+        if ($challengeGeneration < 1) {
+            throw new \DomainException(
+                'ACME HTTP-01 challenge generation must be positive.'
+            );
+        }
         $enrollment = $this->state['enrollments'][$projectUuid] ?? null;
         if (!\is_array($enrollment)
             || (($enrollment['capabilities']['acme_http_01'] ?? false) !== true)
@@ -1325,6 +1331,7 @@ final class WlsEdgeGatewayController
         }
         $now = \time();
         $leases = [];
+        $desiredChallenges = [];
         foreach ($incoming as $challenge) {
             if (!\is_array($challenge)) {
                 throw new \DomainException('ACME HTTP-01 lease must be an object.');
@@ -1367,15 +1374,60 @@ final class WlsEdgeGatewayController
                 throw new \DomainException('ACME HTTP-01 lease token, key authorization or expiry is invalid.');
             }
             $leaseId = \hash('sha256', $projectUuid . "\0" . $domain . "\0" . $token);
-            $leases[$leaseId] = [
-                'lease_id' => $leaseId,
-                'project_uuid' => $projectUuid,
+            if (isset($leases[$leaseId])) {
+                throw new \DomainException('Duplicate ACME HTTP-01 lease is forbidden.');
+            }
+            $desiredChallenge = [
                 'domain' => $domain,
                 'token' => $token,
                 'key_authorization' => $keyAuthorization,
                 'expires_at' => $expiresAt,
-                'updated_at' => \gmdate(DATE_ATOM),
             ];
+            $desiredChallenges[] = $desiredChallenge;
+            $leases[$leaseId] = [
+                'lease_id' => $leaseId,
+                'project_uuid' => $projectUuid,
+                ...$desiredChallenge,
+            ];
+        }
+        \ksort($leases, SORT_STRING);
+        \usort(
+            $desiredChallenges,
+            static fn (array $left, array $right): int => [
+                $left['domain'],
+                $left['token'],
+            ] <=> [
+                $right['domain'],
+                $right['token'],
+            ],
+        );
+        $desiredDigest = \hash(
+            'sha256',
+            $this->canonicalJson($desiredChallenges),
+        );
+        $claimedDigest = \strtolower(\trim((string)(
+            $payload['desired_digest'] ?? $desiredDigest
+        )));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $claimedDigest) !== 1
+            || !\hash_equals($desiredDigest, $claimedDigest)
+        ) {
+            throw new \DomainException('ACME HTTP-01 desired digest does not match its leases.');
+        }
+        $existingGeneration = \is_array(
+            $this->state['acme_generations'][$projectUuid] ?? null,
+        ) ? $this->state['acme_generations'][$projectUuid] : [];
+        $currentGeneration = (int)($existingGeneration['generation'] ?? 0);
+        $currentDigest = (string)($existingGeneration['digest'] ?? '');
+        if ($challengeGeneration < $currentGeneration) {
+            throw new \DomainException('ACME HTTP-01 challenge generation is stale.');
+        }
+        if ($challengeGeneration === $currentGeneration
+            && $currentGeneration > 0
+            && !\hash_equals($currentDigest, $desiredDigest)
+        ) {
+            throw new \DomainException(
+                'ACME HTTP-01 challenge generation is ambiguous.'
+            );
         }
 
         $this->beginRoutingMutation('acme-challenge-sync:' . $projectUuid);
@@ -1393,6 +1445,11 @@ final class WlsEdgeGatewayController
             $before = $this->canonicalJson((array)($this->state['acme_challenges'] ?? []));
             $after = $this->canonicalJson($current);
             $this->state['acme_challenges'] = $current;
+            $this->state['acme_generations'][$projectUuid] = [
+                'generation' => $challengeGeneration,
+                'digest' => $desiredDigest,
+                'updated_at' => \gmdate(DATE_ATOM),
+            ];
             if (!\hash_equals($before, $after)) {
                 $this->configDirty = true;
                 $this->bumpGeneration('acme_challenge_sync', [
@@ -1405,9 +1462,17 @@ final class WlsEdgeGatewayController
                     );
                 }
             } else {
+                // The Nginx bundle is unchanged, but the anti-replay fence is
+                // durable protocol state and must survive Controller restart.
+                $this->persistState();
                 $this->completePublication();
             }
-            return ['accepted' => true, 'count' => \count($leases)];
+            return [
+                'accepted' => true,
+                'count' => \count($leases),
+                'challenge_generation' => $challengeGeneration,
+                'desired_digest' => $desiredDigest,
+            ];
         } catch (\Throwable $throwable) {
             $this->abortRoutingMutation(
                 'ACME challenge transaction aborted: ' . $throwable->getMessage()
@@ -3863,6 +3928,7 @@ final class WlsEdgeGatewayController
                 'instances' => (array)($this->state['instances'] ?? []),
                 'routes' => (array)($this->state['routes'] ?? []),
                 'acme_challenges' => (array)($this->state['acme_challenges'] ?? []),
+                'acme_generations' => (array)($this->state['acme_generations'] ?? []),
                 'isolation_mode' => (bool)($this->state['isolation_mode'] ?? false),
                 'active_config_generation' => (int)($this->state['active_config_generation'] ?? 0),
                 'pending_lkg_generation' => (int)($this->state['pending_lkg_generation'] ?? 0),
@@ -3962,7 +4028,13 @@ final class WlsEdgeGatewayController
             : [];
         $irrevocableSecurity = ($this->publication['irrevocable_security'] ?? false) === true;
         if (!$irrevocableSecurity) {
-            foreach (['projects', 'instances', 'routes', 'acme_challenges'] as $key) {
+            foreach ([
+                'projects',
+                'instances',
+                'routes',
+                'acme_challenges',
+                'acme_generations',
+            ] as $key) {
                 if (\is_array($previous[$key] ?? null)) {
                     $this->state[$key] = $previous[$key];
                 }
@@ -8274,6 +8346,7 @@ final class WlsEdgeGatewayController
             'routes' => [],
             'operations' => [],
             'acme_challenges' => [],
+            'acme_generations' => [],
             'transfers' => [],
             'enrollments' => [],
             'security_ledger_valid' => true,
