@@ -1277,6 +1277,8 @@ final class GatewayProtocolSecurityTest extends TestCase
     {
         $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
         $freeBytes = \getenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        $reserveFailure = \getenv('WLS_GATEWAY_TEST_RECOVERY_RESERVE_FAILURE');
         $reserve = $this->home . DIRECTORY_SEPARATOR . 'state/recovery.reserve';
         $marker = $this->home . DIRECTORY_SEPARATOR . 'state/disk-pressure.marker';
         try {
@@ -1321,7 +1323,174 @@ final class GatewayProtocolSecurityTest extends TestCase
                 $this->controller,
                 'assertPersistentMutationAllowed',
             ))->invoke($this->controller, 'post-repair-mutation');
-            self::assertTrue(true);
+
+            $stateProperty = new \ReflectionProperty($this->controller, 'state');
+            $durableState = $stateProperty->getValue($this->controller);
+            $stateFile = (new \ReflectionMethod($this->controller, 'stateFile'))
+                ->invoke($this->controller);
+            $durableHash = \hash_file('sha256', $stateFile);
+            $mutated = $durableState;
+            $mutated['generation'] = (int)$mutated['generation'] + 1;
+            $stateProperty->setValue($this->controller, $mutated);
+            \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=temporary_write_or_fsync_failed');
+            try {
+                (new \ReflectionMethod($this->controller, 'persistState'))
+                    ->invoke($this->controller);
+                self::fail('Injected atomic persistence failure was accepted.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    'temporary gateway file',
+                    $exception->getMessage(),
+                );
+            } finally {
+                \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+            }
+
+            self::assertSame($durableHash, \hash_file('sha256', $stateFile));
+            self::assertSame([], \glob($stateFile . '.tmp-*') ?: []);
+            self::assertFileExists($marker);
+            self::assertFileDoesNotExist($reserve);
+            $storage = (new \ReflectionMethod($this->controller, 'storageStatus'))
+                ->invoke($this->controller);
+            self::assertTrue($storage['pressure_marker']);
+            self::assertFalse($storage['mutation_ready']);
+
+            $durableStateContents = \file_get_contents($stateFile);
+            self::assertIsString($durableStateContents);
+            $securityLedgerFile = (new \ReflectionMethod(
+                $this->controller,
+                'securityLedgerFile',
+            ))->invoke($this->controller);
+            $securityLedgerContents = \file_get_contents($securityLedgerFile);
+            self::assertIsString($securityLedgerContents);
+            self::assertNotFalse(\file_put_contents($stateFile, '{"corrupt"'));
+            self::assertNotFalse(\file_put_contents($securityLedgerFile, '{"corrupt"'));
+            $pressureStateHash = \hash_file('sha256', $stateFile);
+            $pressureLedgerHash = \hash_file('sha256', $securityLedgerFile);
+            $journalFile = (new \ReflectionMethod($this->controller, 'journalFile'))
+                ->invoke($this->controller);
+            self::assertNotFalse(\file_put_contents(
+                $journalFile,
+                '{"partial"',
+                FILE_APPEND,
+            ));
+            $pressureJournalHash = \hash_file('sha256', $journalFile);
+            $staleShadowFile = $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/shadow/' . \str_repeat('a', 32) . '-0/evidence';
+            self::assertTrue(\mkdir(\dirname($staleShadowFile), 0700, true));
+            self::assertNotFalse(\file_put_contents($staleShadowFile, 'preserve'));
+            $restarted = new \WlsEdgeGatewayController(
+                $this->home,
+                'unix://' . $this->home . DIRECTORY_SEPARATOR . 'runtime'
+                    . DIRECTORY_SEPARATOR . 'run' . DIRECTORY_SEPARATOR . 'controller.sock',
+            );
+            self::assertFileDoesNotExist(
+                $reserve,
+                'A disk-pressure restart must not reallocate the released reserve.',
+            );
+            $restartedState = (new \ReflectionProperty($restarted, 'state'))
+                ->getValue($restarted);
+            self::assertSame('DISK_PRESSURE', $restartedState['health_state']);
+            self::assertTrue($restartedState['isolation_mode']);
+            self::assertSame(
+                $pressureStateHash,
+                \hash_file('sha256', $stateFile),
+                'A disk-pressure restart must not quarantine state on disk.',
+            );
+            self::assertSame(
+                $pressureLedgerHash,
+                \hash_file('sha256', $securityLedgerFile),
+                'A disk-pressure restart must not quarantine the security ledger on disk.',
+            );
+            self::assertSame(
+                $pressureJournalHash,
+                \hash_file('sha256', $journalFile),
+                'A disk-pressure restart must not repair the journal on disk.',
+            );
+            self::assertFalse(
+                (new \ReflectionProperty($restarted, 'journalTrusted'))
+                    ->getValue($restarted),
+            );
+            self::assertFileExists(
+                $staleShadowFile,
+                'A disk-pressure restart must not mutate stale runtime artifacts.',
+            );
+            self::assertNotFalse(\file_put_contents($stateFile, $durableStateContents));
+            self::assertNotFalse(\file_put_contents(
+                $securityLedgerFile,
+                $securityLedgerContents,
+            ));
+
+            try {
+                (new \ReflectionMethod(
+                    $this->controller,
+                    'assertPersistentMutationAllowed',
+                ))->invoke($this->controller, 'latched-pressure-mutation');
+                self::fail('A marker-latched disk-pressure mutation was accepted.');
+            } catch (\DomainException $exception) {
+                self::assertStringContainsString(
+                    'storage reserve is below',
+                    $exception->getMessage(),
+                );
+            }
+
+            (new \ReflectionProperty($this->controller, 'lastHealthAt'))
+                ->setValue($this->controller, 0.0);
+            (new \ReflectionProperty($this->controller, 'lastBackendProbeAt'))
+                ->setValue($this->controller, 0.0);
+            (new \ReflectionMethod($this->controller, 'maintenance'))
+                ->invoke($this->controller);
+            self::assertSame(
+                $durableHash,
+                \hash_file('sha256', $stateFile),
+                'Disk-pressure maintenance must not enter a persistent write loop.',
+            );
+            $pressureState = $stateProperty->getValue($this->controller);
+            self::assertSame('DISK_PRESSURE', $pressureState['health_state']);
+            self::assertNull(
+                (new \ReflectionProperty($this->controller, 'publication'))
+                    ->getValue($this->controller),
+            );
+
+            $stateProperty->setValue($this->controller, $durableState);
+            (new \ReflectionMethod($this->controller, 'repair'))->invoke(
+                $this->controller,
+                ['accept_storage_recovery' => true],
+            );
+            self::assertFileDoesNotExist($marker);
+            self::assertFileExists($reserve);
+
+            self::assertTrue(\unlink($securityLedgerFile));
+            self::assertTrue(\unlink($reserve));
+            \putenv('WLS_GATEWAY_TEST_RECOVERY_RESERVE_FAILURE=after_write');
+            $reserveFailedRestart = new \WlsEdgeGatewayController(
+                $this->home,
+                'unix://' . $this->home . DIRECTORY_SEPARATOR . 'runtime'
+                    . DIRECTORY_SEPARATOR . 'run' . DIRECTORY_SEPARATOR . 'controller.sock',
+            );
+            \putenv('WLS_GATEWAY_TEST_RECOVERY_RESERVE_FAILURE');
+            self::assertFileExists(
+                $marker,
+                'A startup reserve allocation failure must latch disk pressure.',
+            );
+            self::assertFileDoesNotExist(
+                $reserve,
+                'A partial or untrusted recovery reserve must be released.',
+            );
+            $reserveFailedState = (new \ReflectionProperty($reserveFailedRestart, 'state'))
+                ->getValue($reserveFailedRestart);
+            self::assertSame('DISK_PRESSURE', $reserveFailedState['health_state']);
+
+            (new \ReflectionMethod($reserveFailedRestart, 'repair'))->invoke(
+                $reserveFailedRestart,
+                ['accept_storage_recovery' => true],
+            );
+            self::assertFileDoesNotExist($marker);
+            self::assertFileExists($reserve);
+            self::assertFileExists(
+                $securityLedgerFile,
+                'Confirmed storage repair must finish a deferred security-ledger bootstrap.',
+            );
         } finally {
             $testMode === false
                 ? \putenv('WLS_GATEWAY_TEST_MODE')
@@ -1329,6 +1498,12 @@ final class GatewayProtocolSecurityTest extends TestCase
             $freeBytes === false
                 ? \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES')
                 : \putenv('WLS_GATEWAY_TEST_DISK_FREE_BYTES=' . $freeBytes);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+            $reserveFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_RECOVERY_RESERVE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_RECOVERY_RESERVE_FAILURE=' . $reserveFailure);
         }
     }
 
