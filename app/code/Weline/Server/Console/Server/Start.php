@@ -4254,7 +4254,49 @@ class Start extends CommandAbstract
         // 4. 命令行参数覆盖（最高优先级）
         $hasCliOverride = false;
         if (isset($args['host'])) {
-            $config['host'] = $args['host'];
+            $normalizedHost = \trim((string)($config['host'] ?? ''));
+            $savedHost = \is_array($savedConfig)
+                ? \trim((string)($savedConfig['host'] ?? ''))
+                : '';
+            $previousHost = $savedHost !== '' ? $savedHost : $normalizedHost;
+            $previousPublicHost = \trim((string)($config['public_host'] ?? ''));
+            $previousPublicOrigin = \trim((string)($config['public_origin'] ?? ''));
+            $publicHostWasDerived = $previousPublicHost === ''
+                || ($previousHost !== '' && \strcasecmp($previousPublicHost, $previousHost) === 0);
+            $publicOriginParts = $previousPublicOrigin !== '' ? \parse_url($previousPublicOrigin) : false;
+            $previousPublicOriginHost = \is_array($publicOriginParts)
+                ? \trim((string)($publicOriginParts['host'] ?? ''))
+                : '';
+            $publicOriginWasDerived = $previousPublicOrigin === ''
+                || ($previousPublicOriginHost !== ''
+                    && (($previousHost !== '' && \strcasecmp($previousPublicOriginHost, $previousHost) === 0)
+                        || ($previousPublicHost !== ''
+                            && \strcasecmp($previousPublicOriginHost, $previousPublicHost) === 0)));
+
+            $newHost = \trim((string)$args['host']);
+            $config['host'] = $newHost;
+            if ($publicHostWasDerived) {
+                $config['public_host'] = $newHost;
+            }
+            if ($publicHostWasDerived && $publicOriginWasDerived) {
+                $publicScheme = (($config['no_ssl'] ?? false) === true
+                    || (($config['https'] ?? true) === false))
+                    ? 'http'
+                    : 'https';
+                $publicAuthority = \filter_var(
+                    $newHost,
+                    FILTER_VALIDATE_IP,
+                    FILTER_FLAG_IPV6,
+                ) !== false
+                    ? '[' . $newHost . ']'
+                    : $newHost;
+                $publicPort = \is_array($publicOriginParts)
+                    ? (int)($publicOriginParts['port'] ?? 0)
+                    : 0;
+                $defaultPublicPort = $publicScheme === 'https' ? 443 : 80;
+                $config['public_origin'] = $publicScheme . '://' . $publicAuthority
+                    . ($publicPort > 0 && $publicPort !== $defaultPublicPort ? ':' . $publicPort : '');
+            }
             $config['source'] = __('命令行参数');
             $hasCliOverride = true;
         }
