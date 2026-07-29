@@ -2303,8 +2303,10 @@ final class WlsEdgeGatewayController
                 if (\is_array($route)
                     && \hash_equals($projectUuid, (string)($route['project_uuid'] ?? ''))
                 ) {
-                    $this->state['routes'][$routeId]['status'] = 'REMOVED';
-                    $this->state['routes'][$routeId]['removed_at'] = \time();
+                    $this->enforceRemovedRoute(
+                        $this->state['routes'][$routeId],
+                        \time(),
+                    );
                     $this->state['routes'][$routeId]['security_tombstone_generation']
                         = $tombstoneGeneration;
                 }
@@ -6841,6 +6843,24 @@ final class WlsEdgeGatewayController
      */
     private function selectRouteBackends(array &$route): void
     {
+        $projectUuid = (string)($route['project_uuid'] ?? '');
+        $projectTombstone = $projectUuid === ''
+            ? null
+            : ($this->state['security']['tombstones']['project:' . $projectUuid] ?? null);
+        if ((string)($route['status'] ?? '') === 'REMOVED'
+            || (\is_array($projectTombstone)
+                && \hash_equals(
+                    $projectUuid,
+                    (string)($projectTombstone['project_uuid'] ?? ''),
+                ))
+        ) {
+            // A project revocation is an irreversible security decision. Lease
+            // sweeps, backend probes and delayed lifecycle messages must never
+            // repopulate routing secrets or reactivate the removed route.
+            $this->enforceRemovedRoute($route);
+            return;
+        }
+
         $now = \time();
         $monotonicNow = $this->monotonicNow();
         $active = [];
@@ -6951,6 +6971,24 @@ final class WlsEdgeGatewayController
                 $route['stale_since_monotonic'] ??= $monotonicNow;
             }
         }
+    }
+
+    /**
+     * @param array<string,mixed> $route
+     */
+    private function enforceRemovedRoute(array &$route, ?int $removedAt = null): void
+    {
+        $route['status'] = 'REMOVED';
+        if ((int)($route['removed_at'] ?? 0) <= 0) {
+            $route['removed_at'] = $removedAt ?? \time();
+        }
+        $route['instances'] = [];
+        $route['backends'] = [];
+        $route['backend_instances'] = [];
+        $route['preferred_instance_id'] = '';
+        $route['instance_id'] = '';
+        $route['backend_identity'] = [];
+        $route['distribution_mode'] = 'single';
     }
 
     /**
