@@ -72,6 +72,7 @@ final class TlsAlpnRuntimeProbe
             $configPath = @\tempnam(\sys_get_temp_dir(), 'wls-alpn-conf-');
             $opensslConfig = <<<'OPENSSL_CONFIG'
 [ req ]
+default_bits = 2048
 distinguished_name = req_distinguished_name
 prompt = no
 default_md = sha256
