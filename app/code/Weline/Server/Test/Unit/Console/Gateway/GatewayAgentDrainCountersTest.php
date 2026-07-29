@@ -248,6 +248,122 @@ final class GatewayAgentDrainCountersTest extends TestCase
         );
     }
 
+    public function testProjectDrainingFencesFallbackByProjectAndInstanceIdentity(): void
+    {
+        $currentProject = '11111111-1111-4111-8111-111111111111';
+        $otherProject = '22222222-2222-4222-8222-222222222222';
+        $otherInstanceOnly = [
+            'routes' => [[
+                'project_uuid' => $currentProject,
+                'instance_id' => 'worker',
+                'status' => 'DRAINING',
+                'instances' => [
+                    'worker' => [
+                        'instance_id' => 'worker',
+                        'status' => 'DRAINING',
+                    ],
+                ],
+            ]],
+            'instances' => [
+                $currentProject => [
+                    'worker' => [
+                        'instance_id' => 'worker',
+                        'status' => 'DRAINING',
+                    ],
+                ],
+            ],
+        ];
+        self::assertFalse(Agent::projectInstanceDraining(
+            $otherInstanceOnly,
+            $currentProject,
+            'api',
+        ));
+        self::assertFalse(Agent::projectInstanceDraining(
+            [
+                'routes' => [[
+                    'project_uuid' => $otherProject,
+                    'instances' => [
+                        'api' => [
+                            'instance_id' => 'api',
+                            'status' => 'DRAINING',
+                        ],
+                    ],
+                ]],
+            ],
+            $currentProject,
+            'api',
+        ));
+        self::assertTrue(Agent::projectInstanceDraining(
+            [
+                'routes' => [[
+                    'project_uuid' => $currentProject,
+                    'instances' => [
+                        'api' => [
+                            'instance_id' => 'api',
+                            'status' => 'DRAINING',
+                        ],
+                    ],
+                ]],
+            ],
+            $currentProject,
+            'api',
+        ));
+        self::assertTrue(Agent::projectInstanceDraining(
+            [
+                'instances' => [
+                    $currentProject => [
+                        'api' => [
+                            'instance_id' => 'api',
+                            'status' => 'DRAINING',
+                        ],
+                    ],
+                ],
+            ],
+            $currentProject,
+            'api',
+        ));
+
+        $draining = [
+            'dataPlaneHealthy' => false,
+            'fallbackEligible' => true,
+            'controlAvailable' => true,
+            'downSince' => 100.0,
+            'activeSince' => 0.0,
+            'fallbackDrainStartedAt' => 0.0,
+            'lastFallbackCommandAt' => 0.0,
+            'fallbackRequested' => false,
+            'fallbackDrainRequested' => false,
+            'projectDraining' => true,
+        ];
+        self::assertSame('', Agent::decideFallbackLifecycleAction(
+            ...['now' => 1000.0, ...$draining],
+        ));
+        self::assertSame(
+            ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN,
+            Agent::decideFallbackLifecycleAction(...[
+                'now' => 1000.0,
+                ...$draining,
+                'fallbackRequested' => true,
+            ]),
+        );
+        $fallbackDraining = [
+            ...$draining,
+            'fallbackRequested' => true,
+            'fallbackDrainRequested' => true,
+            'fallbackDrainStartedAt' => 700.0,
+        ];
+        self::assertSame('', Agent::decideFallbackLifecycleAction(
+            ...['now' => 999.999, ...$fallbackDraining],
+        ));
+        self::assertSame(
+            ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
+            Agent::decideFallbackLifecycleAction(...[
+                'now' => 1000.0,
+                ...$fallbackDraining,
+            ]),
+        );
+    }
+
     public function testFallbackNeverDrainsFromControlPlaneActiveStateAlone(): void
     {
         self::assertSame('', Agent::decideFallbackLifecycleAction(

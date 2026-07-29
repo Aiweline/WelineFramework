@@ -128,6 +128,7 @@ final class Agent extends CommandAbstract
         $lastFallbackLeaseProbe = 0.0;
         $observedFallback = [];
         $outageStateInitialized = false;
+        $projectDraining = false;
         try {
             while (!$shutdown) {
                 $kernel?->tick();
@@ -227,6 +228,17 @@ final class Agent extends CommandAbstract
                     $probeRegistration = null;
                 }
                 $routeActive = $this->projectRouteActive($status, $projectUuid);
+                if (($status['ok'] ?? false) === true) {
+                    // Preserve a positively observed stop fence across a
+                    // transient control-plane read failure. A later trusted
+                    // status may clear it only by proving this instance is no
+                    // longer DRAINING.
+                    $projectDraining = self::projectInstanceDraining(
+                        $status,
+                        $projectUuid,
+                        $instanceName,
+                    );
+                }
                 if ($probeRegistration === null
                     && ($status['ok'] ?? false)
                     && (!$joinRequired || $joinState === 'ACTIVE')
@@ -400,6 +412,7 @@ final class Agent extends CommandAbstract
                     lastFallbackCommandAt: $lastFallbackCommandAt,
                     fallbackRequested: $fallbackRequested,
                     fallbackDrainRequested: $fallbackDrainRequested,
+                    projectDraining: $projectDraining,
                 );
                 if ($fallbackAction === ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE) {
                     $lastFallbackCommandAt = $now;
@@ -418,8 +431,10 @@ final class Agent extends CommandAbstract
                     $activeSince = $activeSince > 0.0 ? $activeSince : $now;
                 } else {
                     $activeSince = 0.0;
-                    $fallbackDrainStartedAt = 0.0;
-                    $fallbackDrainRequested = false;
+                    if (!$projectDraining) {
+                        $fallbackDrainStartedAt = 0.0;
+                        $fallbackDrainRequested = false;
+                    }
                 }
                 if ($fallbackAction === ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN) {
                     // Command dispatch is not the drain start. Master first
@@ -645,8 +660,23 @@ final class Agent extends CommandAbstract
         float $lastFallbackCommandAt,
         bool $fallbackRequested,
         bool $fallbackDrainRequested,
+        bool $projectDraining = false,
     ): string {
         if (!$controlAvailable) {
+            return '';
+        }
+        if ($projectDraining) {
+            if (!$fallbackRequested) {
+                return '';
+            }
+            if (!$fallbackDrainRequested) {
+                return ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN;
+            }
+            if ($fallbackDrainStartedAt > 0.0
+                && $now - $fallbackDrainStartedAt >= self::FALLBACK_DRAIN_SECONDS
+            ) {
+                return ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE;
+            }
             return '';
         }
         if ($fallbackRequested
@@ -935,6 +965,81 @@ final class Agent extends CommandAbstract
                 masterEpoch: $epoch,
             ),
         ];
+    }
+
+    /**
+     * An explicit project stop is identified only by a DRAINING lease for the
+     * current project and instance. Route-level state alone is insufficient
+     * unless that route also identifies this exact instance.
+     *
+     * @param array<string,mixed> $status
+     */
+    public static function projectInstanceDraining(
+        array $status,
+        string $projectUuid,
+        string $instanceName,
+    ): bool {
+        $projectUuid = \strtolower(\trim($projectUuid));
+        $instanceName = \trim($instanceName);
+        if ($projectUuid === '' || $instanceName === '') {
+            return false;
+        }
+        foreach ((array)($status['routes'] ?? []) as $route) {
+            if (!\is_array($route)
+                || !\hash_equals(
+                    $projectUuid,
+                    \strtolower(\trim((string)($route['project_uuid'] ?? ''))),
+                )
+            ) {
+                continue;
+            }
+            $lease = \is_array($route['instances'] ?? null)
+                ? ($route['instances'][$instanceName] ?? null)
+                : null;
+            if (\is_array($lease)
+                && \hash_equals(
+                    $instanceName,
+                    (string)($lease['instance_id'] ?? $instanceName),
+                )
+                && \hash_equals(
+                    'DRAINING',
+                    \strtoupper(\trim((string)($lease['status'] ?? ''))),
+                )
+            ) {
+                return true;
+            }
+            if (\hash_equals(
+                $instanceName,
+                (string)($route['instance_id'] ?? ''),
+            ) && \hash_equals(
+                'DRAINING',
+                \strtoupper(\trim((string)($route['status'] ?? ''))),
+            )) {
+                return true;
+            }
+        }
+        foreach ((array)($status['instances'] ?? []) as $candidateProjectUuid => $bucket) {
+            if (!\is_string($candidateProjectUuid)
+                || !\hash_equals(
+                    $projectUuid,
+                    \strtolower(\trim($candidateProjectUuid)),
+                )
+                || !\is_array($bucket)
+            ) {
+                continue;
+            }
+            $lease = $bucket[$instanceName] ?? null;
+            return \is_array($lease)
+                && \hash_equals(
+                    $instanceName,
+                    (string)($lease['instance_id'] ?? ''),
+                )
+                && \hash_equals(
+                    'DRAINING',
+                    \strtoupper(\trim((string)($lease['status'] ?? ''))),
+                );
+        }
+        return false;
     }
 
     /**
