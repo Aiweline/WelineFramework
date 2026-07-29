@@ -13,6 +13,8 @@ use Weline\Server\Service\Edge\NginxEdgeAdapter;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\SslCertificateService;
 
+require_once dirname(__DIR__, 5) . '/bootstrap_phpunit.php';
+
 class SslCertificateServiceTest extends TestCase
 {
     protected function setUp(): void
