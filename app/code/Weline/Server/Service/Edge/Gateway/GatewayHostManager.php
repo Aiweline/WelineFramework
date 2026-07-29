@@ -1022,6 +1022,7 @@ final class GatewayHostManager
             'project_generation' => (int)$registration['project_generation'],
             'instance_id' => (string)$registration['instance_id'],
             'instance_generation' => (int)$registration['instance_generation'],
+            'instance_digest' => (string)$registration['instance_digest'],
             'master_epoch' => (int)$registration['master_epoch'],
             'launch_id' => (string)$registration['launch_id'],
         ];
