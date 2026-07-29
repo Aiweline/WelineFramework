@@ -7,6 +7,7 @@ namespace Weline\Server\Service\Runtime;
 use Weline\Framework\App\Env;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\MasterProcess;
 
 /**
@@ -385,6 +386,54 @@ final class ProtocolEdgeRuntime
     }
 
     /**
+     * Resolve validated immutable TLS material from the project generation store.
+     *
+     * @param list<string> $certificateRoots
+     * @param null|callable(string,string,string,string,list<string>):array<string,mixed> $activate
+     * @return array{cert_path:string,key_path:string}
+     */
+    private static function activateImmutableCertificateMaterial(
+        string $domain,
+        string $certificate,
+        string $privateKey,
+        array $certificateRoots,
+        ?callable $activate = null,
+    ): array {
+        $activate ??= static fn(
+            string $activeDomain,
+            string $activeCertificate,
+            string $activePrivateKey,
+            string $chain,
+            array $roots,
+        ): array => (new ProjectCertificateGenerationStore())->activate(
+            $activeDomain,
+            $activeCertificate,
+            $activePrivateKey,
+            $chain,
+            $roots,
+        );
+        $active = $activate($domain, $certificate, $privateKey, '', $certificateRoots);
+        $activeCertificate = \trim((string)($active['cert_path'] ?? ''));
+        $activePrivateKey = \trim((string)($active['key_path'] ?? ''));
+        if ($activeCertificate === ''
+            || $activePrivateKey === ''
+            || !\is_file($activeCertificate)
+            || !\is_file($activePrivateKey)
+            || \is_link($activeCertificate)
+            || \is_link($activePrivateKey)
+        ) {
+            throw new \RuntimeException(
+                'WLS-native TLS requires validated immutable certificate generation files.'
+            );
+        }
+
+        return [
+            'cert_path' => $activeCertificate,
+            'key_path' => $activePrivateKey,
+        ];
+    }
+
+    /**
      * Compile the WLS-owned protocol engine's immutable listener, TLS and
      * upstream contract. The engine only terminates protocols and reuses
      * connections; WorkerPolicyKernel remains authoritative for every L7 rule.
@@ -408,6 +457,22 @@ final class ProtocolEdgeRuntime
         $tlsMinimum = \in_array('tls1.2', $tlsProtocols, true) ? 'tls1.2' : 'tls1.3';
         $tlsMaximum = \in_array('tls1.3', $tlsProtocols, true) ? 'tls1.3' : 'tls1.2';
         $upstreamCount = \count($resolvedUpstreams);
+        $certificateRoots = $context->getConfig('wls.gateway.certificate_roots', []);
+        $certificateRoots = \is_array($certificateRoots)
+            ? \array_values(\array_filter(
+                \array_map(
+                    static fn(mixed $root): string => \is_string($root) ? \trim($root) : '',
+                    $certificateRoots,
+                ),
+                static fn(string $root): bool => $root !== '',
+            ))
+            : [];
+        $activeCertificate = self::activateImmutableCertificateMaterial(
+            $serverName,
+            $context->sslCert,
+            $context->sslKey,
+            $certificateRoots,
+        );
 
         $payload = \json_encode([
             'schema_version' => 1,
@@ -422,8 +487,8 @@ final class ProtocolEdgeRuntime
             'preferred' => $selection->preferred,
             'alt_svc' => $selection->altSvc,
             'tls' => [
-                'certificate_file' => $context->sslCert,
-                'private_key_file' => $context->sslKey,
+                'certificate_file' => $activeCertificate['cert_path'],
+                'private_key_file' => $activeCertificate['key_path'],
                 'minimum_version' => $tlsMinimum,
                 'maximum_version' => $tlsMaximum,
                 'key_exchange_profile' => $tlsSelection['requested'],

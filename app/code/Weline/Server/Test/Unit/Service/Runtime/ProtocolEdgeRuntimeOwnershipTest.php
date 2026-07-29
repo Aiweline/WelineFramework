@@ -36,6 +36,55 @@ final class ProtocolEdgeRuntimeOwnershipTest extends TestCase
         self::assertFalse($probeCalled);
     }
 
+    public function testNativeProtocolEdgeConsumesActivatedImmutableCertificatePaths(): void
+    {
+        $certificate = \tempnam(\sys_get_temp_dir(), 'wls-cert-generation-');
+        $privateKey = \tempnam(\sys_get_temp_dir(), 'wls-key-generation-');
+        self::assertIsString($certificate);
+        self::assertIsString($privateKey);
+        \file_put_contents($certificate, 'immutable certificate generation');
+        \file_put_contents($privateKey, 'immutable private-key generation');
+
+        try {
+            $method = new \ReflectionMethod(
+                \Weline\Server\Service\Runtime\ProtocolEdgeRuntime::class,
+                'activateImmutableCertificateMaterial',
+            );
+            $calls = 0;
+            $active = $method->invoke(
+                null,
+                'snapshot.wls.test',
+                '/mutable/source.crt',
+                '/mutable/source.key',
+                ['/enrolled/certificates'],
+                static function (
+                    string $domain,
+                    string $sourceCertificate,
+                    string $sourcePrivateKey,
+                    string $chain,
+                    array $roots,
+                ) use ($certificate, $privateKey, &$calls): array {
+                    ++$calls;
+                    self::assertSame('snapshot.wls.test', $domain);
+                    self::assertSame('/mutable/source.crt', $sourceCertificate);
+                    self::assertSame('/mutable/source.key', $sourcePrivateKey);
+                    self::assertSame('', $chain);
+                    self::assertSame(['/enrolled/certificates'], $roots);
+                    return ['cert_path' => $certificate, 'key_path' => $privateKey];
+                },
+            );
+
+            self::assertSame(1, $calls);
+            self::assertSame($certificate, $active['cert_path']);
+            self::assertSame($privateKey, $active['key_path']);
+            self::assertNotSame('/mutable/source.crt', $active['cert_path']);
+            self::assertNotSame('/mutable/source.key', $active['key_path']);
+        } finally {
+            @\unlink($certificate);
+            @\unlink($privateKey);
+        }
+    }
+
     public function testEventConfiguratorPublishesIndependentIniAndVerifiesFreshChild(): void
     {
         [$root, $extensionDirectory, $scanDirectory, $extensionBinary] = $this->createEventConfiguratorFixture();
