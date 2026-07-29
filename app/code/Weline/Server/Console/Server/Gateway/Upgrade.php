@@ -10,20 +10,34 @@ final class Upgrade extends AbstractGatewayCommand
 {
     public function execute(array $args = [], array $data = []): int
     {
+        $json = $this->isJson($args);
+        if (!isset($args['confirm'])) {
+            return $this->failure(
+                __('网关升级必须由管理员显式携带 --confirm。'),
+                $json,
+                'confirmation_required',
+            );
+        }
+        $package = \trim((string)($args['package'] ?? ''));
+        if ($package === '') {
+            return $this->failure(
+                __('必须通过 --package 指定签名自包含候选包目录。'),
+                $json,
+                'package_required',
+            );
+        }
+        $profile = \strtolower(\trim((string)($args['profile'] ?? 'default')));
         try {
-            $gateway = $this->gateway();
-            $slot = $gateway->installInactiveSlot();
-            $response = $gateway->request('upgrade', ['activate' => true, 'slot' => $slot['slot']]);
-            if (!($response['ok'] ?? false)) {
-                $this->printer->error((string)($response['error']['message'] ?? __('升级失败')));
-                return 1;
+            $result = $this->gateway()->upgrade($package, $profile);
+            if (!$json) {
+                $this->printer->success(
+                    __('WLS 2.0 Gateway 全包已切换到候选 A/B 槽；Root Broker 正在执行五分钟观察。')
+                );
             }
-            $this->printer->success(__('WLS 2.0 Gateway 已切换到候选 A/B 槽；五分钟崩溃循环将自动回滚。'));
-            $this->output((array)($response['payload'] ?? []), isset($args['json']));
+            $this->output($result, $json);
             return 0;
         } catch (\Throwable $throwable) {
-            $this->printer->error($throwable->getMessage());
-            return 1;
+            return $this->failure($throwable->getMessage(), $json, 'gateway_upgrade_failed');
         }
     }
 
@@ -34,6 +48,17 @@ final class Upgrade extends AbstractGatewayCommand
 
     public function help(): array|string
     {
-        return CommandHelper::formatHelp('server:gateway:upgrade', $this->tip(), ['--json' => __('JSON 输出')], [], []);
+        return CommandHelper::formatHelp(
+            'server:gateway:upgrade --package=/absolute/package --confirm [--profile=default]',
+            $this->tip(),
+            [
+                '--package' => __('签名自包含候选包目录'),
+                '--profile' => __('default（IPv4+IPv6）或 ipv4-only'),
+                '--confirm' => __('确认进入 A/B 升级事务'),
+                '--json' => __('JSON 输出'),
+            ],
+            [],
+            [],
+        );
     }
 }

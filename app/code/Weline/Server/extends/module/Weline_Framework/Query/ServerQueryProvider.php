@@ -1387,21 +1387,28 @@ class ServerQueryProvider implements QueryProviderInterface
         $pathLower = strtolower($path);
         $markers = ['/server/'];
         $normalized = $path;
+        $foundServerMarker = false;
         foreach ($markers as $marker) {
             $pos = strpos($pathLower, $marker);
             if ($pos !== false) {
                 $normalized = substr($path, $pos);
+                $foundServerMarker = true;
                 break;
             }
+        }
+        // Reject non-/server/ paths early. Otherwise /_wls/health is misread as
+        // module=_wls + controller=health → Backend\Health (Controller missing).
+        if (!$foundServerMarker || !str_starts_with(strtolower($normalized), '/server/')) {
+            return ['success' => false, 'message' => 'Unsupported admin path: ' . $normalized];
         }
         $area = 'Backend';
         $controllerSeg = 'Index';
         $actionSeg = 'index';
-        if (preg_match('#^/[a-z0-9_-]+/(backend|admin|frontend)/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
+        if (preg_match('#^/server/(backend|admin|frontend|test)/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
             $area = ucfirst(strtolower($mm[1]));
             $controllerSeg = $mm[2];
             $actionSeg = $mm[3] ?? 'index';
-        } elseif (preg_match('#^/[a-z0-9_-]+/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
+        } elseif (preg_match('#^/server/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
             $controllerSeg = $mm[1];
             $actionSeg = $mm[2] ?? 'index';
         } else {

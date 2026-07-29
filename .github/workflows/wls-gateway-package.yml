@@ -1,0 +1,298 @@
+name: WLS Gateway release package
+
+on:
+  push:
+    paths:
+      - "app/code/Weline/Server/bin/wls_gateway_controller.php"
+      - "app/code/Weline/Server/env/gateway/**"
+      - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/HostGatewayPackageManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/WlsGatewayPackageBuilderTest.php"
+      - "dev/tools/wls-gateway-package.php"
+      - ".github/workflows/wls-gateway-package.yml"
+  pull_request:
+    paths:
+      - "app/code/Weline/Server/bin/wls_gateway_controller.php"
+      - "app/code/Weline/Server/env/gateway/**"
+      - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/HostGatewayPackageManagerTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/WlsGatewayPackageBuilderTest.php"
+      - "dev/tools/wls-gateway-package.php"
+      - ".github/workflows/wls-gateway-package.yml"
+  workflow_dispatch:
+    inputs:
+      assemble_release:
+        description: Assemble and sign a production package from the approved component store
+        required: true
+        default: false
+        type: boolean
+      version:
+        description: WLS Gateway release version
+        required: true
+        default: 2.0.0-dev
+        type: string
+      target_runner:
+        description: GitHub runner that exactly matches the component target
+        required: true
+        default: ubuntu-latest
+        type: choice
+        options:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-14
+          - windows-latest
+      target_platform:
+        description: PHP_OS_FAMILY expected on the selected runner
+        required: true
+        default: Linux
+        type: choice
+        options:
+          - Linux
+          - Darwin
+          - Windows
+      target_arch:
+        description: Architecture expected on the selected runner
+        required: true
+        default: x86_64
+        type: choice
+        options:
+          - x86_64
+          - arm64
+      provenance_sha256:
+        description: Approved SHA-256 of provenance.json in the component store
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wls-gateway-package-${{ github.ref }}-${{ inputs.target_platform || 'contract' }}-${{ inputs.target_arch || 'native' }}
+  cancel-in-progress: false
+
+jobs:
+  package-contract:
+    name: Package contract and release-gate tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: sodium, openssl
+          coverage: none
+      - name: Install locked PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Validate package assembler and installer contract
+        run: >-
+          php vendor/bin/phpunit
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/WlsGatewayPackageBuilderTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/HostGatewayPackageManagerTest.php
+      - name: Validate package schema and builder syntax
+        run: |
+          php -l dev/tools/wls-gateway-package.php
+          php -r 'json_decode(file_get_contents("app/code/Weline/Server/env/gateway/package-manifest.schema.json"), true, 512, JSON_THROW_ON_ERROR);'
+
+  assemble-production:
+    name: Signed ${{ inputs.target_platform }} ${{ inputs.target_arch }} package
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
+    needs: package-contract
+    runs-on: ${{ inputs.target_runner }}
+    env:
+      COMPONENT_BASE_URL: ${{ vars.WLS_GATEWAY_COMPONENT_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: sodium, openssl
+          coverage: none
+      - name: Validate release inputs
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:COMPONENT_BASE_URL)) {
+            throw "WLS_GATEWAY_COMPONENT_BASE_URL is required."
+          }
+          $componentUri = [Uri]$env:COMPONENT_BASE_URL
+          if ($componentUri.Scheme -ne "https") {
+            throw "The release component store must use HTTPS."
+          }
+          if ('${{ inputs.provenance_sha256 }}' -notmatch '^[a-f0-9]{64}$') {
+            throw "An approved lowercase provenance SHA-256 is required."
+          }
+          $targetCheck = @'
+            $expectedPlatform = $argv[1];
+            $expectedArch = $argv[2];
+            $actualArch = match (strtolower(php_uname("m"))) {
+                "amd64", "x86_64" => "x86_64",
+                "aarch64", "arm64" => "arm64",
+                default => strtolower(php_uname("m")),
+            };
+            if (PHP_OS_FAMILY !== $expectedPlatform || $actualArch !== $expectedArch) {
+                fwrite(STDERR, "Runner target does not match requested WLS Gateway package.\n");
+                exit(1);
+            }
+          '@
+          & php -r $targetCheck '${{ inputs.target_platform }}' '${{ inputs.target_arch }}'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Runner target does not match the requested package."
+          }
+      - name: Download approved locked components
+        shell: pwsh
+        run: |
+          $componentDir = Join-Path $env:RUNNER_TEMP "wls-gateway-components"
+          $binDir = Join-Path $componentDir "bin"
+          New-Item -ItemType Directory -Path $binDir | Out-Null
+          $suffix = if ('${{ inputs.target_platform }}' -eq 'Windows') { '.exe' } else { '' }
+          $target = '${{ inputs.target_platform }}-${{ inputs.target_arch }}'
+          $base = "$($env:COMPONENT_BASE_URL.TrimEnd('/'))/${{ inputs.version }}/$target"
+          $curl = if ($IsWindows) {
+            (Get-Command curl.exe -ErrorAction Stop).Source
+          } else {
+            (Get-Command curl -ErrorAction Stop).Source
+          }
+          function Receive-TrustedFile([string]$uri, [string]$destination) {
+            & $curl --fail --location --proto '=https' --proto-redir '=https' `
+              --tlsv1.2 $uri --output $destination
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to download an approved WLS Gateway component."
+            }
+          }
+          foreach ($component in @('php', 'nginx', 'wls-gateway-broker', 'wls-gateway-launcher')) {
+            $destination = Join-Path $binDir "$component$suffix"
+            Receive-TrustedFile "$base/bin/$component$suffix" $destination
+          }
+          $provenance = Join-Path $componentDir "provenance.json"
+          Receive-TrustedFile "$base/provenance.json" $provenance
+          Receive-TrustedFile "$base/LICENSES.txt" (Join-Path $componentDir "LICENSES.txt")
+          $actual = (Get-FileHash -Algorithm SHA256 -Path $provenance).Hash.ToLowerInvariant()
+          if ($actual -ne '${{ inputs.provenance_sha256 }}') {
+            throw "Approved provenance digest does not match the downloaded file."
+          }
+          if ('${{ inputs.target_platform }}' -ne 'Windows') {
+            foreach ($componentFile in Get-ChildItem -LiteralPath $binDir -File) {
+              & chmod 0755 $componentFile.FullName
+              if ($LASTEXITCODE -ne 0) {
+                throw "Unable to apply executable component modes."
+              }
+            }
+          }
+      - name: Assemble unsigned immutable candidate
+        shell: pwsh
+        run: |
+          $componentDir = Join-Path $env:RUNNER_TEMP "wls-gateway-components"
+          $packageDir = Join-Path $env:RUNNER_TEMP "wls-gateway-package"
+          $suffix = if ('${{ inputs.target_platform }}' -eq 'Windows') { '.exe' } else { '' }
+          $arguments = @(
+            'dev/tools/wls-gateway-package.php',
+            "--output=$packageDir",
+            '--profile=production',
+            '--version=${{ inputs.version }}',
+            '--platform=${{ inputs.target_platform }}',
+            '--arch=${{ inputs.target_arch }}',
+            '--controller=app/code/Weline/Server/bin/wls_gateway_controller.php',
+            "--php=$(Join-Path $componentDir "bin/php$suffix")",
+            "--nginx=$(Join-Path $componentDir "bin/nginx$suffix")",
+            "--wls-gateway-broker=$(Join-Path $componentDir "bin/wls-gateway-broker$suffix")",
+            "--wls-gateway-launcher=$(Join-Path $componentDir "bin/wls-gateway-launcher$suffix")",
+            "--licenses=$(Join-Path $componentDir 'LICENSES.txt')",
+            "--provenance=$(Join-Path $componentDir 'provenance.json')"
+          )
+          & php @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "WLS Gateway package assembly failed."
+          }
+          $manifest = Get-Content -Raw (Join-Path $packageDir 'manifest.json') | ConvertFrom-Json
+          if ($manifest.release_ready -ne $false -or $manifest.package_profile -ne 'production') {
+            throw "Assembly must produce a non-ready production candidate."
+          }
+      - name: Upload unsigned candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: wls-gateway-candidate-${{ inputs.version }}-${{ inputs.target_platform }}-${{ inputs.target_arch }}
+          path: ${{ runner.temp }}/wls-gateway-package
+          if-no-files-found: error
+          retention-days: 1
+
+  sign-production:
+    name: Sign approved package without executing components
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
+    needs: assemble-production
+    runs-on: ubuntu-latest
+    environment: wls-gateway-release
+    env:
+      RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: sodium
+          coverage: none
+      - name: Install cross-format dependency auditor
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes llvm
+      - uses: actions/download-artifact@v4
+        with:
+          name: wls-gateway-candidate-${{ inputs.version }}-${{ inputs.target_platform }}-${{ inputs.target_arch }}
+          path: ${{ runner.temp }}/wls-gateway-package
+      - name: Sign verified hashes in an isolated job
+        shell: pwsh
+        env:
+          RELEASE_SECRET_KEY_BASE64: ${{ secrets.WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 }}
+        run: |
+          if ('${{ github.ref_protected }}' -ne 'true') {
+            throw "Production signing is allowed only from a protected ref."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_KEY_ID)) {
+            throw "WLS_GATEWAY_RELEASE_KEY_ID is required."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_SECRET_KEY_BASE64)) {
+            throw "WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 is required."
+          }
+          $keyFile = Join-Path $env:RUNNER_TEMP "wls-gateway-release.key"
+          [IO.File]::WriteAllText(
+            $keyFile,
+            $env:RELEASE_SECRET_KEY_BASE64,
+            [Text.UTF8Encoding]::new($false)
+          )
+          & chmod 0600 $keyFile
+          $packageDir = Join-Path $env:RUNNER_TEMP "wls-gateway-package"
+          $arguments = @(
+            'dev/tools/wls-gateway-package.php',
+            '--mode=sign',
+            "--package=$packageDir",
+            "--signing-key-id=$env:RELEASE_KEY_ID",
+            "--signing-key-file=$keyFile",
+            '--trusted-keys=app/code/Weline/Server/env/gateway/trusted-release-keys.json'
+          )
+          & php @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "WLS Gateway package signing failed."
+          }
+          $manifest = Get-Content -Raw (Join-Path $packageDir 'manifest.json') | ConvertFrom-Json
+          if ($manifest.release_ready -ne $true -or $manifest.package_profile -ne 'production') {
+            throw "The isolated signing gate did not produce a release-ready package."
+          }
+      - name: Remove release secret
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          $keyFile = Join-Path $env:RUNNER_TEMP "wls-gateway-release.key"
+          if (Test-Path -LiteralPath $keyFile -PathType Leaf) {
+            $length = [Math]::Max(1, (Get-Item -LiteralPath $keyFile).Length)
+            $bytes = [byte[]]::new($length)
+            [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+            [IO.File]::WriteAllBytes($keyFile, $bytes)
+            Remove-Item -LiteralPath $keyFile -Force
+          }
+      - name: Upload signed package
+        uses: actions/upload-artifact@v4
+        with:
+          name: wls-gateway-${{ inputs.version }}-${{ inputs.target_platform }}-${{ inputs.target_arch }}
+          path: ${{ runner.temp }}/wls-gateway-package
+          if-no-files-found: error
+          retention-days: 30

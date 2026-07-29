@@ -58,6 +58,14 @@ class Dispatcher
      * sentinel check and shard only the Dispatcher select sets that exceed it.
      */
     private const WINDOWS_SELECT_BATCH_SIZE = 240;
+    /**
+     * POSIX select() rejects a set containing any descriptor >= FD_SETSIZE
+     * (normally 1024), even when the process soft limit is much higher. Each
+     * tunnel owns one client and one Worker socket; reserve 128 descriptors for
+     * listeners, IPC, logs and transient connects instead of accepting a
+     * connection that can only end in a false "all Workers unavailable" 503.
+     */
+    private const POSIX_SELECT_MAX_ACTIVE_TUNNELS = 448;
 
     /**
      * 服务器 socket
@@ -2054,6 +2062,7 @@ class Dispatcher
         // streams remain in this select set and drain normally; the kernel
         // backlog absorbs new connects without manufacturing 503 responses.
         $readSockets = DispatcherPolicyControl::canAcceptConnections()
+            && $this->canAcceptNewSelectTunnel()
             ? [$this->serverSocket]
             : [];
         $workerSockets = [];
@@ -2388,6 +2397,12 @@ class Dispatcher
         $maxAcceptPerLoop = $this->maxAcceptPerLoop;
         
         do {
+            // Re-check inside the bounded accept batch. The main select gate
+            // prevents a new batch at capacity, while this guard prevents one
+            // batch from crossing the POSIX FD_SETSIZE safety boundary.
+            if (!$this->canAcceptNewSelectTunnel()) {
+                break;
+            }
             $clientSocket = @\socket_accept($this->serverSocket);
             if ($clientSocket === false) {
                 break;
@@ -2542,6 +2557,16 @@ class Dispatcher
                 $this->pumpSpinWaitControlTick();
             }
         } while ($accepted < $maxAcceptPerLoop);
+    }
+
+    private function canAcceptNewSelectTunnel(): bool
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            // Winsock fd_set is count-based and selectReadySockets() shards it.
+            return true;
+        }
+
+        return \count($this->clientConnections) < self::POSIX_SELECT_MAX_ACTIVE_TUNNELS;
     }
 
     private function registerAcceptedClientConnection($clientSocket, string $clientIp, int $connId): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -18,11 +19,12 @@ use Weline\Server\Service\MasterProcess;
  */
 final class GatewayProvider extends AbstractServiceProvider
 {
+    public const ROLE = ControlMessage::ROLE_GATEWAY_AGENT;
     public const PROCESS_NAME_PREFIX = 'weline-wls-gateway-agent';
 
     public function getRole(): string
     {
-        return 'gateway_agent';
+        return self::ROLE;
     }
 
     public function getDisplayName(): string
@@ -32,8 +34,16 @@ final class GatewayProvider extends AbstractServiceProvider
 
     public function isEnabled(ServiceContext $context): bool
     {
-        return \strtolower(\trim((string)$context->getConfig('wls.edge.mode', '')))
-            === GatewayStartupDecision::MODE_GATEWAY;
+        $effective = \strtolower(\trim((string)$context->getConfig(
+            'wls.edge.mode',
+            '',
+        )));
+        $requested = \strtolower(\trim((string)$context->getConfig(
+            'wls.gateway.requested_mode',
+            '',
+        )));
+        return $effective === GatewayStartupDecision::MODE_GATEWAY
+            || $requested === GatewayStartupDecision::MODE_AUTO;
     }
 
     public function getInstanceCount(ServiceContext $context): int

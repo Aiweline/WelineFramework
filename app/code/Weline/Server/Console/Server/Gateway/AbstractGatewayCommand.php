@@ -9,6 +9,8 @@ use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 
 abstract class AbstractGatewayCommand extends CommandAbstract
 {
+    protected const OUTPUT_SCHEMA = 'wls-gateway-command/1';
+
     protected function gateway(): GatewayHostManager
     {
         return new GatewayHostManager();
@@ -17,11 +19,24 @@ abstract class AbstractGatewayCommand extends CommandAbstract
     /**
      * @param array<string,mixed> $payload
      */
-    protected function output(array $payload, bool $json): void
+    protected function output(
+        array $payload,
+        bool $json,
+        bool $ok = true,
+        array $error = [],
+    ): void
     {
         if ($json) {
+            $document = [
+                'schema' => self::OUTPUT_SCHEMA,
+                'ok' => $ok,
+                'payload' => $payload,
+            ];
+            if (!$ok) {
+                $document['error'] = $this->normalizeError($error);
+            }
             echo \json_encode(
-                $payload,
+                $document,
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
             ) . PHP_EOL;
             return;
@@ -38,6 +53,34 @@ abstract class AbstractGatewayCommand extends CommandAbstract
         }
     }
 
+    /**
+     * Emit exactly one machine-readable document in JSON mode.
+     *
+     * @param array<string,mixed> $details
+     */
+    protected function failure(
+        string $message,
+        bool $json,
+        string $code = 'command_failed',
+        array $details = [],
+    ): int {
+        if ($json) {
+            $this->output([], true, false, [
+                'code' => $code,
+                'message' => $message,
+                'details' => $details,
+            ]);
+        } else {
+            $this->printer->error($message);
+        }
+        return 1;
+    }
+
+    protected function isJson(array $args): bool
+    {
+        return isset($args['json']);
+    }
+
     protected function positional(array $args, int $position = 0, string $default = ''): string
     {
         $values = [];
@@ -48,5 +91,20 @@ abstract class AbstractGatewayCommand extends CommandAbstract
         }
         \array_shift($values);
         return \trim($values[$position] ?? $default);
+    }
+
+    /**
+     * @param array<string,mixed> $error
+     * @return array{code:string,message:string,details:array<string,mixed>}
+     */
+    private function normalizeError(array $error): array
+    {
+        $details = $error['details'] ?? [];
+        return [
+            'code' => \trim((string)($error['code'] ?? 'command_failed')) ?: 'command_failed',
+            'message' => \trim((string)($error['message'] ?? __('命令执行失败。')))
+                ?: __('命令执行失败。'),
+            'details' => \is_array($details) ? $details : [],
+        ];
     }
 }

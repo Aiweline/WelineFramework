@@ -8,23 +8,23 @@ use Weline\Server\Console\Server\Start;
 
 final class StartRecoverableInstanceDetectionTest extends TestCase
 {
-    public function testIsServerRunningTreatsLiveWlsPortAsRunningWhenRuntimeFileIsMissing(): void
+    public function testIsServerRunningDoesNotTrustLivePortWithoutAuthenticatedIpc(): void
     {
         $start = $this->createStartDouble();
         $start->portOccupiedByWls = true;
 
-        self::assertTrue($start->detect('default', 443));
+        self::assertFalse($start->detect('unit-no-ipc-port', 29443));
     }
 
-    public function testIsServerRunningTreatsRecoverableManagedProcessHintAsRunningWhenRuntimeFileIsMissing(): void
+    public function testIsServerRunningDoesNotTrustProcessHintWithoutAuthenticatedIpc(): void
     {
         $start = $this->createStartDouble();
         $start->recoverableProcessHint = true;
 
-        self::assertTrue($start->detect('default', 443));
+        self::assertFalse($start->detect('unit-no-ipc-process', 29444));
     }
 
-    public function testIsServerRunningFallsBackToRecoverableHintWhenRuntimeFileIsInvalid(): void
+    public function testIsServerRunningDoesNotTrustInvalidRuntimeOrProcessHint(): void
     {
         $file = \tempnam(\sys_get_temp_dir(), 'wls-runtime-');
         self::assertNotFalse($file);
@@ -34,14 +34,14 @@ final class StartRecoverableInstanceDetectionTest extends TestCase
         $start = $this->createStartDouble($file);
         $start->recoverableProcessHint = true;
 
-        self::assertTrue($start->detect('default', 443));
+        self::assertFalse($start->detect('unit-no-ipc-invalid', 29445));
     }
 
     public function testIsServerRunningReturnsFalseWhenNoRuntimeSignalsExist(): void
     {
         $start = $this->createStartDouble();
 
-        self::assertFalse($start->detect('default', 443));
+        self::assertFalse($start->detect('unit-no-ipc-empty', 29446));
     }
 
     private function createStartDouble(?string $runtimeFile = null): object

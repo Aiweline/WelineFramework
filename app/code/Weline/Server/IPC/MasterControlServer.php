@@ -440,14 +440,36 @@ class MasterControlServer implements ControlPlaneServerInterface
         }
     }
 
-    private function isAuthorizedControlCommand(array $msg): bool
+    private function isAuthorizedControlCommand(int $clientId, array $msg): bool
     {
         if ($this->expectedControlToken === '') {
             return true;
         }
 
         $token = \trim((string)($msg['control_token'] ?? ''));
-        return $token !== '' && \hash_equals($this->expectedControlToken, $token);
+        if ($token !== '' && \hash_equals($this->expectedControlToken, $token)) {
+            return true;
+        }
+
+        $client = $this->clients[$clientId] ?? null;
+        if (!\is_array($client)
+            || (string)($client['role'] ?? '') !== ControlMessage::ROLE_GATEWAY_AGENT
+            || (string)($client['state'] ?? '') !== self::STATE_READY
+        ) {
+            return false;
+        }
+
+        return \in_array(
+            (string)($msg['action'] ?? ''),
+            [
+                ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE,
+                ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN,
+                ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
+                ControlMessage::ACTION_GATEWAY_BACKEND_ENABLE,
+                ControlMessage::ACTION_GATEWAY_NATIVE_DRAIN,
+            ],
+            true,
+        );
     }
 
     private function normalizeLifecyclePeerHost(string $peerName): string
@@ -732,7 +754,9 @@ class MasterControlServer implements ControlPlaneServerInterface
 
     private function dispatchDecodedControlMessage(int $clientId, array $msg): void
     {
-        if (($msg['type'] ?? '') === ControlMessage::TYPE_COMMAND && !$this->isAuthorizedControlCommand($msg)) {
+        if (($msg['type'] ?? '') === ControlMessage::TYPE_COMMAND
+            && !$this->isAuthorizedControlCommand($clientId, $msg)
+        ) {
             $this->clients[$clientId]['role'] = self::ROLE_CONTROL;
             $this->ipcLog("[IPC-Master] REJECT unauthorized control command from " . $this->formatClientTag($clientId));
             $this->sendTo(

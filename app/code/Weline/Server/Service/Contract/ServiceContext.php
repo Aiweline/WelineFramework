@@ -66,7 +66,26 @@ class ServiceContext
                 );
             }
             $nginx = \is_array($edge['nginx'] ?? null) ? $edge['nginx'] : [];
-            if (($nginx['managed'] ?? null) !== true
+            $gateway = \is_array($wls['gateway'] ?? null) ? $wls['gateway'] : [];
+            $hostGateway = \strtolower(\trim((string)($edge['mode'] ?? ''))) === 'gateway'
+                && \strtolower(\trim((string)($edge['scope'] ?? ''))) === 'host_gateway';
+            if ($hostGateway) {
+                $protocol = \strtolower(\trim((string)($gateway['protocol'] ?? '')));
+                $projectUuid = \strtolower(\trim((string)($gateway['project_uuid'] ?? '')));
+                $gatewayEpoch = \strtolower(\trim((string)($gateway['epoch'] ?? '')));
+                if ($protocol !== 'wls-edge/2'
+                    || \preg_match(
+                        '/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-'
+                            . '[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                        $projectUuid,
+                    ) !== 1
+                    || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayEpoch) !== 1
+                ) {
+                    throw new \InvalidArgumentException(
+                        'Host-gateway WLS context requires authenticated wls-edge/2 project and epoch metadata.'
+                    );
+                }
+            } elseif (($nginx['managed'] ?? null) !== true
                 || ($nginx['auto_start'] ?? null) !== true
             ) {
                 throw new \InvalidArgumentException(

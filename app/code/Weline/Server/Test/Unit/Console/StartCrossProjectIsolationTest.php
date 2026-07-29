@@ -10,11 +10,11 @@ use Weline\Server\Console\Server\Start;
 
 final class StartCrossProjectIsolationTest extends TestCase
 {
-    public function testIsPortOccupiedByWelineProcessIgnoresForeignProjectScope(): void
+    public function testStartupInspectionPreservesForeignProjectScopeForCallerDecision(): void
     {
-        $start = $this->createStartWithInspect(
-            scopeToken: 'pBBBBBBBB',
-            inspect: [
+        [$listener, $port] = $this->createListener();
+        try {
+            $inspect = $this->createStartWithInspect([
                 'in_use' => true,
                 'pid' => 11111,
                 'pid_running' => true,
@@ -22,125 +22,75 @@ final class StartCrossProjectIsolationTest extends TestCase
                 'state' => 'weline',
                 'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
                 'scope' => 'pAAAAAAAA',
-            ]
-        );
+            ])->inspect($port);
 
-        self::assertFalse($start->checkOccupied(9981));
+            self::assertTrue((bool)($inspect['in_use'] ?? false));
+            self::assertSame('pAAAAAAAA', $inspect['scope'] ?? null);
+        } finally {
+            \fclose($listener);
+        }
     }
 
-    public function testIsPortOccupiedByWelineProcessTreatsOwnProjectScopeAsOccupied(): void
+    public function testStartupInspectionPreservesOwnProjectScopeForCallerDecision(): void
     {
-        $start = $this->createStartWithInspect(
-            scopeToken: 'pAAAAAAAA',
-            inspect: [
+        [$listener, $port] = $this->createListener();
+        try {
+            $inspect = $this->createStartWithInspect([
                 'in_use' => true,
                 'pid' => 22222,
                 'pid_running' => true,
                 'is_weline' => true,
                 'state' => 'weline',
-                'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
-                'scope' => 'pAAAAAAAA',
-            ]
-        );
+                'pname' => '--name=weline-wls-dispatcher-default-pBBBBBBBB',
+                'scope' => 'pBBBBBBBB',
+            ])->inspect($port);
 
-        self::assertTrue($start->checkOccupied(9981));
+            self::assertTrue((bool)($inspect['is_weline'] ?? false));
+            self::assertSame('pBBBBBBBB', $inspect['scope'] ?? null);
+        } finally {
+            \fclose($listener);
+        }
     }
 
-    public function testIsPortOccupiedByWelineProcessIgnoresUnscopedProcess(): void
+    public function testStartupInspectionPreservesUnknownOwnerWithoutGrantingAuthority(): void
     {
-        $start = $this->createStartWithInspect(
-            scopeToken: 'pAAAAAAAA',
-            inspect: [
+        [$listener, $port] = $this->createListener();
+        try {
+            $inspect = $this->createStartWithInspect([
                 'in_use' => true,
                 'pid' => 33333,
                 'pid_running' => true,
-                'is_weline' => true,
-                'state' => 'weline',
-                'pname' => '--name=weline-wls-worker-default',
-                'scope' => '',
-            ]
-        );
-
-        self::assertFalse($start->checkOccupied(9981));
-    }
-
-    public function testHasRestartCleanupResidueIgnoresForeignProjectPorts(): void
-    {
-        $start = $this->createStartWithInspect(
-            scopeToken: 'pBBBBBBBB',
-            inspect: [
-                'in_use' => true,
-                'pid' => 44444,
-                'pid_running' => true,
-                'is_weline' => true,
-                'state' => 'weline',
-                'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
-                'scope' => 'pAAAAAAAA',
-            ]
-        );
-
-        self::assertFalse($start->checkResidue('default', 9981, 4, 19981));
-    }
-
-    public function testHasRestartCleanupResidueDetectsOwnProjectPortResidue(): void
-    {
-        $start = $this->createStartWithInspect(
-            scopeToken: 'pAAAAAAAA',
-            inspect: [
-                'in_use' => true,
-                'pid' => 55555,
-                'pid_running' => true,
-                'is_weline' => true,
-                'state' => 'weline',
-                'pname' => '--name=weline-wls-dispatcher-default-pAAAAAAAA',
-                'scope' => 'pAAAAAAAA',
-            ]
-        );
-
-        self::assertTrue($start->checkResidue('default', 9981, 4, 19981));
-    }
-
-    public function testHasRestartCleanupResidueIgnoresFreeNonWelinePorts(): void
-    {
-        $start = $this->createStartWithInspect(
-            scopeToken: 'pAAAAAAAA',
-            inspect: [
-                'in_use' => false,
-                'pid' => 0,
-                'pid_running' => false,
                 'is_weline' => false,
-                'state' => 'free',
-                'pname' => '',
+                'state' => 'unknown',
+                'pname' => 'nginx',
                 'scope' => '',
-            ]
-        );
+            ])->inspect($port);
 
-        self::assertFalse($start->checkResidue('default', 9981, 4, 19981));
+            self::assertTrue((bool)($inspect['in_use'] ?? false));
+            self::assertFalse((bool)($inspect['is_weline'] ?? true));
+            self::assertSame('', $inspect['scope'] ?? null);
+        } finally {
+            \fclose($listener);
+        }
     }
 
     /**
      * @param array<string,mixed> $inspect
      */
-    private function createStartWithInspect(string $scopeToken, array $inspect): Start
+    private function createStartWithInspect(array $inspect): Start
     {
-        return new class($scopeToken, $inspect) extends Start {
+        return new class($inspect) extends Start {
             /** @param array<string,mixed> $inspect */
-            public function __construct(private readonly string $scopeToken, private readonly array $inspect)
+            public function __construct(private readonly array $inspect)
             {
             }
 
-            public function checkOccupied(int $port): bool
+            /**
+             * @return array<string,mixed>
+             */
+            public function inspect(int $port): array
             {
-                return $this->isPortOccupiedByWelineProcess($port);
-            }
-
-            public function checkResidue(
-                string $instanceName,
-                int $mainPort,
-                int $workerCount,
-                int $workerPort = 0
-            ): bool {
-                return $this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount, $workerPort);
+                return $this->inspectStartupPortIfOccupied($port);
             }
 
             protected function inspectPortOccupantWithHistory(int $port): array
@@ -148,22 +98,23 @@ final class StartCrossProjectIsolationTest extends TestCase
                 unset($port);
                 return $this->inspect;
             }
-
-            protected function getCurrentProjectScopeToken(): string
-            {
-                return $this->scopeToken;
-            }
-
-            protected function getRestartCleanupProcessPrefixes(string $instanceName): array
-            {
-                unset($instanceName);
-                return [];
-            }
-
-            protected function resolvePreferredControlPort(int $mainPort): int
-            {
-                return $mainPort + 10000;
-            }
         };
+    }
+
+    /**
+     * @return array{0: resource, 1: int}
+     */
+    private function createListener(): array
+    {
+        $listener = \stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
+        self::assertIsResource($listener, $errorMessage);
+        $address = (string)\stream_socket_get_name($listener, false);
+        $separator = \strrpos($address, ':');
+        self::assertNotFalse($separator);
+        $port = (int)\substr($address, $separator + 1);
+        self::assertGreaterThanOrEqual(9502, $port);
+        self::assertNotSame(9501, $port);
+
+        return [$listener, $port];
     }
 }

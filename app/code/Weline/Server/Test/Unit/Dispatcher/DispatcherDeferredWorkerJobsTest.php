@@ -13,6 +13,16 @@ use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
 class DispatcherDeferredWorkerJobsTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!\defined('BP')) {
+            \define('BP', \getcwd() . \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+    }
+
     public function testProbeWorkerHealthQueuesDeferredJobInsteadOfBlocking(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
@@ -741,6 +751,43 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertNotFalse($source, 'failed to read dispatcher.php');
         self::assertStringContainsString("\$supervisorEnabledRaw = \\getenv('WLS_SUPERVISOR_ENABLED');", $source);
         self::assertStringContainsString('if ($controlPort > 0 || $supervisorEnabled)', $source);
+    }
+
+    public function testDispatcherEntrypointUsesBoundedDefaultAcceptBatch(): void
+    {
+        $path = BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'dispatcher.php';
+        $source = \file_get_contents($path);
+
+        self::assertNotFalse($source, 'failed to read dispatcher.php');
+        self::assertStringContainsString(
+            "'max_accept_per_loop' => (int)(\$dispatcherConfig['max_accept_per_loop'] ?? 16)",
+            $source,
+        );
+    }
+
+    public function testDispatcherAppliesPosixSelectBackpressureBeforeFdSetOverflow(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $method = new \ReflectionMethod(Dispatcher::class, 'canAcceptNewSelectTunnel');
+        $method->setAccessible(true);
+
+        $this->setProperty($dispatcher, 'clientConnections', \array_fill(0, 447, true));
+        self::assertTrue($method->invoke($dispatcher));
+
+        $this->setProperty($dispatcher, 'clientConnections', \array_fill(0, 448, true));
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::assertTrue($method->invoke($dispatcher));
+        } else {
+            self::assertFalse($method->invoke($dispatcher));
+        }
+
+        $source = (string)\file_get_contents(
+            BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+            . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'Dispatcher'
+            . DIRECTORY_SEPARATOR . 'Dispatcher.php'
+        );
+        self::assertSame(2, \substr_count($source, '$this->canAcceptNewSelectTunnel()'));
     }
 
     public function testDispatcherUsesSupervisorClientWhenInstanceRuntimeMetadataEnablesIt(): void

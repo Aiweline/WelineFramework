@@ -20,7 +20,7 @@ final class StopCommandRuntimeCacheTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             16895,
             80,
@@ -50,6 +50,11 @@ final class StopCommandRuntimeCacheTest extends TestCase
                 'manager' => 0,
                 'parent' => 0,
             ];
+
+            protected function isWindowsPlatform(): bool
+            {
+                return true;
+            }
 
             protected function queryStopPidRunning(int $pid): bool
             {

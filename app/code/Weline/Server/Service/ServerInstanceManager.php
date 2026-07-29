@@ -479,6 +479,7 @@ class ServerInstanceManager
             'startup_failure_reason', 'startup_failure_at', 'startup_failure_timestamp',
             'startup_failure_pending', 'startup_failure_class', 'startup_failure_code',
             'startup_failure_context', 'startup_failure_diagnostics', 'master_exited_pid',
+            'master_exited_at', 'master_exited_timestamp',
             'retained_pids', 'retained_pid_count', 'retained_at', 'retained_timestamp',
             'slot_generations', 'slot_generations_updated_at', 'updated_at',
         ];

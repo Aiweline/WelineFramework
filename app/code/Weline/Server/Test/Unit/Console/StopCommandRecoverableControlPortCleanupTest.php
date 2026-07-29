@@ -22,7 +22,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             16895,
             80,
@@ -309,7 +309,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             2,
             16895,
             80,
@@ -337,7 +337,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             16895,
             80,
@@ -390,7 +390,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             2,
             16895,
             80,
@@ -440,7 +440,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
 
         };
 
-        self::assertSame([33780, 2604, 7704, 16048], $stop->collectCandidates($info));
+        self::assertSame([33780, 2604, 7704], $stop->collectCandidates($info));
     }
 
     public function testForceStopCandidatesIncludePrefixPidsOnFirstPass(): void
@@ -456,7 +456,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             16895,
             0,
@@ -498,7 +498,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             }
         };
 
-        self::assertSame([101, 303], $stop->collectDirectCandidates($info));
+        self::assertSame([101], $stop->collectDirectCandidates($info));
         self::assertSame([101, 202, 303], $stop->collectCleanupCandidates($info->name, $info));
     }
 
@@ -511,7 +511,7 @@ final class StopCommandRecoverableControlPortCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             16895,
             0,

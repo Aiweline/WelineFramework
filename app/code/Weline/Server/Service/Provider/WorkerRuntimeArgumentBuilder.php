@@ -103,6 +103,76 @@ final class WorkerRuntimeArgumentBuilder
         ];
     }
 
+    /** @return string[] */
+    public static function gatewayFallbackProtocolPolicy(ServiceContext $context): array
+    {
+        $httpConfig = $context->getConfig('wls.http', []);
+        $httpConfig = \is_array($httpConfig) ? $httpConfig : [];
+        unset($httpConfig['alt_svc']);
+        $httpConfig['alt_svc'] = false;
+        $httpConfig['protocol_edge'] = 'disabled';
+        $protocols = (array)($httpConfig['protocols'] ?? []);
+        $normalizedProtocols = [];
+        foreach ($protocols !== [] ? $protocols : ['h2', 'h1'] as $protocol) {
+            $normalized = match (\strtolower(\trim((string)$protocol))) {
+                'h2', 'http2', 'http/2', 'http/2.0', '2', '2.0' => 'h2',
+                'h1', 'http1', 'http1.1', 'http/1', 'http/1.1', '1', '1.1' => 'h1',
+                'h3', 'http3', 'http/3', 'http/3.0', '3', '3.0' => '',
+                default => throw new \InvalidArgumentException(
+                    'Unsupported gateway fallback HTTP protocol "' . (string)$protocol . '".'
+                ),
+            };
+            if ($normalized !== '' && !\in_array($normalized, $normalizedProtocols, true)) {
+                $normalizedProtocols[] = $normalized;
+            }
+        }
+        $httpConfig['protocols'] = $normalizedProtocols;
+        if ($httpConfig['protocols'] === []) {
+            $httpConfig['protocols'] = ['h2', 'h1'];
+        }
+        if (!\in_array('h1', $httpConfig['protocols'], true)) {
+            $httpConfig['protocols'][] = 'h1';
+        }
+        $preferred = \strtolower(\trim((string)($httpConfig['preferred'] ?? 'h2')));
+        $preferred = match ($preferred) {
+            'h2', 'http2', 'http/2', 'http/2.0', '2', '2.0' => 'h2',
+            'h1', 'http1', 'http1.1', 'http/1', 'http/1.1', '1', '1.1' => 'h1',
+            default => '',
+        };
+        $httpConfig['preferred'] = \in_array($preferred, $httpConfig['protocols'], true)
+            ? $preferred
+            : (\in_array('h2', $httpConfig['protocols'], true) ? 'h2' : 'h1');
+        $selection = \Weline\Server\Service\Runtime\HttpProtocolSelection::fromConfig(
+            [
+                'edge' => ['adapter' => 'wls'],
+                'http' => $httpConfig,
+            ],
+            true,
+        );
+        $snapshot = [
+            'schema_version' => 1,
+            'instance_name' => $context->instanceName,
+            'edge_adapter' => 'wls',
+            'http_protocol_selection' => $selection->toArray(),
+            'http3' => [
+                'enabled' => false,
+                'runtime_verified' => false,
+                'reason' => 'WLS gateway fallback supports TLS HTTP/2 and HTTP/1.1 only.',
+                'native_digest' => '',
+                'fingerprint' => '',
+            ],
+        ];
+        $json = \json_encode(
+            $snapshot,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+        );
+        return [
+            '--wls-http-policy='
+                . \rtrim(\strtr(\base64_encode($json), '+/', '-_'), '='),
+            '--wls-http-policy-sha256=' . \hash('sha256', $json),
+        ];
+    }
+
     public static function publicOrigin(ServiceContext $context): string
     {
         $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())

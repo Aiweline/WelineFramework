@@ -18,6 +18,7 @@ use Weline\Server\Console\Server\Status;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 final class StatusCommandTest extends TestCase
 {
@@ -179,6 +180,15 @@ final class StatusCommandTest extends TestCase
                 pid: 2001,
                 port: 19970,
                 state: ServiceInstance::STATE_READY
+            ),
+            new ServiceInfo(
+                role: 'gateway_fallback',
+                displayName: 'WLS Gateway Fallback TLS',
+                instanceId: 1,
+                pid: 0,
+                port: 24570,
+                state: ServiceInstance::STATE_STOPPED,
+                metadata: ['fallback_state' => 'DEGRADED_WLS'],
             ),
         ]);
 
@@ -382,7 +392,7 @@ final class StatusCommandTest extends TestCase
             host: '0.0.0.0',
             port: 9981,
             sslEnabled: true,
-            dispatcherEnabled: false,
+            runtimeSelection: self::runtimeSelection(),
             workerCount: 4,
             workerBasePort: 9981,
             httpRedirectPort: 0,
@@ -392,6 +402,110 @@ final class StatusCommandTest extends TestCase
         );
 
         self::assertSame('-k https://127.0.0.1:9981', $status->target($info));
+    }
+
+    public function testGatewayFallbackStatusSeparatesWildcardBindFromConcreteUrls(): void
+    {
+        $status = new class extends Status {
+            public function fallback(ServerInstanceInfo $info, array $gatewayRuntime = []): ?array
+            {
+                return $this->resolveGatewayFallbackStatus($info, $gatewayRuntime);
+            }
+        };
+        $info = $this->createInstanceInfo('default', [
+            new ServiceInfo(
+                role: 'gateway_fallback',
+                displayName: 'WLS Gateway Fallback TLS',
+                instanceId: 1,
+                pid: 4321,
+                port: 24570,
+                state: ServiceInstance::STATE_READY,
+                metadata: [
+                    'fallback_state' => 'DEGRADED_WLS',
+                    'fallback_bind_host' => '::',
+                    'fallback_bind' => '[::]:24570',
+                    'fallback_urls' => [
+                        'https://[::]:24570',
+                        'https://shop.example.test:24570',
+                    ],
+                ],
+            ),
+        ]);
+
+        $fallback = $status->fallback($info);
+
+        self::assertIsArray($fallback);
+        self::assertSame('[::]:24570', $fallback['bind'] ?? null);
+        self::assertSame(
+            ['https://shop.example.test:24570'],
+            $fallback['urls'] ?? null,
+        );
+
+        $startupFallback = $status->fallback(
+            $this->createInstanceInfo('startup', []),
+            [
+                'fallback_state' => 'DEGRADED_WLS',
+                'fallback_bind_host' => '0.0.0.0',
+                'fallback_bind' => '0.0.0.0:24571',
+                'fallback_urls' => ['https://startup.example.test:24571'],
+            ],
+        );
+        self::assertSame('0.0.0.0:24571', $startupFallback['bind'] ?? null);
+        self::assertSame(
+            ['https://startup.example.test:24571'],
+            $startupFallback['urls'] ?? null,
+        );
+
+        $stoppedFallback = $status->fallback(
+            $this->createInstanceInfo('stopped', [
+                new ServiceInfo(
+                    role: 'gateway_fallback',
+                    displayName: 'WLS Gateway Fallback TLS',
+                    instanceId: 1,
+                    pid: 0,
+                    port: 24572,
+                    state: ServiceInstance::STATE_STOPPED,
+                    metadata: [
+                        'fallback_state' => 'DEGRADED_WLS',
+                        'fallback_bind' => '127.0.0.1:24572',
+                        'fallback_urls' => ['https://stopped.example.test:24572'],
+                    ],
+                ),
+            ]),
+            [
+                'fallback_state' => 'DEGRADED_WLS',
+                'fallback_bind' => '127.0.0.1:24572',
+                'fallback_urls' => ['https://stopped.example.test:24572'],
+            ],
+        );
+        self::assertNull($stoppedFallback);
+    }
+
+    public function testGatewayActiveDoesNotReportReleasedNativeEdgeAsFallback(): void
+    {
+        $status = new class extends Status {
+            public function fallback(ServerInstanceInfo $info, array $gatewayRuntime = []): ?array
+            {
+                return $this->resolveGatewayFallbackStatus($info, $gatewayRuntime);
+            }
+        };
+        $info = $this->createInstanceInfo('gateway-active', []);
+
+        self::assertNull($status->fallback($info, [
+            'mode' => 'gateway',
+            'fallback_state' => 'GATEWAY_ACTIVE',
+            'fallback_bind' => '127.0.0.1:26439',
+            'fallback_urls' => ['https://shop.example.test:26439'],
+        ]));
+
+        $draining = $status->fallback($info, [
+            'mode' => 'gateway',
+            'fallback_state' => 'NATIVE_EDGE_DRAINING',
+            'fallback_bind' => '127.0.0.1:26439',
+            'fallback_urls' => ['https://shop.example.test:26439'],
+        ]);
+        self::assertSame('native_edge', $draining['kind'] ?? null);
+        self::assertSame('NATIVE_EDGE_DRAINING', $draining['state'] ?? null);
     }
 
     public function testMasterRuntimeStateFallsBackToManagedPidWhenIpcIsUnavailable(): void
@@ -414,7 +528,7 @@ final class StatusCommandTest extends TestCase
             host: '127.0.0.1',
             port: 9981,
             sslEnabled: false,
-            dispatcherEnabled: false,
+            runtimeSelection: self::runtimeSelection(),
             workerCount: 1,
             workerBasePort: 19982,
             httpRedirectPort: 0,
@@ -445,7 +559,7 @@ final class StatusCommandTest extends TestCase
             host: '127.0.0.1',
             port: 9982,
             sslEnabled: false,
-            dispatcherEnabled: false,
+            runtimeSelection: self::runtimeSelection(),
             workerCount: 1,
             workerBasePort: 19982,
             httpRedirectPort: 0,
@@ -453,5 +567,21 @@ final class StatusCommandTest extends TestCase
             startedTimestamp: 1774377600,
             services: $services,
         );
+    }
+
+    private static function runtimeSelection(): RuntimeSelection
+    {
+        return RuntimeSelection::fromArray([
+            'requested_topology' => 'direct',
+            'effective_topology' => 'direct',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => PHP_OS_FAMILY === 'Windows' ? 'worker_ports' : 'shared_fd',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]);
     }
 }

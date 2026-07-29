@@ -10,15 +10,23 @@ final class Routes extends AbstractGatewayCommand
 {
     public function execute(array $args = [], array $data = []): int
     {
+        $json = $this->isJson($args);
         try {
             $response = $this->gateway()->request('routes');
             $payload = (array)($response['payload'] ?? []);
-            $this->printer->setup(__('WLS 2.0 网关路由'));
-            $this->output($payload, isset($args['json']));
-            return ($response['ok'] ?? false) ? 0 : 1;
+            $ok = (bool)($response['ok'] ?? false);
+            if (!$json) {
+                $this->printer->setup(__('WLS 2.0 网关路由'));
+            }
+            $this->output(
+                $payload,
+                $json,
+                $ok,
+                (array)($response['error'] ?? ['message' => __('读取网关路由失败。')]),
+            );
+            return $ok ? 0 : 1;
         } catch (\Throwable $throwable) {
-            $this->printer->error($throwable->getMessage());
-            return 1;
+            return $this->failure($throwable->getMessage(), $json, 'routes_failed');
         }
     }
 

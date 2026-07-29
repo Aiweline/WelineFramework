@@ -3464,16 +3464,18 @@ CNF;
      * 
      * 注意：PHP 的 SNI_server_certs 需要精确的域名键匹配，不会自动处理泛域名匹配。
      * 因此，对于泛域名证书（*.example.com），我们同时生成：
-     * 1. 根域名映射（example.com）- 根域名可以使用泛域名证书
-     * 2. 保留泛域名键（*.example.com）- 用于 fallback
+     * 1. 保留泛域名键（*.example.com）- 用于 fallback
+     * 2. 展开已知的单标签子域；根域必须由显式证书覆盖
      * 
      * 当证书文件不存在时：先按路径探测 → 再从证书管理（DB 含 PEM）恢复磁盘；localhost/127.0.0.1 互查等价记录。
      * 暂无法从磁盘/DB 恢复且未过期时：不再弹系统通知、不把证书记录标为 ERROR（证书任务会自行恢复，避免误报）。
      * 已过期则仍发续签提示。
      * 
+     * @param array<int|string,string> $certificateRoots When provided, stale
+     *        paths outside the current enrollment are re-resolved locally.
      * @return array [domain => [cert => path, key => path], ...]
      */
-    public function getCertificateMap(): array
+    public function getCertificateMap(array $certificateRoots = []): array
     {
         $this->reconcileCertificateFiles();
 
@@ -3503,13 +3505,30 @@ CNF;
             $expiresAt = (string)($cert[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
 
             // 检查证书文件是否存在；若 DB 路径为空/失效，先尝试从标准目录自动探测并回写路径
-            if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
-                [$resolvedCertPath, $resolvedKeyPath] = $this->resolveCertificateFilePaths($domain, $certPath, $keyPath);
+            if ($certPath === ''
+                || $keyPath === ''
+                || !\is_file($certPath)
+                || !\is_file($keyPath)
+                || ($certificateRoots !== []
+                    && !$this->certificatePathsInsideRoots(
+                        [$certPath, $keyPath],
+                        $certificateRoots,
+                    ))
+            ) {
+                [$resolvedCertPath, $resolvedKeyPath] = $this->resolveCertificateFilePaths(
+                    $domain,
+                    $certPath,
+                    $keyPath,
+                    $certificateRoots,
+                );
                 if ($resolvedCertPath !== '' && $resolvedKeyPath !== '') {
                     $certPath = $resolvedCertPath;
                     $keyPath = $resolvedKeyPath;
                     $cert[SslCertificate::schema_fields_CERT_PATH] = $certPath;
                     $cert[SslCertificate::schema_fields_KEY_PATH] = $keyPath;
+                    $resolvedChainPath = \dirname($certPath) . DS . 'chain.pem';
+                    $cert[SslCertificate::schema_fields_CHAIN_PATH]
+                        = \is_file($resolvedChainPath) ? $resolvedChainPath : '';
 
                     // 路径探测成功后同步回 DB，避免后续请求重复误判
                     try {
@@ -3518,6 +3537,7 @@ CNF;
                         if ($certModel->getCertId()) {
                             $certModel->setCertPath($certPath)
                                 ->setKeyPath($keyPath)
+                                ->setChainPath((string)$cert[SslCertificate::schema_fields_CHAIN_PATH])
                                 ->setStatus(SslCertificate::STATUS_ACTIVE)
                                 ->setRenewError('')
                                 ->save();
@@ -3559,10 +3579,21 @@ CNF;
                 }
             }
 
+            $chainPath = (string)($cert[SslCertificate::schema_fields_CHAIN_PATH] ?? '');
+            if ($chainPath !== ''
+                && $certificateRoots !== []
+                && !$this->certificatePathsInsideRoots([$chainPath], $certificateRoots)
+            ) {
+                $localChain = \dirname($certPath) . DS . 'chain.pem';
+                $chainPath = \is_file($localChain)
+                    && $this->certificatePathsInsideRoots([$localChain], $certificateRoots)
+                        ? $localChain
+                        : '';
+            }
             $certData = [
                 'cert' => $certPath,
                 'key' => $keyPath,
-                'chain' => $cert[SslCertificate::schema_fields_CHAIN_PATH] ?? '',
+                'chain' => $chainPath,
                 'cert_type' => $certType,
                 'force_https' => (int) ($cert[SslCertificate::schema_fields_FORCE_HTTPS] ?? 1),
                 'force_root_to_www' => (int) ($cert[SslCertificate::schema_fields_FORCE_ROOT_TO_WWW] ?? 0),
@@ -3589,9 +3620,23 @@ CNF;
      *
      * @return array{0:string,1:string} [certPath,keyPath]
      */
-    protected function resolveCertificateFilePaths(string $domain, string $certPath, string $keyPath): array
+    protected function resolveCertificateFilePaths(
+        string $domain,
+        string $certPath,
+        string $keyPath,
+        array $certificateRoots = [],
+    ): array
     {
-        if ($certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
+        if ($certPath !== ''
+            && $keyPath !== ''
+            && \is_file($certPath)
+            && \is_file($keyPath)
+            && ($certificateRoots === []
+                || $this->certificatePathsInsideRoots(
+                    [$certPath, $keyPath],
+                    $certificateRoots,
+                ))
+        ) {
             return [$certPath, $keyPath];
         }
 
@@ -3611,7 +3656,14 @@ CNF;
                 foreach ($fileCandidates as $candidate) {
                     $candidateCertPath = $certDir . $candidate['cert'];
                     $candidateKeyPath = $certDir . $candidate['key'];
-                    if (\is_file($candidateCertPath) && \is_file($candidateKeyPath)) {
+                    if (\is_file($candidateCertPath)
+                        && \is_file($candidateKeyPath)
+                        && ($certificateRoots === []
+                            || $this->certificatePathsInsideRoots(
+                                [$candidateCertPath, $candidateKeyPath],
+                                $certificateRoots,
+                            ))
+                    ) {
                         return [$candidateCertPath, $candidateKeyPath];
                     }
                 }
@@ -3619,6 +3671,44 @@ CNF;
         }
 
         return ['', ''];
+    }
+
+    /**
+     * @param list<string> $paths
+     * @param array<int|string,string> $roots
+     */
+    private function certificatePathsInsideRoots(array $paths, array $roots): bool
+    {
+        $canonicalRoots = [];
+        foreach ($roots as $root) {
+            $canonical = \realpath((string)$root);
+            if (\is_string($canonical) && $canonical !== '' && \is_dir($canonical)) {
+                $canonicalRoots[] = \str_replace('\\', '/', \rtrim($canonical, '/\\'));
+            }
+        }
+        if ($canonicalRoots === []) {
+            return false;
+        }
+        foreach ($paths as $path) {
+            $real = \realpath($path);
+            if (!\is_string($real) || !\is_file($real)) {
+                return false;
+            }
+            $real = \str_replace('\\', '/', \rtrim($real, '/\\'));
+            $matched = false;
+            foreach ($canonicalRoots as $root) {
+                $candidate = \PHP_OS_FAMILY === 'Windows' ? \strtolower($real) : $real;
+                $allowed = \PHP_OS_FAMILY === 'Windows' ? \strtolower($root) : $root;
+                if ($candidate === $allowed || \str_starts_with($candidate, $allowed . '/')) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                return false;
+            }
+        }
+        return true;
     }
     
     /**
@@ -3692,9 +3782,6 @@ CNF;
         }
 
         $rootDomain = \substr($domain, 2);
-        if ($rootDomain !== '' && !isset($map[$rootDomain])) {
-            $map[$rootDomain] = $certData;
-        }
 
         try {
             $subdomains = w_query('websites', 'getDomainPoolList', [

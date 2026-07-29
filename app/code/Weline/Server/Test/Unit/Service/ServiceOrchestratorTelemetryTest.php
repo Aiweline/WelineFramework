@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Telemetry\IpcTelemetryGateway;
 
@@ -111,6 +112,22 @@ final class ServiceOrchestratorTelemetryTest extends TestCase
         self::assertSame(1, $this->invokePrivate($orchestrator, 'countRoleSlotsProcessAlive', ['worker']));
     }
 
+    private static function runtimeSelection(): RuntimeSelection
+    {
+        return RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'dispatcher',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'single',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]);
+    }
+
     private function primeTelemetryState(ServiceOrchestrator $orchestrator, int $desiredWorkers, ?int $aliveSlots = null): void
     {
         $aliveSlots ??= $desiredWorkers;
@@ -125,12 +142,16 @@ final class ServiceOrchestratorTelemetryTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: ['wls' => ['orchestrator' => ['telemetry_5xx_worker_recovery_cooldown_sec' => 3.0]]],
-            dispatcherEnabled: true,
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'orchestrator' => ['telemetry_5xx_worker_recovery_cooldown_sec' => 3.0],
+                ],
+            ],
             workerCount: $desiredWorkers,
             workerBasePort: 10000,
             workerPort: 19982,

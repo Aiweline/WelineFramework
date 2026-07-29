@@ -10,14 +10,22 @@ final class Doctor extends AbstractGatewayCommand
 {
     public function execute(array $args = [], array $data = []): int
     {
+        $json = $this->isJson($args);
         try {
             $response = $this->gateway()->request('doctor');
-            $this->printer->setup(__('WLS 2.0 网关诊断'));
-            $this->output((array)($response['payload'] ?? []), isset($args['json']));
-            return ($response['ok'] ?? false) ? 0 : 1;
+            $ok = (bool)($response['ok'] ?? false);
+            if (!$json) {
+                $this->printer->setup(__('WLS 2.0 网关诊断'));
+            }
+            $this->output(
+                (array)($response['payload'] ?? []),
+                $json,
+                $ok,
+                (array)($response['error'] ?? ['message' => __('诊断失败。')]),
+            );
+            return $ok ? 0 : 1;
         } catch (\Throwable $throwable) {
-            $this->printer->error($throwable->getMessage());
-            return 1;
+            return $this->failure($throwable->getMessage(), $json, 'doctor_failed');
         }
     }
 

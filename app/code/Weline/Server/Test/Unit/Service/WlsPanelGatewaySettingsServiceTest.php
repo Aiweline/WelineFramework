@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+namespace Weline\Server\Service;
+
+if (!\function_exists(__NAMESPACE__ . '\__')) {
+    function __(string $text, array $args = []): string
+    {
+        return $text;
+    }
+}
+
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
@@ -11,7 +20,7 @@ use Weline\Server\Service\WlsPanelGatewaySettingsService;
 
 final class WlsPanelGatewaySettingsServiceTest extends TestCase
 {
-    public function testApplyRoutesRequiresExplicitTargetWhenMultipleGatewaysAreReady(): void
+    public function testApplyRoutesRejectsDeprecatedPanelPublicationWithoutSelectingGateway(): void
     {
         $gateway = $this->createRecordingGateway();
         $service = $this->createGatewaySettingsService(['gateway-a', 'gateway-b'], $gateway);
@@ -19,24 +28,23 @@ final class WlsPanelGatewaySettingsServiceTest extends TestCase
         $result = $service->applyRoutes([]);
 
         self::assertFalse($result['success']);
-        self::assertStringContainsString('Gateway', (string)($result['message'] ?? ''));
-        self::assertSame(['routes' => 1, 'gateways' => 2], $result['data'] ?? []);
+        self::assertStringContainsString('Nginx', (string)($result['message'] ?? ''));
+        self::assertSame('', $result['selected_instance'] ?? null);
+        self::assertSame(0, $result['route_count'] ?? null);
         self::assertSame([], $gateway->proxyApplyCalls);
     }
 
-    public function testApplyRoutesOnlySendsProxyApplyToExplicitSelectedGateway(): void
+    public function testApplyRoutesRejectsDeprecatedPanelPublicationAndPreservesRequestedTarget(): void
     {
         $gateway = $this->createRecordingGateway();
         $service = $this->createGatewaySettingsService(['gateway-a', 'gateway-b'], $gateway);
 
         $result = $service->applyRoutes(['gateway_instance' => 'gateway-b']);
 
-        self::assertTrue($result['success']);
+        self::assertFalse($result['success']);
         self::assertSame('gateway-b', $result['selected_instance'] ?? null);
-        self::assertSame(1, $result['route_count'] ?? null);
-        self::assertCount(1, $gateway->proxyApplyCalls);
-        self::assertSame('gateway-b', $gateway->proxyApplyCalls[0]['instance']);
-        self::assertSame($this->fixtureRoutes(), $gateway->proxyApplyCalls[0]['routes']);
+        self::assertSame(0, $result['route_count'] ?? null);
+        self::assertSame([], $gateway->proxyApplyCalls);
     }
 
     private function createGatewaySettingsService(array $instanceNames, IpcControlGateway $gateway): WlsPanelGatewaySettingsService
@@ -49,8 +57,9 @@ final class WlsPanelGatewaySettingsServiceTest extends TestCase
             {
             }
 
-            public function getAllPersistedInstanceInfo(): array
+            public function getAllPersistedInstanceInfo(?array &$rejected = null): array
             {
+                $rejected = [];
                 $instances = [];
                 foreach ($this->instanceNames as $index => $name) {
                     $instances[$name] = new ServerInstanceInfo(

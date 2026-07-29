@@ -114,10 +114,11 @@ final class StopCommandProgressHeuristicTest extends TestCase
         ));
     }
 
-    public function testCompletedIpcStopDoesNotRequireSlowMasterExitWait(): void
+    public function testCompletedIpcStopFallsBackToBoundedMasterExitWhenIndexCleanupLags(): void
     {
         $stop = new class extends Stop {
             public bool $waitedForIndexCleanup = false;
+            public bool $waitedForMasterExit = false;
 
             protected function waitForMasterPidIndexCleanupAfterFinalProgress(int $masterPid): bool
             {
@@ -129,7 +130,8 @@ final class StopCommandProgressHeuristicTest extends TestCase
             protected function waitForMasterExit(int $masterPid): bool
             {
                 unset($masterPid);
-                throw new \RuntimeException('slow process-table wait should not be called after final STOP completion');
+                $this->waitedForMasterExit = true;
+                return true;
             }
 
             protected function ipcMsg(string $message, string $type = 'info'): void
@@ -147,6 +149,7 @@ final class StopCommandProgressHeuristicTest extends TestCase
             0
         ));
         self::assertTrue($stop->waitedForIndexCleanup);
+        self::assertTrue($stop->waitedForMasterExit);
     }
 
     public function testBypassesGracefulStopWhenInstanceIsStillBootstrapping(): void
@@ -215,7 +218,7 @@ final class StopCommandProgressHeuristicTest extends TestCase
             '127.0.0.1',
             9981,
             false,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             10000,
             0,
@@ -255,7 +258,7 @@ final class StopCommandProgressHeuristicTest extends TestCase
             '127.0.0.1',
             9981,
             false,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             10000,
             0,

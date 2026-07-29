@@ -19,7 +19,9 @@ use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\ServerInstanceManager;
@@ -106,7 +108,8 @@ class ServiceOrchestratorStartupTest extends TestCase
             instanceId: 1,
             state: ServiceInstance::STATE_STARTING,
         ));
-        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
         $this->writePrivate($orchestrator, 'serverReadyNotificationArmed', true);
 
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
@@ -128,7 +131,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
         self::assertTrue($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
         self::assertSame([[
-            'instanceName' => 'test',
+            'instanceName' => $context->instanceName,
             'totalServices' => 2,
         ]], $orchestrator->startupReadyMarks);
     }
@@ -167,7 +170,8 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertInstanceOf(ServiceInstance::class, $firstWorker);
         $firstWorker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
         $registry->updateInstance($firstWorker);
-        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
         $this->writePrivate($orchestrator, 'serverReadyNotificationArmed', true);
 
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
@@ -185,7 +189,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertTrue($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
         self::assertSame([[
-            'instanceName' => 'test',
+            'instanceName' => $context->instanceName,
             'totalServices' => 3,
         ]], $orchestrator->startupReadyMarks);
     }
@@ -324,7 +328,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             daemon: false,
             debug: false,
             windowMode: true,
-            envConfig: [],
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             httpRedirectPort: 80,
             workerCount: 4,
             workerBasePort: 16894,
@@ -521,11 +525,15 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: true,
             sslCert: 'cert.pem',
             sslKey: 'key.pem',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: false,
             debug: false,
             windowMode: true,
             envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'https://p11005ce4.weline.test',
+                ],
                 'router' => [
                     'area_routes' => [
                         'backend' => ['prefix' => 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8'],
@@ -535,7 +543,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                 ],
             ],
             httpRedirectPort: 80,
-            dispatcherEnabled: true,
             workerCount: 1,
             workerBasePort: 18080,
             workerPort: 18080,
@@ -555,7 +562,9 @@ class ServiceOrchestratorStartupTest extends TestCase
         }
 
         self::assertStringContainsString('J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE/', $output);
-        self::assertStringContainsString('http://p11005ce4.weline.test:80/ → HTTPS', $output);
+        self::assertStringContainsString('https://p11005ce4.weline.test/', $output);
+        self::assertStringNotContainsString('Nginx 是唯一公网边缘', $output);
+        self::assertStringNotContainsString('→ HTTPS', $output);
 
         $boxLines = [];
         foreach (\preg_split("/\r\n|\n|\r/", $this->stripAnsi($output)) as $line) {
@@ -668,6 +677,91 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(23456, $orchestrator->getContext()?->controlPort);
     }
 
+    public function testBootstrapControlPlaneRetriesAutoAssignedPortAtAuthoritativeBind(): void
+    {
+        $server = new class extends MasterControlServer {
+            /** @var list<int> */
+            public array $requestedPorts = [];
+            private int $actualPort = 0;
+
+            public function start(string $host, int $port): bool
+            {
+                unset($host);
+                $this->requestedPorts[] = $port;
+                if (\count($this->requestedPorts) === 1) {
+                    return false;
+                }
+                $this->actualPort = $port;
+
+                return true;
+            }
+
+            public function getPort(): int
+            {
+                return $this->actualPort;
+            }
+        };
+
+        $orchestrator = new class($server) extends ServiceOrchestrator {
+            public function __construct(private MasterControlServer $server)
+            {
+                parent::__construct();
+            }
+
+            protected function createControlServer(): MasterControlServer
+            {
+                return $this->server;
+            }
+        };
+
+        $context = $this->createWorkerInfraContext();
+        $orchestrator->bootstrapControlPlane($context);
+
+        self::assertSame([$context->controlPort, $context->controlPort + 1], $server->requestedPorts);
+        self::assertSame($context->controlPort + 1, $orchestrator->getContext()?->controlPort);
+    }
+
+    public function testBootstrapControlPlaneDoesNotRetryExplicitControlPort(): void
+    {
+        $server = new class extends MasterControlServer {
+            /** @var list<int> */
+            public array $requestedPorts = [];
+
+            public function start(string $host, int $port): bool
+            {
+                unset($host);
+                $this->requestedPorts[] = $port;
+
+                return false;
+            }
+        };
+
+        $orchestrator = new class($server) extends ServiceOrchestrator {
+            public function __construct(private MasterControlServer $server)
+            {
+                parent::__construct();
+            }
+
+            protected function createControlServer(): MasterControlServer
+            {
+                return $this->server;
+            }
+        };
+
+        $context = $this->createWorkerInfraContext(serverConfig: [
+            'control_port' => 19981,
+            'control_port_scan_max' => 64,
+        ]);
+
+        try {
+            $orchestrator->bootstrapControlPlane($context);
+            self::fail('Explicit control port bind failure must abort startup.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('19981-19981', $exception->getMessage());
+            self::assertSame([19981], $server->requestedPorts);
+        }
+    }
+
     public function testBootstrapControlPlaneCanEnableWindowsNativeSocketBridgeExplicitly(): void
     {
         $server = new class extends MasterControlServer {
@@ -707,12 +801,13 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'orchestrator' => [
                         'ipc_windows_native_socket_bridge' => true,
                     ],
@@ -776,12 +871,13 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'supervisor' => [
                         'enabled' => true,
                         'channel' => 'channel-test',
@@ -877,15 +973,82 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]);
 
         self::assertTrue($this->readPrivateBool($orchestrator, 'running'));
-        self::assertNull($this->readPrivate($orchestrator, 'pendingStopReason'));
+        self::assertSame('startup_failure', $this->readPrivate($orchestrator, 'pendingStopReason'));
         self::assertSame('deferred child startup exception: startup boom', $this->readPrivate($orchestrator, 'startupFailureReason'));
 
+        self::assertTrue($this->invokePrivate($orchestrator, 'consumePendingStopRequest'));
         $this->drainOrchestratorMainLoopTasks($orchestrator);
 
         self::assertSame([[
             'reason' => 'startup_failure',
             'progressClientId' => null,
         ]], $orchestrator->stopAllCalls);
+    }
+
+    public function testHandleStartupFailureInsideFiberDefersStopSchedulingToMainLoop(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var array<int, array{reason:string,progressClientId:?int}> */
+            public array $stopAllCalls = [];
+
+            public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
+            {
+                $this->stopAllCalls[] = [
+                    'reason' => $reason,
+                    'progressClientId' => $progressClientId,
+                ];
+            }
+        };
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $shouldAbort = null;
+        $startupFiber = new \Fiber(function () use ($orchestrator, &$shouldAbort): void {
+            $this->invokePrivateWithArgs($orchestrator, 'handleStartupFailure', [
+                new \RuntimeException('startup fiber boom'),
+                'deferred child startup exception',
+            ]);
+            $shouldAbort = $this->invokePrivate($orchestrator, 'shouldAbortStartupTransition');
+        });
+        $startupFiber->start();
+
+        self::assertTrue($startupFiber->isTerminated());
+        self::assertTrue($shouldAbort);
+        self::assertSame('startup_failure', $this->readPrivate($orchestrator, 'pendingStopReason'));
+        self::assertSame([], $this->readPrivate($orchestrator, 'mainLoopTasks'));
+
+        self::assertTrue($this->invokePrivate($orchestrator, 'consumePendingStopRequest'));
+        $this->drainOrchestratorMainLoopTasks($orchestrator);
+
+        self::assertSame([[
+            'reason' => 'startup_failure',
+            'progressClientId' => null,
+        ]], $orchestrator->stopAllCalls);
+    }
+
+    public function testPendingStopFiberIsNotStartedUntilMainLoopTick(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var array<int, string> */
+            public array $stopReasons = [];
+
+            public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
+            {
+                $this->stopReasons[] = $reason;
+            }
+        };
+        $this->writePrivate($orchestrator, 'running', true);
+        self::assertTrue($orchestrator->requestStop('signal-like-stop'));
+        self::assertTrue($this->invokePrivate($orchestrator, 'consumePendingStopRequest'));
+
+        $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
+        $stopFiber = $tasks['control:stop_all']['fiber'] ?? null;
+        self::assertInstanceOf(\Fiber::class, $stopFiber);
+        self::assertFalse($stopFiber->isStarted());
+        self::assertSame([], $orchestrator->stopReasons);
+
+        $this->invokePrivate($orchestrator, 'tickMainLoopTasks');
+
+        self::assertSame(['signal-like-stop'], $orchestrator->stopReasons);
     }
 
     public function testStartupAcceptanceTimeoutThrowsStructuredExceptionAndPersistsDiagnostics(): void
@@ -1191,9 +1354,11 @@ class ServiceOrchestratorStartupTest extends TestCase
         };
 
         try {
+            $context = $this->persistTestContext($this->createWorkerInfraContext());
+            $this->writePrivate($orchestrator, 'context', $context);
             $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
                 [new DispatcherProvider()],
-                $this->createWorkerInfraContext(),
+                $context,
             ]);
             self::fail('Dispatcher startup must fail fast when its launch port is unavailable.');
         } catch (\RuntimeException $e) {
@@ -1301,7 +1466,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(4200, $instance->getMeta('tracking_pid'));
     }
 
-    public function testStartProvidersBatchRegistersPhaseOnePlaceholdersBeforeBatchCreate(): void
+    public function testStartProvidersBatchRegistersDispatcherPlaceholderBeforeBatchCreate(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
             public array $batchRegistrySnapshot = [];
@@ -1309,29 +1474,22 @@ class ServiceOrchestratorStartupTest extends TestCase
             protected function batchCreateProcesses(array $commands): array
             {
                 $dispatcher = $this->getRegistry()->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
-                $redirect = $this->getRegistry()->getInstance(ControlMessage::ROLE_REDIRECT, 1);
-
                 $this->batchRegistrySnapshot = [
                     'command_keys' => \array_keys($commands),
                     'dispatcher_command' => (string)($commands[ControlMessage::ROLE_DISPATCHER . '#1']['command'] ?? ''),
-                    'redirect_command' => (string)($commands[ControlMessage::ROLE_REDIRECT . '#1']['command'] ?? ''),
                     'dispatcher_state' => $dispatcher?->state,
                     'dispatcher_process_pid' => $dispatcher?->pid,
                     'dispatcher_launch_id' => $dispatcher?->launchId,
-                    'redirect_state' => $redirect?->state,
-                    'redirect_process_pid' => $redirect?->pid,
-                    'redirect_launch_id' => $redirect?->launchId,
                 ];
 
                 return [
                     ControlMessage::ROLE_DISPATCHER . '#1' => 5101,
-                    ControlMessage::ROLE_REDIRECT . '#1' => 5102,
                 ];
             }
         };
 
         $context = new ServiceContext(
-            instanceName: 'phase-one-placeholder-batch',
+            instanceName: 'phase-one-placeholder-batch-' . \bin2hex(\random_bytes(4)),
             epoch: 12,
             controlPort: 37985,
             masterPid: 424246,
@@ -1340,26 +1498,30 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: true,
             sslCert: 'cert.pem',
             sslKey: 'key.pem',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: [],
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'https://127.0.0.1:18444',
+                ],
+            ],
             httpRedirectPort: 18081,
-            dispatcherEnabled: true,
             workerCount: 0,
             workerBasePort: 28184,
             workerPort: 28184,
         );
+        $context = $this->persistTestContext($context);
+        $this->writePrivate($orchestrator, 'context', $context);
 
         $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [[
             new DispatcherProvider(),
-            new HttpRedirectProvider(),
         ], $context]);
 
         self::assertSame([
             ControlMessage::ROLE_DISPATCHER . '#1',
-            ControlMessage::ROLE_REDIRECT . '#1',
         ], $orchestrator->batchRegistrySnapshot['command_keys'] ?? null);
         self::assertSame(ServiceInstance::STATE_STARTING, $orchestrator->batchRegistrySnapshot['dispatcher_state'] ?? null);
         self::assertSame(0, $orchestrator->batchRegistrySnapshot['dispatcher_process_pid'] ?? null);
@@ -1368,20 +1530,9 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertStringContainsString('dispatcher#1', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertStringContainsString('--lease-id=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
         self::assertStringContainsString('--slot-generation=', $orchestrator->batchRegistrySnapshot['dispatcher_command'] ?? '');
-        self::assertSame(ServiceInstance::STATE_STARTING, $orchestrator->batchRegistrySnapshot['redirect_state'] ?? null);
-        self::assertSame(0, $orchestrator->batchRegistrySnapshot['redirect_process_pid'] ?? null);
-        self::assertNotEmpty($orchestrator->batchRegistrySnapshot['redirect_launch_id'] ?? null);
-        self::assertStringContainsString('--slot-id=', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
-        self::assertStringContainsString('redirect#1', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
-        self::assertStringContainsString('--lease-id=', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
-        self::assertStringContainsString('--slot-generation=', $orchestrator->batchRegistrySnapshot['redirect_command'] ?? '');
-
         $dispatcher = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
-        $redirect = $orchestrator->getRegistry()->getInstance(ControlMessage::ROLE_REDIRECT, 1);
         self::assertInstanceOf(ServiceInstance::class, $dispatcher);
-        self::assertInstanceOf(ServiceInstance::class, $redirect);
         self::assertSame(ControlMessage::ROLE_DISPATCHER, $dispatcher->role);
-        self::assertSame(ControlMessage::ROLE_REDIRECT, $redirect->role);
     }
 
     public function testWaitForWorkerCriticalInfraReadyFailsWhenSessionServerStaysDegraded(): void
@@ -1489,7 +1640,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator = new ServiceOrchestrator();
 
         $normalBatches = $this->invokePrivateWithArgs($orchestrator, 'getWorkerRestartBatches', [[1, 2, 3, 4], false]);
-        self::assertSame([[1], [2], [3], [4]], $normalBatches);
+        self::assertSame([[1, 2], [3, 4]], $normalBatches);
 
         $forceBatches = $this->invokePrivateWithArgs($orchestrator, 'getWorkerRestartBatches', [[1, 2, 3, 4], true]);
         self::assertSame([[1, 2, 3, 4]], $forceBatches);
@@ -1617,6 +1768,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         };
         $this->writePrivate($orchestrator, 'running', true);
         $context = $this->createWorkerInfraContext()->withEpoch(50);
+        $this->writePrivate($orchestrator, 'context', $context);
         $provider = new WorkerProvider();
 
         $first = $this->invokePrivateWithArgs($orchestrator, 'startInstanceIdsBatch', [$provider, [1], $context]);
@@ -1724,7 +1876,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->writePrivate($orchestrator, 'running', true);
         $provider = new WorkerProvider();
         $context = new ServiceContext(
-            instanceName: 'emergency-port-test',
+            instanceName: 'emergency-port-test-' . \bin2hex(\random_bytes(4)),
             epoch: 1,
             controlPort: 19981,
             masterPid: 1234,
@@ -1733,16 +1885,22 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: [],
-            dispatcherEnabled: true,
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:8080',
+                ],
+            ],
             workerCount: 1,
             workerBasePort: 18080,
             workerPort: 18081,
         );
+        $context = $this->persistTestContext($context);
+        $this->writePrivate($orchestrator, 'context', $context);
 
         $started = $this->invokePrivateWithArgs($orchestrator, 'startInstanceIdsBatch', [$provider, [1], $context]);
 
@@ -1767,6 +1925,8 @@ class ServiceOrchestratorStartupTest extends TestCase
             public array $capturedCommands = [];
             /** @var list<array{role:string,instanceId:int,port:int,reason:string}> */
             public array $cleanupRequests = [];
+            /** @var list<array{role:string,port:int}> */
+            public array $prepareCalls = [];
 
             protected function batchCreateProcesses(array $commands): array
             {
@@ -1777,6 +1937,8 @@ class ServiceOrchestratorStartupTest extends TestCase
 
             protected function prepareLocalPortForStart(string $role, int $port): bool
             {
+                $this->prepareCalls[] = ['role' => $role, 'port' => $port];
+
                 return !($role === ControlMessage::ROLE_WORKER && $port === 18081);
             }
 
@@ -1802,7 +1964,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         };
         $this->writePrivate($orchestrator, 'running', true);
         $context = new ServiceContext(
-            instanceName: 'phase-one-emergency-port-test',
+            instanceName: 'phase-one-emergency-port-test-' . \bin2hex(\random_bytes(4)),
             epoch: 1,
             controlPort: 19981,
             masterPid: 1234,
@@ -1811,16 +1973,22 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: [],
-            dispatcherEnabled: true,
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:8080',
+                ],
+            ],
             workerCount: 1,
             workerBasePort: 18080,
             workerPort: 18081,
         );
+        $context = $this->persistTestContext($context);
+        $this->writePrivate($orchestrator, 'context', $context);
 
         $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
             [new WorkerProvider()],
@@ -1829,6 +1997,10 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertIsArray($result);
         self::assertInstanceOf(ServiceInstance::class, $result[ControlMessage::ROLE_WORKER][0] ?? null);
+        self::assertSame([[
+            'role' => ControlMessage::ROLE_WORKER,
+            'port' => 18081,
+        ]], $orchestrator->prepareCalls);
         self::assertSame(28081, $result[ControlMessage::ROLE_WORKER][0]->port);
         self::assertSame(18081, (int)$result[ControlMessage::ROLE_WORKER][0]->getMeta('configured_port'));
         self::assertArrayHasKey('worker#1', $orchestrator->capturedCommands);
@@ -1880,16 +2052,17 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: [],
-            dispatcherEnabled: true,
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             workerCount: 3,
             workerBasePort: 18080,
             workerPort: 18081,
         );
+        $context = $this->persistTestContext($context);
+        $this->writePrivate($orchestrator, 'context', $context);
         $expectedPort = $provider->getPort(1, $context);
 
         $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
@@ -2025,12 +2198,13 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'previousState' => ServiceInstance::STATE_STARTING,
             ],
         ]);
+        $scheduledBefore = (float)$this->readPrivate($orchestrator, 'resurrectQueue')['worker:1']['scheduledAt'];
 
         $this->invokePrivate($orchestrator, 'processResurrectQueue');
 
         $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
         self::assertArrayHasKey('worker:1', $queue);
-        self::assertGreaterThan(\microtime(true), $queue['worker:1']['scheduledAt']);
+        self::assertGreaterThan($scheduledBefore, $queue['worker:1']['scheduledAt']);
 
         $currentWorker = $registry->getInstance(ControlMessage::ROLE_WORKER, 1);
         self::assertInstanceOf(ServiceInstance::class, $currentWorker);
@@ -2111,7 +2285,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         });
 
         $context = new ServiceContext(
-            instanceName: 'ai-u-maint-pool-no-inst-file',
+            instanceName: 'ai-u-maint-pool-' . \bin2hex(\random_bytes(4)),
             epoch: 7,
             controlPort: 37981,
             masterPid: 424242,
@@ -2120,20 +2294,22 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:18088',
                     'worker' => ['count' => 0],
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 0,
             workerBasePort: 28180,
             workerPort: 28180,
         );
+        $context = $this->persistTestContext($context);
 
         $this->writePrivate($orchestrator, 'context', $context);
         $this->writePrivate($orchestrator, 'controlServer', $mockControl);
@@ -2187,7 +2363,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     }
 
-    public function testStartupPhaseOneBatchesDispatcherRedirectAndMaintenanceTogether(): void
+    public function testStartupPhaseOneBatchesDispatcherAndMaintenanceWithoutRetiredRedirectWorker(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
             /** @var list<list<string>> */
@@ -2231,17 +2407,17 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: true,
             sslCert: 'cert.pem',
             sslKey: 'key.pem',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'worker' => ['count' => 0],
                 ],
             ],
             httpRedirectPort: 18080,
-            dispatcherEnabled: true,
             workerCount: 0,
             workerBasePort: 28183,
             workerPort: 28183,
@@ -2255,7 +2431,6 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertSame([[
             ControlMessage::ROLE_DISPATCHER,
-            ControlMessage::ROLE_REDIRECT,
             ControlMessage::ROLE_MAINTENANCE,
         ]], $orchestrator->phaseOneRoleBatches);
     }
@@ -2324,12 +2499,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: [],
-            dispatcherEnabled: true,
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             workerCount: 2,
             workerBasePort: 28190,
             workerPort: 28190,
@@ -2506,12 +2680,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: [],
-            dispatcherEnabled: true,
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             workerCount: 0,
             workerBasePort: 28181,
             workerPort: 28181,
@@ -2535,7 +2708,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         ));
 
         $maintPort = 29333;
-        $registry->addInstance(new ServiceInstance(
+        $maintenance = new ServiceInstance(
             role: ControlMessage::ROLE_MAINTENANCE,
             instanceId: 1,
             epoch: $context->epoch,
@@ -2543,7 +2716,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: $maintPort,
             state: ServiceInstance::STATE_STARTING,
             ipcClientId: 202,
-        ));
+        );
+        $maintenance->setMeta('slot_id', 'maintenance#1');
+        $maintenance->setMeta('lease_id', 'late-maint');
+        $maintenance->setMeta('generation', 1);
+        $registry->addInstance($maintenance);
 
         $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
             'epoch' => $context->epoch,
@@ -2568,6 +2745,10 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
             'epoch' => $context->epoch,
             'launch_id' => 'late-maint',
+            'msg_id' => 'late-maint',
+            'slot_id' => 'maintenance#1',
+            'lease_id' => 'late-maint',
+            'generation' => 1,
             'port' => $maintPort,
             'role' => ControlMessage::ROLE_MAINTENANCE,
             ...$this->readyCapabilityPayload($context, ControlMessage::ROLE_MAINTENANCE),
@@ -2639,12 +2820,19 @@ class ServiceOrchestratorStartupTest extends TestCase
             ipcClientId: 202,
         );
         $maintenance->setMeta('worker_id', 1);
+        $maintenance->setMeta('slot_id', 'maintenance#1');
+        $maintenance->setMeta('lease_id', 'dup-ready');
+        $maintenance->setMeta('generation', 1);
         $maintenance->setMeta('ready_at', \microtime(true) - 1.0);
         $registry->addInstance($maintenance);
 
         $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
             'epoch' => $context->epoch,
             'launch_id' => 'dup-ready',
+            'msg_id' => 'dup-ready',
+            'slot_id' => 'maintenance#1',
+            'lease_id' => 'dup-ready',
+            'generation' => 1,
             'port' => 29339,
             'role' => ControlMessage::ROLE_MAINTENANCE,
             ...$this->readyCapabilityPayload($context, ControlMessage::ROLE_MAINTENANCE),
@@ -2756,6 +2944,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'port' => 28001,
             'epoch' => $context->epoch,
             'launch_id' => 'new-worker-launch',
+            'msg_id' => 'new-worker-launch',
             ...$this->readyCapabilityPayload($context, ControlMessage::ROLE_WORKER),
         ], 302]);
 
@@ -2841,6 +3030,75 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(9, $decoded['worker_id'] ?? null);
         self::assertSame(28099, $decoded['port'] ?? null);
         self::assertSame('stray-ready', $decoded['msg_id'] ?? null);
+    }
+
+    public function testLeasedSharedPortRegisterIsRejectedOnlyOnceByExactSlot(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+            /** @var list<int> */
+            public array $closed = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+                return true;
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closed[] = $clientId;
+            }
+
+            public function clientExists(int $clientId): bool
+            {
+                return false;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $registry = $orchestrator->getRegistry();
+        foreach ([1, 2] as $slot) {
+            $backend = new ServiceInstance(
+                role: ControlMessage::ROLE_GATEWAY_BACKEND,
+                instanceId: $slot,
+                epoch: $context->epoch,
+                launchId: 'gateway-current-' . $slot,
+                port: 24542,
+                state: ServiceInstance::STATE_READY,
+            );
+            $backend->setMeta('slot_id', 'gateway_backend#' . $slot);
+            $backend->setMeta('lease_id', 'gateway-current-' . $slot);
+            $backend->setMeta('generation', 10 + $slot);
+            $registry->addInstance($backend);
+        }
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleRegister', [[
+            'role' => ControlMessage::ROLE_GATEWAY_BACKEND,
+            'pid' => 9999,
+            'port' => 24542,
+            'worker_id' => 2,
+            'instance_id' => 2,
+            'epoch' => $context->epoch,
+            'launch_id' => 'gateway-stale-2',
+            'slot_id' => 'gateway_backend#2',
+            'lease_id' => 'gateway-stale-2',
+            'generation' => 10,
+            'msg_id' => 'gateway-stale-2',
+        ], 902]);
+
+        self::assertSame([902], $mockControl->closed);
+        self::assertCount(1, $mockControl->sent);
+        $decoded = \json_decode(\rtrim($mockControl->sent[0]['message'], "\n"), true);
+        self::assertIsArray($decoded);
+        self::assertSame('missing_or_stale_lease', $decoded['reason'] ?? null);
+        self::assertNull(
+            $registry->getInstance(ControlMessage::ROLE_GATEWAY_BACKEND, 2)?->ipcClientId,
+        );
     }
 
     public function testStaleWorkerPoolAckCannotConfirmNewLeaseGeneration(): void
@@ -3134,12 +3392,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: [],
-            dispatcherEnabled: true,
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             workerCount: 6,
             workerBasePort: 28182,
             workerPort: 28182,
@@ -3149,7 +3406,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
         self::assertFalse($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
-        self::assertSame(2, ($this->readPrivate($orchestrator, 'desiredState')[ControlMessage::ROLE_MAINTENANCE] ?? null));
+        self::assertSame(1, ($this->readPrivate($orchestrator, 'desiredState')[ControlMessage::ROLE_MAINTENANCE] ?? null));
     }
 
     public function testPerformHealthChecksDoesNotPromoteStartingMaintenanceWithOnlyIpcBindingToReady(): void
@@ -3458,15 +3715,17 @@ class ServiceOrchestratorStartupTest extends TestCase
             masterPid: 1234,
             host: '127.0.0.1',
             mainPort: 8080,
-            sslEnabled: true,
+            sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: true,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:8080',
                     'orchestrator' => [
                         'allow_windows_frontend_child_process' => true,
                         'frontend_worker_windows' => true,
@@ -3474,7 +3733,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                     ],
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 18080,
             workerPort: 18080,
@@ -3512,15 +3770,17 @@ class ServiceOrchestratorStartupTest extends TestCase
             masterPid: 1234,
             host: '127.0.0.1',
             mainPort: 8080,
-            sslEnabled: true,
+            sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: true,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:8080',
                     'orchestrator' => [
                         'allow_windows_frontend_child_process' => true,
                         'frontend_worker_windows' => true,
@@ -3528,7 +3788,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                     ],
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 18080,
             workerPort: 18080,
@@ -3650,15 +3909,17 @@ class ServiceOrchestratorStartupTest extends TestCase
             masterPid: 1234,
             host: '127.0.0.1',
             mainPort: 8080,
-            sslEnabled: true,
+            sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: true,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:8080',
                     'orchestrator' => [
                         'allow_windows_frontend_child_process' => true,
                         'frontend_worker_windows' => true,
@@ -3666,7 +3927,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                     ],
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 18080,
             workerPort: 18080,
@@ -3698,7 +3958,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame([], $argv);
     }
 
-    public function testDispatcherProviderDoesNotBindToConfiguredAccessHostByDefault(): void
+    public function testPureWlsDispatcherProviderBindsConfiguredAccessHost(): void
     {
         $provider = new DispatcherProvider();
         $context = new ServiceContext(
@@ -3711,16 +3971,16 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'host' => 'p11005ce4.weline.test',
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 4,
             workerBasePort: 24313,
             workerPort: 24313,
@@ -3728,11 +3988,10 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $command = $provider->buildCommand(1, $context);
 
-        self::assertSame('127.0.0.1', $command->arguments[0] ?? null);
-        self::assertNotContains('p11005ce4.weline.test', $command->arguments);
+        self::assertSame('p11005ce4.weline.test', $command->arguments[0] ?? null);
     }
 
-    public function testDispatcherProviderHonorsExplicitDispatcherBindHost(): void
+    public function testPureWlsDispatcherProviderIgnoresLegacyPrivateBindHostOverride(): void
     {
         $provider = new DispatcherProvider();
         $context = new ServiceContext(
@@ -3745,19 +4004,19 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'host' => 'p11005ce4.weline.test',
                     'dispatcher' => [
                         'bind_host' => '127.0.0.1',
                     ],
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 4,
             workerBasePort: 24313,
             workerPort: 24313,
@@ -3765,10 +4024,198 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $command = $provider->buildCommand(1, $context);
 
-        self::assertSame('127.0.0.1', $command->arguments[0] ?? null);
+        self::assertSame('p11005ce4.weline.test', $command->arguments[0] ?? null);
     }
 
-    public function testHttpRedirectProviderDoesNotBindToConfiguredAccessHostByDefault(): void
+    public function testGatewayDispatcherUsesSameProtocolEdgeTokenAsWorkers(): void
+    {
+        $instanceName = 'gateway-dispatcher-token';
+        $provider = new DispatcherProvider();
+        $context = new ServiceContext(
+            instanceName: $instanceName,
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'edge' => [
+                        'adapter' => 'nginx',
+                        'mode' => 'gateway',
+                        'scope' => 'host_gateway',
+                    ],
+                    'gateway' => [
+                        'protocol' => 'wls-edge/2',
+                        'project_uuid' => '9f7bbff7-271a-4bdf-bdf1-7c655d419700',
+                        'epoch' => '0123456789abcdef0123456789abcdef',
+                    ],
+                    'http' => [
+                        'protocols' => ['h1'],
+                        'preferred' => 'h1',
+                        'protocol_edge' => 'disabled',
+                        'tls_session_resumption' => false,
+                        'alt_svc' => false,
+                    ],
+                ],
+            ],
+            workerCount: 1,
+            workerBasePort: 24313,
+            workerPort: 24313,
+        );
+
+        try {
+            $command = $provider->buildCommand(1, $context);
+
+            self::assertContains(
+                '--protocol-edge-token-file=' . ProtocolEdgeRuntime::tokenFile($instanceName),
+                $command->arguments,
+            );
+            self::assertMatchesRegularExpression(
+                '/^[a-f0-9]{64}$/D',
+                \trim((string)\file_get_contents(ProtocolEdgeRuntime::tokenFile($instanceName))),
+            );
+        } finally {
+            @\unlink(ProtocolEdgeRuntime::tokenFile($instanceName));
+        }
+    }
+
+    public function testGatewayWorkerCarriesImmutableBackendIdentity(): void
+    {
+        $instanceName = 'gateway-worker-identity';
+        $provider = new WorkerProvider();
+        $projectUuid = '9f7bbff7-271a-4bdf-bdf1-7c655d419700';
+        $instanceLaunchId = \str_repeat('b', 32);
+        $context = new ServiceContext(
+            instanceName: $instanceName,
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'public_origin' => 'https://gateway-worker-identity.weline.test',
+                    'edge' => [
+                        'adapter' => 'nginx',
+                        'mode' => 'gateway',
+                        'scope' => 'host_gateway',
+                    ],
+                    'gateway' => [
+                        'protocol' => 'wls-edge/2',
+                        'project_uuid' => $projectUuid,
+                        'epoch' => '0123456789abcdef0123456789abcdef',
+                        'instance_generation' => 17,
+                        'launch_id' => $instanceLaunchId,
+                    ],
+                    'http' => [
+                        'protocols' => ['h1'],
+                        'preferred' => 'h1',
+                        'protocol_edge' => 'disabled',
+                        'tls_session_resumption' => false,
+                        'alt_svc' => false,
+                    ],
+                ],
+            ],
+            workerCount: 1,
+            workerBasePort: 24313,
+            workerPort: 24313,
+        );
+
+        try {
+            $command = $provider->buildCommand(1, $context);
+
+            self::assertContains(
+                '--protocol-edge-token-file=' . ProtocolEdgeRuntime::tokenFile($instanceName),
+                $command->arguments,
+            );
+            self::assertContains('--gateway-project-uuid=' . $projectUuid, $command->arguments);
+            self::assertContains('--gateway-instance-generation=17', $command->arguments);
+            self::assertContains(
+                '--gateway-instance-launch-id=' . $instanceLaunchId,
+                $command->arguments,
+            );
+        } finally {
+            @\unlink(ProtocolEdgeRuntime::tokenFile($instanceName));
+        }
+    }
+
+    public function testGatewayMaintenanceWorkerCarriesImmutableBackendIdentity(): void
+    {
+        $instanceName = 'gateway-maintenance-identity';
+        $provider = new MaintenanceWorkerProvider();
+        $provider->enable(1);
+        $projectUuid = 'd2e1fba3-91de-46f4-9538-b39259a89596';
+        $instanceLaunchId = \str_repeat('c', 32);
+        $context = new ServiceContext(
+            instanceName: $instanceName,
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 9982,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'public_origin' => 'https://gateway-maintenance-identity.weline.test',
+                    'edge' => [
+                        'adapter' => 'nginx',
+                        'mode' => 'gateway',
+                        'scope' => 'host_gateway',
+                    ],
+                    'gateway' => [
+                        'protocol' => 'wls-edge/2',
+                        'project_uuid' => $projectUuid,
+                        'epoch' => '0123456789abcdef0123456789abcdef',
+                        'instance_generation' => 19,
+                        'launch_id' => $instanceLaunchId,
+                    ],
+                ],
+            ],
+            workerCount: 1,
+            workerBasePort: 24314,
+            workerPort: 24314,
+        );
+
+        try {
+            $command = $provider->buildCommand(1, $context);
+
+            self::assertContains(
+                '--protocol-edge-token-file=' . ProtocolEdgeRuntime::tokenFile($instanceName),
+                $command->arguments,
+            );
+            self::assertContains('--gateway-project-uuid=' . $projectUuid, $command->arguments);
+            self::assertContains('--gateway-instance-generation=19', $command->arguments);
+            self::assertContains(
+                '--gateway-instance-launch-id=' . $instanceLaunchId,
+                $command->arguments,
+            );
+        } finally {
+            @\unlink(ProtocolEdgeRuntime::tokenFile($instanceName));
+        }
+    }
+
+    public function testHttpRedirectProviderIsRetired(): void
     {
         $provider = new HttpRedirectProvider();
         $context = new ServiceContext(
@@ -3781,26 +4228,25 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: true,
             sslCert: '/tmp/cert.pem',
             sslKey: '/tmp/key.pem',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'host' => 'p11005ce4.weline.test',
                 ],
             ],
             httpRedirectPort: 80,
-            dispatcherEnabled: true,
             workerCount: 4,
             workerBasePort: 24313,
             workerPort: 24313,
         );
 
-        $command = $provider->buildCommand(1, $context);
-
-        self::assertSame('127.0.0.1', $command->arguments[0] ?? null);
-        self::assertNotContains('p11005ce4.weline.test', $command->arguments);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('WLS HTTP redirect provider is retired');
+        $provider->buildCommand(1, $context);
     }
 
     public function testBuildWindowsDetachedPhpArgvForPostBootstrapWorkerYieldsToFrontendWindowFlags(): void
@@ -3815,15 +4261,17 @@ class ServiceOrchestratorStartupTest extends TestCase
             masterPid: 1234,
             host: '127.0.0.1',
             mainPort: 8080,
-            sslEnabled: true,
+            sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: true,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:8080',
                     'orchestrator' => [
                         'allow_windows_frontend_child_process' => true,
                         'frontend_worker_windows' => true,
@@ -3831,7 +4279,6 @@ class ServiceOrchestratorStartupTest extends TestCase
                     ],
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 18080,
             workerPort: 18080,
@@ -3898,14 +4345,14 @@ class ServiceOrchestratorStartupTest extends TestCase
             masterPid: 1234,
             host: '127.0.0.1',
             mainPort: 443,
-            sslEnabled: true,
+            sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'frontend',
+            runtimeSelection: self::runtimeSelection(),
             daemon: false,
             debug: false,
             windowMode: true,
-            envConfig: []
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]]
         );
 
         $budget = $this->invokePrivateWithArgs($orchestrator, 'resolveConcurrentStartupDrainMinDurationUsec', [$context]);
@@ -3932,16 +4379,18 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                ],
                 'system' => [
                     'maintenance' => true,
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 28184,
             workerPort: 28184,
@@ -4003,16 +4452,18 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                ],
                 'system' => [
                     'maintenance' => 'false',
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 28188,
             workerPort: 28188,
@@ -4091,16 +4542,18 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                ],
                 'system' => [
                     'maintenance' => true,
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 28186,
             workerPort: 28186,
@@ -4470,6 +4923,16 @@ class ServiceOrchestratorStartupTest extends TestCase
     {
         $orchestrator = new ServiceOrchestrator();
         $this->invokePrivate($orchestrator, 'initializeMainLoopFiberScheduler');
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            launchId: 'guarded-worker-lease',
+            state: ServiceInstance::STATE_FAILED,
+        );
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'guarded-worker-lease');
+        $worker->setMeta('generation', 1);
+        $orchestrator->getRegistry()->addInstance($worker);
 
         $now = \microtime(true);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
@@ -4482,6 +4945,9 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'delayed' => true,
                 'pid' => 0,
                 'port' => 18080,
+                'slot_id' => 'worker#1',
+                'lease_id' => 'guarded-worker-lease',
+                'generation' => 1,
                 'launching' => true,
                 'launchingAt' => $now - 40.0,
             ],
@@ -4511,7 +4977,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertArrayNotHasKey('launchingAt', $queue['worker:1']);
         self::assertSame(1.0, $queue['worker:1']['restartDelay']);
         self::assertGreaterThan($now, $queue['worker:1']['scheduledAt']);
-        self::assertFalse((bool) $queue['worker:1']['delayed']);
+        self::assertTrue((bool) $queue['worker:1']['delayed']);
 
         $scheduler = $this->readPrivate($orchestrator, 'mainLoopFiberScheduler');
         self::assertNotNull($scheduler);
@@ -4609,10 +5075,103 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame([], $this->readPrivate($orchestrator, 'resurrectQueue'));
     }
 
+    public function testWorkerEmergencyFenceBlocksCompetingRecoveryWriters(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_WORKER)) {
+            $registry->registerProvider(new WorkerProvider());
+        }
+
+        $context = $this->createWorkerInfraContext();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-emergency-frozen-generation',
+            pid: 0,
+            port: 18081,
+            state: ServiceInstance::STATE_FAILED,
+            startedAt: \microtime(true) - 30.0,
+        );
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'worker-emergency-frozen-generation');
+        $worker->setMeta('generation', 1);
+        $registry->addInstance($worker);
+
+        $queued = [
+            'role' => ControlMessage::ROLE_WORKER,
+            'instanceId' => 1,
+            'maxRestarts' => 10,
+            'restartDelay' => 0.0,
+            'scheduledAt' => \microtime(true) - 1.0,
+            'delayed' => false,
+            'pid' => 0,
+            'port' => 18081,
+            'slot_id' => 'worker#1',
+            'lease_id' => 'worker-emergency-frozen-generation',
+            'generation' => 1,
+        ];
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 1,
+        ]);
+        $this->writePrivate($orchestrator, 'resurrectQueue', ['worker:1' => $queued]);
+        $this->writePrivate($orchestrator, 'workerEmergencyRestartInProgress', true);
+
+        $this->invokePrivate($orchestrator, 'processResurrectQueue');
+        $this->invokePrivateWithArgs($orchestrator, 'reconcileRoleSlotGaps', [
+            ControlMessage::ROLE_WORKER,
+        ]);
+
+        self::assertSame(['worker:1' => $queued], $this->readPrivate($orchestrator, 'resurrectQueue'));
+        self::assertSame($worker, $registry->getInstance(ControlMessage::ROLE_WORKER, 1));
+
+        $this->writePrivate($orchestrator, 'resurrectQueue', []);
+        $this->invokePrivateWithArgs($orchestrator, 'scheduleResurrectionWithDelay', [
+            $worker,
+            0.0,
+        ]);
+
+        self::assertSame([], $this->readPrivate($orchestrator, 'resurrectQueue'));
+        self::assertSame($worker, $registry->getInstance(ControlMessage::ROLE_WORKER, 1));
+    }
+
+    public function testWorkerEmergencyFenceBlocksDesiredStateDuplicateLaunch(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_WORKER)) {
+            $registry->registerProvider(new WorkerProvider());
+        }
+
+        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 1,
+        ]);
+        $this->writePrivate($orchestrator, 'workerEmergencyRestartInProgress', true);
+
+        $this->invokePrivate($orchestrator, 'reconcileDesiredState');
+
+        self::assertNull($registry->getInstance(ControlMessage::ROLE_WORKER, 1));
+    }
+
     public function testLaunchingResurrectQueueEntryIsGuardedButDoesNotScheduleDuplicatePeriodicTask(): void
     {
         $orchestrator = new ServiceOrchestrator();
         $this->invokePrivate($orchestrator, 'initializeMainLoopFiberScheduler');
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            launchId: 'guarded-worker-lease',
+            state: ServiceInstance::STATE_FAILED,
+        );
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'guarded-worker-lease');
+        $worker->setMeta('generation', 1);
+        $orchestrator->getRegistry()->addInstance($worker);
 
         $now = \microtime(true);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
@@ -4625,6 +5184,9 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'delayed' => true,
                 'pid' => 0,
                 'port' => 18080,
+                'slot_id' => 'worker#1',
+                'lease_id' => 'guarded-worker-lease',
+                'generation' => 1,
                 'launching' => true,
                 'launchingAt' => $now - 40.0,
             ],
@@ -4660,7 +5222,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             self::assertArrayNotHasKey('launching', $queue['worker:1']);
             self::assertArrayNotHasKey('launchingAt', $queue['worker:1']);
             self::assertGreaterThan($now, $queue['worker:1']['scheduledAt']);
-            self::assertFalse((bool) $queue['worker:1']['delayed']);
+            self::assertTrue((bool) $queue['worker:1']['delayed']);
         } finally {
             $this->invokePrivate($orchestrator, 'resetMainLoopFiberScheduler');
         }
@@ -4669,8 +5231,14 @@ class ServiceOrchestratorStartupTest extends TestCase
     public function testRecoverFromDispatcherAlertQueuesWorkerResurrectionWhenDispatcherReportsAllWorkersUnavailable(): void
     {
         $orchestrator = new ServiceOrchestrator();
-        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
-        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $orchestrator->getRegistry()->registerProvider(new class extends WorkerProvider {
+            public function isEnabled(ServiceContext $context): bool
+            {
+                return false;
+            }
+        });
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
         $this->writePrivate($orchestrator, 'running', true);
         $this->writePrivate($orchestrator, 'desiredState', [
             ControlMessage::ROLE_WORKER => 1,
@@ -4683,12 +5251,17 @@ class ServiceOrchestratorStartupTest extends TestCase
         $worker = new ServiceInstance(
             role: ControlMessage::ROLE_WORKER,
             instanceId: 1,
-            state: ServiceInstance::STATE_READY,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-alert-worker-1',
+            state: ServiceInstance::STATE_FAILED,
             pid: 4567,
             port: 18080,
             startedAt: \microtime(true) - 60.0,
             ipcClientId: 321,
         );
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'dispatcher-alert-worker-1');
+        $worker->setMeta('generation', 1);
         $orchestrator->getRegistry()->addInstance($worker);
 
         $decision = $this->invokePrivateWithArgs($orchestrator, 'recoverFromDispatcherAlert', [
@@ -4718,7 +5291,12 @@ class ServiceOrchestratorStartupTest extends TestCase
     public function testRecoverFromDispatcherAlertQueuesSpecificFailedWorkerPortEvenWhenIpcIsAlive(): void
     {
         $orchestrator = new ServiceOrchestrator();
-        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
+        $orchestrator->getRegistry()->registerProvider(new class extends WorkerProvider {
+            public function isEnabled(ServiceContext $context): bool
+            {
+                return false;
+            }
+        });
         $context = $this->createWorkerInfraContext();
         $this->writePrivate($orchestrator, 'context', $context);
         $this->writePrivate($orchestrator, 'running', true);
@@ -4737,12 +5315,15 @@ class ServiceOrchestratorStartupTest extends TestCase
             instanceId: 1,
             epoch: $context->epoch,
             launchId: 'worker-health-failed',
-            state: ServiceInstance::STATE_READY,
+            state: ServiceInstance::STATE_FAILED,
             pid: 0,
             port: 18080,
             startedAt: \microtime(true) - 60.0,
             ipcClientId: 321,
         );
+        $failedWorker->setMeta('slot_id', 'worker#1');
+        $failedWorker->setMeta('lease_id', 'worker-health-failed');
+        $failedWorker->setMeta('generation', 1);
         $orchestrator->getRegistry()->addInstance($failedWorker);
         $orchestrator->getRegistry()->addInstance(new ServiceInstance(
             role: ControlMessage::ROLE_WORKER,
@@ -4816,6 +5397,22 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('dispatcher_alert_cooldown', $second['reason']);
     }
 
+    private static function runtimeSelection(): RuntimeSelection
+    {
+        return RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'dispatcher',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'single',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]);
+    }
+
     private function createFrontendContext(array $orchestratorConfig = []): ServiceContext
     {
         return new ServiceContext(
@@ -4828,26 +5425,27 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: true,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'orchestrator' => $orchestratorConfig,
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 18080,
             workerPort: 18080,
         );
     }
 
-    private function createWorkerInfraContext(): ServiceContext
+    private function createWorkerInfraContext(?string $instanceName = null, array $serverConfig = []): ServiceContext
     {
-        return new ServiceContext(
-            instanceName: 'test',
+        $instanceName ??= 'ut-orchestrator-' . \bin2hex(\random_bytes(6));
+        $context = new ServiceContext(
+            instanceName: $instanceName,
             epoch: 1,
             controlPort: 19981,
             masterPid: 1234,
@@ -4856,13 +5454,16 @@ class ServiceOrchestratorStartupTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'legacy',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
+                ...($serverConfig !== [] ? ['server' => $serverConfig] : []),
                 'session' => ['server_port' => 19970],
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:8080',
                     'session' => [
                         'port' => 19970,
                         'token_file_name' => 'session_server.token',
@@ -4881,39 +5482,62 @@ class ServiceOrchestratorStartupTest extends TestCase
                     ],
                 ],
             ],
-            dispatcherEnabled: true,
             workerCount: 2,
             workerBasePort: 18080,
             workerPort: 18080,
         );
+
+        return $this->persistTestContext($context);
     }
 
     private function createWorkerInfraContextForInstance(string $instanceName): ServiceContext
     {
-        $base = $this->createWorkerInfraContext();
+        return $this->createWorkerInfraContext($instanceName);
+    }
 
-        return new ServiceContext(
-            instanceName: $instanceName,
-            epoch: $base->epoch,
-            controlPort: $base->controlPort,
-            masterPid: $base->masterPid,
-            host: $base->host,
-            mainPort: $base->mainPort,
-            sslEnabled: $base->sslEnabled,
-            sslCert: $base->sslCert,
-            sslKey: $base->sslKey,
-            mode: $base->mode,
-            daemon: $base->daemon,
-            debug: $base->debug,
-            windowMode: $base->windowMode,
-            envConfig: $base->envConfig,
-            httpRedirectPort: $base->httpRedirectPort,
-            dispatcherEnabled: $base->dispatcherEnabled,
-            workerCount: $base->workerCount,
-            workerBasePort: $base->workerBasePort,
-            workerPort: $base->workerPort,
-            publicHost: $base->publicHost,
+    private function persistTestContext(ServiceContext $context): ServiceContext
+    {
+        $protocolSelection = HttpProtocolSelection::fromConfig(
+            [
+                'edge' => ['adapter' => 'wls'],
+                'http' => \is_array($context->envConfig['wls']['http'] ?? null)
+                    ? $context->envConfig['wls']['http']
+                    : [],
+            ],
+            $context->sslEnabled,
         );
+        $publicOrigin = PureWlsPublicOrigin::fromHostAndPort(
+            $context->publicHost ?? $context->host,
+            $context->mainPort,
+            $context->sslEnabled,
+        );
+        $manager = new ServerInstanceManager();
+        $manager->saveInstance($context->instanceName, [
+            'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+            'instance_name' => $context->instanceName,
+            'runtime_selection' => $context->runtimeSelection->toArray(),
+            'edge_adapter' => 'wls',
+            'public_origin' => $publicOrigin,
+            'http_protocol_selection' => $protocolSelection->toArray(),
+            'protocol_edge_enabled' => false,
+            'host' => $context->host,
+            'public_host' => $context->publicHost,
+            'port' => $context->mainPort,
+            'main_port' => $context->mainPort,
+            'control_port' => $context->controlPort,
+            'master_pid' => $context->masterPid,
+            'count' => $context->getWorkerCount(),
+            'worker_port' => $context->getWorkerPort(),
+            'worker_base_port' => $context->getWorkerBasePort(),
+            'ssl_enabled' => $context->sslEnabled,
+            'ssl_cert' => $context->sslCert,
+            'ssl_key' => $context->sslKey,
+            'http_redirect_port' => $context->httpRedirectPort,
+            'startup_phase' => 'starting',
+        ]);
+        $this->registerFileCleanup($manager->getInstanceFile($context->instanceName));
+
+        return $context;
     }
 
     /** @return array<string, mixed> */
