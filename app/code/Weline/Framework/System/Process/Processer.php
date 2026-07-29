@@ -4230,6 +4230,7 @@ class Processer
                 'process_name' => (string)($processInfo['name'] ?? ''),
                 'block' => (bool)($config['block'] ?? false),
                 'enable_log' => (bool)$enableLog,
+                'output_log_file' => \trim((string)($config['outputLogFile'] ?? '')),
                 'child_owns_pid' => (bool)($config['childOwnsPid'] ?? false),
                 'master_owned' => (bool)($config['masterOwned'] ?? false),
                 'preserve_fds' => \array_keys(self::normalizeUnixInheritedDescriptors(
@@ -4258,13 +4259,26 @@ class Processer
             }
             $enableLog = (bool) $item['enable_log'];
             $processCommand = (string) $item['command'];
-            $logFile = $enableLog ? self::getLogFile($processCommand) : '';
+            $explicitLogFile = $enableLog ? (string)($item['output_log_file'] ?? '') : '';
+            $logFile = $enableLog
+                ? ($explicitLogFile !== '' ? $explicitLogFile : self::getLogFile($processCommand))
+                : '';
             if ($enableLog && !self::prepareProcessLogFileForWrite($logFile)) {
+                if ($explicitLogFile !== '') {
+                    throw new \RuntimeException('Explicit process output log is unavailable.');
+                }
                 self::logLifecycleEvent('log_unwritable', $processCommand, 0, 'path=' . $logFile);
                 $enableLog = false;
                 $logFile = '';
             }
-            if ($enableLog) {
+            if ($enableLog && $explicitLogFile !== '') {
+                @\file_put_contents(
+                    $logFile,
+                    PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . ' ---' . PHP_EOL
+                    . '[INFO] unix managed PHP process launch' . PHP_EOL,
+                    \FILE_APPEND | \LOCK_EX,
+                );
+            } elseif ($enableLog) {
                 self::setOutput(
                     $processCommand,
                     PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . ' ---' . PHP_EOL
@@ -4962,6 +4976,52 @@ PHP;
     }
 
     /**
+     * Resolve and validate explicit child stdout/stderr destinations.
+     *
+     * @param array<string, mixed> $config
+     * @return array{stdout: string, stderr: string}|null
+     */
+    private static function resolveExplicitProcessOutputLogs(
+        array $config,
+        bool $enableLog,
+        bool $requireDistinct,
+    ): ?array {
+        if (!$enableLog) {
+            return null;
+        }
+
+        $outputLog = \trim((string)($config['outputLogFile'] ?? ''));
+        $stdoutLog = \trim((string)($config['stdoutLogFile'] ?? $outputLog));
+        $stderrLog = \trim((string)($config['stderrLogFile'] ?? $outputLog));
+        if ($outputLog === '' && $stdoutLog === '' && $stderrLog === '') {
+            return null;
+        }
+        if ($stdoutLog === '' || $stderrLog === '') {
+            throw new \RuntimeException('Explicit process stdout and stderr logs must both be configured.');
+        }
+
+        foreach (\array_values(\array_unique([$stdoutLog, $stderrLog])) as $logFile) {
+            if (!self::prepareProcessLogFileForWrite($logFile)) {
+                throw new \RuntimeException('Explicit process output log is unavailable.');
+            }
+        }
+
+        if ($requireDistinct) {
+            $stdoutIdentity = (string)(@\realpath($stdoutLog) ?: $stdoutLog);
+            $stderrIdentity = (string)(@\realpath($stderrLog) ?: $stderrLog);
+            $stdoutIdentity = \strtolower(\str_replace('\\', '/', $stdoutIdentity));
+            $stderrIdentity = \strtolower(\str_replace('\\', '/', $stderrIdentity));
+            if ($stdoutIdentity === $stderrIdentity) {
+                throw new \RuntimeException(
+                    'Windows isolated process output logs must use distinct stdout and stderr files.'
+                );
+            }
+        }
+
+        return ['stdout' => $stdoutLog, 'stderr' => $stderrLog];
+    }
+
+    /**
      * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null, childOwnsPid?: bool, isolateParentHandles?: bool, windowsArgv?: list<string>, cwd?: string}> $commands
      * @return array<string, int>|null
      */
@@ -5011,7 +5071,25 @@ PHP;
                 }
             }
 
-            if ($enableLog) {
+            $explicitLogs = self::resolveExplicitProcessOutputLogs(
+                $config,
+                (bool)$enableLog,
+                (bool)($config['isolateParentHandles'] ?? false),
+            );
+            $explicitLogFile = $explicitLogs['stdout'] ?? '';
+            if ($enableLog && $explicitLogFile !== '') {
+                if (!self::prepareProcessLogFileForWrite($explicitLogFile)) {
+                    throw new \RuntimeException('Explicit process output log is unavailable.');
+                }
+                $stdoutLog = $explicitLogs['stdout'];
+                $stderrLog = $explicitLogs['stderr'];
+                @\file_put_contents(
+                    $explicitLogFile,
+                    PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . ' ---' . PHP_EOL
+                    . '[INFO] windows managed PHP process launch' . PHP_EOL,
+                    \FILE_APPEND | \LOCK_EX,
+                );
+            } elseif ($enableLog) {
                 $logFile = self::getLogFile($processCommand);
                 $stdoutLog = $logFile . '.stdout.log';
                 $stderrLog = $logFile . '.stderr.log';

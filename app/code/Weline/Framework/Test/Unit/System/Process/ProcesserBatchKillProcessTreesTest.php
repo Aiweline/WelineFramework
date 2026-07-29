@@ -143,6 +143,110 @@ final class ProcesserBatchKillProcessTreesTest extends TestCase
         }
     }
 
+    public function testBatchCreateWritesChildStdoutAndStderrToExplicitOutputLog(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The real child output contract is exercised on POSIX; Windows uses the same file fields.');
+        }
+
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-processer-output-' . bin2hex(random_bytes(4));
+        self::assertTrue(mkdir($dir, 0777, true));
+        $script = $dir . DIRECTORY_SEPARATOR . 'child.php';
+        $log = $dir . DIRECTORY_SEPARATOR . 'advertised.log';
+        $stdoutMarker = 'explicit-stdout-' . bin2hex(random_bytes(4));
+        $stderrMarker = 'explicit-stderr-' . bin2hex(random_bytes(4));
+        $processName = 'weline-processer-output-' . bin2hex(random_bytes(4));
+        file_put_contents(
+            $script,
+            "<?php\nfwrite(STDOUT, " . var_export($stdoutMarker . PHP_EOL, true) . ");\n"
+            . "fwrite(STDERR, " . var_export($stderrMarker . PHP_EOL, true) . ");\n"
+            . "usleep(150000);\n",
+        );
+        $argv = [PHP_BINARY, $script, '--name=' . $processName];
+        $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script)
+            . ' --name=' . escapeshellarg($processName);
+
+        try {
+            $pids = Processer::batchCreate([
+                'child' => [
+                    'command' => $command,
+                    'argv' => $argv,
+                    'cwd' => $dir,
+                    'block' => false,
+                    'foreground' => false,
+                    'enableLog' => true,
+                    'outputLogFile' => $log,
+                    'childOwnsPid' => true,
+                    'masterOwned' => true,
+                ],
+            ]);
+            self::assertGreaterThan(0, (int)($pids['child'] ?? 0));
+
+            $contents = '';
+            $deadline = microtime(true) + 3.0;
+            do {
+                clearstatcache(true, $log);
+                $contents = is_file($log) ? (string)file_get_contents($log) : '';
+                if (str_contains($contents, $stdoutMarker) && str_contains($contents, $stderrMarker)) {
+                    break;
+                }
+                usleep(20_000);
+            } while (microtime(true) < $deadline);
+
+            self::assertStringContainsString($stdoutMarker, $contents);
+            self::assertStringContainsString($stderrMarker, $contents);
+        } finally {
+            @unlink($script);
+            @unlink($log);
+            @rmdir($dir);
+        }
+    }
+
+    public function testBatchCreateRejectsUnavailableExplicitOutputLog(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The invalid path preflight is exercised on POSIX.');
+        }
+
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-processer-output-invalid-' . bin2hex(random_bytes(4));
+        self::assertTrue(mkdir($dir, 0777, true));
+        $script = $dir . DIRECTORY_SEPARATOR . 'child.php';
+        $blocker = $dir . DIRECTORY_SEPARATOR . 'not-a-directory';
+        file_put_contents($script, "<?php\nusleep(100000);\n");
+        file_put_contents($blocker, 'block');
+        $processName = 'weline-processer-output-invalid-' . bin2hex(random_bytes(4));
+        $argv = [PHP_BINARY, $script, '--name=' . $processName];
+        $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script)
+            . ' --name=' . escapeshellarg($processName);
+        $exception = null;
+
+        try {
+            Processer::batchCreate([
+                'child' => [
+                    'command' => $command,
+                    'argv' => $argv,
+                    'cwd' => $dir,
+                    'block' => false,
+                    'foreground' => false,
+                    'enableLog' => true,
+                    'outputLogFile' => $blocker . DIRECTORY_SEPARATOR . 'child.log',
+                    'childOwnsPid' => true,
+                    'masterOwned' => true,
+                ],
+            ]);
+        } catch (\RuntimeException $caught) {
+            $exception = $caught;
+        } finally {
+            @unlink($script);
+            @unlink($blocker);
+            @rmdir($dir);
+        }
+
+        self::assertInstanceOf(\RuntimeException::class, $exception);
+        self::assertSame('Explicit process output log is unavailable.', $exception->getMessage());
+    }
+
+
     private function replaceProcessDriver(ProcessDriverInterface $driver): void
     {
         $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
