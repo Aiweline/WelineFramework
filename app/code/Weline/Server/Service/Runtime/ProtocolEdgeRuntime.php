@@ -86,6 +86,7 @@ final class ProtocolEdgeRuntime
         $path = self::tokenFile($instanceName);
         $existing = \is_file($path) ? \strtolower(\trim((string)@\file_get_contents($path))) : '';
         if (\preg_match('/^[a-f0-9]{64}$/D', $existing) === 1) {
+            self::preserveProjectRuntimeOwnership($path, false);
             @\chmod($path, 0600);
             return $path;
         }
@@ -761,23 +762,123 @@ final class ProtocolEdgeRuntime
 
     private static function ensurePrivateDirectory(string $directory): void
     {
+        self::assertSafeRuntimeTarget($directory, true);
         if (!\is_dir($directory) && !@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
             throw new \RuntimeException('Unable to create WLS protocol-edge runtime directory.');
         }
+        self::preserveProjectRuntimeOwnership($directory, true);
         @\chmod($directory, 0700);
+        if (!\is_writable($directory)) {
+            throw new \RuntimeException(
+                'WLS protocol-edge runtime directory is not writable by the project runtime.'
+            );
+        }
     }
 
     private static function writeAtomically(string $path, string $contents, int $mode): void
     {
+        self::assertSafeRuntimeTarget($path, false);
         $temporary = $path . '.tmp.' . \bin2hex(\random_bytes(6));
         if (@\file_put_contents($temporary, $contents, \LOCK_EX) === false) {
             throw new \RuntimeException('Unable to write WLS protocol-edge runtime file.');
         }
+        self::preserveProjectRuntimeOwnership($temporary, false);
         @\chmod($temporary, $mode);
         if (!@\rename($temporary, $path)) {
             @\unlink($temporary);
             throw new \RuntimeException('Unable to publish WLS protocol-edge runtime file.');
         }
+        self::preserveProjectRuntimeOwnership($path, false);
         @\chmod($path, $mode);
+    }
+
+    private static function assertSafeRuntimeTarget(string $path, bool $directory): void
+    {
+        $path = \rtrim($path, '/\\');
+        $projectRoot = \realpath((string)BP);
+        if (!\is_string($projectRoot) || $projectRoot === '' || \is_link((string)BP)) {
+            throw new \RuntimeException('WLS protocol-edge project root is unsafe.');
+        }
+        $projectRoot = \rtrim($projectRoot, '/\\');
+        $candidate = \str_replace('\\', '/', $path);
+        $project = \str_replace('\\', '/', $projectRoot);
+        $compareCandidate = \PHP_OS_FAMILY === 'Windows' ? \strtolower($candidate) : $candidate;
+        $compareProject = \PHP_OS_FAMILY === 'Windows' ? \strtolower($project) : $project;
+        $runtimeRoot = \str_replace('\\', '/', \rtrim(
+            Env::VAR_DIR . 'server' . DS . 'protocol-edge',
+            '/\\',
+        ));
+        $compareRuntimeRoot = \PHP_OS_FAMILY === 'Windows'
+            ? \strtolower($runtimeRoot)
+            : $runtimeRoot;
+        if (!\str_starts_with($compareCandidate, $compareProject . '/')
+            || !\str_starts_with($compareCandidate, $compareRuntimeRoot . '/')
+        ) {
+            throw new \RuntimeException('WLS protocol-edge runtime target escapes its project runtime root.');
+        }
+        $relative = \substr($candidate, \strlen($project) + 1);
+        $segments = \explode('/', $relative);
+        $cursor = $projectRoot;
+        foreach ($segments as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..' || \str_contains($segment, "\0")) {
+                throw new \RuntimeException('WLS protocol-edge runtime target contains traversal.');
+            }
+            $cursor .= DIRECTORY_SEPARATOR . $segment;
+            if (\is_link($cursor)) {
+                throw new \RuntimeException(
+                    'WLS protocol-edge runtime target must not contain a symbolic link.'
+                );
+            }
+        }
+        if (\file_exists($path)
+            && ($directory ? !\is_dir($path) : !\is_file($path))
+        ) {
+            throw new \RuntimeException(
+                'WLS protocol-edge runtime target has an unexpected filesystem type.'
+            );
+        }
+    }
+
+    private static function preserveProjectRuntimeOwnership(string $path, bool $directory): void
+    {
+        self::assertSafeRuntimeTarget($path, $directory);
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_geteuid')
+            || \posix_geteuid() !== 0
+        ) {
+            return;
+        }
+        $projectOwner = @\lstat((string)BP);
+        $target = @\lstat($path);
+        if (!\is_array($projectOwner)
+            || !\is_int($projectOwner['uid'] ?? null)
+            || !\is_int($projectOwner['gid'] ?? null)
+            || !\is_array($target)
+            || \is_link($path)
+            || ($directory ? !\is_dir($path) : !\is_file($path))
+        ) {
+            throw new \RuntimeException(
+                'Unable to establish safe WLS protocol-edge runtime ownership.'
+            );
+        }
+        $uid = (int)$projectOwner['uid'];
+        $gid = (int)$projectOwner['gid'];
+        $ownerApplied = \function_exists('lchown')
+            ? @\lchown($path, $uid)
+            : @\chown($path, $uid);
+        $groupApplied = \function_exists('lchgrp')
+            ? @\lchgrp($path, $gid)
+            : @\chgrp($path, $gid);
+        $actual = @\lstat($path);
+        if (!$ownerApplied
+            || !$groupApplied
+            || !\is_array($actual)
+            || (int)($actual['uid'] ?? -1) !== $uid
+            || (int)($actual['gid'] ?? -1) !== $gid
+        ) {
+            throw new \RuntimeException(
+                'Unable to preserve the project owner on WLS protocol-edge runtime facts.'
+            );
+        }
     }
 }

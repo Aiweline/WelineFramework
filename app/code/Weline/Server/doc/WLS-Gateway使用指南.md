@@ -2,10 +2,10 @@
 
 > 状态：实施中。edge 决策、稳定项目身份、纯 WLS 降级、Native Platform Broker、
 > 双通道鉴权、enrollment、证书快照、事务发布、A/B/LKG/熔断和 Controller/Nginx
-> 恢复链均已有实现与专项验证；Linux systemd、真实 80/443、宿主 reboot 和完整
-> fallback/rejoin 与 auto native→gateway 300 秒排空时序已在隔离 VM 通过。
-> macOS/Windows 系统服务与 ACL、首次 ACME、
-> legacy promote 和剩余发布门禁尚未全部完成。
+> 恢复链均已有实现与专项验证；Linux systemd、真实 80/443、宿主 reboot、legacy
+> 显式提升、fallback/rejoin 与修复后网关 H2 百万请求已在隔离 VM 通过。
+> macOS 原生 Broker/Launcher/数据面已在随机端口实测；macOS/Windows 系统服务 ACL
+> 与 reboot、Windows 实机、首次 ACME 和剩余发布门禁尚未全部完成。
 
 ## 1. 角色边界
 
@@ -117,32 +117,38 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - 四轮 heartbeat 后路由保持 ACTIVE，同项目双实例停一仍返回正确 200；
 - 实际 H1/H2/H3、未知域名 404、SNI/Host 不一致 421、重复 Host 与 CL/TE 400；
 - Controller 故障期间持续流量无错误且 Nginx 不 reload；
-- Nginx 连续三次核心探针失败后只恢复任务自有进程。
+- Nginx 连续三次核心探针失败后只恢复任务自有进程；
 - Linux 冷重启且引导项目源码暂时移走时，宿主包独立启动并以原证书完成 TLS、后端
-  返回 503；项目恢复后路由重新 ACTIVE。
+  返回 503；项目恢复后路由重新 ACTIVE；
 - 网关数据面持续故障时，同一 Master 在 90 秒后开放稳定高端口；网关 ACTIVE 连续
-  30 秒后排空，按持久化时间戳 301 秒释放端口和租约。
+  30 秒后排空，按持久化时间戳 301 秒释放端口和租约；
 - auto 从原生高端口发现网关后，8/8 独立 Gateway Backend 先 READY；项目端点原子
-  投影网关 epoch 与 80/443，原入口保持 300 秒排空，到期后关闭且不复活。状态命令
-  在排空期显示原生入口，完成后只显示共享网关，不再把已关闭高端口伪报为 fallback。
-- H3 运行时激活失败时只关闭 UDP/443，H2 与 H1.1 的真实请求继续返回 200。
-- 真实 TLS 1.3 检出旧设计可跨路由复用会话后，v1 已改为全局禁用恢复；最新源码
-  数据面集成验收为 1 test / 1395 assertions。
-- 纯 WLS H2/H1.1 与网关 H2/H1.1 已完成精确百万请求且错误为 0；多项目混合百万、
-  可比性能中位数和 H3 百万仍是 TASK-014 的剩余门禁。
-- 修复后的 `server:benchmark --instance` 会按 target surface 选择普通 Worker 或
-  Gateway Backend 的 PID/IPC lease/generation 指纹。Linux 隔离 VM 在原生入口
-  `DRAINED` 后完成网关 H2 精确 1,000,000/1,000,000、0 错误、质量门禁 PASS：
-  6182.44 QPS，P95 101.23ms，P99 198.54ms，8 个 Gateway Backend 全部命中；
-  161.748 秒压测跨过两个以上内存压力扩容周期，普通 Worker 仍保持 0。
-- 网关在项目启动前已健康时不需要 join backend，正常使用普通 Worker/Dispatcher
-  作为私网回源；同一 VM 的 10,000 次 H2 门禁为 10,000/10,000、0 错误、8 个
-  普通 Worker 全命中、质量门禁 PASS。
+  投影网关 epoch 与 80/443，原入口保持 300 秒排空，到期后关闭且不复活；
+- H3 运行时激活失败时只关闭 UDP/443，H2 与 H1.1 的真实请求继续返回 200；
+- WLS 2.0 v1 全局关闭 TLS session cache、ticket 与 0-RTT，跨租户和证书轮换后均不
+  复用旧 TLS 1.3 会话；
+- macOS 显式启用原生集成后，Native Broker、Launcher、签名槽、崩溃回滚和真实数据面
+  恢复通过 `12 tests / 1995 assertions`；该证据不等于 launchd 安装/reboot；
+- Windows 路径专项通过 `87 tests / 1810 assertions / 3 non-Windows skips`；实际
+  Windows VM 因 Parallels 授权过期挂起，仍为 `BLOCKED_ENVIRONMENT`；
+- legacy 80/443 显式提升已在 Linux VM 成功：promotion v50 的维护窗 69.897 秒，
+  连续公网稳定观察 12.216 秒，提升后项目和宿主网关生命周期相互独立；
+- 提升后修复了 Worker 私有端口落入 Linux 临时端口范围造成的延迟
+  `EADDRINUSE`。当前私有 Worker 端口在候选触及 32768 时稳定归一化到
+  `10000–16999`，并统一避让主端口、控制端口、maintenance/surge 端口；真实 v53
+  的 8 个 Worker 稳定监听 16217–16224；
+- 修复后网关 H2 百万报告
+  `benchmark_report_20260729_091823_496626_wls-health_pid131366.json` 为
+  1,000,000/1,000,000 成功、0 失败、HTTP/2 命中 100%、8 个 Worker 全命中、
+  质量门禁 PASS；2892.78 QPS，P95 187.865ms，P99 301.984ms，压测后公网仍为
+  HTTP/2 200、网关 `HEALTHY`、恢复计数 0；
+- 使用正式框架 bootstrap 的全量 Weline_Server 回归为
+  `1288 tests / 6441 assertions / 17 platform skips`，零错误、零失败。
 
-这组证据仍不覆盖 macOS/Windows 系统服务与 ACL/reboot、首次 ACME、真实 legacy
-80/443 promote、Session 运行时亲和和完整百万请求
-发布门禁。Linux v38 生产候选已经完成来源、依赖、SBOM、自检与签名门禁，但不会绕过
-A/B 旧槽至少保留 24 小时的策略去替换在线 v36。
+当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、Windows 实机、首次 ACME、完整
+Session 运行时亲和、两项目混合百万、H3 百万和同条件三轮性能中位数。Linux v38
+生产候选已经完成来源、依赖、SBOM、自检与签名门禁，但不会绕过 A/B 旧槽至少保留
+24 小时的策略替换在线槽位。
 
 完整需求、缺陷映射和验收矩阵见
 `dev/ai/plans/2026-07-27-WLS-2.0-多项目共享网关与自动恢复.md`。

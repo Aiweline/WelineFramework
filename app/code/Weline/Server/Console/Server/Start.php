@@ -125,6 +125,15 @@ class Start extends CommandAbstract
      * 启动中实例的 worker 端口预留 TTL（秒）
      */
     private const WORKER_PORT_RESERVATION_TTL = 120;
+
+    /**
+     * Listener ports must stay below the lowest default ephemeral TCP range
+     * shared by Linux, macOS and Windows. Otherwise a short-lived loopback
+     * connection can claim the future Worker port between preflight and bind.
+     */
+    private const PRIVATE_WORKER_PORT_MIN = 10000;
+    private const PRIVATE_WORKER_PORT_SPAN = 7000;
+    private const CONSERVATIVE_EPHEMERAL_PORT_START = 32768;
     
     /**
      * 可用的进程控制函数
@@ -7300,7 +7309,13 @@ class Start extends CommandAbstract
             $reservedPortLookup[(int) $reservedPort] = true;
         }
 
-        $base = \max($startPort, 1);
+        $base = $this->normalizePrivateWorkerPortBase(
+            \max($startPort, 1),
+            0,
+            $count,
+            $protocolEdgeEnabled,
+            $protocolEdgeDispatcherEnabled,
+        );
         for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
             $hasConflict = false;
             foreach ($this->buildWorkerAllocationCandidatePorts(
@@ -7318,7 +7333,9 @@ class Start extends CommandAbstract
                 return $base;
             }
         }
-        return $startPort;
+        throw new \RuntimeException(
+            'Unable to allocate a private Worker port range outside the system ephemeral port space.'
+        );
     }
 
     /**
@@ -7372,14 +7389,96 @@ class Start extends CommandAbstract
     ): int
     {
         if ($dispatcherEnabled || $usesWorkerPorts) {
-            return $workerBasePort + $mainPort;
+            return $this->normalizePrivateWorkerPortBase(
+                $workerBasePort + $mainPort,
+                $mainPort,
+                $workerCount,
+            );
         }
 
         if ($workerCount <= 1 || $useDirectMode) {
             return $mainPort;
         }
 
-        return $workerBasePort + $mainPort;
+        return $this->normalizePrivateWorkerPortBase(
+            $workerBasePort + $mainPort,
+            $mainPort,
+            $workerCount,
+        );
+    }
+
+    protected function normalizePrivateWorkerPortBase(
+        int $candidate,
+        int $mainPort,
+        int $workerCount,
+        bool $protocolEdgeEnabled = false,
+        bool $protocolEdgeDispatcherEnabled = false,
+    ): int {
+        if (!$this->workerPortPlanTouchesEphemeralRange(
+            $candidate,
+            $workerCount,
+            $protocolEdgeEnabled,
+            $protocolEdgeDispatcherEnabled,
+        )) {
+            return $candidate;
+        }
+
+        // The raw candidate already contains the project offset, so it is a
+        // stable cross-project seed without bootstrapping framework Env here.
+        $hash = (int)\sprintf(
+            '%u',
+            \crc32($candidate . ':' . $mainPort . ':' . $workerCount),
+        );
+        $base = self::PRIVATE_WORKER_PORT_MIN + ($hash % self::PRIVATE_WORKER_PORT_SPAN);
+
+        for ($attempt = 0; $attempt < self::PRIVATE_WORKER_PORT_SPAN; $attempt++, $base++) {
+            if ($base >= self::PRIVATE_WORKER_PORT_MIN + self::PRIVATE_WORKER_PORT_SPAN) {
+                $base = self::PRIVATE_WORKER_PORT_MIN;
+            }
+            $ports = $this->buildWorkerAllocationCandidatePorts(
+                $base,
+                $workerCount,
+                $protocolEdgeEnabled,
+                $protocolEdgeDispatcherEnabled,
+            );
+            if (!$this->workerPortPlanTouchesEphemeralRange(
+                $base,
+                $workerCount,
+                $protocolEdgeEnabled,
+                $protocolEdgeDispatcherEnabled,
+            ) && ($mainPort <= 0 || !\in_array($mainPort, $ports, true))) {
+                return $base;
+            }
+        }
+
+        throw new \RuntimeException(
+            'Unable to derive a deterministic private Worker port range outside the system ephemeral port space.'
+        );
+    }
+
+    protected function workerPortPlanTouchesEphemeralRange(
+        int $base,
+        int $workerCount,
+        bool $protocolEdgeEnabled = false,
+        bool $protocolEdgeDispatcherEnabled = false,
+    ): bool {
+        $ports = $this->buildWorkerAllocationCandidatePorts(
+            $base,
+            $workerCount,
+            $protocolEdgeEnabled,
+            $protocolEdgeDispatcherEnabled,
+        );
+        if ($base < 1024 || $ports === []) {
+            return true;
+        }
+
+        foreach ($ports as $port) {
+            if ($port >= self::CONSERVATIVE_EPHEMERAL_PORT_START) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function findAvailableMainPort(int $startPort, int $maxScan = 200): int
@@ -7403,12 +7502,13 @@ class Start extends CommandAbstract
             return [];
         }
 
+        $reserved = $mainPort > 0 ? [$mainPort] : [];
         $controlPort = $this->resolvePreferredControlPort($mainPort);
-        if ($controlPort <= 0) {
-            return [];
+        if ($controlPort > 0) {
+            $reserved[] = $controlPort;
         }
 
-        return [$controlPort];
+        return \array_values(\array_unique($reserved));
     }
 
     protected function resolvePreferredControlPort(int $mainPort): int

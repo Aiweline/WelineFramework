@@ -21,6 +21,31 @@ final class GatewayAgentDrainCountersTest extends TestCase
         ]));
     }
 
+    public function testPublicationKeepaliveUsesHeartbeatIntervalAndStopsOnShutdown(): void
+    {
+        self::assertTrue(Agent::publicationHeartbeatDue(110.0, 100.0, false));
+        self::assertFalse(Agent::publicationHeartbeatDue(109.999, 100.0, false));
+        self::assertTrue(Agent::publicationHeartbeatDue(10.0, 0.0, false));
+        self::assertFalse(Agent::publicationHeartbeatDue(110.0, 100.0, true));
+    }
+
+    public function testEmptyAcmeChallengeDigestStartsConverged(): void
+    {
+        self::assertSame(
+            Agent::acmeChallengeDigest([]),
+            Agent::initialAcmeChallengeDigest(),
+        );
+        self::assertNotSame(
+            Agent::initialAcmeChallengeDigest(),
+            Agent::acmeChallengeDigest([[
+                'domain' => 'example.test',
+                'token' => 'token',
+                'key_authorization' => 'token.thumbprint',
+                'expires_at' => 1234,
+            ]]),
+        );
+    }
+
     public function testFallbackLeaseOnlyProvesSuccessAfterReadyPromotion(): void
     {
         self::assertFalse(Agent::fallbackLeaseProvesLive([]));
@@ -258,7 +283,17 @@ final class GatewayAgentDrainCountersTest extends TestCase
             'joinRequired' => true,
             'activeSince' => 100.0,
             'controlAvailable' => true,
+            'promotionCommitted' => true,
         ];
+        self::assertFalse(Agent::shouldRequestNativeDrain(
+            ...[
+                'now' => 200.0,
+                'nativeEdgeState' => 'ACTIVE',
+                'lastCommandAt' => 0.0,
+                ...$base,
+                'promotionCommitted' => false,
+            ],
+        ));
         self::assertFalse(Agent::shouldRequestNativeDrain(
             ...[
                 'now' => 129.999,
