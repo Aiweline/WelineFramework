@@ -70,6 +70,7 @@ final class WlsEdgeGatewayController
     private int $journalSequence = 0;
     private string $journalHead = '';
     private bool $journalTrusted = true;
+    private bool $securityLedgerBootstrapRequired = false;
     /** @var resource|null */
     private $controlServer = null;
     /** @var resource|null */
@@ -86,23 +87,39 @@ final class WlsEdgeGatewayController
         private readonly ?int $brokerAdoptedNginxPid = null,
     ) {
         $this->ensureDirectories();
+        $diskPressureRecovery = $this->diskPressureMarkerActive();
         $this->hostBootId = $this->detectHostBootId();
-        $this->state = $this->loadState();
+        $this->state = $this->loadState(!$diskPressureRecovery);
         $bootstrapSecurityLedger = ($this->state['_security_ledger_bootstrap'] ?? false) === true;
+        $this->securityLedgerBootstrapRequired = $bootstrapSecurityLedger;
         $persistRecoveredState = ($this->state['_state_rebuild_required'] ?? false) === true;
         unset(
             $this->state['_security_ledger_bootstrap'],
             $this->state['_state_rebuild_required'],
         );
-        if ($bootstrapSecurityLedger) {
+        if (!$diskPressureRecovery && $bootstrapSecurityLedger) {
             $this->persistSecurityLedger();
+            $this->securityLedgerBootstrapRequired = false;
         }
-        if ($bootstrapSecurityLedger || $persistRecoveredState) {
+        if (!$diskPressureRecovery
+            && ($bootstrapSecurityLedger || $persistRecoveredState)
+        ) {
             $this->persistState();
         }
-        $this->initializeJournalChain();
-        $this->reconcileActiveRuntimeSlot();
-        $this->reconcileInterruptedPublication();
+        $this->initializeJournalChain(!$diskPressureRecovery);
+        if ($diskPressureRecovery) {
+            $this->markDiskPressure(
+                $this->journalTrusted
+                    ? 'DISK_PRESSURE'
+                    : 'DISK_PRESSURE_JOURNAL_UNTRUSTED',
+                $this->journalTrusted
+                    ? 'startup_recovery_suspended'
+                    : 'startup_recovery_suspended_with_untrusted_journal',
+            );
+        } else {
+            $this->reconcileActiveRuntimeSlot();
+            $this->reconcileInterruptedPublication();
+        }
         $persistedNonces = $this->state['security']['nonces'] ?? [];
         $this->nonces = $this->normalizePersistedNonces($persistedNonces);
         $this->pruneNonces();
@@ -3292,8 +3309,21 @@ final class WlsEdgeGatewayController
                     'Gateway journal remains untrusted after storage recovery validation.'
                 );
             }
-            @\unlink($this->stateDir() . DIRECTORY_SEPARATOR . 'disk-pressure.marker');
+            $marker = $this->diskPressureMarkerFile();
             $this->ensureRecoveryReserve();
+            if ($this->securityLedgerBootstrapRequired && !$securityReset) {
+                $this->persistSecurityLedger();
+                $this->securityLedgerBootstrapRequired = false;
+            }
+            if ((\file_exists($marker) || \is_link($marker))
+                && !@\unlink($marker)
+            ) {
+                throw new \DomainException(
+                    'Gateway disk-pressure marker could not be cleared safely.'
+                );
+            }
+            $this->reconcileActiveRuntimeSlot();
+            $this->reconcileInterruptedPublication();
             $this->state['health_state'] = 'RECOVERING';
             $this->state['recovery']['stage'] = 'STORAGE_RECOVERED';
             $this->state['recovery']['last_failure'] = '';
@@ -3304,6 +3334,7 @@ final class WlsEdgeGatewayController
             $this->state['security_ledger_valid'] = true;
             $this->state['isolation_mode'] = true;
             $this->persistSecurityLedger();
+            $this->securityLedgerBootstrapRequired = false;
             $this->journal('security_ledger_reset', [
                 'reason' => 'administrator-confirmed-reset',
             ]);
@@ -3467,6 +3498,20 @@ final class WlsEdgeGatewayController
     private function maintenance(): void
     {
         $now = \microtime(true);
+        $storage = $this->storageStatus();
+        if (!(bool)($storage['mutation_ready'] ?? false)) {
+            $this->markDiskPressure(
+                'DISK_PRESSURE',
+                'durable_maintenance_suspended',
+            );
+            if ($now - $this->lastHealthAt >= self::HEALTH_INTERVAL) {
+                $this->lastHealthAt = $now;
+                $this->observeDataPlaneDuringDiskPressure();
+                $this->pruneNonces();
+                $this->collectSnapshots();
+            }
+            return;
+        }
         $this->processPendingPublication();
         if ($now - $this->lastHealthAt >= self::HEALTH_INTERVAL) {
             $this->lastHealthAt = $now;
@@ -3501,6 +3546,24 @@ final class WlsEdgeGatewayController
                 $this->state['health_state'] = 'CONTROL_DEGRADED';
                 $this->persistState();
             }
+        }
+    }
+
+    private function observeDataPlaneDuringDiskPressure(): void
+    {
+        $status = $this->nginxStatus();
+        $coreHealthy = ($status['running'] ?? false)
+            && $this->publicPortsReachable();
+        $this->state['ready'] = $coreHealthy
+            && $this->journalTrusted
+            && !($this->state['isolation_mode'] ?? false);
+        $this->state['health_state'] = 'DISK_PRESSURE';
+        $this->state['recovery']['stage'] = $coreHealthy
+            ? 'DISK_PRESSURE'
+            : 'DISK_PRESSURE_DATA_PLANE_DOWN';
+        if (!$coreHealthy) {
+            $this->state['recovery']['last_failure']
+                = (string)($status['message'] ?? 'data_plane_probe_failed_during_disk_pressure');
         }
     }
 
@@ -3736,12 +3799,18 @@ final class WlsEdgeGatewayController
                 return;
             }
             $storageReady = ($this->storageStatus()['mutation_ready'] ?? false) === true;
-            $this->state['ready'] = $storageReady && $this->journalTrusted;
-            $this->state['health_state'] = !$storageReady
-                ? 'DISK_PRESSURE'
-                : (!$this->journalTrusted
-                    ? 'JOURNAL_UNTRUSTED'
-                    : ($routesHealthy ? 'HEALTHY' : 'ROUTE_DEGRADED'));
+            if (!$storageReady) {
+                $this->markDiskPressure(
+                    'DISK_PRESSURE',
+                    'data_plane_state_persistence_suspended',
+                );
+                $this->observeDataPlaneDuringDiskPressure();
+                return;
+            }
+            $this->state['ready'] = $this->journalTrusted;
+            $this->state['health_state'] = !$this->journalTrusted
+                ? 'JOURNAL_UNTRUSTED'
+                : ($routesHealthy ? 'HEALTHY' : 'ROUTE_DEGRADED');
             $this->state['recovery']['consecutive_failures'] = 0;
             $this->state['recovery']['backoff_attempt'] = 0;
             $this->clearRecoveryCircuit();
@@ -8272,10 +8341,10 @@ final class WlsEdgeGatewayController
     /**
      * @return array<string,mixed>
      */
-    private function loadState(): array
+    private function loadState(bool $allowRepair = true): array
     {
         $defaults = $this->defaultState();
-        $securityLedger = $this->loadSecurityLedger();
+        $securityLedger = $this->loadSecurityLedger($allowRepair);
         $raw = @\file_get_contents($this->stateFile());
         if (!\is_string($raw) || $raw === '') {
             return $this->applySecurityLedger($defaults, $securityLedger);
@@ -8289,8 +8358,10 @@ final class WlsEdgeGatewayController
             || !\preg_match('/^[a-f0-9]{64}$/D', $hash)
             || !\hash_equals($hash, \hash('sha256', $this->canonicalJson($payload)))
         ) {
-            $quarantine = $this->stateFile() . '.corrupt-' . \gmdate('YmdHis');
-            @\rename($this->stateFile(), $quarantine);
+            if ($allowRepair) {
+                $quarantine = $this->stateFile() . '.corrupt-' . \gmdate('YmdHis');
+                @\rename($this->stateFile(), $quarantine);
+            }
             $lkg = $this->loadRouteLkg();
             $defaults['routes'] = $lkg;
             foreach ($defaults['routes'] as $routeId => $route) {
@@ -8374,7 +8445,7 @@ final class WlsEdgeGatewayController
     /**
      * @return array{status:string,payload?:array<string,mixed>}
      */
-    private function loadSecurityLedger(): array
+    private function loadSecurityLedger(bool $allowRepair = true): array
     {
         $file = $this->securityLedgerFile();
         $untrustedMarker = $file . '.untrusted';
@@ -8385,7 +8456,9 @@ final class WlsEdgeGatewayController
             return ['status' => 'missing'];
         }
         if (!\is_file($file) || \is_link($file)) {
-            $this->atomicWrite($untrustedMarker, \gmdate(DATE_ATOM) . "\n", 0600);
+            if ($allowRepair) {
+                $this->atomicWrite($untrustedMarker, \gmdate(DATE_ATOM) . "\n", 0600);
+            }
             return ['status' => 'invalid'];
         }
         $raw = @\file_get_contents($file);
@@ -8401,8 +8474,10 @@ final class WlsEdgeGatewayController
             || !\preg_match('/\A[a-f0-9]{64}\z/D', $hash)
             || !\hash_equals($hash, \hash('sha256', $this->canonicalJson($payload)))
         ) {
-            @\rename($file, $file . '.corrupt-' . \gmdate('YmdHis'));
-            $this->atomicWrite($untrustedMarker, \gmdate(DATE_ATOM) . "\n", 0600);
+            if ($allowRepair) {
+                @\rename($file, $file . '.corrupt-' . \gmdate('YmdHis'));
+                $this->atomicWrite($untrustedMarker, \gmdate(DATE_ATOM) . "\n", 0600);
+            }
             return ['status' => 'invalid'];
         }
         return ['status' => 'valid', 'payload' => $payload];
@@ -8567,7 +8642,7 @@ final class WlsEdgeGatewayController
         return true;
     }
 
-    private function initializeJournalChain(): void
+    private function initializeJournalChain(bool $allowRepair = true): void
     {
         $this->journalTrusted = true;
         $this->journalHead = \str_repeat('0', 64);
@@ -8576,19 +8651,19 @@ final class WlsEdgeGatewayController
             return;
         }
         if (!\is_file($file) || \is_link($file)) {
-            $this->quarantineJournal('unsafe_journal_path');
+            $this->rejectOrQuarantineJournal('unsafe_journal_path', $allowRepair);
             return;
         }
         $raw = @\file_get_contents($file);
         if (!\is_string($raw)) {
-            $this->quarantineJournal('journal_read_failed');
+            $this->rejectOrQuarantineJournal('journal_read_failed', $allowRepair);
             return;
         }
         if ($raw === '') {
             return;
         }
         if (\strlen($raw) > 64 * 1024 * 1024) {
-            $this->quarantineJournal('journal_quota_exceeded');
+            $this->rejectOrQuarantineJournal('journal_quota_exceeded', $allowRepair);
             return;
         }
         $hasFinalNewline = \str_ends_with($raw, "\n");
@@ -8602,17 +8677,21 @@ final class WlsEdgeGatewayController
         $tailTruncated = false;
         foreach ($lines as $index => $line) {
             if ($line === '') {
-                $this->quarantineJournal('empty_middle_record');
+                $this->rejectOrQuarantineJournal('empty_middle_record', $allowRepair);
                 return;
             }
             $entry = \json_decode($line, true);
             if (!\is_array($entry)) {
                 if (!$hasFinalNewline && $index === \array_key_last($lines)) {
+                    if (!$allowRepair) {
+                        $this->markJournalUntrustedInMemory('truncated_tail');
+                        return;
+                    }
                     $this->truncateJournalTail($raw);
                     $tailTruncated = true;
                     break;
                 }
-                $this->quarantineJournal('invalid_middle_record');
+                $this->rejectOrQuarantineJournal('invalid_middle_record', $allowRepair);
                 return;
             }
             if ((int)($entry['schema_version'] ?? 0) !== 2) {
@@ -8624,7 +8703,10 @@ final class WlsEdgeGatewayController
                         \hash('sha256', $this->canonicalJson($entry)),
                     )
                 ) {
-                    $this->quarantineJournal('legacy_record_digest_mismatch');
+                    $this->rejectOrQuarantineJournal(
+                        'legacy_record_digest_mismatch',
+                        $allowRepair,
+                    );
                     return;
                 }
                 $legacy = true;
@@ -8634,7 +8716,10 @@ final class WlsEdgeGatewayController
                 || (int)($entry['sequence'] ?? 0) !== $sequence + 1
                 || !\hash_equals($head, (string)($entry['previous_sha256'] ?? ''))
             ) {
-                $this->quarantineJournal('sequence_or_previous_hash_mismatch');
+                $this->rejectOrQuarantineJournal(
+                    'sequence_or_previous_hash_mismatch',
+                    $allowRepair,
+                );
                 return;
             }
             $digest = (string)($entry['sha256'] ?? '');
@@ -8643,17 +8728,25 @@ final class WlsEdgeGatewayController
                 || !\hash_equals($digest, \hash('sha256', $this->canonicalJson($entry)))
             ) {
                 if (!$hasFinalNewline && $index === \array_key_last($lines)) {
+                    if (!$allowRepair) {
+                        $this->markJournalUntrustedInMemory('truncated_tail_digest');
+                        return;
+                    }
                     $this->truncateJournalTail($raw);
                     $tailTruncated = true;
                     break;
                 }
-                $this->quarantineJournal('record_digest_mismatch');
+                $this->rejectOrQuarantineJournal('record_digest_mismatch', $allowRepair);
                 return;
             }
             $sequence++;
             $head = $digest;
         }
         if ($legacy) {
+            if (!$allowRepair) {
+                $this->markJournalUntrustedInMemory('legacy_journal_requires_migration');
+                return;
+            }
             @\rename($file, $file . '.legacy-' . \gmdate('YmdHis'));
             $this->journalSequence = 0;
             $this->journalHead = \str_repeat('0', 64);
@@ -8661,7 +8754,7 @@ final class WlsEdgeGatewayController
         }
         $this->journalSequence = $sequence;
         $this->journalHead = $head;
-        if (!$hasFinalNewline && !$tailTruncated && $lines !== []) {
+        if ($allowRepair && !$hasFinalNewline && !$tailTruncated && $lines !== []) {
             $stream = @\fopen($file, 'ab');
             if (\is_resource($stream)) {
                 @\fwrite($stream, "\n");
@@ -8672,6 +8765,25 @@ final class WlsEdgeGatewayController
                 @\fclose($stream);
             }
         }
+    }
+
+    private function rejectOrQuarantineJournal(string $reason, bool $allowRepair): void
+    {
+        if ($allowRepair) {
+            $this->quarantineJournal($reason);
+            return;
+        }
+        $this->markJournalUntrustedInMemory($reason);
+    }
+
+    private function markJournalUntrustedInMemory(string $reason): void
+    {
+        $this->journalTrusted = false;
+        $this->journalSequence = 0;
+        $this->journalHead = \str_repeat('0', 64);
+        $this->state['ready'] = false;
+        $this->state['recovery']['stage'] = 'DISK_PRESSURE_JOURNAL_UNTRUSTED';
+        $this->state['recovery']['last_failure'] = $reason;
     }
 
     private function truncateJournalTail(string $raw): void
@@ -8776,13 +8888,25 @@ final class WlsEdgeGatewayController
                 ? (int)$override
                 : @\disk_free_space($this->stateDir());
         $freeBytes = \is_int($free) || \is_float($free) ? (int)$free : -1;
+        $pressureMarker = $this->diskPressureMarkerActive();
+        $expectedReserveBytes = (string)\getenv('WLS_GATEWAY_TEST_MODE') === '1'
+            ? self::TEST_RECOVERY_RESERVE_BYTES
+            : self::RECOVERY_RESERVE_BYTES;
+        $reserveBytes = \is_file($this->recoveryReserveFile())
+            && !\is_link($this->recoveryReserveFile())
+                ? (int)@\filesize($this->recoveryReserveFile())
+                : 0;
+        $reserveReady = $reserveBytes === $expectedReserveBytes;
         return [
             'free_bytes' => $freeBytes,
             'minimum_mutation_free_bytes' => self::MIN_MUTATION_FREE_BYTES,
-            'reserve_bytes' => \is_file($this->recoveryReserveFile())
-                ? (int)@\filesize($this->recoveryReserveFile())
-                : 0,
-            'mutation_ready' => $freeBytes >= self::MIN_MUTATION_FREE_BYTES,
+            'reserve_bytes' => $reserveBytes,
+            'reserve_expected_bytes' => $expectedReserveBytes,
+            'recovery_reserve_ready' => $reserveReady,
+            'pressure_marker' => $pressureMarker,
+            'mutation_ready' => $freeBytes >= self::MIN_MUTATION_FREE_BYTES
+                && !$pressureMarker
+                && $reserveReady,
             'snapshot_bytes' => $this->snapshotStorageBytes(),
             'snapshot_quota_bytes' => self::MAX_SNAPSHOT_BYTES,
             'journal_bytes' => \is_file($this->journalFile())
@@ -8798,12 +8922,29 @@ final class WlsEdgeGatewayController
         $this->state['health_state'] = 'DISK_PRESSURE';
         $this->state['recovery']['stage'] = $stage;
         $this->state['recovery']['last_failure'] = $reason;
-        @\unlink($this->recoveryReserveFile());
-        @\file_put_contents(
-            $this->stateDir() . DIRECTORY_SEPARATOR . 'disk-pressure.marker',
-            \gmdate(DATE_ATOM) . "\t" . $stage . "\t" . $reason . "\n",
-            LOCK_EX,
-        );
+        $reserve = $this->recoveryReserveFile();
+        if (\file_exists($reserve) || \is_link($reserve)) {
+            @\unlink($reserve);
+        }
+        $marker = $this->diskPressureMarkerFile();
+        if (\file_exists($marker) || \is_link($marker)) {
+            return;
+        }
+        $handle = @\fopen($marker, 'xb');
+        if (!\is_resource($handle)) {
+            return;
+        }
+        try {
+            $record = \gmdate(DATE_ATOM) . "\t" . $stage . "\t" . $reason . "\n";
+            @\chmod($marker, 0600);
+            @\fwrite($handle, $record);
+            @\fflush($handle);
+            if (\function_exists('fsync')) {
+                @\fsync($handle);
+            }
+        } finally {
+            @\fclose($handle);
+        }
     }
 
     private function ensureRecoveryReserve(): void
@@ -8812,6 +8953,16 @@ final class WlsEdgeGatewayController
         $bytes = (string)\getenv('WLS_GATEWAY_TEST_MODE') === '1'
             ? self::TEST_RECOVERY_RESERVE_BYTES
             : self::RECOVERY_RESERVE_BYTES;
+        $injectedFailure = (string)\getenv('WLS_GATEWAY_TEST_MODE') === '1'
+            ? (string)\getenv('WLS_GATEWAY_TEST_RECOVERY_RESERVE_FAILURE')
+            : '';
+        if ($injectedFailure === '1'
+            || $injectedFailure === 'before_allocation'
+        ) {
+            throw new \RuntimeException(
+                'Injected gateway recovery reserve allocation failure.'
+            );
+        }
         if (\is_file($file) && !\is_link($file) && (int)@\filesize($file) === $bytes) {
             return;
         }
@@ -8822,17 +8973,22 @@ final class WlsEdgeGatewayController
         if (!\is_resource($handle)) {
             throw new \RuntimeException('Unable to establish the gateway recovery disk reserve.');
         }
-        $chunk = \str_repeat("\0", 65_536);
         $remaining = $bytes;
+        $ready = false;
         try {
             while ($remaining > 0) {
-                $write = \min($remaining, \strlen($chunk));
-                if (@\fwrite($handle, \substr($chunk, 0, $write)) !== $write) {
+                $write = \min($remaining, 65_536);
+                if (@\fwrite($handle, \random_bytes($write)) !== $write) {
                     throw new \RuntimeException(
                         'Unable to allocate the gateway recovery disk reserve.'
                     );
                 }
                 $remaining -= $write;
+            }
+            if ($injectedFailure === 'after_write') {
+                throw new \RuntimeException(
+                    'Injected gateway recovery reserve persistence failure.'
+                );
             }
             if (!@\fflush($handle)
                 || (\function_exists('fsync') && !@\fsync($handle))
@@ -8841,8 +8997,12 @@ final class WlsEdgeGatewayController
                     'Unable to persist the gateway recovery disk reserve.'
                 );
             }
+            $ready = true;
         } finally {
             @\fclose($handle);
+            if (!$ready) {
+                @\unlink($file);
+            }
         }
         @\chmod($file, 0600);
     }
@@ -9393,24 +9553,36 @@ final class WlsEdgeGatewayController
             throw new \RuntimeException('Atomic gateway write path is unsafe.');
         }
         $temporary = $path . '.tmp-' . \bin2hex(\random_bytes(6));
+        if ($this->injectedAtomicWriteFailure('temporary_open_failed')) {
+            $this->markDiskPressure('ATOMIC_WRITE_FAILED', 'temporary_open_failed');
+            throw new \RuntimeException('Unable to stage an atomic gateway file.');
+        }
         $handle = @\fopen($temporary, 'xb');
         if (!\is_resource($handle)) {
             $this->markDiskPressure('ATOMIC_WRITE_FAILED', 'temporary_open_failed');
             throw new \RuntimeException('Unable to stage an atomic gateway file.');
         }
+        $staged = false;
         try {
-            if (@\fwrite($handle, $contents) !== \strlen($contents)
+            if ($this->injectedAtomicWriteFailure('temporary_write_or_fsync_failed')
+                || @\fwrite($handle, $contents) !== \strlen($contents)
                 || !@\fflush($handle)
                 || (\function_exists('fsync') && !@\fsync($handle))
             ) {
                 $this->markDiskPressure('ATOMIC_WRITE_FAILED', 'temporary_write_or_fsync_failed');
                 throw new \RuntimeException('Unable to persist a temporary gateway file.');
             }
+            $staged = true;
         } finally {
             @\fclose($handle);
+            if (!$staged) {
+                @\unlink($temporary);
+            }
         }
         @\chmod($temporary, $mode);
-        if (!@\rename($temporary, $path)) {
+        if ($this->injectedAtomicWriteFailure('atomic_rename_failed')
+            || !@\rename($temporary, $path)
+        ) {
             @\unlink($temporary);
             $this->markDiskPressure('ATOMIC_WRITE_FAILED', 'atomic_rename_failed');
             throw new \RuntimeException('Unable to publish gateway file atomically.');
@@ -9423,6 +9595,15 @@ final class WlsEdgeGatewayController
                 @\fclose($directoryHandle);
             }
         }
+    }
+
+    private function injectedAtomicWriteFailure(string $stage): bool
+    {
+        return (string)\getenv('WLS_GATEWAY_TEST_MODE') === '1'
+            && \hash_equals(
+                $stage,
+                (string)\getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE'),
+            );
     }
 
     private function fileHash(string $file): string
@@ -9578,8 +9759,25 @@ final class WlsEdgeGatewayController
                 'Gateway trust directory is missing or unsafe.'
             );
         }
-        $this->collectStaleShadowDirectories();
-        $this->ensureRecoveryReserve();
+        $diskPressureRecovery = $this->diskPressureMarkerActive();
+        if (!$diskPressureRecovery) {
+            $this->collectStaleShadowDirectories();
+            try {
+                $this->ensureRecoveryReserve();
+            } catch (\Throwable $exception) {
+                $this->markDiskPressure(
+                    'RECOVERY_RESERVE_FAILED',
+                    'startup_reserve_allocation_failed',
+                );
+                if (!$this->diskPressureMarkerActive()) {
+                    throw new \RuntimeException(
+                        'Gateway recovery reserve failed and disk pressure could not be latched.',
+                        0,
+                        $exception,
+                    );
+                }
+            }
+        }
         if ($this->brokerInternalEndpoint === null) {
             throw new \RuntimeException('Gateway Controller must be launched through the native platform broker.');
         }
@@ -9616,6 +9814,17 @@ final class WlsEdgeGatewayController
     private function trustDir(): string
     {
         return $this->home . DIRECTORY_SEPARATOR . 'trust';
+    }
+
+    private function diskPressureMarkerActive(): bool
+    {
+        return \file_exists($this->diskPressureMarkerFile())
+            || \is_link($this->diskPressureMarkerFile());
+    }
+
+    private function diskPressureMarkerFile(): string
+    {
+        return $this->stateDir() . DIRECTORY_SEPARATOR . 'disk-pressure.marker';
     }
 
     private function recoveryReserveFile(): string
