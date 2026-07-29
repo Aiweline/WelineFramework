@@ -55,6 +55,19 @@ final class GatewayCommandJsonOutputTest extends TestCase
 
             public function emitSuccess(array $payload): void
             {
+                $statusSource = \file_get_contents(
+                    \dirname(__DIR__, 4) . '/Console/Server/Gateway/Status.php',
+                );
+                \PHPUnit\Framework\Assert::assertIsString($statusSource);
+                \PHPUnit\Framework\Assert::assertStringContainsString(
+                    '$this->gateway()->status();',
+                    $statusSource,
+                );
+                \PHPUnit\Framework\Assert::assertStringNotContainsString(
+                    'administratorStatus()',
+                    $statusSource,
+                );
+
                 $this->output($payload, true);
             }
 
