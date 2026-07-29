@@ -1082,14 +1082,18 @@ final class GatewayHostManager
     {
         $builder = new GatewayRegistrationBuilder();
         $registration = $builder->build($instanceName);
-        $response = $this->client->projectRequest('drain', [
-            'project_uuid' => (string)$registration['project_uuid'],
-            'instance_id' => $instanceName,
-            'instance_generation' => (int)$registration['instance_generation'],
-            'master_epoch' => (int)$registration['master_epoch'],
-            'launch_id' => (string)$registration['launch_id'],
-            'seconds' => \max(1, \min(300, $seconds)),
-        ]);
+        $response = $this->idempotentProjectMutation(
+            'drain',
+            [
+                'project_uuid' => (string)$registration['project_uuid'],
+                'instance_id' => $instanceName,
+                'instance_generation' => (int)$registration['instance_generation'],
+                'master_epoch' => (int)$registration['master_epoch'],
+                'launch_id' => (string)$registration['launch_id'],
+                'seconds' => \max(1, \min(300, $seconds)),
+            ],
+            (float)\min(90, \max(1, $seconds)),
+        );
         if (!($response['ok'] ?? false)) {
             if (\str_contains(
                 \strtolower((string)($response['error']['message'] ?? '')),
@@ -1124,7 +1128,7 @@ final class GatewayHostManager
     {
         $builder = new GatewayRegistrationBuilder();
         $registration = $builder->build($instanceName);
-        $response = $this->client->projectRequest('unregister', [
+        $response = $this->idempotentProjectMutation('unregister', [
             'project_uuid' => (string)$registration['project_uuid'],
             'instance_id' => $instanceName,
             'instance_generation' => (int)$registration['instance_generation'],
