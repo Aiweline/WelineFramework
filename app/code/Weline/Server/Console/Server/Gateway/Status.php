@@ -12,7 +12,7 @@ final class Status extends AbstractGatewayCommand
     {
         $json = $this->isJson($args);
         try {
-            $status = $this->gateway()->administratorStatus();
+            $status = $this->gateway()->status();
             $ok = (bool)($status['ok'] ?? false);
             if (!$json) {
                 $this->printer->setup(__('WLS 2.0 宿主网关状态'));
