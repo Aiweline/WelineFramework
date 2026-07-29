@@ -63,9 +63,6 @@ final class GatewayPublicRouteProbe
         if (\str_starts_with($domain, '*.')) {
             $domain = 'wls-probe.' . \substr($domain, 2);
         }
-        $identity = \is_array($route['backend_identity'] ?? null)
-            ? $route['backend_identity']
-            : [];
         $certificate = \is_array($route['certificate'] ?? null) ? $route['certificate'] : [];
         $certificateReference = \is_array($certificate['cert'] ?? null)
             ? $certificate['cert']
@@ -151,13 +148,28 @@ final class GatewayPublicRouteProbe
             $headers[\strtolower(\trim($name))] = \trim($value);
         }
         $health = $body !== '' ? \json_decode($body, true) : null;
+        $observedInstanceId = (string)($headers['x-wls-instance-id'] ?? '');
+        $backendInstances = \is_array($route['backend_instances'] ?? null)
+            ? $route['backend_instances']
+            : [];
+        $backendInstance = \is_array($backendInstances[$observedInstanceId] ?? null)
+            ? $backendInstances[$observedInstanceId]
+            : null;
+        $identity = \is_array($backendInstance)
+            ? (array)($backendInstance['backend_identity'] ?? [])
+            : [];
+        if ($identity === [] && \hash_equals($instanceId, $observedInstanceId)) {
+            $identity = \is_array($route['backend_identity'] ?? null)
+                ? $route['backend_identity']
+                : [];
+        }
         return \is_array($health)
+            && $identity !== []
             && \hash_equals($projectUuid, (string)($headers['x-wls-project-uuid'] ?? ''))
-            && \hash_equals($instanceId, (string)($headers['x-wls-instance-id'] ?? ''))
             && (int)($identity['generation'] ?? 0)
                 === (int)($headers['x-wls-backend-generation'] ?? 0)
             && \hash_equals($nonce, (string)($headers['x-wls-probe-nonce'] ?? ''))
-            && \hash_equals($instanceId, (string)($health['instance'] ?? ''))
+            && \hash_equals($observedInstanceId, (string)($health['instance'] ?? ''))
             && \hash_equals(
                 (string)($identity['launch_id'] ?? ''),
                 (string)($health['launch_id'] ?? ''),

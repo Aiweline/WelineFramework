@@ -343,6 +343,7 @@ final class HostGatewayPackageManager
         $this->withInstallLock(function () use ($failedSlot, $previousSlot): null {
             $failedSlot = \strtoupper(\trim($failedSlot));
             $previousSlot = \strtoupper(\trim($previousSlot));
+            $initialActivation = !\in_array($previousSlot, ['A', 'B'], true);
             $activeFile = $this->paths->activeSlotFile();
             $active = \is_file($activeFile)
                 ? \strtoupper(\trim((string)@\file_get_contents($activeFile)))
@@ -362,9 +363,60 @@ final class HostGatewayPackageManager
             } elseif (!@\unlink($activeFile) && \is_file($activeFile)) {
                 throw new \RuntimeException('Unable to clear failed initial gateway activation.');
             }
+            if ($initialActivation) {
+                $this->removeFailedInitialBootstrap($failedSlot);
+                @\unlink($this->paths->previousSlotFile());
+            }
             $this->removeTree($this->paths->slotDir($failedSlot));
             return null;
         });
+    }
+
+    private function removeFailedInitialBootstrap(string $failedSlot): void
+    {
+        $slotDirectory = $this->paths->slotDir($failedSlot);
+        $releaseManifestFile = $slotDirectory . DIRECTORY_SEPARATOR
+            . 'release' . DIRECTORY_SEPARATOR . 'manifest.json';
+        $releaseManifest = !\is_link($releaseManifestFile) && \is_file($releaseManifestFile)
+            ? \json_decode((string)@\file_get_contents($releaseManifestFile), true)
+            : null;
+        $launcherComponent = $this->componentPath('wls-gateway-launcher');
+        $expected = \is_array($releaseManifest)
+            ? \strtolower((string)($releaseManifest['components'][$launcherComponent]['sha256'] ?? ''))
+            : '';
+        $launcher = $this->paths->launcherFile();
+        $identity = $this->paths->trustDir() . DIRECTORY_SEPARATOR
+            . 'stable-launcher.sha256';
+        $actual = !\is_link($launcher) && \is_file($launcher)
+            ? \strtolower((string)@\hash_file('sha256', $launcher))
+            : '';
+        $trusted = !\is_link($identity) && \is_file($identity)
+            ? \strtolower(\trim((string)@\file_get_contents($identity)))
+            : '';
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $expected) !== 1
+            || !\hash_equals($expected, $actual)
+            || !\hash_equals($expected, $trusted)
+        ) {
+            throw new \RuntimeException(
+                'Failed initial gateway bootstrap identity cannot be safely removed.'
+            );
+        }
+        $nonce = \bin2hex(\random_bytes(8));
+        $launcherRollback = $launcher . '.failed-initial.' . $nonce;
+        $identityRollback = $identity . '.failed-initial.' . $nonce;
+        if (!@\rename($launcher, $launcherRollback)) {
+            throw new \RuntimeException(
+                'Unable to isolate the failed initial gateway launcher.'
+            );
+        }
+        if (!@\rename($identity, $identityRollback)) {
+            @\rename($launcherRollback, $launcher);
+            throw new \RuntimeException(
+                'Unable to isolate the failed initial gateway launcher identity.'
+            );
+        }
+        @\unlink($launcherRollback);
+        @\unlink($identityRollback);
     }
 
     /** @return array<string,mixed> */

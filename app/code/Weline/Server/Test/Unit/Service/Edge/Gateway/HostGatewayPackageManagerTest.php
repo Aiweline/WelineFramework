@@ -210,6 +210,172 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertDirectoryDoesNotExist($this->paths->slotDir((string)$staged['slot']));
     }
 
+    public function testLegacyPromotionReadinessBudgetCoversColdPublicationWindows(): void
+    {
+        $budget = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'legacyPromotionReadinessTimeoutSeconds',
+        );
+
+        self::assertGreaterThanOrEqual(
+            45.0,
+            $budget->invoke(null),
+            'Production cold start performs shadow and public stability windows before ready.',
+        );
+    }
+
+    public function testPromotionInstanceLookupUsesProjectScopedControllerBuckets(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174099';
+        $instanceName = 'shared-instance-name';
+        $expected = [
+            'instance_id' => $instanceName,
+            'generation' => 17,
+            'status' => 'ACTIVE',
+        ];
+        $lookup = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'promotionInstanceLease',
+        );
+        $lookup->setAccessible(true);
+
+        self::assertSame(
+            $expected,
+            $lookup->invoke(null, [
+                $projectUuid => [$instanceName => $expected],
+                '223e4567-e89b-42d3-a456-426614174099' => [
+                    $instanceName => [...$expected, 'generation' => 99],
+                ],
+            ], $projectUuid, $instanceName),
+        );
+        self::assertNull($lookup->invoke(
+            null,
+            [$projectUuid => [$instanceName => $expected]],
+            '323e4567-e89b-42d3-a456-426614174099',
+            $instanceName,
+        ));
+        self::assertSame(
+            $expected + ['project_uuid' => $projectUuid],
+            $lookup->invoke(null, [
+                $expected + ['project_uuid' => $projectUuid],
+                [...$expected,
+                    'project_uuid' => '423e4567-e89b-42d3-a456-426614174099',
+                    'generation' => 99,
+                ],
+            ], $projectUuid, $instanceName),
+        );
+    }
+
+    public function testPromotionActivationReservesASeparateStabilityWindow(): void
+    {
+        $timedOut = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'promotionActivationTimedOut',
+        );
+        $timedOut->setAccessible(true);
+
+        self::assertFalse($timedOut->invoke(null, 119.999, 120.0, 12.0));
+        self::assertFalse($timedOut->invoke(null, 120.0, 120.0, 12.0));
+        self::assertFalse($timedOut->invoke(null, 131.999, 120.0, 12.0));
+        self::assertTrue($timedOut->invoke(null, 132.0, 120.0, 12.0));
+    }
+
+    public function testPromotionProjectIdentityScopePreservesTheVerifiedOwner(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_geteuid')
+            || !\function_exists('posix_getegid')
+        ) {
+            self::markTestSkipped('POSIX effective identity is required.');
+        }
+        $projectRoot = $this->root . DIRECTORY_SEPARATOR . 'project-owner';
+        self::assertTrue(\mkdir($projectRoot, 0700, true));
+        $owner = \lstat($projectRoot);
+        self::assertIsArray($owner);
+        if (!\function_exists('posix_getpwuid')) {
+            self::markTestSkipped('POSIX account lookup is required.');
+        }
+        $account = \posix_getpwuid((int)$owner['uid']);
+        $ownerHome = \is_array($account)
+            ? \realpath((string)($account['dir'] ?? ''))
+            : false;
+        if (!\is_string($ownerHome) || $ownerHome === '') {
+            self::markTestSkipped('The project owner home is unavailable.');
+        }
+        $beforeUid = \posix_geteuid();
+        $beforeGid = \posix_getegid();
+        $beforeEnvironment = [];
+        foreach (['HOME', 'XDG_STATE_HOME', 'WLS_EDGE_STATE_HOME'] as $name) {
+            $beforeEnvironment[$name] = \getenv($name);
+        }
+        \putenv('HOME=/tmp/wls-promotion-root-home');
+        \putenv('XDG_STATE_HOME=/tmp/wls-promotion-root-state');
+        \putenv('WLS_EDGE_STATE_HOME=/tmp/wls-promotion-root-edge-state');
+        $host = new GatewayHostManager($this->paths);
+        $scope = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'withPromotionProjectOwnerIdentity',
+        );
+
+        try {
+            $observed = $scope->invoke(
+                $host,
+                $projectRoot,
+                static fn (): array => [
+                    'uid' => \posix_geteuid(),
+                    'gid' => \posix_getegid(),
+                    'home' => \getenv('HOME'),
+                    'xdg_state_home' => \getenv('XDG_STATE_HOME'),
+                    'edge_state_home' => \getenv('WLS_EDGE_STATE_HOME'),
+                ],
+            );
+
+            self::assertSame((int)$owner['uid'], $observed['uid']);
+            self::assertSame((int)$owner['gid'], $observed['gid']);
+            self::assertSame($ownerHome, $observed['home']);
+            self::assertFalse($observed['xdg_state_home']);
+            self::assertFalse($observed['edge_state_home']);
+            self::assertSame('/tmp/wls-promotion-root-home', \getenv('HOME'));
+            self::assertSame('/tmp/wls-promotion-root-state', \getenv('XDG_STATE_HOME'));
+            self::assertSame(
+                '/tmp/wls-promotion-root-edge-state',
+                \getenv('WLS_EDGE_STATE_HOME'),
+            );
+            self::assertSame($beforeUid, \posix_geteuid());
+            self::assertSame($beforeGid, \posix_getegid());
+        } finally {
+            foreach ($beforeEnvironment as $name => $value) {
+                \putenv($value === false ? $name : $name . '=' . $value);
+            }
+        }
+    }
+
+    public function testLegacyPromotionAbortDetectsSlotActivatedBeforeReadinessFailure(): void
+    {
+        $packages = new HostGatewayPackageManager($this->paths);
+        $host = new GatewayHostManager(
+            $this->paths,
+            new GatewayClient($this->paths),
+            $packages,
+            new GatewayPlatformServiceInstaller($this->paths),
+        );
+        $staged = $host->stageLegacyPromotion(
+            $this->createPackage('legacy-post-activation-failure'),
+            'default',
+        );
+        $packages->activate((string)$staged['slot']);
+
+        $host->abortLegacyPromotion($staged, false);
+
+        self::assertFileDoesNotExist($this->paths->activeSlotFile());
+        self::assertFileDoesNotExist($this->paths->serviceDefinitionFile());
+        self::assertDirectoryDoesNotExist($this->paths->slotDir((string)$staged['slot']));
+        self::assertFileDoesNotExist($this->paths->launcherFile());
+        self::assertFileDoesNotExist(
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR . 'stable-launcher.sha256',
+        );
+    }
+
     public function testVerifiedAdminStoppedIntentCanBeClearedButTamperFailsClosed(): void
     {
         $this->paths->ensureDirectories();

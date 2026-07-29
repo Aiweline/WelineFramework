@@ -279,6 +279,49 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         }
     }
 
+    public function testRootActivationPreservesProjectOwnerOnGeneratedArtifacts(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_geteuid')
+            || \posix_geteuid() !== 0
+            || !\function_exists('posix_getpwnam')
+        ) {
+            self::markTestSkipped('Root POSIX ownership regression test.');
+        }
+        $account = \posix_getpwnam('nobody');
+        if (!\is_array($account)
+            || (int)($account['uid'] ?? 0) < 1
+            || (int)($account['gid'] ?? 0) < 1
+        ) {
+            self::markTestSkipped('A non-root nobody account is required.');
+        }
+        $domain = 'root-owner.example.test';
+        $source = $this->createCertificate($domain, 'root-owner');
+        $uid = (int)$account['uid'];
+        $gid = (int)$account['gid'];
+        $this->changeOwnership($this->root, $uid, $gid);
+
+        $active = (new ProjectCertificateGenerationStore($this->root))->activate(
+            $domain,
+            $source['cert'],
+            $source['key'],
+        );
+
+        foreach ([
+            $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations',
+            $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations/activation.lock',
+            $active['cert_path'],
+            $active['key_path'],
+            $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations/active/'
+                . \substr(\hash('sha256', $domain), 0, 32) . '.json',
+        ] as $path) {
+            $owner = \lstat($path);
+            self::assertIsArray($owner);
+            self::assertSame($uid, (int)$owner['uid'], $path);
+            self::assertSame($gid, (int)$owner['gid'], $path);
+        }
+    }
+
     /**
      * @return array{cert:string,key:string}
      */
@@ -331,6 +374,20 @@ CONF
         self::assertTrue(\chmod($certificatePath, 0600));
         self::assertTrue(\chmod($keyPath, 0600));
         return ['cert' => $certificatePath, 'key' => $keyPath];
+    }
+
+    private function changeOwnership(string $root, int $uid, int $gid): void
+    {
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($iterator as $item) {
+            self::assertTrue(@\chown($item->getPathname(), $uid));
+            self::assertTrue(@\chgrp($item->getPathname(), $gid));
+        }
+        self::assertTrue(@\chown($root, $uid));
+        self::assertTrue(@\chgrp($root, $gid));
     }
 
     private function removeTree(string $root): void

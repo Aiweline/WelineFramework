@@ -95,6 +95,14 @@ final class GatewayProtocolSecurityTest extends TestCase
     {
         $project = $this->createProject();
         $projectUuid = '123e4567-e89b-42d3-a456-426614174000';
+        $before = $this->request(
+            'admin',
+            'status',
+            [],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertTrue($before['ok']);
         $enrollment = $this->request(
             'admin',
             'enroll',
@@ -116,6 +124,28 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertSame($projectUuid, $credential['project_uuid']);
         self::assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/D', $credential['credential_id']);
         self::assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/D', $credential['secret']);
+        self::assertSame(
+            (int)$before['payload']['control_generation'] + 1,
+            (int)$enrollment['payload']['security_generation'],
+            'Enrollment must return the durable security generation acknowledged to the administrator.',
+        );
+        $after = $this->request(
+            'admin',
+            'status',
+            [],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertTrue($after['ok']);
+        self::assertSame(
+            (int)$enrollment['payload']['security_generation'],
+            (int)$after['payload']['control_generation'],
+        );
+        self::assertSame(
+            (int)$before['payload']['generation'],
+            (int)$after['payload']['generation'],
+            'Enrollment changes host authorization, not the active Nginx configuration.',
+        );
 
         $forbidden = $this->request(
             'project',
@@ -1160,7 +1190,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
-    public function testMultipleInstancesUseDeterministicSingleActiveIdentityAndHotStandby(): void
+    public function testMultipleInstancesRequireCapabilityBeforeDistributionAndFailOver(): void
     {
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $state = $stateProperty->getValue($this->controller);
@@ -1204,7 +1234,12 @@ final class GatewayProtocolSecurityTest extends TestCase
         $state['enrollments'][$projectUuid]['capabilities']['shared_session'] = true;
         $stateProperty->setValue($this->controller, $state);
         $selector->invokeArgs($this->controller, [&$route]);
-        self::assertSame([29001], \array_column($route['backends'], 'port'));
+        self::assertSame([29001, 29002], \array_column($route['backends'], 'port'));
+        self::assertSame('shared_session', $route['distribution_mode']);
+        self::assertSame(
+            ['alpha', 'zeta'],
+            \array_keys($route['backend_instances']),
+        );
         self::assertSame(
             $route['instances']['alpha']['backend_identity'],
             $route['backend_identity'],
@@ -1214,11 +1249,13 @@ final class GatewayProtocolSecurityTest extends TestCase
         $selector->invokeArgs($this->controller, [&$route]);
         self::assertSame('zeta', $route['instance_id']);
         self::assertSame([29002], \array_column($route['backends'], 'port'));
+        self::assertSame('single', $route['distribution_mode']);
 
         $route['instances']['zeta']['backend_healthy'] = false;
         $selector->invokeArgs($this->controller, [&$route]);
         self::assertSame('', $route['instance_id']);
         self::assertSame([], $route['backends']);
+        self::assertSame([], $route['backend_instances']);
         self::assertSame('PENDING_BACKEND', $route['status']);
         self::assertNull($route['stale_since']);
     }

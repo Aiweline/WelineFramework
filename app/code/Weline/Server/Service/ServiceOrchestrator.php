@@ -29,6 +29,7 @@ use Weline\Server\Service\Contract\ServiceProviderInterface;
 use Weline\Server\Service\Control\ControlPlaneServerInterface;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
+use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\MasterProcess;
@@ -91,6 +92,18 @@ class ServiceOrchestrator
         ControlMessage::ROLE_DISPATCHER,
         ControlMessage::ROLE_REDIRECT,
         ProtocolEdgeRuntime::ROLE,
+    ];
+    private const GATEWAY_PROMOTION_MUTABLE_FIELDS = [
+        'degraded_reason',
+        'public_http',
+        'public_https',
+        'epoch',
+        'join_backend',
+        'fallback_state',
+        'runtime_generation',
+        'runtime_observed_at',
+        'runtime_observed_timestamp',
+        'native_edge',
     ];
 
     /**
@@ -17542,6 +17555,878 @@ class ServiceOrchestrator
     }
 
     /**
+     * Atomically project the already-running legacy Master into the WLS 2.0
+     * join topology before starting its Agent. The original edge fields stay
+     * embedded in the endpoint until the public route has been proven healthy.
+     *
+     * @return array<string,mixed>
+     */
+    private function preparePromotionGatewayRuntimeIntent(): array
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway promotion runtime context is unavailable.');
+        }
+        $manager = new ServerInstanceManager();
+        $file = $manager->getInstanceFile($this->context->instanceName);
+        if (!\is_file($file) || \is_link($file)) {
+            throw new \RuntimeException('Gateway promotion endpoint is unavailable or unsafe.');
+        }
+        $transactionId = \bin2hex(\random_bytes(16));
+        $receipt = [];
+        $masterPid = $this->context->masterPid;
+        $runtimePolicyDigest = \strtolower(\trim($this->runtimePolicyPublishedDigest));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $runtimePolicyDigest) !== 1) {
+            $runtimePolicyDigest = \strtolower(\trim((string)(
+                (new RuntimePolicyStore())->state($this->context->instanceName)['active_digest']
+                    ?? ''
+            )));
+        }
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $runtimePolicyDigest) !== 1) {
+            throw new \RuntimeException(
+                'Gateway promotion requires an active runtime policy rollback point.'
+            );
+        }
+        $masterEpoch = $this->context->epoch;
+        $updated = ServerInstanceManager::updateJsonFileAtomically(
+            $file,
+            static function (array $endpoint) use (
+                $masterPid,
+                $masterEpoch,
+                $transactionId,
+                $runtimePolicyDigest,
+                &$receipt,
+            ): array {
+                $endpoint = self::applyPromotionGatewayRuntimeIntent(
+                    $endpoint,
+                    $masterPid,
+                    $masterEpoch,
+                    $transactionId,
+                    $runtimePolicyDigest,
+                    \time(),
+                );
+                $gateway = (array)($endpoint['gateway'] ?? []);
+                $receipt = [
+                    'state' => (string)($gateway['promotion_state'] ?? ''),
+                    'transaction_id' => (string)($gateway['promotion_transaction_id'] ?? ''),
+                    'edge_adapter' => (string)($endpoint['edge_adapter'] ?? ''),
+                    'requested_mode' => (string)($gateway['requested_mode'] ?? ''),
+                ];
+                return $endpoint;
+            },
+        );
+        if (!$updated || $receipt === []) {
+            throw new \RuntimeException('Unable to prepare the gateway promotion endpoint transaction.');
+        }
+        return $receipt;
+    }
+
+    /** @return array<string,mixed> */
+    private function commitPromotionGatewayRuntimeIntent(string $expectedTransactionId): array
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway promotion runtime context is unavailable.');
+        }
+        $manager = new ServerInstanceManager();
+        $file = $manager->getInstanceFile($this->context->instanceName);
+        if (!\is_file($file) || \is_link($file)) {
+            throw new \RuntimeException('Gateway promotion endpoint is unavailable or unsafe.');
+        }
+        $receipt = [];
+        $masterPid = $this->context->masterPid;
+        $masterEpoch = $this->context->epoch;
+        $updated = ServerInstanceManager::updateJsonFileAtomically(
+            $file,
+            static function (array $endpoint) use (
+                $masterPid,
+                $masterEpoch,
+                $expectedTransactionId,
+                &$receipt,
+            ): array {
+                $endpoint = self::commitPromotionGatewayRuntimeIntentProjection(
+                    $endpoint,
+                    $masterPid,
+                    $masterEpoch,
+                    $expectedTransactionId,
+                    \time(),
+                );
+                $gateway = (array)($endpoint['gateway'] ?? []);
+                $receipt = [
+                    'state' => (string)($gateway['promotion_state'] ?? ''),
+                    'transaction_id' => (string)($gateway['promotion_committed_transaction_id'] ?? ''),
+                    'edge_adapter' => (string)($endpoint['edge_adapter'] ?? ''),
+                    'requested_mode' => (string)($gateway['requested_mode'] ?? ''),
+                ];
+                return $endpoint;
+            },
+        );
+        if (!$updated || $receipt === []) {
+            throw new \RuntimeException('Unable to commit the gateway promotion endpoint transaction.');
+        }
+        return $receipt;
+    }
+
+    /** @return array<string,mixed> */
+    private function restorePromotionGatewayRuntimeIntent(): array
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway promotion runtime context is unavailable.');
+        }
+        $manager = new ServerInstanceManager();
+        $file = $manager->getInstanceFile($this->context->instanceName);
+        if (!\is_file($file) || \is_link($file)) {
+            throw new \RuntimeException('Gateway promotion endpoint is unavailable or unsafe.');
+        }
+        $receipt = [];
+        $masterPid = $this->context->masterPid;
+        $masterEpoch = $this->context->epoch;
+        $updated = ServerInstanceManager::updateJsonFileAtomically(
+            $file,
+            static function (array $endpoint) use (
+                $masterPid,
+                $masterEpoch,
+                &$receipt,
+            ): array {
+                $gatewayBefore = \is_array($endpoint['gateway'] ?? null)
+                    ? $endpoint['gateway']
+                    : [];
+                $hadSnapshot = \is_array($gatewayBefore['promotion_previous_edge'] ?? null);
+                $endpoint = self::restorePromotionGatewayRuntimeIntentProjection(
+                    $endpoint,
+                    $masterPid,
+                    $masterEpoch,
+                );
+                $gateway = (array)($endpoint['gateway'] ?? []);
+                $receipt = [
+                    'state' => $hadSnapshot ? 'RESTORED' : 'NOT_REQUIRED',
+                    'edge_adapter' => (string)($endpoint['edge_adapter'] ?? ''),
+                    'requested_mode' => (string)($gateway['requested_mode'] ?? ''),
+                ];
+                return $endpoint;
+            },
+        );
+        if (!$updated || $receipt === []) {
+            throw new \RuntimeException('Unable to restore the gateway promotion endpoint transaction.');
+        }
+        return $receipt;
+    }
+
+    /**
+     * @param array<string,mixed> $endpoint
+     * @return array<string,mixed>
+     */
+    private static function applyPromotionGatewayRuntimeIntent(
+        array $endpoint,
+        int $masterPid,
+        int $masterEpoch,
+        string $transactionId,
+        string $runtimePolicyDigest,
+        int $now,
+    ): array {
+        self::assertPromotionGatewayEndpointIdentity($endpoint, $masterPid, $masterEpoch);
+        $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
+        $previous = \is_array($gateway['promotion_previous_edge'] ?? null)
+            ? $gateway['promotion_previous_edge']
+            : null;
+        if ($previous === null) {
+            if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
+                throw new \RuntimeException('Gateway promotion transaction identity is invalid.');
+            }
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $runtimePolicyDigest) !== 1) {
+                throw new \RuntimeException('Gateway promotion runtime policy digest is invalid.');
+            }
+            $runtimeFields = [];
+            foreach (self::GATEWAY_PROMOTION_MUTABLE_FIELDS as $field) {
+                $runtimeFields[$field] = [
+                    'present' => \array_key_exists($field, $gateway),
+                    'value' => $gateway[$field] ?? null,
+                ];
+            }
+            $previous = [
+                'transaction_id' => $transactionId,
+                'edge_adapter_present' => \array_key_exists('edge_adapter', $endpoint),
+                'edge_adapter' => $endpoint['edge_adapter'] ?? null,
+                'requested_mode_present' => \array_key_exists('requested_mode', $gateway),
+                'requested_mode' => $gateway['requested_mode'] ?? null,
+                'mode_present' => \array_key_exists('mode', $gateway),
+                'mode' => $gateway['mode'] ?? null,
+                'protocol_present' => \array_key_exists('protocol', $gateway),
+                'protocol' => $gateway['protocol'] ?? null,
+                'runtime_policy_digest' => $runtimePolicyDigest,
+                'gateway_runtime_fields' => $runtimeFields,
+            ];
+        }
+        $activeTransaction = \strtolower(\trim((string)($previous['transaction_id'] ?? '')));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $activeTransaction) !== 1) {
+            throw new \RuntimeException('Existing gateway promotion transaction is corrupt.');
+        }
+        $endpoint['edge_adapter'] = 'wls';
+        $gateway['requested_mode'] = 'auto';
+        $gateway['mode'] = 'wls';
+        $gateway['protocol'] = GatewayPaths::PROTOCOL;
+        $gateway['promotion_state'] = 'ATTACHING';
+        $gateway['promotion_transaction_id'] = $activeTransaction;
+        $gateway['promotion_previous_edge'] = $previous;
+        $gateway['promotion_updated_at'] = \gmdate(DATE_ATOM, $now);
+        $gateway['promotion_updated_timestamp'] = $now;
+        $endpoint['gateway'] = $gateway;
+        return $endpoint;
+    }
+
+    /**
+     * @param array<string,mixed> $endpoint
+     * @return array<string,mixed>
+     */
+    private static function commitPromotionGatewayRuntimeIntentProjection(
+        array $endpoint,
+        int $masterPid,
+        int $masterEpoch,
+        string $expectedTransactionId,
+        int $now,
+    ): array {
+        self::assertPromotionGatewayEndpointIdentity($endpoint, $masterPid, $masterEpoch);
+        $expectedTransactionId = \strtolower(\trim($expectedTransactionId));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $expectedTransactionId) !== 1) {
+            throw new \RuntimeException('Gateway promotion commit expectation is invalid.');
+        }
+        $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
+        $previous = \is_array($gateway['promotion_previous_edge'] ?? null)
+            ? $gateway['promotion_previous_edge']
+            : null;
+        if ($previous === null) {
+            if ((string)($gateway['promotion_state'] ?? '') === 'COMMITTED'
+                && (string)($endpoint['edge_adapter'] ?? '') === 'wls'
+                && (string)($gateway['requested_mode'] ?? '') === 'auto'
+                && \hash_equals(
+                    $expectedTransactionId,
+                    \strtolower(\trim((string)(
+                        $gateway['promotion_committed_transaction_id'] ?? ''
+                    ))),
+                )
+            ) {
+                return $endpoint;
+            }
+            throw new \RuntimeException('Gateway promotion commit has no prepared endpoint transaction.');
+        }
+        $transactionId = \strtolower(\trim((string)($previous['transaction_id'] ?? '')));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1
+            || !\hash_equals($expectedTransactionId, $transactionId)
+            || !\hash_equals(
+                $transactionId,
+                \strtolower(\trim((string)($gateway['promotion_transaction_id'] ?? ''))),
+            )
+        ) {
+            throw new \RuntimeException('Gateway promotion commit transaction identity does not match.');
+        }
+        $endpoint['edge_adapter'] = 'wls';
+        $gateway['requested_mode'] = 'auto';
+        $gateway['mode'] = 'wls';
+        $gateway['protocol'] = GatewayPaths::PROTOCOL;
+        $gateway['promotion_state'] = 'COMMITTED';
+        $gateway['promotion_committed_transaction_id'] = $transactionId;
+        $gateway['promotion_updated_at'] = \gmdate(DATE_ATOM, $now);
+        $gateway['promotion_updated_timestamp'] = $now;
+        unset($gateway['promotion_previous_edge'], $gateway['promotion_transaction_id']);
+        $endpoint['gateway'] = $gateway;
+        return $endpoint;
+    }
+
+    /**
+     * @param array<string,mixed> $endpoint
+     * @return array<string,mixed>
+     */
+    private static function restorePromotionGatewayRuntimeIntentProjection(
+        array $endpoint,
+        int $masterPid,
+        int $masterEpoch,
+    ): array {
+        self::assertPromotionGatewayEndpointIdentity($endpoint, $masterPid, $masterEpoch);
+        $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
+        $previous = \is_array($gateway['promotion_previous_edge'] ?? null)
+            ? $gateway['promotion_previous_edge']
+            : null;
+        if ($previous === null) {
+            return $endpoint;
+        }
+        $transactionId = \strtolower(\trim((string)($previous['transaction_id'] ?? '')));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1
+            || !\hash_equals(
+                $transactionId,
+                \strtolower(\trim((string)($gateway['promotion_transaction_id'] ?? ''))),
+            )
+        ) {
+            throw new \RuntimeException('Gateway promotion rollback transaction identity does not match.');
+        }
+        if (($previous['edge_adapter_present'] ?? false) === true) {
+            $endpoint['edge_adapter'] = $previous['edge_adapter'] ?? null;
+        } else {
+            unset($endpoint['edge_adapter']);
+        }
+        foreach (['requested_mode', 'mode', 'protocol'] as $field) {
+            if (($previous[$field . '_present'] ?? false) === true) {
+                $gateway[$field] = $previous[$field] ?? null;
+            } else {
+                unset($gateway[$field]);
+            }
+        }
+        $runtimeFields = $previous['gateway_runtime_fields'] ?? null;
+        if ($runtimeFields !== null && !\is_array($runtimeFields)) {
+            throw new \RuntimeException(
+                'Gateway promotion runtime rollback snapshot is corrupt.'
+            );
+        }
+        foreach (self::GATEWAY_PROMOTION_MUTABLE_FIELDS as $field) {
+            $snapshot = \is_array($runtimeFields)
+                ? ($runtimeFields[$field] ?? null)
+                : null;
+            if (\is_array($runtimeFields)
+                && (!\is_array($snapshot)
+                    || !\array_key_exists('present', $snapshot))
+            ) {
+                throw new \RuntimeException(
+                    'Gateway promotion runtime rollback field is corrupt: ' . $field
+                );
+            }
+            if (\is_array($snapshot) && ($snapshot['present'] ?? false) === true) {
+                $gateway[$field] = $snapshot['value'] ?? null;
+            } else {
+                // Compatibility for a pre-snapshot ATTACHING transaction:
+                // discard promotion-derived observations rather than allowing
+                // a stale drain/join lease to poison legacy recovery.
+                unset($gateway[$field]);
+            }
+        }
+        unset(
+            $gateway['promotion_previous_edge'],
+            $gateway['promotion_transaction_id'],
+            $gateway['promotion_state'],
+            $gateway['promotion_updated_at'],
+            $gateway['promotion_updated_timestamp'],
+        );
+        $endpoint['gateway'] = $gateway;
+        return $endpoint;
+    }
+
+    /** @param array<string,mixed> $endpoint */
+    private static function assertPromotionGatewayEndpointIdentity(
+        array $endpoint,
+        int $masterPid,
+        int $masterEpoch,
+    ): void {
+        $endpointEpoch = (int)($endpoint['master_epoch'] ?? $endpoint['epoch'] ?? 0);
+        if ($masterPid < 1
+            || $masterEpoch < 1
+            || (int)($endpoint['master_pid'] ?? 0) !== $masterPid
+            || $endpointEpoch !== $masterEpoch
+        ) {
+            throw new \RuntimeException(
+                'Gateway promotion endpoint belongs to a different Master generation.'
+            );
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function ensureGatewayJoinRuntimePolicy(): array
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway join runtime policy context is unavailable.');
+        }
+        $this->ensureRuntimePolicyPublished();
+        if ($this->runtimePolicyTransition !== null) {
+            $pendingDigest = \strtolower(\trim((string)(
+                $this->runtimePolicyTransition['digest'] ?? ''
+            )));
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $pendingDigest) !== 1) {
+                throw new \RuntimeException(
+                    'Gateway join encountered a corrupt pending runtime policy transition.'
+                );
+            }
+            $this->awaitGatewayRuntimePolicyDigest(
+                $pendingDigest,
+                'pending policy publication',
+            );
+        }
+        $store = new RuntimePolicyStore();
+        $active = $store->active($this->context->instanceName);
+        if (!$active instanceof RuntimePolicyBundle) {
+            throw new \RuntimeException('Gateway join runtime policy has no active bundle.');
+        }
+        $previousDigest = $active->digest;
+        if ($active->supportsTopology('direct')) {
+            if (!\hash_equals($previousDigest, $this->runtimePolicyPublishedDigest)) {
+                throw new \RuntimeException(
+                    'Gateway join runtime policy digest is not published by the current Master.'
+                );
+            }
+            $this->runtimePolicyState = 'active';
+            $this->runtimePolicyError = '';
+            return [
+                'state' => 'ACTIVE',
+                'changed' => false,
+                'previous_digest' => $previousDigest,
+                'active_digest' => $previousDigest,
+                'topology' => $active->topology,
+            ];
+        }
+        // Promotion must preserve the exact policy facts already accepted by
+        // the running generation. Recompile-from-environment could silently
+        // change limits, providers or host guards while merely adding direct
+        // join capability, so clone the immutable bundle and widen only its
+        // declared topology. Descriptor-level incompatibility still fails
+        // closed in RuntimePolicyValidator below.
+        $bundle = self::buildGatewayJoinRuntimePolicyBundle($active);
+        (new RuntimePolicyValidator())->assertValid($bundle, 'direct');
+        (new RuntimePolicyValidator())->assertValid(
+            $bundle,
+            $this->context->getEffectiveTopology()->value,
+        );
+        $this->startRuntimePolicyTransition($bundle, false);
+        $this->awaitGatewayRuntimePolicyDigest($bundle->digest, 'join policy publication');
+        return [
+            'state' => 'ACTIVE',
+            'changed' => true,
+            'previous_digest' => $previousDigest,
+            'active_digest' => $bundle->digest,
+            'topology' => $bundle->topology,
+        ];
+    }
+
+    private static function buildGatewayJoinRuntimePolicyBundle(
+        RuntimePolicyBundle $active,
+    ): RuntimePolicyBundle {
+        return RuntimePolicyBundle::fromDescriptors(
+            descriptors: $active->descriptors,
+            version: $active->version,
+            topology: 'both',
+            metadata: $active->metadata,
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function restorePromotionGatewayRuntimePolicy(): array
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway promotion runtime policy context is unavailable.');
+        }
+        $endpoint = (new ServerInstanceManager())->getRawInstanceData(
+            $this->context->instanceName,
+        );
+        $gateway = \is_array($endpoint['gateway'] ?? null) ? $endpoint['gateway'] : [];
+        $previous = \is_array($gateway['promotion_previous_edge'] ?? null)
+            ? $gateway['promotion_previous_edge']
+            : [];
+        $previousDigest = \strtolower(\trim((string)(
+            $previous['runtime_policy_digest'] ?? ''
+        )));
+        if ($previousDigest === '') {
+            return ['state' => 'NOT_REQUIRED'];
+        }
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $previousDigest) !== 1) {
+            throw new \RuntimeException('Gateway promotion runtime policy snapshot is corrupt.');
+        }
+        if (\hash_equals($previousDigest, $this->runtimePolicyPublishedDigest)) {
+            return [
+                'state' => 'NOT_REQUIRED',
+                'active_digest' => $previousDigest,
+            ];
+        }
+        $bundle = (new RuntimePolicyStore())->load(
+            $this->context->instanceName,
+            $previousDigest,
+        );
+        (new RuntimePolicyValidator())->assertValid(
+            $bundle,
+            $this->context->getEffectiveTopology()->value,
+        );
+        $this->startRuntimePolicyTransition($bundle, true);
+        $this->awaitGatewayRuntimePolicyDigest($previousDigest, 'promotion policy rollback');
+        return [
+            'state' => 'RESTORED',
+            'active_digest' => $previousDigest,
+            'topology' => $bundle->topology,
+        ];
+    }
+
+    private function awaitGatewayRuntimePolicyDigest(string $expectedDigest, string $purpose): void
+    {
+        $deadline = \microtime(true) + 20.0;
+        while (\microtime(true) < $deadline) {
+            if ($this->runtimePolicyTransition === null) {
+                if ($this->runtimePolicyState === 'active'
+                    && \hash_equals($expectedDigest, $this->runtimePolicyPublishedDigest)
+                ) {
+                    return;
+                }
+                throw new \RuntimeException(
+                    'Gateway ' . $purpose . ' did not reach the expected active digest: '
+                        . $this->runtimePolicyError
+                );
+            }
+            if (\microtime(true) >= (float)(
+                $this->runtimePolicyTransition['deadline'] ?? 0.0
+            )) {
+                $this->handleRuntimePolicyTransitionDeadline();
+            }
+            $this->yieldControlPlane(10_000);
+        }
+        throw new \RuntimeException('Gateway ' . $purpose . ' exceeded its bounded deadline.');
+    }
+
+    /**
+     * Roll back every project-side process created by promotion as one bounded
+     * identity-verified stop transaction. The ordinary Worker/Dispatcher pool
+     * is intentionally excluded so the frozen legacy Nginx snapshot can be
+     * restarted immediately after the host gateway is removed.
+     *
+     * @return array<string,mixed>
+     */
+    private function disablePromotionGatewayRuntime(): array
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway promotion cleanup context is unavailable.');
+        }
+        $roles = [
+            ControlMessage::ROLE_GATEWAY_AGENT,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+            ControlMessage::ROLE_GATEWAY_FALLBACK,
+        ];
+        foreach ($roles as $role) {
+            $this->desiredState[$role] = 0;
+        }
+        $this->clearResurrectionQueueForRoles($roles);
+        $this->gatewayJoinBackendPendingSlots = [];
+        $this->cancelMainLoopTask(
+            'gateway:join_backend_pool_expansion',
+            'gateway promotion rollback',
+        );
+
+        $leases = new GatewayPortLeaseAllocator();
+        $leasePorts = [];
+        foreach ([
+            ControlMessage::ROLE_GATEWAY_BACKEND => 'gateway-backend',
+            ControlMessage::ROLE_GATEWAY_FALLBACK => 'gateway-fallback',
+        ] as $role => $suffix) {
+            try {
+                $lease = $leases->status($this->context->instanceName . ':' . $suffix);
+                $port = (int)($lease['port'] ?? 0);
+                if ($port >= 20000 && $port <= 29999) {
+                    $leasePorts[$role] = $port;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $instances = [];
+        foreach ($roles as $role) {
+            foreach ($this->registry->getInstancesByRole($role) as $instance) {
+                $instances[] = $instance;
+                if (!isset($leasePorts[$role])) {
+                    $port = (int)($instance->port ?? 0);
+                    if ($port >= 20000 && $port <= 29999) {
+                        $leasePorts[$role] = $port;
+                    }
+                }
+                if ($instance->isRunning()) {
+                    $instance->state = ServiceInstance::STATE_STOPPING;
+                    $this->registry->updateInstance($instance);
+                    $this->stopInstance($instance);
+                }
+            }
+        }
+        $graceDeadline = \microtime(true) + 3.0;
+        do {
+            $remaining = false;
+            foreach ($instances as $instance) {
+                $this->invalidateInstanceProcessRunningCache($instance);
+                if ($this->isInstanceServiceAlive($instance)) {
+                    $remaining = true;
+                }
+            }
+            if (!$remaining) {
+                break;
+            }
+            SchedulerSystem::yieldDelay(25);
+        } while (\microtime(true) < $graceDeadline);
+
+        foreach ($instances as $instance) {
+            $this->invalidateInstanceProcessRunningCache($instance);
+            if ($this->isInstanceServiceAlive($instance)) {
+                $this->killInstanceProcess($instance);
+            }
+        }
+        $forceDeadline = \microtime(true) + 1.0;
+        do {
+            $remaining = false;
+            foreach ($instances as $instance) {
+                $this->invalidateInstanceProcessRunningCache($instance);
+                if ($this->isInstanceServiceAlive($instance)) {
+                    $remaining = true;
+                }
+            }
+            if (!$remaining) {
+                break;
+            }
+            SchedulerSystem::yieldDelay(25);
+        } while (\microtime(true) < $forceDeadline);
+
+        $survivors = [];
+        $stopped = [];
+        foreach ($instances as $instance) {
+            $this->invalidateInstanceProcessRunningCache($instance);
+            if ($this->isInstanceServiceAlive($instance)) {
+                $survivors[] = [
+                    'role' => $instance->role,
+                    'instance_id' => $instance->instanceId,
+                    'pid' => $instance->getTrackingPid(),
+                ];
+                continue;
+            }
+            if ($instance->ipcClientId !== null) {
+                $this->controlServer?->closeClient($instance->ipcClientId);
+                $instance->ipcClientId = null;
+            }
+            $this->cleanupInstancePidFile($instance);
+            $instance->state = ServiceInstance::STATE_STOPPED;
+            $this->registry->updateInstance($instance);
+            $this->registry->getProvider($instance->role)?->onStopped($instance);
+            $this->registry->removeInstance($instance->role, $instance->instanceId);
+            $stopped[] = [
+                'role' => $instance->role,
+                'instance_id' => $instance->instanceId,
+            ];
+        }
+
+        $errors = [];
+        if (!$this->isWindowsRuntime()) {
+            $this->closeGatewayJoinListener();
+            $this->closeGatewayFallbackListener();
+        }
+        foreach ([
+            ControlMessage::ROLE_GATEWAY_BACKEND => 'gateway-backend',
+            ControlMessage::ROLE_GATEWAY_FALLBACK => 'gateway-fallback',
+        ] as $role => $suffix) {
+            $port = (int)($leasePorts[$role] ?? 0);
+            if ($port < 20000 || $port > 29999) {
+                continue;
+            }
+            try {
+                $leases->release($this->context->instanceName . ':' . $suffix, $port);
+            } catch (\Throwable $throwable) {
+                $errors[] = $suffix . ': ' . $throwable->getMessage();
+            }
+        }
+        try {
+            $this->publishGatewayJoinBackendState(
+                'FAILED',
+                null,
+                'Gateway promotion rolled back before commit.',
+            );
+        } catch (\Throwable $throwable) {
+            $errors[] = 'join-backend-state: ' . $throwable->getMessage();
+        }
+        try {
+            $runtimePolicy = $this->restorePromotionGatewayRuntimePolicy();
+        } catch (\Throwable $throwable) {
+            $runtimePolicy = ['state' => 'RESTORE_FAILED'];
+            $errors[] = 'runtime-policy: ' . $throwable->getMessage();
+        }
+        $this->persistServicesInfo($this->context);
+        try {
+            $runtimeIntent = $this->restorePromotionGatewayRuntimeIntent();
+        } catch (\Throwable $throwable) {
+            $runtimeIntent = ['state' => 'RESTORE_FAILED'];
+            $errors[] = 'runtime-endpoint: ' . $throwable->getMessage();
+        }
+
+        return [
+            'ok' => $survivors === [] && $errors === [],
+            'state' => 'DISABLED',
+            'stopped' => $stopped,
+            'survivors' => $survivors,
+            'errors' => $errors,
+            'runtime_endpoint' => $runtimeIntent,
+            'runtime_policy' => $runtimePolicy,
+        ];
+    }
+
+    /**
+     * Attach/detach the project-owned lease Agent during an explicit legacy
+     * promotion transaction without restarting the already healthy backend.
+     * These actions are accepted only through the ordinary control-token
+     * channel; an Agent cannot grant or preserve its own desired slot.
+     *
+     * @param array<string,mixed> $msg
+     */
+    private function handleGatewayAgentLifecycleCommand(
+        string $action,
+        array $msg,
+        int $clientId,
+    ): void {
+        $messageId = (string)($msg['msg_id'] ?? '');
+        if ($this->context === null || $this->controlServer === null) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway Agent lifecycle requires a running project Master.',
+                $messageId,
+            ));
+            return;
+        }
+        $role = ControlMessage::ROLE_GATEWAY_AGENT;
+        $instance = $this->registry->getInstance($role, 1);
+        if ($action === ControlMessage::ACTION_GATEWAY_AGENT_DISABLE) {
+            try {
+                $cleanup = $this->disablePromotionGatewayRuntime();
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    (bool)($cleanup['ok'] ?? false),
+                    $cleanup,
+                    ($cleanup['ok'] ?? false)
+                        ? 'Gateway promotion runtime disabled.'
+                        : 'Gateway promotion runtime cleanup left verified survivors.',
+                    $messageId,
+                ));
+            } catch (\Throwable $throwable) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [],
+                    'Gateway promotion runtime cleanup failed: ' . $throwable->getMessage(),
+                    $messageId,
+                ));
+            }
+            return;
+        }
+
+        if ($action === ControlMessage::ACTION_GATEWAY_AGENT_COMMIT) {
+            try {
+                if ($instance === null) {
+                    throw new \RuntimeException('Gateway Agent is not running.');
+                }
+                $this->invalidateInstanceProcessRunningCache($instance);
+                if (!$this->isInstanceServiceAlive($instance)) {
+                    throw new \RuntimeException('Gateway Agent identity is no longer alive.');
+                }
+                $expectedTransactionId = \strtolower(\trim((string)(
+                    $msg['promotion_transaction_id'] ?? ''
+                )));
+                $commit = $this->commitPromotionGatewayRuntimeIntent($expectedTransactionId);
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    $commit,
+                    'Gateway promotion runtime committed.',
+                    $messageId,
+                ));
+            } catch (\Throwable $throwable) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [],
+                    'Gateway promotion runtime commit failed: ' . $throwable->getMessage(),
+                    $messageId,
+                ));
+            }
+            return;
+        }
+
+        if ($instance !== null && $instance->isRunning()) {
+            try {
+                $intent = $this->preparePromotionGatewayRuntimeIntent();
+                $runtimePolicy = $this->ensureGatewayJoinRuntimePolicy();
+                $this->desiredState[$role] = 1;
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    [
+                        'state' => $instance->state,
+                        'pid' => $instance->getTrackingPid(),
+                        'runtime_endpoint' => $intent,
+                        'runtime_policy' => $runtimePolicy,
+                    ],
+                    'Gateway Agent is already enabled.',
+                    $messageId,
+                ));
+            } catch (\Throwable $throwable) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [],
+                    'Gateway Agent endpoint preparation failed: ' . $throwable->getMessage(),
+                    $messageId,
+                ));
+            }
+            return;
+        }
+        if ($instance !== null) {
+            $this->invalidateInstanceProcessRunningCache($instance);
+            if ($this->isInstanceServiceAlive($instance)) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    ['state' => $instance->state, 'pid' => $instance->getTrackingPid()],
+                    'A previous Gateway Agent slot is still occupied.',
+                    $messageId,
+                ));
+                return;
+            }
+            $this->cleanupInstancePidFile($instance);
+            $this->registry->removeInstance($role, 1);
+        }
+        $provider = $this->registry->getProvider($role);
+        if (!$provider instanceof GatewayProvider) {
+            $this->desiredState[$role] = 0;
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway Agent provider is unavailable.',
+                $messageId,
+            ));
+            return;
+        }
+        try {
+            $intent = $this->preparePromotionGatewayRuntimeIntent();
+            $runtimePolicy = $this->ensureGatewayJoinRuntimePolicy();
+            $this->desiredState[$role] = 1;
+            $started = $this->startInstance($provider, 1, $this->context);
+            if (!$started instanceof ServiceInstance) {
+                throw new \RuntimeException('Gateway Agent process was not created.');
+            }
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                true,
+                [
+                    'state' => $started->state,
+                    'pid' => $started->getTrackingPid(),
+                    'launch_id' => $started->launchId,
+                    'runtime_endpoint' => $intent,
+                    'runtime_policy' => $runtimePolicy,
+                ],
+                'Gateway Agent enable accepted.',
+                $messageId,
+            ));
+        } catch (\Throwable $throwable) {
+            try {
+                $cleanup = $this->disablePromotionGatewayRuntime();
+                if (!($cleanup['ok'] ?? false)) {
+                    $throwable = new \RuntimeException(
+                        $throwable->getMessage()
+                            . '; bounded cleanup was incomplete: '
+                            . (string)\json_encode($cleanup, JSON_UNESCAPED_SLASHES),
+                        0,
+                        $throwable,
+                    );
+                }
+            } catch (\Throwable $cleanupError) {
+                $throwable = new \RuntimeException(
+                    $throwable->getMessage()
+                        . '; bounded cleanup failed: '
+                        . $cleanupError->getMessage(),
+                    0,
+                    $throwable,
+                );
+            }
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway Agent enable failed: ' . $throwable->getMessage(),
+                $messageId,
+            ));
+        }
+    }
+
+    /**
      * @return array{initial_slot:int,deferred_slots:list<int>}
      */
     private static function gatewayJoinBackendLaunchPlan(int $poolSize): array
@@ -18151,6 +19036,15 @@ class ServiceOrchestrator
 
         if ($action === ControlMessage::ACTION_CACHE_NAMESPACE_STATUS_V1) {
             $this->handleCacheNamespaceInvalidationStatusCommand($msg, $clientId);
+            return;
+        }
+
+        if (\in_array($action, [
+            ControlMessage::ACTION_GATEWAY_AGENT_ENABLE,
+            ControlMessage::ACTION_GATEWAY_AGENT_COMMIT,
+            ControlMessage::ACTION_GATEWAY_AGENT_DISABLE,
+        ], true)) {
+            $this->handleGatewayAgentLifecycleCommand($action, $msg, $clientId);
             return;
         }
 

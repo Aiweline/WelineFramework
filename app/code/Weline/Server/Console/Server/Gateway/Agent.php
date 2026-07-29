@@ -21,6 +21,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Edge\Gateway\GatewayPublicRouteProbe;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\GatewayRuntimeEndpointPublisher;
+use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * Project-owned wls-edge/2 lease agent.
@@ -55,20 +56,45 @@ final class Agent extends CommandAbstract
         $shutdown = false;
         $this->registerSignals($shutdown);
         [$kernel, $guard] = $this->connectMaster($args, $shutdown);
-        $gateway = new GatewayHostManager(progressCallback: static function () use ($kernel): void {
-            if ($kernel === null) {
+        $publicationHeartbeatAt = 0.0;
+        $gateway = null;
+        $gateway = new GatewayHostManager(progressCallback: function () use (
+            $kernel,
+            $instanceName,
+            &$shutdown,
+            &$publicationHeartbeatAt,
+            &$gateway,
+        ): void {
+            if ($kernel !== null) {
+                try {
+                    $kernel->tick();
+                    $kernel->flushWrites();
+                    if (!$kernel->isConnected()) {
+                        $kernel->reconnect();
+                    }
+                } catch (\Throwable) {
+                    // Publication progress must keep driving the supervisor IPC,
+                    // but a transient reconnect failure is retried by the normal
+                    // Agent loop instead of corrupting the gateway transaction.
+                }
+            }
+            $now = $this->monotonicNow();
+            if (!self::publicationHeartbeatDue(
+                $now,
+                $publicationHeartbeatAt,
+                $shutdown,
+            )) {
                 return;
             }
+            // Reserve the interval before transport so a failed keepalive
+            // cannot turn the publication poll into a heartbeat busy loop.
+            $publicationHeartbeatAt = $now;
             try {
-                $kernel->tick();
-                $kernel->flushWrites();
-                if (!$kernel->isConnected()) {
-                    $kernel->reconnect();
-                }
+                $gateway?->heartbeat($instanceName);
             } catch (\Throwable) {
-                // Publication progress must keep driving the supervisor IPC,
-                // but a transient reconnect failure is retried by the normal
-                // Agent loop instead of corrupting the gateway transaction.
+                // The enclosing register/renew publication remains the desired
+                // state authority. Its next bounded progress tick retries lease
+                // keepalive without nesting another configuration mutation.
             }
         });
         $paths = new GatewayPaths();
@@ -94,8 +120,8 @@ final class Agent extends CommandAbstract
         $fallbackDrainRequested = false;
         $joinBackendRequested = false;
         $lastNativeDrainCommandAt = 0.0;
-        $lastAcmeSyncAt = 0.0;
-        $lastAcmeDigest = '';
+        $lastAcmeSyncAt = $this->monotonicNow();
+        $lastAcmeDigest = self::initialAcmeChallengeDigest();
         $lastFallbackLeaseProbe = 0.0;
         $observedFallback = [];
         $outageStateInitialized = false;
@@ -292,35 +318,41 @@ final class Agent extends CommandAbstract
                     }
                 }
                 if ($now - $lastHeartbeat >= self::HEARTBEAT_SECONDS && ($status['ok'] ?? false)) {
+                    $canReplayRegistration = self::canReplayRegistration(
+                        $joinRequired,
+                        $joinState,
+                    );
                     try {
                         $heartbeat = $gateway->heartbeat(
                             $instanceName,
                             $this->masterDrainCounters($instanceName),
                         );
-                        if (self::heartbeatRequiresRegistrationReplay($heartbeat)) {
+                        if (self::heartbeatRequiresRegistrationReplay($heartbeat)
+                            && $canReplayRegistration
+                        ) {
                             $gateway->register($instanceName);
                         }
-                        $probeRegistration = $builder->build($instanceName);
+                        if ($canReplayRegistration) {
+                            $probeRegistration = $builder->build($instanceName);
+                        }
                     } catch (\Throwable) {
                         // Epoch changes and state rebuild require a full desired
-                        // state replay. Other failures are retried next tick.
-                        try {
-                            $gateway->register($instanceName);
-                            $probeRegistration = $builder->build($instanceName);
-                        } catch (\Throwable) {
+                        // state replay. A project requiring the authenticated
+                        // join pool must not publish its ordinary backend while
+                        // that pool is still starting.
+                        if ($canReplayRegistration) {
+                            try {
+                                $gateway->register($instanceName);
+                                $probeRegistration = $builder->build($instanceName);
+                            } catch (\Throwable) {
+                            }
                         }
                     }
                     $lastHeartbeat = $now;
                 }
                 if (($status['ok'] ?? false) && \is_array($probeRegistration)) {
                     $challenges = $this->loadAcmeChallenges($probeRegistration);
-                    $challengeDigest = \hash(
-                        'sha256',
-                        \json_encode(
-                            $challenges,
-                            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-                        ) ?: '[]',
-                    );
+                    $challengeDigest = self::acmeChallengeDigest($challenges);
                     if (!\hash_equals($lastAcmeDigest, $challengeDigest)
                         || $now - $lastAcmeSyncAt >= 30.0
                     ) {
@@ -399,6 +431,7 @@ final class Agent extends CommandAbstract
                     nativeEdgeState: $nativeEdgeState,
                     lastCommandAt: $lastNativeDrainCommandAt,
                     controlAvailable: $kernel !== null,
+                    promotionCommitted: $this->promotionAllowsNativeDrain($instanceName),
                 )) {
                     $lastNativeDrainCommandAt = $now;
                     $kernel?->sendControlCommand(
@@ -424,9 +457,47 @@ final class Agent extends CommandAbstract
      *
      * @param array<string,mixed> $heartbeat
      */
+    public static function publicationHeartbeatDue(
+        float $now,
+        float $lastHeartbeatAt,
+        bool $shutdown,
+    ): bool {
+        return !$shutdown
+            && $now >= 0.0
+            && $lastHeartbeatAt >= 0.0
+            && $now - $lastHeartbeatAt >= self::HEARTBEAT_SECONDS;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $challenges
+     */
+    public static function acmeChallengeDigest(array $challenges): string
+    {
+        return \hash(
+            'sha256',
+            \json_encode(
+                $challenges,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            ) ?: '[]',
+        );
+    }
+
+    public static function initialAcmeChallengeDigest(): string
+    {
+        return self::acmeChallengeDigest([]);
+    }
+
     public static function heartbeatRequiresRegistrationReplay(array $heartbeat): bool
     {
         return ($heartbeat['re_register_required'] ?? false) === true;
+    }
+
+    public static function canReplayRegistration(
+        bool $joinRequired,
+        string $joinState,
+    ): bool {
+        return !$joinRequired
+            || \hash_equals('ACTIVE', \strtoupper(\trim($joinState)));
     }
 
     /**
@@ -442,6 +513,22 @@ final class Agent extends CommandAbstract
             );
     }
 
+    private function promotionAllowsNativeDrain(string $instanceName): bool
+    {
+        $endpoint = (new ServerInstanceManager())->getRawInstanceData($instanceName);
+        if (!\is_array($endpoint)) {
+            return false;
+        }
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $state = \strtoupper(\trim((string)(
+            $gateway['promotion_state'] ?? ''
+        )));
+
+        return $state === '' || $state === 'COMMITTED';
+    }
+
     public static function shouldRequestNativeDrain(
         float $now,
         bool $dataPlaneHealthy,
@@ -450,8 +537,10 @@ final class Agent extends CommandAbstract
         string $nativeEdgeState,
         float $lastCommandAt,
         bool $controlAvailable,
+        bool $promotionCommitted,
     ): bool {
-        if (!$controlAvailable
+        if (!$promotionCommitted
+            || !$controlAvailable
             || !$joinRequired
             || !$dataPlaneHealthy
             || $activeSince <= 0.0
