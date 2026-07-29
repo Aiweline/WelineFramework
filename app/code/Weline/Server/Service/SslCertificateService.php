@@ -197,6 +197,217 @@ class SslCertificateService
     }
 
     /**
+     * Remove SNI entries whose leaf certificate does not cover the map key or
+     * whose private key is unrelated. This runs at worker startup/reload, not
+     * on the handshake hot path.
+     *
+     * @param array<string,mixed> $map
+     * @return array<string,array<string,mixed>>
+     */
+    public static function sanitizeSniCertificateMap(array $map): array
+    {
+        $sanitized = [];
+        foreach ($map as $mappedName => $pair) {
+            if (!\is_string($mappedName) || !\is_array($pair)) {
+                continue;
+            }
+            $mappedName = self::normalizeSniName($mappedName, true);
+            $cert = \trim((string)($pair['local_cert'] ?? ''));
+            $key = \trim((string)($pair['local_pk'] ?? ''));
+            if ($mappedName === '' || $cert === '' || $key === ''
+                || !self::sniCertificatePairIsValid($cert, $key, $mappedName)
+            ) {
+                continue;
+            }
+            $sanitized[$mappedName] = \array_replace($pair, [
+                'local_cert' => $cert,
+                'local_pk' => $key,
+            ]);
+        }
+
+        return $sanitized;
+    }
+
+    public static function sniCertificateCoversName(string $certificatePath, string $name): bool
+    {
+        $name = self::normalizeSniName($name, true);
+        if ($name === '') {
+            return false;
+        }
+        foreach (self::sniCertificateDnsNames($certificatePath) as $certificateName) {
+            if (\str_starts_with($name, '*.')) {
+                if ($certificateName === $name) {
+                    return true;
+                }
+                continue;
+            }
+            if (self::sniHostnameMatchesPattern($name, $certificateName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function sniCertificatePairIsValid(
+        string $certificatePath,
+        string $keyPath,
+        string $name,
+    ): bool {
+        return $certificatePath !== ''
+            && $keyPath !== ''
+            && \is_file($certificatePath)
+            && \is_file($keyPath)
+            && self::sniCertificateCoversName($certificatePath, $name)
+            && self::sniCertificateMatchesPrivateKey($certificatePath, $keyPath);
+    }
+
+    public static function sniHostnameMatchesPattern(string $hostname, string $pattern): bool
+    {
+        $hostname = self::normalizeSniName($hostname, false);
+        $pattern = self::normalizeSniName($pattern, true);
+        if ($hostname === '' || $pattern === '') {
+            return false;
+        }
+        if (!\str_starts_with($pattern, '*.')) {
+            return \hash_equals($pattern, $hostname);
+        }
+        $root = \substr($pattern, 2);
+        if ($root === '' || !\str_ends_with($hostname, '.' . $root)) {
+            return false;
+        }
+
+        return \substr_count($hostname, '.') === \substr_count($root, '.') + 1;
+    }
+
+    /**
+     * Select from an already sanitized map without parsing certificates during
+     * a TLS handshake.
+     *
+     * @param array<string,array<string,mixed>> $map
+     * @return array<string,mixed>
+     */
+    public static function selectSniCertificatePair(
+        ?string $sniHost,
+        array $map,
+        string $defaultCert,
+        string $defaultKey,
+    ): array {
+        $fallback = ['local_cert' => $defaultCert, 'local_pk' => $defaultKey];
+        $hostname = self::normalizeSniName((string)$sniHost, false);
+        if ($hostname === '') {
+            return $fallback;
+        }
+        $exact = $map[$hostname] ?? null;
+        if (self::usableSniPair($exact)) {
+            return $exact;
+        }
+        foreach ($map as $mappedName => $pair) {
+            if (!\is_string($mappedName) || !\str_starts_with($mappedName, '*.')) {
+                continue;
+            }
+            if (self::sniHostnameMatchesPattern($hostname, $mappedName) && self::usableSniPair($pair)) {
+                return $pair;
+            }
+        }
+
+        return $fallback;
+    }
+
+    /** @return list<string> */
+    private static function sniCertificateDnsNames(string $certificatePath): array
+    {
+        static $cache = [];
+
+        $realPath = \realpath($certificatePath);
+        if ($realPath === false || !\is_file($realPath)) {
+            return [];
+        }
+        $pem = (string)@\file_get_contents($realPath);
+        if ($pem === '' || !\preg_match('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $pem, $match)) {
+            return [];
+        }
+        $cacheKey = $realPath . ':' . \hash('sha256', $match[0]);
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+        $certificate = @\openssl_x509_read($match[0]);
+        $parsed = $certificate !== false ? @\openssl_x509_parse($certificate, false) : false;
+        if (!\is_array($parsed)) {
+            return $cache[$cacheKey] = [];
+        }
+        $names = [];
+        $subjectAltName = $parsed['extensions']['subjectAltName'] ?? '';
+        if (\is_string($subjectAltName)) {
+            foreach (\preg_split('/,\s*/', $subjectAltName) ?: [] as $segment) {
+                if (\str_starts_with($segment, 'DNS:')) {
+                    $normalized = self::normalizeSniName(\substr($segment, 4), true);
+                    if ($normalized !== '') {
+                        $names[] = $normalized;
+                    }
+                }
+            }
+        }
+        if ($names === []) {
+            $commonName = $parsed['subject']['CN'] ?? '';
+            if (\is_string($commonName)) {
+                $normalized = self::normalizeSniName($commonName, true);
+                if ($normalized !== '') {
+                    $names[] = $normalized;
+                }
+            }
+        }
+
+        return $cache[$cacheKey] = \array_values(\array_unique($names));
+    }
+
+    private static function sniCertificateMatchesPrivateKey(string $certificatePath, string $keyPath): bool
+    {
+        $certificatePem = (string)@\file_get_contents($certificatePath);
+        $privateKeyPem = (string)@\file_get_contents($keyPath);
+        if ($certificatePem === '' || $privateKeyPem === '') {
+            return false;
+        }
+        $certificate = @\openssl_x509_read($certificatePem);
+        $privateKey = @\openssl_pkey_get_private($privateKeyPem);
+        if ($certificate === false || $privateKey === false) {
+            return false;
+        }
+
+        return @\openssl_x509_check_private_key($certificate, $privateKey);
+    }
+
+    private static function normalizeSniName(string $name, bool $allowWildcard): string
+    {
+        $name = \strtolower(\rtrim(\trim($name), '.'));
+        if ($name === '' || \filter_var($name, \FILTER_VALIDATE_IP)) {
+            return '';
+        }
+        $prefix = '';
+        if (\str_starts_with($name, '*.')) {
+            if (!$allowWildcard) {
+                return '';
+            }
+            $prefix = '*.';
+            $name = \substr($name, 2);
+        }
+        if ($name === '' || \strlen($name) > 253
+            || !\preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/', $name)
+        ) {
+            return '';
+        }
+
+        return $prefix . $name;
+    }
+
+    private static function usableSniPair(mixed $pair): bool
+    {
+        return \is_array($pair)
+            && \trim((string)($pair['local_cert'] ?? '')) !== ''
+            && \trim((string)($pair['local_pk'] ?? '')) !== '';
+    }
+
+    /**
      * WLS 首次启动可能早于 setup:upgrade 触达 Server 模块表。
      * SSL 证书准备是 server:start 的前置链路，必须能在缺表时用声明式 schema
      * 原子创建本模块证书表；已有表则零写入，避免影响正常升级和已有证书。
