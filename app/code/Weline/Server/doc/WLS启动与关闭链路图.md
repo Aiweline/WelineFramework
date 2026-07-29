@@ -110,6 +110,11 @@ flowchart TB
 - `server:start -r` 在创建新代前冻结旧代端口与 edge decision。共享宿主 Gateway
   不属于项目进程树，重启/停止项目只能 drain/unregister 本实例租约，不能停止宿主
   Controller 或 Nginx。legacy 项目 Nginx 仍按原 scoped owner 清理。
+- Gateway Agent 只有在网关状态同时匹配当前 `project_uuid`、当前实例名并明确为
+  `DRAINING` 时才建立停机围栏。该围栏禁止在 300 秒路由排空窗口内新启纯 WLS
+  fallback；已经存在的 fallback 立即进入排空，并从 Master 权威租约时间起满 300 秒后
+  关闭。其他项目或同项目其他实例的 `DRAINING` 不得影响当前实例，真实数据面故障仍
+  保持 90 秒启用、恢复健康 30 秒后排空、排空 300 秒后关闭的生命周期。
 - 重启交接超时时，端口 owner/scope 只用于诊断；`Start` 不杀 unknown/foreign 进程、不换端口、不跳过栅栏，而是中止新 Master 启动并返回非零。正常重启清理总预算在 Windows 为 30 秒、macOS/Linux 为 12 秒，fast-local 为 6 秒；Windows 的较长预算只覆盖已退出 PID 的 LISTEN 表延迟，不放宽 owner/scope 栅栏。
 - `-r` 和 `-r -f` 都会在停止旧代前保存 `app/etc/env.php` 中的原始 `system.maintenance` 值；平滑 `-r` 随后才临时开启维护态。无论新 Master 成功、超时、端口栅栏失败或中途 return/fatal，启动事务都恢复该原值：原来已开启则保持开启，原来关闭则恢复关闭。
 - 后台重启只有在新 Master 已进入 `running` 后才提交维护事务：启动进程绕过实例列表缓存，按显式实例 endpoint 直连控制面，保留本次命令的 `operation_id`，并在一个 monotonic 总 deadline 内等待该操作退出 `active/queued` 且 `maintenance_mode` 等于快照值。该恢复与确认必须发生在生成/启动 Nginx 候选和公网 health/protocol gate **之前**；否则门禁请求仍可能落到临时维护路由。Direct Master 只会在全部 READY Worker 完成维护门禁 ACK 后提交该状态；缺失 `maintenance_mode/control_operation` 字段、endpoint 不可控或超时都属于启动失败，禁止打印“维护模式已关闭”。
