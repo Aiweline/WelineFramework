@@ -27,6 +27,8 @@
 #define WLS_PATH_CHARS 32768U
 #define WLS_CONTROLLER_START_ATTEMPTS 4500U
 #define WLS_CONTROLLER_START_POLL_MS 10U
+#define WLS_CONTROLLER_IO_TIMEOUT_MS 3000U
+#define WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS 90000U
 
 typedef NTSTATUS (NTAPI *wls_nt_create_file_fn)(
     PHANDLE,
@@ -1431,11 +1433,10 @@ static int wls_socket_write_all(
     return 0;
 }
 
-static SOCKET wls_connect_controller(unsigned short port)
+static SOCKET wls_connect_controller(unsigned short port, DWORD timeout)
 {
     SOCKET controller;
     struct sockaddr_in address;
-    DWORD timeout = 3000U;
     controller = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (controller == INVALID_SOCKET) return INVALID_SOCKET;
     setsockopt(
@@ -1608,7 +1609,12 @@ static DWORD WINAPI wls_channel_thread(LPVOID context)
             ) <= 0) {
             goto request_cleanup;
         }
-        controller = wls_connect_controller(channel->controller_port);
+        controller = wls_connect_controller(
+            channel->controller_port,
+            wcscmp(channel->channel, L"admin") == 0
+                ? WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS
+                : WLS_CONTROLLER_IO_TIMEOUT_MS
+        );
         if (controller == INVALID_SOCKET) goto request_cleanup;
         header_size = _snprintf_s(
             header,
@@ -2099,7 +2105,7 @@ static int wls_wait_for_controller(
             }
             return 1;
         }
-        probe = wls_connect_controller(port);
+        probe = wls_connect_controller(port, WLS_CONTROLLER_IO_TIMEOUT_MS);
         if (probe != INVALID_SOCKET) {
             closesocket(probe);
             return 0;

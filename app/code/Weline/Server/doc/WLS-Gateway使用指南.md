@@ -3,7 +3,7 @@
 > 状态：实施中。edge 决策、稳定项目身份、纯 WLS 降级、Native Platform Broker、
 > 双通道鉴权、enrollment、证书快照、事务发布、A/B/LKG/熔断和 Controller/Nginx
 > 恢复链均已有实现与专项验证；Linux systemd、真实 80/443、宿主 reboot、legacy
-> 显式提升、fallback/rejoin 与修复后网关 H2 百万请求已在隔离 VM 通过。
+> 显式提升、fallback/rejoin、双租户 H2/H3 百万和撤销墓碑不变量已在隔离 VM 通过。
 > macOS 原生 Broker/Launcher/数据面已在随机端口实测；macOS/Windows 系统服务 ACL
 > 与 reboot、Windows 实机、首次 ACME 和剩余发布门禁尚未全部完成。
 
@@ -96,6 +96,10 @@ WLS TLS 入口执行固定 300 秒排空。Agent 每 10 秒重试推进事务但
   仍需隔离 host/VM 实证。
 - 控制协议标识为 `wls-edge/2`；管理/项目双通道、OS peer identity、项目能力凭据、
   nonce 防重放、请求/响应认证、generation 和 fencing 均已接通。
+- `repair`、`revoke`、`transfer`、`upgrade` 属于长管理事务，客户端和 Windows
+  Native Broker 为候选验证、发布及稳定观察保留 90 秒响应窗；普通状态和项目通道仍
+  使用短超时。项目撤销会建立不可逆墓碑；后续租约扫描、后端探测和迟到消息只能保持
+  `REMOVED`，并清空全部后端路由身份，不能复活路由。
 - 项目证书仍是唯一源；Native Broker 只从 enrollment 授权目录 no-follow 读取，
   校验私钥/SAN/权限和复制前后摘要后生成内容寻址快照。无效新证书不会替换 current。
 - WLS 2.0 v1 对全部租户关闭 Nginx TLS session cache、session ticket 和 0-RTT。
@@ -128,9 +132,11 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - WLS 2.0 v1 全局关闭 TLS session cache、ticket 与 0-RTT，跨租户和证书轮换后均不
   复用旧 TLS 1.3 会话；
 - macOS 显式启用原生集成后，Native Broker、Launcher、签名槽、崩溃回滚和真实数据面
-  恢复通过 `12 tests / 1995 assertions`；该证据不等于 launchd 安装/reboot；
-- Windows 路径专项通过 `87 tests / 1810 assertions / 3 non-Windows skips`；实际
-  Windows VM 因 Parallels 授权过期挂起，仍为 `BLOCKED_ENVIRONMENT`；
+  恢复通过 `12 tests / 1986 assertions`；该证据不等于 launchd 安装/reboot；
+- `Gateway|Windows|Nginx` 跨平台门禁通过
+  `221 tests / 2444 assertions / 15 capability skips`，含 Windows Native Broker
+  的长管理事务 I/O 窗口；实际 Windows VM 因 Parallels 授权过期挂起，仍为
+  `BLOCKED_ENVIRONMENT`；
 - legacy 80/443 显式提升已在 Linux VM 成功：promotion v50 的维护窗 69.897 秒，
   连续公网稳定观察 12.216 秒，提升后项目和宿主网关生命周期相互独立；
 - 提升后修复了 Worker 私有端口落入 Linux 临时端口范围造成的延迟
@@ -142,13 +148,19 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   1,000,000/1,000,000 成功、0 失败、HTTP/2 命中 100%、8 个 Worker 全命中、
   质量门禁 PASS；2892.78 QPS，P95 187.865ms，P99 301.984ms，压测后公网仍为
   HTTP/2 200、网关 `HEALTHY`、恢复计数 0；
+- 当前 v54 双租户 H2 混合百万由两个独立项目各完成 500,000 请求，均 0 失败、实际
+  HTTP/2 与 tenant marker 100% 精确；QPS 8268.25/10433，P95
+  3.137/3.043ms。双租户 H3 混合百万同样各 500,000 请求、0 失败，ALPN `h3`、
+  tenant 和 UUID 全量精确；QPS 3166.78/3262.12，P95 44.218/39.847ms；
+- v54 独立项目撤销在 30.67403 秒返回成功，约 3 分钟和三次后续采样均保持同一
+  `removed_at`、空后端身份和 `REMOVED`；撤销域名中性 421，幸存租户 HTTP/2 200，
+  网关保持 `HEALTHY`。多项目故障隔离夹具必须为每个项目使用独立受管 runtime；
 - 使用正式框架 bootstrap 的全量 Weline_Server 回归为
-  `1288 tests / 6441 assertions / 17 platform skips`，零错误、零失败。
+  `1290 tests / 6469 assertions / 17 platform skips`，零错误、零失败。
 
 当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、Windows 实机、首次 ACME、完整
-Session 运行时亲和、两项目混合百万、H3 百万和同条件三轮性能中位数。Linux v38
-生产候选已经完成来源、依赖、SBOM、自检与签名门禁，但不会绕过 A/B 旧槽至少保留
-24 小时的策略替换在线槽位。
+Session 运行时亲和和同条件三轮性能中位数。Linux 宿主包已经完成来源、依赖、SBOM、
+自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。
 
 完整需求、缺陷映射和验收矩阵见
 `dev/ai/plans/2026-07-27-WLS-2.0-多项目共享网关与自动恢复.md`。
