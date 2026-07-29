@@ -987,6 +987,7 @@ function wlsSslMergeDefaultListenerHostnamesIntoSniMap(
     string $sslKey,
     string $defaultHost
 ): void {
+    $sniServerCerts = \Weline\Server\Service\SslCertificateService::sanitizeSniCertificateMap($sniServerCerts);
     $add = static function (string $h, string $cert, string $key) use (&$sniServerCerts): void {
         $h = \strtolower(\trim($h));
         if ($h === '' || \filter_var($h, FILTER_VALIDATE_IP)) {
@@ -996,6 +997,9 @@ function wlsSslMergeDefaultListenerHostnamesIntoSniMap(
             return;
         }
         if ($cert === '' || $key === '' || !\is_file($cert) || !\is_file($key)) {
+            return;
+        }
+        if (!\Weline\Server\Service\SslCertificateService::sniCertificatePairIsValid($cert, $key, $h)) {
             return;
         }
         $sniServerCerts[$h] = ['local_cert' => $cert, 'local_pk' => $key];
@@ -6569,32 +6573,12 @@ function wlsSslPickCertificatePairForDeferSni(
     string $defaultCert,
     string $defaultKey
 ): array {
-    $fallback = ['local_cert' => $defaultCert, 'local_pk' => $defaultKey];
-    if ($defaultCert === '' || $defaultKey === '') {
-        return $fallback;
-    }
-    $h = $sniHost !== null ? \strtolower(\trim($sniHost)) : '';
-    if ($h === '' || \filter_var($h, \FILTER_VALIDATE_IP)) {
-        return $fallback;
-    }
-    if (isset($sniServerCerts[$h])) {
-        $p = $sniServerCerts[$h];
-        if (($p['local_cert'] ?? '') !== '' && ($p['local_pk'] ?? '') !== '') {
-            return $p;
-        }
-    }
-    foreach ($sniServerCerts as $mappedName => $pair) {
-        if (!\is_string($mappedName) || !\str_starts_with($mappedName, '*.')) {
-            continue;
-        }
-        $root = \substr($mappedName, 2);
-        if ($root !== '' && \str_ends_with($h, '.' . $root)) {
-            if (($pair['local_cert'] ?? '') !== '' && ($pair['local_pk'] ?? '') !== '') {
-                return $pair;
-            }
-        }
-    }
-    return $fallback;
+    return \Weline\Server\Service\SslCertificateService::selectSniCertificatePair(
+        $sniHost,
+        $sniServerCerts,
+        $defaultCert,
+        $defaultKey,
+    );
 }
 
 /**

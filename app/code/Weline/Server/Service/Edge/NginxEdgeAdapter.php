@@ -47,6 +47,7 @@ final class NginxEdgeAdapter implements EdgeAdapterInterface
                 if (!\is_array($endpoint)
                     || (string)($endpoint['gateway']['mode'] ?? '') !== 'gateway'
                     || (int)($endpoint['master_pid'] ?? 0) < 1
+                    || !self::gatewayBackendMasterReachable($endpoint)
                 ) {
                     continue;
                 }
@@ -64,10 +65,14 @@ final class NginxEdgeAdapter implements EdgeAdapterInterface
         }
 
         $managed = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
-        if (!$managed->isEdgeNginxManaged() || !$managed->paths()->isInstalled()) {
-            throw new \RuntimeException(
-                'Certificate reload requires the installed project-managed Nginx.'
-            );
+        if (!self::managedNginxCanReload(
+            $managed->isEdgeNginxManaged(),
+            $managed->paths()->isInstalled(),
+        )) {
+            // Pure WLS and cold fallback own their TLS context directly. The
+            // project certificate remains the fact source and no Nginx reload
+            // is required until a managed edge is explicitly installed.
+            return;
         }
         $result = $managed->reload();
         if (!($result['ok'] ?? false)
@@ -83,6 +88,47 @@ final class NginxEdgeAdapter implements EdgeAdapterInterface
                 (string)($result['message'] ?? 'Project-managed Nginx certificate reload failed.')
             );
         }
+    }
+
+    /** Return whether the project-managed Nginx can receive a reload. */
+    private static function managedNginxCanReload(bool $managed, bool $installed): bool
+    {
+        return $managed && $installed;
+    }
+
+    /**
+     * A persisted gateway endpoint is only eligible for certificate renewal
+     * while its project Backend Master control endpoint is reachable. This is
+     * deliberately socket-based so the same check works on Unix and Windows.
+     *
+     * @param array<string,mixed> $endpoint
+     */
+    private static function gatewayBackendMasterReachable(array $endpoint): bool
+    {
+        $port = (int)($endpoint['control_port'] ?? 0);
+        if ($port < 1 || $port > 65535) {
+            return false;
+        }
+
+        $host = \trim((string)($endpoint['control_host'] ?? ''), "[] \t\n\r\0\x0B");
+        if ($host === '' || $host === '0.0.0.0') {
+            $host = '127.0.0.1';
+        } elseif ($host === '::') {
+            $host = '::1';
+        }
+        $authority = \str_contains($host, ':') ? '[' . $host . ']' : $host;
+        $socket = @\stream_socket_client(
+            'tcp://' . $authority . ':' . $port,
+            $errorCode,
+            $errorMessage,
+            0.2,
+            \STREAM_CLIENT_CONNECT,
+        );
+        if (!\is_resource($socket)) {
+            return false;
+        }
+        \fclose($socket);
+        return true;
     }
 
     public function doctorSnapshot(): array

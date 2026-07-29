@@ -9,6 +9,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
+use Weline\Server\Service\Edge\NginxEdgeAdapter;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\SslCertificateService;
 
@@ -233,6 +234,135 @@ class SslCertificateServiceTest extends TestCase
         );
     }
 
+    public function testSniCertificateMapRejectsReversedOverbroadAndMismatchedPairs(): void
+    {
+        $wildcard = $this->createSniCertificatePair('*.weline.test', ['*.weline.test', 'localhost'], 'wildcard');
+        $localhost = $this->createSniCertificatePair('localhost', ['localhost'], 'localhost');
+        $exact = $this->createSniCertificatePair('shop.example.test', ['shop.example.test'], 'exact');
+        $wrongKey = $this->createSniCertificatePair(
+            'wrong-key.example.test',
+            ['wrong-key.example.test'],
+            'wrong-key',
+        );
+
+        $sanitized = SslCertificateService::sanitizeSniCertificateMap([
+            'p2583f416.weline.test' => $localhost,
+            '*.weline.test' => $wildcard,
+            'localhost' => $localhost,
+            'deep.p2583f416.weline.test' => $wildcard,
+            'shop.example.test' => $exact,
+            'wrong-key.example.test' => [
+                'local_cert' => $wrongKey['local_cert'],
+                'local_pk' => $localhost['local_pk'],
+            ],
+        ]);
+
+        $this->assertArrayNotHasKey('p2583f416.weline.test', $sanitized);
+        $this->assertArrayHasKey('*.weline.test', $sanitized);
+        $this->assertArrayHasKey('localhost', $sanitized);
+        $this->assertArrayNotHasKey('deep.p2583f416.weline.test', $sanitized);
+        $this->assertArrayNotHasKey('wrong-key.example.test', $sanitized);
+
+        $projectPair = SslCertificateService::selectSniCertificatePair(
+            'p2583f416.weline.test',
+            $sanitized,
+            $localhost['local_cert'],
+            $localhost['local_pk'],
+        );
+        $this->assertSame($wildcard['local_cert'], $projectPair['local_cert']);
+
+        $exactPair = SslCertificateService::selectSniCertificatePair(
+            'shop.example.test',
+            $sanitized,
+            $localhost['local_cert'],
+            $localhost['local_pk'],
+        );
+        $this->assertSame($exact['local_cert'], $exactPair['local_cert']);
+
+        foreach (['deep.p2583f416.weline.test', 'unrelated.example.test'] as $fallbackHost) {
+            $fallbackPair = SslCertificateService::selectSniCertificatePair(
+                $fallbackHost,
+                $sanitized,
+                $localhost['local_cert'],
+                $localhost['local_pk'],
+            );
+            $this->assertSame($localhost['local_cert'], $fallbackPair['local_cert']);
+        }
+    }
+
+    public function testSniHostnameWildcardMatchesExactlyOneLabel(): void
+    {
+        $this->assertTrue(SslCertificateService::sniHostnameMatchesPattern(
+            'p2583f416.weline.test',
+            '*.weline.test',
+        ));
+        $this->assertFalse(SslCertificateService::sniHostnameMatchesPattern(
+            'deep.p2583f416.weline.test',
+            '*.weline.test',
+        ));
+        $this->assertTrue(SslCertificateService::sniHostnameMatchesPattern(
+            'shop.example.test',
+            'shop.example.test',
+        ));
+        $this->assertFalse(SslCertificateService::sniHostnameMatchesPattern(
+            'other.example.test',
+            'shop.example.test',
+        ));
+    }
+
+    /** @return array{local_cert:string,local_pk:string} */
+    private function createSniCertificatePair(string $commonName, array $dnsNames, string $name): array
+    {
+        $directory = $this->makeTempDir();
+        $configPath = $directory . DIRECTORY_SEPARATOR . $name . '.cnf';
+        $certPath = $directory . DIRECTORY_SEPARATOR . $name . '.pem';
+        $keyPath = $directory . DIRECTORY_SEPARATOR . $name . '.key';
+        $subjectAltNames = \implode(',', \array_map(
+            static fn(string $dnsName): string => 'DNS:' . $dnsName,
+            $dnsNames,
+        ));
+        $config = "[req]\n"
+            . "distinguished_name=req_dn\n"
+            . "prompt=no\n"
+            . "req_extensions=v3_req\n"
+            . "[req_dn]\n"
+            . "CN={$commonName}\n"
+            . "[v3_req]\n"
+            . "subjectAltName={$subjectAltNames}\n"
+            . "[v3_cert]\n"
+            . "basicConstraints=critical,CA:false\n"
+            . "keyUsage=critical,digitalSignature,keyEncipherment\n"
+            . "extendedKeyUsage=serverAuth\n"
+            . "subjectAltName={$subjectAltNames}\n";
+        $this->assertNotFalse(\file_put_contents($configPath, $config));
+        $options = [
+            'config' => $configPath,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'private_key_bits' => 2048,
+            'digest_alg' => 'sha256',
+        ];
+        $key = \openssl_pkey_new($options);
+        $this->assertNotFalse($key);
+        $csr = \openssl_csr_new(['commonName' => $commonName], $key, $options);
+        $this->assertNotFalse($csr);
+        $certificate = \openssl_csr_sign(
+            $csr,
+            null,
+            $key,
+            2,
+            \array_replace($options, ['x509_extensions' => 'v3_cert']),
+            1,
+        );
+        $this->assertNotFalse($certificate);
+        $this->assertTrue(\openssl_x509_export($certificate, $certificatePem));
+        $this->assertTrue(\openssl_pkey_export($key, $privateKeyPem, null, $options));
+        $this->assertNotFalse(\file_put_contents($certPath, $certificatePem));
+        $this->assertNotFalse(\file_put_contents($keyPath, $privateKeyPem));
+        @\chmod($keyPath, 0600);
+
+        return ['local_cert' => $certPath, 'local_pk' => $keyPath];
+    }
+
     public function testLocalCaCertificateReuseRequiresLoopbackIpSanForLocalDomain(): void
     {
         $fixture = $this->createLocalCaFixture('p11005ce4.weline.test');
@@ -303,6 +433,42 @@ class SslCertificateServiceTest extends TestCase
         $this->assertSame($certificate, $map['*.example.test'] ?? null);
         $this->assertArrayNotHasKey('example.test', $map);
     }
+
+    public function testCertificatePublicationOnlyRenewsReachableGatewayBackendMaster(): void
+    {
+        $server = \stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
+        self::assertIsResource($server, $errorMessage);
+        $address = (string)\stream_socket_get_name($server, false);
+        $separator = \strrpos($address, ':');
+        self::assertNotFalse($separator);
+        $port = (int)\substr($address, $separator + 1);
+        self::assertGreaterThan(0, $port);
+
+        $probe = new ReflectionMethod(NginxEdgeAdapter::class, 'gatewayBackendMasterReachable');
+        $probe->setAccessible(true);
+        $endpoint = [
+            'master_pid' => \getmypid(),
+            'control_host' => '127.0.0.1',
+            'control_port' => $port,
+            'gateway' => ['mode' => 'gateway'],
+        ];
+
+        self::assertTrue($probe->invoke(null, $endpoint));
+        \fclose($server);
+        self::assertFalse($probe->invoke(null, $endpoint));
+        self::assertFalse($probe->invoke(null, \array_replace($endpoint, ['control_port' => 0])));
+    }
+    public function testCertificatePublicationReloadsOnlyInstalledManagedNginx(): void
+    {
+        $gate = new ReflectionMethod(NginxEdgeAdapter::class, 'managedNginxCanReload');
+        $gate->setAccessible(true);
+
+        self::assertFalse($gate->invoke(null, false, false));
+        self::assertFalse($gate->invoke(null, false, true));
+        self::assertFalse($gate->invoke(null, true, false));
+        self::assertTrue($gate->invoke(null, true, true));
+    }
+
 
     public function testGatewayCertificateRootFenceRejectsAccessibleStaleHostPath(): void
     {
