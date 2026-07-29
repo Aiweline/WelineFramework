@@ -743,6 +743,91 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    public function testBackendEndpointRejectsForgedSharedSessionEvidence(): void
+    {
+        $project = (string)\realpath($this->createProject());
+        $runtime = $project . DIRECTORY_SEPARATOR . 'var/server';
+        self::assertTrue(\mkdir($runtime, 0700, true));
+        $endpoint = $runtime . DIRECTORY_SEPARATOR . 'gateway-capability.json';
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174097';
+        $launchId = \str_repeat('e', 32);
+        $secret = \str_repeat('b', 64);
+        $evidence = [
+            'schema' => 'wls-session-capability/1',
+            'storage' => 'wls',
+            'runtime_source' => 'project_shared_state',
+            'runtime_registered' => true,
+            'runtime_shared_service' => true,
+            'host' => '127.0.0.1',
+            'port' => 20970,
+            'token_scope_digest' => \hash('sha256', 'session_server.20970.token'),
+            'probe' => 'healthy',
+            'reason' => 'authenticated_session_runtime',
+        ];
+        self::assertNotFalse(\file_put_contents($endpoint, \json_encode([
+            'instance_name' => 'gateway-capability',
+            'main_port' => 29012,
+            'master_pid' => \getmypid(),
+            'master_epoch' => 14,
+            'shared_state' => [
+                'session' => [
+                    'role' => 'session_server',
+                    'host' => '127.0.0.1',
+                    'port' => 20970,
+                    'token_file_name' => 'session_server.20970.token',
+                    'shared_service' => true,
+                    'registered' => true,
+                ],
+            ],
+            'gateway' => [
+                'project_uuid' => $projectUuid,
+                'instance_generation' => 8,
+                'launch_id' => $launchId,
+            ],
+        ], JSON_THROW_ON_ERROR)));
+        $identity = [
+            'project_uuid' => $projectUuid,
+            'instance_id' => 'gateway-capability',
+            'generation' => 8,
+            'launch_id' => $launchId,
+            'master_epoch' => 14,
+            'endpoint_file' => $endpoint,
+            'edge_capability_secret' => $secret,
+            'edge_capability_digest' => \hash('sha256', $secret),
+            'session_capability' => 'shared_session',
+            'session_capability_evidence' => $evidence,
+            'session_capability_evidence_digest' => \hash(
+                'sha256',
+                GatewayClient::canonicalJson($evidence),
+            ),
+        ];
+
+        $validator = new \ReflectionMethod(
+            $this->controller,
+            'validateBackendEndpointIdentity',
+        );
+        self::assertNull($validator->invoke(
+            $this->controller,
+            $identity,
+            $project,
+            [['host' => '127.0.0.1', 'port' => 29012, 'weight' => 1]],
+        ));
+
+        $identity['session_capability_evidence']['token_scope_digest'] = \str_repeat('f', 64);
+        $identity['session_capability_evidence_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($identity['session_capability_evidence']),
+        );
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('session capability evidence');
+        $validator->invoke(
+            $this->controller,
+            $identity,
+            $project,
+            [['host' => '127.0.0.1', 'port' => 29012, 'weight' => 1]],
+        );
+    }
+
     public function testBackendEndpointAcceptsOnlyActiveFencedGatewayJoinPort(): void
     {
         $project = (string)\realpath($this->createProject());
@@ -1244,6 +1329,24 @@ final class GatewayProtocolSecurityTest extends TestCase
             $route['instances']['alpha']['backend_identity'],
             $route['backend_identity'],
         );
+
+        $mismatchedEvidence = $route['instances']['zeta']['backend_identity'][
+            'session_capability_evidence'
+        ];
+        $mismatchedEvidence['port'] = 31999;
+        $route['instances']['zeta']['backend_identity'][
+            'session_capability_evidence'
+        ] = $mismatchedEvidence;
+        $route['instances']['zeta']['backend_identity'][
+            'session_capability_evidence_digest'
+        ] = \hash('sha256', GatewayClient::canonicalJson($mismatchedEvidence));
+        $selector->invokeArgs($this->controller, [&$route]);
+        self::assertSame(
+            'single',
+            $route['distribution_mode'],
+            'Instances using different shared Session runtimes must never share traffic.',
+        );
+        self::assertSame([29001], \array_column($route['backends'], 'port'));
 
         $route['instances']['alpha']['backend_healthy'] = false;
         $selector->invokeArgs($this->controller, [&$route]);
@@ -1947,6 +2050,208 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertSame('ACTIVATING', $unchanged['operations'][$operationId]['state']);
     }
 
+    public function testSameProjectGenerationMayRefreshSameLiveInstanceCapabilityDigest(): void
+    {
+        $project = $this->createProject();
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174037';
+        $instanceId = 'capability-refresh-instance';
+        $launchId = \str_repeat('3', 32);
+        $enrollment = $this->request(
+            'admin',
+            'enroll',
+            [
+                'project_uuid' => $projectUuid,
+                'project_root' => $project,
+                'certificate_roots' => [
+                    'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+                ],
+                'allowed_domains' => ['capability.example.test'],
+            ],
+            'admin',
+            $this->adminSecret,
+        );
+        self::assertTrue($enrollment['ok']);
+
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['projects'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'project_root' => $project,
+            'generation' => 2,
+            'digest' => \str_repeat('1', 64),
+            'idempotency_key' => $projectUuid . ':' . $instanceId . ':2',
+            'route_ids' => [],
+        ];
+        $state['instances'][$projectUuid][$instanceId] = [
+            'instance_id' => $instanceId,
+            'generation' => 4,
+            'digest' => \str_repeat('2', 64),
+            'master_epoch' => 4,
+            'launch_id' => $launchId,
+            'status' => 'ACTIVE',
+        ];
+        $stateProperty->setValue($this->controller, $state);
+
+        $register = new \ReflectionMethod($this->controller, 'register');
+        try {
+            $register->invoke(
+                $this->controller,
+                [
+                    'project_uuid' => $projectUuid,
+                    'project_root' => $project,
+                    'instance_id' => $instanceId,
+                    'project_generation' => 2,
+                    'request_digest' => \str_repeat('1', 64),
+                    'idempotency_key' => $projectUuid . ':' . $instanceId . ':2',
+                    'instance_generation' => 4,
+                    'instance_digest' => \str_repeat('5', 64),
+                    'master_epoch' => 4,
+                    'launch_id' => $launchId,
+                    'gateway_epoch' => (string)$state['epoch'],
+                    'routes' => [],
+                    '_broker_peer' => [
+                        'channel' => 'project',
+                        'uid' => (int)\posix_geteuid(),
+                        'gid' => (int)\posix_getegid(),
+                        'pid' => \getmypid(),
+                    ],
+                ],
+                false,
+            );
+            self::fail('The deliberately incomplete route set was accepted.');
+        } catch (\DomainException $exception) {
+            self::assertSame(
+                'Registration must contain 1..256 routes.',
+                $exception->getMessage(),
+                'The same fenced launch must pass the digest-refresh gate before route validation.',
+            );
+        }
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Same instance generation has a different instance digest.');
+        $register->invoke(
+            $this->controller,
+            [
+                'project_uuid' => $projectUuid,
+                'project_root' => $project,
+                'instance_id' => $instanceId,
+                'project_generation' => 4,
+                'request_digest' => \str_repeat('6', 64),
+                'idempotency_key' => $projectUuid . ':' . $instanceId . ':4',
+                'instance_generation' => 4,
+                'instance_digest' => \str_repeat('7', 64),
+                'master_epoch' => 4,
+                'launch_id' => \str_repeat('8', 32),
+                'gateway_epoch' => (string)$state['epoch'],
+                'routes' => [],
+                '_broker_peer' => [
+                    'channel' => 'project',
+                    'uid' => (int)\posix_geteuid(),
+                    'gid' => (int)\posix_getegid(),
+                    'pid' => \getmypid(),
+                ],
+            ],
+            false,
+        );
+    }
+
+    public function testSameGenerationCapabilityRefreshCannotChangeBackendRouteState(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174099';
+        $instanceId = 'capability-only-refresh';
+        $routeId = \str_repeat('9', 32);
+        $launchId = \str_repeat('4', 32);
+        $backends = [['host' => '127.0.0.1', 'port' => 29140, 'weight' => 1]];
+        $identity = [
+            'project_uuid' => $projectUuid,
+            'instance_id' => $instanceId,
+            'generation' => 4,
+            'endpoint_file' => '/tmp/capability-endpoint.json',
+            'master_pid' => 4100,
+            'master_epoch' => 4,
+            'launch_id' => $launchId,
+            'edge_capability_digest' => \str_repeat('a', 64),
+            'session_capability' => 'isolated',
+        ];
+        $identity['digest'] = \hash('sha256', GatewayClient::canonicalJson($identity));
+        $evidence = [
+            'schema' => 'wls-stateless-capability/1',
+            'runtime_source' => 'project_endpoint',
+            'runtime_declared' => true,
+            'instance_generation' => 4,
+            'reason' => 'declared_stateless_runtime',
+        ];
+        $nextIdentity = $identity;
+        $nextIdentity['session_capability'] = 'stateless';
+        $nextIdentity['session_capability_evidence'] = $evidence;
+        $nextIdentity['session_capability_evidence_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($evidence),
+        );
+        $nextIdentity['digest'] = \hash('sha256', GatewayClient::canonicalJson(
+            \array_diff_key($nextIdentity, ['digest' => true]),
+        ));
+        $existingInstance = [
+            'instance_id' => $instanceId,
+            'generation' => 4,
+            'digest' => \str_repeat('b', 64),
+            'master_epoch' => 4,
+            'launch_id' => $launchId,
+            'backends' => $backends,
+            'backend_identity' => $identity,
+        ];
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['projects'][$projectUuid] = ['route_ids' => [$routeId]];
+        $state['routes'][$routeId] = [
+            'route_id' => $routeId,
+            'project_uuid' => $projectUuid,
+            'domain' => 'capability-only.example.test',
+            'force_https' => true,
+            'certificate' => [
+                'source_digest' => \str_repeat('c', 64),
+                'generation' => 3,
+            ],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        $candidate = [
+            'route_id' => $routeId,
+            'project_uuid' => $projectUuid,
+            'domain' => 'capability-only.example.test',
+            'force_https' => true,
+            'certificate' => [
+                'source_digest' => \str_repeat('c', 64),
+                'generation' => 3,
+            ],
+            'backends' => $backends,
+            'backend_identity' => $nextIdentity,
+        ];
+        $guard = new \ReflectionMethod(
+            $this->controller,
+            'assertCapabilityOnlyInstanceRefresh',
+        );
+        $guard->invoke(
+            $this->controller,
+            $projectUuid,
+            $instanceId,
+            $existingInstance,
+            [$candidate],
+        );
+
+        $candidate['backends'][0]['port'] = 29141;
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage(
+            'Same instance generation may refresh capability evidence only.',
+        );
+        $guard->invoke(
+            $this->controller,
+            $projectUuid,
+            $instanceId,
+            $existingInstance,
+            [$candidate],
+        );
+    }
+
     public function testPreparedPublicationResumesAsPendingAfterControllerRestart(): void
     {
         $operationId = \str_repeat('a', 32);
@@ -2254,6 +2559,47 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertTrue($heartbeat['re_register_required']);
     }
 
+    public function testHeartbeatRequestsReplayWhenInstanceDigestChangesWithoutTouchingLease(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174098';
+        $instanceId = 'instance-capability-refresh';
+        $routeId = \str_repeat('5', 32);
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $lease = $this->instanceLease($instanceId, 29103, 'isolated');
+        $lease['last_heartbeat'] = \time() - 20;
+        $state['projects'][$projectUuid] = ['generation' => 1];
+        $state['instances'][$projectUuid][$instanceId] = $lease;
+        $state['routes'][$routeId] = [
+            'project_uuid' => $projectUuid,
+            'instances' => [$instanceId => $lease],
+            'status' => 'ACTIVE',
+        ];
+        $stateProperty->setValue($this->controller, $state);
+
+        $heartbeat = (new \ReflectionMethod($this->controller, 'heartbeat'))->invoke(
+            $this->controller,
+            [
+                'project_uuid' => $projectUuid,
+                'project_generation' => 1,
+                'instance_id' => $instanceId,
+                'instance_generation' => 1,
+                'instance_digest' => \str_repeat('d', 64),
+                'master_epoch' => 1,
+                'launch_id' => \str_repeat('c', 32),
+            ],
+        );
+
+        self::assertTrue($heartbeat['accepted']);
+        self::assertTrue($heartbeat['re_register_required']);
+        $unchanged = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            $lease['last_heartbeat'],
+            $unchanged['instances'][$projectUuid][$instanceId]['last_heartbeat'],
+            'A changed digest must replay full registration before renewing the lease.',
+        );
+    }
+
     public function testIdempotentRegistrationFastPathRequiresFullyActiveRouting(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174036';
@@ -2556,6 +2902,39 @@ CONF
     {
         $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
             ->getValue($this->controller);
+        $identity = ['session_capability' => $capability];
+        if ($capability === 'stateless') {
+            $evidence = [
+                'schema' => 'wls-stateless-capability/1',
+                'runtime_source' => 'project_endpoint',
+                'runtime_declared' => true,
+                'instance_generation' => 1,
+                'reason' => 'declared_stateless_runtime',
+            ];
+            $identity['session_capability_evidence'] = $evidence;
+            $identity['session_capability_evidence_digest'] = \hash(
+                'sha256',
+                GatewayClient::canonicalJson($evidence),
+            );
+        } elseif ($capability === 'shared_session') {
+            $evidence = [
+                'schema' => 'wls-session-capability/1',
+                'storage' => 'wls',
+                'runtime_source' => 'project_shared_state',
+                'runtime_registered' => true,
+                'runtime_shared_service' => true,
+                'host' => '127.0.0.1',
+                'port' => 31998,
+                'token_scope_digest' => \hash('sha256', 'session.token'),
+                'probe' => 'healthy',
+                'reason' => 'authenticated_session_runtime',
+            ];
+            $identity['session_capability_evidence'] = $evidence;
+            $identity['session_capability_evidence_digest'] = \hash(
+                'sha256',
+                GatewayClient::canonicalJson($evidence),
+            );
+        }
         return [
             'instance_id' => $instanceId,
             'generation' => 1,
@@ -2563,7 +2942,7 @@ CONF
             'master_epoch' => 1,
             'launch_id' => \str_repeat('c', 32),
             'backends' => [['host' => '127.0.0.1', 'port' => $port, 'weight' => 1]],
-            'backend_identity' => ['session_capability' => $capability],
+            'backend_identity' => $identity,
             'backend_healthy' => true,
             'status' => 'ACTIVE',
             'last_heartbeat' => \time(),

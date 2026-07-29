@@ -432,6 +432,12 @@ class Start extends CommandAbstract
                 \time(),
                 (int)($previousGateway['instance_generation'] ?? 0) + 1,
             );
+            $gatewayCapabilityDeclaration = (
+                new \Weline\Server\Service\Edge\Gateway\GatewayBackendCapabilityDeclaration()
+            )->resolve(
+                \is_array($config['gateway'] ?? null) ? $config['gateway'] : [],
+                $instanceGeneration,
+            );
             $edgeDecision = (new \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision())
                 ->decide(
                     $configuredEdgeMode,
@@ -500,6 +506,7 @@ class Start extends CommandAbstract
                     ? (string)($edgeDecision->gateway['epoch'] ?? '')
                     : '',
             ],
+            $gatewayCapabilityDeclaration,
         );
         $this->printer->note(__('WLS 2.0 边缘模式：%{1}（请求：%{2}）', [
             $effectiveEdgeMode,
@@ -8349,6 +8356,12 @@ class Start extends CommandAbstract
         $savedConfig['ssl_enabled'] = $effectiveEdgeMode
             === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
             && empty($config['no_ssl']);
+        if (\hash_equals(
+            'stateless',
+            (string)($config['gateway']['backend_capability'] ?? ''),
+        )) {
+            $savedConfig['gateway']['backend_capability'] = 'stateless';
+        }
         $existingRuntime = \is_array($existingSavedConfig['runtime'] ?? null)
             ? $existingSavedConfig['runtime']
             : [];

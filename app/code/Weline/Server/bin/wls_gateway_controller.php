@@ -949,9 +949,15 @@ final class WlsEdgeGatewayController
         if ($instanceGeneration < $existingInstanceGeneration) {
             throw new \DomainException('Stale instance generation rejected.');
         }
-        if ($instanceGeneration === $existingInstanceGeneration
+        $sameGenerationInstanceDigestChanged = $instanceGeneration === $existingInstanceGeneration
             && $existingInstanceDigest !== ''
-            && !\hash_equals($existingInstanceDigest, $instanceDigest)
+            && !\hash_equals($existingInstanceDigest, $instanceDigest);
+        if ($sameGenerationInstanceDigestChanged
+            && !$this->mayRefreshInstanceDigest(
+                $existingInstance,
+                $masterEpoch,
+                $launchId,
+            )
         ) {
             throw new \DomainException('Same instance generation has a different instance digest.');
         }
@@ -1032,6 +1038,14 @@ final class WlsEdgeGatewayController
         }
         $this->assertDomainsAuthorized($projectUuid, $candidateRoutes);
         $this->assertNoDomainConflicts($projectUuid, $candidateRoutes);
+        if ($sameGenerationInstanceDigestChanged && !$projectChanged) {
+            $this->assertCapabilityOnlyInstanceRefresh(
+                $projectUuid,
+                $instanceId,
+                $existingInstance,
+                $candidateRoutes,
+            );
+        }
         $this->beginRoutingMutation('register:' . $projectUuid . ':' . $instanceId);
 
         try {
@@ -1551,6 +1565,7 @@ final class WlsEdgeGatewayController
                 'Backend endpoint project/generation fencing identity does not match.'
             );
         }
+        $this->validateBackendSessionCapability($identity, $endpoint);
         $endpointPort = (int)($endpoint['main_port'] ?? $endpoint['port'] ?? 0);
         $join = \is_array($endpointGateway['join_backend'] ?? null)
             ? $endpointGateway['join_backend']
@@ -1584,6 +1599,124 @@ final class WlsEdgeGatewayController
         $masterPid = (int)($endpoint['master_pid'] ?? 0);
         if ($masterPid < 1 || !$this->pidRunning($masterPid)) {
             throw new \DomainException('Backend Master identity is not running.');
+        }
+    }
+
+    /**
+     * Runtime distribution evidence is accepted only when it is bound to the
+     * exact project endpoint record. Legacy or unknown claims stay isolated.
+     *
+     * @param array<string,mixed> $identity
+     * @param array<string,mixed> $endpoint
+     */
+    private function validateBackendSessionCapability(array $identity, array $endpoint): void
+    {
+        $mode = \strtolower(\trim((string)($identity['session_capability'] ?? 'isolated')));
+        if ($mode === '' || $mode === 'isolated') {
+            return;
+        }
+        $evidence = \is_array($identity['session_capability_evidence'] ?? null)
+            ? $identity['session_capability_evidence']
+            : [];
+        $evidenceDigest = \strtolower(\trim((string)(
+            $identity['session_capability_evidence_digest'] ?? ''
+        )));
+        if ($evidence === []
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $evidenceDigest) !== 1
+            || !\hash_equals(
+                $evidenceDigest,
+                \hash('sha256', $this->canonicalJson($evidence)),
+            )
+        ) {
+            throw new \DomainException(
+                'Backend session capability evidence is missing or invalid.'
+            );
+        }
+        if ($mode === 'stateless') {
+            $gateway = \is_array($endpoint['gateway'] ?? null)
+                ? $endpoint['gateway']
+                : [];
+            $generation = (int)($identity['generation'] ?? 0);
+            $validStateless = \hash_equals(
+                    'wls-stateless-capability/1',
+                    (string)($evidence['schema'] ?? ''),
+                )
+                && \hash_equals(
+                    'project_endpoint',
+                    (string)($evidence['runtime_source'] ?? ''),
+                )
+                && ($evidence['runtime_declared'] ?? false) === true
+                && (int)($evidence['instance_generation'] ?? 0) === $generation
+                && \hash_equals(
+                    'declared_stateless_runtime',
+                    (string)($evidence['reason'] ?? ''),
+                )
+                && \hash_equals(
+                    'stateless',
+                    (string)($gateway['backend_capability'] ?? ''),
+                )
+                && \hash_equals(
+                    'runtime_config',
+                    (string)($gateway['backend_capability_source'] ?? ''),
+                )
+                && (int)($gateway['backend_capability_generation'] ?? 0) === $generation;
+            if (!$validStateless) {
+                throw new \DomainException(
+                    'Backend stateless capability evidence does not match the project runtime.'
+                );
+            }
+            return;
+        }
+        if ($mode !== 'shared_session') {
+            throw new \DomainException(
+                'Backend session capability evidence is missing or invalid.'
+            );
+        }
+
+        $sharedState = \is_array($endpoint['shared_state'] ?? null)
+            ? $endpoint['shared_state']
+            : [];
+        $runtime = \is_array($sharedState['session'] ?? null)
+            ? $sharedState['session']
+            : [];
+        $host = \strtolower(\trim((string)($runtime['host'] ?? '')));
+        if ($host === 'localhost') {
+            $host = '127.0.0.1';
+        }
+        $tokenFileName = \trim((string)($runtime['token_file_name'] ?? ''));
+        $valid = \hash_equals(
+                'wls-session-capability/1',
+                (string)($evidence['schema'] ?? ''),
+            )
+            && \hash_equals('wls', (string)($evidence['storage'] ?? ''))
+            && \hash_equals(
+                'project_shared_state',
+                (string)($evidence['runtime_source'] ?? ''),
+            )
+            && ($evidence['runtime_registered'] ?? false) === true
+            && ($evidence['runtime_shared_service'] ?? false) === true
+            && \hash_equals('healthy', (string)($evidence['probe'] ?? ''))
+            && \hash_equals(
+                'authenticated_session_runtime',
+                (string)($evidence['reason'] ?? ''),
+            )
+            && \hash_equals('session_server', (string)($runtime['role'] ?? ''))
+            && ($runtime['registered'] ?? false) === true
+            && ($runtime['shared_service'] ?? false) === true
+            && \in_array($host, ['127.0.0.1', '::1'], true)
+            && \hash_equals($host, (string)($evidence['host'] ?? ''))
+            && (int)($runtime['port'] ?? 0) > 0
+            && (int)($runtime['port'] ?? 0) <= 65535
+            && (int)($runtime['port'] ?? 0) === (int)($evidence['port'] ?? 0)
+            && $tokenFileName !== ''
+            && \hash_equals(
+                \hash('sha256', $tokenFileName),
+                (string)($evidence['token_scope_digest'] ?? ''),
+            );
+        if (!$valid) {
+            throw new \DomainException(
+                'Backend session capability evidence does not match the project runtime.'
+            );
         }
     }
 
@@ -1932,6 +2065,9 @@ final class WlsEdgeGatewayController
         $projectGeneration = (int)($payload['project_generation'] ?? 0);
         $instanceId = \trim((string)($payload['instance_id'] ?? ''));
         $instanceGeneration = (int)($payload['instance_generation'] ?? 0);
+        $instanceDigest = \strtolower(\trim((string)(
+            $payload['instance_digest'] ?? ''
+        )));
         $masterEpoch = (int)($payload['master_epoch'] ?? 0);
         $launchId = \strtolower(\trim((string)($payload['launch_id'] ?? '')));
         $project = $this->state['projects'][$projectUuid] ?? null;
@@ -1940,6 +2076,38 @@ final class WlsEdgeGatewayController
             || $instanceId === ''
         ) {
             throw new \DomainException('Heartbeat project generation is stale or unknown.');
+        }
+        if ($instanceDigest !== ''
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $instanceDigest) !== 1
+        ) {
+            throw new \DomainException('Heartbeat instance digest is invalid.');
+        }
+        $registeredInstance = $this->state['instances'][$projectUuid][$instanceId] ?? null;
+        if (!\is_array($registeredInstance)
+            || (int)($registeredInstance['generation'] ?? 0) !== $instanceGeneration
+            || (int)($registeredInstance['master_epoch'] ?? 0) !== $masterEpoch
+            || !\hash_equals(
+                (string)($registeredInstance['launch_id'] ?? ''),
+                $launchId,
+            )
+        ) {
+            throw new \DomainException('Instance lease fencing identity is stale or unknown.');
+        }
+        if ($instanceDigest !== ''
+            && (string)($registeredInstance['digest'] ?? '') !== ''
+            && !\hash_equals(
+                (string)$registeredInstance['digest'],
+                $instanceDigest,
+            )
+        ) {
+            // Heartbeat remains state-only. Do not extend a lease whose full
+            // runtime identity changed; ask the Agent to replay register.
+            return [
+                'epoch' => (string)$this->state['epoch'],
+                'generation' => (int)$this->state['generation'],
+                'accepted' => true,
+                're_register_required' => true,
+            ];
         }
         $this->touchInstanceLease(
             $projectUuid,
@@ -2588,8 +2756,9 @@ final class WlsEdgeGatewayController
         $existingProject = \is_array($this->state['projects'][$projectUuid] ?? null)
             ? $this->state['projects'][$projectUuid]
             : [];
-        if ($projectGeneration < (int)($existingProject['generation'] ?? 0)
-            || ($projectGeneration === (int)($existingProject['generation'] ?? 0)
+        $existingProjectGeneration = (int)($existingProject['generation'] ?? 0);
+        if ($projectGeneration < $existingProjectGeneration
+            || ($projectGeneration === $existingProjectGeneration
                 && (string)($existingProject['digest'] ?? '') !== ''
                 && !\hash_equals((string)$existingProject['digest'], $projectDigest))
         ) {
@@ -2603,7 +2772,13 @@ final class WlsEdgeGatewayController
         if ($instanceGeneration < (int)($existingInstance['generation'] ?? 0)
             || ($instanceGeneration === (int)($existingInstance['generation'] ?? 0)
                 && (string)($existingInstance['digest'] ?? '') !== ''
-                && !\hash_equals((string)$existingInstance['digest'], $instanceDigest))
+                && !\hash_equals((string)$existingInstance['digest'], $instanceDigest)
+                && !($projectGeneration > $existingProjectGeneration
+                    && $this->mayRefreshInstanceDigest(
+                        $existingInstance,
+                        $masterEpoch,
+                        $launchId,
+                    )))
         ) {
             throw new \DomainException(
                 'Transfer target instance generation is stale or ambiguous.'
@@ -6822,6 +6997,175 @@ final class WlsEdgeGatewayController
     }
 
     /**
+     * An unchanged project generation may update only the capability evidence
+     * of the same live endpoint. Domain, certificate, backend, route set and
+     * every other identity field remain fenced.
+     *
+     * @param array<string,mixed> $existingInstance
+     * @param list<array<string,mixed>> $candidateRoutes
+     */
+    private function assertCapabilityOnlyInstanceRefresh(
+        string $projectUuid,
+        string $instanceId,
+        array $existingInstance,
+        array $candidateRoutes,
+    ): void {
+        $reject = static function (): never {
+            throw new \DomainException(
+                'Same instance generation may refresh capability evidence only.'
+            );
+        };
+        $existingProject = \is_array($this->state['projects'][$projectUuid] ?? null)
+            ? $this->state['projects'][$projectUuid]
+            : [];
+        $expectedRouteIds = \array_values(\array_map(
+            'strval',
+            (array)($existingProject['route_ids'] ?? []),
+        ));
+        $incomingRouteIds = \array_values(\array_map(
+            static fn (array $route): string => (string)($route['route_id'] ?? ''),
+            $candidateRoutes,
+        ));
+        \sort($expectedRouteIds, SORT_STRING);
+        \sort($incomingRouteIds, SORT_STRING);
+        if ($expectedRouteIds === [] || $expectedRouteIds !== $incomingRouteIds) {
+            $reject();
+        }
+
+        $incomingIdentity = [];
+        $incomingBackends = [];
+        foreach ($candidateRoutes as $candidate) {
+            $routeId = (string)($candidate['route_id'] ?? '');
+            $existingRoute = \is_array($this->state['routes'][$routeId] ?? null)
+                ? $this->state['routes'][$routeId]
+                : [];
+            $existingDesired = [
+                'route_id' => $routeId,
+                'domain' => (string)($existingRoute['domain'] ?? ''),
+                'force_https' => (bool)($existingRoute['force_https'] ?? false),
+                'certificate_source_digest' => (string)(
+                    $existingRoute['certificate']['source_digest'] ?? ''
+                ),
+                'certificate_generation' => (int)(
+                    $existingRoute['certificate']['generation'] ?? 0
+                ),
+            ];
+            $incomingDesired = [
+                'route_id' => $routeId,
+                'domain' => (string)($candidate['domain'] ?? ''),
+                'force_https' => (bool)($candidate['force_https'] ?? false),
+                'certificate_source_digest' => (string)(
+                    $candidate['certificate']['source_digest'] ?? ''
+                ),
+                'certificate_generation' => (int)(
+                    $candidate['certificate']['generation'] ?? 0
+                ),
+            ];
+            if (!\hash_equals(
+                $this->canonicalJson($existingDesired),
+                $this->canonicalJson($incomingDesired),
+            )) {
+                $reject();
+            }
+            $candidateIdentity = \is_array($candidate['backend_identity'] ?? null)
+                ? $candidate['backend_identity']
+                : [];
+            if ($incomingIdentity === []) {
+                $incomingIdentity = $candidateIdentity;
+            } elseif (!\hash_equals(
+                $this->canonicalJson($incomingIdentity),
+                $this->canonicalJson($candidateIdentity),
+            )) {
+                $reject();
+            }
+            foreach ((array)($candidate['backends'] ?? []) as $backend) {
+                if (!\is_array($backend)) {
+                    $reject();
+                }
+                $key = (string)($backend['host'] ?? '') . ':'
+                    . (int)($backend['port'] ?? 0) . ':'
+                    . (int)($backend['weight'] ?? 1);
+                $incomingBackends[$key] = $backend;
+            }
+        }
+        \ksort($incomingBackends, SORT_STRING);
+        $existingBackends = [];
+        foreach ((array)($existingInstance['backends'] ?? []) as $backend) {
+            if (!\is_array($backend)) {
+                $reject();
+            }
+            $key = (string)($backend['host'] ?? '') . ':'
+                . (int)($backend['port'] ?? 0) . ':'
+                . (int)($backend['weight'] ?? 1);
+            $existingBackends[$key] = $backend;
+        }
+        \ksort($existingBackends, SORT_STRING);
+        if (!\hash_equals(
+            $this->canonicalJson($existingBackends),
+            $this->canonicalJson($incomingBackends),
+        )) {
+            $reject();
+        }
+
+        $existingIdentity = \is_array($existingInstance['backend_identity'] ?? null)
+            ? $existingInstance['backend_identity']
+            : [];
+        $capabilityKeys = [
+            'session_capability',
+            'session_capability_evidence',
+            'session_capability_evidence_digest',
+        ];
+        $existingCapability = [];
+        $incomingCapability = [];
+        foreach ($capabilityKeys as $key) {
+            if (\array_key_exists($key, $existingIdentity)) {
+                $existingCapability[$key] = $existingIdentity[$key];
+            }
+            if (\array_key_exists($key, $incomingIdentity)) {
+                $incomingCapability[$key] = $incomingIdentity[$key];
+            }
+            unset($existingIdentity[$key], $incomingIdentity[$key]);
+        }
+        unset($existingIdentity['digest'], $incomingIdentity['digest']);
+        if ($existingIdentity === []
+            || !\hash_equals(
+                $this->canonicalJson($existingIdentity),
+                $this->canonicalJson($incomingIdentity),
+            )
+            || \hash_equals(
+                $this->canonicalJson($existingCapability),
+                $this->canonicalJson($incomingCapability),
+            )
+            || !\hash_equals(
+                $instanceId,
+                (string)($incomingIdentity['instance_id'] ?? ''),
+            )
+        ) {
+            $reject();
+        }
+    }
+
+    /**
+     * A live launch may update endpoint-validated runtime identity evidence
+     * without inventing a project or process generation. Both independent
+     * process fences must still match exactly; route validation follows.
+     *
+     * @param array<string,mixed> $existingInstance
+     */
+    private function mayRefreshInstanceDigest(
+        array $existingInstance,
+        int $masterEpoch,
+        string $launchId,
+    ): bool {
+        $existingMasterEpoch = (int)($existingInstance['master_epoch'] ?? 0);
+        $existingLaunchId = \strtolower(\trim((string)($existingInstance['launch_id'] ?? '')));
+        return $masterEpoch > 0
+            && $existingMasterEpoch === $masterEpoch
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $existingLaunchId) === 1
+            && \hash_equals($existingLaunchId, $launchId);
+    }
+
+    /**
      * @param array<string,mixed> $instance
      * @param array<string,mixed> $payload
      */
@@ -7013,6 +7357,7 @@ final class WlsEdgeGatewayController
             ? $enrollment['capabilities']
             : [];
         $mode = '';
+        $sharedEvidenceDigest = '';
         foreach ($active as $instance) {
             $identity = \is_array($instance['backend_identity'] ?? null)
                 ? $instance['backend_identity']
@@ -7020,6 +7365,7 @@ final class WlsEdgeGatewayController
             $instanceMode = (string)($identity['session_capability'] ?? 'isolated');
             if (!\in_array($instanceMode, ['stateless', 'shared_session'], true)
                 || ($capabilities[$instanceMode] ?? false) !== true
+                || !$this->validStoredDistributionCapability($identity, $instanceMode)
             ) {
                 return 'single';
             }
@@ -7028,8 +7374,88 @@ final class WlsEdgeGatewayController
             } elseif (!\hash_equals($mode, $instanceMode)) {
                 return 'single';
             }
+            if ($instanceMode === 'shared_session') {
+                $instanceEvidenceDigest = (string)(
+                    $identity['session_capability_evidence_digest'] ?? ''
+                );
+                if ($sharedEvidenceDigest === '') {
+                    $sharedEvidenceDigest = $instanceEvidenceDigest;
+                } elseif (!\hash_equals($sharedEvidenceDigest, $instanceEvidenceDigest)) {
+                    return 'single';
+                }
+            }
         }
         return $mode !== '' ? $mode : 'single';
+    }
+
+    /**
+     * Rejects legacy, incomplete or corrupted capability claims after state
+     * recovery. Shared Session instances are compared by the validated digest
+     * in routeDistributionMode(), so different services fail closed.
+     *
+     * @param array<string,mixed> $identity
+     * @param 'stateless'|'shared_session' $mode
+     */
+    private function validStoredDistributionCapability(array $identity, string $mode): bool
+    {
+        $evidence = \is_array($identity['session_capability_evidence'] ?? null)
+            ? $identity['session_capability_evidence']
+            : [];
+        $digest = \strtolower(\trim((string)(
+            $identity['session_capability_evidence_digest'] ?? ''
+        )));
+        if ($evidence === []
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || !\hash_equals(
+                $digest,
+                \hash('sha256', $this->canonicalJson($evidence)),
+            )
+        ) {
+            return false;
+        }
+        if ($mode === 'stateless') {
+            return \hash_equals(
+                    'wls-stateless-capability/1',
+                    (string)($evidence['schema'] ?? ''),
+                )
+                && \hash_equals(
+                    'project_endpoint',
+                    (string)($evidence['runtime_source'] ?? ''),
+                )
+                && ($evidence['runtime_declared'] ?? false) === true
+                && (int)($evidence['instance_generation'] ?? 0)
+                    === (int)($identity['generation'] ?? 0)
+                && \hash_equals(
+                    'declared_stateless_runtime',
+                    (string)($evidence['reason'] ?? ''),
+                );
+        }
+
+        $host = \strtolower(\trim((string)($evidence['host'] ?? '')));
+        $port = (int)($evidence['port'] ?? 0);
+        return \hash_equals(
+                'wls-session-capability/1',
+                (string)($evidence['schema'] ?? ''),
+            )
+            && \hash_equals('wls', (string)($evidence['storage'] ?? ''))
+            && \hash_equals(
+                'project_shared_state',
+                (string)($evidence['runtime_source'] ?? ''),
+            )
+            && ($evidence['runtime_registered'] ?? false) === true
+            && ($evidence['runtime_shared_service'] ?? false) === true
+            && \in_array($host, ['127.0.0.1', '::1'], true)
+            && $port > 0
+            && $port <= 65535
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($evidence['token_scope_digest'] ?? ''),
+            ) === 1
+            && \hash_equals('healthy', (string)($evidence['probe'] ?? ''))
+            && \hash_equals(
+                'authenticated_session_runtime',
+                (string)($evidence['reason'] ?? ''),
+            );
     }
 
     /**

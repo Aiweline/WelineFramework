@@ -159,9 +159,54 @@ Close the lifecycle blockers found after the Linux gateway million-request run:
   fail-closed rebuild. That topology does not model independent projects and
   is retained as a harness finding: every multi-project failure-isolation
   acceptance must use one independently supervised runtime per project.
-- Browser verification of the documentation remains `BLOCKED_ENVIRONMENT`:
-  the in-app Browser rejected the `file://` target before navigation. No live
-  WLS instance was created merely to bypass that policy.
+- The earlier in-app Browser check rejected the `file://` target. Under the current
+  plain-Markdown gate, documentation is accepted by targeted staged diff, path and
+  format checks; no live WLS instance was created merely to bypass the old policy.
+
+## Runtime capability proof and regression closure
+
+- DEF-060 closed the missing production capability writer. `Start` now emits a
+  generation-bound `dynamic` or explicitly configured `stateless` declaration;
+  shared Session is never accepted from configuration or an endpoint hint.
+- The project resolver proves shared Session only for the effective WLS storage,
+  a registered loopback Session Server and an authenticated token health probe.
+  Failure demotes immediately; recovery requires a shared 30-second healthy
+  window. The Controller binds the proof schema, host, port and token-scope
+  digest to the exact endpoint and still requires matching enrollment capability.
+- DEF-061 closed project-generation and disk-write amplification. Stateless
+  evidence remains bound to each instance generation, but the project desired
+  digest contains only the stable stateless mode. A second stateless instance no
+  longer rewrites project capability state solely because its generation differs.
+- DEF-062 closed stale per-instance capability identity. Heartbeats now carry
+  `instance_digest`; a mismatch does not mutate routing or renew the old lease,
+  and instead asks the Agent to replay full registration. Isolated diagnostic
+  changes are excluded from route identity so recovery-pending messages do not
+  create a register loop.
+- DEF-063 closed two false-negative native H3 harness paths. H3 probes wait for
+  actual QUIC readiness, read the current advertised capability on every phase,
+  require an explicit downgrade reason, and refresh manual fixture leases before
+  bounded Controller/H3 fault injection.
+- DEF-064 closed unsafe shared Session distribution. Persisted capability proof
+  must remain complete and digest-valid for every active instance, and all
+  shared-session evidence digests must match. Different Session services, legacy
+  state without proof and corrupted proof now retain deterministic single-instance
+  routing.
+- DEF-065 closed project-generation oscillation. Project desired state now carries
+  only the stable runtime-attested policy; stateless proof never writes the
+  project recovery file. A same-generation, same-live-launch replay is accepted
+  only when domain, certificate, route set, backend and all non-capability identity
+  fields are byte-equivalent.
+- Red/green evidence reproduced the undefined capability projection, stateless
+  multi-instance state rewrite, missing heartbeat replay, mismatched shared Session distribution, project-generation oscillation and asynchronous H3/lease
+  failures. Final validation: capability/protocol scope `61 / 1060`; complete
+  Weline_Server `1312 / 6606 / 17 skips`; Gateway/Windows/Nginx
+  `243 / 2581 / 15 skips`; opt-in native suite `12 / 1985`; focused real H3 and
+  recovery `1 / 1479`.
+- Current-source Linux million remains intentionally unclaimed. The existing
+  `wls-gateway-v2-perf` host is durably `CLOCK_UNTRUSTED` after deliberate wall
+  clock injection; its security state was not reset. The v54 mixed H2/H3 million
+  remains evidence for the unchanged data plane, while a fresh signed package and
+  three-run median remain TASK-014 boundaries.
 
 ## Remaining release boundaries
 
