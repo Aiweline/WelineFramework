@@ -85,6 +85,30 @@ WLS TLS 入口执行固定 300 秒排空。Agent 每 10 秒重试推进事务但
 `NATIVE_EDGE_DRAINING` 提升为 `GATEWAY_ACTIVE/DRAINED`。`desired=0` 的原生槽位
 不会被健康检查或 IPC 断线恢复逻辑复活。
 
+### 4.1 多实例分流能力
+
+多实例默认始终是确定性首选实例加健康热备，不能仅凭 endpoint 字段开启轮询。分流需要
+管理员 enrollment 与每个活动实例的运行时证明同时成立：
+
+- 无状态项目必须在运行配置中设置 `gateway.backend_capability=stateless`，并由管理员使用
+  `server:gateway:enroll --stateless --confirm` 授权。启动时会把声明绑定到当前
+  `instance_generation`；控制器逐实例核对，不能复用另一实例或旧启动的证明。
+- 共享 Session 项目不能静态声明 `shared_session`。WLS 会读取实际 Session 配置，只接受
+  已注册的 loopback `session_server`，使用项目 token 完成认证健康探针，再由管理员使用
+  `server:gateway:enroll --shared-session --confirm` 授权。任一活动实例缺证明时，全项目保持
+  单实例首选/热备。
+- Session 故障立即降为 `isolated`；恢复后必须连续健康 30 秒才重新提交
+  `shared_session`。派生资格保存在项目 `var/server/gateway-v2`，不属于可迁移事实源；项目
+  移到新宿主时会安全地重新经过观察窗。
+- 项目 generation 只描述共享路由、证书和稳定的 `runtime_attested` 协议策略，不混入
+  任一实例当前的能力模式或证明。完整证明只进入 instance digest；heartbeat 发现摘要变化时
+  要求 Agent 重放完整 register，同一 master/launch 只能更新能力字段，不能夹带后端、域名、
+  证书或路由变更。stateless 不写项目恢复状态；`isolated` 诊断原因也不改变实例路由身份。
+- Controller 只在每个活动实例都保留完整且摘要匹配的能力证明时启用多后端；
+  `shared_session` 还要求所有实例的证据摘要完全一致。不同 Session 服务、旧状态缺证明或
+  证明损坏都会立即退回确定性单实例，不把请求分发到会话不相容的后端。
+- `--edge=wls` 不需要 enrollment，也不依赖宿主派生资格；证书仍从项目事实源读取。
+
 ## 5. 当前安全约束
 
 - legacy 与后续 host gateway 共用 Nginx runtime 原语：进程操作要求 PID、精确 argv、
@@ -132,9 +156,9 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - WLS 2.0 v1 全局关闭 TLS session cache、ticket 与 0-RTT，跨租户和证书轮换后均不
   复用旧 TLS 1.3 会话；
 - macOS 显式启用原生集成后，Native Broker、Launcher、签名槽、崩溃回滚和真实数据面
-  恢复通过 `12 tests / 1986 assertions`；该证据不等于 launchd 安装/reboot；
+  恢复通过 `12 tests / 1985 assertions`；该证据不等于 launchd 安装/reboot；
 - `Gateway|Windows|Nginx` 跨平台门禁通过
-  `221 tests / 2444 assertions / 15 capability skips`，含 Windows Native Broker
+  `243 tests / 2581 assertions / 15 capability skips`，含 Windows Native Broker
   的长管理事务 I/O 窗口；实际 Windows VM 因 Parallels 授权过期挂起，仍为
   `BLOCKED_ENVIRONMENT`；
 - legacy 80/443 显式提升已在 Linux VM 成功：promotion v50 的维护窗 69.897 秒，
@@ -156,11 +180,16 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   `removed_at`、空后端身份和 `REMOVED`；撤销域名中性 421，幸存租户 HTTP/2 200，
   网关保持 `HEALTHY`。多项目故障隔离夹具必须为每个项目使用独立受管 runtime；
 - 使用正式框架 bootstrap 的全量 Weline_Server 回归为
-  `1290 tests / 6469 assertions / 17 platform skips`，零错误、零失败。
+  `1312 tests / 6606 assertions / 17 platform skips`，零错误、零失败。
 
+本轮已补齐 Session/无状态能力的运行时写入、认证证明、30 秒恢复观察、实例摘要心跳
+重放与多实例 generation 防抖；聚焦真实 H3 数据面恢复通过 `1 test / 1479 assertions`。
 当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、Windows 实机、首次 ACME、完整
-Session 运行时亲和和同条件三轮性能中位数。Linux 宿主包已经完成来源、依赖、SBOM、
-自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。
+Session daemon 实机亲和和同条件三轮性能中位数。Linux 宿主包已经完成来源、依赖、SBOM、
+自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。现有 v54
+双租户 H2/H3 百万仍证明未改动的数据面；本轮控制面提交没有在新签名宿主包上重跑百万，
+因为旧 Lima 性能宿主已被时钟故障注入锁定为 `CLOCK_UNTRUSTED`。该安全状态未被清除或
+降级，当前源码百万复测仍属于环境边界，不得写成已通过。
 
 完整需求、缺陷映射和验收矩阵见
 `dev/ai/plans/2026-07-27-WLS-2.0-多项目共享网关与自动恢复.md`。

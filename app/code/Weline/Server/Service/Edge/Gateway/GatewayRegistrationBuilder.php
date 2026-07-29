@@ -20,6 +20,10 @@ final class GatewayRegistrationBuilder
         private readonly ProjectIdentityStore $identity = new ProjectIdentityStore(),
         private readonly ProjectCertificateGenerationStore $certificateGenerations
             = new ProjectCertificateGenerationStore(),
+        private readonly GatewayBackendCapabilityResolver $backendCapabilities
+            = new GatewayBackendCapabilityResolver(),
+        private readonly GatewayBackendCapabilityStateStore $backendCapabilityState
+            = new GatewayBackendCapabilityStateStore(),
     ) {
     }
 
@@ -113,6 +117,9 @@ final class GatewayRegistrationBuilder
             );
         }
         $edgeCapabilitySecret = ProtocolEdgeRuntime::readToken($instanceName);
+        $backendCapability = $this->backendCapabilityState->stabilize(
+            $this->backendCapabilities->resolve($endpoint),
+        );
         $backendIdentity = [
             'project_uuid' => $projectUuid,
             'instance_id' => $instanceName,
@@ -127,13 +134,7 @@ final class GatewayRegistrationBuilder
             'launch_id' => $launchId,
             'edge_capability_secret' => $edgeCapabilitySecret,
             'edge_capability_digest' => \hash('sha256', $edgeCapabilitySecret),
-            'session_capability' => \in_array(
-                (string)($endpointGateway['backend_capability'] ?? ''),
-                ['stateless', 'shared_session'],
-                true,
-            )
-                ? (string)$endpointGateway['backend_capability']
-                : 'isolated',
+            ...$this->backendCapabilities->instanceIdentityState($backendCapability),
         ];
         $backendIdentity['digest'] = \hash(
             'sha256',
@@ -215,6 +216,8 @@ final class GatewayRegistrationBuilder
         $projectDesired = [
             'project_uuid' => $projectUuid,
             'project_root' => $projectRoot,
+            'backend_capability' => $this->backendCapabilities
+                ->projectDesiredState($backendCapability),
             'routes' => \array_map(
                 static fn (array $route): array => [
                     'route_id' => (string)$route['route_id'],

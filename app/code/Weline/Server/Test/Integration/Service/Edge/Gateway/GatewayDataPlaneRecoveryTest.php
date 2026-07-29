@@ -414,8 +414,12 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             self::assertSame(200, $h2['http_code']);
             self::assertStringContainsString($marker, $h2['body']);
 
-            if ($this->h3Enabled && $this->curlSupportsHttp3()) {
-                $h3 = $this->curlRoute($fixture['domain'], '--http3-only');
+            if ($this->h3IsCurrentlyEnabled() && $this->curlSupportsHttp3()) {
+                $h3 = $this->waitForSuccessfulRoute(
+                    $fixture['domain'],
+                    '--http3-only',
+                    15.0,
+                );
                 self::assertSame(0, $h3['code'], $h3['output']);
                 self::assertSame('3', $h3['http_version']);
                 self::assertSame(200, $h3['http_code']);
@@ -636,9 +640,11 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                 }
             }
         }
+        $distributedInstanceIds = \array_keys($distributedInstances);
+        \sort($distributedInstanceIds, SORT_STRING);
         self::assertSame(
             ['alpha-a', 'alpha-b'],
-            \array_keys($distributedInstances),
+            $distributedInstanceIds,
             'A stateless project must distribute traffic only after both instances prove capability.',
         );
         $drain = $alphaClient->projectRequest('drain', [
@@ -671,6 +677,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                     'project_generation' => $fixture['project_generation'],
                     'instance_id' => $fixture['instance_id'],
                     'instance_generation' => $fixture['instance_generation'],
+                    'instance_digest' => $fixture['instance_digest'],
                     'master_epoch' => $fixture['master_epoch'],
                     'launch_id' => $fixture['launch_id'],
                 ]);
@@ -690,7 +697,26 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         );
         $this->assertTenantBackendFailureDoesNotRestartGateway($gatewayEpoch);
 
-        if ($this->h3Enabled && $this->curlSupportsHttp3()) {
+        if ($this->h3IsCurrentlyEnabled() && $this->curlSupportsHttp3()) {
+            // The production Agent refreshes leases every 10 seconds. Mirror
+            // that behavior before a bounded Controller/H3 fault injection so
+            // the harness tests protocol isolation rather than fixture expiry.
+            foreach ([
+                [$alphaClient, $alphaStandby],
+                [$betaClient, $beta],
+                [$acmeClient, $acme],
+            ] as [$client, $fixture]) {
+                $heartbeat = $client->projectRequest('heartbeat', [
+                    'project_uuid' => $fixture['project_uuid'],
+                    'project_generation' => $fixture['project_generation'],
+                    'instance_id' => $fixture['instance_id'],
+                    'instance_generation' => $fixture['instance_generation'],
+                    'instance_digest' => $fixture['instance_digest'],
+                    'master_epoch' => $fixture['master_epoch'],
+                    'launch_id' => $fixture['launch_id'],
+                ]);
+                self::assertTrue($heartbeat['ok'], \json_encode($heartbeat));
+            }
             $this->assertH3FailureIsolation($alpha['domain'], $beta['domain']);
         }
 
@@ -745,8 +771,13 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         self::assertGreaterThan(0, $newNginxPid);
         self::assertSame(200, $this->curlRoute($alpha['domain'])['http_code']);
         self::assertSame(200, $this->curlRoute($beta['domain'])['http_code']);
-        if ($this->h3Enabled && $this->curlSupportsHttp3()) {
-            $recoveredH3 = $this->curlRoute($alpha['domain'], '--http3-only');
+        if ($this->h3IsCurrentlyEnabled() && $this->curlSupportsHttp3()) {
+            $recoveredH3 = $this->waitForSuccessfulRoute(
+                $alpha['domain'],
+                '--http3-only',
+                15.0,
+            );
+            self::assertSame(0, $recoveredH3['code'], $recoveredH3['output']);
             self::assertSame('3', $recoveredH3['http_version']);
             self::assertSame(200, $recoveredH3['http_code']);
         }
@@ -872,6 +903,9 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                     'project_uuid' => $projectUuid,
                     'instance_generation' => 1,
                     'launch_id' => $launchId,
+                    'backend_capability' => 'stateless',
+                    'backend_capability_source' => 'runtime_config',
+                    'backend_capability_generation' => 1,
                 ],
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
         ));
@@ -952,6 +986,9 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                     'project_uuid' => $project['project_uuid'],
                     'instance_generation' => 1,
                     'launch_id' => $launchId,
+                    'backend_capability' => 'stateless',
+                    'backend_capability_source' => 'runtime_config',
+                    'backend_capability_generation' => 1,
                 ],
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
         ));
@@ -1150,6 +1187,13 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         foreach ((array)($fixture['extra_backends'] ?? []) as $backend) {
             $backends[] = $backend;
         }
+        $capabilityEvidence = [
+            'schema' => 'wls-stateless-capability/1',
+            'runtime_source' => 'project_endpoint',
+            'runtime_declared' => true,
+            'instance_generation' => (int)$fixture['instance_generation'],
+            'reason' => 'declared_stateless_runtime',
+        ];
         return [
             'project_uuid' => $fixture['project_uuid'],
             'project_root' => $fixture['project_root'],
@@ -1178,6 +1222,11 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                     'edge_capability_secret' => $fixture['edge_secret'],
                     'edge_capability_digest' => $fixture['edge_digest'],
                     'session_capability' => 'stateless',
+                    'session_capability_evidence' => $capabilityEvidence,
+                    'session_capability_evidence_digest' => \hash(
+                        'sha256',
+                        GatewayClient::canonicalJson($capabilityEvidence),
+                    ),
                 ],
                 'certificate' => [
                     'cert' => [
@@ -1249,6 +1298,43 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
      * @param list<string> $headers
      * @return array{code:int,output:string,http_version:string,http_code:int,body:string}
      */
+    private function h3IsCurrentlyEnabled(): bool
+    {
+        $status = $this->adminClient()->administratorStatus();
+        self::assertTrue($status['ok'], \json_encode($status));
+        self::assertIsBool($status['payload']['h3_enabled'] ?? null);
+        $enabled = (bool)$status['payload']['h3_enabled'];
+        if ($this->h3Enabled && !$enabled) {
+            self::assertNotSame(
+                '',
+                \trim((string)($status['payload']['h3_reason'] ?? '')),
+                'An advertised H3 capability may only disappear with an explicit downgrade reason.',
+            );
+        }
+        $this->h3Enabled = $enabled;
+        return $enabled;
+    }
+
+    /** @return array{code:int,http_code:int,http_version:string,body:string,output:string} */
+    private function waitForSuccessfulRoute(
+        string $domain,
+        string $protocol,
+        float $timeoutSeconds,
+    ): array {
+        $deadline = \microtime(true) + \max(0.1, $timeoutSeconds);
+        $last = [];
+        do {
+            $last = $this->curlRoute($domain, $protocol);
+            if (($last['code'] ?? -1) === 0
+                && ($last['http_code'] ?? 0) === 200
+            ) {
+                return $last;
+            }
+            \usleep(100_000);
+        } while (\microtime(true) < $deadline);
+        return $last;
+    }
+
     private function curlRoute(
         string $domain,
         string $protocol = '--http1.1',
