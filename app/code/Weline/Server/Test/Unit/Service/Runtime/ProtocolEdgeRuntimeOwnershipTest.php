@@ -50,6 +50,35 @@ final class ProtocolEdgeRuntimeOwnershipTest extends TestCase
         }
     }
 
+    public function testTlsAlpnProbeVerifiesAdvertisedProtocolContract(): void
+    {
+        if (!\extension_loaded('openssl')
+            || !\defined('OPENSSL_KEYTYPE_EC')
+            || !\defined('STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT')
+            || !\defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')
+            || !\function_exists('openssl_pkey_new')
+            || !\function_exists('stream_socket_server')
+            || !\function_exists('stream_socket_client')
+        ) {
+            self::markTestSkipped('The OpenSSL EC, TLS 1.3, and stream socket runtime is unavailable.');
+        }
+
+        $probe = new \Weline\Server\Service\Runtime\TlsAlpnRuntimeProbe();
+        if (!$probe->configured()) {
+            self::markTestSkipped('The PHP stream runtime does not expose ALPN configuration support.');
+        }
+
+        $snapshot = $probe->snapshot();
+        $reason = (string)($snapshot['reason'] ?? 'No ALPN probe reason was reported.');
+
+        self::assertTrue((bool)($snapshot['runtime_verified'] ?? false), $reason);
+        self::assertTrue((bool)($snapshot['tls13_runtime_verified'] ?? false), $reason);
+        self::assertSame('h2', $snapshot['negotiated_protocols']['preferred'] ?? null);
+        self::assertSame('http/1.1', $snapshot['negotiated_protocols']['fallback'] ?? null);
+        self::assertSame('TLSv1.3', $snapshot['tls_protocols']['preferred'] ?? null);
+        self::assertSame('TLSv1.3', $snapshot['tls_protocols']['fallback'] ?? null);
+    }
+
     public function testRuntimeDirectoryRejectsSymbolicLinkTraversal(): void
     {
         if (\PHP_OS_FAMILY === 'Windows' || !\function_exists('symlink')) {
