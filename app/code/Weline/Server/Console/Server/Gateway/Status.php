@@ -10,10 +10,23 @@ final class Status extends AbstractGatewayCommand
 {
     public function execute(array $args = [], array $data = []): int
     {
-        $status = $this->gateway()->status();
-        $this->printer->setup(__('WLS 2.0 宿主网关状态'));
-        $this->output($status, isset($args['json']));
-        return ($status['ok'] ?? false) ? 0 : 1;
+        $json = $this->isJson($args);
+        try {
+            $status = $this->gateway()->administratorStatus();
+            $ok = (bool)($status['ok'] ?? false);
+            if (!$json) {
+                $this->printer->setup(__('WLS 2.0 宿主网关状态'));
+            }
+            $this->output(
+                $status,
+                $json,
+                $ok,
+                (array)($status['error'] ?? ['message' => __('读取网关状态失败。')]),
+            );
+            return $ok ? 0 : 1;
+        } catch (\Throwable $throwable) {
+            return $this->failure($throwable->getMessage(), $json, 'status_failed');
+        }
     }
 
     public function tip(): string

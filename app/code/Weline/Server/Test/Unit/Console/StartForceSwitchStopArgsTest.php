@@ -121,14 +121,16 @@ final class StartForceSwitchStopArgsTest extends TestCase
         foreach ([
             'weline-wls-master',
             'weline-wls-dispatcher',
-            'weline-wls-session',
-            'weline-wls-memory',
             'weline-wls-redirect',
             'weline-wls-worker',
             'weline-wls-maintenance',
+            'weline-wls-gateway',
+            'weline-wls-runtime-watchdog',
         ] as $expectedPrefix) {
             self::assertStringContainsString($expectedPrefix, $joined);
         }
+        self::assertStringNotContainsString('weline-wls-session', $joined);
+        self::assertStringNotContainsString('weline-wls-memory', $joined);
     }
 
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed

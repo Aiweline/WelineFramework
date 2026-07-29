@@ -36,7 +36,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            true,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(true),
             1,
             16895,
             80,
@@ -107,7 +107,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             9512,
             false,
-            true,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(true),
             1,
             16895,
             0,
@@ -165,7 +165,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             9982,
             false,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             10000,
             0,
@@ -213,7 +213,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            protected function showInstanceInfo(ServerInstanceInfo $info, string $edgeAdapterName = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX): void
             {
                 unset($info);
                 $this->calls[] = 'show';
@@ -225,6 +225,12 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 $this->calls[] = 'ipc';
 
                 return true;
+            }
+
+            protected function runFastLocalResidualCleanup(string $name, ServerInstanceInfo $info): void
+            {
+                unset($info);
+                $this->calls[] = 'residual:' . $name;
             }
 
             protected function runResidualCleanupPairWithRetry(string $name, ServerInstanceInfo $info, bool $includeSharedState = false): void
@@ -334,7 +340,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             2,
             16895,
             80,
@@ -382,7 +388,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            protected function showInstanceInfo(ServerInstanceInfo $info, string $edgeAdapterName = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX): void
             {
                 unset($info);
                 $this->calls[] = 'show';
@@ -394,6 +400,13 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 $this->calls[] = 'ipc:' . $instanceName . ':' . ($force ? 'force' : 'normal');
 
                 return true;
+            }
+
+            protected function runFastLocalResidualCleanup(string $name, ServerInstanceInfo $info): void
+            {
+                unset($name, $info);
+                $this->calls[] = 'kill';
+                $this->calls[] = 'residual';
             }
 
             protected function terminateDirectForceStopCandidatePids(ServerInstanceInfo $info): int
@@ -504,7 +517,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             2,
             16895,
             80,
@@ -547,7 +560,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return false;
             }
 
-            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            protected function showInstanceInfo(ServerInstanceInfo $info, string $edgeAdapterName = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX): void
             {
                 unset($info);
                 $this->calls[] = 'show';
@@ -625,7 +638,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             2,
             16895,
             80,
@@ -700,7 +713,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             2,
             16895,
             80,
@@ -743,10 +756,17 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            protected function showInstanceInfo(ServerInstanceInfo $info, string $edgeAdapterName = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX): void
             {
                 unset($info);
                 $this->calls[] = 'show';
+            }
+
+            protected function runFastLocalResidualCleanup(string $name, ServerInstanceInfo $info): void
+            {
+                unset($info);
+                $this->calls[] = 'kill';
+                $this->calls[] = 'residual:' . $name;
             }
 
             protected function sendStopViaIpcAndWait(string $instanceName, int $controlPort, int $masterPid, bool $force): bool
@@ -814,7 +834,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
         self::assertSame(['show', 'kill', 'residual:default'], $stop->calls);
     }
 
-    public function testGracefulStopRunsConcurrentResidualCleanupAfterIpcDrain(): void
+    public function testGracefulStopTrustsAuthoritativeIpcCompletionWithoutLocalPrefixScan(): void
     {
         $manager = new class extends ServerInstanceManager {
             public ?ServerInstanceInfo $info = null;
@@ -850,7 +870,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             16895,
             80,
@@ -898,7 +918,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return true;
             }
 
-            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            protected function showInstanceInfo(ServerInstanceInfo $info, string $edgeAdapterName = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX): void
             {
                 unset($info);
                 $this->calls[] = 'show';
@@ -948,7 +968,7 @@ final class StopCommandFastLocalCleanupTest extends TestCase
 
         self::assertSame(['default'], $manager->deleted);
         self::assertSame(
-            ['show', 'residual:default', 'release:default', 'pid:default', 'unlock:default'],
+            ['show', 'ipc', 'release:default', 'pid:default', 'unlock:default'],
             $stop->calls
         );
     }

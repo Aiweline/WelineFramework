@@ -165,12 +165,14 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
 
         self::assertSame([], $this->readPrivate($orchestrator, 'pendingControlOperations'));
         self::assertSame('aborting', $this->readPrivate($orchestrator, 'activeControlOperation')['state']);
-        self::assertNull($this->readPrivate($orchestrator, 'pendingStopReason'));
+        self::assertSame('command', $this->readPrivate($orchestrator, 'pendingStopReason'));
         self::assertSame(ControlMessage::ACTION_STOP, $this->readPrivate($orchestrator, 'ipcExclusiveCommand'));
         self::assertCount(2, $server->sent);
         self::assertFalse((bool)$server->sent[0]['message']['success']);
         self::assertSame('cancelled', $server->sent[0]['message']['data']['state'] ?? null);
         self::assertTrue((bool)$server->sent[1]['message']['success']);
+        self::assertTrue($this->invokePrivate($orchestrator, 'consumePendingStopRequest'));
+        self::assertNull($this->readPrivate($orchestrator, 'pendingStopReason'));
     }
 
     public function testStopWithoutExplicitIntentIsRejected(): void
@@ -399,13 +401,17 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         $processed = $this->invokePrivate($orchestrator, 'processNextQueuedControlOperation');
 
         self::assertTrue($processed);
-        self::assertCount(2, $server->sent);
+        self::assertCount(3, $server->sent);
         self::assertSame(41, $server->sent[0]['clientId']);
         self::assertSame('command_result', $server->sent[0]['message']['type'] ?? '');
+        self::assertSame('queued', $server->sent[0]['message']['data']['state'] ?? null);
         self::assertSame(301, $server->sent[1]['clientId']);
         self::assertSame(ControlMessage::TYPE_SET_ROUTE_TABLE, $server->sent[1]['message']['type'] ?? '');
         self::assertSame(ControlMessage::ROLE_WORKER, $server->sent[1]['message']['role'] ?? '');
         self::assertSame([19081], $server->sent[1]['message']['ports'] ?? []);
+        self::assertSame(41, $server->sent[2]['clientId']);
+        self::assertSame('command_result', $server->sent[2]['message']['type'] ?? '');
+        self::assertSame('completed', $server->sent[2]['message']['data']['state'] ?? null);
     }
 
     public function testDispatcherOnlyMaintenanceEnableWithoutMaintenanceWorkersDoesNotClaimLifecycleMode(): void
@@ -446,9 +452,14 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertTrue($processed);
         self::assertFalse((bool)$this->readPrivate($orchestrator, 'maintenanceMode'));
         self::assertFalse((bool)$this->readPrivate($orchestrator, 'maintenanceSticky'));
-        self::assertCount(1, $server->sent);
+        self::assertCount(2, $server->sent);
         self::assertSame(42, $server->sent[0]['clientId']);
         self::assertSame('command_result', $server->sent[0]['message']['type'] ?? '');
+        self::assertSame('queued', $server->sent[0]['message']['data']['state'] ?? null);
+        self::assertSame(42, $server->sent[1]['clientId']);
+        self::assertSame('command_result', $server->sent[1]['message']['type'] ?? '');
+        self::assertSame('failed', $server->sent[1]['message']['data']['state'] ?? null);
+        self::assertFalse((bool)($server->sent[1]['message']['success'] ?? true));
     }
 
     public function testMaintenanceModePoolSyncPublishesMaintenancePoolInsteadOfBusinessPool(): void
@@ -639,8 +650,9 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertSame([], $this->readPrivate($orchestrator, 'pendingControlOperations'));
         self::assertNull($this->readPrivate($orchestrator, 'activeControlOperation'));
         self::assertNull($this->readPrivate($orchestrator, 'ipcExclusiveCommand'));
-        self::assertCount(1, $server->sent);
+        self::assertCount(2, $server->sent);
         self::assertSame('queued', $server->sent[0]['message']['data']['state'] ?? null);
+        self::assertSame('completed', $server->sent[1]['message']['data']['state'] ?? null);
     }
 
     public function testMaintenanceEnableContinuesAfterCommandClientDisconnects(): void

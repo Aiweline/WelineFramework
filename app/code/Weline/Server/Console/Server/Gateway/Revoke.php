@@ -5,25 +5,44 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server\Gateway;
 
 use Weline\Framework\Console\CommandHelper;
+use Weline\Server\Service\Edge\Gateway\GatewayCredentialStore;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 
 final class Revoke extends AbstractGatewayCommand
 {
     public function execute(array $args = [], array $data = []): int
     {
+        $json = $this->isJson($args);
+        if (!isset($args['confirm'])) {
+            return $this->failure(
+                __('撤销会使当前项目凭据和路由不可恢复；请提供 --confirm。'),
+                $json,
+                'confirmation_required',
+            );
+        }
         try {
             $response = $this->gateway()->request('revoke', [
                 'project_uuid' => (new GatewayRegistrationBuilder())->projectUuid(),
             ]);
             if (!($response['ok'] ?? false)) {
-                $this->printer->error((string)($response['error']['message'] ?? __('撤销失败')));
-                return 1;
+                $error = (array)($response['error'] ?? []);
+                return $this->failure(
+                    (string)($error['message'] ?? __('撤销失败')),
+                    $json,
+                    (string)($error['code'] ?? 'revoke_failed'),
+                    (array)($error['details'] ?? []),
+                );
             }
-            $this->printer->success(__('当前项目路由和宿主授权已撤销；共享网关保持运行。'));
+            (new GatewayCredentialStore())->remove();
+            $payload = (array)($response['payload'] ?? []);
+            $payload['credential_removed'] = true;
+            if (!$json) {
+                $this->printer->success(__('当前项目路由和宿主授权已撤销；共享网关保持运行。'));
+            }
+            $this->output($payload, $json);
             return 0;
         } catch (\Throwable $throwable) {
-            $this->printer->error($throwable->getMessage());
-            return 1;
+            return $this->failure($throwable->getMessage(), $json, 'revoke_failed');
         }
     }
 
@@ -34,6 +53,15 @@ final class Revoke extends AbstractGatewayCommand
 
     public function help(): array|string
     {
-        return CommandHelper::formatHelp('server:gateway:revoke', $this->tip(), [], [], []);
+        return CommandHelper::formatHelp(
+            'server:gateway:revoke --confirm',
+            $this->tip(),
+            [
+                '--confirm' => __('确认写入不可逆撤销状态并删除本项目宿主凭据'),
+                '--json' => __('输出稳定 JSON 文档'),
+            ],
+            [],
+            [],
+        );
     }
 }

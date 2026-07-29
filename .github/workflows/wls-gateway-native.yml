@@ -1,0 +1,91 @@
+name: WLS Gateway native runtime
+
+on:
+  push:
+    paths:
+      - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
+      - "app/code/Weline/Server/bin/wls_gateway_controller.php"
+      - "app/code/Weline/Server/Test/**/Gateway/**"
+      - ".github/workflows/wls-gateway-native.yml"
+  pull_request:
+    paths:
+      - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
+      - "app/code/Weline/Server/bin/wls_gateway_controller.php"
+      - "app/code/Weline/Server/Test/**/Gateway/**"
+      - ".github/workflows/wls-gateway-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  posix:
+    name: ${{ matrix.os }} native build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+      - name: Install libsodium on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config
+      - name: Install libsodium on macOS
+        if: runner.os == 'macOS'
+        run: brew install libsodium pkg-config
+      - name: Configure
+        run: >-
+          cmake
+          -S app/code/Weline/Server/Service/Edge/Gateway/Native
+          -B build/wls-gateway-native
+          -DCMAKE_BUILD_TYPE=Release
+          -DWLS_RELEASE_PUBLIC_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000
+      - name: Build
+        run: cmake --build build/wls-gateway-native --config Release --parallel
+      - name: Native Broker self-test
+        run: ./build/wls-gateway-native/wls-gateway-broker --self-test
+      - name: Native launcher self-test
+        run: ./build/wls-gateway-native/wls-gateway-launcher --self-test
+      - name: Controller self-test
+        run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test
+
+  windows:
+    name: windows native build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+      - name: Install libsodium
+        shell: pwsh
+        run: vcpkg install libsodium:x64-windows
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake
+          -S app/code/Weline/Server/Service/Edge/Gateway/Native
+          -B build/wls-gateway-native
+          -A x64
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DWLS_RELEASE_PUBLIC_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000
+      - name: Build
+        shell: pwsh
+        run: cmake --build build/wls-gateway-native --config Release --parallel
+      - name: Native Broker self-test
+        shell: pwsh
+        run: ./build/wls-gateway-native/Release/wls-gateway-broker.exe --self-test
+      - name: Native launcher self-test
+        shell: pwsh
+        run: ./build/wls-gateway-native/Release/wls-gateway-launcher.exe --self-test
+      - name: Controller self-test
+        shell: pwsh
+        run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test

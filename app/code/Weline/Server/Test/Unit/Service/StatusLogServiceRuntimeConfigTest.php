@@ -21,7 +21,7 @@ final class StatusLogServiceRuntimeConfigTest extends TestCase
             ? (string) \file_get_contents($this->envPath)
             : "<?php return [];";
 
-        \file_put_contents($this->envPath, "<?php return [];\n");
+        $this->writeEnvContent("<?php return [];\n");
         Env::getInstance()->reload();
         Runtime::resetModeCache();
         StatusLogService::reset();
@@ -29,7 +29,7 @@ final class StatusLogServiceRuntimeConfigTest extends TestCase
 
     protected function tearDown(): void
     {
-        \file_put_contents($this->envPath, $this->originalEnvContent);
+        $this->writeEnvContent($this->originalEnvContent);
         Env::getInstance()->reload();
         Runtime::resetModeCache();
         StatusLogService::reset();
@@ -62,7 +62,7 @@ final class StatusLogServiceRuntimeConfigTest extends TestCase
 
     public function testEnvConfigCanExplicitlyEnableWlsDatabaseStatusLogging(): void
     {
-        \file_put_contents($this->envPath, <<<'PHP'
+        $this->writeEnvContent(<<<'PHP'
 <?php return [
     'wls' => [
         'status_log' => [
@@ -76,5 +76,14 @@ PHP);
         Runtime::setMode(RuntimeInterface::MODE_WLS);
 
         self::assertTrue(StatusLogService::isEnabled());
+    }
+
+    private function writeEnvContent(string $content): void
+    {
+        \file_put_contents($this->envPath, $content);
+        \clearstatcache(true, $this->envPath);
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate($this->envPath, true);
+        }
     }
 }

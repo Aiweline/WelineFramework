@@ -8,6 +8,8 @@ use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\ServiceOrchestrator;
 
 /**
@@ -75,6 +77,10 @@ class DispatcherProvider extends AbstractServiceProvider
         $edgeAdapterName = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
             ->resolve($context->envConfig)
             ->name();
+        $gatewayBackend = \strtolower(\trim((string)$context->getConfig(
+            'wls.edge.mode',
+            $context->getConfig('edge_mode', ''),
+        ))) === GatewayStartupDecision::MODE_GATEWAY;
 
         $arguments = [
             $this->resolveBindHost($context, $edgeAdapterName),
@@ -87,6 +93,10 @@ class DispatcherProvider extends AbstractServiceProvider
             '--memory-limit=' . $context->getDispatcherMemoryLimit(),
             '--edge-adapter=' . $edgeAdapterName,
         ];
+        if ($gatewayBackend) {
+            $arguments[] = '--protocol-edge-token-file='
+                . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+        }
 
         if ($context->windowMode) {
             $arguments[] = '--win';

@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServiceOrchestrator;
 
 final class MasterLeaseOrchestratorArgsTest extends TestCase
@@ -24,11 +25,22 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'linux-direct',
+            runtimeSelection: RuntimeSelection::fromArray([
+                'requested_topology' => 'direct',
+                'effective_topology' => 'direct',
+                'topology_source' => 'unit-test',
+                'os_family' => PHP_OS_FAMILY,
+                'event_loop_driver' => 'select',
+                'ssl_engine' => 'stream',
+                'listener_mode' => PHP_OS_FAMILY === 'Windows' ? 'worker_ports' : 'shared_fd',
+                'policy_compatible' => true,
+                'reason_codes' => ['unit_test'],
+                'reason' => 'unit test runtime selection',
+            ]),
             daemon: false,
             debug: true,
             windowMode: false,
-            envConfig: [],
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             masterLeaseFile: '/tmp/wls master lease.json',
             masterToken: 'unit-master-token'
         );

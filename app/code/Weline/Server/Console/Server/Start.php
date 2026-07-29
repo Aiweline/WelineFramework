@@ -51,6 +51,8 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
 use Weline\Server\Service\Runtime\TlsProcessProfileConfigurator;
 use Weline\Server\Service\Runtime\WlsRuntimeProfile;
+use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 
 /**
  * server:start - 启动常驻内存服务器
@@ -168,6 +170,13 @@ class Start extends CommandAbstract
      * 已执行 startMasterInBackground / runMasterProcess 尝试拉起子进程；fatal 退出时需清理残留
      */
     private bool $wlsChildProcessesMayExist = false;
+
+    /**
+     * 当前启动事务已向共享状态服务登记 consumer；只有 Master 成功接管后才转移释放责任。
+     */
+    private bool $sharedStateConsumerAcquired = false;
+
+    private bool $sharedStateConsumerHandoffDone = false;
 
     /**
      * 启动完成后尾部输出的延迟告警（用于确保提示位于最后且醒目）
@@ -360,6 +369,8 @@ class Start extends CommandAbstract
         $this->startLockInstanceName = $instanceName;
         $this->wlsStartupProcessHandoffDone = false;
         $this->wlsChildProcessesMayExist = false;
+        $this->sharedStateConsumerAcquired = false;
+        $this->sharedStateConsumerHandoffDone = false;
         $this->traceStartupPhase($instanceName, 'start-lock:acquired');
         \register_shutdown_function([$this, 'releaseStartLock']);
         \register_shutdown_function([$this, 'shutdownCleanupOrphanWlsProcessesIfNeeded']);
@@ -401,33 +412,58 @@ class Start extends CommandAbstract
             $configuredEdgeMode = \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_LEGACY;
         }
         try {
+            $projectUuid = (new \Weline\Server\Service\Edge\Gateway\ProjectIdentityStore())
+                ->projectUuid();
+            $launchId = \bin2hex(\random_bytes(16));
+            $previousEndpoint = $this->getInstanceManager()->getRawInstanceData($instanceName);
+            $previousGateway = \is_array($previousEndpoint['gateway'] ?? null)
+                ? $previousEndpoint['gateway']
+                : [];
+            $instanceGeneration = \max(
+                \time(),
+                (int)($previousGateway['instance_generation'] ?? 0) + 1,
+            );
             $edgeDecision = (new \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision())
-                ->decide($configuredEdgeMode, $instanceName, $portExplicit);
+                ->decide(
+                    $configuredEdgeMode,
+                    $instanceName,
+                    $portExplicit,
+                    (string)($config['source'] ?? 'runtime'),
+                );
         } catch (\Throwable $exception) {
             $this->printer->error(__('WLS 2.0 边缘模式解析失败：%{1}', [$exception->getMessage()]));
             return 1;
         }
-        $effectiveEdgeMode = (string)$edgeDecision['effective'];
-        $gatewayMode = $effectiveEdgeMode
-            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY;
+        $effectiveEdgeMode = $edgeDecision->mode;
+        $gatewayMode = $edgeDecision->isGateway();
         $noNginxRequested = $effectiveEdgeMode
             === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS;
         if ($noNginxRequested) {
             $config['edge'] = \array_merge(
                 \is_array($config['edge'] ?? null) ? $config['edge'] : [],
-                ['adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS],
+                [
+                    'adapter' => $edgeDecision->adapter,
+                    'scope' => $edgeDecision->scope,
+                    'source' => $edgeDecision->source,
+                    'fallback_reason' => $edgeDecision->fallbackReason,
+                ],
             );
-            $config['edge_adapter'] = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
-            $fallbackPort = (int)($edgeDecision['fallback_port'] ?? 0);
+            $config['edge_adapter'] = $edgeDecision->adapter;
+            $fallbackPort = $edgeDecision->fallbackPort;
             if ($fallbackPort > 0) {
                 $config['port'] = $fallbackPort;
             }
         } else {
             $config['edge'] = \array_merge(
                 \is_array($config['edge'] ?? null) ? $config['edge'] : [],
-                ['adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX],
+                [
+                    'adapter' => $edgeDecision->adapter,
+                    'scope' => $edgeDecision->scope,
+                    'source' => $edgeDecision->source,
+                    'fallback_reason' => $edgeDecision->fallbackReason,
+                ],
             );
-            $config['edge_adapter'] = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX;
+            $config['edge_adapter'] = $edgeDecision->adapter;
         }
         $config['edge_mode'] = $effectiveEdgeMode;
         $config['edge']['mode'] = $effectiveEdgeMode;
@@ -435,33 +471,38 @@ class Start extends CommandAbstract
             \is_array($config['gateway'] ?? null) ? $config['gateway'] : [],
             [
                 'mode' => $effectiveEdgeMode,
-                'requested_mode' => (string)$edgeDecision['requested'],
+                'requested_mode' => $edgeDecision->requestedMode,
+                'project_uuid' => $projectUuid,
+                'instance_id' => $instanceName,
+                'launch_id' => $launchId,
+                'instance_generation' => $instanceGeneration,
+                'edge_decision' => $edgeDecision->toArray(),
                 'protocol' => $gatewayMode
                     ? \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL
                     : '',
-                'degraded_reason' => $gatewayMode ? '' : (string)$edgeDecision['reason'],
+                'degraded_reason' => $gatewayMode ? '' : $edgeDecision->fallbackReason,
                 'public_http' => $gatewayMode
-                    ? (int)($edgeDecision['gateway']['public_http'] ?? 0)
+                    ? (int)($edgeDecision->gateway['public_http'] ?? 0)
                     : 0,
                 'public_https' => $gatewayMode
-                    ? (int)($edgeDecision['gateway']['public_https'] ?? 0)
+                    ? (int)($edgeDecision->gateway['public_https'] ?? 0)
                     : 0,
                 'epoch' => $gatewayMode
-                    ? (string)($edgeDecision['gateway']['epoch'] ?? '')
+                    ? (string)($edgeDecision->gateway['epoch'] ?? '')
                     : '',
             ],
         );
         $this->printer->note(__('WLS 2.0 边缘模式：%{1}（请求：%{2}）', [
             $effectiveEdgeMode,
-            (string)$edgeDecision['requested'],
+            $edgeDecision->requestedMode,
         ]));
-        if (!$gatewayMode && (string)$edgeDecision['requested'] === 'auto') {
+        if ($edgeDecision->isAutoFallback()) {
             $this->printer->warning(__('共享网关不可用，已降级纯 WLS：%{1}', [
-                (string)$edgeDecision['reason'],
+                $edgeDecision->fallbackReason,
             ]));
-            if ((int)($edgeDecision['fallback_port'] ?? 0) > 0) {
+            if ($edgeDecision->fallbackPort > 0) {
                 $this->printer->note(__('备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。', [
-                    (int)$edgeDecision['fallback_port'],
+                    $edgeDecision->fallbackPort,
                 ]));
             }
         }
@@ -507,7 +548,7 @@ class Start extends CommandAbstract
                 if ($dependencyTopologyIntent['effective']->isDirect()) {
                     $this->printer->note(__('Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。'));
                 }
-                return;
+                return 1;
             }
 
             if ($dependencyStatus === 'platform_optimal' || $dependencyStatus === 'skipped') {
@@ -526,7 +567,7 @@ class Start extends CommandAbstract
                     if ($exitCode !== 0) {
                         $this->printer->error(__('依赖安装后的 WLS 重新启动失败，退出码：%{1}', [$exitCode]));
                     }
-                    return;
+                    return $exitCode;
                 }
             }
         }
@@ -551,13 +592,33 @@ class Start extends CommandAbstract
             'host' => (string)$host,
         ]);
         if (!$this->validateExternalHostAllowlist($instanceName, $host, $config)) {
-            return;
+            return 1;
         }
         $this->traceStartupPhase($instanceName, 'host-allowlist:after', [
             'public_host' => (string)($config['public_host'] ?? $host),
         ]);
         $publicHost = (string)($config['public_host'] ?? $host);
         $config['public_host'] = $publicHost;
+        if (\in_array(
+            $edgeDecision->requestedMode,
+            [
+                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO,
+                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY,
+            ],
+            true,
+        )) {
+            try {
+                $config['gateway']['fallback_bind_host'] = $this->resolveGatewayFallbackBindHost(
+                    $config,
+                    (string)$host,
+                );
+            } catch (\Throwable $exception) {
+                $this->printer->error(__('WLS 2.0 备用入口监听地址无效：%{1}', [
+                    $exception->getMessage(),
+                ]));
+                return 1;
+            }
+        }
         $daemon = $this->resolveDaemonMode($config, $foregroundMode);
         if (!$daemon && !$noNginxRequested) {
             $this->printer->error(__('Nginx-only 启动必须使用后台 Master，才能在 Worker READY 后完成 Nginx 配置事务与真实协议门禁；请移除 --foreground/--no-daemon。'));
@@ -582,7 +643,7 @@ class Start extends CommandAbstract
             ]);
             if (!$sslResult['success']) {
                 $this->printer->error($sslResult['message']);
-                return;
+                return 1;
             }
             $sslCert = $sslResult['cert_path'] ?? '';
             $sslKey = $sslResult['key_path'] ?? '';
@@ -591,18 +652,49 @@ class Start extends CommandAbstract
                 $sslKey = Processer::resolveWindowsPersistentPath((string)$sslKey);
             }
             $sslEnabled = (bool) ($sslResult['ssl_enabled'] ?? true);
+            $activeCertificate = null;
+            if ($sslEnabled && $sslCert !== '' && $sslKey !== '') {
+                try {
+                    $projectRoot = \realpath((string)BP);
+                    if (!\is_string($projectRoot) || $projectRoot === '') {
+                        throw new \RuntimeException('Unable to resolve the WLS project root.');
+                    }
+                    $certificateRoots = (new GatewayRegistrationBuilder())
+                        ->enrollmentCertificateRoots($projectRoot);
+                    $activeCertificate = (new ProjectCertificateGenerationStore())->activate(
+                        (string)($config['public_host'] ?? $host),
+                        (string)$sslCert,
+                        (string)$sslKey,
+                        '',
+                        $certificateRoots,
+                    );
+                    $sslCert = (string)$activeCertificate['cert_path'];
+                    $sslKey = (string)$activeCertificate['key_path'];
+                    if (($activeCertificate['retained_previous'] ?? false) === true) {
+                        $this->printer->warning(__('新证书未通过完整校验，继续使用上一代有效证书：%{1}', [
+                            (string)($activeCertificate['activation_error'] ?? ''),
+                        ]));
+                    }
+                } catch (\Throwable $throwable) {
+                    $this->printer->error(__('无法激活项目证书代际：%{1}', [
+                        $throwable->getMessage(),
+                    ]));
+                    return 1;
+                }
+            }
             $config['ssl_cert'] = $sslCert;
             $config['ssl_key'] = $sslKey;
             $config['ssl_domain'] = (string)($config['public_host'] ?? $host);
-            if ($gatewayMode) {
+            if ($gatewayMode
+                || $edgeDecision->requestedMode
+                    === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO
+            ) {
                 $config['gateway']['certificate_source'] = [
                     'domain' => (string)$config['ssl_domain'],
                     'cert_path' => (string)$sslCert,
                     'key_path' => (string)$sslKey,
-                    'generation' => \is_file((string)$sslCert) && \is_file((string)$sslKey)
-                        ? \hash('sha256', (string)@\hash_file('sha256', (string)$sslCert)
-                            . ':' . (string)@\hash_file('sha256', (string)$sslKey))
-                        : '',
+                    'generation' => (int)($activeCertificate['generation'] ?? 0),
+                    'source_digest' => (string)($activeCertificate['source_digest'] ?? ''),
                 ];
             }
             if (!$sslEnabled) {
@@ -663,7 +755,6 @@ class Start extends CommandAbstract
             return 1;
         }
 
-        $policyTopology = $runtimeSelection->effectiveTopology->value;
         $count = (int)$runtimeStrategy['worker_count'];
         $config['worker_count'] = $count;
         $config['runtime_strategy'] = (string)$runtimeStrategy['runtime_strategy'];
@@ -693,8 +784,25 @@ class Start extends CommandAbstract
             return 1;
         }
         $backendSslEnabled = $pureWls && $sslEnabled;
+        $requestedGatewayMode = \strtolower(\trim((string)(
+            $config['gateway']['requested_mode'] ?? ''
+        )));
+        $autoFallback = $pureWls && $requestedGatewayMode === 'auto';
+        $gatewayFallbackCapable = \in_array(
+            $requestedGatewayMode,
+            ['auto', 'gateway'],
+            true,
+        );
+        // An auto gateway instance may run its Dispatcher topology and a
+        // supplemental direct TLS fallback under the same Master. Publish one
+        // immutable bundle that both roles can validate to the same digest.
+        $policyTopology = $gatewayFallbackCapable
+            ? 'both'
+            : $runtimeSelection->effectiveTopology->value;
         $backendListenHost = $pureWls
-            ? $this->resolveServerListenHost((string)$host)
+            ? ($autoFallback
+                ? (string)($config['gateway']['fallback_bind_host'] ?? '127.0.0.1')
+                : $this->resolveServerListenHost((string)$host))
             : '127.0.0.1';
         $config['edge_adapter'] = $edgeAdapter->name();
         // Validate the selected endpoint policy before canonicalizing it.
@@ -758,7 +866,7 @@ class Start extends CommandAbstract
             $tlsProcessProfile = (new TlsProcessProfileConfigurator())->activate($config, $backendSslEnabled);
         } catch (\RuntimeException $exception) {
             $this->printer->error($exception->getMessage());
-            return;
+            return 1;
         }
         if (!\is_array($config['ssl'] ?? null)) {
             $config['ssl'] = [];
@@ -795,6 +903,24 @@ class Start extends CommandAbstract
                 $backendSslEnabled,
             );
             $config['public_origin'] = $publicOrigin;
+            if ($autoFallback) {
+                $fallbackAuthority = \filter_var(
+                    $backendListenHost,
+                    FILTER_VALIDATE_IP,
+                    FILTER_FLAG_IPV6,
+                ) !== false
+                    ? '[' . $backendListenHost . ']'
+                    : $backendListenHost;
+                $config['gateway']['fallback_state'] = 'DEGRADED_WLS';
+                $config['gateway']['fallback_bind_host'] = $backendListenHost;
+                $config['gateway']['fallback_bind'] = $fallbackAuthority . ':' . $port;
+                $config['gateway']['fallback_urls'] = [\rtrim($publicOrigin, '/')];
+                $config['gateway']['fallback_limitations'] = [
+                    'not_public_80_443',
+                    'dns_mapping_required',
+                    'firewall_or_load_balancer_may_block',
+                ];
+            }
             $this->printer->note(__('纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。'));
         } elseif ($gatewayMode) {
             $gatewayHttpsPort = (int)($config['gateway']['public_https'] ?? 0);
@@ -916,7 +1042,7 @@ class Start extends CommandAbstract
             $this->printer->note('  ' . __('3. 查看所有运行中的实例：'));
             $this->printer->note('     php bin/w server:status --all');
             $this->printer->note('');
-            return;
+            return 1;
         }
 
         // 跨项目作用域占用：另一项目（不同 BP 目录哈希派生的 pXXXXXXXX）的 WLS 占了该端口。
@@ -935,7 +1061,7 @@ class Start extends CommandAbstract
             $this->printer->note('  ' . __('3. 或前往实际项目目录处理：'));
             $this->printer->note('     php bin/w server:status --all');
             $this->printer->note('');
-            return;
+            return 1;
         }
         // CLI 服务器占用该端口 → 先停
         if ($occupantCli) {
@@ -1088,6 +1214,10 @@ class Start extends CommandAbstract
         try {
             $this->traceStartupPhase($instanceName, 'shared-runtime:before');
             $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart, $windowMode);
+            $this->sharedStateConsumerAcquired = (bool)(
+                ($sharedStateRuntime['session']['registered'] ?? false)
+                || ($sharedStateRuntime['memory']['registered'] ?? false)
+            );
             $this->printer->note(__('共享状态运行时: %{1}', [$sharedStateRuntime]));
             $this->traceStartupPhase($instanceName, 'shared-runtime:after', [
                 'session_port' => (int)($sharedStateRuntime['session']['port'] ?? 0),
@@ -1176,7 +1306,7 @@ class Start extends CommandAbstract
             $this->printer->note(__('  3. 查看端口占用：'));
             $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
             $this->rollbackRestartMaintenanceTransactionIfPending();
-            return;
+            return 1;
         }
         $this->traceStartupPhase($instanceName, 'main-port-preflight:after', [
             'port' => (int)$port,
@@ -1203,7 +1333,7 @@ class Start extends CommandAbstract
                 $this->printer->error(__('无法分配 Worker 端口：全局端口分配锁正被其他启动流程占用'));
                 $this->printer->note(__('请稍后重试，或等待其他实例启动完成'));
                 $this->rollbackRestartMaintenanceTransactionIfPending();
-                return;
+                return 1;
             }
             $workerPortAllocationLocked = true;
             $this->traceStartupPhase($instanceName, 'worker-port-lock:after');
@@ -1262,9 +1392,9 @@ class Start extends CommandAbstract
             'workers' => (int)$count,
         ]);
 
-        // HTTP Redirect 端口被非框架进程占用时：先展示占用进程详情（PID/名称/命令行），
-        // 在交互式终端询问是否强制结束；用户同意则尝试释放，后续晚判会二次校验；
-        // 用户拒绝或处于非交互模式则按既有方案给出指引并退出，避免误杀宝塔/Nginx 等关键进程。
+        // Unknown port owners are outside WLS authority. Keep HTTPS available,
+        // disable only the optional redirect listener and never prompt, stop or
+        // modify the occupying process.
         $httpRedirectInspect = (!$skipPostStopPortInspection && $sslEnabled && $httpRedirectPort > 0)
             ? $this->inspectStartupPortIfOccupied($httpRedirectPort)
             : [];
@@ -1300,54 +1430,10 @@ class Start extends CommandAbstract
                 $this->printer->note(__('  命令行：%{1}', [$occupantCmdline]));
             }
 
-            $confirmed = false;
-            if ($this->isInteractiveTerminal() && \defined('STDIN')) {
-                $this->printer->warning(__('是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]: ', [$httpRedirectPort]));
-                echo '  > ';
-                $input = \trim((string) @\fgets(STDIN));
-                $confirmed = \in_array(\strtolower($input), ['y', 'yes', '是'], true);
-            }
-
-            if (!$confirmed) {
-                $this->printer->note('');
-                $this->printer->setup(__('解决方案：'));
-                $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$httpRedirectPort]));
-                if ($occupantPid > 0) {
-                    $this->printer->note(__('     - Windows: taskkill /F /PID %{1}', [$occupantPid]));
-                    $this->printer->note(__('     - Linux/macOS: kill -9 %{1}', [$occupantPid]));
-                }
-                $this->printer->note(__('  2. 或使用框架命令释放：php bin/w server:kill-port %{1} -f', [$httpRedirectPort]));
-                $this->printer->note(__('  3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
-                $this->rollbackRestartMaintenanceTransactionIfPending();
-                return;
-            }
-
-            $this->printer->note(__('正在强制结束占用端口 %{1} 的进程 (PID: %{2})...', [
-                $httpRedirectPort,
-                $occupantPid > 0 ? (string) $occupantPid : '?',
-            ]));
-            $released = Processer::killProcessByPort($httpRedirectPort);
-            if (!$released) {
-                $released = Processer::forceReleasePort($httpRedirectPort);
-            }
-            if (Processer::isPortInUse($httpRedirectPort)) {
-                $waited = 0;
-                while ($waited < 3000 && Processer::isPortInUse($httpRedirectPort)) {
-                    SchedulerSystem::usleep(300000);
-                    $waited += 300;
-                }
-                $released = !Processer::isPortInUse($httpRedirectPort);
-            }
-            if (Processer::isPortInUse($httpRedirectPort)) {
-                $this->printer->error(__('无法释放端口 %{1}', [$httpRedirectPort]));
-                $this->printer->note(__('提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试', [
-                    $occupantPid > 0 ? (string) $occupantPid : '?',
-                ]));
-                $this->rollbackRestartMaintenanceTransactionIfPending();
-                return;
-            }
-
-            $this->printer->success(__('端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动', [$httpRedirectPort]));
+            $this->printer->warning(__(
+                'WLS 不会操作未知端口 owner；本次仅禁用可选的 HTTP→HTTPS 重定向监听。'
+            ));
+            $httpRedirectPort = 0;
         }
 
         // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
@@ -1360,7 +1446,7 @@ class Start extends CommandAbstract
         // Linux/macOS 下检测 socket 权限（即使高端口也可能因系统安全设置需要 sudo）
         if (!$this->ensureUnixSocketPermission($backendListenHost, $port)) {
             $this->rollbackRestartMaintenanceTransactionIfPending();
-            return;
+            return 1;
         }
         $this->traceStartupPhase($instanceName, 'permission-check:after');
         
@@ -1392,13 +1478,13 @@ class Start extends CommandAbstract
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
                 }
-                return;
+                return 1;
             }
             if (!$this->checkAndReleasePorts('127.0.0.1', $workerPort, $count, $forceRestart, $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
                 }
-                return;
+                return 1;
             }
             if ($dispatcherEnabled) {
                 $edgeDispatcherPort = ProtocolEdgeRuntime::dispatcherPortFromWorkerRange($workerPort, $count);
@@ -1406,7 +1492,7 @@ class Start extends CommandAbstract
                     if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                         $this->disableMaintenanceMode($instanceName);
                     }
-                    return;
+                    return 1;
                 }
             }
         } elseif (!$skipPostStopPortInspection && $dispatcherEnabled) {
@@ -1416,14 +1502,14 @@ class Start extends CommandAbstract
                     $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护状态已恢复到重启前配置（端口检查未通过）。'));
                 }
-                return;
+                return 1;
             }
             if (!$this->checkAndReleasePorts($host, $workerPort, $count, $restartCleanupPerformed, $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
                     $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护状态已恢复到重启前配置（端口检查未通过）。'));
                 }
-                return;
+                return 1;
             }
         } elseif (!$skipPostStopPortInspection) {
             // 直连模式：
@@ -1439,7 +1525,7 @@ class Start extends CommandAbstract
                     $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护状态已恢复到重启前配置（端口检查未通过）。'));
                 }
-                return;
+                return 1;
             }
         }
         $this->traceStartupPhase($instanceName, 'port-release-check:after', [
@@ -1467,7 +1553,7 @@ class Start extends CommandAbstract
                     ]));
                     $this->printer->note(__('请先停止实例 [%{1}]，或改用非 443 主端口启动。', [$redirectOwner]));
                     $this->rollbackRestartMaintenanceTransactionIfPending();
-                    return;
+                    return 1;
                 }
 
                 if ($shouldAutoRelease) {
@@ -1538,7 +1624,7 @@ class Start extends CommandAbstract
                     $this->disableMaintenanceMode($instanceName);
                 }
                 $this->printer->error(__('WLS 启动策略激活失败：%{1}', [$exception->getMessage()]));
-                return;
+                return 1;
             }
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
             $workerScript = $this->ensureWorkerScript();
@@ -1631,6 +1717,7 @@ class Start extends CommandAbstract
                 'completed' => $startupCompleted,
             ]);
             $this->wlsStartupProcessHandoffDone = $startupCompleted || !$this->wlsChildProcessesMayExist;
+            $this->sharedStateConsumerHandoffDone = $startupCompleted;
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
             // 关闭由本次启动流程引入的维护态：仅在新 Master 全部就绪后才关，避免空窗。
@@ -2027,6 +2114,41 @@ class Start extends CommandAbstract
     }
 
     /**
+     * Resolve the supplemental TLS listener independently from the loopback
+     * gateway backend. A literal public start host is explicit bind intent;
+     * otherwise only an explicit fallback/bind host may widen loopback.
+     *
+     * @param array<string,mixed> $config
+     */
+    protected function resolveGatewayFallbackBindHost(array $config, string $startHost): string
+    {
+        $gateway = \is_array($config['gateway'] ?? null) ? $config['gateway'] : [];
+        $literalStartHost = \strtolower(\trim($startHost, " \t\n\r\0\x0B[]"));
+        if (\filter_var($literalStartHost, FILTER_VALIDATE_IP) !== false) {
+            return $literalStartHost;
+        }
+
+        $candidate = \array_key_exists('fallback_bind_host', $gateway)
+            ? $gateway['fallback_bind_host']
+            : ($config['bind_host'] ?? null);
+        if ($candidate === null || !\is_scalar($candidate)) {
+            return '127.0.0.1';
+        }
+
+        $host = \strtolower(\trim((string)$candidate, " \t\n\r\0\x0B[]"));
+        if ($host === '' || $host === 'localhost') {
+            return '127.0.0.1';
+        }
+        if (\filter_var($host, FILTER_VALIDATE_IP) === false) {
+            throw new \InvalidArgumentException(
+                'fallback_bind_host must be a resolved IPv4 or IPv6 address.'
+            );
+        }
+
+        return $host;
+    }
+
+    /**
      * 仅运行 Master 进程（由 startMasterInBackground 通过子进程调用，从实例文件恢复状态）
      * 非 Windows 下调用 posix_setsid() 脱离控制终端，避免 SSH 断开或父进程退出时收到 SIGHUP 导致 Master 退出。
      */
@@ -2097,6 +2219,29 @@ class Start extends CommandAbstract
                 throw new \RuntimeException('Nginx-only endpoint must not enable WLS native HTTP/3.');
             }
             $persistedGateway = \is_array($data['gateway'] ?? null) ? $data['gateway'] : [];
+            $persistedEdgeDecisionData = \is_array($persistedGateway['edge_decision'] ?? null)
+                ? $persistedGateway['edge_decision']
+                : [];
+            $persistedEdgeDecision = $persistedEdgeDecisionData === []
+                ? null
+                : \Weline\Server\Service\Edge\Gateway\EdgeRuntimeDecision::fromArray(
+                    $persistedEdgeDecisionData,
+                );
+            if ($persistedEdgeDecision !== null
+                && $persistedEdgeDecision->adapter !== $persistedEdgeAdapterName
+            ) {
+                throw new \RuntimeException(
+                    'Master-only startup rejected an edge decision/adapter mismatch.'
+                );
+            }
+            if ($persistedEdgeDecision !== null
+                && isset($persistedGateway['mode'])
+                && (string)$persistedGateway['mode'] !== $persistedEdgeDecision->mode
+            ) {
+                throw new \RuntimeException(
+                    'Master-only startup rejected inconsistent edge decision copies.'
+                );
+            }
             if (\array_key_exists('enabled', $persistedGateway)
                 && $this->isTruthyCliFlagValue($persistedGateway['enabled'])
             ) {
@@ -2217,7 +2362,22 @@ class Start extends CommandAbstract
             'worker_count' => $workerCount,
             'runtime_strategy' => 'auto',
             'runtime_selection' => $persistedRuntimeSelection,
-            'edge' => ['adapter' => $edgeAdapterName],
+            'edge' => [
+                'adapter' => $edgeAdapterName,
+                'mode' => $persistedEdgeDecision?->mode ?? (string)($persistedGateway['mode'] ?? (
+                    $edgeAdapterName === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                        ? \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
+                        : \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_LEGACY
+                )),
+                'scope' => $persistedEdgeDecision?->scope ?? (
+                    $edgeAdapterName === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                        ? \Weline\Server\Service\Edge\Gateway\EdgeRuntimeDecision::SCOPE_PROJECT
+                        : \Weline\Server\Service\Edge\Gateway\EdgeRuntimeDecision::SCOPE_LEGACY
+                ),
+                'source' => $persistedEdgeDecision?->source ?? 'endpoint',
+                'fallback_reason' => $persistedEdgeDecision?->fallbackReason
+                    ?? (string)($persistedGateway['degraded_reason'] ?? ''),
+            ],
             'runtime' => [
                 'topology' => $persistedRuntimeSelection->requestedTopology->value,
                 'listener_mode' => $persistedRuntimeSelection->listenerMode,
@@ -3377,6 +3537,7 @@ class Start extends CommandAbstract
             )->setPrinter($this->printer)
                 ->setOnStartedCallback(function () {
                     $this->wlsStartupProcessHandoffDone = true;
+                    $this->sharedStateConsumerHandoffDone = true;
                     $this->releaseStartLock();
                 })
                 ->init(
@@ -3409,6 +3570,8 @@ class Start extends CommandAbstract
      */
     protected function cleanupFailedStartupProcesses(string $instanceName, int $workerCount = 0): void
     {
+        $this->releaseFailedStartupSharedStateConsumers($instanceName);
+
         $workerCount = $workerCount > 0 ? $workerCount : 16;
         $scopedWorkerPrefix = MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName) . '-';
         $scopedMaintenancePrefix = MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-';
@@ -3435,6 +3598,19 @@ class Start extends CommandAbstract
         }
 
         Processer::cleanupStalePidFiles();
+    }
+
+    protected function releaseFailedStartupSharedStateConsumers(string $instanceName): void
+    {
+        try {
+            $this->createSharedStateServiceManager()->releaseInstanceConsumers($instanceName);
+            $this->sharedStateConsumerAcquired = false;
+        } catch (\Throwable $throwable) {
+            \w_log_warning(__(
+                'WLS 启动失败后释放共享服务 consumer token 异常：%{1}',
+                [$throwable->getMessage()],
+            ));
+        }
     }
 
     protected function configureMasterRuntime(
@@ -3931,11 +4107,15 @@ class Start extends CommandAbstract
                 'adapter' => \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX,
             ],
             'http' => [
-                'protocols' => [HttpProtocolSelection::HTTP_1],
-                'preferred' => HttpProtocolSelection::HTTP_1,
+                // Keep the public pure-WLS default here. HttpProtocolSelection
+                // canonicalizes a managed Nginx/private gateway backend to H1,
+                // while auto fallback and --edge=wls must retain real ALPN H2
+                // with H1 fallback.
+                'protocols' => HttpProtocolSelection::DEFAULT_PROTOCOLS,
+                'preferred' => HttpProtocolSelection::HTTP_2,
                 'protocol_edge' => HttpProtocolSelection::EDGE_DISABLED,
                 'protocol_edge_binary' => '',
-                'tls_session_resumption' => false,
+                'tls_session_resumption' => true,
                 'alt_svc' => false,
             ],
             'supervisor' => ['enabled' => 'auto'],
@@ -4342,8 +4522,6 @@ class Start extends CommandAbstract
         // 开发环境：确保 *.weline.test 泛域名证书存在，避免 hosts 中其他子域 TLS 主机名不匹配
         if (!empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'wildcard-certificate:skipped-http-only');
-        } elseif ($startupCertificateFilesReady) {
-            $this->traceStartupPhase($instanceName, 'wildcard-certificate:deferred-valid-files');
         } else {
             $this->traceStartupPhase($instanceName, 'wildcard-certificate:before');
             $this->ensureManagedLocalWildcardCertificate();
@@ -7328,14 +7506,40 @@ class Start extends CommandAbstract
 
     protected function isWorkerPortReservationActive(array $instanceData, string $instanceFile = ''): bool
     {
+        if ((int)($instanceData['worker_port'] ?? 0) <= 0) {
+            return false;
+        }
+
+        $instanceName = \trim((string)($instanceData['instance_name'] ?? $instanceData['name'] ?? ''));
+        if ($instanceName === '' && $instanceFile !== '') {
+            $instanceName = \basename($instanceFile, '.json');
+        }
+        $masterPid = (int)($instanceData['master_pid'] ?? 0);
+        if ($instanceName !== ''
+            && $masterPid > 0
+            && $this->isRecordedMasterReservationOwnerRunning($instanceName, $masterPid)
+        ) {
+            return true;
+        }
+
         $startedTimestamp = (int) ($instanceData['started_timestamp'] ?? 0);
         if ($startedTimestamp <= 0 && $instanceFile !== '' && \is_file($instanceFile)) {
             $startedTimestamp = (int) (@\filemtime($instanceFile) ?: 0);
         }
 
         return $startedTimestamp > 0
-            && (\time() - $startedTimestamp) <= self::WORKER_PORT_RESERVATION_TTL
-            && (int)($instanceData['worker_port'] ?? 0) > 0;
+            && (\time() - $startedTimestamp) <= self::WORKER_PORT_RESERVATION_TTL;
+    }
+
+    protected function isRecordedMasterReservationOwnerRunning(string $instanceName, int $masterPid): bool
+    {
+        $processName = MasterProcess::getMasterProcessName($instanceName);
+        return Processer::isManagedProcessRunning(
+            $masterPid,
+            $processName,
+            '',
+            '--name=' . $processName,
+        );
     }
 
     /**
@@ -9110,6 +9314,13 @@ PHP;
      */
     public function shutdownCleanupOrphanWlsProcessesIfNeeded(): void
     {
+        if ($this->sharedStateConsumerAcquired && !$this->sharedStateConsumerHandoffDone) {
+            $instanceName = $this->startLockInstanceName;
+            if ($instanceName !== '') {
+                $this->releaseFailedStartupSharedStateConsumers($instanceName);
+            }
+        }
+
         if ($this->wlsStartupProcessHandoffDone || !$this->wlsChildProcessesMayExist) {
             return;
         }

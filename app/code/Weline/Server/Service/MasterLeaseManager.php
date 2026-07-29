@@ -16,6 +16,7 @@ class MasterLeaseManager
     public const STATE_RUNNING = 'running';
     public const STATE_STOPPING = 'stopping';
     public const HEARTBEAT_STALE_SEC = 15;
+    private const TEMPORARY_STALE_SEC = 30;
 
     public static function pathForInstance(string $instance): string
     {
@@ -118,6 +119,7 @@ class MasterLeaseManager
         if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
             throw new \RuntimeException('Unable to create master lease directory: ' . $dir);
         }
+        $this->cleanupStaleTemporaries($path);
 
         $json = \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
         if (!\is_string($json)) {
@@ -125,13 +127,37 @@ class MasterLeaseManager
         }
 
         $tmp = $path . '.' . \getmypid() . '.' . \bin2hex(\random_bytes(4)) . '.tmp';
-        if (@\file_put_contents($tmp, $json . PHP_EOL, LOCK_EX) === false) {
+        $payload = $json . PHP_EOL;
+        $written = @\file_put_contents($tmp, $payload, LOCK_EX);
+        if (!\is_int($written) || $written !== \strlen($payload)) {
+            @\unlink($tmp);
             throw new \RuntimeException('Unable to write master lease temp file: ' . $tmp);
         }
         @\chmod($tmp, 0640);
         if (!@\rename($tmp, $path)) {
             @\unlink($tmp);
             throw new \RuntimeException('Unable to publish master lease file: ' . $path);
+        }
+    }
+
+    private function cleanupStaleTemporaries(string $path): void
+    {
+        $basename = \basename($path);
+        $pattern = '/^' . \preg_quote($basename, '/') . '\.[0-9]+\.[a-f0-9]{8}\.tmp$/D';
+        $now = \time();
+        foreach (\glob($path . '.*.tmp') ?: [] as $candidate) {
+            if (!\is_string($candidate)
+                || \is_link($candidate)
+                || !\is_file($candidate)
+                || \preg_match($pattern, \basename($candidate)) !== 1
+            ) {
+                continue;
+            }
+            $modifiedAt = @\filemtime($candidate);
+            if (!\is_int($modifiedAt) || $now - $modifiedAt < self::TEMPORARY_STALE_SEC) {
+                continue;
+            }
+            @\unlink($candidate);
         }
     }
 

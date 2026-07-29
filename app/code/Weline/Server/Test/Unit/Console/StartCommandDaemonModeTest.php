@@ -28,10 +28,10 @@ final class StartCommandDaemonModeTest extends TestCase
         self::assertTrue($start->daemonMode(['daemon' => true], false));
     }
 
-    public function testFrontendFlagRequiresExplicitTruthyValue(): void
+    public function testWindowFlagRequiresExplicitTruthyValue(): void
     {
         $start = new class extends Start {
-            public function frontendFlag(array $args): bool
+            public function windowFlag(array $args): bool
             {
                 return $this->resolveWindowModeFlag($args);
             }
@@ -41,11 +41,11 @@ final class StartCommandDaemonModeTest extends TestCase
         $originalArgv = $_SERVER['argv'] ?? null;
         $_SERVER['argv'] = ['bin/w', 'server:start'];
         try {
-            self::assertFalse($start->frontendFlag(['frontend' => false]));
-            self::assertFalse($start->frontendFlag(['foreground' => 'false']));
-            self::assertFalse($start->frontendFlag(['frontend' => '0']));
-            self::assertTrue($start->frontendFlag(['frontend' => true]));
-            self::assertTrue($start->frontendFlag([0 => '--frontend']));
+            self::assertFalse($start->windowFlag(['win' => false]));
+            self::assertFalse($start->windowFlag(['frontend' => true]));
+            self::assertFalse($start->windowFlag(['win' => '0']));
+            self::assertTrue($start->windowFlag(['win' => true]));
+            self::assertTrue($start->windowFlag([0 => '--win']));
         } finally {
             if ($originalArgv === null) {
                 unset($_SERVER['argv']);
@@ -55,10 +55,10 @@ final class StartCommandDaemonModeTest extends TestCase
         }
     }
 
-    public function testFrontendFlagFallsBackToRawArgv(): void
+    public function testWindowFlagFallsBackToRawArgv(): void
     {
         $start = new class extends Start {
-            public function frontendFlag(array $args): bool
+            public function windowFlag(array $args): bool
             {
                 return $this->resolveWindowModeFlag($args);
             }
@@ -68,7 +68,7 @@ final class StartCommandDaemonModeTest extends TestCase
         $originalArgv = $_SERVER['argv'] ?? null;
         $_SERVER['argv'] = ['bin/w', 'server:start', '--win'];
         try {
-            self::assertTrue($start->frontendFlag([]));
+            self::assertTrue($start->windowFlag([]));
         } finally {
             if ($originalArgv === null) {
                 unset($_SERVER['argv']);
@@ -95,16 +95,6 @@ final class StartCommandDaemonModeTest extends TestCase
                 return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
             }
 
-            public function masterCommand(
-                string $phpBinary,
-                string $script,
-                string $instanceName,
-                string $masterName,
-                bool $foregroundMode,
-                bool $windowMode
-            ): string {
-                return $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
-            }
         };
         $start->__init();
 
@@ -112,16 +102,10 @@ final class StartCommandDaemonModeTest extends TestCase
         $displayName = MasterProcess::getMasterProcessDisplayName('default', true);
 
         $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, false, true);
-        $command = $start->masterCommand('php', 'bin/w', 'default', $masterName, false, true);
 
         self::assertContains('--win', $argv);
         self::assertContains('--name=' . $masterName, $argv);
         self::assertContains('--window-title=' . $displayName, $argv);
-        self::assertStringContainsString('--win', $command);
-        self::assertStringContainsString('--name=', $command);
-        self::assertStringContainsString($masterName, $command);
-        self::assertStringContainsString('--window-title=', $command);
-        self::assertStringContainsString($displayName, $command);
     }
 
     public function testNonFrontendMasterBackgroundLaunchKeepsStableIdentityOnly(): void
@@ -141,30 +125,17 @@ final class StartCommandDaemonModeTest extends TestCase
                 return $this->buildMasterBackgroundArgv($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
             }
 
-            public function masterCommand(
-                string $phpBinary,
-                string $script,
-                string $instanceName,
-                string $masterName,
-                bool $foregroundMode,
-                bool $windowMode
-            ): string {
-                return $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
-            }
         };
         $start->__init();
 
         $masterName = MasterProcess::getMasterProcessName('default');
 
         $argv = $start->masterArgv('php', 'bin/w', 'default', $masterName, false, false);
-        $command = $start->masterCommand('php', 'bin/w', 'default', $masterName, false, false);
 
         self::assertContains('--master-only', $argv);
         self::assertContains('--name=' . $masterName, $argv);
         self::assertNotContains('--win', $argv);
         self::assertNotContains('--window-title=' . MasterProcess::getMasterProcessDisplayName('default', true), $argv);
-        self::assertStringNotContainsString('--win', $command);
-        self::assertStringNotContainsString('--window-title=', $command);
     }
 
     public function testPersistForegroundLauncherPidStoresWrapperPidFromProcessMetadata(): void

@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Supervisor;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Runtime\WorkerReadinessState;
 use Weline\Server\Service\Telemetry\WorkerTelemetryReporter;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpoint;
@@ -134,6 +135,189 @@ final class SupervisorChildClientTest extends TestCase
         } finally {
             $client->close();
             $server?->close();
+        }
+    }
+
+    public function testGatewayWorkerRolesSendReadinessEvidenceOverSupervisorTransport(): void
+    {
+        foreach ([
+            ControlMessage::ROLE_GATEWAY_FALLBACK,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ] as $index => $role) {
+            $instanceName = 'ut-' . $role;
+            $runtime = $this->createRuntime($instanceName);
+            $server = new SupervisorServer($runtime);
+            $endpoint = $server->start(ControlEndpoint::tcp('127.0.0.1', 0));
+            $client = new SupervisorChildClient(
+                instanceName: $instanceName,
+                channelId: 'channel-' . $instanceName,
+                endpointResolver: new ControlEndpointResolver(BP, 27000, 1000),
+                endpoint: $endpoint,
+                progressCallback: static function () use ($server): void {
+                    $server->poll(0, 10000);
+                },
+            );
+
+            try {
+                $workerId = $index + 1;
+                $port = 22000 + $index;
+                $policyDigest = \hash('sha256', $role . '-policy');
+                WorkerReadinessState::reset('direct');
+                WorkerReadinessState::markPolicyLoaded($policyDigest);
+                WorkerReadinessState::markListenerBound(
+                    false,
+                    'stream_select',
+                    'stream',
+                    'single',
+                );
+                WorkerReadinessState::markMaintenanceReady();
+
+                self::assertTrue($client->connect('127.0.0.1', 0));
+                self::assertTrue($client->register(
+                    role: $role,
+                    pid: 12100 + $index,
+                    port: $port,
+                    workerId: $workerId,
+                    launchId: 'launch-' . $role,
+                    instanceCode: $instanceName,
+                    msgId: 'hello-' . $role,
+                ));
+                self::assertTrue($client->sendReady(
+                    role: $role,
+                    workerId: $workerId,
+                    port: $port,
+                    launchId: 'launch-' . $role,
+                    msgId: 'ready-' . $role,
+                ));
+
+                $sessions = $server->sessionsSnapshot();
+                self::assertCount(1, $sessions);
+                $readiness = (array)(\array_values($sessions)[0]['ready_capabilities'] ?? []);
+                self::assertSame(
+                    WorkerReadinessState::READINESS_PROTOCOL_VERSION,
+                    $readiness['readiness_protocol_version'] ?? null,
+                );
+                self::assertSame('direct', $readiness['topology'] ?? null);
+                self::assertSame($policyDigest, $readiness['policy_digest'] ?? null);
+                self::assertTrue((bool)($readiness['listen_capabilities']['bound'] ?? false));
+                self::assertSame(
+                    'single',
+                    $readiness['listen_capabilities']['mode'] ?? null,
+                );
+            } finally {
+                WorkerReadinessState::reset('');
+                $client->close();
+                $server->close();
+            }
+        }
+    }
+
+    public function testExplicitGatewayBackendSlotIdentitySurvivesReadyHeartbeatAndRelease(): void
+    {
+        $instanceName = 'ut-gateway-backend-slot-2';
+        $runtime = $this->createRuntime($instanceName);
+        $server = new SupervisorServer($runtime);
+        $endpoint = $server->start(ControlEndpoint::tcp('127.0.0.1', 0));
+        $client = new SupervisorChildClient(
+            instanceName: $instanceName,
+            channelId: 'channel-' . $instanceName,
+            endpointResolver: new ControlEndpointResolver(BP, 27000, 1000),
+            endpoint: $endpoint,
+            progressCallback: static function () use ($server): void {
+                $server->poll(0, 10000);
+            },
+        );
+        $hadGlobalArgv = \array_key_exists('argv', $GLOBALS);
+        $originalGlobalArgv = $GLOBALS['argv'] ?? null;
+        $hadServerArgv = \array_key_exists('argv', $_SERVER);
+        $originalServerArgv = $_SERVER['argv'] ?? null;
+        $runtimeArgv = [
+            'bin/w',
+            '--slot-id=gateway_backend#2',
+            '--lease-id=gateway-backend-slot-2-lease',
+            '--slot-generation=42',
+        ];
+
+        try {
+            $GLOBALS['argv'] = $runtimeArgv;
+            $_SERVER['argv'] = $runtimeArgv;
+            WorkerReadinessState::reset('direct');
+            WorkerReadinessState::markPolicyLoaded(\hash('sha256', 'gateway-backend-slot-2-policy'));
+            WorkerReadinessState::markListenerBound(false, 'stream_select', 'stream', 'single');
+            WorkerReadinessState::markMaintenanceReady();
+
+            self::assertTrue($client->connect('127.0.0.1', 0));
+            self::assertTrue($client->register(
+                role: ControlMessage::ROLE_GATEWAY_BACKEND,
+                pid: 12142,
+                port: 22142,
+                workerId: 2,
+                launchId: 'gateway-backend-slot-2-lease',
+                instanceCode: $instanceName,
+                msgId: 'hello-gateway-backend-slot-2',
+            ));
+            self::assertTrue($client->sendReady(
+                role: ControlMessage::ROLE_GATEWAY_BACKEND,
+                workerId: 2,
+                port: 22142,
+                launchId: 'gateway-backend-slot-2-lease',
+                msgId: 'ready-gateway-backend-slot-2',
+            ));
+
+            $sourceIdentity = $client->runtimeSourceIdentity();
+            self::assertSame('gateway_backend#2', $sourceIdentity['slot_id']);
+            self::assertSame('gateway-backend-slot-2-lease', $sourceIdentity['lease_id']);
+            self::assertSame(42, $sourceIdentity['slot_generation']);
+
+            $sessions = $server->sessionsSnapshot();
+            self::assertCount(1, $sessions);
+            self::assertSame('gateway_backend#2', \array_values($sessions)[0]['slot_id'] ?? null);
+            $lease = $runtime->supervisor()->leases()->get('gateway_backend#2');
+            self::assertNotNull($lease);
+            self::assertSame('ready', $lease->state);
+
+            $lastHeartbeatAt = new \ReflectionProperty($client, 'lastHeartbeatAt');
+            $lastHeartbeatAt->setAccessible(true);
+            $lastHeartbeatAt->setValue($client, 0.0);
+            $client->hasPendingWrites();
+            $client->flushPendingWrites(0.25);
+            $server->poll(0, 10000);
+            self::assertSame(1, $runtime->supervisor()->leases()->get('gateway_backend#2')?->heartbeatSeq);
+
+            $sessionIds = \array_keys($server->sessions());
+            self::assertNotSame([], $sessionIds);
+            self::assertTrue($server->sendToSession((int)\end($sessionIds), ControlMessage::shutdown()));
+            for ($i = 0; $i < 10; $i++) {
+                $client->handleReadable();
+                if ($client->hasReceivedShutdown()) {
+                    break;
+                }
+                \usleep(10000);
+            }
+            self::assertTrue($client->hasReceivedShutdown());
+            $client->close();
+            for ($i = 0; $i < 10; $i++) {
+                $server->poll(0, 10000);
+                if ($runtime->supervisor()->leases()->get('gateway_backend#2') === null) {
+                    break;
+                }
+                \usleep(10000);
+            }
+            self::assertNull($runtime->supervisor()->leases()->get('gateway_backend#2'));
+        } finally {
+            WorkerReadinessState::reset('');
+            $client->close();
+            $server->close();
+            if ($hadGlobalArgv) {
+                $GLOBALS['argv'] = $originalGlobalArgv;
+            } else {
+                unset($GLOBALS['argv']);
+            }
+            if ($hadServerArgv) {
+                $_SERVER['argv'] = $originalServerArgv;
+            } else {
+                unset($_SERVER['argv']);
+            }
         }
     }
 

@@ -246,15 +246,25 @@ PS1;
             return null;
         }
 
-        // authopen requests a GUI authorization prompt. In a non-interactive
-        // daemon (WLS web worker, tty=0) that prompt cannot be answered, so a
-        // synchronous exec would block the whole HTTP request indefinitely.
-        // Only attempt it from an interactive session; otherwise degrade to
-        // needs_admin so callers surface a copy-paste command instead of hanging.
-        if (!self::canPromptForElevation()) {
-            return null;
+        // Prefer authopen when an interactive TTY can answer the GUI prompt.
+        // WLS web workers are non-interactive (tty=0); a synchronous authopen
+        // would hang the HTTP request, so fall through to osascript which still
+        // shows a macOS administrator dialog for the logged-in desktop session.
+        if (self::canPromptForElevation()) {
+            $authopen = self::tryAddDomainWithMacOsAuthOpen($hostsFile, $newContent, $domain, $ip);
+            if ($authopen !== null) {
+                return $authopen;
+            }
         }
 
+        return self::tryAddDomainWithMacOsOsascript($hostsFile, $newContent, $domain, $ip);
+    }
+
+    /**
+     * @return null|array{success: bool, message: string, needs_admin?: bool, command?: string, elevated?: bool}
+     */
+    private static function tryAddDomainWithMacOsAuthOpen(string $hostsFile, string $newContent, string $domain, string $ip): ?array
+    {
         $authopenPath = self::findMacOsAuthOpen();
         if ($authopenPath === '') {
             return null;
@@ -273,6 +283,62 @@ PS1;
 
         $command = '/bin/cat ' . \escapeshellarg($payloadPath)
             . ' | ' . \escapeshellcmd($authopenPath) . ' -w ' . \escapeshellarg($hostsFile) . ' 2>&1';
+
+        $output = [];
+        $exitCode = 1;
+        @\exec($command, $output, $exitCode);
+        @\unlink($payloadPath);
+
+        if ($exitCode === 0) {
+            $content = \file_get_contents($hostsFile);
+            if ($content !== false && self::domainHasExactIp($content, $domain, $ip)) {
+                return [
+                    'success' => true,
+                    'message' => "Added {$domain} to hosts file",
+                    'needs_admin' => false,
+                    'elevated' => true,
+                ];
+            }
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Administrator privileges are required to modify the hosts file',
+            'needs_admin' => true,
+            'command' => self::getAdminCommand($domain, $ip),
+        ];
+    }
+
+    /**
+     * Ask macOS for administrator privileges via a desktop dialog. Works from
+     * non-TTY WLS workers when a user session is logged in.
+     *
+     * @return null|array{success: bool, message: string, needs_admin?: bool, command?: string, elevated?: bool}
+     */
+    private static function tryAddDomainWithMacOsOsascript(string $hostsFile, string $newContent, string $domain, string $ip): ?array
+    {
+        $osascript = self::findUnixCommand('osascript');
+        if ($osascript === '') {
+            return null;
+        }
+
+        $payloadPath = \tempnam(\sys_get_temp_dir(), 'wls-hosts-');
+        if ($payloadPath === false) {
+            return null;
+        }
+        if (\file_put_contents($payloadPath, $newContent) === false) {
+            @\unlink($payloadPath);
+
+            return null;
+        }
+        @\chmod($payloadPath, 0600);
+
+        // Copy the prepared hosts body into /etc/hosts under admin privileges.
+        $shell = '/bin/cat ' . \escapeshellarg($payloadPath) . ' > ' . \escapeshellarg($hostsFile);
+        $appleScript = 'do shell script '
+            . \escapeshellarg($shell)
+            . ' with administrator privileges';
+        $command = \escapeshellcmd($osascript) . ' -e ' . \escapeshellarg($appleScript) . ' 2>&1';
 
         $output = [];
         $exitCode = 1;

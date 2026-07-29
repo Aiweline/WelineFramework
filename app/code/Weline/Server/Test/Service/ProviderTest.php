@@ -10,6 +10,9 @@ use Weline\Server\Service\Provider\HttpRedirectProvider;
 use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
+use Weline\Server\Service\Runtime\EffectiveTopology;
+use Weline\Server\Service\Runtime\RequestedTopology;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 class ProviderTest extends TestCase
 {
@@ -27,12 +30,14 @@ class ProviderTest extends TestCase
             sslEnabled: true,
             sslCert: '/path/to/cert.pem',
             sslKey: '/path/to/key.pem',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: false,
             debug: true,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'https://test.weline.test',
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                     'worker_memory_limit' => '512M',
@@ -89,12 +94,14 @@ class ProviderTest extends TestCase
             sslEnabled: true,
             sslCert: '/path/to/cert.pem',
             sslKey: '/path/to/key.pem',
-            mode: 'linux-direct',
+            runtimeSelection: self::runtimeSelection(true, 'reuseport'),
             daemon: false,
             debug: true,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'https://127.0.0.1:9981',
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                     'runtime' => [
@@ -109,7 +116,8 @@ class ProviderTest extends TestCase
         $this->assertStringContainsString('worker_ssl.php', $command->script);
         $this->assertContains('0.0.0.0', $command->arguments);
         $this->assertContains('9981', $command->arguments);
-        $this->assertContains('--reuseport', $command->arguments);
+        $this->assertContains('--wls-listener-mode=reuseport', $command->arguments);
+        $this->assertNotContains('--reuseport', $command->arguments);
         $this->assertContains('--defer-ssl', $command->arguments);
     }
 
@@ -126,12 +134,14 @@ class ProviderTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'direct',
+            runtimeSelection: self::runtimeSelection(true, 'shared_fd'),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'public_origin' => 'http://127.0.0.1:9982',
                     'worker_count' => 4,
                     'runtime' => [
                         'topology' => 'direct',
@@ -223,12 +233,13 @@ class ProviderTest extends TestCase
             sslEnabled: true,
             sslCert: '/path/to/cert.pem',
             sslKey: '/path/to/key.pem',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: false,
             debug: true,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'session' => [
                         'wls_server' => [
                             'port' => 18889,
@@ -254,12 +265,13 @@ class ProviderTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'worker_count' => 1,
                 ],
             ],
@@ -281,12 +293,13 @@ class ProviderTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'worker_count' => 1,
                     'session_server' => [
                         'enabled' => false,
@@ -310,12 +323,13 @@ class ProviderTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'worker_count' => 2,
                     'shared_state' => [
                         'runtime' => [
@@ -349,6 +363,7 @@ class ProviderTest extends TestCase
 
         $this->assertEquals('redirect', $provider->getRole());
         $this->assertEquals('HTTP Redirect', $provider->getDisplayName());
+        $this->assertFalse($provider->isEnabled($this->context));
         $this->assertEquals(1, $provider->getInstanceCount($this->context));
         $this->assertEquals(40, $provider->getPriority());
         $this->assertEquals('immediate', $provider->getReloadStrategy());
@@ -357,11 +372,9 @@ class ProviderTest extends TestCase
     public function testHttpRedirectProviderBuildCommand(): void
     {
         $provider = new HttpRedirectProvider();
-        $command = $provider->buildCommand(0, $this->context);
-
-        $this->assertStringContainsString('http_redirect_worker.php', $command->script);
-        $this->assertContains('80', $command->arguments);
-        $this->assertContains('443', $command->arguments);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('redirect provider is retired');
+        $provider->buildCommand(0, $this->context);
     }
 
     public function testHttpRedirectDisabledWhenHttpsNotStandardPort(): void
@@ -377,17 +390,17 @@ class ProviderTest extends TestCase
             sslEnabled: true,
             sslCert: '/c',
             sslKey: '/k',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: false,
             debug: false,
             windowMode: false,
-            envConfig: [],
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             httpRedirectPort: 0,
         );
         $this->assertFalse($provider->isEnabled($ctx));
     }
 
-    public function testHttpRedirectEnabledWhenMasterPassesPort(): void
+    public function testHttpRedirectRemainsRetiredWhenMasterPassesPort(): void
     {
         $provider = new HttpRedirectProvider();
         $ctx = new ServiceContext(
@@ -400,14 +413,14 @@ class ProviderTest extends TestCase
             sslEnabled: true,
             sslCert: '/c',
             sslKey: '/k',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: false,
             debug: false,
             windowMode: false,
-            envConfig: [],
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
             httpRedirectPort: 9080,
         );
-        $this->assertTrue($provider->isEnabled($ctx));
+        $this->assertFalse($provider->isEnabled($ctx));
         $this->assertSame(9080, $provider->getPort(0, $ctx));
     }
 
@@ -415,7 +428,7 @@ class ProviderTest extends TestCase
     {
         $provider = new HttpRedirectProvider();
 
-        $this->assertTrue($provider->isEnabled($this->context));
+        $this->assertFalse($provider->isEnabled($this->context));
 
         $nonSslContext = new ServiceContext(
             instanceName: 'test',
@@ -427,13 +440,35 @@ class ProviderTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'multi',
+            runtimeSelection: self::runtimeSelection(),
             daemon: false,
             debug: false,
             windowMode: false,
-            envConfig: [],
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
         );
 
         $this->assertFalse($provider->isEnabled($nonSslContext));
+    }
+
+    private static function runtimeSelection(
+        bool $direct = false,
+        string $listenerMode = 'single',
+    ): RuntimeSelection {
+        return new RuntimeSelection(
+            requestedTopology: $direct
+                ? RequestedTopology::Direct
+                : RequestedTopology::Dispatcher,
+            effectiveTopology: $direct
+                ? EffectiveTopology::Direct
+                : EffectiveTopology::Dispatcher,
+            source: 'unit',
+            osFamily: 'Linux',
+            eventLoopDriver: 'event',
+            sslEngine: 'stream',
+            listenerMode: $listenerMode,
+            policyCompatible: true,
+            reasonCodes: ['unit_fixture'],
+            reason: 'Provider test runtime selection.',
+        );
     }
 }

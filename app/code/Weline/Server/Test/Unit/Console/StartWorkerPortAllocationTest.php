@@ -6,13 +6,24 @@ namespace Weline\Server\Test\Unit\Console;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
-use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\SharedStateServiceManager;
 
 final class StartWorkerPortAllocationTest extends TestCase
 {
     /** @var list<string> */
     private array $pathsToDelete = [];
+
+    protected function setUp(): void
+    {
+        if (!\defined('DS')) {
+            \define('DS', DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('BP')) {
+            \define('BP', \rtrim((string)\getcwd(), '\\/') . DS);
+        }
+    }
 
     public function testFindAvailableWorkerPortBaseSkipsOccupiedPortsEvenWhenTheyBelongToWeline(): void
     {
@@ -87,10 +98,11 @@ final class StartWorkerPortAllocationTest extends TestCase
         \file_put_contents(
             $runtimeDir . DIRECTORY_SEPARATOR . 'api.json',
             (string) \json_encode([
+                'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
                 'name' => 'api',
                 'worker_port' => 19983,
                 'count' => 2,
-                'master_mode' => MasterProcess::MODE_LEGACY,
+                'runtime_selection' => $this->runtimeSelection()->toArray(),
                 'started_timestamp' => \time(),
             ], JSON_PRETTY_PRINT)
         );
@@ -146,9 +158,100 @@ final class StartWorkerPortAllocationTest extends TestCase
         );
     }
 
+    public function testLiveMasterKeepsWorkerRangeReservedBeyondStartupTtl(): void
+    {
+        $runtimeDir = $this->createTempDir();
+        \file_put_contents(
+            $runtimeDir . DIRECTORY_SEPARATOR . 'long-running.json',
+            (string)\json_encode([
+                'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+                'name' => 'long-running',
+                'master_pid' => 43210,
+                'worker_port' => 19983,
+                'count' => 4,
+                'runtime_selection' => $this->runtimeSelection()->toArray(),
+                'started_timestamp' => \time() - 3600,
+            ], JSON_PRETTY_PRINT),
+        );
+
+        $start = new class($runtimeDir) extends Start {
+            public function __construct(private readonly string $runtimeDir)
+            {
+            }
+
+            protected function isWorkerPortAllocated(int $port): bool
+            {
+                unset($port);
+                return false;
+            }
+
+            protected function getInstanceRuntimeDir(): string
+            {
+                return $this->runtimeDir . DIRECTORY_SEPARATOR;
+            }
+
+            protected function isRecordedMasterReservationOwnerRunning(
+                string $instanceName,
+                int $masterPid,
+            ): bool {
+                return $instanceName === 'long-running' && $masterPid === 43210;
+            }
+        };
+
+        self::assertSame(
+            19987,
+            $this->invokeProtected($start, 'findAvailableWorkerPortBase', 19982, 4, 20, 'new-instance'),
+        );
+    }
+
+    public function testFailedStartupReleasesSharedStateConsumerTokens(): void
+    {
+        $released = [];
+        $manager = new class($released) extends SharedStateServiceManager {
+            /** @var list<string> */
+            public array $released;
+
+            public function __construct(array &$released)
+            {
+                $this->released =& $released;
+            }
+
+            public function releaseInstanceConsumers(string $instanceName): array
+            {
+                $this->released[] = $instanceName;
+                return ['session_server' => true, 'memory_server' => true];
+            }
+        };
+        $start = new class($manager) extends Start {
+            public function __construct(private readonly SharedStateServiceManager $manager)
+            {
+            }
+
+            public function release(string $instanceName): void
+            {
+                $this->releaseFailedStartupSharedStateConsumers($instanceName);
+            }
+
+            protected function createSharedStateServiceManager(): SharedStateServiceManager
+            {
+                return $this->manager;
+            }
+        };
+        $instanceName = 'failed-cleanup-' . \bin2hex(\random_bytes(4));
+
+        $start->release($instanceName);
+
+        self::assertSame([$instanceName], $manager->released);
+    }
+
     public function testRuntimeRecordedPortsComeFromEndpointFields(): void
     {
-        $manager = new class extends ServerInstanceManager {
+        $runtimeSelection = $this->runtimeSelection();
+        $manager = new class($runtimeSelection) extends ServerInstanceManager {
+            public function __construct(private readonly RuntimeSelection $runtimeSelection)
+            {
+            }
+
             public function getInstanceInfo(string $name, bool $includeStopped = false): ?ServerInstanceInfo
             {
                 unset($includeStopped);
@@ -163,7 +266,7 @@ final class StartWorkerPortAllocationTest extends TestCase
                     host: '127.0.0.1',
                     port: 443,
                     sslEnabled: true,
-                    dispatcherEnabled: true,
+                    runtimeSelection: $this->runtimeSelection,
                     workerCount: 2,
                     workerBasePort: 16895,
                     httpRedirectPort: 80,
@@ -257,6 +360,22 @@ final class StartWorkerPortAllocationTest extends TestCase
         }
 
         $this->pathsToDelete = [];
+    }
+
+    private function runtimeSelection(): RuntimeSelection
+    {
+        return RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'dispatcher',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'single',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]);
     }
 
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed

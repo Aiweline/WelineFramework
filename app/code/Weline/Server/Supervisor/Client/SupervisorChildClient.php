@@ -55,6 +55,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
      */
     private ?array $registerInfo = null;
 
+    private string $slotId = '';
     private string $leaseId = '';
     private int $generation = 0;
     private int $poolSnapshotVersion = 0;
@@ -91,6 +92,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         $this->receivedShutdown = false;
         $this->readyConfirmed = false;
         $this->reconnectFailCount = 0;
+        $this->slotId = '';
         $this->leaseId = '';
         $this->generation = 0;
         $this->heartbeatSeq = 0;
@@ -199,14 +201,28 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
             return false;
         }
 
-        $this->leaseId = (string)($response['lease_id'] ?? '');
-        $this->generation = (int)($response['generation'] ?? 0);
+        $assignedSlotId = (string)($response['slot_id'] ?? '');
+        $assignedLeaseId = (string)($response['lease_id'] ?? '');
+        $assignedGeneration = (int)($response['generation'] ?? 0);
+        if ($assignedSlotId === ''
+            || !\hash_equals($slotId, $assignedSlotId)
+            || $assignedLeaseId === ''
+            || $assignedGeneration <= 0) {
+            $this->slotId = '';
+            $this->leaseId = '';
+            $this->generation = 0;
+            return false;
+        }
+
+        $this->slotId = $assignedSlotId;
+        $this->leaseId = $assignedLeaseId;
+        $this->generation = $assignedGeneration;
         $this->heartbeatSeq = 0;
         $this->lastHeartbeatAt = \microtime(true);
         $this->readyConfirmed = false;
         $this->releaseSent = false;
 
-        return $this->leaseId !== '' && $this->generation > 0;
+        return true;
     }
 
     public function rememberRegistration(
@@ -284,14 +300,18 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         }
 
         $readiness = match (true) {
-            \in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
-                => WorkerReadinessState::snapshot(),
+            \in_array($role, [
+                ControlMessage::ROLE_WORKER,
+                ControlMessage::ROLE_MAINTENANCE,
+                ControlMessage::ROLE_GATEWAY_FALLBACK,
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            ], true) => WorkerReadinessState::snapshot(),
             $role === ControlMessage::ROLE_DISPATCHER
                 => DispatcherPolicyControl::readinessSnapshot(),
             default => [],
         };
         $ready = SupervisorMessage::ready(
-            slotId: $this->buildSlotId($role, $workerId),
+            slotId: $this->currentSlotId($role, $workerId),
             leaseId: $this->leaseId,
             generation: $this->generation,
             port: $port,
@@ -311,6 +331,9 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         if (!\is_array($response)
             || !($response['accepted'] ?? false)
             || \strtolower(\trim((string)($response['ready_phase'] ?? 'final'))) !== 'final'
+            || !\hash_equals($this->slotId, (string)($response['slot_id'] ?? ''))
+            || !\hash_equals($this->leaseId, (string)($response['lease_id'] ?? ''))
+            || $this->generation !== (int)($response['generation'] ?? 0)
         ) {
             $this->readyConfirmed = false;
             return false;
@@ -340,7 +363,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
             'client_id' => 0,
             'role' => $role,
             'worker_id' => $workerId,
-            'slot_id' => $this->buildSlotId($role, $workerId),
+            'slot_id' => $this->currentSlotId($role, $workerId),
             'lease_id' => $this->leaseId,
             'slot_generation' => $this->generation,
             'pid' => \max(0, (int)($info['pid'] ?? 0)),
@@ -518,6 +541,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         $this->readBuffer = '';
         $this->writeBuffer = '';
         $this->readyConfirmed = false;
+        $this->slotId = '';
         $this->leaseId = '';
         $this->generation = 0;
         $this->heartbeatSeq = 0;
@@ -539,6 +563,11 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
             'maintenance' => 'maintenance#' . ($workerId > 0 ? $workerId : 1),
             default => $role . '#1',
         };
+    }
+
+    private function currentSlotId(string $role, int $workerId): string
+    {
+        return $this->slotId !== '' ? $this->slotId : $this->buildSlotId($role, $workerId);
     }
 
     /**
@@ -703,7 +732,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         $workerId = (int)($this->registerInfo['worker_id'] ?? 0);
         $this->heartbeatSeq++;
         if (!$this->send(SupervisorMessage::heartbeat(
-            $this->buildSlotId($role, $workerId),
+            $this->currentSlotId($role, $workerId),
             $this->leaseId,
             $this->generation,
             $this->heartbeatSeq,
@@ -782,7 +811,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         $role = (string)$this->registerInfo['role'];
         $workerId = (int)$this->registerInfo['worker_id'];
         $message = SupervisorMessage::leaseRelease(
-            slotId: $this->buildSlotId($role, $workerId),
+            slotId: $this->currentSlotId($role, $workerId),
             leaseId: $this->leaseId,
             generation: $this->generation,
             msgId: $this->leaseId,

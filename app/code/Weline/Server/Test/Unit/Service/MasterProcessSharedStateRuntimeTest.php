@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 final class MasterProcessSharedStateRuntimeTest extends TestCase
 {
@@ -52,9 +53,30 @@ final class MasterProcessSharedStateRuntimeTest extends TestCase
     public function testApplyRuntimeWlsConfigExposesMemoryLimitsToServiceContext(): void
     {
         $master = new MasterProcess();
+        $master->setRuntimeSelection(RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'dispatcher',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'single',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]));
         $this->writePrivate($master, 'config', [
             'worker_memory_limit' => '768',
             'dispatcher_memory_limit' => '1g',
+            'edge' => ['adapter' => 'wls'],
+            'public_origin' => 'http://127.0.0.1:8080',
+            'http' => [
+                'protocols' => ['h2', 'h1'],
+                'preferred' => 'h2',
+                'protocol_edge' => 'disabled',
+                'tls_session_resumption' => true,
+                'alt_svc' => false,
+            ],
         ]);
 
         $envConfig = $this->invokePrivate($master, 'applyRuntimeWlsConfig', []);

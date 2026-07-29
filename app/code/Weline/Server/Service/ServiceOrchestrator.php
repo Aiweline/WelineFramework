@@ -28,10 +28,17 @@ use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Contract\ServiceProviderInterface;
 use Weline\Server\Service\Control\ControlPlaneServerInterface;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
+use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Telemetry\InMemoryMetricsAggregator;
 use Weline\Server\Service\Telemetry\IpcTelemetryGateway;
+use Weline\Server\Service\Provider\GatewayFallbackProvider;
+use Weline\Server\Service\Provider\GatewayJoinBackendProvider;
+use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
+use Weline\Server\Service\Edge\Gateway\ProjectIdentityStore;
+use Weline\Server\Service\Provider\GatewayProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\Policy\RuntimePolicyCompiler;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
@@ -76,6 +83,15 @@ class ServiceOrchestrator
     private const READY_CONFIRM_TIMEOUT_SEC = ControlMessage::READY_CONFIRM_TIMEOUT_SEC;
     private const MIN_READY_TIMER_POLL_USEC = 1000;
     private const NGINX_UPSTREAM_DRAIN_SAFETY_MARGIN_SEC = 5.0;
+    private const GATEWAY_FALLBACK_QUARANTINE_RETRY_SECONDS = 30.0;
+    private const GATEWAY_NATIVE_DRAIN_SECONDS = 300;
+    private const GATEWAY_NATIVE_FINALIZE_GRACE_SECONDS = 15;
+    private const GATEWAY_NATIVE_EDGE_ROLES = [
+        ControlMessage::ROLE_WORKER,
+        ControlMessage::ROLE_DISPATCHER,
+        ControlMessage::ROLE_REDIRECT,
+        ProtocolEdgeRuntime::ROLE,
+    ];
 
     /**
      * Master 等待排水的时间必须严格大于发给 Worker 的软期限，
@@ -98,6 +114,8 @@ class ServiceOrchestrator
     private ?ControlPlaneServerInterface $controlServer = null;
     private ?ServiceContext $context = null;
     private ?DirectSharedListener $directSharedListener = null;
+    private ?DirectSharedListener $gatewayFallbackListener = null;
+    private ?DirectSharedListener $gatewayJoinListener = null;
     private ?DarwinDatagramRouterTransport $darwinHttp3DatagramRouter = null;
 
     private bool $running = false;
@@ -204,6 +222,8 @@ class ServiceOrchestrator
 
     /** @var array<string, array{role: string, instanceId: int, maxRestarts: int, restartDelay: float}> 等待复活的实例 */
     private array $resurrectQueue = [];
+    /** @var array<int, true> Gateway join backend slots owned by the serialized recovery lane. */
+    private array $gatewayJoinBackendPendingSlots = [];
     /** @var array<string,int> Startup acceptance bounded local recovery attempts keyed by role:slot. */
     private array $startupAcceptanceRecoveryAttempts = [];
     /** @var array<int, array{running: bool, checkedAt: float}> */
@@ -457,6 +477,12 @@ class ServiceOrchestrator
     private bool $reconcileWorkersWithoutHa = true;
     private float $lastEmergencyWorkerRestartAt = 0.0;
     private float $workerEmergencyCooldownSec = 20.0;
+    /**
+     * Fences every competing Worker recovery writer while the emergency
+     * transaction yields between terminating the frozen pool and publishing
+     * its replacement generation.
+     */
+    private bool $workerEmergencyRestartInProgress = false;
     private float $lastWorkerSlotReconcileAt = 0.0;
 
     /** Master 自检间隔（秒），0=关闭 */
@@ -683,6 +709,7 @@ class ServiceOrchestrator
         $this->fullRestartRequested = false;
         $this->fullRestartReason = '';
         $this->resurrectQueue = [];
+        $this->gatewayJoinBackendPendingSlots = [];
         $this->rollingRestartInProgress = false;
         $this->rollingRestartClientId = null;
         $this->rollingRestartProgress = 0;
@@ -725,7 +752,10 @@ class ServiceOrchestrator
         }
 
         WlsLogger::info_("[Orchestrator] 已接收停止请求，立即进入统一停机流程，原因: {$reason}");
-        $this->consumePendingStopRequest();
+        // 停机请求可能来自启动 Fiber、IPC poll 回调或异步信号处理器。这里若直接
+        // start 一个 stop_all Fiber，PHP 8.5 在异常展开/信号回调等不可切换上下文中会抛出
+        // "Cannot switch fibers in current execution context"，导致停机请求丢失。
+        // 因此统一只登记 pending；主循环在下一轮 tick 前负责消费，ACK 已在上方同步发出。
         return true;
     }
 
@@ -775,22 +805,27 @@ class ServiceOrchestrator
             return true;
         }
 
-        if (!$this->scheduleMainLoopTask('control:stop_all', 'stop_all', function () use ($reason, $progressClientId, $skipDrain): void {
-            $previousSkipDrain = $this->stopAllSkipDrain;
-            $this->stopAllSkipDrain = $skipDrain;
-            try {
-                $this->stopAll($reason, $progressClientId);
-            } catch (\Throwable $throwable) {
-                WlsLogger::error_(
-                    '[Orchestrator] stopAll 执行异常，将重置停机状态并强制退出: ' . $throwable->getMessage(),
-                    ['exception' => $throwable]
-                );
-                $this->resetStopFlowFlagsAfterStopAllFailure();
-                $this->forceTerminateMasterAndChildren('stop_all_exception:' . $reason);
-            } finally {
-                $this->stopAllSkipDrain = $previousSkipDrain;
-            }
-        })) {
+        if (!$this->scheduleMainLoopTask(
+            'control:stop_all',
+            'stop_all',
+            function () use ($reason, $progressClientId, $skipDrain): void {
+                $previousSkipDrain = $this->stopAllSkipDrain;
+                $this->stopAllSkipDrain = $skipDrain;
+                try {
+                    $this->stopAll($reason, $progressClientId);
+                } catch (\Throwable $throwable) {
+                    WlsLogger::error_(
+                        '[Orchestrator] stopAll 执行异常，将重置停机状态并强制退出: ' . $throwable->getMessage(),
+                        ['exception' => $throwable]
+                    );
+                    $this->resetStopFlowFlagsAfterStopAllFailure();
+                    $this->forceTerminateMasterAndChildren('stop_all_exception:' . $reason);
+                } finally {
+                    $this->stopAllSkipDrain = $previousSkipDrain;
+                }
+            },
+            deferStart: true,
+        )) {
             $this->pendingStopReason = $reason;
             $this->pendingStopSkipDrain = $skipDrain;
             $this->pendingStopProgressClientId = $progressClientId;
@@ -1077,6 +1112,7 @@ class ServiceOrchestrator
     private function resetMainLoopFiberScheduler(): void
     {
         $this->mainLoopTasks = [];
+        $this->gatewayJoinBackendPendingSlots = [];
         if ($this->mainLoopFiberScheduler !== null) {
             $this->mainLoopFiberScheduler->reset();
             $this->mainLoopFiberScheduler = null;
@@ -1281,7 +1317,12 @@ class ServiceOrchestrator
         });
     }
 
-    private function scheduleMainLoopTask(string $key, string $label, callable $task): bool
+    private function scheduleMainLoopTask(
+        string $key,
+        string $label,
+        callable $task,
+        bool $deferStart = false,
+    ): bool
     {
         if ($this->mainLoopFiberScheduler === null) {
             $this->initializeMainLoopFiberScheduler();
@@ -1318,6 +1359,15 @@ class ServiceOrchestrator
         if ($traceStartupTask) {
             WlsLogger::info_("[Orchestrator] scheduling main-loop startup task {$label}");
             WlsLogger::flush_(true);
+        }
+
+        // stop_all can be queued immediately after an async signal callback.
+        // PHP 8.5 still rejects Fiber::start() in that execution context even
+        // though the callback has returned. Let the next top-level loop tick
+        // start the Fiber instead; the task remains registered and cannot be
+        // lost or scheduled twice.
+        if ($deferStart) {
+            return true;
         }
 
         try {
@@ -1360,6 +1410,21 @@ class ServiceOrchestrator
         $budgetMs = (float) ($this->context?->getConfig('wls.orchestrator.fiber_tick_budget_ms', 50.0) ?? 50.0);
         if ($budgetMs < 1.0) {
             $budgetMs = 1.0;
+        }
+        foreach (\array_keys($this->mainLoopTasks) as $key) {
+            $fiber = $this->mainLoopTasks[$key]['fiber'] ?? null;
+            if (!$fiber instanceof \Fiber || $fiber->isStarted()) {
+                continue;
+            }
+            try {
+                $fiber->start();
+            } catch (\Throwable $throwable) {
+                WlsLogger::error_(
+                    "[Orchestrator] failed to start deferred main-loop fiber task "
+                    . "{$this->mainLoopTasks[$key]['label']}: {$throwable->getMessage()}"
+                );
+                $this->cleanupMainLoopTask($key);
+            }
         }
         $this->mainLoopFiberScheduler->tick(null, $budgetMs);
 
@@ -2052,19 +2117,46 @@ class ServiceOrchestrator
         $this->controlServer->setWindowsNativeSocketBridgeEnabled($windowsNativeSocketBridgeEnabled);
         $this->controlServer->setExpectedInstanceCode($context->instanceName);
         $this->controlServer->setExpectedControlToken($context->controlToken);
-        if (!$this->controlServer->start('127.0.0.1', $context->controlPort)) {
-            $portInUseMsg = '';
-            // 尝试诊断端口占用问题
-            if (\Weline\Framework\System\Process\Processer::isPortInUse($context->controlPort)) {
-                $portInUseMsg = " （端口被占用，可能是前一个 Master 进程尚未完全退出，请稍候几秒后重试，或手动杀死占用该端口的进程）";
+        $configuredControlPort = (int)($context->getConfig('server.control_port', 0) ?? 0);
+        $autoAssignControlPort = $configuredControlPort <= 0;
+        $controlPortScanMax = (int)($context->getConfig('server.control_port_scan_max', 64) ?? 64);
+        $controlPortScanMax = $autoAssignControlPort
+            ? \max(1, \min(512, $controlPortScanMax))
+            : 1;
+        $requestedControlPort = $context->controlPort;
+        $boundControlPort = 0;
+        for ($offset = 0; $offset < $controlPortScanMax; $offset++) {
+            $candidateControlPort = $requestedControlPort + $offset;
+            if ($candidateControlPort <= 0 || $candidateControlPort > 65535) {
+                break;
             }
+            if ($this->controlServer->start('127.0.0.1', $candidateControlPort)) {
+                $actualControlPort = $this->controlServer->getPort();
+                $boundControlPort = $actualControlPort > 0 ? $actualControlPort : $candidateControlPort;
+                break;
+            }
+            if (!$autoAssignControlPort) {
+                break;
+            }
+            WlsLogger::warning_(
+                "[Orchestrator] IPC 控制端口 {$candidateControlPort} 在实际绑定时不可用，尝试下一候选端口"
+            );
+        }
+        if ($boundControlPort <= 0) {
+            $lastCandidateControlPort = \min(
+                65535,
+                $requestedControlPort + \max(0, $controlPortScanMax - 1)
+            );
+            $portInUseMsg = \Weline\Framework\System\Process\Processer::isPortInUse($requestedControlPort)
+                ? ' （端口当前被占用）'
+                : '';
             throw new \RuntimeException(
-                "无法启动 IPC 控制服务器，端口: {$context->controlPort}{$portInUseMsg}. " .
+                "无法启动 IPC 控制服务器，候选端口: {$requestedControlPort}-{$lastCandidateControlPort}{$portInUseMsg}. " .
                 "这是严重错误，会导致所有 Worker 无法连接到 Master，系统无法正常运行。"
             );
         }
-        if ($context->controlPort !== $this->controlServer->getPort()) {
-            $this->context = $context->withControlPort($this->controlServer->getPort());
+        if ($context->controlPort !== $boundControlPort) {
+            $this->context = $context->withControlPort($boundControlPort);
             $context = $this->context;
         }
         WlsLogger::info_("[Orchestrator] IPC 控制服务器已启动，端口: " . $this->controlServer->getPort());
@@ -2306,6 +2398,10 @@ class ServiceOrchestrator
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-redirect', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-gateway', $instanceName),
+            MasterProcess::buildScopedProcessName(
+                GatewayJoinBackendProvider::PROCESS_NAME_PREFIX,
+                $instanceName,
+            ),
             MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $instanceName),
         ];
 
@@ -2382,6 +2478,13 @@ class ServiceOrchestrator
             $role = $provider->getRole();
             if ($this->isSharedStateProviderRole($role)) {
                 WlsLogger::debug_("[Orchestrator] 共享状态 Provider 不参与本实例并发启动批次: {$role}");
+                continue;
+            }
+            if ($this->isGatewayNativeEdgeRoleSuppressed($role)) {
+                $this->desiredState[$role] = 0;
+                WlsLogger::info_(
+                    "[Orchestrator] shared gateway owns the public edge; skip native provider startup: {$role}"
+                );
                 continue;
             }
 
@@ -3500,7 +3603,15 @@ class ServiceOrchestrator
 
     private function shouldAbortStartupTransition(): bool
     {
-        if ($this->consumePendingStopRequest()) {
+        if ($this->pendingStopReason !== null) {
+            // Startup transitions run inside the child-services Fiber. Starting
+            // stop_all from that Fiber while an exception/signal callback is
+            // unwinding is forbidden by PHP 8.5. Leave the request pending for
+            // the top-level runLoop tick; direct/top-level callers may consume
+            // it immediately.
+            if (\Fiber::getCurrent() === null) {
+                $this->consumePendingStopRequest();
+            }
             return true;
         }
         if ($this->hasMainLoopTask('control:stop_all')) {
@@ -4390,7 +4501,7 @@ class ServiceOrchestrator
         if ($port <= 0) {
             return true;
         }
-        if ($this->isDirectWorkerPublicPort($role, $port)) {
+        if ($this->isMasterOwnedSharedListenerPort($role, $port)) {
             // Direct Workers intentionally share the public listener. Darwin
             // inherits the Master-owned FD; Linux binds with SO_REUSEPORT.
             return true;
@@ -4398,7 +4509,7 @@ class ServiceOrchestrator
         if ($this->requiresStartupPortPreflight($role)) {
             return $this->prepareCriticalPortForStart($role, $port);
         }
-        if ($this->shouldUseFastBindProbeForPortChecks() && !$this->bulkLaunchPortCheckActive) {
+        if ($this->shouldUseFastBindProbeForPortChecks()) {
             $free = $this->isPortFreeByBindProbe($port);
             if ($free) {
                 return true;
@@ -4598,6 +4709,12 @@ class ServiceOrchestrator
             ControlMessage::ROLE_MAINTENANCE => [
                 MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-',
             ],
+            ControlMessage::ROLE_GATEWAY_BACKEND => [
+                MasterProcess::buildScopedProcessName(
+                    GatewayJoinBackendProvider::PROCESS_NAME_PREFIX,
+                    $instanceName,
+                ),
+            ],
             ProtocolEdgeRuntime::ROLE => [
                 MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $instanceName),
             ],
@@ -4698,37 +4815,6 @@ class ServiceOrchestrator
     {
         if ($configuredPort <= 0) {
             return $configuredPort;
-        }
-        if ($this->bulkLaunchPortCheckActive && $this->shouldUseFastBindProbeForPortChecks()) {
-            $directCheckStartedAt = \microtime(true);
-            $directWorkerPublicPort = $this->isDirectWorkerPublicPort($role, $configuredPort);
-            $directCheckElapsedMs = (int) \round((\microtime(true) - $directCheckStartedAt) * 1000);
-            $bindProbeElapsedMs = 0;
-            $bindable = false;
-            if (!$directWorkerPublicPort) {
-                $bindProbeStartedAt = \microtime(true);
-                $bindable = $this->isPortFreeByBindProbe($configuredPort);
-                $bindProbeElapsedMs = (int) \round((\microtime(true) - $bindProbeStartedAt) * 1000);
-            }
-            if ((string) \getenv('WLS_STARTUP_TRACE') === '1') {
-                $this->traceStartup('launch_port_fast_probe', [
-                    'role' => $role,
-                    'instance_id' => $instanceId,
-                    'port' => $configuredPort,
-                    'direct_public' => $directWorkerPublicPort,
-                    'direct_check_ms' => $directCheckElapsedMs,
-                    'bindable' => $bindable,
-                    'bind_probe_ms' => $bindProbeElapsedMs,
-                ]);
-            }
-            if ($bindable) {
-                // Start already allocated the complete generation port plan.
-                // A real bind probe closes the race without invoking netstat
-                // plus a per-PID command-line scan for every child on Windows.
-                // Occupied ports still fall through to strict ownership
-                // validation below.
-                return $configuredPort;
-            }
         }
         if ($this->bulkLaunchPortCheckActive
             && (bool)($context->getConfig('wls.orchestrator.skip_bulk_launch_port_reprobe', true) ?? true)
@@ -5015,6 +5101,32 @@ class ServiceOrchestrator
 
     private function ensureDirectSharedListenerForRole(string $role, ServiceContext $context): void
     {
+        if ($role === ControlMessage::ROLE_GATEWAY_BACKEND) {
+            if ($this->isWindowsRuntime()) {
+                return;
+            }
+            if ($this->gatewayJoinListener === null
+                || !$this->gatewayJoinListener->isListening()
+            ) {
+                throw new \RuntimeException(
+                    'Gateway join backend must reserve its Master-owned listener before launch.'
+                );
+            }
+            return;
+        }
+        if ($role === ControlMessage::ROLE_GATEWAY_FALLBACK) {
+            if ($this->isWindowsRuntime()) {
+                return;
+            }
+            if ($this->gatewayFallbackListener === null
+                || !$this->gatewayFallbackListener->isListening()
+            ) {
+                throw new \RuntimeException(
+                    'Gateway fallback must reserve its Master-owned listener before launch.'
+                );
+            }
+            return;
+        }
         if ($role !== ControlMessage::ROLE_WORKER || !$this->usesDirectSharedListener($context)) {
             return;
         }
@@ -5039,6 +5151,16 @@ class ServiceOrchestrator
      */
     private function getDirectSharedListenerDescriptors(string $role, ?ServiceContext $context): array
     {
+        if ($role === ControlMessage::ROLE_GATEWAY_BACKEND
+            && !$this->isWindowsRuntime()
+        ) {
+            return $this->gatewayJoinListener?->descriptorMap() ?? [];
+        }
+        if ($role === ControlMessage::ROLE_GATEWAY_FALLBACK
+            && !$this->isWindowsRuntime()
+        ) {
+            return $this->gatewayFallbackListener?->descriptorMap() ?? [];
+        }
         if ($context === null
             || $role !== ControlMessage::ROLE_WORKER
             || !$this->usesDirectSharedListener($context)
@@ -5059,10 +5181,26 @@ class ServiceOrchestrator
         return $context->runtimeSelection->listenerMode === 'shared_fd';
     }
 
-    private function isDirectWorkerPublicPort(string $role, int $port): bool
+    private function isMasterOwnedSharedListenerPort(string $role, int $port): bool
     {
+        if ($port <= 0) {
+            return false;
+        }
+        if ($role === ControlMessage::ROLE_GATEWAY_BACKEND) {
+            return $this->gatewayJoinListener?->matches('127.0.0.1', $port) ?? false;
+        }
+        if ($role === ControlMessage::ROLE_GATEWAY_FALLBACK) {
+            try {
+                return $this->gatewayFallbackListener?->matches(
+                    $this->gatewayFallbackBindHost(),
+                    $port,
+                ) ?? false;
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
         return $role === ControlMessage::ROLE_WORKER
-            && $port > 0
             && $this->context !== null
             && $this->context->isWorkerPublicListener()
             && $port === $this->context->mainPort;
@@ -5076,6 +5214,26 @@ class ServiceOrchestrator
         $this->directSharedListener->close();
         $this->directSharedListener = null;
         WlsLogger::info_('[Orchestrator] Master-owned direct shared listener closed');
+    }
+
+    private function closeGatewayFallbackListener(): void
+    {
+        if ($this->gatewayFallbackListener === null) {
+            return;
+        }
+        $this->gatewayFallbackListener->close();
+        $this->gatewayFallbackListener = null;
+        WlsLogger::info_('[Orchestrator] Master-owned gateway fallback listener closed');
+    }
+
+    private function closeGatewayJoinListener(): void
+    {
+        if ($this->gatewayJoinListener === null) {
+            return;
+        }
+        $this->gatewayJoinListener->close();
+        $this->gatewayJoinListener = null;
+        WlsLogger::info_('[Orchestrator] Master-owned gateway join listener closed');
     }
 
     /**
@@ -5757,6 +5915,11 @@ class ServiceOrchestrator
             : '阶段3/5: 通知共享服务卸载令牌，并发终止非共享进程'
         );
         $this->releaseSharedStateConsumersForStopFlow();
+        // IPC disconnect handling may mark/remove instances before the VERIFY
+        // phase. Keep the authenticated process identities captured before
+        // shutdown so a disconnected child cannot disappear from the OS-exit
+        // barrier and leave its listener behind for the next Master.
+        $stopVerificationInstances = $this->registry->getAllInstances();
         $this->terminateAllAfterDrain();
         if (!$skipDrain) {
             $this->waitForServiceIpcDisconnectAfterShutdown();
@@ -5769,7 +5932,7 @@ class ServiceOrchestrator
             ? '阶段2/3: 校验非共享进程退出状态'
             : '阶段4/5: 校验非共享进程退出状态'
         );
-        $this->verifyAndKillRemainingProcesses();
+        $this->verifyAndKillRemainingProcesses($stopVerificationInstances);
 
         // ========== 阶段 5：关闭 IPC 服务器 ==========
         $this->setStopStage(self::STOP_STAGE_CLOSE_IPC);
@@ -5798,6 +5961,8 @@ class ServiceOrchestrator
     {
         WlsLogger::info_('[Orchestrator] Stop flow complete, Master main loop will exit');
         $this->shutdownDarwinHttp3DatagramRouter('finalize_stop', false);
+        $this->closeGatewayFallbackListener();
+        $this->closeGatewayJoinListener();
         $this->closeDirectSharedListener();
         $this->running = false;
         $this->cancelMainLoopTasksForMasterExit();
@@ -5872,6 +6037,8 @@ class ServiceOrchestrator
     protected function finalizeForceTerminateMasterExit(int $exitCode): void
     {
         $this->shutdownDarwinHttp3DatagramRouter('finalize_force_terminate', false);
+        $this->closeGatewayFallbackListener();
+        $this->closeGatewayJoinListener();
         $this->closeDirectSharedListener();
         $this->running = false;
         $this->shuttingDown = true;
@@ -6602,9 +6769,10 @@ class ServiceOrchestrator
      *
      * 使用 Processer::batchGracefulKill() 批量停止，比逐个停止更高效
      */
-    private function verifyAndKillRemainingProcesses(): void
+    private function verifyAndKillRemainingProcesses(?array $verificationInstances = null): void
     {
-        $allInstances = $this->registry->getAllInstances();
+        $allInstances = $verificationInstances ?? $this->registry->getAllInstances();
+        $includeStopped = $verificationInstances !== null;
         $nonSharedInstances = [];
         $pidToInstance = [];
         $connectedVerificationPids = [];
@@ -6615,7 +6783,7 @@ class ServiceOrchestrator
             if ($this->isSharedStateServiceInstance($instance)) {
                 continue;
             }
-            if ($instance->state === ServiceInstance::STATE_STOPPED) {
+            if (!$includeStopped && $instance->state === ServiceInstance::STATE_STOPPED) {
                 continue;
             }
             $nonSharedInstances[] = $instance;
@@ -6786,7 +6954,7 @@ class ServiceOrchestrator
      */
     protected function shouldWaitForStopFlowExitVerification(ServiceInstance $instance): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -7286,6 +7454,12 @@ class ServiceOrchestrator
         if (empty($reloadRoles)) {
             $reloadRoles = ['worker'];
         }
+        if (\in_array(ControlMessage::ROLE_WORKER, $reloadRoles, true)
+            && $this->registry->getInstancesByRole(ControlMessage::ROLE_GATEWAY_BACKEND) !== []
+        ) {
+            $reloadRoles[] = ControlMessage::ROLE_GATEWAY_BACKEND;
+            $reloadRoles = \array_values(\array_unique($reloadRoles));
+        }
         WlsLogger::info_("[Orchestrator] 收到重载请求 (type={$type})，目标角色: " . \implode(',', $reloadRoles));
         if ($this->rollingRestartClientId !== null) {
             $total = (int)($this->desiredState[ControlMessage::ROLE_WORKER]
@@ -7301,6 +7475,9 @@ class ServiceOrchestrator
 
         $reloadsWorker = \in_array('worker', $reloadRoles, true);
         $workerCount = \count($this->registry->getInstancesByRole('worker'));
+        $gatewayBackendCount = \count(
+            $this->registry->getInstancesByRole(ControlMessage::ROLE_GATEWAY_BACKEND),
+        );
         $multiWorkerWorkerReload = $reloadsWorker && $workerCount >= 2;
         $forceReload = ($type === ControlMessage::RELOAD_TYPE_FORCE);
         // Dispatcher 单 Worker 无同角色接替，需要维护池承接。Direct 即使只有
@@ -7308,7 +7485,8 @@ class ServiceOrchestrator
         $shouldEnableMaintenanceBeforeWorkerReload = $reloadsWorker
             && !$this->maintenanceMode
             && !(bool)$this->context?->isDirect()
-            && !$multiWorkerWorkerReload;
+            && !$multiWorkerWorkerReload
+            && $gatewayBackendCount === 0;
         $maintenanceEnabledForReload = false;
         $maintenanceStickyBeforeReload = $this->maintenanceSticky;
         try {
@@ -11703,6 +11881,13 @@ class ServiceOrchestrator
      */
     private function healthCheckRestartOrEscalate(ServiceInstance $instance, string $reason): void
     {
+        if (\in_array($instance->state, [
+            ServiceInstance::STATE_DRAINING,
+            ServiceInstance::STATE_STOPPING,
+            ServiceInstance::STATE_STOPPED,
+        ], true)) {
+            return;
+        }
         if ($this->isRecoverySuspended()) {
             return;
         }
@@ -11813,6 +11998,11 @@ class ServiceOrchestrator
     private function isRecoveryCriticalRole(string $role): bool
     {
         if (\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_DISPATCHER], true)) {
+            return true;
+        }
+        if ($role === ControlMessage::ROLE_GATEWAY_BACKEND
+            && (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0) === 0
+        ) {
             return true;
         }
         if ($role === ControlMessage::ROLE_MAINTENANCE && $this->maintenanceMode) {
@@ -12076,6 +12266,14 @@ class ServiceOrchestrator
         }
 
         return false;
+    }
+
+    private function invalidateInstanceProcessRunningCache(
+        ServiceInstance $instance,
+    ): void {
+        foreach ($instance->getManagedPids() as $pid) {
+            unset($this->processRunningCache[$pid]);
+        }
     }
 
     private function formatInstanceDebugContext(ServiceInstance $instance): string
@@ -12398,7 +12596,7 @@ class ServiceOrchestrator
 
             // 阶段 5：强制杀死残留子进程
             WlsLogger::info_('[Orchestrator] 子进程停止阶段5: 校验并杀死残留');
-            $this->verifyAndKillRemainingProcesses();
+            $this->verifyAndKillRemainingProcesses($allInstances);
 
             WlsLogger::info_('[Orchestrator] 所有子进程已停止');
         } finally {
@@ -12427,6 +12625,13 @@ class ServiceOrchestrator
             $instanceCount = $provider->getInstanceCount($context);
             $role = $provider->getRole();
             $displayName = $provider->getDisplayName();
+            if ($this->isGatewayNativeEdgeRoleSuppressed($role)) {
+                $this->desiredState[$role] = 0;
+                WlsLogger::info_(
+                    "[Orchestrator] shared gateway owns the public edge; skip native provider restart: {$role}"
+                );
+                continue;
+            }
             $this->desiredState[$role] = $instanceCount;
 
             WlsLogger::info_("[Orchestrator] 重启服务 {$displayName} (role={$role}, instances={$instanceCount})");
@@ -12500,6 +12705,33 @@ class ServiceOrchestrator
             $this->cooperativeYieldIfNeeded($lastYieldAt);
             if ($this->shouldYieldPeriodicWork(true)) {
                 return;
+            }
+            if ($this->isGatewayNativeEdgeRoleSuppressed((string)$role)) {
+                $this->desiredState[$role] = 0;
+                $this->clearResurrectionQueueForRoles([(string)$role]);
+                continue;
+            }
+            if ($role === ControlMessage::ROLE_WORKER
+                && $this->workerEmergencyRestartInProgress
+            ) {
+                continue;
+            }
+            if ($role === ControlMessage::ROLE_GATEWAY_BACKEND
+            ) {
+                $provider = $this->registry->getProvider($role);
+                if (!$provider instanceof GatewayJoinBackendProvider) {
+                    continue;
+                }
+                $slots = $this->gatewayJoinBackendSlotsNeedingReconciliation(
+                    (int)$desiredCount,
+                );
+                if ($slots !== []) {
+                    $this->scheduleGatewayJoinBackendPoolExpansion(
+                        $provider,
+                        $slots,
+                    );
+                }
+                continue;
             }
             if ($role === ControlMessage::ROLE_MAINTENANCE && !$this->maintenanceMode) {
                 $this->desiredState[ControlMessage::ROLE_MAINTENANCE] = 0;
@@ -12603,6 +12835,13 @@ class ServiceOrchestrator
         if ($this->isStopFlowActive()) {
             return;
         }
+        if (!$this->isRoleSlotDesiredForRecovery($instance->role, $instance->instanceId)) {
+            WlsLogger::info_(
+                "[Orchestrator] skip resurrection for undesired slot "
+                . "{$instance->role}#{$instance->instanceId}"
+            );
+            return;
+        }
         if ($this->isRecoverySlotQuarantined($instance->role, $instance->instanceId)) {
             return;
         }
@@ -12663,6 +12902,36 @@ class ServiceOrchestrator
         $now = \microtime(true);
         foreach ($this->resurrectQueue as $key => $entry) {
             if ($roles !== null && !\in_array((string) ($entry['role'] ?? ''), $roles, true)) {
+                continue;
+            }
+            if (!$this->isRoleSlotDesiredForRecovery(
+                (string)($entry['role'] ?? ''),
+                (int)($entry['instanceId'] ?? 0),
+            )) {
+                unset($this->resurrectQueue[$key]);
+                WlsLogger::info_(
+                    '[Orchestrator] drop resurrect queue for undesired slot '
+                    . (string)($entry['role'] ?? '') . '#'
+                    . (int)($entry['instanceId'] ?? 0)
+                );
+                continue;
+            }
+            if (($entry['role'] ?? '') === ControlMessage::ROLE_WORKER
+                && $this->workerEmergencyRestartInProgress
+            ) {
+                continue;
+            }
+            if (($entry['role'] ?? '') === ControlMessage::ROLE_GATEWAY_BACKEND) {
+                unset($this->resurrectQueue[$key]);
+                $provider = $this->registry->getProvider(
+                    ControlMessage::ROLE_GATEWAY_BACKEND,
+                );
+                if ($provider instanceof GatewayJoinBackendProvider) {
+                    $this->scheduleGatewayJoinBackendPoolExpansion(
+                        $provider,
+                        [(int)($entry['instanceId'] ?? 0)],
+                    );
+                }
                 continue;
             }
             if ($this->isRecoverySlotQuarantined(
@@ -12802,7 +13071,7 @@ class ServiceOrchestrator
                     $fenceUpdates['old_process_released'] = true;
                 } elseif (empty($entry['old_process_released'])) {
                     $portProvesRelease = $port > 0
-                        && !$this->isDirectWorkerPublicPort((string)$entry['role'], $port)
+                        && !$this->isMasterOwnedSharedListenerPort((string)$entry['role'], $port)
                         && $this->ensurePortReleasedForResurrection($port, (string)$entry['role']);
                     if (!$portProvesRelease) {
                         $this->deferResurrectionFenceOrEscalate(
@@ -13290,7 +13559,7 @@ class ServiceOrchestrator
             return true;
         }
 
-        if ($this->isDirectWorkerPublicPort($role, $port)) {
+        if ($this->isMasterOwnedSharedListenerPort($role, $port)) {
             // This listener is a shared topology primitive, not an orphaned
             // per-slot resource. Port-wide cleanup would terminate healthy
             // siblings and, with shared_fd, the Master that owns the listener.
@@ -13604,6 +13873,7 @@ class ServiceOrchestrator
         if ($source === null || !\in_array($source->role, [
             ControlMessage::ROLE_WORKER,
             ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
             ControlMessage::ROLE_DISPATCHER,
         ], true)) {
             return;
@@ -13623,7 +13893,12 @@ class ServiceOrchestrator
         }
 
         $delta = ControlMessage::policyStateDelta($instance, (string)\inet_ntop($packedIp), $expiresAt);
-        foreach ([ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE, ControlMessage::ROLE_DISPATCHER] as $role) {
+        foreach ([
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+            ControlMessage::ROLE_DISPATCHER,
+        ] as $role) {
             $this->controlServer->sendToRole($role, $delta);
         }
     }
@@ -13709,6 +13984,45 @@ class ServiceOrchestrator
         // 查找匹配的实例
         $instances = $this->registry->getInstancesByRole($role);
 
+        // WLS 2.0 leased children carry a canonical slot id. It is the only
+        // authoritative match key: shared-listener roles intentionally have
+        // the same port, so falling through the port heuristic would reject
+        // the same stale registration once per sibling slot and amplify a
+        // single old process into a control-plane close/reconnect storm.
+        if ($slotId !== '') {
+            foreach ($instances as $instance) {
+                if (!\hash_equals($this->getInstanceSlotId($instance), $slotId)) {
+                    continue;
+                }
+                $this->registerInstanceIpc(
+                    $instance,
+                    $clientId,
+                    $pid,
+                    $workerId,
+                    $epoch,
+                    $launchId,
+                    $processKind,
+                    $moduleCode,
+                    $slotId,
+                    $leaseId,
+                    $generation,
+                );
+                return;
+            }
+            $this->rejectUntrustedChild(
+                $clientId,
+                $role,
+                $workerId,
+                $port,
+                'no_matching_slot',
+                (string)($msg['msg_id'] ?? ''),
+                $slotId,
+                $leaseId,
+                $generation,
+            );
+            return;
+        }
+
         // 策略0：launch_id 精确匹配（最稳妥）
         if ($launchId !== '') {
             foreach ($instances as $instance) {
@@ -13770,7 +14084,11 @@ class ServiceOrchestrator
         }
 
         WlsLogger::warning_("[Orchestrator] 未找到匹配的实例: role={$role}, pid={$pid}, port={$port}, workerId={$workerId}, epoch={$epoch}, launch_id={$launchId}");
-        if (\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+        if (\in_array($role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)) {
             $this->rejectUntrustedChild($clientId, $role, $workerId, $port, 'no_matching_slot', (string)($msg['msg_id'] ?? ''));
             return;
         }
@@ -13790,6 +14108,8 @@ class ServiceOrchestrator
             [
                 ControlMessage::ROLE_WORKER,
                 ControlMessage::ROLE_MAINTENANCE,
+                ControlMessage::ROLE_GATEWAY_FALLBACK,
+                ControlMessage::ROLE_GATEWAY_BACKEND,
                 ControlMessage::ROLE_DISPATCHER,
                 ControlMessage::ROLE_REDIRECT,
                 ProtocolEdgeRuntime::ROLE,
@@ -13946,7 +14266,11 @@ class ServiceOrchestrator
             $this->persistServicesInfo($this->context);
         }
 
-        if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+        if (\in_array($instance->role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)) {
             $this->sendRoutingPolicyToWorker($instance);
         } elseif ($instance->role === ControlMessage::ROLE_DISPATCHER) {
             $this->sendRuntimePolicyToParticipant($instance);
@@ -14201,7 +14525,12 @@ class ServiceOrchestrator
             return;
         }
         $readyMsgId = \trim((string)($msg['msg_id'] ?? ''));
-        if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
+        if (\in_array($instance->role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_FALLBACK,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)
             && ($readyMsgId === ''
                 || $instance->launchId === ''
                 || !\hash_equals($instance->launchId, $readyMsgId))
@@ -14264,9 +14593,19 @@ class ServiceOrchestrator
             $instance->setMeta('policy_digest', $reportedDigest);
         }
 
-        if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+        if (\in_array($instance->role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_FALLBACK,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)) {
             $reportedTopology = \strtolower(\trim((string)($msg['topology'] ?? '')));
-            $expectedTopology = $this->context?->getEffectiveTopology()->value ?? '';
+            $expectedTopology = \in_array($instance->role, [
+                ControlMessage::ROLE_GATEWAY_FALLBACK,
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            ], true)
+                ? 'direct'
+                : ($this->context?->getEffectiveTopology()->value ?? '');
             $reportedDigest = \strtolower(\trim((string)($msg['policy_digest'] ?? '')));
             $expectedDigest = \strtolower(\trim($this->runtimePolicyPublishedDigest));
             $readinessProtocolVersion = (int)($msg['readiness_protocol_version'] ?? 0);
@@ -14297,7 +14636,12 @@ class ServiceOrchestrator
                 ? $msg['listen_capabilities']
                 : [];
             $reportedListenerMode = \strtolower(\trim((string)($listenCapabilities['mode'] ?? '')));
-            $expectedListenerMode = $this->context?->runtimeSelection->listenerMode ?? '';
+            $expectedListenerMode = \in_array($instance->role, [
+                ControlMessage::ROLE_GATEWAY_FALLBACK,
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            ], true)
+                ? ($this->isWindowsRuntime() ? 'single' : 'shared_fd')
+                : ($this->context?->runtimeSelection->listenerMode ?? '');
             $reusePortListenerReady = $reportedListenerMode === 'reuseport'
                 && (bool)($listenCapabilities['reuseport'] ?? false);
             $sharedListenerReady = $reportedListenerMode === 'shared_fd'
@@ -14428,6 +14772,121 @@ class ServiceOrchestrator
             WlsLogger::debug_("[Orchestrator] 更新 {$instance->role}#{$instance->instanceId} 端口: {$instance->port} -> {$reportedPort}");
             $instance->port = $reportedPort;
         }
+        if ($instance->role === ControlMessage::ROLE_GATEWAY_FALLBACK) {
+            $fallbackPort = (int)($instance->port ?? 0);
+            $fallbackBindHost = \trim((string)$instance->getMeta(
+                'fallback_bind_host',
+                '',
+            ));
+            if ($fallbackBindHost === '') {
+                $fallbackBindHost = $this->gatewayFallbackBindHost();
+            }
+            if (!$this->isWindowsRuntime()
+                && ($this->gatewayFallbackListener === null
+                    || !$this->gatewayFallbackListener->matches(
+                        $fallbackBindHost,
+                        $fallbackPort,
+                    ))
+            ) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $fallbackPort,
+                    'fallback_master_listener_mismatch',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                return;
+            }
+            try {
+                $lease = (new GatewayPortLeaseAllocator())->confirm(
+                    (string)($this->context?->instanceName ?? '') . ':gateway-fallback',
+                    $fallbackPort,
+                    $instance->getTrackingPid(),
+                    $instance->launchId,
+                );
+                $instance->setMeta('fallback_lease_id', (string)($lease['lease_id'] ?? ''));
+                $instance->setMeta('fallback_lease_state', (string)($lease['state'] ?? ''));
+                $instance->setMeta(
+                    'fallback_listener_owner',
+                    $this->isWindowsRuntime() ? 'child' : 'master',
+                );
+            } catch (\Throwable $throwable) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $fallbackPort,
+                    'fallback_lease_confirmation_failed',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                WlsLogger::error_(
+                    '[Orchestrator] Gateway fallback READY lease rejected: '
+                    . $throwable->getMessage()
+                );
+                return;
+            }
+        }
+        if ($instance->role === ControlMessage::ROLE_GATEWAY_BACKEND) {
+            $backendPort = (int)($instance->port ?? 0);
+            if (!$this->isWindowsRuntime()
+                && ($this->gatewayJoinListener === null
+                    || !$this->gatewayJoinListener->matches('127.0.0.1', $backendPort))
+            ) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $backendPort,
+                    'gateway_backend_master_listener_mismatch',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                return;
+            }
+            try {
+                $lease = (new GatewayPortLeaseAllocator())->confirm(
+                    (string)($this->context?->instanceName ?? '') . ':gateway-backend',
+                    $backendPort,
+                    $instance->getTrackingPid(),
+                    $instance->launchId,
+                );
+                $instance->setMeta(
+                    'gateway_backend_lease_id',
+                    (string)($lease['lease_id'] ?? ''),
+                );
+                $instance->setMeta(
+                    'gateway_backend_lease_state',
+                    (string)($lease['state'] ?? ''),
+                );
+                $this->publishGatewayJoinBackendState('ACTIVE', $instance);
+            } catch (\Throwable $throwable) {
+                $this->rejectUntrustedChild(
+                    $clientId,
+                    $instance->role,
+                    (int)($msg['worker_id'] ?? $instance->instanceId),
+                    $backendPort,
+                    'gateway_backend_lease_confirmation_failed',
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance),
+                );
+                WlsLogger::error_(
+                    '[Orchestrator] Gateway join backend READY lease rejected: '
+                    . $throwable->getMessage()
+                );
+                return;
+            }
+        }
 
         // Darwin READY is publicly meaningful only after the stable Initial
         // Owner has atomically connected and activated this exact generation.
@@ -14457,7 +14916,11 @@ class ServiceOrchestrator
         // Re-read the DB clock at the final admission edge. This closes the
         // gap between the earlier capability validation and route publication
         // for initial, reconnect, replacement, and surge generations.
-        if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+        if (\in_array($instance->role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)) {
             $finalNamespaceRejection = $this->validateWorkerNamespaceReadiness(
                 $msg,
                 \is_array($msg['readiness_capabilities'] ?? null)
@@ -14968,40 +15431,65 @@ class ServiceOrchestrator
         if ($this->context !== null) {
             $this->markStartupPhaseRunning($this->context, $totalServices);
         }
-        $mainPort = $this->context?->mainPort ?? 0;
-        $bindHost = '127.0.0.1';
-        $displayHost = $bindHost;
-        $sslEnabled = false;
-        $protocol = 'http';
+        $ctx = $this->context;
+        $mainPort = $ctx?->mainPort ?? 0;
+        $edgeAdapter = $ctx === null
+            ? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+            : (new \Weline\Server\Service\Edge\EdgeAdapterResolver())
+                ->resolve($ctx->envConfig)
+                ->name();
+        $pureWlsEdge = $edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+        $bindHost = $pureWlsEdge ? (string)($ctx?->host ?? '127.0.0.1') : '127.0.0.1';
+        $displayHost = $pureWlsEdge
+            ? (string)($ctx?->publicHost ?: $bindHost)
+            : $bindHost;
+        $sslEnabled = $pureWlsEdge && (bool)($ctx?->sslEnabled ?? false);
+        $protocol = $sslEnabled ? 'https' : 'http';
+        $publicOrigin = '';
+        if ($pureWlsEdge && $ctx !== null) {
+            $publicOrigin = \Weline\Server\Service\Edge\PureWlsPublicOrigin::normalize(
+                (string)$ctx->getConfig('wls.public_origin', ''),
+            );
+        }
         $backendPorts = [$mainPort];
-        if ($this->context?->isDirect()
-            && $this->context->runtimeSelection->listenerMode === 'worker_ports'
+        if (!$pureWlsEdge
+            && $ctx?->isDirect()
+            && $ctx->runtimeSelection->listenerMode === 'worker_ports'
         ) {
             $readyWorkerPorts = $this->collectReadyWorkerPortsSorted();
             if ($readyWorkerPorts !== []) {
                 $backendPorts = $readyWorkerPorts;
             }
         }
-        $backendEndpoints = \array_map(
-            static fn(int $backendPort): string => 'http://127.0.0.1:' . $backendPort,
-            $backendPorts,
-        );
+        $backendEndpoints = $pureWlsEdge
+            ? [$publicOrigin]
+            : \array_map(
+                static fn(int $backendPort): string => 'http://127.0.0.1:' . $backendPort,
+                $backendPorts,
+            );
 
         // 输出醒目的服务器准备就绪通知
         WlsLogger::info_('[Server] ========================================');
-        WlsLogger::info_('[Server] ✓ ' . $this->translateMessage('WLS 私网回源'));
-        WlsLogger::info_('[Server]   ' . $this->translateMessage(
-            'WLS 私网回源：%{1}；公网访问必须经过项目托管 Nginx。',
-            [\implode(', ', $backendEndpoints)],
-        ));
+        $readyTitle = $pureWlsEdge ? 'WLS 公网入口' : 'WLS 私网回源';
+        WlsLogger::info_('[Server] ✓ ' . $this->translateMessage($readyTitle));
+        WlsLogger::info_('[Server]   ' . ($pureWlsEdge
+            ? $this->translateMessage(
+                'WLS 纯运行入口：%{1}。',
+                [\implode(', ', $backendEndpoints)],
+            )
+            : $this->translateMessage(
+                'WLS 私网回源：%{1}；公网访问必须经过项目托管 Nginx。',
+                [\implode(', ', $backendEndpoints)],
+            )));
         WlsLogger::info_("[Server]   服务实例: {$totalServices} 个");
         WlsLogger::info_('[Server] ========================================');
 
         // 前台模式：直接输出访问地址表与代理转发说明（不悬浮，日志正常滚动）
-        if ($this->context?->windowMode) {
-            $ctx = $this->context;
+        if ($ctx?->windowMode) {
             $defaultPort = $sslEnabled ? 443 : 80;
-            $baseUrl = $protocol . '://' . $displayHost . ($mainPort !== $defaultPort ? ':' . $mainPort : '');
+            $baseUrl = $pureWlsEdge
+                ? \rtrim($publicOrigin, '/')
+                : $protocol . '://' . $displayHost . ($mainPort !== $defaultPort ? ':' . $mainPort : '');
             $backendPrefix = $ctx->getConfig('router.area_routes.backend.prefix') ?? '';
             $apiPath = $ctx->getConfig('router.area_routes.rest_frontend.prefix') ?: 'api';
             $apiAdminPath = $ctx->getConfig('router.area_routes.rest_backend.prefix') ?: 'api_admin';
@@ -15011,7 +15499,9 @@ class ServiceOrchestrator
             $backendUrl = $baseUrl . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '') . 'admin';
             $apiUrl = $baseUrl . '/' . $apiPath . '/';
             $apiAdminUrl = $baseUrl . '/' . $apiAdminPath . '/';
-            $httpUrl = $sslEnabled && $httpRedirectPort > 0 ? "http://{$displayHost}:{$httpRedirectPort}/ → HTTPS" : null;
+            $httpUrl = !$pureWlsEdge && $sslEnabled && $httpRedirectPort > 0
+                ? "http://{$displayHost}:{$httpRedirectPort}/ → HTTPS"
+                : null;
 
             $paddingX = 2;
             $colLabel = 16;
@@ -15037,7 +15527,7 @@ class ServiceOrchestrator
                 . \str_repeat(' ', $paddingX)
                 . "{$B}║{$R}\n";
 
-            $title = '  ✓ ' . $this->translateMessage('WLS 私网回源');
+            $title = '  ✓ ' . $this->translateMessage($readyTitle);
             $titlePad = \max(0, $tableWidth - ($paddingX * 2) - $this->getDisplayWidth($title));
             $titleRow = "{$B}  ║{$R}"
                 . \str_repeat(' ', $paddingX)
@@ -15064,11 +15554,17 @@ class ServiceOrchestrator
             // Canonical public-protocol guidance belongs to the Master banner,
             // not to every Worker process.
             echo self::ANSI_BOLD . self::ANSI_GREEN . "  " . $this->translateMessage('使用说明：') . self::ANSI_RESET . "\n";
-            $tips = [
-                $this->translateMessage('Nginx 负责公网 TLS/HTTP；WLS 后端固定为回环地址明文 HTTP/1.1。'),
-                $this->translateMessage('Nginx 是唯一公网边缘，不能跳过其启动。'),
-                $this->translateMessage('Nginx 示例：') . "proxy_pass http://{$bindHost}:{$mainPort};",
-            ];
+            $tips = $pureWlsEdge
+                ? [
+                    $this->translateMessage('纯 WLS 直接提供 TLS/HTTP；该地址不经过宿主网关。'),
+                    $this->translateMessage('若使用高端口，请同步检查防火墙、DNS 或负载均衡配置。'),
+                    $this->translateMessage('网关恢复并稳定后，备用入口会按配置排空并关闭。'),
+                ]
+                : [
+                    $this->translateMessage('Nginx 负责公网 TLS/HTTP；WLS 后端固定为回环地址明文 HTTP/1.1。'),
+                    $this->translateMessage('Nginx 是唯一公网边缘，不能跳过其启动。'),
+                    $this->translateMessage('Nginx 示例：') . "proxy_pass http://{$bindHost}:{$mainPort};",
+                ];
             foreach ($tips as $tip) {
                 echo "  " . self::ANSI_BRIGHT_ORANGE . "• " . self::ANSI_RESET . self::ANSI_ORANGE . $tip . self::ANSI_RESET . "\n";
             }
@@ -15488,6 +15984,9 @@ class ServiceOrchestrator
         if ($this->context === null || $this->controlServer === null || !$this->running || $this->isRecoverySuspended()) {
             return;
         }
+        if ($this->workerEmergencyRestartInProgress) {
+            return;
+        }
         if ($this->childServicesBootstrapInProgress) {
             return;
         }
@@ -15551,7 +16050,7 @@ class ServiceOrchestrator
      */
     private function emergencyRestartAllWorkers(): void
     {
-        if ($this->context === null) {
+        if ($this->context === null || $this->workerEmergencyRestartInProgress) {
             return;
         }
         $provider = $this->registry->getProvider('worker');
@@ -15559,44 +16058,53 @@ class ServiceOrchestrator
             return;
         }
         $desired = (int) ($this->desiredState['worker'] ?? 0);
-        $this->killKnownWorkerProcessesForEmergencyRestart();
-        // 按实例作用域前缀清理 name_index / 系统可解析的 Worker，避免仅 kill 注册表 PID 后仍有逃逸子进程。
-        // 使用 buildScopedProcessName 与 Worker 实际 --name 一致（含实例名规范化）。
-        $scopedPrefix = MasterProcess::buildScopedProcessName(
-            WorkerProvider::PROCESS_NAME_PREFIX,
-            $this->context->instanceName
-        ) . '-';
-        Processer::killByProcessNamePrefix($scopedPrefix);
-        if (!$this->sleepInterruptiblyForPeriodicWork(600000)) {
+        if ($desired <= 0) {
             return;
         }
 
-        foreach (\array_keys($this->resurrectQueue) as $key) {
-            if (\str_starts_with((string) $key, 'worker:')) {
-                unset($this->resurrectQueue[$key]);
+        $this->workerEmergencyRestartInProgress = true;
+        try {
+            $this->killKnownWorkerProcessesForEmergencyRestart();
+            // 按实例作用域前缀清理 name_index / 系统可解析的 Worker，避免仅 kill 注册表 PID 后仍有逃逸子进程。
+            // 使用 buildScopedProcessName 与 Worker 实际 --name 一致（含实例名规范化）。
+            $scopedPrefix = MasterProcess::buildScopedProcessName(
+                WorkerProvider::PROCESS_NAME_PREFIX,
+                $this->context->instanceName
+            ) . '-';
+            Processer::killByProcessNamePrefix($scopedPrefix);
+            if (!$this->sleepInterruptiblyForPeriodicWork(600000)) {
+                return;
             }
-        }
 
-        $instanceIds = [];
-        for ($slot = 1; $slot <= $desired; $slot++) {
-            $old = $this->registry->getInstance('worker', $slot);
-            if ($old !== null) {
-                $this->cleanupInstancePidFile($old);
-                $this->registry->removeInstance('worker', $slot);
+            foreach (\array_keys($this->resurrectQueue) as $key) {
+                if (\str_starts_with((string) $key, 'worker:')) {
+                    unset($this->resurrectQueue[$key]);
+                }
             }
-            $instanceIds[] = $slot;
-        }
 
-        $newInstances = $this->startInstanceIdsBatch($provider, $instanceIds, $this->context);
-        foreach ($newInstances as $newInst) {
-            if (!$newInst instanceof ServiceInstance) {
-                continue;
+            $instanceIds = [];
+            for ($slot = 1; $slot <= $desired; $slot++) {
+                $old = $this->registry->getInstance('worker', $slot);
+                if ($old !== null) {
+                    $this->cleanupInstancePidFile($old);
+                    $this->registry->removeInstance('worker', $slot);
+                }
+                $instanceIds[] = $slot;
             }
-            $newInst->restarts = 0;
-            $this->registry->updateInstance($newInst);
+
+            $newInstances = $this->startInstanceIdsBatch($provider, $instanceIds, $this->context);
+            foreach ($newInstances as $newInst) {
+                if (!$newInst instanceof ServiceInstance) {
+                    continue;
+                }
+                $newInst->restarts = 0;
+                $this->registry->updateInstance($newInst);
+            }
+            $this->controlServer?->poll(0, 200000);
+            WlsLogger::warning_("[Orchestrator] Worker 紧急拉起已提交（{$desired} 槽位）");
+        } finally {
+            $this->workerEmergencyRestartInProgress = false;
         }
-        $this->controlServer?->poll(0, 200000);
-        WlsLogger::warning_("[Orchestrator] Worker 紧急拉起已提交（{$desired} 槽位）");
     }
 
     /**
@@ -15613,7 +16121,7 @@ class ServiceOrchestrator
                 $this->killProcess($pid);
             }
             $port = (int) ($worker->port ?? 0);
-            if ($port > 0 && !$this->isDirectWorkerPublicPort(ControlMessage::ROLE_WORKER, $port)) {
+            if ($port > 0 && !$this->isMasterOwnedSharedListenerPort(ControlMessage::ROLE_WORKER, $port)) {
                 Processer::forceReleasePort($port);
             }
         }
@@ -16203,6 +16711,1421 @@ class ServiceOrchestrator
     }
 
     /**
+     * @param array<string,mixed> $msg
+     */
+    private function handleGatewayFallbackCommand(
+        string $action,
+        array $msg,
+        int $clientId,
+    ): void {
+        $requester = $this->registry->getInstanceByIpcClient($clientId);
+        $messageId = (string)($msg['msg_id'] ?? '');
+        if ($requester === null
+            || !\hash_equals(GatewayProvider::ROLE, $requester->role)
+            || $this->context === null
+            || $this->controlServer === null
+        ) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway fallback commands require the current project gateway Agent.',
+                $messageId,
+            ));
+            return;
+        }
+        $port = (int)($msg['port'] ?? 0);
+        $instance = $this->registry->getInstance(ControlMessage::ROLE_GATEWAY_FALLBACK, 1);
+        if ($action === ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE) {
+            if ($instance !== null && $instance->isRunning()) {
+                $samePort = $port === 0 || (int)($instance->port ?? 0) === $port;
+                $accepted = $samePort && $instance->state !== ServiceInstance::STATE_DRAINING;
+                $bindHost = (string)$instance->getMeta(
+                    'fallback_bind_host',
+                    $this->gatewayFallbackBindHost(),
+                );
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    $accepted,
+                    [
+                        'state' => $instance->state,
+                        'port' => (int)($instance->port ?? 0),
+                        'pid' => $instance->getTrackingPid(),
+                        'bind' => $bindHost,
+                        'bind_endpoint' => (string)$instance->getMeta(
+                            'fallback_bind',
+                            $this->formatGatewayFallbackBind($bindHost, (int)($instance->port ?? 0)),
+                        ),
+                        'urls' => (array)$instance->getMeta('fallback_urls', []),
+                        'limitations' => (array)$instance->getMeta(
+                            'fallback_limitations',
+                            [],
+                        ),
+                    ],
+                    $accepted
+                        ? 'Gateway fallback is already active under this Master.'
+                        : 'Gateway fallback is already occupied or draining.',
+                    $messageId,
+                ));
+                return;
+            }
+            if ($instance !== null) {
+                $slotOccupancy = $this->inspectSlotOccupancy($instance);
+                $existingPort = (int)($instance->port ?? 0);
+                $masterOwnedDeadListener = !$this->isWindowsRuntime()
+                    && $existingPort >= 20000
+                    && $existingPort <= 29999
+                    && $this->gatewayFallbackListener?->matches(
+                        $this->gatewayFallbackBindHost(),
+                        $existingPort,
+                    ) === true
+                    && !$slotOccupancy['ipcAlive']
+                    && !$slotOccupancy['pidAlive'];
+                if ($masterOwnedDeadListener) {
+                    (new GatewayPortLeaseAllocator())->cancelReservation(
+                        $this->context->instanceName . ':gateway-fallback',
+                        $existingPort,
+                    );
+                    $this->closeGatewayFallbackListener();
+                    $slotOccupancy['occupied'] = false;
+                }
+                if ($slotOccupancy['occupied']) {
+                    $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                        false,
+                        [
+                            'state' => $instance->state,
+                            'port' => (int)($instance->port ?? 0),
+                            'pid' => $slotOccupancy['trackedPid'],
+                        ],
+                        'Gateway fallback slot is still occupied by an earlier process.',
+                        $messageId,
+                    ));
+                    return;
+                }
+
+                // The fallback provider has zero desired instances at
+                // bootstrap, so status persistence may leave a STOPPED slot
+                // placeholder behind. Remove that proven-dead placeholder
+                // before the Master reserves the supplemental listener;
+                // otherwise the generic duplicate-start guard mistakes the
+                // newly Master-owned socket for the old slot.
+                $this->registry->removeInstance(
+                    ControlMessage::ROLE_GATEWAY_FALLBACK,
+                    1,
+                );
+                $instance = null;
+            }
+            $quarantineRetryAfter = $this->releaseGatewayFallbackQuarantineForRetry();
+            if ($quarantineRetryAfter > 0.0) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    ['retry_after_seconds' => (int)\ceil($quarantineRetryAfter)],
+                    'Gateway fallback recovery is cooling down before a verified retry.',
+                    $messageId,
+                ));
+                return;
+            }
+            try {
+                $leaseName = $this->context->instanceName . ':gateway-fallback';
+                $leases = new GatewayPortLeaseAllocator();
+                $bindHost = $this->gatewayFallbackBindHost();
+                if ($port === 0) {
+                    if ($this->isWindowsRuntime()) {
+                        $port = $leases->allocate($leaseName);
+                    } else {
+                        $this->gatewayFallbackListener ??= new DirectSharedListener();
+                        $reservation = $leases->reserveBound(
+                            $leaseName,
+                            function (int $candidate) use ($bindHost): bool {
+                                $this->gatewayFallbackListener?->acquire(
+                                    $bindHost,
+                                    $candidate,
+                                );
+                                return true;
+                            },
+                        );
+                        $port = (int)$reservation['port'];
+                    }
+                } elseif ($this->isWindowsRuntime()) {
+                    $requestedPort = $port;
+                    $reservation = $leases->reserveBound(
+                        $leaseName,
+                        function (int $candidate) use ($requestedPort, $bindHost): mixed {
+                            if ($candidate !== $requestedPort) {
+                                return false;
+                            }
+                            return @\stream_socket_server(
+                                $this->gatewayFallbackSocketAddress($bindHost, $candidate),
+                                $errno,
+                                $error,
+                                \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+                            );
+                        },
+                    );
+                    $port = (int)$reservation['port'];
+                } else {
+                    $requestedPort = $port;
+                    $this->gatewayFallbackListener ??= new DirectSharedListener();
+                    $reservation = $leases->reserveBound(
+                        $leaseName,
+                        function (int $candidate) use ($requestedPort, $bindHost): bool {
+                            if ($candidate !== $requestedPort) {
+                                return false;
+                            }
+                            $this->gatewayFallbackListener?->acquire(
+                                $bindHost,
+                                $candidate,
+                            );
+                            return true;
+                        },
+                    );
+                    $port = (int)$reservation['port'];
+                }
+                if ($port < 20000 || $port > 29999) {
+                    throw new \RuntimeException(
+                        'Gateway fallback port must be inside 20000-29999.'
+                    );
+                }
+                [$certificate, $privateKey] = $this->gatewayFallbackCertificateSource();
+                $fallbackMetadata = $this->gatewayFallbackEndpointMetadata(
+                    $bindHost,
+                    $port,
+                    $certificate,
+                );
+                $fallbackUrls = (array)($fallbackMetadata['fallback_urls'] ?? []);
+                $provider = new GatewayFallbackProvider(
+                    port: $port,
+                    certificate: $certificate,
+                    privateKey: $privateKey,
+                    bindHost: $bindHost,
+                    publicOrigin: (string)($fallbackUrls[0] ?? ''),
+                    inheritedListener: !$this->isWindowsRuntime(),
+                    runtimeEnabled: true,
+                );
+                $this->registry->registerProvider($provider);
+                $started = $this->startInstance($provider, 1, $this->context, $port, $port);
+                if ($started === null) {
+                    $leases->cancelReservation($leaseName, $port);
+                    $this->closeGatewayFallbackListener();
+                    throw new \RuntimeException(
+                        'Gateway fallback listener could not reserve the requested port.'
+                    );
+                }
+                foreach ($fallbackMetadata as $key => $value) {
+                    $started->setMeta((string)$key, $value);
+                }
+                $this->registry->updateInstance($started);
+                $this->desiredState[ControlMessage::ROLE_GATEWAY_FALLBACK] = 1;
+                $this->persistServicesInfo($this->context);
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    [
+                        'state' => $started->state,
+                        'port' => $port,
+                        'pid' => $started->getTrackingPid(),
+                        'bind' => $bindHost,
+                        'bind_endpoint' => (string)$fallbackMetadata['fallback_bind'],
+                        'url' => (string)($fallbackUrls[0] ?? ''),
+                        'urls' => $fallbackUrls,
+                        'limitations' => (array)$fallbackMetadata['fallback_limitations'],
+                        'lease_state' => 'RESERVED',
+                        'listener_owner' => $this->isWindowsRuntime() ? 'child' : 'master',
+                    ],
+                    'Gateway fallback listener is starting under the current Master.',
+                    $messageId,
+                ));
+            } catch (\Throwable $throwable) {
+                if (!$this->isWindowsRuntime()) {
+                    $this->closeGatewayFallbackListener();
+                }
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [],
+                    'Gateway fallback start failed: ' . $throwable->getMessage(),
+                    $messageId,
+                ));
+            }
+            return;
+        }
+        if ($instance === null || !$instance->isRunning()) {
+            $this->desiredState[ControlMessage::ROLE_GATEWAY_FALLBACK] = 0;
+            $leases = new GatewayPortLeaseAllocator();
+            if ($port === 0 && $instance !== null) {
+                $port = (int)($instance->port ?? 0);
+            }
+            if ($port === 0 && $instance === null) {
+                // The draining child may already have exited and been removed
+                // before Agent sends DISABLE. Recover its port from the
+                // durable, project-scoped lease so the cleanup cannot report
+                // success while leaving that lease permanently DRAINING.
+                $lease = $leases->status(
+                    $this->context->instanceName . ':gateway-fallback',
+                );
+                $leasePort = (int)($lease['port'] ?? 0);
+                if ($leasePort >= 20000 && $leasePort <= 29999) {
+                    $port = $leasePort;
+                }
+            }
+            if ($port >= 20000 && $port <= 29999) {
+                $leases->release(
+                    $this->context->instanceName . ':gateway-fallback',
+                    $port,
+                );
+            }
+            if (!$this->isWindowsRuntime()) {
+                $this->closeGatewayFallbackListener();
+            }
+            if ($instance !== null) {
+                $this->registry->removeInstance(
+                    ControlMessage::ROLE_GATEWAY_FALLBACK,
+                    1,
+                );
+            }
+            $this->persistServicesInfo($this->context);
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                true,
+                ['state' => ServiceInstance::STATE_STOPPED, 'port' => $port],
+                'Gateway fallback is already stopped.',
+                $messageId,
+            ));
+            return;
+        }
+        if ($port === 0) {
+            $port = (int)($instance->port ?? 0);
+        }
+        if ($port < 20000 || $port > 29999) {
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway fallback port must be inside 20000-29999.',
+                $messageId,
+            ));
+            return;
+        }
+        if ((int)($instance->port ?? 0) !== $port) {
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway fallback port does not match the active supplemental listener.',
+                $messageId,
+            ));
+            return;
+        }
+        if ($action === ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN) {
+            if ($instance->state !== ServiceInstance::STATE_DRAINING) {
+                try {
+                    (new GatewayPortLeaseAllocator())->markDraining(
+                        $this->context->instanceName . ':gateway-fallback',
+                        $port,
+                    );
+                } catch (\Throwable $throwable) {
+                    $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                        false,
+                        ['state' => $instance->state, 'port' => $port],
+                        'Gateway fallback drain lease rejected: ' . $throwable->getMessage(),
+                        $messageId,
+                    ));
+                    return;
+                }
+                $this->sendDrainToInstance($instance, 300.0);
+                $this->persistServicesInfo($this->context);
+            }
+            if (!$this->isWindowsRuntime()) {
+                // The child owns accepted connections after inheritance. Once
+                // drain starts, Master must release its duplicate listening FD
+                // or new TCP clients can enter an unserved backlog and hang at
+                // TLS after every fallback Worker has exited.
+                $this->closeGatewayFallbackListener();
+            }
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                true,
+                ['state' => ServiceInstance::STATE_DRAINING, 'port' => $port],
+                'Gateway fallback listener is draining.',
+                $messageId,
+            ));
+            return;
+        }
+        $this->desiredState[ControlMessage::ROLE_GATEWAY_FALLBACK] = 0;
+        $this->stopInstance($instance);
+        $this->closeGatewayFallbackListener();
+        (new GatewayPortLeaseAllocator())->release(
+            $this->context->instanceName . ':gateway-fallback',
+            $port,
+        );
+        $this->persistServicesInfo($this->context);
+        $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+            true,
+            ['state' => ServiceInstance::STATE_STOPPING, 'port' => $port],
+            'Gateway fallback listener stop was requested.',
+            $messageId,
+        ));
+    }
+
+    /**
+     * An on-demand fallback is allowed to leave the generic auxiliary-slot
+     * quarantine after a bounded cooldown. Automatic resurrection remains
+     * fenced, and the explicit retry path still proves the old slot dead
+     * before this method is reached.
+     *
+     * @return float Remaining cooldown seconds, or 0 when retry is allowed.
+     */
+    private function releaseGatewayFallbackQuarantineForRetry(): float
+    {
+        $key = ControlMessage::ROLE_GATEWAY_FALLBACK . ':1';
+        $quarantine = $this->recoveryQuarantine[$key] ?? null;
+        if (!\is_array($quarantine)) {
+            return 0.0;
+        }
+        $reason = (string)($quarantine['reason'] ?? '');
+        if (!\in_array($reason, [
+            'resurrect_fence_exhausted:' . ControlMessage::ROLE_GATEWAY_FALLBACK,
+            'infra_resurrect_fence_exhausted:' . ControlMessage::ROLE_GATEWAY_FALLBACK,
+            'resurrect_launch_attempts_exhausted:' . ControlMessage::ROLE_GATEWAY_FALLBACK,
+        ], true)) {
+            return self::GATEWAY_FALLBACK_QUARANTINE_RETRY_SECONDS;
+        }
+        $quarantinedAt = (float)($quarantine['quarantined_at'] ?? 0.0);
+        $elapsed = $quarantinedAt > 0.0
+            ? \max(0.0, \microtime(true) - $quarantinedAt)
+            : 0.0;
+        $remaining = self::GATEWAY_FALLBACK_QUARANTINE_RETRY_SECONDS - $elapsed;
+        if ($remaining > 0.0) {
+            return $remaining;
+        }
+        unset(
+            $this->recoveryQuarantine[$key],
+            $this->resurrectQueue[$key],
+        );
+        WlsLogger::warning_(
+            '[Orchestrator] Gateway fallback cooldown completed; '
+            . 'the current project Agent may attempt one new fenced launch.'
+        );
+        return 0.0;
+    }
+
+    private function gatewayFallbackBindHost(): string
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway fallback context is unavailable.');
+        }
+        $host = \strtolower(\trim(
+            (string)$this->context->getConfig(
+                'wls.gateway.fallback_bind_host',
+                '127.0.0.1',
+            ),
+            " \t\n\r\0\x0B[]",
+        ));
+        if ($host === '' || $host === 'localhost') {
+            return '127.0.0.1';
+        }
+        if (\filter_var($host, FILTER_VALIDATE_IP) === false) {
+            throw new \RuntimeException(
+                'Gateway fallback bind must be a resolved IPv4 or IPv6 address.'
+            );
+        }
+
+        return $host;
+    }
+
+    private function gatewayFallbackSocketAddress(string $host, int $port): string
+    {
+        $authority = \filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? '[' . $host . ']'
+            : $host;
+        return 'tcp://' . $authority . ':' . $port;
+    }
+
+    private function formatGatewayFallbackBind(string $host, int $port): string
+    {
+        $authority = \filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? '[' . $host . ']'
+            : $host;
+        return $authority . ':' . $port;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function gatewayFallbackEndpointMetadata(
+        string $bindHost,
+        int $port,
+        string $certificate,
+    ): array {
+        $urls = [];
+        foreach ($this->gatewayFallbackCertificateDomains($certificate) as $domain) {
+            try {
+                $urls[] = PureWlsPublicOrigin::fromHostAndPort($domain, $port, true);
+            } catch (\Throwable) {
+            }
+        }
+        if ($urls === []) {
+            $reportHost = $bindHost;
+            if ($reportHost === '0.0.0.0') {
+                $reportHost = '127.0.0.1';
+            } elseif ($reportHost === '::') {
+                $reportHost = '::1';
+            }
+            $urls[] = PureWlsPublicOrigin::fromHostAndPort($reportHost, $port, true);
+        }
+
+        return [
+            'fallback_state' => 'DEGRADED_WLS',
+            'fallback_bind_host' => $bindHost,
+            'fallback_bind' => $this->formatGatewayFallbackBind($bindHost, $port),
+            'fallback_urls' => \array_values(\array_unique($urls)),
+            'fallback_limitations' => [
+                'not_public_80_443',
+                'dns_mapping_required',
+                'firewall_or_load_balancer_may_block',
+            ],
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function gatewayFallbackCertificateDomains(string $certificate): array
+    {
+        if ($this->context === null) {
+            return [];
+        }
+        $source = $this->context->getConfig('wls.gateway.certificate_source', []);
+        $source = \is_array($source) ? $source : [];
+        $candidates = [];
+        foreach ((array)($source['domains'] ?? []) as $domain) {
+            if (\is_scalar($domain)) {
+                $candidates[] = (string)$domain;
+            }
+        }
+        $candidates[] = (string)($source['domain'] ?? '');
+        $candidates[] = (string)($this->context->publicHost ?? '');
+
+        if (\function_exists('openssl_x509_parse')
+            && \is_file($certificate)
+            && !\is_link($certificate)
+        ) {
+            $certificatePem = @\file_get_contents($certificate);
+            $parsed = \is_string($certificatePem) && $certificatePem !== ''
+                ? @\openssl_x509_parse($certificatePem, false)
+                : false;
+            if (\is_array($parsed)) {
+                $subjectAltName = (string)($parsed['extensions']['subjectAltName'] ?? '');
+                foreach (\preg_split('/\s*,\s*/', $subjectAltName) ?: [] as $entry) {
+                    $entry = \trim((string)$entry);
+                    if (\str_starts_with($entry, 'DNS:')) {
+                        $candidates[] = \substr($entry, 4);
+                    } elseif (\str_starts_with($entry, 'IP Address:')) {
+                        $candidates[] = \substr($entry, 11);
+                    } elseif (\str_starts_with($entry, 'IP:')) {
+                        $candidates[] = \substr($entry, 3);
+                    }
+                }
+                if (\is_scalar($parsed['subject']['CN'] ?? null)) {
+                    $candidates[] = (string)$parsed['subject']['CN'];
+                }
+            }
+        }
+
+        $domains = [];
+        foreach ($candidates as $candidate) {
+            $domain = \strtolower(\trim((string)$candidate, " \t\n\r\0\x0B[]"));
+            if ($domain === ''
+                || \str_starts_with($domain, '*.')
+                || \in_array($domain, ['0.0.0.0', '::', '*'], true)
+            ) {
+                continue;
+            }
+            try {
+                PureWlsPublicOrigin::fromHostAndPort($domain, 443, true);
+            } catch (\Throwable) {
+                continue;
+            }
+            $domains[$domain] = true;
+            if (\count($domains) >= 64) {
+                break;
+            }
+        }
+
+        return \array_keys($domains);
+    }
+
+    /**
+     * @param array<string,mixed> $msg
+     */
+    private function handleGatewayJoinCommand(
+        string $action,
+        array $msg,
+        int $clientId,
+    ): void {
+        $requester = $this->registry->getInstanceByIpcClient($clientId);
+        $messageId = (string)($msg['msg_id'] ?? '');
+        if ($requester === null
+            || !\hash_equals(GatewayProvider::ROLE, $requester->role)
+            || $this->context === null
+            || $this->controlServer === null
+        ) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway join commands require the current project gateway Agent.',
+                $messageId,
+            ));
+            return;
+        }
+
+        if ($action === ControlMessage::ACTION_GATEWAY_NATIVE_DRAIN) {
+            $backends = $this->registry->getInstancesByRole(
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            );
+            $desiredBackends = \max(
+                1,
+                (int)($this->desiredState[ControlMessage::ROLE_GATEWAY_BACKEND] ?? 0),
+            );
+            $readyBackends = \array_values(\array_filter(
+                $backends,
+                fn (ServiceInstance $backend): bool => $backend->state === ServiceInstance::STATE_READY
+                    && $backend->ipcClientId !== null
+                    && ($this->controlServer?->clientExists($backend->ipcClientId) ?? false)
+                    && $this->isInstanceServiceAlive($backend),
+            ));
+            if (\count($readyBackends) < $desiredBackends) {
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    false,
+                    [
+                        'ready_backends' => \count($readyBackends),
+                        'desired_backends' => $desiredBackends,
+                    ],
+                    'Native edge drain requires the complete gateway join backend pool.',
+                    $messageId,
+                ));
+                return;
+            }
+            $backend = $readyBackends[0];
+            $this->suppressGatewayNativeEdgeDesiredState();
+            $native = $this->gatewayNativeEdgeSnapshot();
+            $transition = self::classifyGatewayNativeDrainTransition($native, \time());
+            if ($transition === 'DRAINED') {
+                $now = \time();
+                $complete = $this->finalizeGatewayNativeEdge(
+                    $now - self::GATEWAY_NATIVE_FINALIZE_GRACE_SECONDS,
+                    $now,
+                );
+                if (!$complete) {
+                    $this->publishGatewayNativeEdgeStateWithFinalize(
+                        'DRAINING',
+                        $now,
+                        $now,
+                    );
+                }
+                $this->persistServicesInfo($this->context);
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    [
+                        'state' => $complete ? 'DRAINED' : 'DRAINING',
+                        'drain_until' => $complete ? 0 : $now,
+                        'gateway_backend_port' => (int)($backend->port ?? 0),
+                    ],
+                    $complete
+                        ? 'Native pure-WLS edge is already drained.'
+                        : 'Native pure-WLS edge shutdown is converging.',
+                    $messageId,
+                ));
+                return;
+            }
+
+            if ($transition === 'FINALIZE') {
+                $finalizeStarted = (int)($native['finalize_started_timestamp'] ?? 0);
+                if ($finalizeStarted <= 0) {
+                    $finalizeStarted = \time();
+                }
+                $complete = $this->finalizeGatewayNativeEdge(
+                    $finalizeStarted,
+                    \time(),
+                );
+                $state = $complete ? 'DRAINED' : 'DRAINING';
+                $this->publishGatewayNativeEdgeStateWithFinalize(
+                    $state,
+                    $complete ? 0 : (int)($native['drain_until'] ?? 0),
+                    $complete ? 0 : $finalizeStarted,
+                );
+                $this->persistServicesInfo($this->context);
+                $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    [
+                        'state' => $state,
+                        'drain_until' => $complete
+                            ? 0
+                            : (int)($native['drain_until'] ?? 0),
+                        'gateway_backend_port' => (int)($backend->port ?? 0),
+                    ],
+                    $complete
+                        ? 'Native pure-WLS edge drain is complete.'
+                        : 'Native pure-WLS edge shutdown is converging.',
+                    $messageId,
+                ));
+                return;
+            }
+
+            $drainUntil = $transition === 'START'
+                ? \time() + self::GATEWAY_NATIVE_DRAIN_SECONDS
+                : (int)($native['drain_until'] ?? 0);
+            $remaining = \max(1, $drainUntil - \time());
+            foreach (self::GATEWAY_NATIVE_EDGE_ROLES as $role) {
+                foreach ($this->registry->getInstancesByRole($role) as $instance) {
+                    if ($instance->isRunning()
+                        && $instance->state !== ServiceInstance::STATE_DRAINING
+                    ) {
+                        $this->sendDrainToInstance($instance, (float)$remaining);
+                    }
+                }
+            }
+            $this->publishGatewayNativeEdgeState('DRAINING', $drainUntil);
+            $this->persistServicesInfo($this->context);
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                true,
+                [
+                    'state' => 'DRAINING',
+                    'drain_until' => $drainUntil,
+                    'gateway_backend_port' => (int)($backend->port ?? 0),
+                ],
+                'Native pure-WLS edge is draining after gateway route activation.',
+                $messageId,
+            ));
+            return;
+        }
+
+        $runningBackends = \array_values(\array_filter(
+            $this->registry->getInstancesByRole(ControlMessage::ROLE_GATEWAY_BACKEND),
+            static fn (ServiceInstance $backend): bool => $backend->isRunning(),
+        ));
+        if ($runningBackends !== []) {
+            $instance = $runningBackends[0];
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                true,
+                [
+                    'state' => $instance->state,
+                    'port' => (int)($instance->port ?? 0),
+                    'pid' => $instance->getTrackingPid(),
+                    'running_backends' => \count($runningBackends),
+                    'desired_backends' => (int)(
+                        $this->desiredState[ControlMessage::ROLE_GATEWAY_BACKEND] ?? 1
+                    ),
+                ],
+                'Gateway join backend is already active under this Master.',
+                $messageId,
+            ));
+            return;
+        }
+
+        $leaseName = $this->context->instanceName . ':gateway-backend';
+        $leases = new GatewayPortLeaseAllocator();
+        $port = 0;
+        $startedBackends = [];
+        try {
+            if ($this->isWindowsRuntime()) {
+                $reservation = $leases->reserveBound(
+                    $leaseName,
+                    static function (int $candidate): mixed {
+                        return @\stream_socket_server(
+                            'tcp://127.0.0.1:' . $candidate,
+                            $errno,
+                            $error,
+                            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+                        );
+                    },
+                );
+            } else {
+                $this->gatewayJoinListener ??= new DirectSharedListener();
+                $reservation = $leases->reserveBound(
+                    $leaseName,
+                    function (int $candidate): bool {
+                        $this->gatewayJoinListener?->acquire(
+                            '127.0.0.1',
+                            $candidate,
+                        );
+                        return true;
+                    },
+                );
+            }
+            $port = (int)($reservation['port'] ?? 0);
+            $poolSize = $this->isWindowsRuntime()
+                ? 1
+                : \max(
+                    1,
+                    (int)($this->desiredState[ControlMessage::ROLE_WORKER]
+                        ?? \count($this->registry->getInstancesByRole(
+                            ControlMessage::ROLE_WORKER,
+                        ))),
+                );
+            $provider = new GatewayJoinBackendProvider(
+                port: $port,
+                inheritedListener: !$this->isWindowsRuntime(),
+                runtimeEnabled: true,
+                instanceCount: $poolSize,
+            );
+            $this->registry->registerProvider($provider);
+            $launchPlan = self::gatewayJoinBackendLaunchPlan($poolSize);
+            $this->desiredState[ControlMessage::ROLE_GATEWAY_BACKEND] = $poolSize;
+            // Publish intent before a child can report READY. Publishing
+            // STARTING after startInstanceIdsBatch() can overwrite an ACTIVE
+            // endpoint with port=0 because that helper drains early IPC.
+            $this->publishGatewayJoinBackendState('STARTING', null);
+            $startedBackends = \array_values(\array_filter(
+                $this->startInstanceIdsBatch(
+                    $provider,
+                    [$launchPlan['initial_slot']],
+                    $this->context,
+                ),
+                static fn (mixed $instance): bool => $instance instanceof ServiceInstance,
+            ));
+            if (\count($startedBackends) !== 1) {
+                throw new \RuntimeException(
+                    'Gateway join backend initial slot did not start.'
+                );
+            }
+            if (!$this->scheduleGatewayJoinBackendPoolExpansion(
+                $provider,
+                $launchPlan['deferred_slots'],
+            )) {
+                throw new \RuntimeException(
+                    'Gateway join backend pool expansion could not be scheduled.'
+                );
+            }
+            $this->persistServicesInfo($this->context);
+            $started = $startedBackends[0];
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                true,
+                [
+                    'state' => $started->state,
+                    'port' => $port,
+                    'pid' => $started->getTrackingPid(),
+                    'bind' => '127.0.0.1',
+                    'lease_state' => 'RESERVED',
+                    'listener_owner' => $this->isWindowsRuntime() ? 'child' : 'master',
+                    'desired_backends' => $poolSize,
+                ],
+                'Gateway join backend is starting under the current Master.',
+                $messageId,
+            ));
+        } catch (\Throwable $throwable) {
+            $this->desiredState[ControlMessage::ROLE_GATEWAY_BACKEND] = 0;
+            foreach ($startedBackends as $startedBackend) {
+                $this->stopInstance($startedBackend);
+                $this->registry->removeInstance(
+                    ControlMessage::ROLE_GATEWAY_BACKEND,
+                    $startedBackend->instanceId,
+                );
+            }
+            if ($port > 0) {
+                $leases->cancelReservation($leaseName, $port);
+            }
+            if (!$this->isWindowsRuntime()) {
+                $this->closeGatewayJoinListener();
+            }
+            try {
+                $this->publishGatewayJoinBackendState(
+                    'FAILED',
+                    null,
+                    $throwable->getMessage(),
+                );
+            } catch (\Throwable $stateError) {
+                WlsLogger::error_(
+                    '[Orchestrator] Gateway join failure state could not be published: '
+                    . $stateError->getMessage()
+                );
+            }
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Gateway join backend start failed: ' . $throwable->getMessage(),
+                $messageId,
+            ));
+        }
+    }
+
+    /**
+     * @return array{initial_slot:int,deferred_slots:list<int>}
+     */
+    private static function gatewayJoinBackendLaunchPlan(int $poolSize): array
+    {
+        $poolSize = \max(1, $poolSize);
+        return [
+            'initial_slot' => 1,
+            'deferred_slots' => $poolSize > 1 ? \range(2, $poolSize) : [],
+        ];
+    }
+
+    /**
+     * Start one shared-listener consumer at a time. A simultaneous cold
+     * bootstrap can starve each child before it can drive its registered IPC
+     * connection. Do not advance on REGISTERED: the previous child must reach
+     * final READY with a live IPC lease first.
+     *
+     * @param list<int> $instanceIds
+     */
+    private function scheduleGatewayJoinBackendPoolExpansion(
+        GatewayJoinBackendProvider $provider,
+        array $instanceIds,
+    ): bool {
+        foreach (self::normalizeGatewayJoinBackendSlots($instanceIds) as $instanceId) {
+            $this->gatewayJoinBackendPendingSlots[$instanceId] = true;
+        }
+        if ($this->gatewayJoinBackendPendingSlots === []) {
+            return true;
+        }
+        if ($this->hasMainLoopTask('gateway:join_backend_pool_expansion')) {
+            return true;
+        }
+
+        return $this->scheduleMainLoopTask(
+            'gateway:join_backend_pool_expansion',
+            'gateway_join_backend_pool_expansion',
+            function () use ($provider): void {
+                while ($this->gatewayJoinBackendPendingSlots !== []) {
+                    if ($this->context === null
+                        || !$this->running
+                        || $this->isStopFlowActive()
+                    ) {
+                        return;
+                    }
+                    \ksort($this->gatewayJoinBackendPendingSlots, \SORT_NUMERIC);
+                    $instanceId = (int)\array_key_first(
+                        $this->gatewayJoinBackendPendingSlots,
+                    );
+                    unset($this->gatewayJoinBackendPendingSlots[$instanceId]);
+                    if (!$this->reconcileGatewayJoinBackendSlot(
+                        $provider,
+                        $instanceId,
+                    )) {
+                        $this->gatewayJoinBackendPendingSlots[$instanceId] = true;
+                        return;
+                    }
+                }
+            },
+            true,
+        );
+    }
+
+    /**
+     * @param array<int, mixed> $instanceIds
+     * @return list<int>
+     */
+    private static function normalizeGatewayJoinBackendSlots(
+        array $instanceIds,
+    ): array {
+        $slots = [];
+        foreach ($instanceIds as $instanceId) {
+            $instanceId = (int)$instanceId;
+            if ($instanceId > 0) {
+                $slots[$instanceId] = true;
+            }
+        }
+        \ksort($slots, \SORT_NUMERIC);
+
+        return \array_map('intval', \array_keys($slots));
+    }
+
+    /**
+     * A gateway backend slot has one recovery owner. It first fences and
+     * retires the previous generation, then launches exactly one replacement
+     * and does not advance the pool until final READY is acknowledged.
+     */
+    private function reconcileGatewayJoinBackendSlot(
+        GatewayJoinBackendProvider $provider,
+        int $instanceId,
+    ): bool {
+        if ($instanceId <= 0 || $this->context === null) {
+            return false;
+        }
+        $role = ControlMessage::ROLE_GATEWAY_BACKEND;
+        $existing = $this->registry->getInstance($role, $instanceId);
+        if ($existing !== null) {
+            $clientExists = $existing->ipcClientId !== null
+                && ($this->controlServer?->clientExists(
+                    $existing->ipcClientId,
+                ) ?? false);
+            if (self::gatewayJoinBackendExpansionDecision(
+                $existing,
+                $existing->launchId,
+                $clientExists,
+            ) === 'ready'
+                && $this->isInstanceServiceAlive($existing)
+            ) {
+                return true;
+            }
+
+            unset($this->resurrectQueue[$existing->getKey()]);
+            $this->cancelMainLoopTask(
+                'resurrect_launch:' . $existing->getKey(),
+                'gateway backend recovery transferred to serialized lane',
+            );
+            $this->stopInstanceWithProtocol($existing);
+            $this->invalidateInstanceProcessRunningCache($existing);
+            if ($this->isInstanceServiceAlive($existing)) {
+                WlsLogger::error_(
+                    '[Orchestrator] Gateway join backend slot '
+                    . $instanceId
+                    . ' previous generation is still alive; replacement is fenced.'
+                );
+                return false;
+            }
+            $this->registry->removeInstance($role, $instanceId);
+        }
+
+        $started = \array_values(\array_filter(
+            $this->startInstanceIdsBatch(
+                $provider,
+                [$instanceId],
+                $this->context,
+            ),
+            static fn (mixed $instance): bool => $instance instanceof ServiceInstance,
+        ));
+        if (\count($started) !== 1) {
+            WlsLogger::warning_(
+                '[Orchestrator] Gateway join backend slot '
+                . $instanceId . ' did not start; serialized recovery will retry.'
+            );
+            return false;
+        }
+
+        if ($this->waitForGatewayJoinBackendReady(
+            $instanceId,
+            $started[0]->launchId,
+        )) {
+            return true;
+        }
+        WlsLogger::warning_(
+            '[Orchestrator] Gateway join backend slot '
+            . $instanceId
+            . ' did not reach final READY before its startup deadline; '
+            . 'serialized recovery will retry.'
+        );
+        return false;
+    }
+
+    private function waitForGatewayJoinBackendReady(
+        int $instanceId,
+        string $launchId,
+    ): bool {
+        $deadline = \microtime(true) + \max(
+            15.0,
+            (float)$this->getRegisterTimeoutForRole(
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            ),
+        );
+        while (\microtime(true) < $deadline) {
+            if ($this->context === null
+                || !$this->running
+                || $this->isStopFlowActive()
+            ) {
+                return false;
+            }
+            $current = $this->registry->getInstance(
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+                $instanceId,
+            );
+            $clientExists = $current?->ipcClientId !== null
+                && ($this->controlServer?->clientExists(
+                    $current->ipcClientId,
+                ) ?? false);
+            $decision = self::gatewayJoinBackendExpansionDecision(
+                $current,
+                $launchId,
+                $clientExists,
+            );
+            if ($decision === 'ready') {
+                return $current !== null
+                    && $this->isInstanceServiceAlive($current);
+            }
+            if ($decision === 'abort') {
+                return false;
+            }
+            SchedulerSystem::yieldDelay(25);
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function gatewayJoinBackendSlotsNeedingReconciliation(
+        int $desired,
+    ): array {
+        $slots = [];
+        for ($instanceId = 1; $instanceId <= $desired; $instanceId++) {
+            $instance = $this->registry->getInstance(
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+                $instanceId,
+            );
+            $clientExists = $instance?->ipcClientId !== null
+                && ($this->controlServer?->clientExists(
+                    $instance->ipcClientId,
+                ) ?? false);
+            if ($instance !== null
+                && self::gatewayJoinBackendExpansionDecision(
+                    $instance,
+                    $instance->launchId,
+                    $clientExists,
+                ) === 'ready'
+                && $this->isInstanceServiceAlive($instance)
+            ) {
+                continue;
+            }
+            $slots[] = $instanceId;
+        }
+
+        return $slots;
+    }
+
+    private static function gatewayJoinBackendExpansionDecision(
+        ?ServiceInstance $instance,
+        string $expectedLaunchId,
+        bool $clientExists,
+    ): string {
+        if ($instance === null
+            || !\hash_equals($expectedLaunchId, $instance->launchId)
+            || \in_array($instance->state, [
+                ServiceInstance::STATE_FAILED,
+                ServiceInstance::STATE_DRAINING,
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+            ], true)
+        ) {
+            return 'abort';
+        }
+        if ($instance->state === ServiceInstance::STATE_READY
+            && $instance->ipcClientId !== null
+            && $clientExists
+        ) {
+            return 'ready';
+        }
+
+        return 'wait';
+    }
+
+    /**
+     * @param list<ServiceInstance> $readyBackends
+     */
+    private static function gatewayJoinBackendPublicationInstance(
+        array $readyBackends,
+    ): ?ServiceInstance {
+        if ($readyBackends === []) {
+            return null;
+        }
+        \usort(
+            $readyBackends,
+            static fn (ServiceInstance $left, ServiceInstance $right): int =>
+                $left->instanceId <=> $right->instanceId,
+        );
+
+        return $readyBackends[0];
+    }
+
+    private function publishGatewayJoinBackendState(
+        string $state,
+        ?ServiceInstance $instance,
+        string $reason = '',
+    ): void {
+        if ($this->context === null) {
+            return;
+        }
+        $manager = new ServerInstanceManager();
+        $file = $manager->getInstanceFile($this->context->instanceName);
+        if (!\is_file($file)) {
+            return;
+        }
+        $projectUuid = \strtolower(\trim((string)$this->context->getConfig(
+            'wls.gateway.project_uuid',
+            '',
+        )));
+        $instanceGeneration = (int)$this->context->getConfig(
+            'wls.gateway.instance_generation',
+            0,
+        );
+        $tokenDigest = '';
+        try {
+            $tokenDigest = \hash(
+                'sha256',
+                ProtocolEdgeRuntime::readToken($this->context->instanceName),
+            );
+        } catch (\Throwable) {
+        }
+        $join = [
+            'state' => $state,
+            'host' => '127.0.0.1',
+            'port' => (int)($instance?->port ?? 0),
+            'project_uuid' => $projectUuid,
+            'instance_id' => $this->context->instanceName,
+            'instance_generation' => $instanceGeneration,
+            'master_pid' => $this->context->masterPid,
+            'master_epoch' => $this->context->epoch,
+            'worker_pid' => (int)($instance?->getTrackingPid() ?? 0),
+            'launch_id' => (string)($instance?->launchId ?? ''),
+            'edge_capability_digest' => $tokenDigest,
+            'listener_owner' => $this->isWindowsRuntime() ? 'child' : 'master',
+            'updated_at' => \gmdate(DATE_ATOM),
+            'updated_timestamp' => \time(),
+        ];
+        $members = [];
+        $readyCount = 0;
+        foreach ($this->registry->getInstancesByRole(
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ) as $backend) {
+            $ready = $backend->state === ServiceInstance::STATE_READY
+                || ($instance !== null
+                    && $backend->instanceId === $instance->instanceId
+                    && $backend->launchId === $instance->launchId);
+            if ($ready
+                && $backend->ipcClientId !== null
+                && ($this->controlServer?->clientExists($backend->ipcClientId) ?? false)
+            ) {
+                $readyCount++;
+            }
+            if (!$backend->isRunning() && !$ready) {
+                continue;
+            }
+            $members[] = [
+                'instance_id' => $backend->instanceId,
+                'pid' => $backend->getTrackingPid(),
+                'launch_id' => $backend->launchId,
+                'state' => $ready ? 'READY' : $backend->state,
+            ];
+        }
+        if ($instance !== null && $members !== []) {
+            $join['worker_pid'] = (int)($instance->getTrackingPid());
+            $join['launch_id'] = $instance->launchId;
+        }
+        $join['workers'] = $members;
+        $join['ready_count'] = $readyCount;
+        $join['desired_count'] = \max(
+            1,
+            (int)($this->desiredState[ControlMessage::ROLE_GATEWAY_BACKEND] ?? 1),
+        );
+        if ($reason !== '') {
+            $join['reason'] = \substr($reason, 0, 512);
+        }
+        if (!ServerInstanceManager::updateJsonFileAtomically(
+            $file,
+            static function (array $data) use ($join): array {
+                $gateway = \is_array($data['gateway'] ?? null) ? $data['gateway'] : [];
+                $gateway['join_backend'] = $join;
+                $data['gateway'] = $gateway;
+                return $data;
+            },
+        )) {
+            throw new \RuntimeException('Unable to publish gateway join backend state.');
+        }
+    }
+
+    private function publishGatewayNativeEdgeState(string $state, int $drainUntil = 0): void
+    {
+        $this->publishGatewayNativeEdgeStateWithFinalize(
+            $state,
+            $drainUntil,
+            0,
+        );
+    }
+
+    private function publishGatewayNativeEdgeStateWithFinalize(
+        string $state,
+        int $drainUntil = 0,
+        int $finalizeStarted = 0,
+    ): void
+    {
+        if ($this->context === null) {
+            return;
+        }
+        $manager = new ServerInstanceManager();
+        $file = $manager->getInstanceFile($this->context->instanceName);
+        if (!\is_file($file)) {
+            return;
+        }
+        if (!ServerInstanceManager::updateJsonFileAtomically(
+            $file,
+            static function (array $data) use ($state, $drainUntil, $finalizeStarted): array {
+                $gateway = \is_array($data['gateway'] ?? null) ? $data['gateway'] : [];
+                $gateway['native_edge'] = [
+                    'state' => $state,
+                    'drain_until' => $drainUntil,
+                    'finalize_started_timestamp' => $finalizeStarted,
+                    'updated_at' => \gmdate(DATE_ATOM),
+                    'updated_timestamp' => \time(),
+                ];
+                $data['gateway'] = $gateway;
+                return $data;
+            },
+        )) {
+            throw new \RuntimeException('Unable to publish native edge transition state.');
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $native
+     */
+    public static function classifyGatewayNativeDrainTransition(
+        array $native,
+        int $now,
+    ): string {
+        $state = \strtoupper(\trim((string)($native['state'] ?? 'ACTIVE')));
+        if ($state === 'DRAINED') {
+            return 'DRAINED';
+        }
+        if ($state !== 'DRAINING') {
+            return 'START';
+        }
+        $drainUntil = (int)($native['drain_until'] ?? 0);
+
+        return $drainUntil > $now ? 'DRAINING' : 'FINALIZE';
+    }
+
+    /** @return array<string,mixed> */
+    private function gatewayNativeEdgeSnapshot(): array
+    {
+        if ($this->context === null) {
+            return [];
+        }
+        $endpoint = (new ServerInstanceManager())
+            ->getRawInstanceData($this->context->instanceName);
+        if (!\is_array($endpoint)) {
+            return [];
+        }
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+
+        return \is_array($gateway['native_edge'] ?? null)
+            ? $gateway['native_edge']
+            : [];
+    }
+
+    private function isGatewayNativeEdgeRoleSuppressed(string $role): bool
+    {
+        return self::gatewayNativeEdgeStateSuppressesRole(
+            $this->gatewayNativeEdgeSnapshot(),
+            $role,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $native
+     */
+    private static function gatewayNativeEdgeStateSuppressesRole(
+        array $native,
+        string $role,
+    ): bool {
+        if (!\in_array($role, self::GATEWAY_NATIVE_EDGE_ROLES, true)) {
+            return false;
+        }
+        $state = \strtoupper(\trim((string)($native['state'] ?? 'ACTIVE')));
+
+        return $state === 'DRAINING' || $state === 'DRAINED';
+    }
+
+    private function suppressGatewayNativeEdgeDesiredState(): void
+    {
+        foreach (self::GATEWAY_NATIVE_EDGE_ROLES as $role) {
+            $this->desiredState[$role] = 0;
+        }
+        $this->clearResurrectionQueueForRoles(self::GATEWAY_NATIVE_EDGE_ROLES);
+    }
+
+    /**
+     * Stop every project-native public-edge process as one non-blocking batch.
+     * Returns true only after every tracked process has exited or has been
+     * identity-verified and force-stopped after the bounded finalization grace.
+     */
+    private function finalizeGatewayNativeEdge(
+        int $finalizeStarted,
+        int $now,
+    ): bool {
+        $instances = [];
+        foreach (self::GATEWAY_NATIVE_EDGE_ROLES as $role) {
+            foreach ($this->registry->getInstancesByRole($role) as $instance) {
+                $instances[] = $instance;
+                $this->invalidateInstanceProcessRunningCache($instance);
+                if ($this->isInstanceServiceAlive($instance)
+                    && $instance->state !== ServiceInstance::STATE_STOPPING
+                ) {
+                    $instance->state = ServiceInstance::STATE_STOPPING;
+                    $this->registry->updateInstance($instance);
+                    $this->stopInstance($instance);
+                }
+            }
+        }
+
+        $force = $now - $finalizeStarted
+            >= self::GATEWAY_NATIVE_FINALIZE_GRACE_SECONDS;
+        $remaining = [];
+        foreach ($instances as $instance) {
+            $this->invalidateInstanceProcessRunningCache($instance);
+            if ($this->isInstanceServiceAlive($instance) && $force) {
+                $this->killInstanceProcess($instance);
+                $this->invalidateInstanceProcessRunningCache($instance);
+            }
+            if ($this->isInstanceServiceAlive($instance)) {
+                $remaining[] = $instance;
+                continue;
+            }
+            if ($instance->ipcClientId !== null) {
+                $this->controlServer?->closeClient($instance->ipcClientId);
+                $instance->ipcClientId = null;
+            }
+            $this->cleanupInstancePidFile($instance);
+            $instance->state = ServiceInstance::STATE_STOPPED;
+            $this->registry->updateInstance($instance);
+            $this->registry->getProvider($instance->role)?->onStopped($instance);
+            $this->registry->removeInstance($instance->role, $instance->instanceId);
+        }
+
+        return $remaining === [];
+    }
+
+    /** @param string[] $roles */
+    private function clearResurrectionQueueForRoles(array $roles): void
+    {
+        foreach (\array_keys($this->resurrectQueue) as $key) {
+            foreach ($roles as $role) {
+                if (\str_starts_with((string)$key, $role . ':')) {
+                    unset($this->resurrectQueue[$key]);
+                    break;
+                }
+            }
+        }
+    }
+
+    /** @return array{0:string,1:string} */
+    private function gatewayFallbackCertificateSource(): array
+    {
+        if ($this->context === null) {
+            throw new \RuntimeException('Gateway fallback context is unavailable.');
+        }
+        $source = $this->context->getConfig('wls.gateway.certificate_source', []);
+        $source = \is_array($source) ? $source : [];
+        $domain = \trim((string)($source['domain']
+            ?? $this->context->getConfig('ssl_domain', '')
+            ?? $this->context->getConfig('public_host', '')));
+        if ($domain === '') {
+            throw new \RuntimeException(
+                'Gateway fallback certificate domain is unavailable.'
+            );
+        }
+        $generations = new ProjectCertificateGenerationStore();
+        $active = $generations->active($domain);
+        if ($active === null) {
+            // One-time migration for endpoint records created before project
+            // certificate generations were introduced.
+            $active = $generations->activate(
+                $domain,
+                (string)($source['cert_path'] ?? ''),
+                (string)($source['key_path'] ?? ''),
+            );
+        }
+        return [
+            (string)$active['cert_path'],
+            (string)$active['key_path'],
+        ];
+    }
+
+    /**
      * 处理 command 消息
      */
     private function handleCommand(array $msg, int $clientId): void
@@ -16228,6 +18151,23 @@ class ServiceOrchestrator
 
         if ($action === ControlMessage::ACTION_CACHE_NAMESPACE_STATUS_V1) {
             $this->handleCacheNamespaceInvalidationStatusCommand($msg, $clientId);
+            return;
+        }
+
+        if (\in_array($action, [
+            ControlMessage::ACTION_GATEWAY_BACKEND_ENABLE,
+            ControlMessage::ACTION_GATEWAY_NATIVE_DRAIN,
+        ], true)) {
+            $this->handleGatewayJoinCommand($action, $msg, $clientId);
+            return;
+        }
+
+        if (\in_array($action, [
+            ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE,
+            ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN,
+            ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
+        ], true)) {
+            $this->handleGatewayFallbackCommand($action, $msg, $clientId);
             return;
         }
 
@@ -16529,6 +18469,18 @@ class ServiceOrchestrator
             );
             return;
         }
+        if ($this->isGatewayNativeEdgeRoleSuppressed(ControlMessage::ROLE_WORKER)) {
+            $this->controlServer?->sendTo(
+                $clientId,
+                ControlMessage::commandResult(
+                    false,
+                    ['target_workers' => 0],
+                    'Cannot scale native workers while the shared gateway owns the public edge.',
+                    (string)($msg['msg_id'] ?? ''),
+                ),
+            );
+            return;
+        }
 
         $provider = $this->registry->getProvider(ControlMessage::ROLE_WORKER);
         if (!$provider instanceof ServiceProviderInterface || !$provider->isEnabled($this->context)) {
@@ -16604,7 +18556,11 @@ class ServiceOrchestrator
     private function getFiberEligibleInstances(): iterable
     {
         foreach ($this->registry->getAllInstances() as $instance) {
-            if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            if (\in_array($instance->role, [
+                ControlMessage::ROLE_WORKER,
+                ControlMessage::ROLE_MAINTENANCE,
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            ], true)) {
                 yield $instance;
             }
         }
@@ -17256,7 +19212,13 @@ class ServiceOrchestrator
             return;
         }
 
-        foreach (['worker', 'dispatcher', 'redirect', 'session_server'] as $role) {
+        foreach ([
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+            ControlMessage::ROLE_DISPATCHER,
+            ControlMessage::ROLE_REDIRECT,
+            ControlMessage::ROLE_SESSION_SERVER,
+        ] as $role) {
             if ($this->shouldYieldPeriodicWork(true)) {
                 return;
             }
@@ -17264,13 +19226,22 @@ class ServiceOrchestrator
             if ($desired <= 0) {
                 continue;
             }
+            if ($role === ControlMessage::ROLE_GATEWAY_BACKEND
+                && $this->hasMainLoopTask('gateway:join_backend_pool_expansion')
+            ) {
+                continue;
+            }
             $ready = $this->countRoleSlotsReadyHealthy($role);
             if ($ready >= $desired) {
                 continue;
             }
-            if ($role === 'worker') {
+            if ($role === ControlMessage::ROLE_WORKER) {
                 WlsLogger::error_(
                     "[Master自检] Worker 未完备: 期望 {$desired} 槽位 READY，当前 {$ready}，执行补齐"
+                );
+            } elseif ($role === ControlMessage::ROLE_GATEWAY_BACKEND) {
+                WlsLogger::error_(
+                    "[Master自检] Gateway backend pool 未完备: 期望 {$desired} 槽位 READY，当前 {$ready}，执行补齐"
                 );
             } elseif ($role === 'dispatcher') {
                 WlsLogger::error_(
@@ -17338,6 +19309,27 @@ class ServiceOrchestrator
     private function reconcileRoleSlotGaps(string $role): void
     {
         if ($this->context === null || !$this->running || $this->isStopFlowActive()) {
+            return;
+        }
+        if ($role === ControlMessage::ROLE_WORKER
+            && $this->workerEmergencyRestartInProgress
+        ) {
+            return;
+        }
+        if ($role === ControlMessage::ROLE_GATEWAY_BACKEND
+        ) {
+            $provider = $this->registry->getProvider($role);
+            if ($provider instanceof GatewayJoinBackendProvider) {
+                $slots = $this->gatewayJoinBackendSlotsNeedingReconciliation(
+                    (int)($this->desiredState[$role] ?? 0),
+                );
+                if ($slots !== []) {
+                    $this->scheduleGatewayJoinBackendPoolExpansion(
+                        $provider,
+                        $slots,
+                    );
+                }
+            }
             return;
         }
         if ($this->childServicesBootstrapInProgress && $role === ControlMessage::ROLE_WORKER) {
@@ -18163,15 +20155,20 @@ class ServiceOrchestrator
 
         $expected = [];
         $unreachable = [];
-        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
-            if ($worker->state !== ServiceInstance::STATE_READY) {
-                continue;
+        foreach ([
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ] as $role) {
+            foreach ($this->registry->getInstancesByRole($role) as $worker) {
+                if ($worker->state !== ServiceInstance::STATE_READY) {
+                    continue;
+                }
+                if ($worker->ipcClientId === null) {
+                    $unreachable[] = $role . '#' . $worker->instanceId;
+                    continue;
+                }
+                $expected[$worker->ipcClientId] = true;
             }
-            if ($worker->ipcClientId === null) {
-                $unreachable[] = $worker->instanceId;
-                continue;
-            }
-            $expected[$worker->ipcClientId] = true;
         }
         if ($unreachable !== []) {
             return [
@@ -18267,6 +20264,16 @@ class ServiceOrchestrator
         $workerCount = \count($workers);
 
         if ($workerCount === 0) {
+            $gatewayBackends = $this->registry->getInstancesByRole(
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            );
+            if ($gatewayBackends !== []) {
+                $this->reloadService(ControlMessage::ROLE_GATEWAY_BACKEND, 'code');
+                return [
+                    'success' => true,
+                    'message' => 'Gateway backend pool graceful restart initiated',
+                ];
+            }
             return [
                 'success' => false,
                 'message' => 'No workers to restart',
@@ -18901,7 +20908,11 @@ class ServiceOrchestrator
     private function snapshotCacheNamespaceTargets(): array
     {
         $targets = [];
-        foreach ([ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE] as $role) {
+        foreach ([
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ] as $role) {
             if ($role === ControlMessage::ROLE_MAINTENANCE && !$this->maintenanceMode) {
                 continue;
             }
@@ -18955,7 +20966,11 @@ class ServiceOrchestrator
         int $clientId,
         array $expected,
     ): bool {
-        return \in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
+        return \in_array($instance->role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)
             && ($instance->role !== ControlMessage::ROLE_WORKER || !$this->isDirectReloadSurgeWorker($instance))
             && $instance->state === ServiceInstance::STATE_READY
             && $instance->ipcClientId === $clientId
@@ -19116,8 +21131,12 @@ class ServiceOrchestrator
         int $clientId,
         array $expected
     ): bool {
-        return $worker->role === ControlMessage::ROLE_WORKER
-            && !$this->isDirectReloadSurgeWorker($worker)
+        return \in_array($worker->role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)
+            && ($worker->role !== ControlMessage::ROLE_WORKER
+                || !$this->isDirectReloadSurgeWorker($worker))
             && $worker->state === ServiceInstance::STATE_READY
             && $worker->ipcClientId === $clientId
             && $worker->instanceId === $expected['instance_id']
@@ -19283,20 +21302,30 @@ class ServiceOrchestrator
 
         $expected = [];
         $preflightFailures = [];
-        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $worker) {
-            if ($worker->state !== ServiceInstance::STATE_READY || $this->isDirectReloadSurgeWorker($worker)) {
-                continue;
+        foreach ([
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ] as $role) {
+            foreach ($this->registry->getInstancesByRole($role) as $worker) {
+                if ($worker->state !== ServiceInstance::STATE_READY
+                    || ($role === ControlMessage::ROLE_WORKER
+                        && $this->isDirectReloadSurgeWorker($worker))
+                ) {
+                    continue;
+                }
+                $identity = $this->buildCacheClearTargetIdentity($worker);
+                if ($worker->ipcClientId === null
+                    || !$this->controlServer->clientExists($worker->ipcClientId)
+                ) {
+                    $preflightFailures[] = \array_merge([
+                        'code' => 'ready_worker_without_ipc',
+                        'client_id' => $worker->ipcClientId ?? 0,
+                        'worker_id' => $worker->instanceId,
+                    ], $identity);
+                    continue;
+                }
+                $expected[$worker->ipcClientId] = $identity;
             }
-            $identity = $this->buildCacheClearTargetIdentity($worker);
-            if ($worker->ipcClientId === null || !$this->controlServer->clientExists($worker->ipcClientId)) {
-                $preflightFailures[] = \array_merge([
-                    'code' => 'ready_worker_without_ipc',
-                    'client_id' => $worker->ipcClientId ?? 0,
-                    'worker_id' => $worker->instanceId,
-                ], $identity);
-                continue;
-            }
-            $expected[$worker->ipcClientId] = $identity;
         }
         if ($expected === [] || $preflightFailures !== []) {
             $expectedCount = \count($expected) + \count($preflightFailures);
@@ -19655,7 +21684,11 @@ class ServiceOrchestrator
             if ($instance->ipcClientId === null) {
                 continue;
             }
-            if (!\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            if (!\in_array($instance->role, [
+                ControlMessage::ROLE_WORKER,
+                ControlMessage::ROLE_MAINTENANCE,
+                ControlMessage::ROLE_GATEWAY_BACKEND,
+            ], true)) {
                 continue;
             }
             $targets[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
@@ -19759,6 +21792,7 @@ class ServiceOrchestrator
                 || !\in_array($instance->role, [
                     ControlMessage::ROLE_WORKER,
                     ControlMessage::ROLE_MAINTENANCE,
+                    ControlMessage::ROLE_GATEWAY_BACKEND,
                     ControlMessage::ROLE_DISPATCHER,
                 ], true)
             ) {
@@ -20394,6 +22428,30 @@ class ServiceOrchestrator
         // 清除 IPC 客户端 ID（连接已断开）
         $instance->ipcClientId = null;
         $this->registry->updateInstance($instance);
+        if ($instance->role === ControlMessage::ROLE_GATEWAY_BACKEND) {
+            $remainingReady = \array_values(\array_filter(
+                $this->registry->getInstancesByRole(ControlMessage::ROLE_GATEWAY_BACKEND),
+                fn (ServiceInstance $backend): bool => $backend->state === ServiceInstance::STATE_READY
+                    && $backend->ipcClientId !== null
+                    && ($this->controlServer?->clientExists($backend->ipcClientId) ?? false)
+                    && $this->isInstanceServiceAlive($backend),
+            ));
+            $publicationInstance = self::gatewayJoinBackendPublicationInstance(
+                $remainingReady,
+            );
+            try {
+                $this->publishGatewayJoinBackendState(
+                    $publicationInstance !== null ? 'ACTIVE' : 'DEGRADED',
+                    $publicationInstance,
+                    'gateway_backend_ipc_disconnected',
+                );
+            } catch (\Throwable $throwable) {
+                WlsLogger::error_(
+                    '[Orchestrator] Gateway join backend disconnect state could not be published: '
+                    . $throwable->getMessage()
+                );
+            }
+        }
         $this->handleRuntimePolicyParticipantDisconnect($clientId);
 
         // 停机态下的断开一律视为预期行为，不再触发自愈/整组重启
@@ -20462,6 +22520,22 @@ class ServiceOrchestrator
                 $this->persistServicesInfo($this->context);
             }
             WlsLogger::info_("[Orchestrator] 实例 {$instance->role}#{$instance->instanceId} 处于 {$instance->state} 状态，预期断开，跳过整组重启");
+            return;
+        }
+
+        if ($instance->role === ControlMessage::ROLE_GATEWAY_BACKEND) {
+            $instance->state = ServiceInstance::STATE_FAILED;
+            $instance->setMeta('lease_state', 'disconnected_recovery');
+            $this->registry->updateInstance($instance);
+            if ($provider instanceof GatewayJoinBackendProvider) {
+                $this->scheduleGatewayJoinBackendPoolExpansion(
+                    $provider,
+                    [$instance->instanceId],
+                );
+            }
+            if ($this->context !== null) {
+                $this->persistServicesInfo($this->context);
+            }
             return;
         }
 
@@ -20660,6 +22734,18 @@ class ServiceOrchestrator
         if ($this->isRecoverySuspended()) {
             return;
         }
+        if (!$this->isRoleSlotDesiredForRecovery($instance->role, $instance->instanceId)) {
+            WlsLogger::info_(
+                '[Orchestrator] skip delayed resurrection for undesired slot '
+                . "{$instance->role}#{$instance->instanceId}"
+            );
+            return;
+        }
+        if ($instance->role === ControlMessage::ROLE_WORKER
+            && $this->workerEmergencyRestartInProgress
+        ) {
+            return;
+        }
         if ($instance->role === ControlMessage::ROLE_WORKER
             && $this->shouldGateWorkerResurrection($instance->instanceId)
         ) {
@@ -20798,6 +22884,22 @@ class ServiceOrchestrator
         );
     }
 
+    private function isRoleSlotDesiredForRecovery(string $role, int $instanceId): bool
+    {
+        if ($role === '' || $instanceId < 1) {
+            return false;
+        }
+        if ($this->isGatewayNativeEdgeRoleSuppressed($role)) {
+            return false;
+        }
+        if (!\array_key_exists($role, $this->desiredState)) {
+            return true;
+        }
+        $desired = \max(0, (int)$this->desiredState[$role]);
+
+        return $desired > 0 && $instanceId <= $desired;
+    }
+
     /**
      * 委托给 Processer 杀死进程
      */
@@ -20854,7 +22956,11 @@ class ServiceOrchestrator
         int $port,
         string $launchId
     ): bool {
-        if (!\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+        if (!\in_array($role, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_MAINTENANCE,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)) {
             return false;
         }
 
@@ -20904,6 +23010,10 @@ class ServiceOrchestrator
     private function tickMemoryPressure(float $now): void
     {
         if ($this->context === null) {
+            return;
+        }
+        if ($this->isGatewayNativeEdgeRoleSuppressed(ControlMessage::ROLE_WORKER)) {
+            $this->desiredState[ControlMessage::ROLE_WORKER] = 0;
             return;
         }
         if ($this->memoryPressureController === null) {
@@ -21000,6 +23110,10 @@ class ServiceOrchestrator
     public function scaleUpOneWorkerForMemoryPressure(
         \Weline\Server\Service\Memory\MemoryPressureController $controller
     ): bool {
+        if ($this->isGatewayNativeEdgeRoleSuppressed(ControlMessage::ROLE_WORKER)) {
+            $this->desiredState[ControlMessage::ROLE_WORKER] = 0;
+            return false;
+        }
         if (\microtime(true) < $this->memoryPressureShrinkFenceUntil) {
             // Still draining; don't recover yet.
             return false;

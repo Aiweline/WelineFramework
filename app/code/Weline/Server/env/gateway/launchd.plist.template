@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.weline.wls-gateway-v2</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{LAUNCHER}}</string>
+    <string>--service</string>
+    <string>--home={{HOME}}</string>
+    <string>--run={{RUN_DIR}}</string>
+    <string>--profile={{PROFILE}}</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>WLS_GATEWAY_LISTEN_HTTP</key>
+    <string>{{HTTP_PORT}}</string>
+    <key>WLS_GATEWAY_LISTEN_HTTPS</key>
+    <string>{{HTTPS_PORT}}</string>
+  </dict>
+  <key>UserName</key>
+  <string>root</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>{{HOME}}/runtime/logs/controller.log</string>
+  <key>StandardErrorPath</key>
+  <string>{{HOME}}/runtime/logs/controller.log</string>
+</dict>
+</plist>

@@ -165,12 +165,18 @@ class ErrorBootstrapTest extends TestCase
 
     public function testSuppressesVendorImplicitNullableDeprecatedNotice(): void
     {
-        $handled = ErrorHandler::handle(
-            E_DEPRECATED,
-            'Endroid\QrCode\Writer\WriterInterface::write(): Implicitly marking parameter $label as nullable is deprecated, the explicit nullable type must be used instead',
-            'E:\WelineFramework\DEV-workspace\vendor\endroid\qr-code\src\Writer\WriterInterface.php',
-            15
-        );
+        $previousReporting = \error_reporting();
+        try {
+            \error_reporting($previousReporting | E_DEPRECATED);
+            $handled = ErrorHandler::handle(
+                E_DEPRECATED,
+                'Endroid\QrCode\Writer\WriterInterface::write(): Implicitly marking parameter $label as nullable is deprecated, the explicit nullable type must be used instead',
+                'E:\WelineFramework\DEV-workspace\vendor\endroid\qr-code\src\Writer\WriterInterface.php',
+                15
+            );
+        } finally {
+            \error_reporting($previousReporting);
+        }
 
         $this->assertTrue($handled);
     }

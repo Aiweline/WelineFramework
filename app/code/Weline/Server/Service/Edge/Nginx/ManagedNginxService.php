@@ -8,6 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
 use Weline\Server\Service\Edge\EdgeAdapterResolver;
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxLiveProbe;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -25,6 +26,7 @@ final class ManagedNginxService
         private readonly ManagedNginxProcessManager $processManager = new ManagedNginxProcessManager(),
         private readonly ManagedNginxPortAllocator $portAllocator = new ManagedNginxPortAllocator(),
         private readonly ManagedNginxTlsSessionResumptionVerifier $tlsSessionResumptionVerifier = new ManagedNginxTlsSessionResumptionVerifier(),
+        private readonly NginxLiveProbe $liveProbe = new NginxLiveProbe(),
     ) {
     }
 
@@ -1198,50 +1200,17 @@ final class ManagedNginxService
         ) {
             return false;
         }
-        $consecutiveMatches = 0;
-        for ($attempt = 0; $attempt < 60; $attempt++) {
-            $matched = false;
-            $errno = 0;
-            $error = '';
-            $socket = @\fsockopen('127.0.0.1', $port, $errno, $error, 0.25);
-            if (\is_resource($socket)) {
-                @\stream_set_timeout($socket, 1);
-                @\fwrite(
-                    $socket,
-                    "GET /_wls/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
-                );
-                $headers = '';
-                while (!\feof($socket) && \strlen($headers) < 65_536) {
-                    $line = @\fgets($socket, 8192);
-                    if (!\is_string($line)) {
-                        break;
-                    }
-                    $headers .= $line;
-                    if ($line === "\r\n" || $line === "\n") {
-                        break;
-                    }
-                }
-                @\fclose($socket);
-                if (\preg_match('/\AHTTP\/1\.[01]\s+200(?:\s|$)/', $headers) === 1
-                    && \preg_match(
-                        '/^X-Wls-Nginx-Config:\s*' . \preg_quote($generation, '/') . '\s*$/mi',
-                        $headers,
-                    ) === 1
-                ) {
-                    $matched = true;
-                    $consecutiveMatches++;
-                    if ($consecutiveMatches >= 8) {
-                        return true;
-                    }
-                }
-            }
-            if (!$matched) {
-                $consecutiveMatches = 0;
-            }
-            SchedulerSystem::usleep(100_000);
-        }
-
-        return false;
+        $probe = $this->liveProbe->probeHttp(
+            address: '127.0.0.1',
+            port: $port,
+            host: 'localhost',
+            path: '/_wls/health',
+            expectedStatus: 200,
+            expectedHeaders: ['X-Wls-Nginx-Config' => $generation],
+            maxAttempts: 60,
+            requiredConsecutive: 8,
+        );
+        return (bool)($probe['ok'] ?? false);
     }
 
     /** @param list<string> $serverNames */

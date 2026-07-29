@@ -1,0 +1,18 @@
+{
+  "service": "weline-wls-gateway-v2",
+  "display_name": "Weline WLS 2.0 Host Gateway",
+  "account": "LocalSystem",
+  "start": "automatic",
+  "failure_restart_seconds": [5, 30, 300],
+  "launcher": "{{LAUNCHER}}",
+  "arguments": [
+    "--service",
+    "--home={{HOME}}",
+    "--run={{RUN_DIR}}",
+    "--profile={{PROFILE}}"
+  ],
+  "environment": {
+    "WLS_GATEWAY_LISTEN_HTTP": "{{HTTP_PORT}}",
+    "WLS_GATEWAY_LISTEN_HTTPS": "{{HTTPS_PORT}}"
+  }
+}

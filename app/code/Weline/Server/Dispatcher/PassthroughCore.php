@@ -48,6 +48,19 @@ class PassthroughCore
      * long failover sweep is enough to overflow it and manufacture ECONNREFUSED.
      */
     private const MAX_CONNECT_ATTEMPTS_PER_PHASE = 3;
+    /**
+     * Keep the historical minimum of three attempts, then continue scanning
+     * additional loopback Workers while the phase remains inside this bounded
+     * wall-clock budget. A fixed three-port cap produced false 503 responses
+     * after scaling beyond three Workers even when later ports were healthy.
+     */
+    private const WORKER_CONNECT_PHASE_BUDGET_SECONDS = 0.020;
+    /**
+     * Linux may need more than 2ms to make a loopback socket writable during
+     * multiplexed HTTP/2 bursts. Keep this within the whole failover phase
+     * budget while avoiding false "all Workers unavailable" responses.
+     */
+    private const LOOPBACK_CONNECT_TIMEOUT_SECONDS = 0.020;
 
     /**
      * WOULDBLOCK 错误码列表（跨平台）
@@ -1116,6 +1129,7 @@ class PassthroughCore
             : $this->orderWorkerPortsRoundRobin($startIndex);
 
         $attempts = 0;
+        $phaseStartedAt = \microtime(true);
         foreach ($candidatePorts as $port) {
 
             // 跳过已尝试的端口
@@ -1136,7 +1150,7 @@ class PassthroughCore
                 continue;
             }
 
-            if ($attempts >= self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+            if ($this->workerConnectPhaseExhausted($attempts, $count, $phaseStartedAt)) {
                 break;
             }
             $attempts++;
@@ -1177,6 +1191,7 @@ class PassthroughCore
         $startIndex = $this->connectionCounter > 0 ? (($this->connectionCounter - 1) % $count) : 0;
 
         $attempts = 0;
+        $phaseStartedAt = \microtime(true);
         for ($i = 0; $i < $count; $i++) {
             $index = ($startIndex + $i) % $count;
             $port = $this->workerPorts[$index];
@@ -1194,7 +1209,7 @@ class PassthroughCore
                 continue;
             }
 
-            if ($attempts >= self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+            if ($this->workerConnectPhaseExhausted($attempts, $count, $phaseStartedAt)) {
                 break;
             }
             $attempts++;
@@ -1223,6 +1238,8 @@ class PassthroughCore
         $excludePort = $this->normalizeExcludePortForWorkerPool($excludePort);
 
         $attempts = 0;
+        $candidateCount = \count($this->workerPorts);
+        $phaseStartedAt = \microtime(true);
         foreach ($this->workerPorts as $port) {
             if ($port === $excludePort) {
                 continue;
@@ -1236,7 +1253,7 @@ class PassthroughCore
                 continue;
             }
 
-            if ($attempts >= self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+            if ($this->workerConnectPhaseExhausted($attempts, $candidateCount, $phaseStartedAt)) {
                 break;
             }
             $attempts++;
@@ -1249,6 +1266,21 @@ class PassthroughCore
         }
         
         return false;
+    }
+
+    private function workerConnectPhaseExhausted(
+        int $attempts,
+        int $candidateCount,
+        float $phaseStartedAt,
+    ): bool {
+        if ($attempts >= $candidateCount) {
+            return true;
+        }
+        if ($attempts < self::MAX_CONNECT_ATTEMPTS_PER_PHASE) {
+            return false;
+        }
+
+        return (\microtime(true) - $phaseStartedAt) >= self::WORKER_CONNECT_PHASE_BUDGET_SECONDS;
     }
 
     /**
@@ -1367,20 +1399,7 @@ class PassthroughCore
             return false;
         }
 
-        // P0-2：用可配置的 workerConnectSelectTimeoutSec 替代旧 0.3-0.5s 硬上限。
-        // 默认 0.02s 对 localhost Worker 绰绰有余；远端后端可通过 worker_connect_select_timeout_sec 覆盖。
-        // 高并发失败路径下，单次 connect 的最差阻塞从 500ms → 100ms。
-        $requestedTimeout = $connectTimeoutOverride ?? $this->workerConnectSelectTimeoutSec;
-        if (\in_array(\strtolower($this->workerHost), ['127.0.0.1', '::1', 'localhost'], true)) {
-            // A loopback connect either completes immediately or should yield
-            // to another READY Worker. Keeping the historical 20ms per port
-            // here can block the single Dispatcher loop for hundreds of ms.
-            $requestedTimeout = \min($requestedTimeout, 0.002);
-        }
-        $failoverTimeout = \max(0.001, \min(
-            $requestedTimeout,
-            (float) $this->connectTimeout
-        ));
+        $failoverTimeout = $this->resolveWorkerConnectTimeout($connectTimeoutOverride);
         $seconds = (int) $failoverTimeout;
         $microseconds = (int) (($failoverTimeout - $seconds) * 1_000_000);
 
@@ -1401,6 +1420,19 @@ class PassthroughCore
         }
 
         return $workerSocket;
+    }
+
+    private function resolveWorkerConnectTimeout(?float $connectTimeoutOverride = null): float
+    {
+        $requestedTimeout = $connectTimeoutOverride ?? $this->workerConnectSelectTimeoutSec;
+        if (\in_array(\strtolower($this->workerHost), ['127.0.0.1', '::1', 'localhost'], true)) {
+            $requestedTimeout = \min($requestedTimeout, self::LOOPBACK_CONNECT_TIMEOUT_SECONDS);
+        }
+
+        return \max(0.001, \min(
+            $requestedTimeout,
+            (float) $this->connectTimeout
+        ));
     }
     
     // ==================== Worker 健康状态管理 ====================
