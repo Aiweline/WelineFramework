@@ -20,6 +20,7 @@ final class ProjectCertificateGenerationStore
     private readonly string $projectRoot;
     private readonly string $storeRoot;
     private readonly int $projectOwner;
+    private readonly int $projectGroup;
 
     public function __construct(?string $projectRoot = null)
     {
@@ -31,8 +32,13 @@ final class ProjectCertificateGenerationStore
         $this->storeRoot = $this->projectRoot . DIRECTORY_SEPARATOR . 'app'
             . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl'
             . DIRECTORY_SEPARATOR . '.wls-generations';
-        $owner = @\fileowner($this->projectRoot);
-        $this->projectOwner = \is_int($owner) ? $owner : -1;
+        $owner = @\lstat($this->projectRoot);
+        $this->projectOwner = \is_array($owner) && \is_int($owner['uid'] ?? null)
+            ? (int)$owner['uid']
+            : -1;
+        $this->projectGroup = \is_array($owner) && \is_int($owner['gid'] ?? null)
+            ? (int)$owner['gid']
+            : -1;
     }
 
     /**
@@ -69,6 +75,7 @@ final class ProjectCertificateGenerationStore
             throw new \RuntimeException('Unable to lock project certificate activation.');
         }
         @\chmod($lockPath, 0600);
+        $this->preserveProjectArtifactOwnership($lockPath, $lock);
         try {
             $active = $this->readActiveUnlocked($domain);
             try {
@@ -370,6 +377,7 @@ final class ProjectCertificateGenerationStore
         if (!@\mkdir($temporary, 0700) || \is_link($temporary)) {
             throw new \RuntimeException('Unable to create certificate snapshot staging directory.');
         }
+        $this->preserveProjectArtifactOwnership($temporary);
         try {
             $this->atomicWrite(
                 $temporary . DIRECTORY_SEPARATOR . 'fullchain.pem',
@@ -421,6 +429,12 @@ final class ProjectCertificateGenerationStore
         $cert = $directory . DIRECTORY_SEPARATOR . 'fullchain.pem';
         $key = $directory . DIRECTORY_SEPARATOR . 'privkey.pem';
         $chain = $directory . DIRECTORY_SEPARATOR . 'chain.pem';
+        $this->preserveProjectArtifactOwnership($directory);
+        $this->preserveProjectArtifactOwnership($cert);
+        $this->preserveProjectArtifactOwnership($key);
+        if (\is_file($chain)) {
+            $this->preserveProjectArtifactOwnership($chain);
+        }
         $certHash = $this->safeHashFile($cert);
         $keyHash = $this->safeHashFile($key);
         $chainHash = \is_file($chain) && !\is_link($chain) ? $this->safeHashFile($chain) : '';
@@ -456,6 +470,7 @@ final class ProjectCertificateGenerationStore
         if (!\file_exists($file) && !\is_link($file)) {
             return null;
         }
+        $this->preserveProjectArtifactOwnership($file);
         $manifest = $this->readManifest($file);
         if (!\hash_equals($domain, (string)($manifest['domain'] ?? ''))
             || (int)($manifest['generation'] ?? 0) < 1
@@ -626,6 +641,7 @@ final class ProjectCertificateGenerationStore
                 );
             }
             @\chmod($directory, 0700);
+            $this->preserveProjectArtifactOwnership($directory);
         }
     }
 
@@ -701,6 +717,7 @@ final class ProjectCertificateGenerationStore
             if (\function_exists('fsync') && !@\fsync($stream)) {
                 throw new \RuntimeException('Unable to sync certificate generation staging file.');
             }
+            $this->preserveProjectArtifactOwnership($temporary, $stream);
         } finally {
             @\fclose($stream);
         }
@@ -709,6 +726,66 @@ final class ProjectCertificateGenerationStore
             throw new \RuntimeException('Unable to atomically publish certificate generation file.');
         }
         @\chmod($path, $mode);
+    }
+
+    /**
+     * Root may coordinate enrollment/promotion, but every derived certificate
+     * generation remains a project-owned fact. Never apply this repair to the
+     * original certificate sources or to paths outside the private store.
+     *
+     * @param resource|null $handle
+     */
+    private function preserveProjectArtifactOwnership(string $path, mixed $handle = null): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || $this->projectOwner < 0
+            || $this->projectGroup < 0
+            || !\function_exists('posix_geteuid')
+            || \posix_geteuid() !== 0
+        ) {
+            return;
+        }
+        $store = \realpath($this->storeRoot);
+        $real = \realpath($path);
+        $status = @\lstat($path);
+        if (!\is_string($store)
+            || !\is_string($real)
+            || !$this->pathInside($real, $store)
+            || \is_link($path)
+            || !\is_array($status)
+            || (!\is_file($path) && !\is_dir($path))
+        ) {
+            throw new \RuntimeException(
+                'Certificate generation ownership target is unsafe.'
+            );
+        }
+        $ownerApplied = \is_resource($handle)
+            && \function_exists('fchown')
+            && @\fchown($handle, $this->projectOwner);
+        if (!$ownerApplied) {
+            $ownerApplied = \function_exists('lchown')
+                ? @\lchown($path, $this->projectOwner)
+                : @\chown($path, $this->projectOwner);
+        }
+        $groupApplied = \is_resource($handle)
+            && \function_exists('fchgrp')
+            && @\fchgrp($handle, $this->projectGroup);
+        if (!$groupApplied) {
+            $groupApplied = \function_exists('lchgrp')
+                ? @\lchgrp($path, $this->projectGroup)
+                : @\chgrp($path, $this->projectGroup);
+        }
+        $actual = @\lstat($path);
+        if (!$ownerApplied
+            || !$groupApplied
+            || !\is_array($actual)
+            || (int)($actual['uid'] ?? -1) !== $this->projectOwner
+            || (int)($actual['gid'] ?? -1) !== $this->projectGroup
+        ) {
+            throw new \RuntimeException(
+                'Unable to preserve the project owner on certificate generations.'
+            );
+        }
     }
 
     private function assertSafeTarget(string $path): void

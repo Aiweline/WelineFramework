@@ -94,6 +94,34 @@ final class ProjectIdentityStoreTest extends TestCase
         }
     }
 
+    public function testUnreadableIdentityIsNotMisreportedAsInvalidJson(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || (\function_exists('posix_geteuid') && \posix_geteuid() === 0)
+        ) {
+            self::markTestSkipped('POSIX non-root file permission test.');
+        }
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject($sandbox . DIRECTORY_SEPARATOR . 'unreadable');
+        $hostState = $sandbox . DIRECTORY_SEPARATOR . 'host-state';
+        $legacy = $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json';
+        $store = new ProjectIdentityStore($project, $hostState, $legacy);
+        $store->projectUuid();
+        $identity = $project . DIRECTORY_SEPARATOR . 'app'
+            . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'wls-project.json';
+        self::assertTrue(\chmod($identity, 0000));
+
+        try {
+            (new ProjectIdentityStore($project, $hostState, $legacy))->projectUuid();
+            self::fail('An unreadable project fact must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('not readable', $exception->getMessage());
+            self::assertStringNotContainsString('invalid JSON', $exception->getMessage());
+        } finally {
+            \chmod($identity, 0600);
+        }
+    }
+
     private function makeSandbox(): string
     {
         $root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-project-identity-test-'

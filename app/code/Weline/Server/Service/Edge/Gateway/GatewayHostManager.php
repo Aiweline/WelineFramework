@@ -10,6 +10,7 @@ namespace Weline\Server\Service\Edge\Gateway;
 final class GatewayHostManager
 {
     private const EXPLICIT_START_READY_TIMEOUT_SECONDS = 60.0;
+    private const PROMOTION_ENROLLMENT_READY_TIMEOUT_SECONDS = 5.0;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -305,7 +306,8 @@ final class GatewayHostManager
                 'slot' => $slot,
             ];
         }
-        $deadline = \microtime(true) + 30.0;
+        $timeoutSeconds = self::legacyPromotionReadinessTimeoutSeconds();
+        $deadline = \microtime(true) + $timeoutSeconds;
         do {
             \usleep(100000);
             $status = $this->administratorStatus();
@@ -314,8 +316,20 @@ final class GatewayHostManager
             }
         } while (\microtime(true) < $deadline);
         throw new \RuntimeException(
-            'Promoted host gateway did not become ready within 30 seconds.'
+            'Promoted host gateway did not become ready within '
+                . \number_format($timeoutSeconds, 0, '.', '') . ' seconds.'
         );
+    }
+
+    /**
+     * A production cold publication includes both the candidate shadow probe
+     * and the public stability observation. Reuse the explicit-start budget so
+     * promotion cannot time out on the exact boundary of those mandatory
+     * windows and roll a healthy gateway back to legacy.
+     */
+    private static function legacyPromotionReadinessTimeoutSeconds(): float
+    {
+        return self::EXPLICIT_START_READY_TIMEOUT_SECONDS;
     }
 
     /**
@@ -337,6 +351,19 @@ final class GatewayHostManager
         if (!\in_array($slot, ['A', 'B'], true)) {
             return;
         }
+        $activeSlotFile = $this->paths->activeSlotFile();
+        if (\is_link($activeSlotFile)) {
+            throw new \RuntimeException(
+                'Gateway active-slot identity is unsafe during promotion rollback.'
+            );
+        }
+        $actualActive = \is_file($activeSlotFile)
+            ? \strtoupper(\trim((string)@\file_get_contents($activeSlotFile)))
+            : '';
+        // Activation can complete before the readiness wait throws. The
+        // caller cannot set its boolean after an exception, so the durable
+        // active-slot pointer is the authoritative rollback signal.
+        $activated = $activated || \hash_equals($slot, $actualActive);
         if ($activated) {
             $this->packages->rollbackActivation(
                 $slot,
@@ -386,7 +413,423 @@ final class GatewayHostManager
             (array)($payload['credential'] ?? []),
             $projectUuid,
         );
+        if (!$this->paths->isTestMode()) {
+            $this->awaitPromotionEnrollmentDurability(
+                (int)($payload['security_generation'] ?? 0),
+            );
+        }
         return $payload;
+    }
+
+    private function awaitPromotionEnrollmentDurability(
+        int $expectedSecurityGeneration,
+    ): void
+    {
+        if ($expectedSecurityGeneration < 1) {
+            throw new \RuntimeException(
+                'Promotion enrollment did not acknowledge a durable security generation.'
+            );
+        }
+        $timeoutSeconds = self::PROMOTION_ENROLLMENT_READY_TIMEOUT_SECONDS;
+        $deadline = \hrtime(true) / 1_000_000_000 + $timeoutSeconds;
+        $lastStatus = [];
+        do {
+            $this->serviceProgressCallback();
+            $status = $this->administratorStatus();
+            $lastStatus = $status;
+            $controlGeneration = (int)($status['control_generation'] ?? 0);
+            if (($status['ok'] ?? false)
+                && ($status['ready'] ?? false)
+                && ($status['supervisor_ready'] ?? false)
+                && ($status['broker_ready'] ?? false)
+                && ($status['release_ready'] ?? false)
+                && $controlGeneration >= $expectedSecurityGeneration
+            ) {
+                return;
+            }
+            \usleep(100000);
+        } while (\hrtime(true) / 1_000_000_000 < $deadline);
+        throw new \RuntimeException(
+            'Promotion enrollment was not durably observable on a ready gateway within '
+                . \number_format($timeoutSeconds, 0, '.', '') . ' seconds: '
+                . (string)($lastStatus['reason']
+                    ?? $lastStatus['state']
+                    ?? 'status unavailable')
+        );
+    }
+
+    /**
+     * Promotion is an administrator transaction, while project protocol calls
+     * must retain the enrolled project's OS peer identity. On POSIX, scope the
+     * registration to the verified project owner and always restore the
+     * administrator identity before rollback or cleanup can run.
+     *
+     * @return array<string,mixed>
+     */
+    public function registerCurrentProjectForPromotion(
+        string $instanceName,
+        string $projectRoot,
+    ): array {
+        return $this->withPromotionProjectOwnerIdentity(
+            $projectRoot,
+            function () use ($instanceName): array {
+                $registration = (new GatewayRegistrationBuilder())->build($instanceName);
+                return $this->submitRegistration($registration);
+            },
+        );
+    }
+
+    /**
+     * A legacy promotion is committed only after the project-owned Agent has
+     * published the authenticated join backend, the expected routes are
+     * ACTIVE, and real SNI/Host/TLS/backend identity probes remain healthy
+     * across a complete heartbeat interval.
+     *
+     * @return array<string,mixed>
+     */
+    public function awaitPromotionProjectActivation(
+        string $instanceName,
+        string $projectRoot,
+        float $timeoutSeconds = 120.0,
+        float $stableSeconds = 12.0,
+    ): array {
+        return $this->withPromotionProjectOwnerIdentity(
+            $projectRoot,
+            function () use ($instanceName, $timeoutSeconds, $stableSeconds): array {
+                $timeoutSeconds = \max(1.0, $timeoutSeconds);
+                $stableSeconds = \max(1.0, \min(30.0, $stableSeconds));
+                $deadline = \hrtime(true) / 1_000_000_000 + $timeoutSeconds;
+                $healthySince = 0.0;
+                $lastReason = 'project Agent has not published an active route';
+                $lastStatus = [];
+                $builder = new GatewayRegistrationBuilder();
+                $probe = new GatewayPublicRouteProbe($builder);
+
+                while (true) {
+                    $this->serviceProgressCallback();
+                    $now = \hrtime(true) / 1_000_000_000;
+                    $status = $this->status(1.0);
+                    $lastStatus = $status;
+                    $registration = null;
+                    try {
+                        if (($status['ok'] ?? false) && ($status['ready'] ?? false)) {
+                            $registration = $builder->build($instanceName);
+                        }
+                    } catch (\Throwable $throwable) {
+                        $lastReason = $throwable->getMessage();
+                    }
+
+                    $routesHealthy = \is_array($registration);
+                    $expectedRoutes = [];
+                    if (\is_array($registration)) {
+                        foreach ((array)($registration['routes'] ?? []) as $route) {
+                            if (\is_array($route)) {
+                                $routeId = (string)($route['route_id'] ?? '');
+                                if ($routeId !== '') {
+                                    $expectedRoutes[$routeId] = true;
+                                }
+                            }
+                        }
+                    }
+                    $observedRoutes = [];
+                    foreach ((array)($status['routes'] ?? []) as $route) {
+                        if (\is_array($route)) {
+                            $observedRoutes[(string)($route['route_id'] ?? '')] = $route;
+                        }
+                    }
+                    if ($expectedRoutes === []) {
+                        $routesHealthy = false;
+                    }
+                    foreach (\array_keys($expectedRoutes) as $routeId) {
+                        $route = $observedRoutes[$routeId] ?? null;
+                        $lease = \is_array($route)
+                            && \is_array($route['instances'][$instanceName] ?? null)
+                                ? $route['instances'][$instanceName]
+                                : null;
+                        if (!\is_array($route)
+                            || !\hash_equals('ACTIVE', (string)($route['status'] ?? ''))
+                            || !\is_array($lease)
+                            || !\hash_equals('ACTIVE', (string)($lease['status'] ?? ''))
+                        ) {
+                            $routesHealthy = false;
+                            $lastReason = 'one or more expected routes are not ACTIVE';
+                            break;
+                        }
+                    }
+
+                    $instanceLease = \is_array($registration)
+                        ? self::promotionInstanceLease(
+                            (array)($status['instances'] ?? []),
+                            (string)($registration['project_uuid'] ?? ''),
+                            $instanceName,
+                        )
+                        : null;
+                    $instanceHealthy = \is_array($instanceLease)
+                        && \hash_equals(
+                            'ACTIVE',
+                            (string)($instanceLease['status'] ?? ''),
+                        )
+                        && (int)($instanceLease['generation'] ?? 0)
+                            === (int)($registration['instance_generation'] ?? -1);
+                    if (!$instanceHealthy && \is_array($registration)) {
+                        $lastReason = 'the promoted project instance lease is not ACTIVE';
+                    }
+
+                    $publicHealthy = false;
+                    if ($routesHealthy && $instanceHealthy && \is_array($registration)) {
+                        try {
+                            $publicHealthy = $probe->registrationIsHealthy(
+                                $registration,
+                                (int)($status['public_https'] ?? 0),
+                            );
+                        } catch (\Throwable $throwable) {
+                            $lastReason = $throwable->getMessage();
+                        }
+                        if (!$publicHealthy) {
+                            $lastReason = 'the public SNI/Host/TLS/backend identity probe failed';
+                        }
+                    }
+                    $coreHealthy = ($status['ok'] ?? false)
+                        && ($status['ready'] ?? false)
+                        && ($status['supervisor_ready'] ?? false)
+                        && ($status['data_plane']['running'] ?? false)
+                        && (string)($status['state'] ?? '') !== 'DATA_PLANE_DOWN';
+                    if (!$coreHealthy) {
+                        $lastReason = (string)($status['reason']
+                            ?? $status['state']
+                            ?? 'gateway core is not ready');
+                    }
+
+                    if ($coreHealthy && $routesHealthy && $instanceHealthy && $publicHealthy) {
+                        $healthySince = $healthySince > 0.0 ? $healthySince : $now;
+                        $stableElapsed = $now - $healthySince;
+                        if ($stableElapsed >= $stableSeconds) {
+                            return [
+                                'state' => 'ACTIVE',
+                                'instance_id' => $instanceName,
+                                'route_count' => \count($expectedRoutes),
+                                'stable_seconds' => \round($stableElapsed, 3),
+                                'gateway_epoch' => (string)($status['epoch'] ?? ''),
+                                'gateway_generation' => (int)($status['generation'] ?? 0),
+                                'public_http' => (int)($status['public_http'] ?? 0),
+                                'public_https' => (int)($status['public_https'] ?? 0),
+                            ];
+                        }
+                        $lastReason = 'the public route is healthy but has completed only '
+                            . \number_format($stableElapsed, 1, '.', '') . ' of '
+                            . \number_format($stableSeconds, 1, '.', '')
+                            . ' required stability seconds';
+                    } else {
+                        $healthySince = 0.0;
+                    }
+                    if (self::promotionActivationTimedOut(
+                        $now,
+                        $deadline,
+                        $stableSeconds,
+                    )) {
+                        throw new \RuntimeException(
+                            'Promoted project did not become durably reachable through its '
+                                . 'Gateway Agent within '
+                                . \number_format($timeoutSeconds, 0, '.', '')
+                                . ' seconds: ' . $lastReason
+                                . '; gateway_state=' . (string)($lastStatus['state'] ?? 'unavailable')
+                        );
+                    }
+                    \usleep(200000);
+                }
+            },
+        );
+    }
+
+    /**
+     * Convergence and durability are independent promotion gates. The caller
+     * receives the full convergence budget and then one complete stability
+     * window, so a route that becomes healthy near the convergence deadline
+     * is not rejected before it can prove durable health.
+     */
+    private static function promotionActivationTimedOut(
+        float $now,
+        float $convergenceDeadline,
+        float $stableSeconds,
+    ): bool {
+        return $now >= $convergenceDeadline + \max(0.0, $stableSeconds);
+    }
+
+    /**
+     * Controller status stores instances under project UUID so two projects
+     * may safely reuse the same local instance name. Older flat status payloads
+     * remain accepted only when they identify one unambiguous matching row.
+     *
+     * @param array<mixed> $instances
+     * @return array<string,mixed>|null
+     */
+    private static function promotionInstanceLease(
+        array $instances,
+        string $projectUuid,
+        string $instanceName,
+    ): ?array {
+        $projectUuid = \strtolower(\trim($projectUuid));
+        $instanceName = \trim($instanceName);
+        if ($projectUuid === '' || $instanceName === '') {
+            return null;
+        }
+        foreach ($instances as $candidateProjectUuid => $bucket) {
+            if (!\is_string($candidateProjectUuid)
+                || !\hash_equals(
+                    $projectUuid,
+                    \strtolower(\trim($candidateProjectUuid)),
+                )
+                || !\is_array($bucket)
+            ) {
+                continue;
+            }
+            $candidate = $bucket[$instanceName] ?? null;
+            if (\is_array($candidate)
+                && \hash_equals(
+                    $instanceName,
+                    (string)($candidate['instance_id'] ?? ''),
+                )
+            ) {
+                return $candidate;
+            }
+            foreach ($bucket as $row) {
+                if (\is_array($row)
+                    && \hash_equals(
+                        $instanceName,
+                        (string)($row['instance_id'] ?? ''),
+                    )
+                ) {
+                    return $row;
+                }
+            }
+            return null;
+        }
+
+        $matches = [];
+        foreach ($instances as $row) {
+            if (!\is_array($row)
+                || !\hash_equals(
+                    $instanceName,
+                    (string)($row['instance_id'] ?? ''),
+                )
+            ) {
+                continue;
+            }
+            $rowProjectUuid = \strtolower(\trim((string)(
+                $row['project_uuid'] ?? ''
+            )));
+            if ($rowProjectUuid !== '' && !\hash_equals($projectUuid, $rowProjectUuid)) {
+                continue;
+            }
+            $matches[] = $row;
+        }
+        return \count($matches) === 1 ? $matches[0] : null;
+    }
+
+    private function withPromotionProjectOwnerIdentity(
+        string $projectRoot,
+        \Closure $operation,
+    ): mixed {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return $operation();
+        }
+        foreach ([
+            'posix_geteuid',
+            'posix_getegid',
+            'posix_getpwuid',
+            'posix_seteuid',
+            'posix_setegid',
+        ] as $function) {
+            if (!\function_exists($function)) {
+                throw new \RuntimeException(
+                    'POSIX effective identity support is required for legacy promotion.'
+                );
+            }
+        }
+        $canonical = \realpath($projectRoot);
+        $owner = @\lstat($projectRoot);
+        if (!\is_string($canonical)
+            || !\is_dir($canonical)
+            || \is_link($projectRoot)
+            || !\is_array($owner)
+            || !\is_int($owner['uid'] ?? null)
+            || !\is_int($owner['gid'] ?? null)
+        ) {
+            throw new \RuntimeException(
+                'Unable to establish the promoted project owner identity.'
+            );
+        }
+        $targetUid = (int)$owner['uid'];
+        $targetGid = (int)$owner['gid'];
+        $account = \posix_getpwuid($targetUid);
+        $ownerHome = \is_array($account)
+            ? \realpath((string)($account['dir'] ?? ''))
+            : false;
+        if (!\is_string($ownerHome)
+            || $ownerHome === ''
+            || !\is_dir($ownerHome)
+            || \is_link((string)($account['dir'] ?? ''))
+        ) {
+            throw new \RuntimeException(
+                'Unable to establish the promoted project owner HOME.'
+            );
+        }
+        $originalUid = \posix_geteuid();
+        $originalGid = \posix_getegid();
+        if ($targetUid !== $originalUid && $originalUid !== 0) {
+            throw new \RuntimeException(
+                'Legacy promotion cannot assume the enrolled project owner identity.'
+            );
+        }
+        $originalEnvironment = [];
+        foreach (['HOME', 'XDG_STATE_HOME', 'WLS_EDGE_STATE_HOME'] as $name) {
+            $originalEnvironment[$name] = \getenv($name);
+        }
+
+        $gidChanged = false;
+        $uidChanged = false;
+        try {
+            if (!\putenv('HOME=' . $ownerHome)
+                || !\putenv('XDG_STATE_HOME')
+                || !\putenv('WLS_EDGE_STATE_HOME')
+            ) {
+                throw new \RuntimeException(
+                    'Unable to assume the promoted project owner state environment.'
+                );
+            }
+            if ($targetGid !== $originalGid) {
+                if (!@\posix_setegid($targetGid)) {
+                    throw new \RuntimeException(
+                        'Unable to assume the promoted project owner group.'
+                    );
+                }
+                $gidChanged = true;
+            }
+            if ($targetUid !== $originalUid) {
+                if (!@\posix_seteuid($targetUid)) {
+                    throw new \RuntimeException(
+                        'Unable to assume the promoted project owner user.'
+                    );
+                }
+                $uidChanged = true;
+            }
+            return $operation();
+        } finally {
+            $uidRestored = !$uidChanged || @\posix_seteuid($originalUid);
+            $gidRestored = !$gidChanged
+                || ($uidRestored && @\posix_setegid($originalGid));
+            $environmentRestored = true;
+            foreach ($originalEnvironment as $name => $value) {
+                $environmentRestored = \putenv(
+                    $value === false ? $name : $name . '=' . $value,
+                ) && $environmentRestored;
+            }
+            if (!$uidRestored || !$gidRestored || !$environmentRestored) {
+                throw new \RuntimeException(
+                    'Unable to restore the administrator identity or environment after project registration.'
+                );
+            }
+        }
     }
 
     /**
@@ -501,10 +944,21 @@ final class GatewayHostManager
     public function register(string $instanceName): array
     {
         $builder = new GatewayRegistrationBuilder();
-        $registration = $builder->build($instanceName);
+        return $this->submitRegistration($builder->build($instanceName));
+    }
+
+    /**
+     * @param array<string,mixed> $registration
+     * @return array<string,mixed>
+     */
+    private function submitRegistration(array $registration): array
+    {
         $status = $this->status(5.0);
         if (!($status['ok'] ?? false) || !($status['ready'] ?? false)) {
-            throw new \RuntimeException('WLS Gateway is not ready for project registration.');
+            throw new \RuntimeException(
+                'WLS Gateway is not ready for project registration: '
+                    . (string)($status['reason'] ?? $status['state'] ?? 'status unavailable')
+            );
         }
         $registration['gateway_epoch'] = (string)($status['epoch'] ?? '');
         $response = $this->idempotentProjectMutation('register', $registration);
