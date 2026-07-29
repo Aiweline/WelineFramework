@@ -608,6 +608,48 @@ final class GatewayHostManagerAsyncPublicationTest extends TestCase
         self::assertSame(5, $unknown['forced_long_lived_connections']);
     }
 
+    public function testDrainAndUnregisterUseBoundedIdempotentMutationRetries(): void
+    {
+        $drain = $this->methodSource(GatewayHostManager::class, 'drain');
+        self::assertStringContainsString(
+            "\$this->idempotentProjectMutation(\n            'drain',",
+            $drain,
+        );
+        self::assertStringContainsString(
+            '(float)\\min(90, \\max(1, $seconds))',
+            $drain,
+        );
+        self::assertStringNotContainsString(
+            "\$this->client->projectRequest('drain'",
+            $drain,
+        );
+
+        $unregister = $this->methodSource(GatewayHostManager::class, 'unregister');
+        self::assertStringContainsString(
+            "\$this->idempotentProjectMutation('unregister'",
+            $unregister,
+        );
+        self::assertStringNotContainsString(
+            "\$this->client->projectRequest('unregister'",
+            $unregister,
+        );
+    }
+
+    private function methodSource(string $class, string $method): string
+    {
+        $reflection = new \ReflectionMethod($class, $method);
+        $file = $reflection->getFileName();
+        self::assertIsString($file);
+        $lines = \file($file);
+        self::assertIsArray($lines);
+
+        return \implode('', \array_slice(
+            $lines,
+            $reflection->getStartLine() - 1,
+            $reflection->getEndLine() - $reflection->getStartLine() + 1,
+        ));
+    }
+
     private function removeTree(string $path): void
     {
         if (!\is_dir($path) || \is_link($path)) {
