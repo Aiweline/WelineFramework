@@ -962,14 +962,82 @@ final class GatewayProtocolSecurityTest extends TestCase
             'backends' => [],
             'certificate' => ['valid' => false],
         ];
-        $state['acme_challenges'] = [[
-            'project_uuid' => $projectUuid,
+        $stateProperty->setValue($this->controller, $state);
+        $desiredChallenges = [[
             'domain' => 'acme.example.test',
             'token' => $token,
             'key_authorization' => $keyAuthorization,
             'expires_at' => \time() + 300,
         ]];
-        $stateProperty->setValue($this->controller, $state);
+        $desiredChallengeDigest = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($desiredChallenges),
+        );
+        $firstSync = $this->request(
+            'project',
+            'acme-challenge-sync',
+            [
+                'project_uuid' => $projectUuid,
+                'challenge_generation' => 2,
+                'desired_digest' => $desiredChallengeDigest,
+                'challenges' => $desiredChallenges,
+            ],
+            (string)$credential['credential_id'],
+            (string)$credential['secret'],
+        );
+        self::assertTrue($firstSync['ok'], \json_encode($firstSync));
+
+        $staleSync = $this->request(
+            'project',
+            'acme-challenge-sync',
+            [
+                'project_uuid' => $projectUuid,
+                'challenge_generation' => 1,
+                'challenges' => [],
+            ],
+            (string)$credential['credential_id'],
+            (string)$credential['secret'],
+        );
+        self::assertFalse($staleSync['ok']);
+        self::assertStringContainsString('generation is stale', $staleSync['error']['message']);
+
+        $ambiguousSync = $this->request(
+            'project',
+            'acme-challenge-sync',
+            [
+                'project_uuid' => $projectUuid,
+                'challenge_generation' => 2,
+                'challenges' => [],
+            ],
+            (string)$credential['credential_id'],
+            (string)$credential['secret'],
+        );
+        self::assertFalse($ambiguousSync['ok']);
+        self::assertStringContainsString('generation is ambiguous', $ambiguousSync['error']['message']);
+
+        $driftedState = $stateProperty->getValue($this->controller);
+        $driftedState['acme_challenges'] = [];
+        $stateProperty->setValue($this->controller, $driftedState);
+
+        $idempotentSync = $this->request(
+            'project',
+            'acme-challenge-sync',
+            [
+                'project_uuid' => $projectUuid,
+                'challenge_generation' => 2,
+                'desired_digest' => $desiredChallengeDigest,
+                'challenges' => $desiredChallenges,
+            ],
+            (string)$credential['credential_id'],
+            (string)$credential['secret'],
+        );
+        self::assertTrue($idempotentSync['ok'], \json_encode($idempotentSync));
+        $reconciledState = $stateProperty->getValue($this->controller);
+        self::assertCount(
+            1,
+            $reconciledState['acme_challenges'] ?? [],
+            'An idempotent replay must restore a drifted serving lease.',
+        );
 
         $render = new \ReflectionMethod($this->controller, 'renderNginxConfig');
         $config = $render->invoke($this->controller, false);
@@ -981,11 +1049,69 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertStringNotContainsString('location ^~ /.well-known/acme-challenge/', $config);
         self::assertStringNotContainsString('proxy_pass http://wls_backend_', $config);
 
+        (new \ReflectionProperty($this->controller, 'rateWindows'))
+            ->setValue($this->controller, []);
+        $beforeGenerationOnlyRefresh = $stateProperty->getValue($this->controller);
+        $generationOnlyRefresh = $this->request(
+            'project',
+            'acme-challenge-sync',
+            [
+                'project_uuid' => $projectUuid,
+                'challenge_generation' => 3,
+                'desired_digest' => $desiredChallengeDigest,
+                'challenges' => $desiredChallenges,
+            ],
+            (string)$credential['credential_id'],
+            (string)$credential['secret'],
+        );
+        self::assertTrue($generationOnlyRefresh['ok'], \json_encode($generationOnlyRefresh));
+        $afterGenerationOnlyRefresh = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            $beforeGenerationOnlyRefresh['generation'],
+            $afterGenerationOnlyRefresh['generation'],
+            'An identical challenge set must not reload Nginx.',
+        );
+        $stateFile = (new \ReflectionMethod($this->controller, 'stateFile'))
+            ->invoke($this->controller);
+        $persistedEnvelope = \json_decode(
+            (string)\file_get_contents($stateFile),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame(
+            3,
+            $persistedEnvelope['payload']['acme_generations'][$projectUuid]['generation'] ?? 0,
+            'Generation-only ACME fencing must survive Controller restart.',
+        );
+
+        $tamperedDigest = $this->request(
+            'project',
+            'acme-challenge-sync',
+            [
+                'project_uuid' => $projectUuid,
+                'challenge_generation' => 3,
+                'desired_digest' => \str_repeat('f', 64),
+                'challenges' => $desiredChallenges,
+            ],
+            (string)$credential['credential_id'],
+            (string)$credential['secret'],
+        );
+        self::assertFalse($tamperedDigest['ok']);
+        self::assertStringContainsString(
+            'desired digest does not match',
+            $tamperedDigest['error']['message'],
+        );
+
+        (new \ReflectionProperty($this->controller, 'rateWindows'))
+            ->setValue($this->controller, []);
+
         $outsideCapability = $this->request(
             'project',
             'acme-challenge-sync',
             [
                 'project_uuid' => $projectUuid,
+                'challenge_generation' => 3,
                 'challenges' => [[
                     'domain' => 'other.example.test',
                     'token' => $token,
@@ -1003,7 +1129,9 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
 
         $state = $stateProperty->getValue($this->controller);
-        $state['acme_challenges'][0]['expires_at'] = \time() - 1;
+        foreach ((array)$state['acme_challenges'] as $leaseId => $lease) {
+            $state['acme_challenges'][$leaseId]['expires_at'] = \time() - 1;
+        }
         $stateProperty->setValue($this->controller, $state);
         self::assertStringNotContainsString(
             'location = /.well-known/acme-challenge/' . $token,

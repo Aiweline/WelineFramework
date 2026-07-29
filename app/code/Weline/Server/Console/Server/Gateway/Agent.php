@@ -21,6 +21,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Edge\Gateway\GatewayPublicRouteProbe;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\GatewayRuntimeEndpointPublisher;
+use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -104,6 +105,7 @@ final class Agent extends CommandAbstract
         $fallbackOutages = new GatewayFallbackOutageStore();
         $endpointPublisher = new GatewayRuntimeEndpointPublisher();
         $projectUuid = $builder->projectUuid();
+        $acmeChallenges = new ProjectAcmeHttp01ChallengeStore();
         $masterPid = $this->integerArgument($args, 'master-pid');
         $masterEpoch = $this->integerArgument($args, 'epoch');
         $lastHeartbeat = 0.0;
@@ -121,6 +123,7 @@ final class Agent extends CommandAbstract
         $joinBackendRequested = false;
         $lastNativeDrainCommandAt = 0.0;
         $lastAcmeSyncAt = $this->monotonicNow();
+        $lastAcmeGeneration = 0;
         $lastAcmeDigest = self::initialAcmeChallengeDigest();
         $lastFallbackLeaseProbe = 0.0;
         $observedFallback = [];
@@ -351,15 +354,32 @@ final class Agent extends CommandAbstract
                     $lastHeartbeat = $now;
                 }
                 if (($status['ok'] ?? false) && \is_array($probeRegistration)) {
-                    $challenges = $this->loadAcmeChallenges($probeRegistration);
-                    $challengeDigest = self::acmeChallengeDigest($challenges);
-                    if (!\hash_equals($lastAcmeDigest, $challengeDigest)
-                        || $now - $lastAcmeSyncAt >= 30.0
+                    try {
+                        $desiredChallenges = $acmeChallenges->desired(
+                            $this->acmeRouteDomains($probeRegistration),
+                        );
+                    } catch (\Throwable) {
+                        $desiredChallenges = null;
+                    }
+                    if (\is_array($desiredChallenges)
+                        && (int)$desiredChallenges['generation'] > 0
+                        && ((int)$desiredChallenges['generation'] !== $lastAcmeGeneration
+                            || !\hash_equals(
+                                $lastAcmeDigest,
+                                (string)$desiredChallenges['digest'],
+                            )
+                            || $now - $lastAcmeSyncAt >= 30.0)
                     ) {
                         $lastAcmeSyncAt = $now;
                         try {
-                            $gateway->syncAcmeChallenges($projectUuid, $challenges);
-                            $lastAcmeDigest = $challengeDigest;
+                            $gateway->syncAcmeChallenges(
+                                $projectUuid,
+                                (int)$desiredChallenges['generation'],
+                                (array)$desiredChallenges['challenges'],
+                                (string)$desiredChallenges['digest'],
+                            );
+                            $lastAcmeGeneration = (int)$desiredChallenges['generation'];
+                            $lastAcmeDigest = (string)$desiredChallenges['digest'];
                         } catch (\Throwable) {
                             // Registration/enrollment may still be converging.
                             // Retry without delaying the lease heartbeat.
@@ -934,6 +954,30 @@ final class Agent extends CommandAbstract
     }
 
     /**
+     * @param array<string,mixed> $registration
+     * @return list<string>
+     */
+    private function acmeRouteDomains(array $registration): array
+    {
+        $domains = [];
+        foreach ((array)($registration['routes'] ?? []) as $route) {
+            if (!\is_array($route)) {
+                continue;
+            }
+            $domain = \strtolower(\trim((string)($route['domain'] ?? '')));
+            if ($domain !== '' && !\str_starts_with($domain, '*.')) {
+                $domains[$domain] = true;
+            }
+        }
+        $result = \array_keys($domains);
+        \sort($result, SORT_STRING);
+        return $result;
+    }
+
+    /**
+     * Compatibility reader for project states created before the durable
+     * challenge-set envelope. New Agent publication uses the store above.
+     *
      * @param array<string,mixed> $registration
      * @return list<array{domain:string,token:string,key_authorization:string,expires_at:int}>
      */

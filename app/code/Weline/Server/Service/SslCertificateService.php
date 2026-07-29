@@ -20,6 +20,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Server\Api\Tls\AcmeDnsTxtPollPolicyProviderInterface;
 use Weline\Server\Model\SslCertificate;
+use Weline\Server\Service\Edge\Gateway\GatewayAcmeChallengePublisher;
+use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 
 /**
  * SSL 证书管理服务
@@ -160,6 +162,8 @@ class SslCertificateService
      * 上一次 ACME 请求失败时的错误详情（供创建订单等步骤返回给前端）
      */
     protected string $lastAcmeError = '';
+
+    private ?ProjectAcmeHttp01ChallengeStore $acmeHttp01Store = null;
     
     /**
      * SAN 条目缓存 [domain => ['dns' => [], 'ip' => []]]
@@ -5748,14 +5752,17 @@ CNF;
      */
     protected function registerWlsHttp01Challenge(string $domain, string $token, string $keyAuth): bool
     {
-        $base = \defined('BP') ? \rtrim(BP, \DIRECTORY_SEPARATOR) : \dirname(__DIR__, 4);
-        $dir = $base . DS . 'generated' . DS . 'acme-http01' . DS;
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
+        try {
+            $desired = $this->acmeHttp01ChallengeStore()->register(
+                $domain,
+                $token,
+                $keyAuth,
+            );
+            return $this->publishGatewayAcmeDesired($desired, $domain);
+        } catch (\Throwable $throwable) {
+            $this->lastAcmeError = $throwable->getMessage();
+            return false;
         }
-        $file = $dir . self::domainToAcmeChallengeFilename($domain) . '.json';
-        $data = ['token' => $token, 'keyAuth' => $keyAuth];
-        return (bool) \file_put_contents($file, \json_encode($data, JSON_UNESCAPED_UNICODE));
     }
 
     /**
@@ -5763,11 +5770,36 @@ CNF;
      */
     protected function cleanupWlsHttp01Challenge(string $domain): void
     {
-        $base = \defined('BP') ? \rtrim(BP, \DIRECTORY_SEPARATOR) : \dirname(__DIR__, 4);
-        $file = $base . DS . 'generated' . DS . 'acme-http01' . DS . self::domainToAcmeChallengeFilename($domain) . '.json';
-        if (\is_file($file)) {
-            @\unlink($file);
+        try {
+            $desired = $this->acmeHttp01ChallengeStore()->remove($domain);
+            $this->publishGatewayAcmeDesired($desired);
+        } catch (\Throwable $throwable) {
+            // The project queue remains authoritative. Agent reconciliation
+            // retries the desired generation after control-plane recovery.
+            $this->lastAcmeError = $throwable->getMessage();
         }
+    }
+
+    protected function acmeHttp01ChallengeStore(): ProjectAcmeHttp01ChallengeStore
+    {
+        return $this->acmeHttp01Store ??= new ProjectAcmeHttp01ChallengeStore();
+    }
+
+    /**
+     * Synchronously publishes before CA notification when a live project
+     * endpoint is owned by the shared gateway. With no gateway endpoint this
+     * is pure WLS and the project-local compatibility projection is sufficient.
+     *
+     * @param array{generation:int,digest:string,challenges:list<array<string,mixed>>} $desired
+     */
+    protected function publishGatewayAcmeDesired(
+        array $desired,
+        ?string $requiredDomain = null,
+    ): bool {
+        return (new GatewayAcmeChallengePublisher())->publish(
+            $desired,
+            $requiredDomain,
+        );
     }
 
     /**

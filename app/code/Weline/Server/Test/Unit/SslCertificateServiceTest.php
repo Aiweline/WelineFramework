@@ -9,6 +9,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
+use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\SslCertificateService;
 
 class SslCertificateServiceTest extends TestCase
@@ -762,6 +763,35 @@ class SslCertificateServiceTest extends TestCase
         $this->assertIsBool($service->hasValidLocalCertificate('0.0.0.0'));
     }
 
+    public function testGatewayHttp01PublicationFailsBeforeCaNotificationAndRemainsReplayable(): void
+    {
+        $directory = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'acme-http01';
+        $now = 1_000;
+        $store = new ProjectAcmeHttp01ChallengeStore(
+            $directory,
+            static fn (): int => $now,
+        );
+        $service = new GatewayPublishingSslCertificateServiceDouble($store, false);
+        $register = new ReflectionMethod($service, 'registerWlsHttp01Challenge');
+        $register->setAccessible(true);
+        $cleanup = new ReflectionMethod($service, 'cleanupWlsHttp01Challenge');
+        $cleanup->setAccessible(true);
+        $token = 'TOKEN_gateway';
+        $authorization = $token . '.' . \str_repeat('A', 43);
+        $domain = 'gateway-acme.example.test';
+
+        $published = $register->invoke($service, $domain, $token, $authorization);
+        $service->publicationResult = true;
+        $cleanup->invoke($service, $domain);
+
+        self::assertFalse($published);
+        self::assertCount(2, $service->publishedDesired);
+        self::assertSame(1, $service->publishedDesired[0]['generation']);
+        self::assertSame($token, $service->publishedDesired[0]['challenges'][0]['token']);
+        self::assertSame(2, $service->publishedDesired[1]['generation']);
+        self::assertSame([], $service->publishedDesired[1]['challenges']);
+    }
+
     private function makeTempDir(): string
     {
         $tempDir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-local-ca-' . \bin2hex(\random_bytes(4));
@@ -809,5 +839,31 @@ class SslCertificateServiceTest extends TestCase
         $method->setAccessible(true);
 
         return (string) $method->invoke($service, $domain, ['dns' => [$domain], 'ip' => $ipSans]);
+    }
+}
+
+final class GatewayPublishingSslCertificateServiceDouble extends SslCertificateService
+{
+    /** @var list<array<string,mixed>> */
+    public array $publishedDesired = [];
+
+    public function __construct(
+        private readonly ProjectAcmeHttp01ChallengeStore $challengeStore,
+        public bool $publicationResult,
+    ) {
+    }
+
+    protected function acmeHttp01ChallengeStore(): ProjectAcmeHttp01ChallengeStore
+    {
+        return $this->challengeStore;
+    }
+
+    /** @param array<string,mixed> $desired */
+    protected function publishGatewayAcmeDesired(
+        array $desired,
+        ?string $requiredDomain = null,
+    ): bool {
+        $this->publishedDesired[] = $desired;
+        return $this->publicationResult;
     }
 }
