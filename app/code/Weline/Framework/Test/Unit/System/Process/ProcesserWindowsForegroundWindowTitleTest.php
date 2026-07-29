@@ -170,4 +170,53 @@ final class ProcesserWindowsForegroundWindowTitleTest extends TestCase
         self::assertStringContainsString('return self::batchCreateWindowsDetachedHelpers', $source);
         self::assertStringContainsString('self::resolveWindowsBatchCreateHelperParallelism', $source);
     }
+
+    public function testExplicitWindowsProcessLogsRequireDistinctStreamsForIsolation(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'resolveExplicitProcessOutputLogs');
+        $directory = \sys_get_temp_dir() . \DIRECTORY_SEPARATOR
+            . 'weline-processer-explicit-logs-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(@\mkdir($directory, 0777, true));
+        $stdout = $directory . \DIRECTORY_SEPARATOR . 'stdout.log';
+        $stderr = $directory . \DIRECTORY_SEPARATOR . 'stderr.log';
+
+        try {
+            try {
+                $method->invoke(null, ['outputLogFile' => $stdout], true, true);
+                self::fail('Windows isolated launch must reject one shared output file.');
+            } catch (\RuntimeException $exception) {
+                self::assertSame(
+                    'Windows isolated process output logs must use distinct stdout and stderr files.',
+                    $exception->getMessage()
+                );
+            }
+
+            try {
+                $method->invoke(null, ['stdoutLogFile' => $stdout], true, true);
+                self::fail('An incomplete explicit stream pair must be rejected.');
+            } catch (\RuntimeException $exception) {
+                self::assertSame(
+                    'Explicit process stdout and stderr logs must both be configured.',
+                    $exception->getMessage()
+                );
+            }
+
+            $resolved = $method->invoke(
+                null,
+                ['stdoutLogFile' => $stdout, 'stderrLogFile' => $stderr],
+                true,
+                true
+            );
+            self::assertSame(['stdout' => $stdout, 'stderr' => $stderr], $resolved);
+            self::assertFileExists($stdout);
+            self::assertFileExists($stderr);
+            self::assertIsWritable($stdout);
+            self::assertIsWritable($stderr);
+            self::assertNull($method->invoke(null, ['outputLogFile' => $stdout], false, true));
+        } finally {
+            @\unlink($stdout);
+            @\unlink($stderr);
+            @\rmdir($directory);
+        }
+    }
 }
