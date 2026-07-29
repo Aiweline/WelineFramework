@@ -44,6 +44,91 @@ final class WlsLogServiceTest extends TestCase
         self::assertStringContainsString('/var/log/wls/store-a/weline-wls-worker-store-a-1.log/', $processLog);
     }
 
+    public function testProcessLaunchLogConfigIsCrossPlatformAndInstanceScoped(): void
+    {
+        $base = \sys_get_temp_dir() . \DIRECTORY_SEPARATOR
+            . 'weline-wls-launch-logs-' . \bin2hex(\random_bytes(6));
+        $createdFiles = [];
+
+        try {
+            self::assertSame([], WlsLogService::getProcessLaunchLogConfig(
+                'disabled-process',
+                'disabled',
+                false,
+                true,
+                null,
+                $base
+            ));
+            self::assertDirectoryDoesNotExist($base . \DIRECTORY_SEPARATOR . 'disabled');
+
+            $posix = WlsLogService::getProcessLaunchLogConfig(
+                'worker-one',
+                'alpha',
+                true,
+                false,
+                null,
+                $base
+            );
+            self::assertSame(['outputLogFile'], \array_keys($posix));
+            self::assertFileExists($posix['outputLogFile']);
+            $createdFiles[] = $posix['outputLogFile'];
+            self::assertFileDoesNotExist(WlsLogService::getProcessStderrLogFile(
+                'worker-one',
+                'alpha',
+                null,
+                $base
+            ));
+
+            $windows = WlsLogService::getProcessLaunchLogConfig(
+                'worker-two',
+                'beta',
+                true,
+                true,
+                null,
+                $base
+            );
+            self::assertSame(['stdoutLogFile', 'stderrLogFile'], \array_keys($windows));
+            self::assertNotSame($windows['stdoutLogFile'], $windows['stderrLogFile']);
+            self::assertFileExists($windows['stdoutLogFile']);
+            self::assertFileExists($windows['stderrLogFile']);
+            self::assertIsWritable($windows['stdoutLogFile']);
+            self::assertIsWritable($windows['stderrLogFile']);
+            $createdFiles[] = $windows['stdoutLogFile'];
+            $createdFiles[] = $windows['stderrLogFile'];
+
+            self::assertSame(
+                [$windows['stdoutLogFile']],
+                WlsLogService::getVisibleProcessLogFiles('worker-two', 'beta', null, $base)
+            );
+            \file_put_contents($windows['stderrLogFile'], 'early bootstrap failure');
+            self::assertSame(
+                [$windows['stdoutLogFile'], $windows['stderrLogFile']],
+                WlsLogService::getVisibleProcessLogFiles('worker-two', 'beta', null, $base)
+            );
+
+            $other = WlsLogService::getProcessLaunchLogConfig(
+                'worker-two',
+                'gamma',
+                true,
+                true,
+                null,
+                $base
+            );
+            self::assertNotSame($windows['stdoutLogFile'], $other['stdoutLogFile']);
+            self::assertNotSame($windows['stderrLogFile'], $other['stderrLogFile']);
+            $createdFiles[] = $other['stdoutLogFile'];
+            $createdFiles[] = $other['stderrLogFile'];
+        } finally {
+            foreach (\array_unique($createdFiles) as $file) {
+                @\unlink($file);
+            }
+            foreach (['alpha', 'beta', 'gamma', 'disabled'] as $instance) {
+                @\rmdir($base . \DIRECTORY_SEPARATOR . $instance);
+            }
+            @\rmdir($base);
+        }
+    }
+
     private function normalizePath(string $path): string
     {
         $normalized = \str_replace('\\', '/', $path);
