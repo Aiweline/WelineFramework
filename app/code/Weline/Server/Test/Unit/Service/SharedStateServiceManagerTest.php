@@ -599,6 +599,71 @@ final class SharedStateServiceManagerTest extends TestCase
         }
     }
 
+    public function testSharedBatchLaunchRoutesFirstOutputToProjectManagedLog(): void
+    {
+        $suffix = \bin2hex(\random_bytes(6));
+        $instanceName = 'shared-batch-log-' . $suffix;
+        $processName = 'weline-wls-shared-log-' . $suffix;
+        $script = \sys_get_temp_dir() . \DIRECTORY_SEPARATOR . $processName . '.php';
+        $expectedLog = \Weline\Server\Service\WlsLogService::getProcessLogFile(
+            $processName,
+            $instanceName
+        );
+        $expectedStderrLog = \Weline\Server\Service\WlsLogService::getProcessStderrLogFile(
+            $processName,
+            $instanceName
+        );
+        $manager = new class($script, $processName) extends SharedStateServiceManager {
+            public function __construct(
+                private readonly string $script,
+                private readonly string $processName
+            ) {
+            }
+
+            public function launchForTest(string $instanceName): array
+            {
+                return $this->launchSharedServiceProcessesBatch(
+                    [['role' => ControlMessage::ROLE_SESSION_SERVER]],
+                    $instanceName
+                );
+            }
+
+            protected function buildLaunchCommand(
+                array $definition,
+                string $requesterInstanceName
+            ): \Weline\Server\Service\Contract\ServiceCommand {
+                return new \Weline\Server\Service\Contract\ServiceCommand(
+                    script: $this->script,
+                    workingDir: \dirname($this->script),
+                    processName: $this->processName
+                );
+            }
+        };
+
+        try {
+            @\unlink($expectedLog);
+            @\unlink($expectedStderrLog);
+            self::assertNotFalse(\file_put_contents(
+                $script,
+                '<?php fwrite(STDOUT, "shared-first-output\\n");'
+            ));
+
+            $pids = $manager->launchForTest($instanceName);
+            Processer::waitForExit(\array_values($pids), 5.0);
+
+            self::assertFileExists($expectedLog);
+            self::assertStringContainsString(
+                'shared-first-output',
+                (string) \file_get_contents($expectedLog)
+            );
+        } finally {
+            @\unlink($script);
+            @\unlink($expectedLog);
+            @\unlink($expectedStderrLog);
+            @\rmdir(\dirname($expectedLog));
+        }
+    }
+
     public function testImplicitSharedSessionTokenResetsToCanonicalDefaultPortToken(): void
     {
         $manager = new SharedStateServiceManager();
