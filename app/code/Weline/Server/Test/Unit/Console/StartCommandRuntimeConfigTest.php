@@ -68,6 +68,11 @@ class StartCommandRuntimeConfigTest extends TestCase
                 ];
             }
 
+            protected function ensureHostsFileConfigured(string $host): void
+            {
+                // Unit configuration tests must never mutate the host OS network files.
+            }
+
             protected function hasCliArgvToken(array $tokens): bool
             {
                 return \in_array('--host', $tokens, true);
