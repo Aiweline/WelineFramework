@@ -208,10 +208,22 @@ Close the lifecycle blockers found after the Linux gateway million-request run:
   remains evidence for the unchanged data plane, while a fresh signed package and
   three-run median remain TASK-014 boundaries.
 
+## ACME publication barrier and generation fencing
+
+- DEF-066 closed the first-signing race: the project now persists the complete HTTP-01 desired set before publication, and `SslCertificateService` synchronously publishes it to the gateway that owns the target domain before notifying the CA. A failed publication returns failure without CA notification and leaves durable state for Agent replay.
+- DEF-067 unified the digest contract across project store, PHP client and Controller as the canonical sorted challenge list. The Controller rejects a tampered digest, unauthorized domain, duplicate lease or expired proof before candidate publication.
+- DEF-068 made challenge generation a durable fencing value. Lower generations are rejected, same-generation same-digest requests are idempotent, same-generation different content is ambiguous and rejected, and a higher generation with identical content is persisted without an unnecessary Nginx reload.
+- DEF-069 closed rollout and topology edge cases: authorized legacy single-file challenges migrate without generation rollback, Unicode domains normalize to IDNA ASCII, never-used projects do not emit empty unauthorized mutations, and an unrelated gateway does not suppress a pure-WLS target.
+- DEF-070 made expiry-only cleanup persist the exact generation returned to the gateway, preventing restart from rolling the project fence backward. DEF-071 changed same-generation/same-digest replay from a blind success into desired-state reconciliation, so a drifted serving lease is restored without relaxing ambiguity rejection.
+- DEF-072 makes complete replay fail closed when any gateway registration view is unavailable; it cannot publish a partial subset that poisons the project generation for the later complete digest.
+- Pure WLS Workers continue to consume per-domain compatibility projections from the same project fact source. Explicit expiry is enforced by Dispatcher and both Worker variants; invalid replacement state never displaces the current serving view.
+- Red/green evidence first reproduced the async notification race, production digest mismatch, restart fence rollback, idempotent false success, partial-view poisoning, legacy migration failure and IDNA/mixed-mode misclassification. Final targeted ACME/protocol regression passed `101 tests / 1269 assertions`; complete Weline_Server passed `1327 / 6699 / 17 skips`; Gateway/Windows/Nginx passed `257 / 2673 / 15 skips`; opt-in Native Broker/Launcher passed `9 / 334`; focused real data-plane recovery passed `1 / 1476`.
+- This closes the deterministic project-to-local-gateway code path. A public first issuance against external CA and DNS remains an environment acceptance boundary and is not claimed by these local tests.
+
 ## Remaining release boundaries
 
 This closes the discovered Linux lifecycle blockers, mixed-project H2/H3
 million traffic, and revoke invariants. It does not convert the whole WLS 2.0
 plan to release-ready: Windows/macOS system-service ACL/reboot, Windows
-real-host acceptance, first ACME, three-run performance medians and the
+real-host acceptance, external-CA/DNS public first issuance, three-run performance medians and the
 remaining TEST-001..054 evidence retain their current plan status.

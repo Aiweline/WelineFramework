@@ -109,6 +109,14 @@ WLS TLS 入口执行固定 300 秒排空。Agent 每 10 秒重试推进事务但
   证明损坏都会立即退回确定性单实例，不把请求分发到会话不相容的后端。
 - `--edge=wls` 不需要 enrollment，也不依赖宿主派生资格；证书仍从项目事实源读取。
 
+### 4.2 ACME HTTP-01 事实源与网关发布
+
+- 项目在 `generated/acme-http01/.desired.json` 原子持久化 challenge generation、排序摘要和明确过期时间；每域名兼容投影仍由同一事实源生成，供纯 WLS Worker 读取。旧单文件会在已授权域名范围内迁移，符号链接、通配符 HTTP-01、非法 token/proof 一律拒绝。
+- 目标域名属于共享网关时，证书服务必须先把本代 challenge 同步发布成功，再通知 CA 发起验证。发布失败不会丢弃项目待确认状态，也不会提前通知 CA；Gateway Agent 每 10 秒观察 generation/digest 并重放，30 秒无变化也会续同步。
+- Controller 只接受 enrollment 与当前路由同时授权的精确域名，统一按 IDNA ASCII 规范化；低 generation 拒绝，同 generation 同摘要幂等对账、异摘要拒绝。同代同摘要会在活动 lease 漂移时恢复数据面；内容相同而 generation 前进时只持久化栅栏，不触发 Nginx reload。到期清扫产生的新 generation 同步落盘。
+- 若宿主存在网关但不承载目标域名，项目仍按纯 WLS 路径发布；只有匹配目标域名的网关注册失败才 fail-closed。未指定单域名的全量重放要求所有网关注册视图完整，绝不提交部分子集。清理 challenge 同样推进 generation 并同步空集合，失败可由 Agent 恢复。
+- 以上闭合的是项目到本机网关的数据面可达性与恢复链；外部 CA/DNS 的公网首次签发仍必须在具备真实域名、DNS 和 CA 网络的隔离环境单独验收。
+
 ## 5. 当前安全约束
 
 - legacy 与后续 host gateway 共用 Nginx runtime 原语：进程操作要求 PID、精确 argv、
@@ -158,7 +166,7 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - macOS 显式启用原生集成后，Native Broker、Launcher、签名槽、崩溃回滚和真实数据面
   恢复通过 `12 tests / 1985 assertions`；该证据不等于 launchd 安装/reboot；
 - `Gateway|Windows|Nginx` 跨平台门禁通过
-  `243 tests / 2581 assertions / 15 capability skips`，含 Windows Native Broker
+  `257 tests / 2673 assertions / 15 capability skips`，含 Windows Native Broker
   的长管理事务 I/O 窗口；实际 Windows VM 因 Parallels 授权过期挂起，仍为
   `BLOCKED_ENVIRONMENT`；
 - legacy 80/443 显式提升已在 Linux VM 成功：promotion v50 的维护窗 69.897 秒，
@@ -180,11 +188,13 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   `removed_at`、空后端身份和 `REMOVED`；撤销域名中性 421，幸存租户 HTTP/2 200，
   网关保持 `HEALTHY`。多项目故障隔离夹具必须为每个项目使用独立受管 runtime；
 - 使用正式框架 bootstrap 的全量 Weline_Server 回归为
-  `1312 tests / 6606 assertions / 17 platform skips`，零错误、零失败。
+  `1327 tests / 6699 assertions / 17 platform skips`，零错误、零失败。
 
 本轮已补齐 Session/无状态能力的运行时写入、认证证明、30 秒恢复观察、实例摘要心跳
-重放与多实例 generation 防抖；聚焦真实 H3 数据面恢复通过 `1 test / 1479 assertions`。
-当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、Windows 实机、首次 ACME、完整
+重放与多实例 generation 防抖；ACME/协议专项通过 `101 tests / 1269 assertions`，聚焦
+真实数据面恢复通过 `1 test / 1476 assertions`，Native Broker/Launcher 聚焦门禁通过
+`9 tests / 334 assertions`。当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、
+Windows 实机、外部 CA/DNS 公网首次实签、完整
 Session daemon 实机亲和和同条件三轮性能中位数。Linux 宿主包已经完成来源、依赖、SBOM、
 自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。现有 v54
 双租户 H2/H3 百万仍证明未改动的数据面；本轮控制面提交没有在新签名宿主包上重跑百万，
