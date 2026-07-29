@@ -1168,6 +1168,40 @@ class SharedStateServiceManager
         return \array_map(static fn(mixed $pid): int => (int)$pid, $pids);
     }
 
+    protected function buildSharedProcessBatchConfig(
+        string $registryIdentity,
+        array $argv,
+        string $workingDir,
+        string $processName,
+        string $logInstanceName,
+        bool $frontend,
+        ?string $configuredLogPath = null
+    ): array {
+        if ($frontend) {
+            $registryIdentity .= ' --win';
+            $argv[] = '--win';
+        }
+
+        return \array_merge(
+            [
+                'command' => $registryIdentity,
+                'block' => false,
+                'foreground' => $frontend,
+                'enableLog' => true,
+                'childOwnsPid' => true,
+                'isolateParentHandles' => \defined('IS_WIN') && IS_WIN,
+                'windowsArgv' => $argv,
+                'cwd' => $workingDir,
+            ],
+            WlsLogService::getProcessLaunchLogConfig(
+                processName: $processName,
+                instanceName: $logInstanceName,
+                enableLog: true,
+                configuredPath: $configuredLogPath
+            )
+        );
+    }
+
     protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName, bool $frontend = false): int
     {
         $command = $this->buildLaunchCommand($definition, $requesterInstanceName);
@@ -1184,17 +1218,22 @@ class SharedStateServiceManager
             $argv[] = '--name=' . $processName;
         }
 
-        if (!$frontend) {
-            return Processer::createDetachedPhpArgv(
+        $logInstanceName = \trim((string)($definition['service_instance_name'] ?? $requesterInstanceName));
+        if ($logInstanceName === '') {
+            $logInstanceName = 'default';
+        }
+        $pids = Processer::batchCreate([
+            'shared-service' => $this->buildSharedProcessBatchConfig(
+                $registryIdentity,
                 $argv,
                 $command->getWorkingDir(),
-                $registryIdentity,
-                true
-            );
-        }
+                $processName,
+                $logInstanceName,
+                $frontend
+            ),
+        ]);
 
-        $registryIdentity .= ' --win';
-        return Processer::create($registryIdentity, block: false, foreground: true, enableLog: true);
+        return (int)($pids['shared-service'] ?? 0);
     }
 
     /**
@@ -1912,8 +1951,10 @@ class SharedStateServiceManager
      */
     protected function ensureSharedProcessLogVisible(array $runtime, string $requesterInstanceName): void
     {
-        $processName = \trim((string) ($runtime['process_name'] ?? ''));
-        $sharedLogInstanceName = \trim((string) ($runtime['service_instance_name'] ?? $runtime['instance_name'] ?? ''));
+        $processName = \trim((string)($runtime['process_name'] ?? ''));
+        $sharedLogInstanceName = \trim((string)(
+            $runtime['service_instance_name'] ?? $runtime['instance_name'] ?? $requesterInstanceName
+        ));
         if ($sharedLogInstanceName === '') {
             $sharedLogInstanceName = 'default';
         }
@@ -1922,28 +1963,10 @@ class SharedStateServiceManager
         }
 
         try {
-            $targetLog = WlsLogService::ensureProcessLogFile($processName, $sharedLogInstanceName);
-            $sourceLog = Processer::getLogFile('--name=' . $processName);
+            WlsLogService::ensureProcessLogFile($processName, $sharedLogInstanceName);
         } catch (\Throwable) {
-            return;
+            // Reused legacy processes may not expose managed launch logs yet.
         }
-
-        if (!\is_file($sourceLog) || \realpath($sourceLog) === \realpath($targetLog)) {
-            return;
-        }
-
-        $sourceSize = (int) (@\filesize($sourceLog) ?: 0);
-        $targetSize = (int) (@\filesize($targetLog) ?: 0);
-        if ($sourceSize <= 0 || $targetSize > 0) {
-            return;
-        }
-
-        $snapshot = @\file_get_contents($sourceLog);
-        if ($snapshot === false || $snapshot === '') {
-            return;
-        }
-
-        @\file_put_contents($targetLog, $snapshot, FILE_APPEND);
     }
 
     protected function syncRuntimeRegistryMetadata(string $role, ?SharedStateServiceRegistry $registry = null): void
