@@ -292,6 +292,9 @@ class ControlMessage
     public const ACTION_GATEWAY_FALLBACK_DISABLE = 'gateway_fallback_disable';
     public const ACTION_GATEWAY_BACKEND_ENABLE = 'gateway_backend_enable';
     public const ACTION_GATEWAY_NATIVE_DRAIN = 'gateway_native_drain';
+    public const ACTION_GATEWAY_AGENT_ENABLE = 'gateway_agent_enable';
+    public const ACTION_GATEWAY_AGENT_COMMIT = 'gateway_agent_commit';
+    public const ACTION_GATEWAY_AGENT_DISABLE = 'gateway_agent_disable';
 
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';

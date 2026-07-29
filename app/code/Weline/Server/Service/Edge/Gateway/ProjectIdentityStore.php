@@ -172,6 +172,10 @@ final class ProjectIdentityStore
             throw new \RuntimeException('Unable to lock WLS project identity.');
         }
         @\chmod($lockFile, 0600);
+        $this->preserveProjectIdentityOwnership($lockFile, $lock);
+        if (\is_file($this->identityFile)) {
+            $this->preserveProjectIdentityOwnership($this->identityFile);
+        }
         try {
             $exists = \is_file($this->identityFile);
             $state = $exists ? $this->readStateFile($this->identityFile) : $this->newState();
@@ -305,8 +309,14 @@ final class ProjectIdentityStore
     private function readStateFile(string $file, bool $requireObject = true): array
     {
         $this->assertSafeFileTarget($file);
+        if (!\is_readable($file)) {
+            throw new \RuntimeException('WLS project state is not readable: ' . $file);
+        }
         $raw = @\file_get_contents($file);
-        $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
+        if (!\is_string($raw)) {
+            throw new \RuntimeException('Unable to read WLS project state: ' . $file);
+        }
+        $decoded = \json_decode($raw, true);
         if (!\is_array($decoded)) {
             if (!$requireObject) {
                 return [];
@@ -349,13 +359,39 @@ final class ProjectIdentityStore
         $encoded = \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         $payload = \is_string($encoded) ? $encoded . PHP_EOL : '';
         $temporary = $file . '.tmp.' . \bin2hex(\random_bytes(6));
-        if ($payload === ''
-            || @\file_put_contents($temporary, $payload, LOCK_EX) === false
-        ) {
+        $temporaryHandle = $payload === '' ? false : @\fopen($temporary, 'xb');
+        if (!\is_resource($temporaryHandle)) {
             @\unlink($temporary);
             throw new \RuntimeException('Unable to stage WLS project state: ' . $file);
         }
-        @\chmod($temporary, 0600);
+        try {
+            $remaining = $payload;
+            while ($remaining !== '') {
+                $written = @\fwrite($temporaryHandle, $remaining);
+                if (!\is_int($written) || $written < 1) {
+                    throw new \RuntimeException('Unable to stage WLS project state: ' . $file);
+                }
+                $remaining = (string)\substr($remaining, $written);
+            }
+            if (!@\fflush($temporaryHandle)
+                || (\function_exists('fsync') && !@\fsync($temporaryHandle))
+            ) {
+                throw new \RuntimeException('Unable to synchronize WLS project state: ' . $file);
+            }
+            if (\hash_equals($this->identityFile, $file)) {
+                $this->preserveProjectIdentityOwnership($temporary, $temporaryHandle);
+            }
+            if (\function_exists('fchmod')) {
+                @\fchmod($temporaryHandle, 0600);
+            } else {
+                @\chmod($temporary, 0600);
+            }
+        } catch (\Throwable $throwable) {
+            @\fclose($temporaryHandle);
+            @\unlink($temporary);
+            throw $throwable;
+        }
+        @\fclose($temporaryHandle);
         if (@\rename($temporary, $file)) {
             @\chmod($file, 0600);
             return;
@@ -394,6 +430,74 @@ final class ProjectIdentityStore
         }
         if (!$published) {
             throw new \RuntimeException('Unable to publish WLS project state: ' . $file);
+        }
+    }
+
+    /**
+     * Project facts must remain usable by the project owner even when an
+     * administrator performs enrollment or legacy promotion. Restrict root
+     * ownership repair to the identity file and its private lock/candidate.
+     *
+     * @param resource|null $handle
+     */
+    private function preserveProjectIdentityOwnership(string $file, mixed $handle = null): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_geteuid')
+            || \posix_geteuid() !== 0
+        ) {
+            return;
+        }
+        $lockFile = \dirname($this->identityFile) . DIRECTORY_SEPARATOR
+            . '.wls-project.lock';
+        if (!\hash_equals($this->identityFile, $file)
+            && !\hash_equals($lockFile, $file)
+            && !\str_starts_with($file, $this->identityFile . '.tmp.')
+        ) {
+            throw new \RuntimeException(
+                'Refusing to apply project ownership outside WLS project facts.'
+            );
+        }
+        $owner = @\lstat($this->projectRoot);
+        if (!\is_array($owner)
+            || \is_link($this->projectRoot)
+            || !\is_int($owner['uid'] ?? null)
+            || !\is_int($owner['gid'] ?? null)
+            || \is_link($file)
+            || !\is_file($file)
+        ) {
+            throw new \RuntimeException(
+                'Unable to establish safe WLS project fact ownership.'
+            );
+        }
+        $uid = (int)$owner['uid'];
+        $gid = (int)$owner['gid'];
+        $ownerApplied = \is_resource($handle)
+            && \function_exists('fchown')
+            && @\fchown($handle, $uid);
+        if (!$ownerApplied) {
+            $ownerApplied = \function_exists('lchown')
+                ? @\lchown($file, $uid)
+                : @\chown($file, $uid);
+        }
+        $groupApplied = \is_resource($handle)
+            && \function_exists('fchgrp')
+            && @\fchgrp($handle, $gid);
+        if (!$groupApplied) {
+            $groupApplied = \function_exists('lchgrp')
+                ? @\lchgrp($file, $gid)
+                : @\chgrp($file, $gid);
+        }
+        $actual = @\lstat($file);
+        if (!$ownerApplied
+            || !$groupApplied
+            || !\is_array($actual)
+            || (int)($actual['uid'] ?? -1) !== $uid
+            || (int)($actual['gid'] ?? -1) !== $gid
+        ) {
+            throw new \RuntimeException(
+                'Unable to preserve the project owner on WLS project facts.'
+            );
         }
     }
 

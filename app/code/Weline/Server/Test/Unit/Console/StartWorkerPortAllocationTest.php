@@ -74,6 +74,60 @@ final class StartWorkerPortAllocationTest extends TestCase
         );
     }
 
+    public function testDispatcherWorkerRangeAvoidsConservativeEphemeralPorts(): void
+    {
+        $start = new Start();
+
+        $first = $this->invokeProtected(
+            $start,
+            'resolveInitialWorkerPort',
+            28080,
+            14694,
+            8,
+            true,
+            false,
+        );
+        $second = $this->invokeProtected(
+            $start,
+            'resolveInitialWorkerPort',
+            28080,
+            14694,
+            8,
+            true,
+            false,
+        );
+
+        self::assertSame($first, $second);
+        self::assertNotSame(42774, $first);
+        self::assertGreaterThanOrEqual(10000, $first);
+        self::assertLessThan(17000, $first);
+    }
+
+    public function testWorkerPortScannerRehomesAnEphemeralPreferredRange(): void
+    {
+        $start = new class extends Start {
+            protected function isWorkerPortAllocated(int $port): bool
+            {
+                unset($port);
+                return false;
+            }
+
+            protected function getReservedWorkerPortsFromOtherInstances(?string $ignoreInstanceName = null): array
+            {
+                unset($ignoreInstanceName);
+                return [];
+            }
+        };
+
+        $first = $this->invokeProtected($start, 'findAvailableWorkerPortBase', 42774, 8);
+        $second = $this->invokeProtected($start, 'findAvailableWorkerPortBase', 42774, 8);
+
+        self::assertSame($first, $second);
+        self::assertNotSame(42774, $first);
+        self::assertGreaterThanOrEqual(10000, $first);
+        self::assertLessThan(17000, $first);
+    }
+
     public function testSingleWorkerWithoutDispatcherUsesMainPort(): void
     {
         $start = new Start();

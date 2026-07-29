@@ -623,9 +623,24 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
                 $standbyOperation,
             );
         }
-        $beforeDrain = $this->curlRoute($alpha['domain']);
-        self::assertSame(200, $beforeDrain['http_code']);
-        self::assertStringContainsString('"instance":"alpha-a"', $beforeDrain['body']);
+        $distributedInstances = [];
+        for ($request = 0; $request < 64; ++$request) {
+            $beforeDrain = $this->curlRoute($alpha['domain']);
+            self::assertSame(200, $beforeDrain['http_code']);
+            foreach (['alpha-a', 'alpha-b'] as $expectedInstance) {
+                if (\str_contains(
+                    (string)$beforeDrain['body'],
+                    '"instance":"' . $expectedInstance . '"',
+                )) {
+                    $distributedInstances[$expectedInstance] = true;
+                }
+            }
+        }
+        self::assertSame(
+            ['alpha-a', 'alpha-b'],
+            \array_keys($distributedInstances),
+            'A stateless project must distribute traffic only after both instances prove capability.',
+        );
         $drain = $alphaClient->projectRequest('drain', [
             'project_uuid' => $alpha['project_uuid'],
             'instance_id' => $alpha['instance_id'],
@@ -2202,7 +2217,8 @@ C;
             : 'not tracked';
     }
 
-    private function waitForAdminStatus(float $timeout): void
+    /** @return array<string,mixed> */
+    private function waitForAdminStatus(float $timeout): array
     {
         $deadline = \microtime(true) + $timeout;
         $error = '';
@@ -2210,7 +2226,7 @@ C;
             try {
                 $response = $this->adminClient()->administratorStatus();
                 if (($response['ok'] ?? false) === true) {
-                    return;
+                    return $response;
                 }
                 $error = \json_encode($response);
             } catch (\Throwable $throwable) {
@@ -2417,6 +2433,27 @@ C;
                     @\fwrite(
                         $client,
                         "HTTP/1.1 {$status}\r\nContent-Type: application/json\r\n"
+                            . 'Content-Length: ' . \strlen($body)
+                            . "\r\nConnection: close\r\n\r\n{$body}",
+                    );
+                    @\fclose($client);
+                    continue;
+                }
+                $authorized = \hash_equals(
+                    $edgeSecret,
+                    (string)($headers['x-wls-edge-token'][0] ?? ''),
+                ) && \hash_equals(
+                    $projectUuid,
+                    (string)($headers['x-wls-project-uuid'][0] ?? ''),
+                ) && \hash_equals(
+                    $instanceId,
+                    (string)($headers['x-wls-instance-id'][0] ?? ''),
+                ) && (int)($headers['x-wls-backend-generation'][0] ?? 0) === 1;
+                if (!$authorized) {
+                    $body = '{"error":"invalid gateway backend identity"}';
+                    @\fwrite(
+                        $client,
+                        "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n"
                             . 'Content-Length: ' . \strlen($body)
                             . "\r\nConnection: close\r\n\r\n{$body}",
                     );

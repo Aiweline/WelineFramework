@@ -306,6 +306,7 @@ final class NginxProcessIdentity
             throw new \RuntimeException('Unable to stage the PID-bound Nginx process identity.');
         }
         @\chmod($temporary, 0600);
+        $this->inheritDirectoryOwnership($temporary, \dirname($this->processManifest));
         if (!@\rename($temporary, $this->processManifest)) {
             @\unlink($temporary);
             throw new \RuntimeException('Unable to publish the PID-bound Nginx process identity.');
@@ -328,11 +329,38 @@ final class NginxProcessIdentity
             throw new \RuntimeException('Unable to lock the Nginx process identity.');
         }
         @\chmod($lockFile, 0600);
+        $this->inheritDirectoryOwnership($lockFile, $directory);
         try {
             return $operation();
         } finally {
             @\flock($lock, LOCK_UN);
             @\fclose($lock);
+        }
+    }
+
+    /**
+     * Promotion rollback runs as the host administrator but restores a
+     * project-owned runtime. A root-owned 0600 identity file would make the
+     * recovered Nginx impossible for the project user to inspect or stop.
+     */
+    private function inheritDirectoryOwnership(string $file, string $directory): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_geteuid')
+            || \posix_geteuid() !== 0
+        ) {
+            return;
+        }
+        $owner = @\stat($directory);
+        if (!\is_array($owner)
+            || !\is_int($owner['uid'] ?? null)
+            || !\is_int($owner['gid'] ?? null)
+            || !@\chown($file, (int)$owner['uid'])
+            || !@\chgrp($file, (int)$owner['gid'])
+        ) {
+            throw new \RuntimeException(
+                'Unable to preserve project ownership for the Nginx process identity.'
+            );
         }
     }
 

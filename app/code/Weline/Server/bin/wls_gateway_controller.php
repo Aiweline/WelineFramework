@@ -2208,6 +2208,7 @@ final class WlsEdgeGatewayController
         return [
             'accepted' => true,
             'project_uuid' => $projectUuid,
+            'security_generation' => $securityGeneration,
             'credential' => [
                 'schema_version' => 1,
                 'protocol' => self::PROTOCOL,
@@ -4563,37 +4564,50 @@ final class WlsEdgeGatewayController
                 continue;
             }
             $projectUuid = (string)($route['project_uuid'] ?? '');
-            $instanceId = (string)($route['instance_id'] ?? '');
-            $routeLease = $route['instances'][$instanceId] ?? null;
-            if ($projectUuid === ''
-                || $instanceId === ''
-                || !\is_array($routeLease)
-                || (string)($routeLease['status'] ?? '') !== 'ACTIVE'
-                || ($routeLease['backend_healthy'] ?? false) !== true
+            $selectedInstanceIds = \array_keys(
+                \is_array($route['backend_instances'] ?? null)
+                    ? $route['backend_instances']
+                    : [],
+            );
+            if ($selectedInstanceIds === []
+                && (string)($route['instance_id'] ?? '') !== ''
             ) {
+                $selectedInstanceIds[] = (string)$route['instance_id'];
+            }
+            if ($projectUuid === '' || $selectedInstanceIds === []) {
                 continue;
             }
-            $routeLease['last_heartbeat'] = $wall;
-            $routeLease['last_heartbeat_monotonic'] = $monotonic;
-            $routeLease['lease_boot_id'] = $this->hostBootId;
-            $this->state['routes'][$routeId]['instances'][$instanceId] = $routeLease;
-            $this->state['routes'][$routeId]['last_heartbeat'] = $wall;
+            foreach ($selectedInstanceIds as $instanceId) {
+                $instanceId = (string)$instanceId;
+                $routeLease = $route['instances'][$instanceId] ?? null;
+                if (!\is_array($routeLease)
+                    || (string)($routeLease['status'] ?? '') !== 'ACTIVE'
+                    || ($routeLease['backend_healthy'] ?? false) !== true
+                ) {
+                    continue;
+                }
+                $routeLease['last_heartbeat'] = $wall;
+                $routeLease['last_heartbeat_monotonic'] = $monotonic;
+                $routeLease['lease_boot_id'] = $this->hostBootId;
+                $this->state['routes'][$routeId]['instances'][$instanceId] = $routeLease;
+                $this->state['routes'][$routeId]['last_heartbeat'] = $wall;
 
-            $instanceLease = $this->state['instances'][$projectUuid][$instanceId] ?? null;
-            if (!\is_array($instanceLease)
-                || (int)($instanceLease['generation'] ?? 0)
-                    !== (int)($routeLease['generation'] ?? 0)
-                || !\hash_equals(
-                    (string)($instanceLease['launch_id'] ?? ''),
-                    (string)($routeLease['launch_id'] ?? ''),
-                )
-            ) {
-                continue;
+                $instanceLease = $this->state['instances'][$projectUuid][$instanceId] ?? null;
+                if (!\is_array($instanceLease)
+                    || (int)($instanceLease['generation'] ?? 0)
+                        !== (int)($routeLease['generation'] ?? 0)
+                    || !\hash_equals(
+                        (string)($instanceLease['launch_id'] ?? ''),
+                        (string)($routeLease['launch_id'] ?? ''),
+                    )
+                ) {
+                    continue;
+                }
+                $instanceLease['last_heartbeat'] = $wall;
+                $instanceLease['last_heartbeat_monotonic'] = $monotonic;
+                $instanceLease['lease_boot_id'] = $this->hostBootId;
+                $this->state['instances'][$projectUuid][$instanceId] = $instanceLease;
             }
-            $instanceLease['last_heartbeat'] = $wall;
-            $instanceLease['last_heartbeat_monotonic'] = $monotonic;
-            $instanceLease['lease_boot_id'] = $this->hostBootId;
-            $this->state['instances'][$projectUuid][$instanceId] = $instanceLease;
         }
     }
 
@@ -4791,28 +4805,30 @@ final class WlsEdgeGatewayController
                     continue;
                 }
                 $domain = (string)($route['domain'] ?? 'unknown');
-                $backends = (array)($route['backends'] ?? []);
                 if (!(bool)($route['certificate']['valid'] ?? false)) {
                     $this->lastShadowVerificationError =
                         'Candidate route has no valid certificate snapshot: ' . $domain;
                     return false;
                 }
-                if ($backends === []) {
+                $backendInstances = $this->routeBackendInstances($route);
+                if ($backendInstances === []) {
                     $this->lastShadowVerificationError =
                         'Candidate route has no active backend: ' . $domain;
                     return false;
                 }
-                if (!$this->probeBackends(
-                    $backends,
-                    (array)($route['backend_identity'] ?? []),
-                    true,
-                )) {
-                    $allReady = false;
-                    $identity = (array)($route['backend_identity'] ?? []);
-                    $lastPending = $domain
-                        . ' instance=' . (string)($identity['instance_id'] ?? 'unknown')
-                        . ' generation=' . (int)($identity['generation'] ?? 0);
-                    break;
+                foreach ($backendInstances as $instanceId => $backendInstance) {
+                    $identity = (array)($backendInstance['backend_identity'] ?? []);
+                    if (!$this->probeBackends(
+                        (array)($backendInstance['backends'] ?? []),
+                        $identity,
+                        true,
+                    )) {
+                        $allReady = false;
+                        $lastPending = $domain
+                            . ' instance=' . (string)$instanceId
+                            . ' generation=' . (int)($identity['generation'] ?? 0);
+                        break 2;
+                    }
                 }
             }
             if ($allReady) {
@@ -5011,6 +5027,37 @@ final class WlsEdgeGatewayController
                 @\unlink($pidFile);
             }
         }
+    }
+
+    /**
+     * @param array<string,mixed> $route
+     * @return array<string,array{
+     *     instance_id:string,
+     *     backends:list<array<string,mixed>>,
+     *     backend_identity:array<string,mixed>
+     * }>
+     */
+    private function routeBackendInstances(array $route): array
+    {
+        $instances = \is_array($route['backend_instances'] ?? null)
+            ? $route['backend_instances']
+            : [];
+        if ($instances !== []) {
+            return $instances;
+        }
+        $instanceId = (string)($route['instance_id'] ?? '');
+        $backends = \array_values((array)($route['backends'] ?? []));
+        $identity = (array)($route['backend_identity'] ?? []);
+        if ($instanceId === '' || $backends === [] || $identity === []) {
+            return [];
+        }
+        return [
+            $instanceId => [
+                'instance_id' => $instanceId,
+                'backends' => $backends,
+                'backend_identity' => $identity,
+            ],
+        ];
     }
 
     private function removeShadowDirectory(string $root): void
@@ -5562,8 +5609,19 @@ final class WlsEdgeGatewayController
             '  }',
         ];
 
-        /** @var array<string,string> $routeUpstreams */
-        $routeUpstreams = [];
+        /**
+         * Each instance keeps a separate upstream and authenticated identity.
+         * Sharing one upstream across instances would send the preferred
+         * instance token/generation to every backend and either fail closed or
+         * silently defeat the instance fence.
+         *
+         * @var array<string,list<array{
+         *     instance_id:string,
+         *     upstream:string,
+         *     identity:array<string,mixed>
+         * }>> $routeTransports
+         */
+        $routeTransports = [];
         /** @var array<string,list<array<string,mixed>>> $upstreamBackends */
         $upstreamBackends = [];
         foreach ((array)$this->state['routes'] as $route) {
@@ -5574,24 +5632,117 @@ final class WlsEdgeGatewayController
             ) {
                 continue;
             }
-            $backendIdentity = \is_array($route['backend_identity'] ?? null)
-                ? $route['backend_identity']
+            $routeId = (string)$route['route_id'];
+            $backendInstances = \is_array($route['backend_instances'] ?? null)
+                ? $route['backend_instances']
                 : [];
-            $upstreamDigest = \hash('sha256', $this->canonicalJson([
-                'project_uuid' => (string)($route['project_uuid'] ?? ''),
-                'instance_id' => (string)($route['instance_id'] ?? ''),
-                'backends' => (array)$route['backends'],
-                'backend_identity' => [
-                    'instance_id' => (string)($backendIdentity['instance_id'] ?? ''),
-                    'generation' => (int)($backendIdentity['generation'] ?? 0),
-                    'edge_capability_digest' => (string)(
-                        $backendIdentity['edge_capability_digest'] ?? ''
+            if ($backendInstances === []) {
+                $backendInstances[(string)($route['instance_id'] ?? '')] = [
+                    'instance_id' => (string)($route['instance_id'] ?? ''),
+                    'backends' => (array)$route['backends'],
+                    'backend_identity' => (array)($route['backend_identity'] ?? []),
+                ];
+            }
+            foreach ($backendInstances as $instanceId => $backendInstance) {
+                if (!\is_array($backendInstance)) {
+                    continue;
+                }
+                $backends = \array_values((array)($backendInstance['backends'] ?? []));
+                $backendIdentity = \is_array($backendInstance['backend_identity'] ?? null)
+                    ? $backendInstance['backend_identity']
+                    : [];
+                if ($backends === [] || $backendIdentity === []) {
+                    continue;
+                }
+                $instanceId = (string)$instanceId;
+                $upstreamDigest = \hash('sha256', $this->canonicalJson([
+                    'project_uuid' => (string)($route['project_uuid'] ?? ''),
+                    'instance_id' => $instanceId,
+                    'backends' => $backends,
+                    'backend_identity' => [
+                        'instance_id' => (string)($backendIdentity['instance_id'] ?? ''),
+                        'generation' => (int)($backendIdentity['generation'] ?? 0),
+                        'edge_capability_digest' => (string)(
+                            $backendIdentity['edge_capability_digest'] ?? ''
+                        ),
+                    ],
+                ]));
+                $upstream = 'wls_backend_' . \substr($upstreamDigest, 0, 32);
+                $routeTransports[$routeId][] = [
+                    'instance_id' => $instanceId,
+                    'upstream' => $upstream,
+                    'identity' => $backendIdentity,
+                ];
+                $upstreamBackends[$upstream] ??= $backends;
+            }
+        }
+
+        /**
+         * Values used by each route's proxy directives. In distributed mode,
+         * split_clients selects one authenticated transport per request, and
+         * the maps switch all fencing fields as one tuple.
+         *
+         * @var array<string,array{
+         *     upstream:string,
+         *     token:string,
+         *     instance_id:string,
+         *     generation:string
+         * }> $routeRoutingValues
+         */
+        $routeRoutingValues = [];
+        foreach ($routeTransports as $routeId => $transports) {
+            if (\count($transports) === 1) {
+                $identity = (array)$transports[0]['identity'];
+                $routeRoutingValues[$routeId] = [
+                    'upstream' => (string)$transports[0]['upstream'],
+                    'token' => $this->quote(
+                        (string)($identity['edge_capability_secret'] ?? ''),
                     ),
-                ],
-            ]));
-            $upstream = 'wls_backend_' . \substr($upstreamDigest, 0, 32);
-            $routeUpstreams[(string)$route['route_id']] = $upstream;
-            $upstreamBackends[$upstream] ??= \array_values((array)$route['backends']);
+                    'instance_id' => $this->quote(
+                        (string)$transports[0]['instance_id'],
+                    ),
+                    'generation' => (string)(int)($identity['generation'] ?? 0),
+                ];
+                continue;
+            }
+            $prefix = 'wls_route_' . \substr(\hash('sha256', $routeId), 0, 16);
+            $selector = '$' . $prefix . '_selector';
+            $lines[] = '  split_clients "$request_id" ' . $selector . ' {';
+            $percentage = \floor(10000 / \count($transports)) / 100;
+            foreach ($transports as $index => $transport) {
+                $bucket = '"' . $index . '"';
+                $lines[] = $index === \array_key_last($transports)
+                    ? '    * ' . $bucket . ';'
+                    : '    ' . \number_format($percentage, 2, '.', '')
+                        . '% ' . $bucket . ';';
+            }
+            $lines[] = '  }';
+            foreach ([
+                'upstream' => static fn (array $transport): string =>
+                    (string)$transport['upstream'],
+                'token' => fn (array $transport): string => $this->quote(
+                    (string)($transport['identity']['edge_capability_secret'] ?? ''),
+                ),
+                'instance' => fn (array $transport): string => $this->quote(
+                    (string)$transport['instance_id'],
+                ),
+                'generation' => static fn (array $transport): string =>
+                    (string)(int)($transport['identity']['generation'] ?? 0),
+            ] as $suffix => $value) {
+                $variable = '$' . $prefix . '_' . $suffix;
+                $lines[] = '  map ' . $selector . ' ' . $variable . ' {';
+                $lines[] = '    default ' . $value($transports[0]) . ';';
+                foreach ($transports as $index => $transport) {
+                    $lines[] = '    "' . $index . '" ' . $value($transport) . ';';
+                }
+                $lines[] = '  }';
+            }
+            $routeRoutingValues[$routeId] = [
+                'upstream' => '$' . $prefix . '_upstream',
+                'token' => '$' . $prefix . '_token',
+                'instance_id' => '$' . $prefix . '_instance',
+                'generation' => '$' . $prefix . '_generation',
+            ];
         }
         foreach ($upstreamBackends as $upstream => $backends) {
             $lines[] = '  upstream ' . $upstream . ' {';
@@ -5627,7 +5778,13 @@ final class WlsEdgeGatewayController
             $routeId = (string)$route['route_id'];
             $domain = (string)$route['domain'];
             $status = (string)$route['status'];
-            $upstream = (string)($routeUpstreams[$routeId] ?? '');
+            $routing = $routeRoutingValues[$routeId] ?? [
+                'upstream' => '',
+                'token' => '""',
+                'instance_id' => '""',
+                'generation' => '0',
+            ];
+            $upstream = (string)$routing['upstream'];
             $lines[] = '  server {';
             $lines[] = '    listen 0.0.0.0:' . $httpPort . ';';
             $lines[] = '    listen [::]:' . $httpPort . ';';
@@ -5685,7 +5842,6 @@ final class WlsEdgeGatewayController
             if ($status !== 'ACTIVE') {
                 $lines[] = '    return 503;';
             } else {
-                $identity = (array)$route['backend_identity'];
                 // The public benchmark contract needs the two-byte liveness
                 // response, but must never expose detail=1 identity metadata.
                 // Drop all query parameters and pin the authenticated project
@@ -5697,7 +5853,7 @@ final class WlsEdgeGatewayController
                 $lines[] = '      proxy_set_header Forwarded "";';
                 $lines[] = '      proxy_set_header X-Forwarded-For $remote_addr;';
                 $lines[] = '      proxy_set_header X-WLS-Edge-Token '
-                    . $this->quote((string)($identity['edge_capability_secret'] ?? '')) . ';';
+                    . (string)$routing['token'] . ';';
                 $lines[] = '      proxy_set_header X-WLS-Client-Protocol $server_protocol;';
                 $lines[] = '      proxy_set_header Connection "";';
                 $lines[] = '      proxy_hide_header X-WLS-Project-UUID;';
@@ -5713,7 +5869,7 @@ final class WlsEdgeGatewayController
                 $lines[] = '      proxy_set_header Forwarded "";';
                 $lines[] = '      proxy_set_header X-Forwarded-For $remote_addr;';
                 $lines[] = '      proxy_set_header X-WLS-Edge-Token '
-                    . $this->quote((string)($identity['edge_capability_secret'] ?? '')) . ';';
+                    . (string)$routing['token'] . ';';
                 $lines[] = '      proxy_set_header X-WLS-Client-Protocol $server_protocol;';
                 $lines[] = '      proxy_hide_header X-WLS-Project-UUID;';
                 $lines[] = '      proxy_hide_header X-WLS-Instance-ID;';
@@ -5722,9 +5878,9 @@ final class WlsEdgeGatewayController
                 $lines[] = '      add_header X-WLS-Project-UUID '
                     . $this->quote((string)$route['project_uuid']) . ' always;';
                 $lines[] = '      add_header X-WLS-Instance-ID '
-                    . $this->quote((string)$route['instance_id']) . ' always;';
+                    . (string)$routing['instance_id'] . ' always;';
                 $lines[] = '      add_header X-WLS-Backend-Generation '
-                    . (int)($identity['generation'] ?? 0) . ' always;';
+                    . (string)$routing['generation'] . ' always;';
                 $lines[] = '      add_header X-WLS-Probe-Nonce $arg_nonce always;';
                 $lines[] = '      proxy_pass http://' . $upstream
                     . '/_wls/health?detail=1&gateway=1&nonce=$arg_nonce;';
@@ -5742,14 +5898,14 @@ final class WlsEdgeGatewayController
                 $lines[] = '      proxy_set_header Connection $connection_upgrade;';
                 $lines[] = '      proxy_set_header X-WLS-Edge-Protocol wls-edge/2;';
                 $lines[] = '      proxy_set_header X-WLS-Edge-Token '
-                    . $this->quote((string)($identity['edge_capability_secret'] ?? '')) . ';';
+                    . (string)$routing['token'] . ';';
                 $lines[] = '      proxy_set_header X-WLS-Client-Protocol $server_protocol;';
                 $lines[] = '      proxy_set_header X-WLS-Project-UUID '
                     . $this->quote((string)$route['project_uuid']) . ';';
                 $lines[] = '      proxy_set_header X-WLS-Instance-ID '
-                    . $this->quote((string)$route['instance_id']) . ';';
+                    . (string)$routing['instance_id'] . ';';
                 $lines[] = '      proxy_set_header X-WLS-Backend-Generation '
-                    . (int)($identity['generation'] ?? 0) . ';';
+                    . (string)$routing['generation'] . ';';
                 $lines[] = '      proxy_buffering off;';
                 $lines[] = '      proxy_read_timeout 3600s;';
                 $lines[] = '      proxy_send_timeout 3600s;';
@@ -6084,14 +6240,13 @@ final class WlsEdgeGatewayController
             $domain = 'wls-probe.' . \substr($domain, 2);
         }
         $certificate = (array)($route['certificate'] ?? []);
-        $identity = (array)($route['backend_identity'] ?? []);
         $expectedCertificate = @\openssl_x509_read((string)@\file_get_contents(
             (string)($certificate['cert_path'] ?? ''),
         ));
         if ($domain === ''
             || $expectedCertificate === false
             || (string)($route['project_uuid'] ?? '') === ''
-            || (string)($route['instance_id'] ?? '') === ''
+            || $this->routeBackendInstances($route) === []
         ) {
             return false;
         }
@@ -6160,19 +6315,21 @@ final class WlsEdgeGatewayController
             $headers[\strtolower(\trim($name))] = \trim($value);
         }
         $health = $body !== '' ? \json_decode($body, true) : null;
+        $instanceId = (string)($headers['x-wls-instance-id'] ?? '');
+        $backendInstance = $this->routeBackendInstances($route)[$instanceId] ?? null;
+        $identity = \is_array($backendInstance)
+            ? (array)($backendInstance['backend_identity'] ?? [])
+            : [];
         return \is_array($health)
+            && $identity !== []
             && \hash_equals(
                 (string)$route['project_uuid'],
                 (string)($headers['x-wls-project-uuid'] ?? ''),
             )
-            && \hash_equals(
-                (string)$route['instance_id'],
-                (string)($headers['x-wls-instance-id'] ?? ''),
-            )
             && (int)($identity['generation'] ?? 0)
                 === (int)($headers['x-wls-backend-generation'] ?? 0)
             && \hash_equals($nonce, (string)($headers['x-wls-probe-nonce'] ?? ''))
-            && \hash_equals((string)$route['instance_id'], (string)($health['instance'] ?? ''))
+            && \hash_equals($instanceId, (string)($health['instance'] ?? ''))
             && \hash_equals((string)($identity['launch_id'] ?? ''), (string)($health['launch_id'] ?? ''))
             && (int)($identity['master_epoch'] ?? 0) === (int)($health['master_epoch'] ?? 0)
             && \hash_equals($nonce, (string)($health['nonce'] ?? ''));
@@ -6717,19 +6874,40 @@ final class WlsEdgeGatewayController
         }
         \ksort($active, SORT_STRING);
         $selected = [];
+        $selectedInstances = [];
         $preferred = '';
+        $distributionMode = 'single';
         if ($active !== []) {
             $preferred = (string)\array_key_first($active);
-            foreach ([$active[$preferred]] as $instance) {
+            $distributionMode = $this->routeDistributionMode($route, $active);
+            $eligibleInstances = $distributionMode === 'single'
+                ? [$preferred => $active[$preferred]]
+                : $active;
+            foreach ($eligibleInstances as $instanceId => $instance) {
+                $instanceBackends = [];
                 foreach ((array)($instance['backends'] ?? []) as $backend) {
                     if (\is_array($backend)) {
                         $selected[] = $backend;
+                        $instanceBackends[] = $backend;
                     }
                     if (\count($selected) >= 16) {
-                        break 2;
+                        break;
                     }
                 }
+                if ($instanceBackends !== []) {
+                    $selectedInstances[(string)$instanceId] = [
+                        'instance_id' => (string)$instanceId,
+                        'backends' => $instanceBackends,
+                        'backend_identity' => (array)($instance['backend_identity'] ?? []),
+                    ];
+                }
+                if (\count($selected) >= 16) {
+                    break;
+                }
             }
+        }
+        if (\count($selectedInstances) < 2) {
+            $distributionMode = 'single';
         }
         $route['preferred_instance_id'] = $preferred;
         $route['instance_id'] = $preferred;
@@ -6737,6 +6915,8 @@ final class WlsEdgeGatewayController
             ? []
             : (array)($active[$preferred]['backend_identity'] ?? []);
         $route['backends'] = $selected;
+        $route['backend_instances'] = $selectedInstances;
+        $route['distribution_mode'] = $distributionMode;
         $route['last_heartbeat'] = $active === []
             ? (int)($route['last_heartbeat'] ?? 0)
             : \max(\array_map(
@@ -6774,6 +6954,47 @@ final class WlsEdgeGatewayController
     }
 
     /**
+     * Multiple WLS instances may share traffic only when the administrator
+     * enrollment and every currently eligible runtime independently attest
+     * the same session-safe capability. Any mixed or missing proof retains
+     * the deterministic preferred-instance/hot-standby topology.
+     *
+     * @param array<string,mixed> $route
+     * @param array<string,array<string,mixed>> $active
+     */
+    private function routeDistributionMode(array $route, array $active): string
+    {
+        if (\count($active) < 2) {
+            return 'single';
+        }
+        $projectUuid = (string)($route['project_uuid'] ?? '');
+        $enrollment = \is_array($this->state['enrollments'][$projectUuid] ?? null)
+            ? $this->state['enrollments'][$projectUuid]
+            : [];
+        $capabilities = \is_array($enrollment['capabilities'] ?? null)
+            ? $enrollment['capabilities']
+            : [];
+        $mode = '';
+        foreach ($active as $instance) {
+            $identity = \is_array($instance['backend_identity'] ?? null)
+                ? $instance['backend_identity']
+                : [];
+            $instanceMode = (string)($identity['session_capability'] ?? 'isolated');
+            if (!\in_array($instanceMode, ['stateless', 'shared_session'], true)
+                || ($capabilities[$instanceMode] ?? false) !== true
+            ) {
+                return 'single';
+            }
+            if ($mode === '') {
+                $mode = $instanceMode;
+            } elseif (!\hash_equals($mode, $instanceMode)) {
+                return 'single';
+            }
+        }
+        return $mode !== '' ? $mode : 'single';
+    }
+
+    /**
      * @param array<string,mixed> $route
      */
     private function routeRoutingDigest(array $route): string
@@ -6785,6 +7006,8 @@ final class WlsEdgeGatewayController
             'status' => (string)($route['status'] ?? ''),
             'domain' => (string)($route['domain'] ?? ''),
             'backends' => (array)($route['backends'] ?? []),
+            'backend_instances' => (array)($route['backend_instances'] ?? []),
+            'distribution_mode' => (string)($route['distribution_mode'] ?? 'single'),
             'preferred_instance_id' => (string)($route['preferred_instance_id'] ?? ''),
             'certificate' => [
                 'snapshot_digest' => (string)($route['certificate']['snapshot_digest'] ?? ''),
