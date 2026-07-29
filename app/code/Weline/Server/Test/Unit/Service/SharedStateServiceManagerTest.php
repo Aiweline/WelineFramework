@@ -555,6 +555,50 @@ final class SharedStateServiceManagerTest extends TestCase
         }
     }
 
+    public function testSharedProcessBatchConfigUsesProjectManagedLaunchLog(): void
+    {
+        $base = \sys_get_temp_dir() . \DIRECTORY_SEPARATOR
+            . 'weline-shared-launch-log-' . \bin2hex(\random_bytes(6));
+        $manager = new class extends SharedStateServiceManager {
+            public function buildConfigForTest(string $configuredLogPath): array
+            {
+                return $this->buildSharedProcessBatchConfig(
+                    'php child.php --name=weline-wls-session-test',
+                    [PHP_BINARY, 'child.php', '--name=weline-wls-session-test'],
+                    BP,
+                    'weline-wls-session-test',
+                    'shared-test',
+                    false,
+                    $configuredLogPath
+                );
+            }
+        };
+
+        $config = [];
+        try {
+            $config = $manager->buildConfigForTest($base);
+            self::assertTrue($config['enableLog']);
+            self::assertTrue($config['childOwnsPid']);
+            self::assertFalse($config['foreground']);
+            if (\defined('IS_WIN') && IS_WIN) {
+                self::assertArrayHasKey('stdoutLogFile', $config);
+                self::assertArrayHasKey('stderrLogFile', $config);
+                self::assertNotSame($config['stdoutLogFile'], $config['stderrLogFile']);
+            } else {
+                self::assertArrayHasKey('outputLogFile', $config);
+                self::assertStringContainsString('weline-wls-session-test.log', $config['outputLogFile']);
+            }
+        } finally {
+            foreach (['outputLogFile', 'stdoutLogFile', 'stderrLogFile'] as $key) {
+                if (isset($config[$key])) {
+                    @\unlink((string)$config[$key]);
+                }
+            }
+            @\rmdir($base . \DIRECTORY_SEPARATOR . 'shared-test');
+            @\rmdir($base);
+        }
+    }
+
     public function testImplicitSharedSessionTokenResetsToCanonicalDefaultPortToken(): void
     {
         $manager = new SharedStateServiceManager();

@@ -103,6 +103,96 @@ class WlsLogService
         return $logFile;
     }
 
+    public static function getProcessStderrLogFile(
+        string $processName,
+        ?string $instanceName = null,
+        ?string $processTag = null,
+        ?string $configuredPath = null
+    ): string {
+        $safeName = self::sanitizeFilename($processName, 'process');
+        return self::getLogDir($instanceName, $processTag, $configuredPath) . $safeName . '.stderr.log';
+    }
+
+    public static function ensureProcessStderrLogFile(
+        string $processName,
+        ?string $instanceName = null,
+        ?string $processTag = null,
+        ?string $configuredPath = null
+    ): string {
+        $logFile = self::getProcessStderrLogFile($processName, $instanceName, $processTag, $configuredPath);
+        $logDir = \dirname($logFile);
+        if (!\is_dir($logDir)) {
+            @\mkdir($logDir, 0777, true);
+        }
+        if (!\is_file($logFile)) {
+            @\touch($logFile);
+        }
+
+        return $logFile;
+    }
+
+    /**
+     * @return array{outputLogFile?: string, stdoutLogFile?: string, stderrLogFile?: string}
+     */
+    public static function getProcessLaunchLogConfig(
+        string $processName,
+        ?string $instanceName = null,
+        bool $enableLog = true,
+        ?bool $windows = null,
+        ?string $processTag = null,
+        ?string $configuredPath = null
+    ): array {
+        if (!$enableLog) {
+            return [];
+        }
+
+        $mainLog = self::ensureProcessLogFile($processName, $instanceName, $processTag, $configuredPath);
+        self::assertWritableLaunchLog($mainLog);
+        $windows ??= \defined('IS_WIN') && IS_WIN;
+        if (!$windows) {
+            return ['outputLogFile' => $mainLog];
+        }
+
+        $stderrLog = self::ensureProcessStderrLogFile(
+            $processName,
+            $instanceName,
+            $processTag,
+            $configuredPath
+        );
+        self::assertWritableLaunchLog($stderrLog);
+        if (\strcasecmp(\str_replace('\\', '/', $mainLog), \str_replace('\\', '/', $stderrLog)) === 0) {
+            throw new \RuntimeException('WLS process stdout and stderr launch logs must be distinct on Windows.');
+        }
+
+        return ['stdoutLogFile' => $mainLog, 'stderrLogFile' => $stderrLog];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getVisibleProcessLogFiles(
+        string $processName,
+        ?string $instanceName = null,
+        ?string $processTag = null,
+        ?string $configuredPath = null
+    ): array {
+        $mainLog = self::getProcessLogFile($processName, $instanceName, $processTag, $configuredPath);
+        $stderrLog = self::getProcessStderrLogFile($processName, $instanceName, $processTag, $configuredPath);
+        \clearstatcache(true, $stderrLog);
+        if (\is_file($stderrLog) && (int)(@\filesize($stderrLog) ?: 0) > 0) {
+            return [$mainLog, $stderrLog];
+        }
+
+        return [$mainLog];
+    }
+
+    private static function assertWritableLaunchLog(string $logFile): void
+    {
+        if (!\is_file($logFile) || !\is_writable($logFile)) {
+            throw new \RuntimeException('WLS process launch log is unavailable.');
+        }
+    }
+
     public static function prepareProcessLogFile(
         string $processName,
         ?string $instanceName = null,
