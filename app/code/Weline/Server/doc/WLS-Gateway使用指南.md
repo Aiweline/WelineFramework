@@ -137,6 +137,7 @@ WLS TLS 入口执行固定 300 秒排空。Agent 每 10 秒重试推进事务但
 - WLS 2.0 v1 对全部租户关闭 Nginx TLS session cache、session ticket 和 0-RTT。
   实测证明仅使用不同的 per-route ticket key 不能可靠隔离 TLS 1.3 恢复会话，因此
   v1 采用 fail-closed 策略；同一域名和跨域名恢复都必须重新握手。
+- 状态盘为普通发布保留至少 16 MiB 安全阈值，并维护以不可压缩内容实际写入的独立 recovery reserve。任一原子 write/fsync/rename 或 reserve 重建失败会保留原 active/LKG、清理 staging、释放 reserve 并建立 `DISK_PRESSURE` marker；marker 即使剩余空间恢复也继续锁住新持久操作。Controller 带 marker 重启不重新分配 reserve，也不修复/隔离 state、security ledger、journal 或清理 stale runtime，周期维护只做数据面只读观察与有界快照 GC。管理员确认存储恢复后才重建 reserve、补齐待完成的 security-ledger bootstrap、清 marker，再对账 A/B 槽和中断发布。
 - 宿主 A/B、LKG、熔断、隔离 503 和 Controller/Nginx 恢复逻辑已有专项覆盖；
   Linux 隔离 VM 已证明宿主 reboot 后先恢复 TLS/503、项目恢复后逐路由 ACTIVE，
   以及 90 秒故障触发、30 秒健康回切、301 秒排空释放。每个发布持久化边界的 kill
@@ -166,7 +167,7 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - macOS 显式启用原生集成后，Native Broker、Launcher、签名槽、崩溃回滚和真实数据面
   恢复通过 `12 tests / 1985 assertions`；该证据不等于 launchd 安装/reboot；
 - `Gateway|Windows|Nginx` 跨平台门禁通过
-  `257 tests / 2673 assertions / 15 capability skips`，含 Windows Native Broker
+  `257 tests / 2710 assertions / 15 capability skips`，含 Windows Native Broker
   的长管理事务 I/O 窗口；实际 Windows VM 因 Parallels 授权过期挂起，仍为
   `BLOCKED_ENVIRONMENT`；
 - legacy 80/443 显式提升已在 Linux VM 成功：promotion v50 的维护窗 69.897 秒，
@@ -188,12 +189,12 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   `removed_at`、空后端身份和 `REMOVED`；撤销域名中性 421，幸存租户 HTTP/2 200，
   网关保持 `HEALTHY`。多项目故障隔离夹具必须为每个项目使用独立受管 runtime；
 - 使用正式框架 bootstrap 的全量 Weline_Server 回归为
-  `1327 tests / 6699 assertions / 17 platform skips`，零错误、零失败。
+  `1327 tests / 6736 assertions / 17 platform skips`，零错误、零失败。
 
 本轮已补齐 Session/无状态能力的运行时写入、认证证明、30 秒恢复观察、实例摘要心跳
 重放与多实例 generation 防抖；ACME/协议专项通过 `101 tests / 1269 assertions`，聚焦
-真实数据面恢复通过 `1 test / 1476 assertions`，Native Broker/Launcher 聚焦门禁通过
-`9 tests / 334 assertions`。当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、
+真实数据面恢复通过 `1 test / 1465 assertions`，Native Broker/Launcher 聚焦门禁通过
+`9 tests / 334 assertions`。磁盘压力注入回归通过 `1 test / 59 assertions`，完整 Gateway 协议通过 `43 / 1055`；真实 ENOSPC/inode/只读文件系统仍需隔离主机验收。当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、
 Windows 实机、外部 CA/DNS 公网首次实签、完整
 Session daemon 实机亲和和同条件三轮性能中位数。Linux 宿主包已经完成来源、依赖、SBOM、
 自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。现有 v54
