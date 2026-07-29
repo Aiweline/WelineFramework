@@ -44,6 +44,46 @@ class StartCommandRuntimeConfigTest extends TestCase
         self::assertTrue((bool)($config['http']['tls_session_resumption'] ?? false));
     }
 
+    public function testCliHostOverrideRefreshesPersistedDerivedPublicOrigin(): void
+    {
+        $start = new class extends Start {
+            /** @return array<string,mixed> */
+            public function configFor(string $instanceName, array $args): array
+            {
+                return $this->getServerConfig($instanceName, $args);
+            }
+
+            protected function getEnvConfig(): array
+            {
+                return [];
+            }
+
+            protected function loadSavedInstanceConfig(string $instanceName): ?array
+            {
+                return [
+                    'host' => 'old-reused.weline.test',
+                    'public_host' => 'old-reused.weline.test',
+                    'public_origin' => 'https://old-reused.weline.test',
+                    'https' => true,
+                ];
+            }
+
+            protected function hasCliArgvToken(array $tokens): bool
+            {
+                return \in_array('--host', $tokens, true);
+            }
+        };
+        $start->__init();
+
+        $config = $start->configFor('unit-reused-host', [
+            'host' => 'new-reused.weline.test',
+        ]);
+
+        self::assertSame('new-reused.weline.test', $config['host'] ?? null);
+        self::assertSame('new-reused.weline.test', $config['public_host'] ?? null);
+        self::assertSame('https://new-reused.weline.test', $config['public_origin'] ?? null);
+    }
+
     public function testConfigureMasterRuntimeKeepsFrontendWorkerTopology(): void
     {
         $start = new Start();
