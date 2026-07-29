@@ -223,9 +223,6 @@ final class GatewayFallbackProviderTest extends TestCase
             ServiceOrchestrator::class,
             'restorePromotionGatewayRuntimeIntentProjection',
         );
-        $prepare->setAccessible(true);
-        $commit->setAccessible(true);
-        $restore->setAccessible(true);
         $transactionId = \str_repeat('b', 32);
         $policyDigest = \str_repeat('d', 64);
 
@@ -331,7 +328,6 @@ final class GatewayFallbackProviderTest extends TestCase
             ServiceOrchestrator::class,
             'applyPromotionGatewayRuntimeIntent',
         );
-        $prepare->setAccessible(true);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('runtime policy digest is invalid');
@@ -373,7 +369,6 @@ final class GatewayFallbackProviderTest extends TestCase
             ServiceOrchestrator::class,
             'buildGatewayJoinRuntimePolicyBundle',
         );
-        $widen->setAccessible(true);
 
         $joined = $widen->invoke(null, $active);
 
@@ -446,7 +441,6 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertIsResource($workerSocket);
         self::assertIsResource($registeredAgentSocket);
         $clients = new \ReflectionProperty($server, 'clients');
-        $clients->setAccessible(true);
         $clients->setValue($server, [
             7 => [
                 'socket' => $agentSocket,
@@ -465,7 +459,6 @@ final class GatewayFallbackProviderTest extends TestCase
             ],
         ]);
         $authorize = new \ReflectionMethod($server, 'isAuthorizedControlCommand');
-        $authorize->setAccessible(true);
 
         self::assertTrue($authorize->invoke(
             $server,
