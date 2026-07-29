@@ -13,6 +13,14 @@ use Weline\Framework\Console\ConsoleEncoding;
 class LongRunningPhpRuntime
 {
     /**
+     * Dispatcher keeps one client socket and one upstream socket per proxied
+     * connection. A common Linux soft limit of 1024 therefore becomes
+     * exhausted at roughly 500 concurrent requests even when the hard limit is
+     * much higher, producing false "all workers unavailable" responses.
+     */
+    private const RECOMMENDED_OPEN_FILE_SOFT_LIMIT = 65536;
+
+    /**
      * Unix WLS processes explicitly enable CLI OPcache when the extension is
      * available so every Master/Worker generation gets the production bytecode
      * fast path even when the interactive CLI default is disabled.
@@ -49,9 +57,116 @@ class LongRunningPhpRuntime
     public function apply(): void
     {
         $this->initConsoleEncoding();
+        $this->raiseOpenFileSoftLimit();
         $this->setIniValue('max_execution_time', '0');
         $this->setTimeLimit(0);
         $this->setIgnoreUserAbort(true);
+    }
+
+    protected function raiseOpenFileSoftLimit(): void
+    {
+        if (!$this->supportsPosixOpenFileLimits()) {
+            return;
+        }
+
+        $limits = $this->readPosixResourceLimits();
+        if (!\is_array($limits)) {
+            $this->reportOpenFileLimitWarning('Unable to read the process open-file limit.');
+            return;
+        }
+
+        $softRaw = $limits['soft openfiles'] ?? null;
+        $hardRaw = $limits['hard openfiles'] ?? null;
+        if ($this->isUnlimitedResourceLimit($softRaw)) {
+            return;
+        }
+
+        $soft = $this->normalizeFiniteResourceLimit($softRaw);
+        if ($soft === null) {
+            $this->reportOpenFileLimitWarning('The process soft open-file limit is not numeric.');
+            return;
+        }
+        if ($soft >= self::RECOMMENDED_OPEN_FILE_SOFT_LIMIT) {
+            return;
+        }
+
+        $hardUnlimited = $this->isUnlimitedResourceLimit($hardRaw);
+        $hard = $hardUnlimited ? null : $this->normalizeFiniteResourceLimit($hardRaw);
+        if (!$hardUnlimited && $hard === null) {
+            $this->reportOpenFileLimitWarning('The process hard open-file limit is not numeric.');
+            return;
+        }
+
+        $target = $hardUnlimited
+            ? self::RECOMMENDED_OPEN_FILE_SOFT_LIMIT
+            : \min(self::RECOMMENDED_OPEN_FILE_SOFT_LIMIT, (int)$hard);
+        if ($target <= $soft) {
+            $this->reportOpenFileLimitWarning(
+                "Open-file hard limit {$hard} cannot satisfy the recommended "
+                . self::RECOMMENDED_OPEN_FILE_SOFT_LIMIT . '.'
+            );
+            return;
+        }
+
+        $hardForSet = $hardUnlimited ? $this->posixUnlimitedResourceLimit() : (int)$hard;
+        if (!$this->setPosixOpenFileLimit($target, $hardForSet)) {
+            $this->reportOpenFileLimitWarning(
+                "Unable to raise the process open-file soft limit from {$soft} to {$target}."
+            );
+            return;
+        }
+
+        if ($target < self::RECOMMENDED_OPEN_FILE_SOFT_LIMIT) {
+            $this->reportOpenFileLimitWarning(
+                "Open-file soft limit was raised to {$target}, below the recommended "
+                . self::RECOMMENDED_OPEN_FILE_SOFT_LIMIT . ' because of the host hard limit.'
+            );
+        }
+    }
+
+    protected function supportsPosixOpenFileLimits(): bool
+    {
+        return !$this->isWindows()
+            && \function_exists('posix_getrlimit')
+            && \function_exists('posix_setrlimit')
+            && \defined('POSIX_RLIMIT_NOFILE');
+    }
+
+    protected function readPosixResourceLimits(): array|false
+    {
+        return @\posix_getrlimit();
+    }
+
+    protected function setPosixOpenFileLimit(int $softLimit, int $hardLimit): bool
+    {
+        return @\posix_setrlimit(\POSIX_RLIMIT_NOFILE, $softLimit, $hardLimit);
+    }
+
+    protected function posixUnlimitedResourceLimit(): int
+    {
+        return \defined('POSIX_RLIMIT_INFINITY') ? (int)\constant('POSIX_RLIMIT_INFINITY') : -1;
+    }
+
+    protected function reportOpenFileLimitWarning(string $message): void
+    {
+        WlsLogger::warning_('[WLS Runtime] ' . $message);
+    }
+
+    private function isUnlimitedResourceLimit(mixed $value): bool
+    {
+        return \is_string($value) && \strtolower(\trim($value)) === 'unlimited';
+    }
+
+    private function normalizeFiniteResourceLimit(mixed $value): ?int
+    {
+        if (\is_int($value)) {
+            return $value >= 0 ? $value : null;
+        }
+        if (\is_string($value) && \preg_match('/^\d+$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return null;
     }
 
     protected function initConsoleEncoding(): void

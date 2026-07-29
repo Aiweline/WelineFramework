@@ -539,7 +539,10 @@ $dispatcher->configure([
     'worker_health_response_timeout_sec' => (float)($dispatcherConfig['worker_health_response_timeout_sec'] ?? 2.0),
     'worker_health_audit_enabled' => (bool)($dispatcherConfig['worker_health_audit_enabled'] ?? false),
     'fast_tls_path_enabled' => (bool)($dispatcherConfig['fast_tls_path_enabled'] ?? true),
-    'max_accept_per_loop' => (int)($dispatcherConfig['max_accept_per_loop'] ?? 64),
+    // Keep the executable fallback aligned with env.sample.php. Accepting 64
+    // sockets before returning to the proxy loop can create a second loopback
+    // connection burst and transiently make every healthy Worker look down.
+    'max_accept_per_loop' => (int)($dispatcherConfig['max_accept_per_loop'] ?? 16),
     'worker_connect_select_timeout_sec' => (float)($dispatcherConfig['worker_connect_select_timeout_sec'] ?? 0.02),
     'worker_busy_penalty_after_ms' => (float)($dispatcherConfig['worker_busy_penalty_after_ms'] ?? 120),
     'ssl_backend_preconnect_per_worker' => (int)($dispatcherConfig['ssl_backend_preconnect_per_worker'] ?? 0),

@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 final class ServerInstanceManagerFastLookupTest extends TestCase
 {
@@ -223,8 +224,8 @@ final class ServerInstanceManagerFastLookupTest extends TestCase
                 }
             };
 
-            self::assertSame(0, $manager->cleanupStaleInstancesForStartup(null, 100));
-            self::assertFileExists($dir . 'already-stopped.json');
+            self::assertSame(['already-stopped'], $manager->cleanupInactiveInstances());
+            self::assertFileDoesNotExist($dir . 'already-stopped.json');
         } finally {
             @\unlink($dir . 'already-stopped.json');
             @\rmdir($dir);
@@ -233,6 +234,24 @@ final class ServerInstanceManagerFastLookupTest extends TestCase
 
     private function createManager(array $rawData): ServerInstanceManager
     {
+        $dispatcher = (bool)($rawData['dispatcher_enabled'] ?? false);
+        unset($rawData['dispatcher_enabled']);
+        $rawData['schema_version'] = RuntimeSelection::ENDPOINT_SCHEMA_VERSION;
+        $rawData['runtime_selection'] = RuntimeSelection::fromArray([
+            'requested_topology' => $dispatcher ? 'auto' : 'direct',
+            'effective_topology' => $dispatcher ? 'dispatcher' : 'direct',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => $dispatcher
+                ? 'single'
+                : (PHP_OS_FAMILY === 'Windows' ? 'worker_ports' : 'shared_fd'),
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ])->toArray();
+
         return new class($rawData) extends ServerInstanceManager {
             public function __construct(private readonly array $rawData)
             {

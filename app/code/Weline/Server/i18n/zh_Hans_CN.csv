@@ -1531,8 +1531,8 @@ URI,URI
 "HTTPS/OpenSSL 与 Dispatcher 可选 ext-event 已使用当前 PHP 安装并验证。","HTTPS/OpenSSL 与 Dispatcher 可选 ext-event 已使用当前 PHP 安装并验证。"
 "proc_open 不可用。","proc_open 不可用。"
 无法启动依赖安装子进程。,无法启动依赖安装子进程。
-"WLS TLS 引擎已退役；公网 TLS 仅由项目托管 Nginx 处理。请删除 wls.ssl.engine=%{1}。","WLS TLS 引擎已退役；公网 TLS 仅由项目托管 Nginx 处理。请删除 wls.ssl.engine=%{1}。"
-"wls.ssl.session_cache=external 已退役；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。","wls.ssl.session_cache=external 已退役；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。"
+"wls.ssl.engine 仅支持 none/stream；收到 %{1}。","wls.ssl.engine 仅支持 none/stream；收到 %{1}。"
+"Nginx 模式不允许 WLS external TLS Session Cache；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。","Nginx 模式不允许 WLS external TLS Session Cache；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。"
 仅开发模式可用，当前部署模式：%{1},仅开发模式可用，当前部署模式：%{1}
 "请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）","请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）"
 "已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效","已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效"
@@ -1869,6 +1869,8 @@ Webroot：%{1},Webroot：%{1}
 请二选一：要么停止所有实例，要么只停止某个前缀。,请二选一：要么停止所有实例，要么只停止某个前缀。
 "另一个 server:stop 任务正在处理中，请稍后再试。","另一个 server:stop 任务正在处理中，请稍后再试。"
 若锁文件长期存在，请确认停止任务是否已结束后再重试。,若锁文件长期存在，请确认停止任务是否已结束后再重试。
+共享网关：当前实例连接已自然排空并注销；网关本身与其他项目保持运行。,共享网关：当前实例连接已自然排空并注销；网关本身与其他项目保持运行。
+共享网关路由注销失败：%{1},共享网关路由注销失败：%{1}
 "托管 Nginx：%{1}","托管 Nginx：%{1}"
 "托管 Nginx 停止失败：%{1}","托管 Nginx 停止失败：%{1}"
 "托管 Nginx 停止异常：%{1}","托管 Nginx 停止异常：%{1}"
@@ -1902,9 +1904,11 @@ Webroot：%{1},Webroot：%{1}
 (未运行),(未运行)
 控制端口：,控制端口：
 (未配置),(未配置)
+"纯 WLS 公网端口：","纯 WLS 公网端口："
 "WLS 回源端口：","WLS 回源端口："
-"公网 TLS：","公网 TLS："
+"由纯 WLS 直接终结","由纯 WLS 直接终结"
 "由托管 Nginx 终结","由托管 Nginx 终结"
+"公网 TLS：","公网 TLS："
 "HTTP 跳转：","HTTP 跳转："
 启动时间：,启动时间：
 (未知),(未知)
@@ -2020,6 +2024,16 @@ Webroot：%{1},Webroot：%{1}
 "请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁","请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁"
 解封命令已接收,解封命令已接收
 解封命令失败,解封命令失败
+"公网协议所有者：纯 WLS；无需 Nginx 或其他边缘进程。","公网协议所有者：纯 WLS；无需 Nginx 或其他边缘进程。"
+"纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}","纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}"
+未验证,未验证
+无,无
+"纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}","纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}"
+已验证,已验证
+"纯 WLS HTTP/3：不可用；需要项目托管 Nginx。","纯 WLS HTTP/3：不可用；需要项目托管 Nginx。"
+"纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}","纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}"
+pending,pending
+"TLS Session 说明：%{1}","TLS Session 说明：%{1}"
 "运行端点协议或 Managed Nginx owner 尚未完整绑定；下面不会把配置值提升为运行验证。","运行端点协议或 Managed Nginx owner 尚未完整绑定；下面不会把配置值提升为运行验证。"
 "当前为配置预览；运行验证只有在实例与 Managed Nginx owner 绑定后才归因。","当前为配置预览；运行验证只有在实例与 Managed Nginx owner 绑定后才归因。"
 "Nginx reload：仅使用项目托管生命周期，不执行宿主机外部命令。","Nginx reload：仅使用项目托管生命周期，不执行宿主机外部命令。"
@@ -2030,11 +2044,9 @@ Webroot：%{1},Webroot：%{1}
 匹配,匹配
 不匹配,不匹配
 "Nginx 公网协议：配置顺序=%{1}，配置首选=%{2}，实测首选=%{3}，整体运行验证=%{4}","Nginx 公网协议：配置顺序=%{1}，配置首选=%{2}，实测首选=%{3}，整体运行验证=%{4}"
-未验证,未验证
 通过,通过
 未通过,未通过
 "Nginx HTTP/2：模块能力=%{1}，已配置=%{2}，owner-bound 真实请求=%{3}","Nginx HTTP/2：模块能力=%{1}，已配置=%{2}，owner-bound 真实请求=%{3}"
-已验证,已验证
 "Nginx HTTP/1.1 回退：已配置=%{1}，真实请求=%{2}","Nginx HTTP/1.1 回退：已配置=%{1}，真实请求=%{2}"
 "Nginx HTTP/3：二进制能力=%{1}，已配置=%{2}，Alt-Svc=%{3}，真实 QUIC=%{4}","Nginx HTTP/3：二进制能力=%{1}，已配置=%{2}，Alt-Svc=%{3}，真实 QUIC=%{4}"
 "Nginx HTTP/3 说明：%{1}","Nginx HTTP/3 说明：%{1}"
@@ -2150,6 +2162,8 @@ workers,workers
 "使用 server:stop <name> 停止实例","使用 server:stop <name> 停止实例"
 "如有残留 endpoint 文件，可执行 server:clean 清理未运行记录","如有残留 endpoint 文件，可执行 server:clean 清理未运行记录"
 "实例 [%{1}] 状态","实例 [%{1}] 状态"
+"WLS 2.0 网关入口","WLS 2.0 网关入口"
+"纯 WLS 公网入口","纯 WLS 公网入口"
 监听地址：,监听地址：
 "Worker 数：","Worker 数："
 unknown,unknown
@@ -2161,6 +2175,12 @@ unknown,unknown
 "状态：部分运行 (%{1}/%{2})","状态：部分运行 (%{1}/%{2})"
 "状态：全部停止 (%{1}/%{2})","状态：全部停止 (%{1}/%{2})"
 "测试请求：curl %{1}/","测试请求：curl %{1}/"
+前台/首页,前台/首页
+后台入口,后台入口
+"后台 REST 接口","后台 REST 接口"
+"未配置（请在 env.php 中设置 area_routes.rest_backend.prefix）","未配置（请在 env.php 中设置 area_routes.rest_backend.prefix）"
+"前台 REST 接口","前台 REST 接口"
+服务访问地址,服务访问地址
 "运行时选择：仅接受 endpoint schema v4，当前记录已拒绝。","运行时选择：仅接受 endpoint schema v4，当前记录已拒绝。"
 实际运行时：,实际运行时：
 实际运行时选择：,实际运行时选择：
@@ -2168,7 +2188,12 @@ unknown,unknown
 数据面：,数据面：
 策略：,策略：
 Endpoint：,Endpoint：
+共享网关：,共享网关：
+边缘降级：,边缘降级：
 选择原因：,选择原因：
+"纯 WLS 备用入口：","纯 WLS 备用入口："
+"备用 TLS 地址：","备用 TLS 地址："
+"高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。","高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。"
 启动失败详情：,启动失败详情：
 "● on (默认)","● on (默认)"
 "● on (env.php)","● on (env.php)"
@@ -2265,12 +2290,12 @@ Windows,Windows
 "未检测到通过 Managed Nginx owner 与公网端口身份门禁的运行实例。","未检测到通过 Managed Nginx owner 与公网端口身份门禁的运行实例。"
 "请先完成 WLS 与 Managed Nginx 启动；如只测内部回源，必须显式使用 -p <WLS端口>。","请先完成 WLS 与 Managed Nginx 启动；如只测内部回源，必须显式使用 -p <WLS端口>。"
 "或使用 --instance <name> / -p <port> 明确指定压测目标","或使用 --instance <name> / -p <port> 明确指定压测目标"
-"实例 [%{1}] 没有通过 Managed Nginx 进程、owner、upstream 与公网端口身份门禁。","实例 [%{1}] 没有通过 Managed Nginx 进程、owner、upstream 与公网端口身份门禁。"
+"实例 [%{1}] 没有通过其公网入口身份与协议策略门禁。","实例 [%{1}] 没有通过其公网入口身份与协议策略门禁。"
 "--instance %{1} 的实际端口是 %{2}:%{3}，与手动端口 %{4} 冲突。","--instance %{1} 的实际端口是 %{2}:%{3}，与手动端口 %{4} 冲突。"
 "--instance %{1} 的实际 host 是 %{2}，与手动 host %{3} 冲突。","--instance %{1} 的实际 host 是 %{2}，与手动 host %{3} 冲突。"
 "--instance %{1} 的 endpoint 不是 HTTPS，不能与 --ssl 同时使用。","--instance %{1} 的 endpoint 不是 HTTPS，不能与 --ssl 同时使用。"
 "实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。","实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。"
-"实例 [%{1}] 的 WLS 回源 health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过 Managed Nginx owner 门禁。","实例 [%{1}] 的 WLS 回源 health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过 Managed Nginx owner 门禁。"
+"实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。","实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。"
 "实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。","实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。"
 "已停止 Worker：%{1}","已停止 Worker：%{1}"
 "压测端口必须在 1-65535 范围内。","压测端口必须在 1-65535 范围内。"
@@ -2286,6 +2311,7 @@ Windows,Windows
 "已跳过 %{1} 个无效 WLS 实例记录%{2}","已跳过 %{1} 个无效 WLS 实例记录%{2}"
 "--authority-host 必须是不含 scheme、端口或路径的有效主机名/IP。","--authority-host 必须是不含 scheme、端口或路径的有效主机名/IP。"
 "Managed Nginx owner 在正式压测前已变化，已拒绝运行。","Managed Nginx owner 在正式压测前已变化，已拒绝运行。"
+"宿主级 WLS 2.0 网关身份或活动路由在正式压测前已变化，已拒绝运行。","宿主级 WLS 2.0 网关身份或活动路由在正式压测前已变化，已拒绝运行。"
 "需要 curl 扩展支持","需要 curl 扩展支持"
 "多路复用连接模型：逻辑并发 %{1}，物理连接目标 %{2}，READY Worker 目标 %{3}，每连接 Stream 目标 %{4}/服务端上限 %{5}，MAX_CONCURRENT_STREAMS=%{6}，PIPEWAIT=%{7}","多路复用连接模型：逻辑并发 %{1}，物理连接目标 %{2}，READY Worker 目标 %{3}，每连接 Stream 目标 %{4}/服务端上限 %{5}，MAX_CONCURRENT_STREAMS=%{6}，PIPEWAIT=%{7}"
 "进度：%{1}%（完成 %{2}/%{3}，活动请求 %{4}，已发送 %{5}/%{3}，耗时 %{6}s，实时 QPS %{7}）","进度：%{1}%（完成 %{2}/%{3}，活动请求 %{4}，已发送 %{5}/%{3}，耗时 %{6}s，实时 QPS %{7}）"
@@ -2295,6 +2321,7 @@ Windows,Windows
 "物理连接 lane：请求 %{1}，创建 %{2}，实际建连 %{3}，累计新连接 %{4}。","物理连接 lane：请求 %{1}，创建 %{2}，实际建连 %{3}，累计新连接 %{4}。"
 "物理连接 lane 未达到请求值（请求 %{1}，实际 %{2}），本次基准无效。","物理连接 lane 未达到请求值（请求 %{1}，实际 %{2}），本次基准无效。"
 "Managed Nginx owner 在压测期间发生变化，本次结果无效。","Managed Nginx owner 在压测期间发生变化，本次结果无效。"
+"宿主级 WLS 2.0 网关身份或活动路由在压测期间发生变化，本次结果无效。","宿主级 WLS 2.0 网关身份或活动路由在压测期间发生变化，本次结果无效。"
 "%{1} 必须是非负数字。","%{1} 必须是非负数字。"
 "%{1} 必须在 %{2} 范围内。","%{1} 必须在 %{2} 范围内。"
 压测结果报告,压测结果报告
@@ -2368,14 +2395,14 @@ P99：%{1},P99：%{1}
 "当前 PHP 未安装 curl 扩展。","当前 PHP 未安装 curl 扩展。"
 "无法初始化内容编码 cURL 探针。","无法初始化内容编码 cURL 探针。"
 内容编码探针失败。,内容编码探针失败。
-"已归因目标缺少完整的 Managed Nginx owner 或协议运行证据，拒绝开始压测。","已归因目标缺少完整的 Managed Nginx owner 或协议运行证据，拒绝开始压测。"
+已归因目标缺少完整的边缘身份或协议运行证据，拒绝开始压测。,已归因目标缺少完整的边缘身份或协议运行证据，拒绝开始压测。
 "目标没有任何已完成运行验证的 HTTP 协议。","目标没有任何已完成运行验证的 HTTP 协议。"
 "内部 WLS HTTP/1.1 回源","内部 WLS HTTP/1.1 回源"
 "%{1} 尚未实测验证 HTTP/%{2}，拒绝把配置能力当作压测证据。","%{1} 尚未实测验证 HTTP/%{2}，拒绝把配置能力当作压测证据。"
 "当前 Nginx 公网 HTTP/2 与 HTTP/3 门禁要求 HTTPS 目标。","当前 Nginx 公网 HTTP/2 与 HTTP/3 门禁要求 HTTPS 目标。"
 "当前 PHP cURL/libcurl 不能发起 HTTP/2 请求。","当前 PHP cURL/libcurl 不能发起 HTTP/2 请求。"
 "当前 PHP cURL/libcurl 不能发起 HTTP/3 请求；可使用 auto 回退到已验证的 Nginx HTTP/2/1.1。","当前 PHP cURL/libcurl 不能发起 HTTP/3 请求；可使用 auto 回退到已验证的 Nginx HTTP/2/1.1。"
-"已归因目标的 Managed Nginx owner 或协议策略未绑定，auto 已拒绝降级猜测。","已归因目标的 Managed Nginx owner 或协议策略未绑定，auto 已拒绝降级猜测。"
+"已归因目标的边缘身份或协议策略未绑定，auto 已拒绝降级猜测。","已归因目标的边缘身份或协议策略未绑定，auto 已拒绝降级猜测。"
 "目标与当前 cURL 没有共同且已完成运行验证的 HTTP 协议。","目标与当前 cURL 没有共同且已完成运行验证的 HTTP 协议。"
 "当前 system.env=%{1} 禁止执行 hosts 写入","当前 system.env=%{1} 禁止执行 hosts 写入"
 "*.weline.test 固定写入 127.0.0.1，无需也不应指定其它 IP","*.weline.test 固定写入 127.0.0.1，无需也不应指定其它 IP"
@@ -2440,12 +2467,118 @@ Previous：%{1},Previous：%{1}
 "WLS 运行时策略发布已受理。","WLS 运行时策略发布已受理。"
 模式：%{1},模式：%{1}
 "两阶段发布 WLS 运行时策略","两阶段发布 WLS 运行时策略"
+"共享网关停止会影响所有租户；请提供 --confirm。","共享网关停止会影响所有租户；请提供 --confirm。"
+"宿主级 WLS 2.0 Gateway 已持久停止；平台守护不会自动拉起。","宿主级 WLS 2.0 Gateway 已持久停止；平台守护不会自动拉起。"
+"显式停止共享网关；普通 server:stop 不会执行此操作","显式停止共享网关；普通 server:stop 不会执行此操作"
+"确认写入签名 ADMIN_STOPPED 意图并禁用平台服务","确认写入签名 ADMIN_STOPPED 意图并禁用平台服务"
+存在活动路由时仍强制停止,存在活动路由时仍强制停止
+"输出稳定 JSON 文档","输出稳定 JSON 文档"
+危险,危险
+"优先逐项目 server:stop 或 gateway:revoke；共享入口停止会影响所有租户。","优先逐项目 server:stop 或 gateway:revoke；共享入口停止会影响所有租户。"
+"维护项目到 WLS 2.0 网关的租约、重注册和纯 WLS 降级","维护项目到 WLS 2.0 网关的租约、重注册和纯 WLS 降级"
+"作为 WLS 子进程持续运行","作为 WLS 子进程持续运行"
+"宿主级安装必须由管理员显式携带 --confirm。","宿主级安装必须由管理员显式携带 --confirm。"
+"必须通过 --package 指定离线或 CI 生成的签名自包含包目录。","必须通过 --package 指定离线或 CI 生成的签名自包含包目录。"
+"--profile 只允许 default 或 ipv4-only。","--profile 只允许 default 或 ipv4-only。"
+"WLS 2.0 Gateway 安装失败。","WLS 2.0 Gateway 安装失败。"
+"测试包已安装到隔离根；它不会被生产客户端信任，也不会报告 release ready。","测试包已安装到隔离根；它不会被生产客户端信任，也不会报告 release ready。"
+"WLS 2.0 Gateway 自包含包和系统服务安装完成。","WLS 2.0 Gateway 自包含包和系统服务安装完成。"
+"显式安装签名、自包含的宿主级 WLS 2.0 Gateway","显式安装签名、自包含的宿主级 WLS 2.0 Gateway"
+签名自包含包目录,签名自包含包目录
+"default（IPv4+IPv6）或 ipv4-only","default（IPv4+IPv6）或 ipv4-only"
+确认写入系统信任根并安装系统服务,确认写入系统信任根并安装系统服务
+安全边界,安全边界
+"普通 server:start/auto 不会调用本命令；未知 80/443 owner 永不被终止。","普通 server:start/auto 不会调用本命令；未知 80/443 owner 永不被终止。"
+命令执行失败。,命令执行失败。
+"WLS 2.0 网关诊断","WLS 2.0 网关诊断"
+诊断失败。,诊断失败。
+"诊断网关控制面、数据面、generation、LKG 与 A/B 槽","诊断网关控制面、数据面、generation、LKG 与 A/B 槽"
+"显式提升必须携带 --confirm，且只能由当前 80/443 的受管 owner 执行。","显式提升必须携带 --confirm，且只能由当前 80/443 的受管 owner 执行。"
+"显式提升必须通过 --package 提供签名、自包含的 WLS 2.0 宿主包。","显式提升必须通过 --package 提供签名、自包含的 WLS 2.0 宿主包。"
+"只有身份已验证、正在占用目标公共端口的项目托管 Nginx 才能提升。","只有身份已验证、正在占用目标公共端口的项目托管 Nginx 才能提升。"
+"当前项目缺少可迁移身份或域名/证书期望状态，旧 Nginx 保持不变。","当前项目缺少可迁移身份或域名/证书期望状态，旧 Nginx 保持不变。"
+"WLS 1.x 公共端口 owner 已显式提升为宿主级 WLS 2.0 Gateway。","WLS 1.x 公共端口 owner 已显式提升为宿主级 WLS 2.0 Gateway。"
+"实测维护窗：%{1} 秒。","实测维护窗：%{1} 秒。"
+宿主网关清理失败：%{1},宿主网关清理失败：%{1}
+"旧项目 Nginx 未进入交接，仍保持原状。","旧项目 Nginx 未进入交接，仍保持原状。"
+提升失败：%{1},提升失败：%{1}
+"已回滚并恢复原项目托管 Nginx。","已回滚并恢复原项目托管 Nginx。"
+"失败恢复窗：%{1} 秒。","失败恢复窗：%{1} 秒。"
+"原项目 Nginx 回滚也失败：%{1}","原项目 Nginx 回滚也失败：%{1}"
+"将当前 80/443 的 WLS 1.x 受管 owner 显式提升为 WLS 2.0 Gateway","将当前 80/443 的 WLS 1.x 受管 owner 显式提升为 WLS 2.0 Gateway"
+"签名、自包含的 WLS 2.0 宿主包目录","签名、自包含的 WLS 2.0 宿主包目录"
+确认进入有实测维护窗的公共端口所有权切换,确认进入有实测维护窗的公共端口所有权切换
+回滚,回滚
+"先在旧入口在线时完成影子预检；交接失败时先停宿主服务，再用冻结快照恢复旧 Nginx。","先在旧入口在线时完成影子预检；交接失败时先停宿主服务，再用冻结快照恢复旧 Nginx。"
+"域名转移会原子改变宿主入口归属；请提供 --confirm。","域名转移会原子改变宿主入口归属；请提供 --confirm。"
+"必须提供 --domain、--from、--to 和目标项目 --instance。","必须提供 --domain、--from、--to 和目标项目 --instance。"
+"--to 必须等于当前目标项目 UUID：%{1}","--to 必须等于当前目标项目 UUID：%{1}"
+"域名已在同一网关 generation 内转移到当前项目。","域名已在同一网关 generation 内转移到当前项目。"
+"将域名原子转移到当前已 enrollment 的项目","将域名原子转移到当前已 enrollment 的项目"
+待转移的精确域名或通配符域名,待转移的精确域名或通配符域名
+"当前源项目 UUID","当前源项目 UUID"
+"目标项目 UUID，必须是当前项目","目标项目 UUID，必须是当前项目"
+目标项目中用于证明后端和证书的运行实例,目标项目中用于证明后端和证书的运行实例
+确认短租约预检、目标证明和原子归属切换,确认短租约预检、目标证明和原子归属切换
+"输出 JSON 结果","输出 JSON 结果"
+安全语义,安全语义
+"网关升级必须由管理员显式携带 --confirm。","网关升级必须由管理员显式携带 --confirm。"
+"必须通过 --package 指定签名自包含候选包目录。","必须通过 --package 指定签名自包含候选包目录。"
+"WLS 2.0 Gateway 全包已切换到候选 A/B 槽；Root Broker 正在执行五分钟观察。","WLS 2.0 Gateway 全包已切换到候选 A/B 槽；Root Broker 正在执行五分钟观察。"
+"安装并激活经过自检的 WLS 2.0 Gateway A/B 候选槽","安装并激活经过自检的 WLS 2.0 Gateway A/B 候选槽"
+签名自包含候选包目录,签名自包含候选包目录
+"确认进入 A/B 升级事务","确认进入 A/B 升级事务"
+"撤销会使当前项目凭据和路由不可恢复；请提供 --confirm。","撤销会使当前项目凭据和路由不可恢复；请提供 --confirm。"
+撤销失败,撤销失败
+当前项目路由和宿主授权已撤销；共享网关保持运行。,当前项目路由和宿主授权已撤销；共享网关保持运行。
+撤销当前项目的网关路由与证书目录授权,撤销当前项目的网关路由与证书目录授权
+确认写入不可逆撤销状态并删除本项目宿主凭据,确认写入不可逆撤销状态并删除本项目宿主凭据
+"WLS 2.0 宿主网关状态","WLS 2.0 宿主网关状态"
+读取网关状态失败。,读取网关状态失败。
+"查看宿主级 WLS 2.0 Gateway 状态","查看宿主级 WLS 2.0 Gateway 状态"
+"宿主 enrollment 会授权域名和证书目录并轮换项目凭据；请提供 --confirm。","宿主 enrollment 会授权域名和证书目录并轮换项目凭据；请提供 --confirm。"
+"项目身份已显式轮换：%{1} → %{2}","项目身份已显式轮换：%{1} → %{2}"
+无法解析项目根目录。,无法解析项目根目录。
+无法验证项目根目录所有者。,无法验证项目根目录所有者。
+证书根别名重复：%{1},证书根别名重复：%{1}
+"未找到可授权域名；请先配置项目证书，或显式重复提供 --domain。","未找到可授权域名；请先配置项目证书，或显式重复提供 --domain。"
+授权失败,授权失败
+"当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。","当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。"
+授权域名：%{1},授权域名：%{1}
+授权当前项目及其证书根目录到宿主网关,授权当前项目及其证书根目录到宿主网关
+附加项目内证书目录，可重复；别名用于可迁移证书引用,附加项目内证书目录，可重复；别名用于可迁移证书引用
+显式授权域名或通配符，可重复；省略时读取当前证书域名,显式授权域名或通配符，可重复；省略时读取当前证书域名
+"不授权精确 HTTP-01 challenge 短租约（默认授权）","不授权精确 HTTP-01 challenge 短租约（默认授权）"
+"授权项目使用 DNS-01 能力","授权项目使用 DNS-01 能力"
+声明项目后端可按无状态策略分流；仍需运行时证明,声明项目后端可按无状态策略分流；仍需运行时证明
+"声明项目后端共享 Session；仍需运行时证明","声明项目后端共享 Session；仍需运行时证明"
+"为复制项目显式生成新 UUID；必须配合 --confirm","为复制项目显式生成新 UUID；必须配合 --confirm"
+"确认 enrollment、域名能力和项目凭据轮换","确认 enrollment、域名能力和项目凭据轮换"
+"WLS 2.0 网关路由","WLS 2.0 网关路由"
+读取网关路由失败。,读取网关路由失败。
+查看宿主网关的项目路由与租约状态,查看宿主网关的项目路由与租约状态
+"重新启用共享网关会清除签名 ADMIN_STOPPED 意图；请提供 --confirm。","重新启用共享网关会清除签名 ADMIN_STOPPED 意图；请提供 --confirm。"
+"宿主级 WLS 2.0 Gateway 已由管理员显式重新启用。","宿主级 WLS 2.0 Gateway 已由管理员显式重新启用。"
+"清除已验证的 ADMIN_STOPPED 意图并重新启用共享网关","清除已验证的 ADMIN_STOPPED 意图并重新启用共享网关"
+确认清除停止意图并启用宿主平台服务,确认清除停止意图并启用宿主平台服务
+"输出 JSON 状态","输出 JSON 状态"
+"重置安全账本会撤销全部项目凭据；请同时传入 --confirm。","重置安全账本会撤销全部项目凭据；请同时传入 --confirm。"
+"时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。","时钟信任恢复必须单独执行；请先仅运行 --accept-clock，再执行其他修复项。"
+修复失败,修复失败
+网关已执行身份安全的配置重发、LKG/数据面恢复。,网关已执行身份安全的配置重发、LKG/数据面恢复。
+触发网关安全恢复并解除当前熔断等待,触发网关安全恢复并解除当前熔断等待
+"管理员确认宿主时钟已校准并清除 CLOCK_UNTRUSTED","管理员确认宿主时钟已校准并清除 CLOCK_UNTRUSTED"
+"确认磁盘/配额已恢复并重新验证 journal、重建恢复预留","确认磁盘/配额已恢复并重新验证 journal、重建恢复预留"
+"清除当前运行时的 H3 隔离并执行一次显式重新探测","清除当前运行时的 H3 隔离并执行一次显式重新探测"
+"隔离损坏账本并撤销全部项目凭据（必须同时 --confirm）","隔离损坏账本并撤销全部项目凭据（必须同时 --confirm）"
+确认安全账本重置这一破坏性操作,确认安全账本重置这一破坏性操作
 "WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。","WLS 已不再支持 independent 拓扑；所有平台请使用 --direct，兼容诊断时可显式使用 --dispatcher。"
 "Conflicting WLS topology CLI options: --direct and --dispatcher.","Conflicting WLS topology CLI options: --direct and --dispatcher."
-"Nginx-only 模式禁止 PHP 内置 CLI 服务器；请使用项目托管 Nginx。","Nginx-only 模式禁止 PHP 内置 CLI 服务器；请使用项目托管 Nginx。"
+"--no-nginx 只能与 --edge=wls 一起使用。","--no-nginx 只能与 --edge=wls 一起使用。"
+"WLS 启动不使用 PHP 内置 CLI 服务器；需要纯 WLS 时请使用 --no-nginx。","WLS 启动不使用 PHP 内置 CLI 服务器；需要纯 WLS 时请使用 --no-nginx。"
 "检测到 Windows ARM64 上运行 x64 PHP 仿真；WLS 已对后续 PHP 子进程关闭 CLI OPcache 与 JIT，避免已确认的原生访问冲突；请使用原生 ARM64 PHP 恢复字节码缓存。","检测到 Windows ARM64 上运行 x64 PHP 仿真；WLS 已对后续 PHP 子进程关闭 CLI OPcache 与 JIT，避免已确认的原生访问冲突；请使用原生 ARM64 PHP 恢复字节码缓存。"
 "Weline Server 不可用：%{1}","Weline Server 不可用：%{1}"
-"Nginx-only 模式不执行 PHP CLI 回退；请修复 WLS 运行时依赖。","Nginx-only 模式不执行 PHP CLI 回退；请修复 WLS 运行时依赖。"
+"WLS 不执行 PHP CLI 回退；请修复 WLS 运行时依赖。","WLS 不执行 PHP CLI 回退；请修复 WLS 运行时依赖。"
 "Master 启动失败：%{1}","Master 启动失败：%{1}"
 "无法启动：实例 [%{1}] 正在被另一个进程启动中","无法启动：实例 [%{1}] 正在被另一个进程启动中"
 "锁持有进程 PID：%{1}","锁持有进程 PID：%{1}"
@@ -2455,14 +2588,21 @@ Previous：%{1},Previous：%{1}
 "正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留...","正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留..."
 "已强制接管启动锁，继续启动实例 [%{1}]","已强制接管启动锁，继续启动实例 [%{1}]"
 "强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。","强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。"
+"WLS 2.0 边缘模式解析失败：%{1}","WLS 2.0 边缘模式解析失败：%{1}"
+"WLS 2.0 边缘模式：%{1}（请求：%{2}）","WLS 2.0 边缘模式：%{1}（请求：%{2}）"
+"共享网关不可用，已降级纯 WLS：%{1}","共享网关不可用，已降级纯 WLS：%{1}"
+"备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。","备用入口端口：%{1}；该地址不等价于 80/443，请同步检查防火墙、DNS 或负载均衡。"
 "WLS 运行时依赖检查或显式安装失败：%{1}","WLS 运行时依赖检查或显式安装失败：%{1}"
-"Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议仅由 Nginx 提供。","Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议仅由 Nginx 提供。"
+"Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。","Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。"
 "WLS 运行时依赖已按显式请求安装并验证。","WLS 运行时依赖已按显式请求安装并验证。"
 "正在使用已加载新扩展的 PHP 进程继续启动...","正在使用已加载新扩展的 PHP 进程继续启动..."
 "依赖安装后的 WLS 重新启动失败，退出码：%{1}","依赖安装后的 WLS 重新启动失败，退出码：%{1}"
 "使用已保存的实例配置：%{1} (%{2}:%{3})","使用已保存的实例配置：%{1} (%{2}:%{3})"
+"WLS 2.0 备用入口监听地址无效：%{1}","WLS 2.0 备用入口监听地址无效：%{1}"
 "Nginx-only 启动必须使用后台 Master，才能在 Worker READY 后完成 Nginx 配置事务与真实协议门禁；请移除 --foreground/--no-daemon。","Nginx-only 启动必须使用后台 Master，才能在 Worker READY 后完成 Nginx 配置事务与真实协议门禁；请移除 --foreground/--no-daemon。"
 "Nginx-only 公网端点强制 TLS 1.3；--no-ssl 与 wls.https=false 已停用。","Nginx-only 公网端点强制 TLS 1.3；--no-ssl 与 wls.https=false 已停用。"
+新证书未通过完整校验，继续使用上一代有效证书：%{1},新证书未通过完整校验，继续使用上一代有效证书：%{1}
+无法激活项目证书代际：%{1},无法激活项目证书代际：%{1}
 "HTTPS 未启用：%{1}","HTTPS 未启用：%{1}"
 "SSL 证书服务返回 HTTP 模式","SSL 证书服务返回 HTTP 模式"
 "本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。","本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。"
@@ -2471,15 +2611,23 @@ Previous：%{1},Previous：%{1}
 证书有效期至：%{1},证书有效期至：%{1}
 "WLS 运行时解析器未返回完整 RuntimeSelection；已拒绝启动。","WLS 运行时解析器未返回完整 RuntimeSelection；已拒绝启动。"
 "WLS 依赖预检与最终 RuntimeSelection 拓扑不一致；已拒绝启动。","WLS 依赖预检与最终 RuntimeSelection 拓扑不一致；已拒绝启动。"
+"WLS 边缘适配器无效：%{1}","WLS 边缘适配器无效：%{1}"
 "Nginx-only 公网端点要求 TLS 1.3；已拒绝 --no-ssl。","Nginx-only 公网端点要求 TLS 1.3；已拒绝 --no-ssl。"
 "WLS HTTP 协议配置无效：%{1}","WLS HTTP 协议配置无效：%{1}"
-"Nginx 回源禁止启用 WLS native/Caddy 协议边缘。","Nginx 回源禁止启用 WLS native/Caddy 协议边缘。"
+"WLS native/Caddy 协议边缘进程已退役；纯 WLS HTTP/2 由 PHP 进程内实现。","WLS native/Caddy 协议边缘进程已退役；纯 WLS HTTP/2 由 PHP 进程内实现。"
+"纯 WLS HTTP/3 不可用；HTTP/3 仅由项目托管 Nginx 提供。","纯 WLS HTTP/3 不可用；HTTP/3 仅由项目托管 Nginx 提供。"
+"WLS native/Caddy 协议边缘进程已退役。","WLS native/Caddy 协议边缘进程已退役。"
+"纯 WLS 协议：HTTP/2（默认）→ HTTP/1.1（自动回退）","纯 WLS 协议：HTTP/2（默认）→ HTTP/1.1（自动回退）"
 "WLS 回源协议：HTTP/1.1（公网协议协商由 Nginx 负责）","WLS 回源协议：HTTP/1.1（公网协议协商由 Nginx 负责）"
 边缘适配器：%{1},边缘适配器：%{1}
+"纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。","纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。"
+"WLS 2.0 网关没有返回有效 HTTPS 监听端口。","WLS 2.0 网关没有返回有效 HTTPS 监听端口。"
+"WLS 2.0 网关公网 origin 固化失败：%{1}","WLS 2.0 网关公网 origin 固化失败：%{1}"
+"宿主级 Weline Gateway 负责公网 TLS/HTTP；本项目只提供 loopback WLS 后端。","宿主级 Weline Gateway 负责公网 TLS/HTTP；本项目只提供 loopback WLS 后端。"
 "Nginx 负责公网 TLS/HTTP；WLS 后端固定为回环地址明文 HTTP/1.1。","Nginx 负责公网 TLS/HTTP；WLS 后端固定为回环地址明文 HTTP/1.1。"
-"Nginx 是唯一公网边缘；--no-nginx 不能产生可交付的 WLS 启动。","Nginx 是唯一公网边缘；--no-nginx 不能产生可交付的 WLS 启动。"
-"Nginx-only 默认启动要求 wls.edge.nginx.managed=true。","Nginx-only 默认启动要求 wls.edge.nginx.managed=true。"
-"Nginx-only 默认启动要求 wls.edge.nginx.auto_start=true。","Nginx-only 默认启动要求 wls.edge.nginx.auto_start=true。"
+"Nginx 默认启动要求 wls.edge.nginx.managed=true；不可用时请显式使用 --no-nginx。","Nginx 默认启动要求 wls.edge.nginx.managed=true；不可用时请显式使用 --no-nginx。"
+"Nginx 默认启动要求 wls.edge.nginx.auto_start=true；不可用时请显式使用 --no-nginx。","Nginx 默认启动要求 wls.edge.nginx.auto_start=true；不可用时请显式使用 --no-nginx。"
+"项目隔离 Nginx 尚未安装；请先执行 server:nginx:install，或显式使用 --no-nginx 启动纯 WLS。","项目隔离 Nginx 尚未安装；请先执行 server:nginx:install，或显式使用 --no-nginx 启动纯 WLS。"
 "Nginx 公网 origin 固化失败：%{1}","Nginx 公网 origin 固化失败：%{1}"
 "托管 Nginx 正在运行但缺少可验证 owner；请先执行身份审查与显式停止。","托管 Nginx 正在运行但缺少可验证 owner；请先执行身份审查与显式停止。"
 "托管 Nginx 已绑定实例 %{1}；请先停止该 owner，再启动实例 %{2}。","托管 Nginx 已绑定实例 %{1}；请先停止该 owner，再启动实例 %{2}。"
@@ -2527,14 +2675,7 @@ Previous：%{1},Previous：%{1}
 占用进程：%{1},占用进程：%{1}
 PID：%{1},PID：%{1}
 命令行：%{1},命令行：%{1}
-"是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:","是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:"
-"- Windows: taskkill /F /PID %{1}","- Windows: taskkill /F /PID %{1}"
-"- Linux/macOS: kill -9 %{1}","- Linux/macOS: kill -9 %{1}"
-"3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
-"正在强制结束占用端口 %{1} 的进程 (PID: %{2})...","正在强制结束占用端口 %{1} 的进程 (PID: %{2})..."
-"无法释放端口 %{1}","无法释放端口 %{1}"
-"提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试","提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试"
-"端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动","端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动"
+"WLS 不会操作未知端口 owner；本次仅禁用可选的 HTTP→HTTPS 重定向监听。","WLS 不会操作未知端口 owner；本次仅禁用可选的 HTTP→HTTPS 重定向监听。"
 "提示：当前为 Nginx 直连模式，Worker 独立监听回环端口 %{1}-%{2}。","提示：当前为 Nginx 直连模式，Worker 独立监听回环端口 %{1}-%{2}。"
 "Master 共享监听 FD","Master 共享监听 FD"
 "提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。","提示：当前为 %{1} 直连模式，多 Worker 共用同一端口 %{2}。"
@@ -2567,9 +2708,11 @@ PID：%{1},PID：%{1}
 如果默认内网访问可忽略该提示。,如果默认内网访问可忽略该提示。
 "WLS Master 进程创建失败：%{1}","WLS Master 进程创建失败：%{1}"
 "Master 已启动，等待所有服务就绪...","Master 已启动，等待所有服务就绪..."
-"WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；Nginx-only 启动失败，将回收本次实例。","WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；Nginx-only 启动失败，将回收本次实例。"
 "服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）","服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）"
-"WLS 与托管 Nginx 均已就绪，启动完成。","WLS 与托管 Nginx 均已就绪，启动完成。"
+"纯 WLS Worker 已就绪；TLS/HTTP 由 WLS 直接提供。","纯 WLS Worker 已就绪；TLS/HTTP 由 WLS 直接提供。"
+"WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；默认 Nginx 启动失败，将回收本次实例。","WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；默认 Nginx 启动失败，将回收本次实例。"
+"WLS 与宿主级 WLS 2.0 Gateway 均已就绪，启动完成。","WLS 与宿主级 WLS 2.0 Gateway 均已就绪，启动完成。"
+"WLS 与项目托管 Nginx 均已就绪，启动完成。","WLS 与项目托管 Nginx 均已就绪，启动完成。"
 "Master 已运行，但未在 %{1} 秒内等到所有服务 READY（当前阶段：%{2}）。","Master 已运行，但未在 %{1} 秒内等到所有服务 READY（当前阶段：%{2}）。"
 启动失败原因：%{1},启动失败原因：%{1}
 "WLS Master 控制面启动失败。","WLS Master 控制面启动失败。"
@@ -2589,6 +2732,7 @@ PID：%{1},PID：%{1}
 服务器启动失败,服务器启动失败
 "1. 停止占用端口的进程","1. 停止占用端口的进程"
 "2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
+"WLS 启动失败后释放共享服务 consumer token 异常：%{1}","WLS 启动失败后释放共享服务 consumer token 异常：%{1}"
 "实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
 "实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
 "WLS 维护模式已确认落地：%{1}","WLS 维护模式已确认落地：%{1}"
@@ -2598,7 +2742,9 @@ PID：%{1},PID：%{1}
 env.wls,env.wls
 env.wls.servers.%{1},env.wls.servers.%{1}
 命令行参数,命令行参数
+"命令行参数 --edge","命令行参数 --edge"
 环境变量,环境变量
+"命令行参数 --no-nginx","命令行参数 --no-nginx"
 "参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。","参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。"
 证书持久层恢复失败，已跳过并继续启动：%{1},证书持久层恢复失败，已跳过并继续启动：%{1}
 "真实 Host 解析校验失败","真实 Host 解析校验失败"
@@ -2638,21 +2784,27 @@ env.wls.servers.%{1},env.wls.servers.%{1}
 本地泛域名证书准备失败：%{1},本地泛域名证书准备失败：%{1}
 "已为 %{1} 生成自签证书","已为 %{1} 生成自签证书"
 无效的实例名称：%{1}，只允许字母开头，包含字母、数字、下划线和横线,无效的实例名称：%{1}，只允许字母开头，包含字母、数字、下划线和横线
-"Nginx 公网端点未验证","Nginx 公网端点未验证"
-"HTTP/3 QUIC pending","HTTP/3 QUIC pending"
-"shared cache/tickets；live Reused 已验证：%{1}","shared cache/tickets；live Reused 已验证：%{1}"
-"shared cache/tickets 已配置；live Reused pending","shared cache/tickets 已配置；live Reused pending"
-未配置或未验证,未配置或未验证
-"WLS 私网回源","WLS 私网回源"
 内部拓扑,内部拓扑
 TLS,TLS
 "TLS 会话恢复","TLS 会话恢复"
+"跨连接/跨 Worker Reused pending","跨连接/跨 Worker Reused pending"
+HTTP/3,HTTP/3
+"不可用；需使用托管 Nginx","不可用；需使用托管 Nginx"
 运行模式,运行模式
 后台运行（默认）,后台运行（默认）
 前台运行,前台运行
 平台,平台
 配置来源,配置来源
 智能模式,智能模式
+网关公网端点未验证,网关公网端点未验证
+"WLS 私网回源","WLS 私网回源"
+网关状态,网关状态
+"网关 epoch","网关 epoch"
+"Nginx 公网端点未验证","Nginx 公网端点未验证"
+"HTTP/3 QUIC pending","HTTP/3 QUIC pending"
+"shared cache/tickets；live Reused 已验证：%{1}","shared cache/tickets；live Reused 已验证：%{1}"
+"shared cache/tickets 已配置；live Reused pending","shared cache/tickets 已配置；live Reused pending"
+未配置或未验证,未配置或未验证
 "检测到特权端口 %{1}，当前用户无法直接绑定。","检测到特权端口 %{1}，当前用户无法直接绑定。"
 "未找到 setcap 命令，跳过 setcap 方式。","未找到 setcap 命令，跳过 setcap 方式。"
 "PHP 已有 cap_net_bind_service 但绑定仍失败，可能需要重新设置。","PHP 已有 cap_net_bind_service 但绑定仍失败，可能需要重新设置。"
@@ -2702,6 +2854,7 @@ TLS,TLS
 "端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...","端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳..."
 "端口 %{1} 被非框架进程占用，不予杀死","端口 %{1} 被非框架进程占用，不予杀死"
 "端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程...","端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程..."
+"无法释放端口 %{1}","无法释放端口 %{1}"
 "WLS 进程（实例 %{1}）","WLS 进程（实例 %{1}）"
 "PID %{1}","PID %{1}"
 未知进程,未知进程
@@ -2720,9 +2873,9 @@ TLS,TLS
 "在 php.ini 中启用：extension=%{1}","在 php.ini 中启用：extension=%{1}"
 函数被禁用：proc_open,函数被禁用：proc_open
 函数被禁用：pcntl_fork,函数被禁用：pcntl_fork
-"当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker","当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker"
-"Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制","Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制"
-"移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","移除 --dispatcher，或配置 wls.runtime.topology = auto/direct"
+"当前使用 Dispatcher；Nginx 模式 auto 与纯 WLS macOS/Linux auto 均使用 Direct","当前使用 Dispatcher；Nginx 模式 auto 与纯 WLS macOS/Linux auto 均使用 Direct"
+"Nginx 模式由边缘直接分流到 Worker；纯 WLS Windows 固定使用单一公网 Dispatcher，macOS/Linux 使用 Direct","Nginx 模式由边缘直接分流到 Worker；纯 WLS Windows 固定使用单一公网 Dispatcher，macOS/Linux 使用 Direct"
+"非 Windows 纯 WLS 场景可移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","非 Windows 纯 WLS 场景可移除 --dispatcher，或配置 wls.runtime.topology = auto/direct"
 内存限制较低：%{1},内存限制较低：%{1}
 "在 php.ini 设置 memory_limit = 256M","在 php.ini 设置 memory_limit = 256M"
 "OPCache CLI 模式未启用","OPCache CLI 模式未启用"
@@ -2747,69 +2900,73 @@ TLS,TLS
 "📁 PHP 配置文件：%{1}","📁 PHP 配置文件：%{1}"
 "🔥 解决关键问题后，性能将提升 100-200%%！","🔥 解决关键问题后，性能将提升 100-200%%！"
 "💪 优化后，服务器性能将有质的飞跃！","💪 优化后，服务器性能将有质的飞跃！"
+"无法生成访问地址：WLS 2.0 Gateway HTTPS 端点未验证。","无法生成访问地址：WLS 2.0 Gateway HTTPS 端点未验证。"
 "无法生成访问地址：实例绑定的 Nginx HTTPS 端点未验证。","无法生成访问地址：实例绑定的 Nginx HTTPS 端点未验证。"
-"未配置（请在 env.php 中设置 area_routes.rest_backend.prefix）","未配置（请在 env.php 中设置 area_routes.rest_backend.prefix）"
-前台/首页,前台/首页
-后台入口,后台入口
-"后台 REST 接口","后台 REST 接口"
-"前台 REST 接口","前台 REST 接口"
 默认外网地址,默认外网地址
+"纯 WLS 直接提供公网 %{1}；HTTP/3 需要托管 Nginx。","纯 WLS 直接提供公网 %{1}；HTTP/3 需要托管 Nginx。"
+"WLS 私网回源：http://127.0.0.1:%{1}；公网访问由宿主级 WLS 2.0 Gateway 提供。","WLS 私网回源：http://127.0.0.1:%{1}；公网访问由宿主级 WLS 2.0 Gateway 提供。"
 "WLS 私网回源：%{1}；公网访问必须经过项目托管 Nginx。","WLS 私网回源：%{1}；公网访问必须经过项目托管 Nginx。"
 测试请求,测试请求
 停止服务,停止服务
 压力测试,压力测试
 "启动 Weline 常驻内存 HTTP 服务器","启动 Weline 常驻内存 HTTP 服务器"
 "启动 Weline 高性能常驻内存服务器","启动 Weline 高性能常驻内存服务器"
+"公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听","公网域名或展示主机；gateway/legacy 模式回源监听 127.0.0.1，wls 模式直接监听"
+"gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口","gateway/legacy 模式的 WLS 回源端口；wls 模式为纯 WLS HTTPS 端口"
 "Worker 进程数（默认：auto 智能模式）","Worker 进程数（默认：auto 智能模式）"
 "Windows 子进程使用可见控制台窗口","Windows 子进程使用可见控制台窗口"
 "运行模式：io（I/O密集）或 cpu（CPU密集）","运行模式：io（I/O密集）或 cpu（CPU密集）"
 "平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换","平滑重启：开维护模式，并在全部 READY Worker 确认请求排空后切换"
 "与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）","与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）"
-"Nginx 公网 TLS 证书文件路径","Nginx 公网 TLS 证书文件路径"
-"Nginx 公网 TLS 私钥文件路径","Nginx 公网 TLS 私钥文件路径"
+"公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）","公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）"
+"公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）","公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）"
 "Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）","Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）"
 "Dispatcher 进程 PHP memory_limit（默认跟随 Worker）","Dispatcher 进程 PHP memory_limit（默认跟随 Worker）"
 "运行策略：auto/performance/stability（默认 auto）","运行策略：auto/performance/stability（默认 auto）"
 "事件循环：auto/event/select（默认 auto）","事件循环：auto/event/select（默认 auto）"
 "仅为 POSIX Direct 显式安装 ext-event/reuseport 依赖；Windows worker_ports 不需要编译扩展","仅为 POSIX Direct 显式安装 ext-event/reuseport 依赖；Windows worker_ports 不需要编译扩展"
 "已退役：请先单独执行 server:nginx:install；启动路径不会下载或编译","已退役：请先单独执行 server:nginx:install；启动路径不会下载或编译"
+"WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）","WLS 2.0 边缘模式：auto/gateway/wls（默认 auto）"
+"兼容别名，等价于 --edge=wls","兼容别名，等价于 --edge=wls"
 "兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用","兼容旧脚本：明确禁止依赖安装；当前普通启动默认已等价，不能与 --install-deps 同用"
 "Supervisor：auto/true/false（默认 auto）","Supervisor：auto/true/false（默认 auto）"
-"直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd","直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd"
-"显式兼容/诊断拓扑；所有平台的 auto 均不启动 Dispatcher","显式兼容/诊断拓扑；所有平台的 auto 均不启动 Dispatcher"
+"直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用","直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用"
+"Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断","Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断"
 配置优先级,配置优先级
 "命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值","命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值"
 拓扑优先级,拓扑优先级
 "--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto","--direct/--dispatcher > 当前实例 wls.runtime.topology > 全局 wls.runtime.topology > auto"
-Nginx-only,Nginx-only
+默认边缘,默认边缘
+"auto 加入可信 wls-edge/2 网关；无法建立时不接管未知端口 owner，自动分配 20000–29999 纯 WLS 地址","auto 加入可信 wls-edge/2 网关；无法建立时不接管未知端口 owner，自动分配 20000–29999 纯 WLS 地址"
 启动副作用,启动副作用
-"普通 start/reload/restart 不下载、不编译；缺少 Nginx 时失败并提示显式 server:nginx:install","普通 start/reload/restart 不下载、不编译；缺少 Nginx 时失败并提示显式 server:nginx:install"
-多实例支持,多实例支持
-"可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例","可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例"
+"建立网关前需要显式安装项目钉死版本 Nginx；网关复制到宿主 A/B 槽后不依赖引导项目","建立网关前需要显式安装项目钉死版本 Nginx；网关复制到宿主 A/B 槽后不依赖引导项目"
+多项目支持,多项目支持
+"多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离","多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离"
 配置记忆,配置记忆
 "首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用","首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用"
 "worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算","worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算"
 事件循环,事件循环
 "Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps","Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps"
-HTTP/3,HTTP/3
 "仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending","仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending"
 默认拓扑,默认拓扑
-"所有平台 auto 均为 Nginx 直连 Worker：Windows 使用 worker_ports，Linux 优先已验证 reuseport 并回退 shared_fd，macOS 使用 shared_fd","所有平台 auto 均为 Nginx 直连 Worker：Windows 使用 worker_ports，Linux 优先已验证 reuseport 并回退 shared_fd，macOS 使用 shared_fd"
+"Nginx 模式所有平台 auto 均为 Direct；纯 WLS 的 macOS/Linux 为 Direct，Windows 固定 Dispatcher","Nginx 模式所有平台 auto 均为 Direct；纯 WLS 的 macOS/Linux 为 Direct，Windows 固定 Dispatcher"
 多进程,多进程
 "优先级：proc_open > pcntl_fork > exec","优先级：proc_open > pcntl_fork > exec"
-"仅由 Nginx 终结，启动门禁要求真实 TLS 1.3、ALPN HTTP/2 与 HTTP/1.1","仅由 Nginx 终结，启动门禁要求真实 TLS 1.3、ALPN HTTP/2 与 HTTP/1.1"
+"gateway/legacy 由 Nginx 终结；wls 模式由纯 WLS 启用 TLS 1.3","gateway/legacy 由 Nginx 终结；wls 模式由纯 WLS 启用 TLS 1.3"
 "HTTP 协议","HTTP 协议"
-"Nginx 公网默认 HTTP/2并自动回退 HTTP/1.1；WLS 回源固定 HTTP/1.1 Keep-Alive","Nginx 公网默认 HTTP/2并自动回退 HTTP/1.1；WLS 回源固定 HTTP/1.1 Keep-Alive"
+"Nginx 公网支持 HTTP/3（能力可用时）、HTTP/2、HTTP/1.1；纯 WLS 默认 HTTP/2 并自动回退 HTTP/1.1","Nginx 公网支持 HTTP/3（能力可用时）、HTTP/2、HTTP/1.1；纯 WLS 默认 HTTP/2 并自动回退 HTTP/1.1"
 连接复用,连接复用
-"Nginx 提供客户端 Keep-Alive、HTTP/2 多路复用与回源 Keep-Alive 连接池","Nginx 提供客户端 Keep-Alive、HTTP/2 多路复用与回源 Keep-Alive 连接池"
+"两种模式均支持 Keep-Alive；HTTP/2 使用多路复用；Nginx 模式额外提供回源连接池","两种模式均支持 Keep-Alive；HTTP/2 使用多路复用；Nginx 模式额外提供回源连接池"
 "TLS 会话","TLS 会话"
-"Nginx shared SSL session cache 与 Session Tickets 由启动和 reload 的 live Reused 证据验收","Nginx shared SSL session cache 与 Session Tickets 由启动和 reload 的 live Reused 证据验收"
-"持续监控 Worker 状态并自动恢复；公网 HTTP→HTTPS 重定向由 Nginx 负责","持续监控 Worker 状态并自动恢复；公网 HTTP→HTTPS 重定向由 Nginx 负责"
-"-p 指定 WLS loopback 回源端口；Nginx listen_http/listen_https 是唯一公网端口","-p 指定 WLS loopback 回源端口；Nginx listen_http/listen_https 是唯一公网端口"
+"Nginx 会话缓存与 Ticket 需 live Reused 验收；纯 WLS 跨连接/跨 Worker Session Ticket 仍为 pending","Nginx 会话缓存与 Ticket 需 live Reused 验收；纯 WLS 跨连接/跨 Worker Session Ticket 仍为 pending"
+"持续监控 Worker 状态并自动恢复；Nginx 模式的公网 HTTP→HTTPS 重定向由 Nginx 负责","持续监控 Worker 状态并自动恢复；Nginx 模式的公网 HTTP→HTTPS 重定向由 Nginx 负责"
+"Nginx 模式下 -p 指定 loopback 回源端口；--no-nginx 时 -p 指定纯 WLS 公网端口","Nginx 模式下 -p 指定 loopback 回源端口；--no-nginx 时 -p 指定纯 WLS 公网端口"
 "Worker 内存","Worker 内存"
 "可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker","可通过 wls.worker_memory_limit 或 --worker-memory-limit 设置；wls.dispatcher_memory_limit 未设置时跟随 Worker"
 "显式安装 Nginx","显式安装 Nginx"
 启动默认实例,启动默认实例
+强制加入共享网关,强制加入共享网关
+"纯 WLS HTTPS","纯 WLS HTTPS"
 启动命名实例（首次指定回源端口）,启动命名实例（首次指定回源端口）
 再次启动已配置实例,再次启动已配置实例
 "Direct 模式","Direct 模式"
@@ -2828,7 +2985,13 @@ HTTP/3,HTTP/3
 "检查间隔：%{1} 秒","检查间隔：%{1} 秒"
 "按 Ctrl+C 停止监控...","按 Ctrl+C 停止监控..."
 创建文件监控子进程失败,创建文件监控子进程失败
+"纯 WLS 模式不应进入 Nginx/网关发布阶段。","纯 WLS 模式不应进入 Nginx/网关发布阶段。"
+"WLS 2.0 网关注册完成但没有 ACTIVE 路由：%{1}","WLS 2.0 网关注册完成但没有 ACTIVE 路由：%{1}"
+"项目已注册到宿主级 WLS 2.0 Gateway","项目已注册到宿主级 WLS 2.0 Gateway"
+协议：%{1}，epoch：%{2}，活动路由：%{3},协议：%{1}，epoch：%{2}，活动路由：%{3}
 "运行态实例不是 Nginx-only 边缘，已拒绝发布。","运行态实例不是 Nginx-only 边缘，已拒绝发布。"
+"Nginx-only 默认启动要求 wls.edge.nginx.managed=true。","Nginx-only 默认启动要求 wls.edge.nginx.managed=true。"
+"Nginx-only 默认启动要求 wls.edge.nginx.auto_start=true。","Nginx-only 默认启动要求 wls.edge.nginx.auto_start=true。"
 "托管 Nginx 启动失败：%{1}","托管 Nginx 启动失败：%{1}"
 "托管 Nginx 启动成功但缺少已验证的公网端点详情。","托管 Nginx 启动成功但缺少已验证的公网端点详情。"
 "托管 Nginx 未同时通过 TLS 1.3、HTTP/2 与 HTTP/1.1 真实门禁。","托管 Nginx 未同时通过 TLS 1.3、HTTP/2 与 HTTP/1.1 真实门禁。"
@@ -2926,7 +3089,6 @@ HTTP/3,HTTP/3
 端口被占用但无法确定进程ID，尝试强制清理端口,端口被占用但无法确定进程ID，尝试强制清理端口
 检测到服务器已在运行中！进程ID：%{1},检测到服务器已在运行中！进程ID：%{1}
 已自动更新配置信息。,已自动更新配置信息。
-服务访问地址,服务访问地址
 服务器已在后台运行,服务器已在后台运行
 检测到端口被占用，但无法获取进程信息,检测到端口被占用，但无法获取进程信息
 开发专用，请勿用于生产环境。,开发专用，请勿用于生产环境。
@@ -2959,6 +3121,55 @@ proc_open不可用，使用传统方式启动后台进程,proc_open不可用，�
 "端口 %{1} 被占用但无法获取进程ID，请手动停止后重试","端口 %{1} 被占用但无法获取进程ID，请手动停止后重试"
 "端口 %{1} 多次尝试后仍被占用，CLI 可能无法正常监听","端口 %{1} 多次尝试后仍被占用，CLI 可能无法正常监听"
 "若仍无法结束，请以管理员身份运行 CMD 或 PowerShell 后执行上述命令。","若仍无法结束，请以管理员身份运行 CMD 或 PowerShell 后执行上述命令。"
+"共享网关：已将当前项目路由置为 DRAINING；网关本身与其他项目保持运行。","共享网关：已将当前项目路由置为 DRAINING；网关本身与其他项目保持运行。"
+"宿主级 WLS 2.0 Gateway 正在停止。","宿主级 WLS 2.0 Gateway 正在停止。"
+"旧 Nginx 未安全停止，提升已中止：%{1}","旧 Nginx 未安全停止，提升已中止：%{1}"
+确认公共端口所有权切换,确认公共端口所有权切换
+"提升失败时使用冻结的 owner/upstream/server_name 快照恢复旧 Nginx。","提升失败时使用冻结的 owner/upstream/server_name 快照恢复旧 Nginx。"
+升级失败,升级失败
+"WLS 2.0 Gateway 已切换到候选 A/B 槽；五分钟崩溃循环将自动回滚。","WLS 2.0 Gateway 已切换到候选 A/B 槽；五分钟崩溃循环将自动回滚。"
+附加项目内证书目录，可重复,附加项目内证书目录，可重复
+"轮换项目身份会生成新的 UUID；请同时提供 --confirm。","轮换项目身份会生成新的 UUID；请同时提供 --confirm。"
+"当前项目已授权到 WLS 2.0 宿主网关。","当前项目已授权到 WLS 2.0 宿主网关。"
+"确认项目 UUID 轮换","确认项目 UUID 轮换"
+"是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:","是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:"
+"- Windows: taskkill /F /PID %{1}","- Windows: taskkill /F /PID %{1}"
+"- Linux/macOS: kill -9 %{1}","- Linux/macOS: kill -9 %{1}"
+"3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
+"正在强制结束占用端口 %{1} 的进程 (PID: %{2})...","正在强制结束占用端口 %{1} 的进程 (PID: %{2})..."
+"提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试","提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试"
+"端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动","端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动"
+"WLS TLS 引擎已退役；公网 TLS 仅由项目托管 Nginx 处理。请删除 wls.ssl.engine=%{1}。","WLS TLS 引擎已退役；公网 TLS 仅由项目托管 Nginx 处理。请删除 wls.ssl.engine=%{1}。"
+"wls.ssl.session_cache=external 已退役；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。","wls.ssl.session_cache=external 已退役；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。"
+"实例 [%{1}] 没有通过 Managed Nginx 进程、owner、upstream 与公网端口身份门禁。","实例 [%{1}] 没有通过 Managed Nginx 进程、owner、upstream 与公网端口身份门禁。"
+"实例 [%{1}] 的 WLS 回源 health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过 Managed Nginx owner 门禁。","实例 [%{1}] 的 WLS 回源 health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过 Managed Nginx owner 门禁。"
+"已归因目标缺少完整的 Managed Nginx owner 或协议运行证据，拒绝开始压测。","已归因目标缺少完整的 Managed Nginx owner 或协议运行证据，拒绝开始压测。"
+"已归因目标的 Managed Nginx owner 或协议策略未绑定，auto 已拒绝降级猜测。","已归因目标的 Managed Nginx owner 或协议策略未绑定，auto 已拒绝降级猜测。"
+"Nginx-only 模式禁止 PHP 内置 CLI 服务器；请使用项目托管 Nginx。","Nginx-only 模式禁止 PHP 内置 CLI 服务器；请使用项目托管 Nginx。"
+"Nginx-only 模式不执行 PHP CLI 回退；请修复 WLS 运行时依赖。","Nginx-only 模式不执行 PHP CLI 回退；请修复 WLS 运行时依赖。"
+"Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议仅由 Nginx 提供。","Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议仅由 Nginx 提供。"
+"Nginx 回源禁止启用 WLS native/Caddy 协议边缘。","Nginx 回源禁止启用 WLS native/Caddy 协议边缘。"
+"Nginx 是唯一公网边缘；--no-nginx 不能产生可交付的 WLS 启动。","Nginx 是唯一公网边缘；--no-nginx 不能产生可交付的 WLS 启动。"
+"WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；Nginx-only 启动失败，将回收本次实例。","WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；Nginx-only 启动失败，将回收本次实例。"
+"WLS 与托管 Nginx 均已就绪，启动完成。","WLS 与托管 Nginx 均已就绪，启动完成。"
+"当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker","当前显式使用 Dispatcher；所有平台 auto/direct 都由 Nginx 直接分流到 Worker"
+"Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制","Windows 使用独立 Worker 回环端口，Linux 自动优先 reuseport 并回退 shared_fd，macOS 使用 shared_fd；移除 PHP 中转层可减少一次调度与复制"
+"移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","移除 --dispatcher，或配置 wls.runtime.topology = auto/direct"
+"Nginx 公网 TLS 证书文件路径","Nginx 公网 TLS 证书文件路径"
+"Nginx 公网 TLS 私钥文件路径","Nginx 公网 TLS 私钥文件路径"
+"直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd","直连模式：Windows 由 Nginx 均衡独立 Worker 端口；Linux 自动优先 reuseport 并回退 shared_fd；macOS 使用 shared_fd"
+"显式兼容/诊断拓扑；所有平台的 auto 均不启动 Dispatcher","显式兼容/诊断拓扑；所有平台的 auto 均不启动 Dispatcher"
+Nginx-only,Nginx-only
+"普通 start/reload/restart 不下载、不编译；缺少 Nginx 时失败并提示显式 server:nginx:install","普通 start/reload/restart 不下载、不编译；缺少 Nginx 时失败并提示显式 server:nginx:install"
+多实例支持,多实例支持
+"可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例","可同时运行多个命名 WLS 实例并使用不同回源端口；一个项目托管 Nginx 同一时刻只绑定一个 owner 实例"
+"所有平台 auto 均为 Nginx 直连 Worker：Windows 使用 worker_ports，Linux 优先已验证 reuseport 并回退 shared_fd，macOS 使用 shared_fd","所有平台 auto 均为 Nginx 直连 Worker：Windows 使用 worker_ports，Linux 优先已验证 reuseport 并回退 shared_fd，macOS 使用 shared_fd"
+"仅由 Nginx 终结，启动门禁要求真实 TLS 1.3、ALPN HTTP/2 与 HTTP/1.1","仅由 Nginx 终结，启动门禁要求真实 TLS 1.3、ALPN HTTP/2 与 HTTP/1.1"
+"Nginx 公网默认 HTTP/2并自动回退 HTTP/1.1；WLS 回源固定 HTTP/1.1 Keep-Alive","Nginx 公网默认 HTTP/2并自动回退 HTTP/1.1；WLS 回源固定 HTTP/1.1 Keep-Alive"
+"Nginx 提供客户端 Keep-Alive、HTTP/2 多路复用与回源 Keep-Alive 连接池","Nginx 提供客户端 Keep-Alive、HTTP/2 多路复用与回源 Keep-Alive 连接池"
+"Nginx shared SSL session cache 与 Session Tickets 由启动和 reload 的 live Reused 证据验收","Nginx shared SSL session cache 与 Session Tickets 由启动和 reload 的 live Reused 证据验收"
+"持续监控 Worker 状态并自动恢复；公网 HTTP→HTTPS 重定向由 Nginx 负责","持续监控 Worker 状态并自动恢复；公网 HTTP→HTTPS 重定向由 Nginx 负责"
+"-p 指定 WLS loopback 回源端口；Nginx listen_http/listen_https 是唯一公网端口","-p 指定 WLS loopback 回源端口；Nginx listen_http/listen_https 是唯一公网端口"
 "SSL 状态：","SSL 状态："
 "已启用 (HTTPS)","已启用 (HTTPS)"
 "未启用 (HTTP)","未启用 (HTTP)"
@@ -2970,59 +3181,10 @@ proc_open不可用，使用传统方式启动后台进程,proc_open不可用，�
 "托管 Nginx 回收失败：%{1}","托管 Nginx 回收失败：%{1}"
 "托管 Nginx 回收异常：%{1}","托管 Nginx 回收异常：%{1}"
 "Nginx-only 启动失败后的实例回收未完全收敛；请检查 server:doctor 与实例状态。","Nginx-only 启动失败后的实例回收未完全收敛；请检查 server:doctor 与实例状态。"
-"Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。","Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。"
-"Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断","Dispatcher 模式：纯 WLS Windows auto 默认使用；其他场景可显式用于兼容/诊断"
-"Nginx 会话缓存与 Ticket 需 live Reused 验收；纯 WLS 跨连接/跨 Worker Session Ticket 仍为 pending","Nginx 会话缓存与 Ticket 需 live Reused 验收；纯 WLS 跨连接/跨 Worker Session Ticket 仍为 pending"
-"Nginx 公网支持 HTTP/3（能力可用时）、HTTP/2、HTTP/1.1；纯 WLS 默认 HTTP/2 并自动回退 HTTP/1.1","Nginx 公网支持 HTTP/3（能力可用时）、HTTP/2、HTTP/1.1；纯 WLS 默认 HTTP/2 并自动回退 HTTP/1.1"
-"Nginx 模式下 -p 指定 loopback 回源端口；--no-nginx 时 -p 指定纯 WLS 公网端口","Nginx 模式下 -p 指定 loopback 回源端口；--no-nginx 时 -p 指定纯 WLS 公网端口"
-"Nginx 模式不允许 WLS external TLS Session Cache；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。","Nginx 模式不允许 WLS external TLS Session Cache；TLS Session Cache 与 Ticket 由项目托管 Nginx 处理。"
-"Nginx 模式所有平台 auto 均为 Direct；纯 WLS 的 macOS/Linux 为 Direct，Windows 固定 Dispatcher","Nginx 模式所有平台 auto 均为 Direct；纯 WLS 的 macOS/Linux 为 Direct，Windows 固定 Dispatcher"
 "Nginx 模式的 WLS 回源端口；--no-nginx 时为纯 WLS 公网 HTTPS 端口","Nginx 模式的 WLS 回源端口；--no-nginx 时为纯 WLS 公网 HTTPS 端口"
-"Nginx 默认启动要求 wls.edge.nginx.auto_start=true；不可用时请显式使用 --no-nginx。","Nginx 默认启动要求 wls.edge.nginx.auto_start=true；不可用时请显式使用 --no-nginx。"
-"Nginx 默认启动要求 wls.edge.nginx.managed=true；不可用时请显式使用 --no-nginx。","Nginx 默认启动要求 wls.edge.nginx.managed=true；不可用时请显式使用 --no-nginx。"
-"TLS Session 说明：%{1}","TLS Session 说明：%{1}"
-"WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；默认 Nginx 启动失败，将回收本次实例。","WLS Worker 已 READY，但托管 Nginx 未通过公网协议门禁；默认 Nginx 启动失败，将回收本次实例。"
-"WLS native/Caddy 协议边缘进程已退役。","WLS native/Caddy 协议边缘进程已退役。"
-"WLS native/Caddy 协议边缘进程已退役；纯 WLS HTTP/2 由 PHP 进程内实现。","WLS native/Caddy 协议边缘进程已退役；纯 WLS HTTP/2 由 PHP 进程内实现。"
-"WLS 不执行 PHP CLI 回退；请修复 WLS 运行时依赖。","WLS 不执行 PHP CLI 回退；请修复 WLS 运行时依赖。"
-"WLS 启动不使用 PHP 内置 CLI 服务器；需要纯 WLS 时请使用 --no-nginx。","WLS 启动不使用 PHP 内置 CLI 服务器；需要纯 WLS 时请使用 --no-nginx。"
-"WLS 边缘适配器无效：%{1}","WLS 边缘适配器无效：%{1}"
-"pending","pending"
-"wls.ssl.engine 仅支持 none/stream；收到 %{1}。","wls.ssl.engine 仅支持 none/stream；收到 %{1}。"
-"不可用；需使用托管 Nginx","不可用；需使用托管 Nginx"
-"两种模式均支持 Keep-Alive；HTTP/2 使用多路复用；Nginx 模式额外提供回源连接池","两种模式均支持 Keep-Alive；HTTP/2 使用多路复用；Nginx 模式额外提供回源连接池"
-"公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）","公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）"
-"公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）","公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）"
-"公网协议所有者：纯 WLS；无需 Nginx 或其他边缘进程。","公网协议所有者：纯 WLS；无需 Nginx 或其他边缘进程。"
 "公网域名或展示主机；Nginx 模式回源监听 127.0.0.1，--no-nginx 时由纯 WLS 直接监听","公网域名或展示主机；Nginx 模式回源监听 127.0.0.1，--no-nginx 时由纯 WLS 直接监听"
-"命令行参数 --no-nginx","命令行参数 --no-nginx"
-"实例 [%{1}] 没有通过其公网入口身份与协议策略门禁。","实例 [%{1}] 没有通过其公网入口身份与协议策略门禁。"
-"实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。","实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。"
-"已归因目标的边缘身份或协议策略未绑定，auto 已拒绝降级猜测。","已归因目标的边缘身份或协议策略未绑定，auto 已拒绝降级猜测。"
-"已归因目标缺少完整的边缘身份或协议运行证据，拒绝开始压测。","已归因目标缺少完整的边缘身份或协议运行证据，拒绝开始压测。"
-"持续监控 Worker 状态并自动恢复；Nginx 模式的公网 HTTP→HTTPS 重定向由 Nginx 负责","持续监控 Worker 状态并自动恢复；Nginx 模式的公网 HTTP→HTTPS 重定向由 Nginx 负责"
-"无","无"
 "显式退化为纯 WLS：默认 HTTPS，HTTP/2 优先并自动回退 HTTP/1.1；不提供 HTTP/3","显式退化为纯 WLS：默认 HTTPS，HTTP/2 优先并自动回退 HTTP/1.1；不提供 HTTP/3"
 "普通 start/reload/restart 不下载、不编译；缺少 Nginx 时先执行 server:nginx:install，或使用 --no-nginx 退化","普通 start/reload/restart 不下载、不编译；缺少 Nginx 时先执行 server:nginx:install，或使用 --no-nginx 退化"
-"由纯 WLS 直接终结","由纯 WLS 直接终结"
-"直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用","直连模式：Nginx 下 Windows 使用独立 Worker 端口；纯 WLS 仅 macOS/Linux 可用"
-"纯 WLS HTTP/3 不可用；HTTP/3 仅由项目托管 Nginx 提供。","纯 WLS HTTP/3 不可用；HTTP/3 仅由项目托管 Nginx 提供。"
-"纯 WLS HTTP/3：不可用；需要项目托管 Nginx。","纯 WLS HTTP/3：不可用；需要项目托管 Nginx。"
 "纯 WLS HTTPS（不使用 Nginx）","纯 WLS HTTPS（不使用 Nginx）"
-"纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}","纯 WLS TLS Session：configured=%{1}，live Reused=%{2}，cross Worker=%{3}"
-"纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}","纯 WLS TLS：TLS 1.3=%{1}，ALPN HTTP/2=%{2}"
-"纯 WLS Worker 已就绪；TLS/HTTP 由 WLS 直接提供。","纯 WLS Worker 已就绪；TLS/HTTP 由 WLS 直接提供。"
-"纯 WLS 公网入口","纯 WLS 公网入口"
-"纯 WLS 公网端口：","纯 WLS 公网端口："
-"纯 WLS 协议：HTTP/2（默认）→ HTTP/1.1（自动回退）","纯 WLS 协议：HTTP/2（默认）→ HTTP/1.1（自动回退）"
-"纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}","纯 WLS 协议：目标=%{1}，实际首选=%{2}，回退=%{3}"
-"纯 WLS 直接提供公网 %{1}；HTTP/3 需要托管 Nginx。","纯 WLS 直接提供公网 %{1}；HTTP/3 需要托管 Nginx。"
-"纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。","纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。"
-"跨连接/跨 Worker Reused pending","跨连接/跨 Worker Reused pending"
-"项目隔离 Nginx 尚未安装；请先执行 server:nginx:install，或显式使用 --no-nginx 启动纯 WLS。","项目隔离 Nginx 尚未安装；请先执行 server:nginx:install，或显式使用 --no-nginx 启动纯 WLS。"
 "默认使用项目隔离 Nginx；不可用时显式传入 --no-nginx，由纯 WLS 直接提供公网入口","默认使用项目隔离 Nginx；不可用时显式传入 --no-nginx，由纯 WLS 直接提供公网入口"
 "默认由 Nginx 终结；--no-nginx 时由纯 WLS 默认启用 TLS 1.3","默认由 Nginx 终结；--no-nginx 时由纯 WLS 默认启用 TLS 1.3"
-"默认边缘","默认边缘"
-"当前使用 Dispatcher；Nginx 模式 auto 与纯 WLS macOS/Linux auto 均使用 Direct","当前使用 Dispatcher；Nginx 模式 auto 与纯 WLS macOS/Linux auto 均使用 Direct"
-"Nginx 模式由边缘直接分流到 Worker；纯 WLS Windows 固定使用单一公网 Dispatcher，macOS/Linux 使用 Direct","Nginx 模式由边缘直接分流到 Worker；纯 WLS Windows 固定使用单一公网 Dispatcher，macOS/Linux 使用 Direct"
-"非 Windows 纯 WLS 场景可移除 --dispatcher，或配置 wls.runtime.topology = auto/direct","非 Windows 纯 WLS 场景可移除 --dispatcher，或配置 wls.runtime.topology = auto/direct"

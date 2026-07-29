@@ -6,9 +6,44 @@ namespace Weline\Server\Test\Unit\Console;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 class StartCommandRuntimeConfigTest extends TestCase
 {
+    public function testPureWlsCliKeepsHttp2WithHttp11Fallback(): void
+    {
+        $start = new class extends Start {
+            /** @return array<string,mixed> */
+            public function configFor(string $instanceName, array $args): array
+            {
+                return $this->getServerConfig($instanceName, $args);
+            }
+
+            protected function getEnvConfig(): array
+            {
+                return [];
+            }
+
+            protected function loadSavedInstanceConfig(string $instanceName): ?array
+            {
+                return null;
+            }
+
+            protected function hasCliArgvToken(array $tokens): bool
+            {
+                return false;
+            }
+        };
+        $start->__init();
+
+        $config = $start->configFor('unit-pure-wls-h2', ['edge' => 'wls']);
+
+        self::assertSame('wls', $config['edge']['adapter'] ?? null);
+        self::assertSame(['h2', 'h1'], $config['http']['protocols'] ?? null);
+        self::assertSame('h2', $config['http']['preferred'] ?? null);
+        self::assertTrue((bool)($config['http']['tls_session_resumption'] ?? false));
+    }
+
     public function testConfigureMasterRuntimeKeepsFrontendWorkerTopology(): void
     {
         $start = new Start();
@@ -17,24 +52,34 @@ class StartCommandRuntimeConfigTest extends TestCase
 
         $method = new \ReflectionMethod(Start::class, 'configureMasterRuntime');
         $method->setAccessible(true);
+        $runtimeSelection = RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'dispatcher',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'single',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]);
 
         $result = $method->invoke(
             $start,
             $master,
-            true,
+            $runtimeSelection,
             2,
             10000,
             22081,
-            MasterProcess::MODE_LEGACY,
             12081
         );
 
         self::assertSame($master, $result);
-        self::assertTrue($this->readProperty($master, 'dispatcherEnabled'));
+        self::assertSame($runtimeSelection, $this->readProperty($master, 'runtimeSelection'));
         self::assertSame(2, $this->readProperty($master, 'workerCount'));
         self::assertSame(22080, $this->readProperty($master, 'workerBasePort'));
         self::assertSame(22081, $this->readProperty($master, 'workerPort'));
-        self::assertSame(MasterProcess::MODE_LEGACY, $this->readProperty($master, 'mode'));
         self::assertSame(12081, $this->readProperty($master, 'mainPort'));
     }
 

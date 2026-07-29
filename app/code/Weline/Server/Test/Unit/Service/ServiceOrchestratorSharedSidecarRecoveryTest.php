@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\SharedStateServiceManager;
 
@@ -28,8 +29,17 @@ final class ServiceOrchestratorSharedSidecarRecoveryTest extends TestCase
                 $this->ensureCalls++;
 
                 return [
-                    'session' => ['port' => 26277],
-                    'memory' => ['enabled' => true, 'port' => 26278],
+                    'session' => [
+                        'host' => '127.0.0.1',
+                        'port' => 26277,
+                        'token_file_name' => 'session-server-26277.token',
+                    ],
+                    'memory' => [
+                        'enabled' => true,
+                        'host' => '127.0.0.1',
+                        'port' => 26278,
+                        'token_file_name' => 'memory-server-26278.token',
+                    ],
                 ];
             }
 
@@ -76,11 +86,26 @@ final class ServiceOrchestratorSharedSidecarRecoveryTest extends TestCase
             sslEnabled: false,
             sslCert: '',
             sslKey: '',
-            mode: 'io',
+            runtimeSelection: self::runtimeSelection(),
             daemon: true,
             debug: false,
             windowMode: false,
-            envConfig: []
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'session' => [
+                        'host' => '127.0.0.1',
+                        'port' => 26277,
+                        'token_file_name' => 'session-server-26277.token',
+                    ],
+                    'memory_service' => [
+                        'enabled' => true,
+                        'host' => '127.0.0.1',
+                        'port' => 26278,
+                        'token_file_name' => 'memory-server-26278.token',
+                    ],
+                ],
+            ]
         );
         $property = new \ReflectionProperty(ServiceOrchestrator::class, 'context');
         $property->setValue($orchestrator, $context);
@@ -95,5 +120,21 @@ final class ServiceOrchestratorSharedSidecarRecoveryTest extends TestCase
         ]));
         self::assertSame(2, $manager->ensureCalls);
         self::assertSame(1, $manager->renewCalls);
+    }
+
+    private static function runtimeSelection(): RuntimeSelection
+    {
+        return RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'dispatcher',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'single',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]);
     }
 }

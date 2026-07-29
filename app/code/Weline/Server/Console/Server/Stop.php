@@ -161,7 +161,11 @@ class Stop extends CommandAbstract
      *
      * @param array<string, mixed> $instanceData
      */
-    private function maybeStopManagedNginx(string $instanceName, array $instanceData = []): bool
+    private function maybeStopManagedNginx(
+        string $instanceName,
+        array $instanceData = [],
+        bool $force = false,
+    ): bool
     {
         $edgeAdapter = \strtolower(\trim((string)($instanceData['edge_adapter'] ?? '')));
         if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
@@ -174,16 +178,32 @@ class Stop extends CommandAbstract
             === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
         ) {
             try {
-                (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
-                    ->drain($instanceName, 300);
-                $this->printer->note(__(
-                    '共享网关：已将当前项目路由置为 DRAINING；网关本身与其他项目保持运行。'
-                ));
+                $drain = (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
+                    ->drain($instanceName, $force ? 1 : 300, true);
+                if (($drain['drain_complete'] ?? false) === true) {
+                    $this->printer->note(__(
+                        '共享网关：当前实例连接已自然排空并注销；网关本身与其他项目保持运行。'
+                    ));
+                } elseif (($drain['forced_connections_known'] ?? false) !== true) {
+                    $this->printer->warning(__(
+                        '共享网关：排空期限已到，Master 连接计数不可确认；'
+                        . '当前实例已注销，网关本身与其他项目保持运行。'
+                    ));
+                } else {
+                    $this->printer->warning(__(
+                        '共享网关：排空期限已到，注销实例时仍有 %{1} 个活动连接；'
+                        . '网关本身与其他项目保持运行。',
+                        [(int)($drain['forced_connections'] ?? 0)],
+                    ));
+                }
                 return true;
             } catch (\Throwable $throwable) {
-                $this->managedNginxStopFailed = true;
                 $this->printer->warning(__('共享网关路由注销失败：%{1}', [$throwable->getMessage()]));
-                return false;
+                $this->printer->warning(__(
+                    '继续停止当前项目；共享网关将在租约过期后把该路由标记为 STALE 并返回 503，'
+                    . '不会停止网关或影响其他项目。'
+                ));
+                return true;
             }
         }
 
@@ -474,7 +494,7 @@ class Stop extends CommandAbstract
         $instanceInfo = $manager->getInstanceInfo($name, false);
         
         if ($instanceInfo === null) {
-            if (!$this->maybeStopManagedNginx($name) && !$force) {
+            if (!$this->maybeStopManagedNginx($name, [], $force) && !$force) {
                 $this->printer->warning(__('已中止残留清理：请先修复托管 Nginx 停止故障，或显式使用强制停止。'));
                 return;
             }
@@ -498,7 +518,7 @@ class Stop extends CommandAbstract
             ?? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
         )));
 
-        if (!$this->maybeStopManagedNginx($name, $instanceData) && !$force) {
+        if (!$this->maybeStopManagedNginx($name, $instanceData, $force) && !$force) {
             $this->printer->warning(__('已中止 WLS 停止：请先修复托管 Nginx 停止故障，或显式使用强制停止。'));
             return;
         }

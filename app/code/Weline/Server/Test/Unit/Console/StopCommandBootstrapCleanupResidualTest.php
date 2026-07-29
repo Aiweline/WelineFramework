@@ -52,7 +52,7 @@ final class StopCommandBootstrapCleanupResidualTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             2,
             16899,
             0,
@@ -129,7 +129,19 @@ final class StopCommandBootstrapCleanupResidualTest extends TestCase
                 return true;
             }
 
-            protected function showInstanceInfo(ServerInstanceInfo $info): void
+            protected function shouldBypassGracefulStopDuringBootstrap(string $startupPhase): bool
+            {
+                unset($startupPhase);
+                return true;
+            }
+
+            protected function validateInstanceForIpcStop(ServerInstanceInfo $info): bool
+            {
+                unset($info);
+                return true;
+            }
+
+            protected function showInstanceInfo(ServerInstanceInfo $info, string $edgeAdapterName = \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX): void
             {
                 unset($info);
                 $this->calls[] = 'show';

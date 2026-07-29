@@ -225,6 +225,9 @@ class ControlMessage
     public const ROLE_SESSION_SERVER = 'session_server';
     public const ROLE_MEMORY_SERVER = 'memory_server';
     public const ROLE_GATEWAY = 'gateway';
+    public const ROLE_GATEWAY_FALLBACK = 'gateway_fallback';
+    public const ROLE_GATEWAY_AGENT = 'gateway_agent';
+    public const ROLE_GATEWAY_BACKEND = 'gateway_backend';
 
     // ========== 重载类型 ==========
 
@@ -284,6 +287,11 @@ class ControlMessage
 
     /** CLI → Master：回滚并发布前一或指定策略包。 */
     public const ACTION_POLICY_ROLLBACK = 'policy_rollback';
+    public const ACTION_GATEWAY_FALLBACK_ENABLE = 'gateway_fallback_enable';
+    public const ACTION_GATEWAY_FALLBACK_DRAIN = 'gateway_fallback_drain';
+    public const ACTION_GATEWAY_FALLBACK_DISABLE = 'gateway_fallback_disable';
+    public const ACTION_GATEWAY_BACKEND_ENABLE = 'gateway_backend_enable';
+    public const ACTION_GATEWAY_NATIVE_DRAIN = 'gateway_native_drain';
 
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';
@@ -538,7 +546,12 @@ class ControlMessage
         if ($launchId !== '') {
             $data['launch_id'] = $launchId;
         }
-        if (\in_array($role, [self::ROLE_WORKER, self::ROLE_MAINTENANCE], true)) {
+        if (\in_array($role, [
+            self::ROLE_WORKER,
+            self::ROLE_MAINTENANCE,
+            self::ROLE_GATEWAY_FALLBACK,
+            self::ROLE_GATEWAY_BACKEND,
+        ], true)) {
             $readiness = \Weline\Server\Service\Runtime\WorkerReadinessState::snapshot();
             $data['readiness_protocol_version'] = $readiness['readiness_protocol_version'];
             $data['readiness_capabilities'] = $readiness['readiness_capabilities'];

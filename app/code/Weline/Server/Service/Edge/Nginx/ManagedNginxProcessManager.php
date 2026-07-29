@@ -6,6 +6,7 @@ namespace Weline\Server\Service\Edge\Nginx;
 
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxProcessIdentity;
 
 /**
  * Start/stop/reload the per-project managed nginx process.
@@ -15,8 +16,22 @@ final class ManagedNginxProcessManager
     private const GRACEFUL_STOP_TIMEOUT_SECONDS = 30.0;
     private const RELOAD_OLD_WORKER_TIMEOUT_SECONDS = 15.0;
 
-    public function __construct(private readonly ManagedNginxPaths $paths = new ManagedNginxPaths())
-    {
+    private readonly ManagedNginxPaths $paths;
+    private readonly NginxProcessIdentity $processIdentity;
+
+    public function __construct(
+        ?ManagedNginxPaths $paths = null,
+        ?NginxProcessIdentity $processIdentity = null,
+    ) {
+        $this->paths = $paths ?? new ManagedNginxPaths();
+        $this->processIdentity = $processIdentity ?? new NginxProcessIdentity(
+            role: 'legacy-project-nginx',
+            binary: $this->paths->binary(),
+            prefix: $this->paths->runtimeRoot(),
+            config: $this->paths->confFile(),
+            installManifest: $this->paths->manifestFile(),
+            processManifest: $this->paths->runDir() . DIRECTORY_SEPARATOR . 'nginx.process-identity.json',
+        );
     }
 
     /**
@@ -35,6 +50,17 @@ final class ManagedNginxProcessManager
             ];
         }
         if ($pid === null) {
+            $recordedPid = $this->processIdentity->recordedPid();
+            if ($recordedPid !== null
+                && $this->pidState($recordedPid) === Processer::PROCESS_STATE_RUNNING
+            ) {
+                return [
+                    'ok' => false,
+                    'running' => false,
+                    'pid' => $recordedPid,
+                    'message' => 'verified nginx identity is running without its authoritative pid file',
+                ];
+            }
             return ['ok' => true, 'running' => false, 'pid' => null, 'message' => 'not running'];
         }
         $pidState = $this->pidState($pid);
@@ -44,10 +70,23 @@ final class ManagedNginxProcessManager
         if ($pidState !== Processer::PROCESS_STATE_RUNNING) {
             return ['ok' => false, 'running' => false, 'pid' => $pid, 'message' => 'pid state is unknown'];
         }
-        if (!$this->pidIdentityMatches($pid)) {
-            return ['ok' => false, 'running' => false, 'pid' => $pid, 'message' => 'pid identity mismatch'];
+        $identity = $this->inspectPidIdentity($pid);
+        if (!($identity['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'running' => false,
+                'pid' => $pid,
+                'message' => 'pid identity mismatch: ' . (string)($identity['reason'] ?? 'unknown'),
+            ];
         }
-        return ['ok' => true, 'running' => true, 'pid' => $pid, 'message' => 'running'];
+        return [
+            'ok' => true,
+            'running' => true,
+            'pid' => $pid,
+            'message' => 'running',
+            'binary_sha256' => (string)($identity['binary_sha256'] ?? ''),
+            'runtime_generation' => (string)($identity['runtime_generation'] ?? ''),
+        ];
     }
 
     /**
@@ -78,6 +117,17 @@ final class ManagedNginxProcessManager
         }
 
         $this->paths->ensureRuntimeDirectories();
+        $recordedPid = $this->processIdentity->recordedPid();
+        if ($recordedPid !== null) {
+            if ($this->pidState($recordedPid) === Processer::PROCESS_STATE_RUNNING) {
+                return [
+                    'ok' => false,
+                    'message' => 'refusing start: a PID-bound managed Nginx generation is still running',
+                    'pid' => $recordedPid,
+                ];
+            }
+            $this->processIdentity->clear($recordedPid);
+        }
         $test = $this->runNginx(['-t']);
         if (($test['code'] ?? 1) !== 0) {
             return [
@@ -107,7 +157,8 @@ final class ManagedNginxProcessManager
             if (!($startedStatus['ok'] ?? false)) {
                 return [
                     'ok' => false,
-                    'message' => 'started nginx PID identity could not be verified',
+                    'message' => 'started nginx PID identity could not be verified: '
+                        . (string)($startedStatus['message'] ?? 'unknown'),
                     'pid' => $startedStatus['pid'],
                 ];
             }
@@ -599,37 +650,33 @@ final class ManagedNginxProcessManager
                 'message' => 'nginx exited but its stale PID file could not be removed',
             ];
         }
+        try {
+            $this->processIdentity->clear($masterPid);
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => 'nginx exited but its process identity could not be cleared: '
+                    . $throwable->getMessage(),
+            ];
+        }
 
         return ['ok' => true, 'message' => 'stopped'];
     }
 
     private function pidIdentityMatches(int $pid): bool
     {
+        return (bool)($this->inspectPidIdentity($pid)['ok'] ?? false);
+    }
+
+    /** @return array<string,mixed> */
+    private function inspectPidIdentity(int $pid): array
+    {
         $command = Processer::getProcessCommandLine($pid, true);
         if ($command === '') {
-            return false;
-        }
-        $tokens = $this->tokenizeCommandLine($command);
-        $binary = $this->normalizeIdentityPath($this->paths->binary());
-        $prefix = $this->normalizeIdentityPath($this->paths->runtimeRoot());
-        $config = $this->normalizeIdentityPath($this->paths->confFile());
-        $binaryMatched = false;
-        $prefixMatched = false;
-        $configMatched = false;
-        foreach ($tokens as $index => $token) {
-            $normalized = $this->normalizeIdentityPath($token);
-            if ($normalized === $binary) {
-                $binaryMatched = true;
-            }
-            if ($token === '-p' && isset($tokens[$index + 1])) {
-                $prefixMatched = $this->normalizeIdentityPath($tokens[$index + 1]) === $prefix;
-            }
-            if ($token === '-c' && isset($tokens[$index + 1])) {
-                $configMatched = $this->normalizeIdentityPath($tokens[$index + 1]) === $config;
-            }
+            return ['ok' => false, 'reason' => 'process command line is unavailable'];
         }
 
-        return $binaryMatched && $prefixMatched && $configMatched;
+        return $this->processIdentity->inspect($pid, $command, true);
     }
 
     /** @return list<string> */

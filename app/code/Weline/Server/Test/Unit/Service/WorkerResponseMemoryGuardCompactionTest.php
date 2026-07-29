@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\View\TemplateCacheManager;
 use Weline\Framework\Support\Php84;
+use Weline\Framework\Runtime\WlsConcurrency;
 use Weline\Server\Service\WorkerResponseMemoryGuard;
 use Weline\Server\Service\MemoryCacheService;
 use Weline\Theme\Block\Partials;
@@ -13,8 +14,15 @@ use Weline\Widget\Service\WidgetData;
 
 final class WorkerResponseMemoryGuardCompactionTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
+    }
+
     protected function tearDown(): void
     {
+        WlsConcurrency::setOtherSuspendedFiberCountProvider(null);
         WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
         WorkerResponseMemoryGuard::resetThresholdCache();
         $this->resetProbeCaches();
@@ -233,6 +241,10 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
     private function withMemoryPressure(float $pressure, callable $callback): mixed
     {
         $previousLimit = \ini_get('memory_limit');
+        \gc_collect_cycles();
+        if (\function_exists('gc_mem_caches')) {
+            \gc_mem_caches();
+        }
         $usage = \memory_get_usage(true);
         $targetLimit = \max(
             (int) \ceil($usage / $pressure),

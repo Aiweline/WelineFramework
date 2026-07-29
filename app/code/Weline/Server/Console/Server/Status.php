@@ -21,6 +21,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
+use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
@@ -194,7 +195,7 @@ class Status extends CommandAbstract
             // 详细信息
             $scheme = $info->sslEnabled ? 'https' : 'http';
             $this->printer->note($childPrefix . '  ├─ ' . __('地址：') . $scheme . '://' . $host . ':' . $port);
-            $this->showRuntimeMetadata($name, $childPrefix . '  ├─ ', true);
+            $this->showRuntimeMetadata($name, $childPrefix . '  ├─ ', true, $info);
             
             // 端口展示统一由实例契约根据 RuntimeSelection 与实际服务计算
             $portRangeStr = $info->getPortRangeDescription();
@@ -264,11 +265,19 @@ class Status extends CommandAbstract
         $this->printer->note(__('║                    实例详细信息                                ║'));
         $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
         $this->printer->note(\sprintf('║  ' . __('实例名称：') . '%-50s║', $info->name));
-        $publicEndpoint = $this->resolveGatewayPublicEndpoint($name, $info)
-            ?? $this->resolveManagedNginxPublicEndpoint($info);
-        $addressLabel = $this->resolveGatewayPublicEndpoint($name, $info) !== null
+        $gatewayPublicEndpoint = $this->resolveGatewayPublicEndpoint($name, $info);
+        $managedNginxPublicEndpoint = $this->resolveManagedNginxPublicEndpoint($info);
+        $pureWlsPublicEndpoint = $this->resolvePureWlsPublicEndpoint($name);
+        $publicEndpoint = $gatewayPublicEndpoint
+            ?? $managedNginxPublicEndpoint
+            ?? $pureWlsPublicEndpoint;
+        $addressLabel = $gatewayPublicEndpoint !== null
             ? __('WLS 2.0 网关入口') . '：'
-            : ($publicEndpoint !== null ? __('Nginx 公网入口') . '：' : __('监听地址：'));
+            : ($managedNginxPublicEndpoint !== null
+                ? __('Nginx 公网入口') . '：'
+                : ($pureWlsPublicEndpoint !== null
+                    ? __('纯 WLS 公网入口') . '：'
+                    : __('监听地址：')));
         $this->printer->note(\sprintf('║  ' . $addressLabel . '%-50s║', $publicEndpoint ?? $info->getListenAddress()));
         $this->printer->note(\sprintf('║  ' . __('端口范围：') . '%-50s║', $info->getPortRangeDescription()));
         $this->printer->note(\sprintf('║  ' . __('Worker 数：') . '%-49s║', (string)$info->workerCount));
@@ -280,7 +289,7 @@ class Status extends CommandAbstract
         $selfHealMode = $this->resolveSelfHealMode();
         $this->printer->note(\sprintf('║  ' . __('Master 自愈：') . '%-46s║', $selfHealMode));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
-        $this->showRuntimeMetadata($name);
+        $this->showRuntimeMetadata($name, '  ', false, $info);
         if ((string) ($masterRuntimeState['message'] ?? '') !== '') {
             $this->printer->warning((string) $masterRuntimeState['message']);
         }
@@ -320,11 +329,53 @@ class Status extends CommandAbstract
         }
         
         echo "\n";
+        $this->showAccessAddresses($name, $info);
+        echo "\n";
         $this->printer->note(__('测试请求：curl %{1}/', [$this->buildTestCurlTarget($info)]));
         $this->printer->note(__('停止服务：php bin/w server:stop %{1}', [$name]));
     }
 
-    private function showRuntimeMetadata(string $instanceName, string $prefix = '  ', bool $compact = false): void
+    private function showAccessAddresses(string $instanceName, ServerInstanceInfo $info): void
+    {
+        $baseUrl = $this->resolveGatewayPublicEndpoint($instanceName, $info)
+            ?? $this->resolveManagedNginxPublicEndpoint($info)
+            ?? $this->resolvePureWlsPublicEndpoint($instanceName);
+        if ($baseUrl === null) {
+            $scheme = $info->sslEnabled ? 'https' : 'http';
+            $host = \strtolower(\trim($info->host));
+            if ($host === '' || $host === '0.0.0.0' || $host === '*') {
+                $host = '127.0.0.1';
+            } elseif ($host === '::') {
+                $host = '[::1]';
+            } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+                $host = '[' . $host . ']';
+            }
+            $baseUrl = $scheme . '://' . $host . ':' . $info->port;
+        }
+
+        $backendPrefix = \trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        $restBackendPrefix = \trim((string)(Env::getAreaRoutePrefix('rest_backend') ?? ''), '/');
+        $restFrontendPrefix = \trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?? 'api'), '/');
+
+        $urls = [
+            __('前台/首页') => $baseUrl . '/',
+            __('后台入口') => $baseUrl . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '') . 'admin',
+            __('后台 REST 接口') => $restBackendPrefix !== ''
+                ? $baseUrl . '/' . $restBackendPrefix . '/'
+                : __('未配置（请在 env.php 中设置 area_routes.rest_backend.prefix）'),
+            __('前台 REST 接口') => $baseUrl . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix : 'api') . '/',
+        ];
+
+        $this->printer->title(__('服务访问地址'), '─');
+        $this->printer->keyValue($urls, '→', 18);
+    }
+
+    private function showRuntimeMetadata(
+        string $instanceName,
+        string $prefix = '  ',
+        bool $compact = false,
+        ?ServerInstanceInfo $instanceInfo = null,
+    ): void
     {
         $raw = $this->getInstanceManager()->getRawInstanceData($instanceName);
         if (!\is_array($raw)) {
@@ -361,6 +412,8 @@ class Status extends CommandAbstract
         $digestShort = $digest !== '' ? \substr($digest, 0, 12) : '-';
         $containerDigest = \strtolower(\trim((string)($runtime['container_registry_digest'] ?? '')));
         $containerDigestShort = $containerDigest !== '' ? \substr($containerDigest, 0, 12) : '-';
+        $gateway = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
+        $fallbackStatus = $this->resolveGatewayFallbackStatus($instanceInfo, $gateway);
 
         if ($compact) {
             $summary = $effective
@@ -369,7 +422,19 @@ class Status extends CommandAbstract
                 . ' / ' . $sslEngine
                 . ' / policy=' . $digestShort
                 . ' / container=' . $containerDigestShort;
+            if ($fallbackStatus !== null) {
+                $summary .= ' / '
+                    . ((string)($fallbackStatus['kind'] ?? '') === 'native_edge'
+                        ? 'native_edge='
+                        : 'fallback=')
+                    . (string)$fallbackStatus['state']
+                    . '@'
+                    . (string)$fallbackStatus['bind'];
+            }
             $this->printer->note($prefix . __('实际运行时：') . $summary);
+            if ($fallbackStatus !== null) {
+                $this->showGatewayFallbackStatus($fallbackStatus, $prefix);
+            }
             return;
         }
 
@@ -392,7 +457,6 @@ class Status extends CommandAbstract
             . 'schema=v' . RuntimeSelection::ENDPOINT_SCHEMA_VERSION
             . ', metadata=' . (string)($runtime['metadata_source'] ?? '-')
             . ', container=' . ($containerDigest !== '' ? $containerDigest : '-'));
-        $gateway = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
         if ((string)($gateway['mode'] ?? '') === 'gateway') {
             $this->printer->note($prefix . __('共享网关：')
                 . (string)($gateway['protocol'] ?? '-')
@@ -402,10 +466,136 @@ class Status extends CommandAbstract
         } elseif ((string)($gateway['degraded_reason'] ?? '') !== '') {
             $this->printer->warning($prefix . __('边缘降级：') . (string)$gateway['degraded_reason']);
         }
+        if ($fallbackStatus !== null) {
+            $this->showGatewayFallbackStatus($fallbackStatus, $prefix);
+        }
 
         $this->printer->note($prefix . __('选择原因：')
             . '[' . \implode(', ', $selection->reasonCodes) . '] '
             . $selection->reason);
+    }
+
+    /**
+     * @return array{state:string,bind:string,urls:list<string>,kind:string}|null
+     */
+    protected function resolveGatewayFallbackStatus(
+        ?ServerInstanceInfo $instanceInfo,
+        array $gatewayRuntime = [],
+    ): ?array {
+        $metadata = [];
+        $state = '';
+        $port = 0;
+        $kind = 'fallback';
+        if ($instanceInfo !== null) {
+            $fallbacks = $instanceInfo->getServicesByRole(
+                ControlMessage::ROLE_GATEWAY_FALLBACK,
+            );
+            /** @var ServiceInfo|false $fallback */
+            $fallback = \reset($fallbacks);
+            if ($fallback instanceof ServiceInfo) {
+                if (!$fallback->isExpectedRunningState()) {
+                    return null;
+                }
+                $metadata = $fallback->metadata;
+                $state = (string)($metadata['fallback_state'] ?? $fallback->state);
+                $port = (int)($fallback->port ?? 0);
+            }
+        }
+        if ($metadata === []
+            && (string)($gatewayRuntime['fallback_state'] ?? '') !== ''
+        ) {
+            $runtimeState = \strtoupper(\trim(
+                (string)$gatewayRuntime['fallback_state'],
+            ));
+            if ($runtimeState === 'GATEWAY_ACTIVE') {
+                return null;
+            }
+            $metadata = $gatewayRuntime;
+            $state = $runtimeState;
+            if (\str_starts_with($runtimeState, 'NATIVE_EDGE_')) {
+                $kind = 'native_edge';
+            }
+        }
+        if ($metadata === []) {
+            return null;
+        }
+
+        $bind = \trim(\str_replace(
+            ["\r", "\n"],
+            '',
+            (string)($metadata['fallback_bind'] ?? ''),
+        ));
+        if ($bind === '') {
+            $host = \trim((string)($metadata['fallback_bind_host'] ?? ''));
+            if ($host === '') {
+                $host = '127.0.0.1';
+            }
+            if (\filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+                $host = '[' . $host . ']';
+            }
+            $bind = $host . ':' . $port;
+        }
+
+        $urls = [];
+        foreach ((array)($metadata['fallback_urls'] ?? []) as $url) {
+            if (!\is_scalar($url)) {
+                continue;
+            }
+            $url = \trim((string)$url);
+            try {
+                $parts = \parse_url($url);
+            } catch (\ValueError) {
+                $parts = false;
+            }
+            $urlHost = \is_array($parts)
+                ? \strtolower(\trim(
+                    (string)($parts['host'] ?? ''),
+                    " \t\n\r\0\x0B[]",
+                ))
+                : '';
+            if (!\is_array($parts)
+                || \strtolower((string)($parts['scheme'] ?? '')) !== 'https'
+                || \in_array(
+                    $urlHost,
+                    ['', '0.0.0.0', '::', '*'],
+                    true,
+                )
+            ) {
+                continue;
+            }
+            $urls[$url] = true;
+        }
+
+        return [
+            'state' => $state,
+            'bind' => $bind,
+            'urls' => \array_keys($urls),
+            'kind' => $kind,
+        ];
+    }
+
+    /**
+     * @param array{state:string,bind:string,urls:list<string>,kind?:string} $status
+     */
+    private function showGatewayFallbackStatus(array $status, string $prefix): void
+    {
+        $state = (string)$status['state'];
+        $kind = (string)($status['kind'] ?? 'fallback');
+        $label = $kind === 'native_edge'
+            ? ($state === 'NATIVE_EDGE_DRAINING'
+                ? __('原生 WLS 入口排空：')
+                : __('原生 WLS 备用入口：'))
+            : __('纯 WLS 备用入口：');
+        $this->printer->warning($prefix . $label
+            . (string)$status['state']
+            . ', bind='
+            . (string)$status['bind']);
+        foreach ($status['urls'] as $url) {
+            $this->printer->note($prefix . __('备用 TLS 地址：') . $url);
+        }
+        $this->printer->warning($prefix . __(
+            '高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。'
+        ));
     }
 
     protected function showStartupFailureSummary(ServerInstanceInfo $info): void
@@ -472,7 +662,8 @@ class Status extends CommandAbstract
     protected function buildTestCurlTarget(ServerInstanceInfo $info): string
     {
         $publicEndpoint = $this->resolveGatewayPublicEndpoint($info->name, $info)
-            ?? $this->resolveManagedNginxPublicEndpoint($info);
+            ?? $this->resolveManagedNginxPublicEndpoint($info)
+            ?? $this->resolvePureWlsPublicEndpoint($info->name);
         if ($publicEndpoint !== null) {
             return '-k ' . $publicEndpoint;
         }
@@ -513,6 +704,21 @@ class Status extends CommandAbstract
             $host = '[' . $host . ']';
         }
         return 'https://' . $host . ($port === 443 ? '' : ':' . $port);
+    }
+
+    private function resolvePureWlsPublicEndpoint(string $instanceName): ?string
+    {
+        $raw = $this->getInstanceManager()->getRawInstanceData($instanceName);
+        if (!\is_array($raw)
+            || \strtolower(\trim((string)($raw['edge_adapter'] ?? ''))) !== 'wls'
+        ) {
+            return null;
+        }
+        try {
+            return PureWlsPublicOrigin::normalize((string)($raw['public_origin'] ?? ''));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function resolveManagedNginxPublicEndpoint(ServerInstanceInfo $info): ?string
@@ -859,7 +1065,10 @@ class Status extends CommandAbstract
         $total = 0;
         $running = 0;
         foreach ($info->services as $service) {
-            if ($this->isSharedDependencyService($service)) {
+            if ($this->isSharedDependencyService($service)
+                || ($service->role === ControlMessage::ROLE_GATEWAY_FALLBACK
+                    && !$service->isExpectedRunningState())
+            ) {
                 continue;
             }
 

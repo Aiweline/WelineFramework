@@ -13,7 +13,7 @@ $wlsDocsUrl = $this->getUrl('dev/tool/docs') . '?search=WLS';
 $serverDocsUrl = $this->getUrl('dev/tool/docs') . '?module=Weline_Server';
 $monitorUrl = $this->getBackendUrl('server/backend/server-monitor');
 $attackLogUrl = $this->getBackendUrl('server/backend/server-monitor/attack-log');
-$wlsPerformanceJsUrl = '/Weline/Server/view/statics/wls-performance-panel/panel.js?v=20260702-weline-panel-wls-detect-1';
+$wlsPerformanceJsUrl = '/Weline/Server/view/statics/wls-performance-panel/panel.js?v=20260727-weline-panel-wls-http-1';
 $wlsPerformanceCssUrl = '/Weline/Server/view/statics/wls-performance-panel/panel.css?v=20260702-weline-panel-wls-detect-1';
 $wlsPerformanceEndpointUrl = '/server/test/wls-performance-panel';
 $wlsRuntimeMode = 'unknown';
@@ -396,11 +396,26 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
 
 <script>
 (function(g){
-  if(g.__bqAdmin_server) return;
+  // Prefer the HTTP-aware bridge from panel.js; do not overwrite with adminRequest-only.
+  if(g.__bqAdmin_server_http) return;
   g.__bqAdmin_server=true;
+  g.__bqAdmin_server_http=true;
   g.bqAdmin=g.bqAdmin||{};
   g.bqAdmin['server']=function(url, options){
     options=options||{};
+    var urlStr=String(url||'');
+    if(/\/_wls\//i.test(urlStr) || /\/server\/test\//i.test(urlStr)){
+      var fetchOpts={
+        method:options.method||'GET',
+        credentials:options.credentials||'same-origin',
+        cache:options.cache||'no-store',
+        headers:options.headers||{}
+      };
+      if(options.body!==undefined&&options.body!==null&&String(fetchOpts.method).toUpperCase()!=='GET'&&String(fetchOpts.method).toUpperCase()!=='HEAD'){
+        fetchOpts.body=options.body;
+      }
+      return fetch(urlStr, fetchOpts);
+    }
     var body=options.body;
     if(body && typeof FormData!=='undefined' && body instanceof FormData){
       var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();

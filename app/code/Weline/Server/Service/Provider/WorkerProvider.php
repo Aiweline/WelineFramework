@@ -11,6 +11,8 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
+use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
 
 /**
  * Worker 服务提供者
@@ -69,6 +71,10 @@ class WorkerProvider extends AbstractServiceProvider
         $edgeAdapter = (new \Weline\Server\Service\Edge\EdgeAdapterResolver())->resolve($context->envConfig);
         $pureWls = $edgeAdapter->name()
             === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+        $gatewayBackend = \strtolower(\trim((string)$context->getConfig(
+            'wls.edge.mode',
+            $context->getConfig('edge_mode', ''),
+        ))) === GatewayStartupDecision::MODE_GATEWAY;
         $script = $pureWls && $context->sslEnabled
             ? $this->resolveSslWorkerScript($scriptDir, $context)
             : $scriptDir . DS . 'worker.php';
@@ -110,6 +116,33 @@ class WorkerProvider extends AbstractServiceProvider
         // READY 首页预热使用启动时固化的对外 origin，避免 Windows 替换 instance.json 时的短暂空窗。
         // 保持为离散 argv，不使用 environment，以便 Windows 继续走快速批量启动路径。
         $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
+        if ($gatewayBackend) {
+            $arguments[] = '--protocol-edge-token-file='
+                . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+            $projectUuid = \strtolower(\trim((string)$context->getConfig(
+                'wls.gateway.project_uuid',
+                '',
+            )));
+            $instanceGeneration = (int)$context->getConfig(
+                'wls.gateway.instance_generation',
+                0,
+            );
+            $instanceLaunchId = \strtolower(\trim((string)$context->getConfig(
+                'wls.gateway.launch_id',
+                '',
+            )));
+            if (\preg_match('/^[a-f0-9-]{36}$/D', $projectUuid) !== 1
+                || $instanceGeneration < 1
+                || \preg_match('/^[a-f0-9]{32}$/D', $instanceLaunchId) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'Gateway backend requires project UUID, instance launch ID, and monotonic instance generation.'
+                );
+            }
+            $arguments[] = '--gateway-project-uuid=' . $projectUuid;
+            $arguments[] = '--gateway-instance-generation=' . $instanceGeneration;
+            $arguments[] = '--gateway-instance-launch-id=' . $instanceLaunchId;
+        }
 
         if ($direct && $listenerMode === 'shared_fd') {
             $arguments[] = '--listen-fd=' . DirectSharedListener::INHERITED_FD;

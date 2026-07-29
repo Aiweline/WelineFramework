@@ -260,7 +260,7 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame('session_server.token', $status['token_file_name'] ?? null);
     }
 
-    public function testRegistryPidIsCorrectedFromLivePortOwner(): void
+    public function testRegistryPidIsNotCorrectedFromUnauthenticatedLivePortOwner(): void
     {
         $errno = 0;
         $errstr = '';
@@ -317,10 +317,9 @@ final class SharedStateServiceManagerTest extends TestCase
                 $registry
             );
 
-            self::assertSame($ownerPid, $runtime['pid'] ?? null);
-            self::assertTrue((bool) ($runtime['registry_pid_stale'] ?? false));
-            self::assertSame($stalePid, $runtime['registry_pid_stale_previous'] ?? null);
-            self::assertSame($ownerPid, $registry->updatedRecord['pid'] ?? null);
+            self::assertSame($stalePid, $runtime['pid'] ?? null);
+            self::assertArrayNotHasKey('registry_pid_stale', $runtime);
+            self::assertSame([], $registry->updatedRecord);
         } finally {
             if (\is_resource($server)) {
                 \fclose($server);
@@ -328,7 +327,7 @@ final class SharedStateServiceManagerTest extends TestCase
         }
     }
 
-    public function testEnsureRestartsUnhealthyReusableService(): void
+    public function testEnsureRefusesToStopUnauthenticatedCurrentScopeService(): void
     {
         $manager = new class extends SharedStateServiceManager {
             public array $runtimeFiles = [];
@@ -431,12 +430,15 @@ final class SharedStateServiceManagerTest extends TestCase
             }
         };
 
-        $runtime = $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv(), 'consumer-b');
+        try {
+            $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv(), 'consumer-b');
+            self::fail('Unauthenticated current-scope service must be rejected.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('failed authenticated PING', $exception->getMessage());
+        }
 
-        self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 9876]], $manager->stopCalls);
-        self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 'consumer-b']], $manager->launchCalls);
-        self::assertTrue((bool) ($runtime['created_now'] ?? false));
-        self::assertSame(6543, $runtime['pid'] ?? null);
+        self::assertSame([], $manager->stopCalls);
+        self::assertSame([], $manager->launchCalls);
     }
 
     public function testEnsureFailsWhenPortIsOccupiedByUnexpectedProcess(): void
@@ -590,22 +592,14 @@ final class SharedStateServiceManagerTest extends TestCase
                 ];
             }
 
-            protected function probePortInUse(int $port): bool
+            protected function probeSharedPortWithToken(int $port, string $tokenFileName): bool
             {
-                return true;
+                return $port === 19970 && $tokenFileName === 'session_server.token';
             }
 
             protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
             {
-                return [
-                    'reusable' => true,
-                    'pid' => 4321,
-                    'port' => (int) $definition['port'],
-                    'role' => (string) $definition['role'],
-                    'token_file_name' => $expectedTokenFileName,
-                    'process_name' => 'weline-wls-session-' . $this->scope . '-shared-' . (int) $definition['port'],
-                    'instance_name' => 'shared-session-' . $this->scope . '-' . (int) $definition['port'],
-                ];
+                TestCase::fail('authenticated protocol reuse must not require process inspection');
             }
         };
 

@@ -9,6 +9,16 @@ use Weline\Server\Dispatcher\RoutingCacheService;
 
 class PassthroughCoreSeedWorkerPoolTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!\defined('BP')) {
+            \define('BP', \getcwd() . \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+    }
+
     private function createTrustingMasterReadyWarmupCore(
         array $healthResults,
         array $homepageResults = [],
@@ -387,6 +397,56 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         // 上边界：> 2.0 会被钳制到 2.0
         $core->configure(['worker_connect_select_timeout_sec' => 10.0]);
         self::assertSame(2.0, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
+    }
+
+    public function testLoopbackWorkerConnectTimeoutAllowsBurstSchedulingWithoutUnboundedWait(): void
+    {
+        $loopbackCore = new PassthroughCore('127.0.0.1', 19981, 2);
+        self::assertSame(
+            0.02,
+            (float) $this->invokePrivateMethod($loopbackCore, 'resolveWorkerConnectTimeout')
+        );
+        self::assertSame(
+            0.001,
+            (float) $this->invokePrivateMethod($loopbackCore, 'resolveWorkerConnectTimeout', 0.001)
+        );
+
+        $remoteCore = new PassthroughCore('192.0.2.1', 19981, 2);
+        $remoteCore->configure(['worker_connect_select_timeout_sec' => 0.25]);
+        self::assertSame(
+            0.25,
+            (float) $this->invokePrivateMethod($remoteCore, 'resolveWorkerConnectTimeout')
+        );
+    }
+
+    public function testAvailableWorkerScanReachesHealthyPortBeyondHistoricalThirdAttempt(): void
+    {
+        $closedServers = [];
+        $closedPorts = [];
+        for ($index = 0; $index < 3; $index++) {
+            [$server, $port] = $this->createListeningSocket();
+            $closedServers[] = $server;
+            $closedPorts[] = $port;
+        }
+        foreach ($closedServers as $server) {
+            \socket_close($server);
+        }
+
+        [$healthyServer, $healthyPort] = $this->createListeningSocket();
+        $core = new PassthroughCore('127.0.0.1', $closedPorts[0], 0, false);
+        $this->setPrivateProperty($core, 'workerPorts', [...$closedPorts, $healthyPort]);
+        $this->setPrivateProperty($core, 'workerCount', 4);
+
+        try {
+            $connected = $this->invokePrivateMethod($core, 'connectToAvailableWorker', null, '');
+
+            self::assertIsArray($connected);
+            self::assertSame($healthyPort, $connected['port']);
+            self::assertTrue(\is_object($connected['socket']));
+            \socket_close($connected['socket']);
+        } finally {
+            \socket_close($healthyServer);
+        }
     }
 
     public function testPostFailureSpinBudgetCanBeCompletelyDisabled(): void

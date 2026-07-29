@@ -34,4 +34,23 @@ final class ListenSocketOptionsTest extends TestCase
         self::assertTrue(ListenSocketOptions::isWindows(true));
         self::assertFalse(ListenSocketOptions::isWindows(false));
     }
+
+    public function testAddressInUseDetectionCoversPlatformCodesAndZeroErrnoMessage(): void
+    {
+        self::assertTrue(ListenSocketOptions::isAddressInUseError(48, ''));
+        self::assertTrue(ListenSocketOptions::isAddressInUseError(98, ''));
+        self::assertTrue(ListenSocketOptions::isAddressInUseError(10048, ''));
+        self::assertTrue(ListenSocketOptions::isAddressInUseError(
+            0,
+            'Address already in use',
+        ));
+        self::assertTrue(ListenSocketOptions::isAddressInUseError(
+            0,
+            'Only one usage of each socket address is normally permitted',
+        ));
+        self::assertFalse(ListenSocketOptions::isAddressInUseError(
+            13,
+            'Permission denied',
+        ));
+    }
 }

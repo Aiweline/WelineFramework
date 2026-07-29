@@ -47,6 +47,9 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
                 startedAt: $this->date((string)($row['started_at'] ?? '')),
             );
             $policy = ResumableTaskPolicyHydrator::fromArray((array)($row['policy'] ?? []));
+            $requiresClientLease = $policy->requiresClientLease();
+            $hasActiveClientLease = $requiresClientLease
+                && $this->store->hasActiveLeases($taskId, $now->getTimestamp());
             $status = (string)$row['status'];
             $stopRequested = $status === 'cancel_requested' || !empty($row['recovery_stop_requested']);
             $leaseReleased = !empty($row['runner_lease_released']);
@@ -56,7 +59,7 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
                 taskId: $taskId,
                 process: $process,
                 isTerminal: false,
-                allClientLeasesExpired: !$this->store->hasActiveLeases($taskId, $now->getTimestamp()),
+                allClientLeasesExpired: $requiresClientLease && !$hasActiveClientLease,
                 // A null execution lease means the Runner has not claimed yet
                 // (still starting/recovering). That is not an expired heartbeat.
                 runnerHeartbeatExpired: !$leaseReleased
@@ -70,7 +73,7 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
                 recoveryEligible: $policy->recoveryEnabled
                     && (int)$row['attempt'] < (int)$row['max_attempts']
                     && $status !== 'cancel_requested'
-                    && $this->store->hasActiveLeases($taskId, $now->getTimestamp()),
+                    && (!$requiresClientLease || $hasActiveClientLease),
                 runnerLeaseReleased: $leaseReleased,
             );
         }

@@ -14,8 +14,12 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
+use Weline\Server\Service\Edge\Gateway\GatewayPaths;
+use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 use Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
@@ -41,6 +45,8 @@ class Benchmark extends CommandAbstract
         if (!$serverConfig) {
             return 1;
         }
+
+        $serverConfig['worker_count'] = $this->resolveRuntimeWorkerCount($serverConfig);
         
         $host = $serverConfig['host'];
         $authorityHost = (string)($serverConfig['authority_host'] ?? $host);
@@ -382,10 +388,12 @@ class Benchmark extends CommandAbstract
         if (\count($runningInstances) === 1) {
             $name = (string)\array_key_first($runningInstances);
             $info = $manager->getInstanceInfoWithIpcTimeout($name, false, 0.5);
-            if ($info === null || !$this->ensureBenchmarkInstanceReady($info, $name)) {
+            $target = $runningInstances[$name];
+            if ($info === null
+                || !$this->ensureBenchmarkInstanceReady($info, $name, $target)
+            ) {
                 return null;
             }
-            $target = $runningInstances[$name];
             $target['target_attribution'] = 'single_running_instance';
             return $target;
         }
@@ -416,16 +424,15 @@ class Benchmark extends CommandAbstract
             $this->printer->error(__('实例 [%{1}] 不存在', [$instanceName]));
             return null;
         }
-        if (!$this->ensureBenchmarkInstanceReady($info, $instanceName)) {
-            return null;
-        }
-
         $target = $this->buildInstanceTarget($instanceName, $raw);
         if ($target === null) {
             $this->printer->error(__(
                 '实例 [%{1}] 没有通过其公网入口身份与协议策略门禁。',
                 [$instanceName],
             ));
+            return null;
+        }
+        if (!$this->ensureBenchmarkInstanceReady($info, $instanceName, $target)) {
             return null;
         }
 
@@ -464,11 +471,56 @@ class Benchmark extends CommandAbstract
         return $target;
     }
 
-    private function ensureBenchmarkInstanceReady(ServerInstanceInfo $info, string $instanceName): bool
+    /**
+     * @param array<string,mixed> $target
+     */
+    private function ensureBenchmarkInstanceReady(
+        ServerInstanceInfo $info,
+        string $instanceName,
+        array $target = [],
+    ): bool
     {
         if (!$info->isMasterRunning()) {
             $this->printer->error(__('实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。', [$instanceName]));
             return false;
+        }
+
+        if ((string)($target['benchmark_carrier_role'] ?? '')
+            === ControlMessage::ROLE_GATEWAY_BACKEND
+        ) {
+            $expected = \max(
+                1,
+                (int)($target['benchmark_expected_carriers'] ?? $info->workerCount),
+            );
+            $running = 0;
+            foreach ($info->getServicesByRole(ControlMessage::ROLE_GATEWAY_BACKEND) as $service) {
+                // getInstanceInfoWithIpcTimeout() is a fresh authenticated
+                // Master snapshot. Gateway backend children intentionally
+                // replace argv[0] with a per-slot process title, so the generic
+                // CLI managed-process-name probe cannot be used as identity
+                // evidence here. READY + current IPC client + PID is the
+                // authoritative project-side lease; buildInstanceTarget()
+                // separately proves the public route end to end.
+                if ($service->state === ServiceInstance::STATE_READY
+                    && $service->pid > 0
+                    && $service->ipcClientId !== null
+                ) {
+                    $running++;
+                }
+            }
+            if ($running < $expected) {
+                $this->printer->error(__(
+                    '实例 [%{1}] 未达到网关压测就绪状态：运行 Gateway Backend %{2}/%{3}。',
+                    [$instanceName, $running, $expected],
+                ));
+                $this->printer->note(__(
+                    '请先恢复项目网关后端池，再重新压测；可查看：php bin/w server:status %{1}',
+                    [$instanceName],
+                ));
+                return false;
+            }
+
+            return true;
         }
 
         $expectedWorkerCount = \max(1, (int)$info->workerCount);
@@ -522,6 +574,70 @@ class Benchmark extends CommandAbstract
         }
 
         return true;
+    }
+
+    /**
+     * Dynamic scale is a runtime-only control-plane operation. The persisted
+     * endpoint remains restart configuration, so benchmark attribution must
+     * resolve the current desired Worker count from authoritative IPC state.
+     *
+     * @param array<string,mixed> $serverConfig
+     */
+    protected function resolveRuntimeWorkerCount(array $serverConfig): int
+    {
+        if ((string)($serverConfig['benchmark_carrier_role'] ?? '')
+            === ControlMessage::ROLE_GATEWAY_BACKEND
+        ) {
+            return \max(
+                1,
+                (int)($serverConfig['benchmark_expected_carriers']
+                    ?? $serverConfig['worker_count']
+                    ?? 1),
+            );
+        }
+        $configuredWorkers = \max(0, (int)($serverConfig['worker_count'] ?? 0));
+        $instanceName = \trim((string)($serverConfig['instance'] ?? ''));
+        if ($instanceName === '') {
+            return $configuredWorkers;
+        }
+
+        /** @var ServerInstanceManager $manager */
+        $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+        $info = $manager->getInstanceInfoWithIpcTimeout($instanceName, false, 0.5);
+        if ($info === null) {
+            return $configuredWorkers;
+        }
+
+        return $this->selectRuntimeWorkerCount(
+            $configuredWorkers,
+            (int)$info->workerCount,
+            $manager->getRuntimeStatsForInstance($info, true),
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $runtimeStats
+     */
+    protected function selectRuntimeWorkerCount(
+        int $configuredWorkers,
+        int $persistedWorkers,
+        array $runtimeStats,
+    ): int {
+        $desiredWorkers = (int)($runtimeStats['desired_workers'] ?? 0);
+        if ($desiredWorkers > 0) {
+            return $desiredWorkers;
+        }
+
+        $readyWorkers = (int)($runtimeStats['workers'] ?? 0);
+        if ($readyWorkers > 0) {
+            return $readyWorkers;
+        }
+
+        if ($configuredWorkers > 0) {
+            return $configuredWorkers;
+        }
+
+        return \max(1, $persistedWorkers);
     }
 
     private function probeBenchmarkHealthEndpoint(ServerInstanceInfo $info): bool
@@ -701,10 +817,10 @@ class Benchmark extends CommandAbstract
                 $this->printer->error(__('实例 [%{1}] 状态不可读，已拒绝开始压测。', [$name]));
                 return null;
             }
-            if (!$this->ensureBenchmarkInstanceReady($info, $name)) {
+            $target = $matches[$name];
+            if (!$this->ensureBenchmarkInstanceReady($info, $name, $target)) {
                 return null;
             }
-            $target = $matches[$name];
             $target['target_attribution'] = $publicMatches !== []
                 ? 'unique_live_public_edge_match'
                 : 'unique_live_backend_match';
@@ -830,21 +946,81 @@ class Benchmark extends CommandAbstract
         } catch (\Throwable) {
             return null;
         }
+        $gatewayRuntime = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        if ((string)($gatewayRuntime['mode'] ?? '') === 'gateway') {
+            $publicTarget = $this->resolveHostGatewayPublicTarget(
+                $name,
+                $endpointHost,
+                (string)($endpoint['public_host'] ?? $endpoint['ssl_domain'] ?? ''),
+                $gatewayRuntime,
+            );
+            if ($publicTarget === null) {
+                return null;
+            }
+            $joinBackendRequired = $edgeAdapter
+                    === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                && \strtolower(\trim((string)($gatewayRuntime['requested_mode'] ?? '')))
+                    === GatewayStartupDecision::MODE_AUTO;
+            $carrierRole = $joinBackendRequired
+                ? ControlMessage::ROLE_GATEWAY_BACKEND
+                : ControlMessage::ROLE_WORKER;
+
+            return [
+                ...$publicTarget,
+                'endpoint_host' => (string)$publicTarget['host'],
+                'instance' => $name,
+                'worker_count' => (int)($endpoint['count'] ?? $endpoint['worker_count'] ?? 0),
+                'runtime_metadata' => $runtimeMetadata,
+                'edge_adapter' => $edgeAdapter,
+                'http_protocol_selection' => $selection->toArray(),
+                'benchmark_carrier_role' => $carrierRole,
+                'benchmark_expected_carriers' => \max(
+                    1,
+                    (int)($joinBackendRequired
+                        ? ($gatewayRuntime['join_backend']['desired_count']
+                            ?? $endpoint['count']
+                            ?? $endpoint['worker_count']
+                            ?? 1)
+                        : ($endpoint['count']
+                            ?? $endpoint['worker_count']
+                            ?? 1)),
+                ),
+                'managed_nginx' => [],
+                'wls_backend' => [
+                    'host' => $this->normalizeConnectHost($endpointHost),
+                    'port' => $port,
+                    'ssl' => false,
+                ],
+            ];
+        }
         if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
             $connectHost = $this->normalizeConnectHost($endpointHost);
             $authorityHost = $this->normalizeAuthorityHost(
                 (string)($endpoint['public_host'] ?? $endpoint['ssl_domain'] ?? ''),
                 $connectHost,
             );
-            $sslEnabled = (bool)($endpoint['ssl_enabled'] ?? false);
+            $fallbackHttpsPort = (string)($gatewayRuntime['fallback_state'] ?? '')
+                === 'DEGRADED_WLS'
+                ? (int)($gatewayRuntime['public_https'] ?? 0)
+                : 0;
+            $sslEnabled = $fallbackHttpsPort > 0
+                ? true
+                : (bool)($endpoint['ssl_enabled'] ?? false);
+            $publicPort = $fallbackHttpsPort >= 1 && $fallbackHttpsPort <= 65535
+                ? $fallbackHttpsPort
+                : $port;
 
             return [
                 'host' => $connectHost,
                 'authority_host' => $authorityHost,
-                'port' => $port,
+                'port' => $publicPort,
                 'ssl' => $sslEnabled,
                 'target_surface' => 'wls_endpoint',
-                'target_endpoint_role' => 'pure_wls_public',
+                'target_endpoint_role' => $fallbackHttpsPort > 0
+                    ? 'gateway_fallback_public'
+                    : 'pure_wls_public',
                 'explicit_transport_resolve' => \strcasecmp($authorityHost, $connectHost) !== 0,
                 'endpoint_host' => $connectHost,
                 'instance' => $name,
@@ -855,7 +1031,7 @@ class Benchmark extends CommandAbstract
                 'managed_nginx' => [],
                 'wls_backend' => [
                     'host' => $connectHost,
-                    'port' => $port,
+                    'port' => $publicPort,
                     'ssl' => $sslEnabled,
                 ],
             ];
@@ -894,6 +1070,303 @@ class Benchmark extends CommandAbstract
                 'ssl' => false,
             ],
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $gatewayRuntime
+     * @return array<string,mixed>|null
+     */
+    private function resolveHostGatewayPublicTarget(
+        string $instanceName,
+        string $backendHost,
+        string $configuredAuthorityHost,
+        array $gatewayRuntime,
+    ): ?array {
+        $connectHost = $this->normalizeConnectHost($backendHost);
+        $authorityHost = $this->normalizeAuthorityHost($configuredAuthorityHost, $connectHost);
+        if (!$this->isLoopbackHost($connectHost)
+            || $authorityHost === $connectHost
+            || \filter_var($authorityHost, FILTER_VALIDATE_IP) !== false
+        ) {
+            return null;
+        }
+        $projectUuid = \strtolower(\trim((string)($gatewayRuntime['project_uuid'] ?? '')));
+        $gatewayInstance = \trim((string)($gatewayRuntime['instance_id'] ?? ''));
+        $gatewayEpoch = \strtolower(\trim((string)($gatewayRuntime['epoch'] ?? '')));
+        $launchId = \strtolower(\trim((string)($gatewayRuntime['launch_id'] ?? '')));
+        $instanceGeneration = (int)($gatewayRuntime['instance_generation'] ?? 0);
+        if (!\hash_equals(GatewayPaths::PROTOCOL, (string)($gatewayRuntime['protocol'] ?? ''))
+            || \preg_match('/\A[a-f0-9-]{36}\z/D', $projectUuid) !== 1
+            || !\hash_equals($instanceName, $gatewayInstance)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayEpoch) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+            || $instanceGeneration < 1
+        ) {
+            return null;
+        }
+
+        $status = $this->readHostGatewayStatus();
+        $observation = $this->hostGatewayObservation(
+            $status,
+            $projectUuid,
+            $instanceName,
+            $instanceGeneration,
+            $launchId,
+            $gatewayEpoch,
+            $authorityHost,
+        );
+        if ($observation === null) {
+            return null;
+        }
+        $publicHttps = (int)$observation['public_https'];
+        $protocols = $this->probeHostGatewayPublicProtocols(
+            $connectHost,
+            $authorityHost,
+            $publicHttps,
+            $observation,
+        );
+        if (!\in_array('http/1.1', $protocols, true)) {
+            return null;
+        }
+        $observation['public_protocols'] = $protocols;
+
+        return [
+            'host' => $connectHost,
+            'authority_host' => $authorityHost,
+            'port' => $publicHttps,
+            'ssl' => true,
+            'target_surface' => 'public_edge',
+            'target_endpoint_role' => 'host_gateway_public',
+            'explicit_transport_resolve' => true,
+            'host_gateway' => $observation,
+        ];
+    }
+
+    /**
+     * Read through the project-authenticated gateway endpoint. Kept protected
+     * so the identity gates can be tested without a host-level service.
+     *
+     * @return array<string,mixed>
+     */
+    protected function readHostGatewayStatus(): array
+    {
+        return (new GatewayHostManager())->status(2.0);
+    }
+
+    /**
+     * @param array<string,mixed> $status
+     * @return array<string,mixed>|null
+     */
+    private function hostGatewayObservation(
+        array $status,
+        string $projectUuid,
+        string $instanceName,
+        int $instanceGeneration,
+        string $launchId,
+        string $gatewayEpoch,
+        string $authorityHost,
+    ): ?array {
+        $statusProject = \strtolower(\trim((string)($status['project_uuid'] ?? '')));
+        $statusEpoch = \strtolower(\trim((string)($status['epoch'] ?? '')));
+        $publicHttps = (int)($status['public_https'] ?? 0);
+        if (!(bool)($status['ok'] ?? false)
+            || !(bool)($status['ready'] ?? false)
+            || !(bool)($status['release_ready'] ?? false)
+            || !(bool)($status['broker_ready'] ?? false)
+            || !(bool)($status['supervisor_ready'] ?? false)
+            || !(bool)($status['data_plane']['running'] ?? false)
+            || !\hash_equals(GatewayPaths::PROTOCOL, (string)($status['protocol'] ?? ''))
+            || (int)($status['protocol_min'] ?? 0) > 2
+            || (int)($status['protocol_max'] ?? 0) < 2
+            || !\hash_equals(GatewayPaths::IMPLEMENTATION_LEVEL, (string)($status['implementation_level'] ?? ''))
+            || !\hash_equals(GatewayPaths::SECURITY_PROFILE, (string)($status['security_profile'] ?? ''))
+            || !\hash_equals($projectUuid, $statusProject)
+            || !\hash_equals($gatewayEpoch, $statusEpoch)
+            || $publicHttps < 1
+            || $publicHttps > 65535
+        ) {
+            return null;
+        }
+
+        $instanceActive = false;
+        foreach ((array)($status['instances'] ?? []) as $instance) {
+            if (!\is_array($instance)
+                || !\hash_equals($instanceName, (string)($instance['instance_id'] ?? ''))
+            ) {
+                continue;
+            }
+            $instanceActive = (string)($instance['status'] ?? '') === 'ACTIVE'
+                && (int)($instance['generation'] ?? 0) === $instanceGeneration;
+            break;
+        }
+        if (!$instanceActive) {
+            return null;
+        }
+
+        foreach ((array)($status['routes'] ?? []) as $route) {
+            if (!\is_array($route)
+                || (string)($route['status'] ?? '') !== 'ACTIVE'
+                || !\hash_equals($projectUuid, \strtolower((string)($route['project_uuid'] ?? '')))
+                || !$this->gatewayDomainCoversAuthority(
+                    (string)($route['domain'] ?? ''),
+                    $authorityHost,
+                )
+                || !\hash_equals(
+                    $instanceName,
+                    (string)($route['preferred_instance_id'] ?? $route['instance_id'] ?? ''),
+                )
+            ) {
+                continue;
+            }
+            $identity = \is_array($route['backend_identity'] ?? null)
+                ? $route['backend_identity']
+                : [];
+            $certificate = \is_array($route['certificate'] ?? null)
+                ? $route['certificate']
+                : [];
+            $certificateDigest = \strtolower(\trim(
+                (string)($certificate['snapshot_digest'] ?? ''),
+            ));
+            $routeId = \strtolower(\trim((string)($route['route_id'] ?? '')));
+            if ((int)($identity['generation'] ?? 0) !== $instanceGeneration
+                || !\hash_equals($launchId, \strtolower((string)($identity['launch_id'] ?? '')))
+                || (int)($identity['master_epoch'] ?? 0) < 1
+                || !(bool)($certificate['valid'] ?? false)
+                || (int)($certificate['generation'] ?? 0) < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $certificateDigest) !== 1
+                || \preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
+                || (int)($route['route_generation'] ?? 0) < 1
+            ) {
+                continue;
+            }
+
+            return [
+                'protocol' => GatewayPaths::PROTOCOL,
+                'implementation_level' => GatewayPaths::IMPLEMENTATION_LEVEL,
+                'security_profile' => GatewayPaths::SECURITY_PROFILE,
+                'epoch' => $statusEpoch,
+                'gateway_generation' => (int)($status['generation'] ?? 0),
+                'project_uuid' => $projectUuid,
+                'instance_id' => $instanceName,
+                'instance_generation' => $instanceGeneration,
+                'launch_id' => $launchId,
+                'master_epoch' => (int)$identity['master_epoch'],
+                'route_id' => $routeId,
+                'route_generation' => (int)$route['route_generation'],
+                'domain' => \strtolower((string)$route['domain']),
+                'certificate_generation' => (int)$certificate['generation'],
+                'certificate_snapshot_sha256' => $certificateDigest,
+                'public_https' => $publicHttps,
+            ];
+        }
+
+        return null;
+    }
+
+    private function gatewayDomainCoversAuthority(string $domain, string $authorityHost): bool
+    {
+        $domain = \strtolower(\rtrim(\trim($domain), '.'));
+        $authorityHost = \strtolower(\rtrim(\trim($authorityHost), '.'));
+        if ($domain === '' || $authorityHost === '') {
+            return false;
+        }
+        if (!\str_starts_with($domain, '*.')) {
+            return \hash_equals($domain, $authorityHost);
+        }
+        $suffix = \substr($domain, 1);
+        return \str_ends_with($authorityHost, $suffix)
+            && \substr_count($authorityHost, '.') === \substr_count($domain, '.');
+    }
+
+    /**
+     * @param array<string,mixed> $observation
+     * @return list<string>
+     */
+    protected function probeHostGatewayPublicProtocols(
+        string $connectHost,
+        string $authorityHost,
+        int $httpsPort,
+        array $observation,
+    ): array {
+        if (!\function_exists('curl_init')) {
+            return [];
+        }
+        $candidates = [['http/1.1', \CURL_HTTP_VERSION_1_1]];
+        $curl = (array)\curl_version();
+        if (\defined('CURL_HTTP_VERSION_2_0')
+            && \defined('CURL_VERSION_HTTP2')
+            && (((int)($curl['features'] ?? 0) & (int)\constant('CURL_VERSION_HTTP2')) !== 0)
+        ) {
+            \array_unshift($candidates, ['http/2', (int)\constant('CURL_HTTP_VERSION_2_0')]);
+        }
+        $verified = [];
+        foreach ($candidates as [$protocol, $curlVersion]) {
+            $nonce = \bin2hex(\random_bytes(16));
+            $url = 'https://' . $this->formatTargetUrlHost($authorityHost) . ':' . $httpsPort
+                . '/__wls_gateway_sentinel?nonce=' . $nonce;
+            $headers = [];
+            $handle = \curl_init($url);
+            if ($handle === false) {
+                continue;
+            }
+            $resolveAddress = \trim($connectHost, '[]');
+            if (\str_contains($resolveAddress, ':')) {
+                $resolveAddress = '[' . $resolveAddress . ']';
+            }
+            \curl_setopt_array($handle, [
+                \CURLOPT_RETURNTRANSFER => true,
+                \CURLOPT_TIMEOUT_MS => 4000,
+                \CURLOPT_CONNECTTIMEOUT_MS => 1000,
+                \CURLOPT_SSL_VERIFYPEER => false,
+                \CURLOPT_SSL_VERIFYHOST => 0,
+                \CURLOPT_HTTP_VERSION => $curlVersion,
+                \CURLOPT_NOPROXY => '*',
+                \CURLOPT_PROXY => '',
+                \CURLOPT_RESOLVE => [
+                    \trim($authorityHost, '[]') . ':' . $httpsPort . ':' . $resolveAddress,
+                ],
+                \CURLOPT_HTTPHEADER => ['Cache-Control: no-store'],
+                \CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
+                    $separator = \strpos($line, ':');
+                    if ($separator !== false) {
+                        $headers[\strtolower(\trim(\substr($line, 0, $separator)))]
+                            = \trim(\substr($line, $separator + 1));
+                    }
+                    return \strlen($line);
+                },
+            ]);
+            $body = \curl_exec($handle);
+            $statusCode = (int)\curl_getinfo($handle, \CURLINFO_RESPONSE_CODE);
+            $observed = $this->curlHttpVersionName(
+                (int)\curl_getinfo($handle, \CURLINFO_HTTP_VERSION),
+            );
+            \curl_close($handle);
+            $payload = \is_string($body) ? \json_decode($body, true) : null;
+            if ($statusCode !== 200
+                || $observed !== ($protocol === 'http/2' ? '2' : '1.1')
+                || !\is_array($payload)
+                || !\hash_equals(
+                    (string)$observation['project_uuid'],
+                    (string)($headers['x-wls-project-uuid'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)$observation['instance_id'],
+                    (string)($headers['x-wls-instance-id'] ?? ''),
+                )
+                || (int)$observation['instance_generation']
+                    !== (int)($headers['x-wls-backend-generation'] ?? 0)
+                || !\hash_equals($nonce, (string)($headers['x-wls-probe-nonce'] ?? ''))
+                || !\hash_equals((string)$observation['instance_id'], (string)($payload['instance'] ?? ''))
+                || !\hash_equals((string)$observation['launch_id'], (string)($payload['launch_id'] ?? ''))
+                || (int)$observation['master_epoch'] !== (int)($payload['master_epoch'] ?? 0)
+                || !\hash_equals($nonce, (string)($payload['nonce'] ?? ''))
+            ) {
+                continue;
+            }
+            $verified[] = $protocol;
+        }
+
+        return $verified;
     }
 
     /**
@@ -1037,6 +1510,93 @@ class Benchmark extends CommandAbstract
         }
 
         return $this->managedNginxObservationMatches($expected, $current);
+    }
+
+    /**
+     * @param array<string,mixed> $expected
+     */
+    private function hostGatewayObservationStillMatches(
+        array $expected,
+        string $connectHost,
+        string $authorityHost,
+    ): bool {
+        if ($expected === []) {
+            return false;
+        }
+        $current = $this->hostGatewayObservation(
+            $this->readHostGatewayStatus(),
+            (string)($expected['project_uuid'] ?? ''),
+            (string)($expected['instance_id'] ?? ''),
+            (int)($expected['instance_generation'] ?? 0),
+            (string)($expected['launch_id'] ?? ''),
+            (string)($expected['epoch'] ?? ''),
+            $authorityHost,
+        );
+        if ($current === null) {
+            return false;
+        }
+        foreach ([
+            'protocol',
+            'implementation_level',
+            'security_profile',
+            'epoch',
+            'project_uuid',
+            'instance_id',
+            'instance_generation',
+            'launch_id',
+            'master_epoch',
+            'route_id',
+            'route_generation',
+            'domain',
+            'certificate_generation',
+            'certificate_snapshot_sha256',
+            'public_https',
+        ] as $field) {
+            if ((string)($expected[$field] ?? '') !== (string)($current[$field] ?? '')) {
+                return false;
+            }
+        }
+        $expectedProtocols = \is_array($expected['public_protocols'] ?? null)
+            ? \array_values(\array_filter(\array_map('strval', $expected['public_protocols'])))
+            : [];
+        if (!\in_array('http/1.1', $expectedProtocols, true)) {
+            return false;
+        }
+        $currentProtocols = $this->probeHostGatewayPublicProtocols(
+            $connectHost,
+            $authorityHost,
+            (int)$current['public_https'],
+            $current,
+        );
+        foreach ($expectedProtocols as $protocol) {
+            if (!\in_array($protocol, $currentProtocols, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string,mixed> $benchmarkContext
+     */
+    private function hostGatewayStillMatchesBenchmarkContext(array $benchmarkContext): bool
+    {
+        if (!(bool)($benchmarkContext['host_gateway_identity_required'] ?? false)) {
+            return true;
+        }
+        $expected = \is_array($benchmarkContext['_host_gateway_observation'] ?? null)
+            ? $benchmarkContext['_host_gateway_observation']
+            : [];
+        try {
+            return $this->hostGatewayObservationStillMatches(
+                $expected,
+                (string)($benchmarkContext['connect_host'] ?? ''),
+                (string)($benchmarkContext['authority_host'] ?? ''),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -1209,6 +1769,14 @@ class Benchmark extends CommandAbstract
         $benchmarkContext['managed_nginx_owner_stable_before'] = $managedNginxOwnerStableBefore;
         if (!$managedNginxOwnerStableBefore) {
             $this->printer->error(__('Managed Nginx owner 在正式压测前已变化，已拒绝运行。'));
+            return 1;
+        }
+        $hostGatewayStableBefore = $this->hostGatewayStillMatchesBenchmarkContext(
+            $benchmarkContext,
+        );
+        $benchmarkContext['host_gateway_identity_stable_before'] = $hostGatewayStableBefore;
+        if (!$hostGatewayStableBefore) {
+            $this->printer->error(__('宿主级 WLS 2.0 网关身份或活动路由在正式压测前已变化，已拒绝运行。'));
             return 1;
         }
         
@@ -1868,6 +2436,11 @@ class Benchmark extends CommandAbstract
         if (!(bool)$benchmarkContext['managed_nginx_owner_stable_after']) {
             $this->printer->error(__('Managed Nginx owner 在压测期间发生变化，本次结果无效。'));
         }
+        $benchmarkContext['host_gateway_identity_stable_after'] =
+            $this->hostGatewayStillMatchesBenchmarkContext($benchmarkContext);
+        if (!(bool)$benchmarkContext['host_gateway_identity_stable_after']) {
+            $this->printer->error(__('宿主级 WLS 2.0 网关身份或活动路由在压测期间发生变化，本次结果无效。'));
+        }
 
         $benchmarkContext['benchmark_success_count'] = $successCount;
         $benchmarkContext['worker_runtime_after'] = $this->captureWorkerRuntimeSnapshot($benchmarkContext);
@@ -2020,7 +2593,17 @@ class Benchmark extends CommandAbstract
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
         $info = $manager->getInstanceInfoWithIpcTimeout($instanceName, false, 0.5);
-        if ($info !== null && $this->workerRuntimeIdentityEvidenceIncomplete($info)) {
+        $carrierRole = (string)($benchmarkContext['benchmark_carrier_role']
+            ?? ControlMessage::ROLE_WORKER);
+        if (!\in_array($carrierRole, [
+            ControlMessage::ROLE_WORKER,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true)) {
+            $carrierRole = ControlMessage::ROLE_WORKER;
+        }
+        if ($info !== null
+            && $this->workerRuntimeIdentityEvidenceIncomplete($info, $carrierRole)
+        ) {
             $retriedInfo = $manager->getInstanceInfoWithIpcTimeout($instanceName, false, 1.5);
             if ($retriedInfo !== null) {
                 $info = $retriedInfo;
@@ -2037,10 +2620,21 @@ class Benchmark extends CommandAbstract
         }
 
         $contextWorkerCount = (int)($benchmarkContext['worker_count'] ?? 0);
-        $expectedWorkers = \max(1, $contextWorkerCount > 0 ? $contextWorkerCount : $info->workerCount);
+        $expectedWorkers = $carrierRole === ControlMessage::ROLE_GATEWAY_BACKEND
+            ? \max(
+                1,
+                (int)($benchmarkContext['benchmark_expected_carriers']
+                    ?? $contextWorkerCount
+                    ?? 1),
+            )
+            : $this->selectRuntimeWorkerCount(
+                $contextWorkerCount,
+                (int)$info->workerCount,
+                $manager->getRuntimeStatsForInstance($info, true),
+            );
         $canonicalSlots = [];
         for ($slot = 1; $slot <= $expectedWorkers; $slot++) {
-            $canonicalSlots['worker#' . (string)$slot] = true;
+            $canonicalSlots[$carrierRole . '#' . (string)$slot] = true;
         }
         $workers = [];
         $readyFingerprint = [];
@@ -2049,10 +2643,10 @@ class Benchmark extends CommandAbstract
         $duplicateSlots = [];
         $unexpectedReadySlots = [];
         $activeCanonicalSlots = [];
-        foreach ($info->getWorkers() as $service) {
+        foreach ($info->getServicesByRole($carrierRole) as $service) {
             $slotId = \trim((string)($service->metadata['slot_id'] ?? ''));
             if ($slotId === '') {
-                $slotId = 'worker#' . (string)$service->instanceId;
+                $slotId = $carrierRole . '#' . (string)$service->instanceId;
             }
             $runningRealtime = $service->state === ServiceInstance::STATE_READY
                 && $service->pid > 0
@@ -2124,6 +2718,7 @@ class Benchmark extends CommandAbstract
             'instance_name' => $instanceName,
             'master_pid' => $info->masterPid,
             'master_running' => $masterRunning,
+            'carrier_role' => $carrierRole,
             'expected_workers' => $expectedWorkers,
             'ready_workers' => \count($readyFingerprint),
             'identity_source' => $identitySource,
@@ -2134,12 +2729,17 @@ class Benchmark extends CommandAbstract
             'missing_canonical_slots' => $missingCanonicalSlots,
             'ready_fingerprint' => $readyFingerprint,
             'workers' => $workers,
-            'reason' => $healthy ? 'master_and_all_canonical_workers_ready' : 'master_or_worker_ready_contract_failed',
+            'reason' => $healthy
+                ? 'master_and_all_canonical_carriers_ready'
+                : 'master_or_carrier_ready_contract_failed',
         ];
     }
-    private function workerRuntimeIdentityEvidenceIncomplete(ServerInstanceInfo $info): bool
+    private function workerRuntimeIdentityEvidenceIncomplete(
+        ServerInstanceInfo $info,
+        string $carrierRole = ControlMessage::ROLE_WORKER,
+    ): bool
     {
-        $workers = $info->getWorkers();
+        $workers = $info->getServicesByRole($carrierRole);
         if ($workers === []) {
             return true;
         }
@@ -2291,6 +2891,26 @@ class Benchmark extends CommandAbstract
             ],
             'same Managed Nginx owner/PID/generation/ports before and after the measured run',
             'managed_nginx_owner_changed_during_benchmark',
+        );
+        $hostGatewayIdentityRequired =
+            (bool)($benchmarkContext['host_gateway_identity_required'] ?? false);
+        $record(
+            'host_gateway_identity_stability',
+            $hostGatewayIdentityRequired,
+            (bool)($benchmarkContext['host_gateway_identity_stable_before'] ?? false)
+                && (bool)($benchmarkContext['host_gateway_identity_stable_after'] ?? false),
+            [
+                'before' => (bool)($benchmarkContext['host_gateway_identity_stable_before'] ?? false),
+                'after' => (bool)($benchmarkContext['host_gateway_identity_stable_after'] ?? false),
+                'epoch' => (string)(
+                    $benchmarkContext['_host_gateway_observation']['epoch'] ?? ''
+                ),
+                'route_generation' => (int)(
+                    $benchmarkContext['_host_gateway_observation']['route_generation'] ?? 0
+                ),
+            ],
+            'same signed gateway epoch and project route/certificate/backend identity before and after the measured run',
+            'host_gateway_identity_changed_during_benchmark',
         );
 
         $record('request_completion', true, $completed === $totalRequests, $completed, $totalRequests, 'request_completion_mismatch');
@@ -3175,9 +3795,13 @@ class Benchmark extends CommandAbstract
         $targetManagedNginx = \is_array($serverConfig['managed_nginx'] ?? null)
             ? $serverConfig['managed_nginx']
             : [];
+        $targetHostGateway = \is_array($serverConfig['host_gateway'] ?? null)
+            ? $serverConfig['host_gateway']
+            : [];
         if ($endpointPolicyBound
             && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
             && $requestedTargetSurface === 'public_edge'
+            && $targetHostGateway === []
         ) {
             try {
                 $currentManagedNginx = ManagedNginxService::fromEnv()->doctorSnapshot();
@@ -3191,6 +3815,27 @@ class Benchmark extends CommandAbstract
                     'Managed Nginx owner identity changed while the benchmark target was being bound';
             }
         }
+        if ($endpointPolicyBound
+            && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+            && $requestedTargetSurface === 'public_edge'
+            && $targetHostGateway !== []
+        ) {
+            try {
+                $hostGatewayMatches = $this->hostGatewayObservationStillMatches(
+                    $targetHostGateway,
+                    (string)($serverConfig['host'] ?? ''),
+                    (string)($serverConfig['authority_host'] ?? $serverConfig['host'] ?? ''),
+                );
+            } catch (\Throwable) {
+                $hostGatewayMatches = false;
+            }
+            if (!$hostGatewayMatches) {
+                $endpointPolicyBound = false;
+                $endpointPolicySource = 'persisted_endpoint_unbound';
+                $endpointPolicyError =
+                    'Host gateway identity or active project route changed while the benchmark target was being bound';
+            }
+        }
         $httpProtocolCapabilities = (new HttpProtocolCapabilityProbe())->snapshot(
             $endpointEdgeValid ? $endpointEdgeAdapter : null,
             $endpointSelection,
@@ -3198,6 +3843,13 @@ class Benchmark extends CommandAbstract
             $endpointPolicySource,
             null,
         );
+        if ($endpointPolicyBound && $targetHostGateway !== []) {
+            $httpProtocolCapabilities = $this->bindHostGatewayProtocolCapabilities(
+                $httpProtocolCapabilities,
+                $targetHostGateway,
+                $endpointPolicySource,
+            );
+        }
         $httpDefaultPolicy = \is_array($httpProtocolCapabilities['default_policy'] ?? null)
             ? $httpProtocolCapabilities['default_policy']
             : [];
@@ -3221,6 +3873,9 @@ class Benchmark extends CommandAbstract
         $managedNginx = \is_array($edgeSnapshot['managed_nginx'] ?? null)
             ? $edgeSnapshot['managed_nginx']
             : [];
+        $hostGatewayEdge = \is_array($edgeSnapshot['host_gateway'] ?? null)
+            ? $edgeSnapshot['host_gateway']
+            : [];
         $verifiedTargetProtocols = $endpointPolicyBound
             ? $this->runtimeVerifiedProtocolsForSurface($httpProtocolCapabilities, $requestedTargetSurface)
             : [];
@@ -3239,7 +3894,8 @@ class Benchmark extends CommandAbstract
             && (
                 ($requestedTargetSurface === 'public_edge'
                     && ((bool)($managedNginx['http2_runtime_verified'] ?? false)
-                        || (bool)($managedNginx['http3_runtime_verified'] ?? false)))
+                        || (bool)($managedNginx['http3_runtime_verified'] ?? false)
+                        || (bool)($hostGatewayEdge['http2_runtime_verified'] ?? false)))
                 || $pureWlsMultiplexVerified
             );
         $explicitRemoteMultiplex = $clientMultiplexOptionEnabled
@@ -3309,18 +3965,31 @@ class Benchmark extends CommandAbstract
             'managed_nginx_generation_required' =>
                 $endpointPolicyBound
                 && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-                && $requestedTargetSurface === 'public_edge',
+                && $requestedTargetSurface === 'public_edge'
+                && $targetHostGateway === [],
             'managed_nginx_expected_generation' =>
                 $endpointPolicyBound
                 && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
                 && $requestedTargetSurface === 'public_edge'
+                && $targetHostGateway === []
                     ? (string)($targetManagedNginx['owner_config_generation'] ?? '')
                     : '',
             '_managed_nginx_owner_observation' =>
                 $endpointPolicyBound
                 && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
                 && $requestedTargetSurface === 'public_edge'
+                && $targetHostGateway === []
                     ? $targetManagedNginx : [],
+            'host_gateway_identity_required' =>
+                $endpointPolicyBound
+                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+                && $requestedTargetSurface === 'public_edge'
+                && $targetHostGateway !== [],
+            '_host_gateway_observation' =>
+                $endpointPolicyBound
+                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+                && $requestedTargetSurface === 'public_edge'
+                    ? $targetHostGateway : [],
             'http3_data_plane_reason' => $endpointEdgeAdapter
                 === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
                     ? 'Pure WLS HTTP/3 is unavailable; use managed Nginx.'
@@ -3338,6 +4007,12 @@ class Benchmark extends CommandAbstract
             'endpoint_schema_version' => $runtime['endpoint_schema_version'] ?? null,
             'runtime_selection' => $runtimeSelection,
             'worker_count' => (int)($serverConfig['worker_count'] ?? 0),
+            'benchmark_carrier_role' => (string)($serverConfig['benchmark_carrier_role']
+                ?? ControlMessage::ROLE_WORKER),
+            'benchmark_expected_carriers' => \max(
+                0,
+                (int)($serverConfig['benchmark_expected_carriers'] ?? 0),
+            ),
             'architecture' => $runtime['architecture'] ?? null,
             'php_version' => $runtime['php_version'] ?? null,
             'event_extension_version' => $runtime['event_extension_version'] ?? null,
@@ -3481,6 +4156,71 @@ class Benchmark extends CommandAbstract
     }
 
     /**
+     * Replace project-managed Nginx capability guesses with live, signed
+     * project-route evidence from the host gateway.
+     *
+     * @param array<string,mixed> $capabilities
+     * @param array<string,mixed> $observation
+     * @return array<string,mixed>
+     */
+    private function bindHostGatewayProtocolCapabilities(
+        array $capabilities,
+        array $observation,
+        string $policySource,
+    ): array {
+        $observedProtocols = \is_array($observation['public_protocols'] ?? null)
+            ? \array_values(\array_filter(\array_map(
+                static fn(mixed $protocol): string => \strtolower(\trim((string)$protocol)),
+                $observation['public_protocols'],
+            )))
+            : [];
+        $order = [];
+        foreach (['http/2', 'http/1.1'] as $protocol) {
+            if (\in_array($protocol, $observedProtocols, true)) {
+                $order[] = $protocol;
+            }
+        }
+        $defaultPolicy = \is_array($capabilities['default_policy'] ?? null)
+            ? $capabilities['default_policy']
+            : [];
+        $surfaces = \is_array($defaultPolicy['surfaces'] ?? null)
+            ? $defaultPolicy['surfaces']
+            : [];
+        $surfaces['public_edge'] = [
+            'owner' => 'host_gateway',
+            'role' => 'public_https',
+            'target_preferred' => $order[0] ?? null,
+            'effective_preferred' => $order[0] ?? null,
+            'fallback' => \array_slice($order, 1),
+            'negotiation_order' => $order,
+            'policy_bound' => true,
+            'policy_source' => $policySource,
+            'runtime_verified' => $order !== [],
+            'capability_verified' => $order !== [],
+            'observed_preferred' => $order[0] ?? null,
+            'verification_required' => 'signed own-status plus authenticated public sentinel ALPN probes',
+            'http3_when_available' => false,
+            'http3_reason' => 'Project-scoped gateway status does not publish live HTTP/3 evidence.',
+        ];
+        $defaultPolicy['surfaces'] = $surfaces;
+        $capabilities['default_policy'] = $defaultPolicy;
+        $edge = \is_array($capabilities['edge'] ?? null) ? $capabilities['edge'] : [];
+        $edge['host_gateway'] = [
+            'protocol' => (string)($observation['protocol'] ?? ''),
+            'epoch' => (string)($observation['epoch'] ?? ''),
+            'route_id' => (string)($observation['route_id'] ?? ''),
+            'route_generation' => (int)($observation['route_generation'] ?? 0),
+            'public_protocols' => $order,
+            'http1_runtime_verified' => \in_array('http/1.1', $order, true),
+            'http2_runtime_verified' => \in_array('http/2', $order, true),
+            'http3_runtime_verified' => false,
+        ];
+        $capabilities['edge'] = $edge;
+
+        return $capabilities;
+    }
+
+    /**
      * Return only protocols with live evidence on the selected data plane.
      *
      * @param array<string,mixed> $capabilities
@@ -3520,14 +4260,17 @@ class Benchmark extends CommandAbstract
             }
             return $protocols;
         }
+        $surfaceOwner = (string)($surface['owner'] ?? '');
         if ($targetSurface !== 'public_edge'
-            || (string)($surface['owner'] ?? '') !== 'nginx'
+            || !\in_array($surfaceOwner, ['nginx', 'host_gateway'], true)
         ) {
             return [];
         }
 
         $edge = \is_array($capabilities['edge'] ?? null) ? $capabilities['edge'] : [];
-        $managed = \is_array($edge['managed_nginx'] ?? null) ? $edge['managed_nginx'] : [];
+        $managed = $surfaceOwner === 'host_gateway'
+            ? (\is_array($edge['host_gateway'] ?? null) ? $edge['host_gateway'] : [])
+            : (\is_array($edge['managed_nginx'] ?? null) ? $edge['managed_nginx'] : []);
         $verified = [
             'http/3' => (bool)($managed['http3_runtime_verified'] ?? false),
             'http/2' => (bool)($managed['http2_runtime_verified'] ?? false),

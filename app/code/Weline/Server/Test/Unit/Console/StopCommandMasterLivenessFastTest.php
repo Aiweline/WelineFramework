@@ -50,7 +50,7 @@ final class StopCommandMasterLivenessFastTest extends TestCase
             '127.0.0.1',
             9982,
             false,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             10000,
             0,

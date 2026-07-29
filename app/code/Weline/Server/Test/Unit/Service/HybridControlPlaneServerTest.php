@@ -285,6 +285,127 @@ final class HybridControlPlaneServerTest extends TestCase
         }
     }
 
+    public function testGatewayAgentSupervisorSessionOnlyForwardsGatewayLifecycleCommands(): void
+    {
+        $controlServer = new MasterControlServer();
+        $resolver = new ControlEndpointResolver(BP, 28300, 1000);
+        $runtime = new SupervisorRuntime(
+            instanceName: 'ut-gateway-agent',
+            channelId: 'channel-ut-gateway-agent',
+            endpointResolver: $resolver,
+        );
+        $hybrid = new HybridControlPlaneServer(
+            controlServer: $controlServer,
+            endpointResolver: $resolver,
+            supervisorEnabled: true,
+            channelId: 'channel-ut-gateway-agent',
+            supervisorRuntime: $runtime,
+        );
+        $hybrid->setExpectedInstanceCode('ut-gateway-agent');
+
+        $messages = [];
+        $hybrid->onMessage(function (array $msg, int $clientId, object $server) use (&$messages): void {
+            $messages[] = [$msg, $clientId];
+            if (($msg['type'] ?? '') !== ControlMessage::TYPE_READY) {
+                return;
+            }
+            $server->sendTo($clientId, ControlMessage::readyAck(
+                leaseId: (string)($msg['lease_id'] ?? ''),
+                generation: (int)($msg['generation'] ?? 0),
+                workerId: (int)($msg['worker_id'] ?? 0),
+                port: (int)($msg['port'] ?? 0),
+                msgId: (string)($msg['msg_id'] ?? ''),
+                slotId: (string)($msg['slot_id'] ?? ''),
+            ));
+        });
+        $hybrid->onDisconnect(static function (): void {});
+        self::assertTrue($hybrid->start('127.0.0.1', 0));
+
+        $client = new SupervisorChildClient(
+            instanceName: 'ut-gateway-agent',
+            channelId: 'channel-ut-gateway-agent',
+            endpointResolver: $resolver,
+            progressCallback: static function () use ($hybrid): void {
+                $hybrid->poll(0, 10000);
+            },
+        );
+
+        try {
+            self::assertTrue($client->connect('127.0.0.1', 0));
+            self::assertTrue($client->register(
+                role: ControlMessage::ROLE_GATEWAY_AGENT,
+                pid: 12003,
+                port: 0,
+                workerId: 1,
+                launchId: 'gateway-agent-launch-1',
+                instanceCode: 'ut-gateway-agent',
+                msgId: 'gateway-agent-hello-1',
+            ));
+            self::assertTrue($client->sendReady(
+                role: ControlMessage::ROLE_GATEWAY_AGENT,
+                workerId: 1,
+                port: 0,
+                launchId: 'gateway-agent-launch-1',
+                msgId: 'gateway-agent-ready-1',
+            ));
+
+            $allowedActions = [
+                ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE,
+                ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN,
+                ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
+                ControlMessage::ACTION_GATEWAY_BACKEND_ENABLE,
+                ControlMessage::ACTION_GATEWAY_NATIVE_DRAIN,
+            ];
+            foreach ($allowedActions as $action) {
+                self::assertTrue($client->send(ControlMessage::command(
+                    $action,
+                    '',
+                    ['port' => 23456],
+                )));
+            }
+            self::assertTrue($client->flushPendingWrites(0.25));
+            $this->pollUntil(
+                static function () use (&$messages, $allowedActions): bool {
+                    $commands = \array_filter(
+                        $messages,
+                        static fn(array $item): bool =>
+                            ($item[0]['type'] ?? null) === ControlMessage::TYPE_COMMAND,
+                    );
+                    return \count($commands) === \count($allowedActions);
+                },
+                $hybrid,
+            );
+
+            $commands = \array_values(\array_filter(
+                $messages,
+                static fn(array $item): bool =>
+                    ($item[0]['type'] ?? null) === ControlMessage::TYPE_COMMAND,
+            ));
+            self::assertSame($allowedActions, \array_column(\array_column($commands, 0), 'action'));
+            foreach ($commands as [$message, $clientId]) {
+                self::assertGreaterThanOrEqual(1000000, $clientId);
+                self::assertSame(ControlMessage::ROLE_GATEWAY_AGENT, $message['source_role'] ?? null);
+                self::assertSame(12003, $message['source_pid'] ?? null);
+                self::assertSame($clientId, $message['source_client_id'] ?? null);
+            }
+
+            self::assertTrue($client->send(ControlMessage::command(ControlMessage::ACTION_STOP)));
+            self::assertTrue($client->flushPendingWrites(0.25));
+            for ($i = 0; $i < 5; $i++) {
+                $hybrid->poll(0, 10000);
+            }
+            $forbidden = \array_filter(
+                $messages,
+                static fn(array $item): bool =>
+                    ($item[0]['action'] ?? null) === ControlMessage::ACTION_STOP,
+            );
+            self::assertSame([], \array_values($forbidden));
+        } finally {
+            $client->close();
+            $hybrid->close();
+        }
+    }
+
     private function pollUntil(callable $assertion, HybridControlPlaneServer $server, float $timeoutSec = 2.0): void
     {
         $deadline = \microtime(true) + $timeoutSec;

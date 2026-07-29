@@ -64,7 +64,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
             '127.0.0.1',
             443,
             true,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             16899,
             0,
@@ -135,6 +135,8 @@ final class StopCommandResidualPidIndexTest extends TestCase
                 }
 
                 return [
+                    'schema_version' => \Weline\Server\Service\Runtime\RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+                    'runtime_selection' => \Weline\Server\Console\Server\stopTestRuntimeSelection(true)->toArray(),
                     'port' => 443,
                     'count' => 2,
                     'control_port' => 26895,
@@ -156,11 +158,11 @@ final class StopCommandResidualPidIndexTest extends TestCase
         };
 
         self::assertSame(
-            [80, 443, 444, 16895, 16896, 26895],
+            [80, 443, 16895, 16896, 26895],
             $this->invokeProtected($stop, 'collectRecoverablePortsFromEndpointRecord', 'default')
         );
         self::assertSame(
-            [80, 443, 444, 16895, 16896, 26895],
+            [80, 443, 16895, 16896, 26895],
             $this->invokeProtected($stop, 'collectRecoverablePortsFromEndpointRecord', 'default', true)
         );
     }
@@ -198,8 +200,11 @@ final class StopCommandResidualPidIndexTest extends TestCase
                 }
 
                 return [
+                    'schema_version' => \Weline\Server\Service\Runtime\RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+                    'runtime_selection' => \Weline\Server\Console\Server\stopTestRuntimeSelection(true)->toArray(),
                     'lifecycle_state' => 'stopped',
-                    'port' => 9500,
+                    'port' => 19500,
+                    'worker_port' => 19500,
                     'count' => 3,
                 ];
             }
@@ -229,7 +234,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
             }
         };
 
-        self::assertSame('default', $stop->findWelineServerInstanceNameByPort(9502));
+        self::assertSame('default', $stop->findWelineServerInstanceNameByPort(19502));
     }
 
     public function testFindInstanceByPortIgnoresPersistedRecordsWhenPortIsFree(): void
@@ -306,7 +311,12 @@ final class StopCommandResidualPidIndexTest extends TestCase
                     return null;
                 }
 
-                return [];
+                return [
+                    'schema_version' => \Weline\Server\Service\Runtime\RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+                    'runtime_selection' => \Weline\Server\Console\Server\stopTestRuntimeSelection(true)->toArray(),
+                    'port' => 19500,
+                    'count' => 1,
+                ];
             }
         };
 
@@ -388,10 +398,10 @@ final class StopCommandResidualPidIndexTest extends TestCase
         };
 
         self::assertSame(
-            [111, 333],
+            [333],
             $this->invokeProtected($stop, 'collectRunningResidualPids', [111, 222, 333], [111])
         );
-        self::assertSame([333], $stop->ownershipChecks);
+        self::assertSame([111, 333], $stop->ownershipChecks);
     }
 
     public function testCollectRunningResidualPidsSkipsZombieProcessesReportedByDriver(): void
@@ -477,7 +487,7 @@ final class StopCommandResidualPidIndexTest extends TestCase
             '127.0.0.1',
             9501,
             false,
-            false,
+            \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             1,
             9601,
             0,

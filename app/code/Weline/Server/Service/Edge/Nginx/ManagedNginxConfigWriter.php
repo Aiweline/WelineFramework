@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Nginx;
 
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxConfigPublication;
 use Weline\Server\Service\SslCertificateService;
 
 /**
@@ -14,8 +15,18 @@ use Weline\Server\Service\SslCertificateService;
  */
 final class ManagedNginxConfigWriter
 {
-    public function __construct(private readonly ManagedNginxPaths $paths = new ManagedNginxPaths())
-    {
+    private readonly ManagedNginxPaths $paths;
+    private readonly NginxConfigPublication $publication;
+
+    public function __construct(
+        ?ManagedNginxPaths $paths = null,
+        ?NginxConfigPublication $publication = null,
+    ) {
+        $this->paths = $paths ?? new ManagedNginxPaths();
+        $this->publication = $publication ?? new NginxConfigPublication(
+            $this->paths->confFile(),
+            'managed nginx',
+        );
     }
 
     /**
@@ -336,11 +347,13 @@ NGINX;
             \file_put_contents($mimeDst, "types { text/html html htm; text/css css; application/javascript js; }\n");
         }
 
-        $confFile = $candidate
-            ? $this->candidatePath()
-            : $this->paths->confFile();
-        if (\file_put_contents($confFile, $conf, LOCK_EX) === false) {
-            throw new \RuntimeException('Unable to write managed nginx.conf: ' . $confFile);
+        if ($candidate) {
+            $confFile = $this->publication->stageCandidate($conf);
+        } else {
+            $confFile = $this->paths->confFile();
+            if (\file_put_contents($confFile, $conf, LOCK_EX) === false) {
+                throw new \RuntimeException('Unable to write managed nginx.conf: ' . $confFile);
+            }
         }
 
         return [
@@ -399,10 +412,7 @@ NGINX;
         if ($count !== 3) {
             throw new \RuntimeException('Managed nginx.conf generation replacement was incomplete.');
         }
-        $candidate = $this->candidatePath();
-        if (\file_put_contents($candidate, $candidateContents, LOCK_EX) === false) {
-            throw new \RuntimeException('Unable to write managed nginx reload candidate: ' . $candidate);
-        }
+        $candidate = $this->publication->stageCandidate($candidateContents);
 
         return [
             'conf' => $candidate,
@@ -415,117 +425,32 @@ NGINX;
     /** @return array{conf:string,rollback:string|null} */
     public function publishCandidate(string $candidate, string $transactionId): array
     {
-        $this->assertCandidatePath($candidate);
-        if (!\is_file($candidate)) {
-            throw new \RuntimeException('Managed nginx candidate config is missing.');
-        }
-        $active = $this->paths->confFile();
-        $rollback = null;
-        if (\is_file($active)) {
-            $rollback = $this->rollbackPathForTransaction($transactionId);
-            if (\is_file($rollback)) {
-                throw new \RuntimeException('Managed nginx transaction rollback already exists.');
-            }
-            if (!@\rename($active, $rollback)) {
-                throw new \RuntimeException('Unable to preserve the active managed nginx config.');
-            }
-        }
-        if (!@\rename($candidate, $active)) {
-            if ($rollback !== null) {
-                @\rename($rollback, $active);
-            }
-            throw new \RuntimeException('Unable to publish the managed nginx candidate config.');
-        }
-
-        return ['conf' => $active, 'rollback' => $rollback];
+        return $this->publication->publishCandidate($candidate, $transactionId);
     }
 
     public function rollbackPublished(?string $rollback): void
     {
-        if ($rollback !== null && !\is_file($rollback)) {
-            throw new \RuntimeException(
-                'Managed nginx rollback file is missing; refusing to remove the active config.'
-            );
-        }
-        $active = $this->paths->confFile();
-        $rejected = null;
-        if (\is_file($active)) {
-            $rejected = $active . '.rejected.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-            if (!@\rename($active, $rejected)) {
-                throw new \RuntimeException('Unable to preserve the rejected managed nginx config during rollback.');
-            }
-        }
-        if ($rollback !== null && \is_file($rollback) && !@\rename($rollback, $active)) {
-            if ($rejected !== null) {
-                @\rename($rejected, $active);
-            }
-            throw new \RuntimeException('Unable to restore the previous managed nginx config.');
-        }
-        if ($rejected !== null) {
-            @\unlink($rejected);
-        }
+        $this->publication->rollbackPublished($rollback);
     }
 
     public function recoverInterruptedPublication(): void
     {
-        $active = $this->paths->confFile();
-        if (\is_file($active)) {
-            return;
-        }
-        $lastGood = $active . '.last-good';
-        if (\is_file($lastGood) && !@\copy($lastGood, $active)) {
-            throw new \RuntimeException('Unable to recover the last-known-good managed nginx config.');
-        }
+        $this->publication->recoverInterruptedPublication();
     }
     public function rollbackPathForTransaction(string $transactionId): string
     {
-        $transactionId = \strtolower(\trim($transactionId));
-        if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
-            throw new \InvalidArgumentException('Managed nginx transaction id is invalid.');
-        }
-
-        return $this->paths->confFile() . '.rollback.' . $transactionId;
+        return $this->publication->rollbackPathForTransaction($transactionId);
     }
 
 
     public function commitPublished(?string $rollback): bool
     {
-        if ($rollback === null || !\is_file($rollback)) {
-            return true;
-        }
-        $lastGood = $this->paths->confFile() . '.last-good';
-        if (!@\copy($rollback, $lastGood)) {
-            return false;
-        }
-        if (!@\unlink($rollback)) {
-            return false;
-        }
-
-        return true;
+        return $this->publication->commitPublished($rollback);
     }
 
     public function discardCandidate(string $candidate): void
     {
-        $this->assertCandidatePath($candidate);
-        if (\is_file($candidate)) {
-            @\unlink($candidate);
-        }
-    }
-
-    private function candidatePath(): string
-    {
-        return $this->paths->confFile()
-            . '.candidate.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-    }
-
-    private function assertCandidatePath(string $candidate): void
-    {
-        $prefix = $this->paths->confFile() . '.candidate.';
-        if (\dirname($candidate) !== \dirname($this->paths->confFile())
-            || !\str_starts_with($candidate, $prefix)
-        ) {
-            throw new \InvalidArgumentException('Managed nginx candidate path is outside the isolated config scope.');
-        }
+        $this->publication->discardCandidate($candidate);
     }
 
     private function normalizeLoopbackUpstreamHost(string $host): string

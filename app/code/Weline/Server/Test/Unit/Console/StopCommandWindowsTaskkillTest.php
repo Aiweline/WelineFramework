@@ -30,6 +30,11 @@ final class StopCommandWindowsTaskkillTest extends TestCase
                 return true;
             }
 
+            protected function isResidualPidStillOwnedByWls(int $pid): bool
+            {
+                return $pid === 18628;
+            }
+
             protected function executeWindowsTaskkillForStop(int $pid, bool $tree): int
             {
                 $this->calls[] = ['pid' => $pid, 'tree' => $tree];
@@ -70,6 +75,11 @@ final class StopCommandWindowsTaskkillTest extends TestCase
             protected function isWindowsPlatform(): bool
             {
                 return true;
+            }
+
+            protected function isResidualPidStillOwnedByWls(int $pid): bool
+            {
+                return $pid === 15364;
             }
 
             protected function executeWindowsTaskkillForStop(int $pid, bool $tree): int
@@ -251,7 +261,7 @@ final class StopCommandWindowsTaskkillTest extends TestCase
             host: 'p11005ce4.weline.test',
             port: 9512,
             sslEnabled: false,
-            dispatcherEnabled: false,
+            runtimeSelection: \Weline\Server\Console\Server\stopTestRuntimeSelection(false),
             workerCount: 1,
             workerBasePort: 25964,
             httpRedirectPort: 0,
