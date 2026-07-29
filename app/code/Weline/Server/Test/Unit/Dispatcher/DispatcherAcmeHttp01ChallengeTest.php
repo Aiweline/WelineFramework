@@ -52,6 +52,19 @@ final class DispatcherAcmeHttp01ChallengeTest extends TestCase
         self::assertNull($method->invoke($dispatcher, 'test.aiweline.com', 'wrong-token'));
     }
 
+    public function testExpiredChallengeIsRejected(): void
+    {
+        $token = 'expired_token';
+        $keyAuth = $token . '.thumbprint';
+        $this->writeAcmeChallenge('expired.aiweline.com', $token, $keyAuth, \time() - 1);
+
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $method = new \ReflectionMethod(Dispatcher::class, 'resolveAcmeHttp01ChallengeBody');
+        $method->setAccessible(true);
+
+        self::assertNull($method->invoke($dispatcher, 'expired.aiweline.com', $token));
+    }
+
     public function testResolveChallengeFallsBackToTokenScanWhenHostIsMissing(): void
     {
         $token = 'fallback_token';
@@ -65,7 +78,12 @@ final class DispatcherAcmeHttp01ChallengeTest extends TestCase
         self::assertSame($keyAuth, $method->invoke($dispatcher, '', $token));
     }
 
-    private function writeAcmeChallenge(string $domain, string $token, string $keyAuth): void
+    private function writeAcmeChallenge(
+        string $domain,
+        string $token,
+        string $keyAuth,
+        ?int $expiresAt = null,
+    ): void
     {
         $dir = \rtrim(BP, \DIRECTORY_SEPARATOR)
             . \DIRECTORY_SEPARATOR . 'generated'
@@ -76,7 +94,11 @@ final class DispatcherAcmeHttp01ChallengeTest extends TestCase
         }
 
         $file = $dir . SslCertificateService::domainToAcmeChallengeFilename($domain) . '.json';
-        \file_put_contents($file, (string)\json_encode(['token' => $token, 'keyAuth' => $keyAuth]));
+        \file_put_contents($file, (string)\json_encode([
+            'token' => $token,
+            'keyAuth' => $keyAuth,
+            'expires_at' => $expiresAt ?? (\time() + 900),
+        ]));
         $this->cleanupFiles[] = $file;
     }
 

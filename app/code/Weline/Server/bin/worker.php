@@ -4821,7 +4821,8 @@ function handleRequest(
                 if ($json !== false) {
                     $data = \json_decode($json, true);
                     if (\is_array($data) && isset($data['keyAuth']) && \is_string($data['keyAuth'])
-                        && (string)($data['token'] ?? '') === (string)$requestToken) {
+                        && (string)($data['token'] ?? '') === (string)$requestToken
+                        && (int)($data['expires_at'] ?? ((int)@\filemtime($acmeFile) + 900)) > \time()) {
                         $body = $data['keyAuth'];
                         $len = \strlen($body);
                         $keepAlive = $policyDecision->keepAlive();

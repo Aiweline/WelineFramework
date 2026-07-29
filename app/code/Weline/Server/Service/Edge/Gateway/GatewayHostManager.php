@@ -1042,10 +1042,25 @@ final class GatewayHostManager
      * @param list<array{domain:string,token:string,key_authorization:string,expires_at:int}> $challenges
      * @return array<string,mixed>
      */
-    public function syncAcmeChallenges(string $projectUuid, array $challenges): array
-    {
+    public function syncAcmeChallenges(
+        string $projectUuid,
+        int $challengeGeneration,
+        array $challenges,
+        string $desiredDigest,
+    ): array {
+        $computedDigest = \hash('sha256', GatewayClient::canonicalJson($challenges));
+        if ($challengeGeneration < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $desiredDigest) !== 1
+            || !\hash_equals($computedDigest, $desiredDigest)
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway ACME desired generation or digest is invalid.'
+            );
+        }
         $response = $this->client->projectRequest('acme-challenge-sync', [
             'project_uuid' => $projectUuid,
+            'challenge_generation' => $challengeGeneration,
+            'desired_digest' => $desiredDigest,
             'challenges' => $challenges,
         ]);
         if (!($response['ok'] ?? false)) {

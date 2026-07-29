@@ -3471,6 +3471,7 @@ HTML;
             || (string)($data['token'] ?? '') !== $token
             || !isset($data['keyAuth'])
             || !\is_string($data['keyAuth'])
+            || (int)($data['expires_at'] ?? ((int)@\filemtime($file) + 900)) <= \time()
         ) {
             return null;
         }
