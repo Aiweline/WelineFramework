@@ -14,9 +14,36 @@ final class GatewayClientTimeoutPolicyTest extends TestCase
     {
         $client = new GatewayClient(timeoutSeconds: 2.0);
 
-        self::assertSame(90.0, $this->responseTimeout($client, 'admin', 'repair'));
+        foreach (['repair', 'revoke', 'transfer', 'upgrade'] as $operation) {
+            self::assertSame(
+                90.0,
+                $this->responseTimeout($client, 'admin', $operation),
+                $operation,
+            );
+        }
         self::assertSame(2.0, $this->responseTimeout($client, 'admin', 'status'));
         self::assertSame(2.0, $this->responseTimeout($client, 'project', 'repair'));
+    }
+
+    public function testWindowsBrokerCoversTheAdminPublicationResponseWindow(): void
+    {
+        $source = \file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/Native/windows/wls_gateway_broker.c',
+        );
+
+        self::assertIsString($source);
+        self::assertStringContainsString(
+            '#define WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS 90000U',
+            $source,
+        );
+        self::assertMatchesRegularExpression(
+            '/wls_connect_controller\(\s*channel->controller_port,\s*'
+                . 'wcscmp\(channel->channel, L"admin"\) == 0\s*'
+                . '\? WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS\s*'
+                . ': WLS_CONTROLLER_IO_TIMEOUT_MS\s*\)/s',
+            $source,
+        );
     }
 
     private function responseTimeout(
