@@ -114,9 +114,59 @@ Close the lifecycle blockers found after the Linux gateway million-request run:
   four routes settled to `STALE` and returned the specified HTTP/2 503 while
   public 80/443 remained owned by the manifest-verified Nginx.
 
+## v54 multi-tenant million and revoke defect closure
+
+- DEF-058 closed the administrator publication timeout mismatch. `repair`,
+  `revoke`, `transfer` and `upgrade` can synchronously consume the candidate
+  validation and stable-probe window, so the PHP client and Windows Native
+  Broker now preserve the authenticated response for up to 90 seconds. Short
+  status/project operations keep their bounded default timeout.
+- DEF-059 closed route resurrection after project revoke. Every path that
+  selects backends now treats a matching project tombstone or `REMOVED` status
+  as irreversible, preserves the first `removed_at`, and clears instances,
+  backends, backend-instance mappings and backend identity before returning.
+- Red/green regression: the focused scope first failed exactly on the old
+  2-second timeout and `REMOVED → ACTIVE` transition, then passed
+  `41 tests / 932 assertions`. The final Weline_Server regression passed
+  `1290 / 6469 / 17 platform skips`; the `Gateway|Windows|Nginx` scope passed
+  `221 / 2444 / 15 capability skips`; opt-in native macOS Broker/Launcher/
+  data-plane recovery passed `12 / 1986` with no skips.
+- Fresh Linux host `wls-gateway-v2-v54` installed the current immutable package
+  on real 80/443 and reached `wls-edge/2`, slot B, `HEALTHY`, with zero
+  recovery failures. The package used an isolated acceptance signing root;
+  an initial mismatch between that PHP trust root and the launcher-embedded
+  public key was corrected in the acceptance package and was not classified as
+  a product defect.
+- Mixed H2 million: project one and two each completed 500,000 requests with
+  zero failures, 100% actual HTTP/2 and exact tenant marker. QPS was
+  8268.25/10433 and P95 was 3.137/3.043ms. Persistent raw-log SHA-256 values:
+  `7e197b6a84c5bac6df4d0d86e6e88eaa47b16a97f71e01cae6daa401d32c59bf` and
+  `ec50c19a8b512c46c37e3ef1b7d27fd514004dd61b62121f4a919e93b99e215f`.
+- Mixed H3 million: project one and two each completed 500,000 requests with
+  zero failures and 500,000 exact ALPN `h3`, tenant and UUID matches. QPS was
+  3166.78/3262.12 and P95 was 44.218/39.847ms. Report SHA-256 values:
+  `a0c2fb2fe74066cbc929ef251d240165c5211e108115d38d06d843a72d32df60` and
+  `9aa1c7f0ebd0c0da554fe7d6ffe1bee0fb38bfc1a7ba4478216722ce892847cf`.
+- Real independent-project revoke returned authenticated success in
+  30.67403 seconds with tombstone generation 13. Three samples after about
+  three minutes retained the same `removed_at`, empty routing identities and
+  `REMOVED`; the revoked domain returned neutral 421 while the survivor stayed
+  exact HTTP/2 200 and the gateway remained `HEALTHY`. Evidence SHA-256:
+  `7af2509bcc4c223f0362c52a4ddb85f0ca2b3c506557b9c5543d513189ede83e` and
+  `73c4c464219d46e0092ac12bc3ea4415aa3e06e8db595444862d3b76deb46191`.
+- The first revoke harness colocated two nominal projects in one runner;
+  revoking one therefore stopped both and correctly forced the gateway into
+  fail-closed rebuild. That topology does not model independent projects and
+  is retained as a harness finding: every multi-project failure-isolation
+  acceptance must use one independently supervised runtime per project.
+- Browser verification of the documentation remains `BLOCKED_ENVIRONMENT`:
+  the in-app Browser rejected the `file://` target before navigation. No live
+  WLS instance was created merely to bypass that policy.
+
 ## Remaining release boundaries
 
-This closes the discovered Linux lifecycle blockers. It does not convert the
-whole WLS 2.0 plan to release-ready: Windows/macOS system-service ACL/reboot,
-Windows real-host acceptance, mixed-project million traffic, first ACME, H3 million and the
+This closes the discovered Linux lifecycle blockers, mixed-project H2/H3
+million traffic, and revoke invariants. It does not convert the whole WLS 2.0
+plan to release-ready: Windows/macOS system-service ACL/reboot, Windows
+real-host acceptance, first ACME, three-run performance medians and the
 remaining TEST-001..054 evidence retain their current plan status.

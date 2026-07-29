@@ -1609,6 +1609,60 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertTrue($dirtyProperty->getValue($this->controller));
     }
 
+    public function testRemovedRouteCannotBeReactivatedByBackendSelectionOrLeaseSweep(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174031';
+        $routeId = \str_repeat('f', 32);
+        $instanceId = 'revoked-instance';
+        $lease = $this->instanceLease($instanceId, 29120, 'stateless');
+        $removedAt = \time() - 60;
+        $route = [
+            'route_id' => $routeId,
+            'project_uuid' => $projectUuid,
+            'domain' => 'revoked.example.test',
+            'status' => 'REMOVED',
+            'removed_at' => $removedAt,
+            'certificate' => [
+                'valid' => true,
+                'snapshot_digest' => \str_repeat('e', 64),
+                'generation' => 7,
+            ],
+            'instances' => [$instanceId => $lease],
+            'backends' => [],
+            'backend_instances' => [],
+        ];
+
+        $selector = new \ReflectionMethod($this->controller, 'selectRouteBackends');
+        $selector->invokeArgs($this->controller, [&$route]);
+        self::assertSame('REMOVED', $route['status']);
+        self::assertSame($removedAt, $route['removed_at']);
+        self::assertSame([], $route['instances']);
+        self::assertSame([], $route['backends']);
+        self::assertSame([], $route['backend_instances']);
+        self::assertSame('', $route['preferred_instance_id']);
+        self::assertSame('', $route['instance_id']);
+        self::assertSame([], $route['backend_identity']);
+
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['instances'][$projectUuid][$instanceId] = $lease;
+        $state['routes'][$routeId] = $route;
+        $state['security']['tombstones']['project:' . $projectUuid] = [
+            'kind' => 'project_revoke',
+            'project_uuid' => $projectUuid,
+            'generation' => 7,
+        ];
+        $stateProperty->setValue($this->controller, $state);
+
+        (new \ReflectionMethod($this->controller, 'expireLeases'))
+            ->invoke($this->controller);
+
+        $swept = $stateProperty->getValue($this->controller);
+        self::assertSame('REMOVED', $swept['routes'][$routeId]['status']);
+        self::assertSame($removedAt, $swept['routes'][$routeId]['removed_at']);
+        self::assertSame([], $swept['routes'][$routeId]['instances']);
+    }
+
     public function testQueuedPublicationCoalescesAndFailedRequestKeepsEarlierAcceptedState(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174032';

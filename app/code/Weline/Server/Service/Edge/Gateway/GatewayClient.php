@@ -139,11 +139,14 @@ final class GatewayClient
 
     private function responseTimeoutSeconds(string $channel, string $operation): float
     {
-        if ($channel === 'admin' && $operation === 'repair') {
-            // A repair may synchronously validate a candidate, run the full
-            // activation probe window, and publish/rollback before replying.
-            // Keep endpoint connection failures bounded by timeoutSeconds,
-            // but do not report a successful long repair as an empty response.
+        if ($channel === 'admin'
+            && \in_array($operation, ['repair', 'revoke', 'transfer', 'upgrade'], true)
+        ) {
+            // These administrator mutations may synchronously validate a
+            // candidate, run the full activation probe window, and publish or
+            // roll back before replying. Keep endpoint connection failures
+            // bounded by timeoutSeconds, but preserve the authenticated result
+            // across the complete publication transaction.
             return \max($this->timeoutSeconds, self::LONG_ADMIN_RESPONSE_TIMEOUT_SECONDS);
         }
 
