@@ -1,8 +1,27 @@
 
 (function(g){
   g.bqAdmin=g.bqAdmin||{};
+  if(g.__bqAdmin_server_http){
+    return;
+  }
   g.bqAdmin['server']=function(url, options){
     options=options||{};
+    var urlStr=String(url||'');
+    // Real HTTP endpoints (WLS health probe + Test\WlsPerformancePanel routes).
+    // adminRequest only understands /server/(backend|admin|frontend)/Controller/action
+    // and mis-parses /_wls/health as Backend\Health.
+    if(/\/_wls\//i.test(urlStr) || /\/server\/test\//i.test(urlStr)){
+      var fetchOpts={
+        method:options.method||'GET',
+        credentials:options.credentials||'same-origin',
+        cache:options.cache||'no-store',
+        headers:options.headers||{}
+      };
+      if(options.body!==undefined&&options.body!==null&&String(fetchOpts.method).toUpperCase()!=='GET'&&String(fetchOpts.method).toUpperCase()!=='HEAD'){
+        fetchOpts.body=options.body;
+      }
+      return fetch(urlStr, fetchOpts);
+    }
     var body=options.body;
     if(body && typeof FormData!=='undefined' && body instanceof FormData){
       var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
@@ -22,6 +41,8 @@
     var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
     return p.then(toResp);
   };
+  g.__bqAdmin_server=true;
+  g.__bqAdmin_server_http=true;
 })(typeof window!=='undefined'?window:globalThis);
 (function (window, document) {
   "use strict";

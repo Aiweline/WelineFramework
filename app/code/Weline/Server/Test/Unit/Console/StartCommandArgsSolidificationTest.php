@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Console;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Console\Server\Start;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SslCertificateService;
 
@@ -25,6 +26,23 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $start->resolveConfig('default', ['no-ssl' => true]);
 
         self::assertSame(0, $start->managedWildcardCertificateCalls);
+    }
+
+    public function testReusablePrimaryCertificateDoesNotSkipManagedWildcardValidation(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('canReuseConfiguredCertificate')->willReturn(true);
+        $sslService->method('certificateMatchesHost')->willReturn(true);
+        ObjectManager::setInstance(SslCertificateService::class, $sslService);
+        $start = new StartConfigProbe([
+            'host' => 'unit-test.weline.test',
+            'ssl_cert' => '/tmp/unit-primary-cert.pem',
+            'ssl_key' => '/tmp/unit-primary-key.pem',
+        ]);
+
+        $start->resolveConfig('default', []);
+
+        self::assertSame(1, $start->managedWildcardCertificateCalls);
     }
 
     public function testHttpOnlyAliasAlsoForcesHttpOnlyMode(): void
@@ -59,12 +77,6 @@ final class StartCommandArgsSolidificationTest extends TestCase
                 ->with($certPath, 'pre.example.com')
                 ->willReturn(true);
             $sslService->expects($this->once())
-                ->method('syncCertificateRecordFromFiles')
-                ->with('pre.example.com', $certPath, $keyPath, 0, true, '', false);
-            $sslService->expects($this->once())
-                ->method('regenerateCertificateMap')
-                ->with(false);
-            $sslService->expects($this->once())
                 ->method('parseCertificate')
                 ->with($certPath)
                 ->willReturn(['issuer' => 'Unit CA', 'expires_at' => '2026-12-31 00:00:00']);
@@ -76,6 +88,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
             self::assertTrue((bool)($result['ssl_enabled'] ?? false));
             self::assertSame($certPath, $result['cert_path'] ?? null);
             self::assertSame($keyPath, $result['key_path'] ?? null);
+            self::assertTrue((bool)($result['storage_sync_deferred'] ?? false));
         } finally {
             @\unlink($certPath);
             @\unlink($keyPath);
@@ -179,6 +192,50 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('192.168.1.10', $start->resolveListenHost('192.168.1.10'));
     }
 
+    public function testGatewayFallbackBindDefaultsToLoopbackForPublicDomain(): void
+    {
+        $start = $this->createProbe();
+
+        self::assertSame(
+            '127.0.0.1',
+            $start->resolveFallbackBind(
+                ['bind_host' => '127.0.0.1'],
+                'shop.example.test',
+            ),
+        );
+    }
+
+    public function testGatewayFallbackBindPreservesExplicitIpAndAddressFamily(): void
+    {
+        $start = $this->createProbe();
+
+        self::assertSame(
+            '::',
+            $start->resolveFallbackBind(
+                ['bind_host' => '127.0.0.1'],
+                '::',
+            ),
+        );
+        self::assertSame(
+            '192.0.2.15',
+            $start->resolveFallbackBind(
+                ['gateway' => ['fallback_bind_host' => '192.0.2.15']],
+                'shop.example.test',
+            ),
+        );
+    }
+
+    public function testGatewayFallbackBindRejectsUnresolvedHostname(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('resolved IPv4 or IPv6');
+
+        $this->createProbe()->resolveFallbackBind(
+            ['gateway' => ['fallback_bind_host' => 'bind.example.test']],
+            'shop.example.test',
+        );
+    }
+
     public function testEnvCustomHostOverridesSavedLegacyHost(): void
     {
         $start = $this->createProbe(
@@ -263,6 +320,11 @@ final class StartConfigProbe extends Start
     public function resolveListenHost(string $host): string
     {
         return $this->resolveServerListenHost($host);
+    }
+
+    public function resolveFallbackBind(array $config, string $startHost): string
+    {
+        return $this->resolveGatewayFallbackBindHost($config, $startHost);
     }
 
     public function useStartupCertificateFiles(
@@ -387,51 +449,62 @@ final class StartInstanceInfoProbe extends Start
     public function persistInstanceInfo(string $instanceName): void
     {
         $this->saveInstanceInfo(
-            $instanceName,
-            '127.0.0.1',
-            9443,
-            2,
-            true,
-            true,
-            '/tmp/cert.pem',
-            '/tmp/key.pem',
-            true,
-            19443,
-            80,
-            true,
-            true,
-            false,
-            19443,
-            [],
-            ['frontend_process_mode' => true],
-            '512M'
+            instanceName: $instanceName,
+            host: '127.0.0.1',
+            port: 9443,
+            count: 2,
+            daemon: true,
+            sslEnabled: true,
+            sslCert: '/tmp/cert.pem',
+            sslKey: '/tmp/key.pem',
+            runtimeSelection: $this->runtimeSelection(),
+            workerPort: 19443,
+            httpRedirectPort: 80,
+            windowMode: true,
+            enableLog: true,
+            workerBasePort: 19443,
+            sharedStateRuntime: [],
+            orchestratorRuntimeOptions: ['frontend_process_mode' => true],
+            workerMemoryLimit: '512M',
+            runtimeMetadata: ['container_registry_digest' => \str_repeat('a', 64)]
         );
     }
 
     public function persistInstanceInfoWithPublicHost(string $instanceName): void
     {
         $this->saveInstanceInfo(
-            $instanceName,
-            '127.0.0.1',
-            9443,
-            2,
-            true,
-            true,
-            '/tmp/cert.pem',
-            '/tmp/key.pem',
-            true,
-            19443,
-            80,
-            false,
-            false,
-            false,
-            19443,
-            [],
-            [],
-            '512M',
-            '',
-            'p11005ce4.weline.test'
+            instanceName: $instanceName,
+            host: '127.0.0.1',
+            port: 9443,
+            count: 2,
+            daemon: true,
+            sslEnabled: true,
+            sslCert: '/tmp/cert.pem',
+            sslKey: '/tmp/key.pem',
+            runtimeSelection: $this->runtimeSelection(),
+            workerPort: 19443,
+            httpRedirectPort: 80,
+            workerBasePort: 19443,
+            workerMemoryLimit: '512M',
+            publicHost: 'p11005ce4.weline.test',
+            runtimeMetadata: ['container_registry_digest' => \str_repeat('b', 64)]
         );
+    }
+
+    private function runtimeSelection(): RuntimeSelection
+    {
+        return RuntimeSelection::fromArray([
+            'requested_topology' => 'auto',
+            'effective_topology' => 'dispatcher',
+            'topology_source' => 'unit-test',
+            'os_family' => PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'stream',
+            'listener_mode' => 'single',
+            'policy_compatible' => true,
+            'reason_codes' => ['unit_test'],
+            'reason' => 'unit test runtime selection',
+        ]);
     }
 
     protected function getInstanceManager(): ServerInstanceManager

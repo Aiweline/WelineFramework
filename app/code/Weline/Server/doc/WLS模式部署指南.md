@@ -1,55 +1,57 @@
 # WLS 模式部署指南
 
-WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器。默认启动使用项目托管 Nginx：Nginx 终结 TLS 1.3 与公网 HTTP 协商，WLS 自动关闭重复 TLS，并固定以 loopback 明文 HTTP/1.1 Keep-Alive 回源。公网默认协商 HTTP/2，客户端不支持时自动回退 HTTP/1.1；H3 还要求 Nginx HTTP/3/QUIC 配置、UDP、Alt-Svc 与项目 owner 绑定的 HTTP/3-only 请求真实到达 `/_wls/health?detail=1`。
+WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器。WLS 2.0 默认
+`--edge=auto`：只发现并加入已安装且受信的宿主 Weline Gateway；网关不存在、不兼容或
+未 ready 时，以稳定高端口降级为纯 WLS TLS。普通项目启动不会安装、升级或修复宿主
+网关，也不会检测、接管或停止未知的系统 Nginx。
 
-无法运行 Nginx 的环境可显式传入 `--no-nginx`。此时 WLS 直接作为公网入口，默认启用 HTTPS/TLS 1.3、优先 HTTP/2，并自动回退 HTTP/1.1；纯 WLS 不提供 HTTP/3，fresh TCP Session Ticket/Session Resumption 和跨 Worker 恢复仍待实现与验证。普通启动仍不下载、不安装、不编译协议组件。
+纯 WLS 可显式使用 `--edge=wls`，`--no-nginx` 是兼容别名。此时 WLS 直接作为入口，
+默认启用 HTTPS/TLS 1.3、优先 HTTP/2，并自动回退 HTTP/1.1；纯 WLS 不提供 HTTP/3，
+fresh TCP Session Ticket/Session Resumption 和跨 Worker恢复仍待实现与验证。
+自动降级的高端口不是 80/443 的透明替代，必须同步检查防火墙、DNS 或负载均衡。
 
 ## 1. 模式说明
 
 | 模式 | 说明 |
 |------|------|
-| **项目托管 Nginx（默认）** | 默认 `wls.edge.adapter=nginx`、`managed=true`、`auto_start=true`。Nginx 终结公网 TLS/H1/H2/H3，WLS 只处理 loopback 明文 H1。 |
-| **纯 WLS（显式回退）** | `server:start ... --no-nginx`。不启动、不停止项目 Nginx；纯 WLS 默认 HTTPS/TLS 1.3/H2，并自动回退 H1。H3 不可用。 |
-| **外部/宿主机 Nginx（已退役）** | `managed=false`、`auto_start=false` 仍会在创建子进程前拒绝；这和不使用任何 Nginx 的 `--no-nginx` 纯 WLS 模式不是一回事。 |
-| **Gateway/Caddy/独立 Protocol Edge（已退役）** | 只保留历史识别或残留清理材料；没有可成功启动的数据面命令或配置值。 |
+| **自动（默认）** | `--edge=auto`。加入 ready 的 `wls-edge/2` 宿主网关；不可用时降级纯 WLS，不创建宿主网关目录。 |
+| **共享网关（强制）** | `--edge=gateway`。必须加入受信宿主网关，否则启动非零失败；项目只管理自己的期望路由与证书事实源。 |
+| **纯 WLS** | `--edge=wls` 或 `--no-nginx`。完全绕过网关；默认 HTTPS/TLS 1.3/H2，并自动回退 H1。H3 不可用。 |
+| **项目托管 Nginx（legacy）** | WLS 1.x 已保存实例在显式提升前保持原状；WLS 2.0 新项目不自动建立该模式。 |
+| **未知系统 Nginx** | 不是 WLS 网关。WLS 不提示终止、不修改配置；`auto` 降级，`gateway` 非零失败。 |
+| **Caddy/独立 Protocol Edge（已退役）** | 只保留历史识别或残留清理材料；没有可成功启动的数据面命令或配置值。 |
 
-默认接入含义：**公网请求到达项目托管 Nginx** + **Nginx 能访问 WLS loopback 回源端口** + **在后台为该网站配置域名**。纯 WLS 接入则由客户端直接访问 `--host/--port` 对应的 HTTPS endpoint。
+网关接入含义：**公网请求到达宿主 Weline Gateway** + **网关访问项目 loopback
+回源** + **项目 Agent 注册域名、后端身份和证书 generation**。纯 WLS 接入则由客户端
+直接访问 `--host/--port` 对应的 HTTPS endpoint。
 
-### 1.1 Nginx 边缘配置
+### 1.1 WLS 2.0 边缘配置
 
 ```php
 'wls' => [
     'edge' => [
-        'adapter' => 'nginx',           // 默认值；整段可省略
-        'reload_command' => '',         // 遗留外部边缘键；项目托管模式不使用
+        'mode' => 'auto',               // auto / gateway / wls
+        'adapter' => 'nginx',           // 兼容投影；由最终 decision 固化
         'nginx' => [
-            'managed' => true,          // Nginx adapter 唯一受支持的生命周期模式
-            'auto_start' => true,       // WLS READY 后自动启动并验证本项目 Nginx
-            'listen_http' => null,      // 仅托管模式：null → 8080 + projectPortOffset
-            'listen_https' => null,     // 仅托管模式：null → 8443 + projectPortOffset
-            'install_root' => null,      // 使用平台隔离默认目录
-            'runtime_root' => null,      // 使用平台隔离默认目录
-            // 最佳性能默认
-            'edge_cache' => true,
-            'edge_cache_ttl_sec' => 60,
-            'edge_cache_max_size_mb' => 1024,
-            'edge_cache_keys_zone_mb' => 128,
-            'gzip' => true,
-            'gzip_comp_level' => 2,
-            'upstream_keepalive' => 256,
-            'upstream_keepalive_timeout_sec' => 5,
-            'worker_connections' => 32768,
+            // 以下项目托管 Nginx 键只服务 legacy 实例；
+            // 共享网关由宿主 Gateway Controller 管理。
+            'managed' => true,
+            'auto_start' => true,
         ],
     ],
 ],
 ```
 
-### 1.2 纯 WLS 回退（`--no-nginx`）
+配置优先级为 CLI > 已保存实例 > 环境配置 > `auto`。普通 `server:start` 对共享网关
+仅执行只读发现/加入；安装、修复、升级和显式提升必须使用对应的
+`server:gateway:*` 管理命令。
 
-纯 WLS 是显式、按次启动的回退模式，不要求也不触碰项目托管 Nginx：
+### 1.2 纯 WLS 回退（`--edge=wls`）
+
+纯 WLS 是独立运行模式，不要求也不触碰宿主网关或项目 legacy Nginx：
 
 ```bash
-php bin/w server:start pure-wls -p 9986 --no-nginx
+php bin/w server:start pure-wls -p 9986 --edge=wls
 php bin/w server:doctor --instance pure-wls
 php bin/w server:benchmark --instance pure-wls
 php bin/w server:stop pure-wls
@@ -58,13 +60,16 @@ php bin/w server:stop pure-wls
 - 默认启用 HTTPS 与 TLS 1.3；ALPN 优先 `h2`，不支持 H2 的客户端自动使用 HTTP/1.1。
 - macOS/Linux `auto` 使用 Direct；Windows `auto` 固定使用 Dispatcher。Windows 纯 WLS 显式 `direct`、`independent` 会在启动前拒绝。
 - Dispatcher 不解析或降级 TLS，而是把客户端原始 TLS/H2/H1 字节转交给 SSL Worker。
-- `server:stop` 只停止该纯 WLS 实例，不停止当前项目托管 Nginx。
-- HTTP/3 只属于 Nginx 模式；纯 WLS 的 H3 readiness 固定为 unavailable/nginx-only。
+- `server:stop` 只停止该纯 WLS 实例，不停止宿主共享网关。
+- HTTP/3 只属于 Nginx 数据面；纯 WLS 的 H3 readiness 固定为 unavailable/nginx-only。
 - PHP Stream TLS 当前没有证明 fresh TCP Session Ticket/Session Resumption 或跨 Worker 恢复；长连接、H2 多路复用和同连接 TLS 复用不能写成跨连接会话恢复。
 
-### 1.2a 已退役：宿主机 Nginx 模式
+### 1.2a 未受管宿主 Nginx
 
-以下配置和反代片段只保留为退役部署的迁移参考，**不是当前可运行入口**。当前启动不会检测、接管或放行宿主机 Nginx；`managed=false`、`auto_start=false` 会在创建 WLS 子进程前失败。`--no-nginx` 是纯 WLS 模式，不会复活或接管这里的宿主机 Nginx 配置。
+以下配置和反代片段只保留为手工迁移参考，**不是 WLS 2.0 受管网关**。当前启动不会
+检测、接管或放行未知宿主 Nginx；`managed=false`、`auto_start=false` 也不会使它成为
+可信网关。需要共享 80/443 时安装 Weline Gateway；需要绕开网关时使用
+`--edge=wls`。
 
 ```php
 'wls' => [
@@ -80,7 +85,8 @@ php bin/w server:stop pure-wls
 ],
 ```
 
-> 退役配置没有对应的 `server:start` 命令；需要完全绕开 Nginx 时使用现行 `--no-nginx` 纯 WLS 模式，不要复制本节的宿主机反代配置。
+> 这段手工配置没有对应的受管生命周期；不要把它的 PID、端口或配置识别为 Weline
+> Gateway。
 
 宿主机 Nginx 反代示例（用户自管 conf，指向本项目 WLS 端口）：
 
@@ -295,7 +301,7 @@ Worker 数必须用目标机器上的矩阵选择，不能仅按 CPU 数线性�
 
 实例 endpoint 只写 schema v4。嵌套 `runtime_selection` 完整保留 requested/effective topology、选择来源、OS、event loop、listener mode、策略兼容性和 reason codes；根级投影已删除。Master 重入只接受完整 v4，旧 schema、缺失字段或未知字段都在绑定端口前拒绝，不推导、不补写。`edge_adapter=nginx` 与 WLS h1 回源选择是 Start 已验证的实例协议策略，必须穿过 Master 与 Orchestrator 的所有 endpoint 写回；任一环节丢失时 Worker 都应 fail closed。
 
-`server:status <name>` 直接展示 endpoint schema v4 中持久化的回源选择、listener/event、policy digest 与项目托管 Nginx 公网事实。推荐显式使用 `php bin/w server:benchmark --instance <name>`：只有 owner/config generation 与实例绑定一致且 Nginx live probe 通过时才压公网端点。仅显式提供内部 host/port 才测 WLS 回源并标记 `wls_endpoint`；多匹配、零匹配或多个运行实例无明确目标时 fail closed，防止误压生产实例。
+`server:status <name>` 直接展示 endpoint schema v4 中持久化的回源选择、listener/event、policy digest、项目托管 Nginx 公网事实，以及按当前 `router.area_routes` 推导的前台、后台、前台 REST 与后台 REST 完整地址；未配置后台 REST 前缀时明确显示配置提示。推荐显式使用 `php bin/w server:benchmark --instance <name>`：只有 owner/config generation 与实例绑定一致且 Nginx live probe 通过时才压公网端点。仅显式提供内部 host/port 才测 WLS 回源并标记 `wls_endpoint`；多匹配、零匹配或多个运行实例无明确目标时 fail closed，防止误压生产实例。
 
 两种内部拓扑都在 Worker 执行同一 mandatory request guard、Static/FPC 和 Router/Controller 管线。缺少后台 Key 的 `/admin/login` 会在缓存和 Router 前返回 404，必须访问 `/{backend_key}/admin/login`。完整执行顺序见 [WLS 安全与规则配置推演](WLS安全与规则配置推演.md)。
 
@@ -399,11 +405,15 @@ php bin/w server:start -p 9981
 
 ## 5. HTTPS / SSL
 
-- **默认 Nginx TLS**：由 Nginx 终结，要求真实握手为 TLS 1.3；WLS 回源保持 `127.0.0.1:<高端口>` 明文 HTTP/1.1。
-- **纯 WLS TLS**：`--no-nginx` 时由 PHP Stream SSL Worker 终结，默认 HTTPS/TLS 1.3、ALPN H2/H1。
-- **证书**：两种模式都使用项目证书目录 `app/etc/ssl/{域名}/`；Nginx 模式由托管生命周期发布/reload，纯 WLS 由实例生命周期加载/reload。
-- **HTTP 到 HTTPS**：Nginx 模式由 Nginx 统一处理；纯 WLS 默认直接提供 HTTPS。
-- **所有权**：默认公网端口属于项目托管 Nginx；`--no-nginx` 指定端口属于该纯 WLS 实例。Gateway、Caddy 与独立 Protocol Edge 均不可选。
+- **共享网关 TLS**：由宿主 Weline Gateway 的 Nginx 数据面终结，WLS 回源保持
+  `127.0.0.1:<高端口>` 明文 HTTP/1.1。
+- **纯 WLS TLS**：`--edge=wls` 时由 PHP Stream SSL Worker 终结，默认
+  HTTPS/TLS 1.3、ALPN H2/H1。
+- **证书**：两种模式都以子项目证书目录 `app/etc/ssl/{域名}/` 为事实源；网关只读取、
+  校验并生成宿主内容寻址快照，不把证书所有权转移到网关。
+- **HTTP 到 HTTPS**：网关模式由共享 Nginx 统一处理；纯 WLS 默认直接提供 HTTPS。
+- **所有权**：80/443 属于宿主 Weline Gateway；高端口属于对应纯 WLS 实例。项目停止
+  只注销/排空自己的路由，不停止共享网关。
 
 ### 5.1 当前 HTTP 协议能力
 
@@ -530,6 +540,11 @@ curl -k --http3-only https://example.com/
 
 **版本：** 2.0.0-dev
 **更新时间：** 2026-07-27
-**状态：** 默认公网入口为项目托管 Nginx，WLS 自动使用 loopback 明文 H1 回源；显式 `--no-nginx` 可启动纯 WLS HTTPS，macOS/Linux `auto` 使用 Direct，Windows `auto` 使用 Dispatcher。纯 WLS 已在 macOS 独立实例验证 4/4 Worker READY、首页 Process FPC HIT、TLS 1.3、ALPN H2、HTTP/2 与 HTTP/1.1 回退；Parallels Windows 11 ARM + PHP 8.4.23 x64-on-ARM 也已用独立实例验证 3/3 Worker READY、Dispatcher 单一 HTTPS 入口、实际 HTTP/2 1000/1000（5630.09 QPS、P95 3.000ms）和 fresh TLS1.3/HTTP1.1 200/200（120.94 QPS、P95 97.598ms、Worker `max/min=1.015`）。HTTP/3 固定为 Nginx-only，PHP Stream fresh TCP Session Ticket/跨 Worker 恢复仍未实现或验证。Nginx 模式既有跨平台、H3 与 Nginx Session 恢复证据继续有效，但不能推导为纯 WLS 的会话恢复。
+**状态：** WLS 2.0 默认 `edge=auto`，只加入受信且 ready 的宿主网关；不可用时
+降级到稳定高端口的纯 WLS。edge decision、可迁移项目 UUID/generation、显式
+`gateway` 失败语义和 `--no-nginx` 兼容映射已经接通；平台 Broker、生产安装包、完整
+协议鉴权、证书事务、LKG/A-B 恢复和最终百万请求发布门禁仍按主计划实施，未完成前
+不得宣称 WLS 2.0 release-ready。既有纯 WLS 与 legacy Nginx 的性能/协议证据只作为
+基线，不能替代最终共享网关验收。
 
 动态路径预热默认只包含首页 `/`。业务模块需要预热商品、分类或账户页面时，应显式配置 `wls.worker.dynamic_critical_paths` / `wls.worker.dynamic_hot_paths`，或通过 `Weline_Server::dispatcher::warmup_paths` 发布真实路由；Server 不内置任何演示业务 URL。

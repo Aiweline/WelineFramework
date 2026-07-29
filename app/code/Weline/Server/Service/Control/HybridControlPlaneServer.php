@@ -339,7 +339,11 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         $type = (string)($message['type'] ?? '');
         if (!$session instanceof SupervisorSession
             || !$session->masterAccepted
-            || !$this->isAllowedSupervisorPassthroughType($session->role, $type)) {
+            || !$this->isAllowedSupervisorPassthroughType(
+                $session->role,
+                $type,
+                (string)($message['action'] ?? ''),
+            )) {
             return;
         }
 
@@ -385,7 +389,11 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
                 || $session->generation <= 0
                 || ($this->expectedInstanceCode !== null
                     && !\hash_equals($this->expectedInstanceCode, $session->instance))
-                || !$this->isAllowedSupervisorPassthroughType($session->role, $type)) {
+                || !$this->isAllowedSupervisorPassthroughType(
+                    $session->role,
+                    $type,
+                    (string)($entry['message']['action'] ?? ''),
+                )) {
                 continue;
             }
 
@@ -404,7 +412,11 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         }
     }
 
-    private function isAllowedSupervisorPassthroughType(string $role, string $type): bool
+    private function isAllowedSupervisorPassthroughType(
+        string $role,
+        string $type,
+        string $action = '',
+    ): bool
     {
         $policyAcks = [
             ControlMessage::TYPE_POLICY_PREPARED_ACK,
@@ -476,10 +488,27 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
                 ControlMessage::TYPE_STATUS_REPORT,
                 ControlMessage::TYPE_PONG,
             ],
+            ControlMessage::ROLE_GATEWAY_AGENT => [
+                ControlMessage::TYPE_COMMAND,
+            ],
             default => [],
         };
 
-        return \in_array($type, $allowed, true);
+        if (!\in_array($type, $allowed, true)) {
+            return false;
+        }
+        if ($role !== ControlMessage::ROLE_GATEWAY_AGENT) {
+            return true;
+        }
+
+        return $type === ControlMessage::TYPE_COMMAND
+            && \in_array($action, [
+                ControlMessage::ACTION_GATEWAY_FALLBACK_ENABLE,
+                ControlMessage::ACTION_GATEWAY_FALLBACK_DRAIN,
+                ControlMessage::ACTION_GATEWAY_FALLBACK_DISABLE,
+                ControlMessage::ACTION_GATEWAY_BACKEND_ENABLE,
+                ControlMessage::ACTION_GATEWAY_NATIVE_DRAIN,
+            ], true);
     }
 
     private function isCriticalSupervisorPassthroughType(string $type): bool
@@ -500,6 +529,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             ControlMessage::TYPE_ROUTE_TABLE_ACK,
             SupervisorMessage::TYPE_POOL_SNAPSHOT_ACK,
             ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
+            ControlMessage::TYPE_COMMAND,
         ], true);
     }
 

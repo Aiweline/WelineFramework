@@ -429,6 +429,28 @@ final class SubprocessControlKernel
         $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
     }
 
+    /** @param array<string,mixed> $payload */
+    public function sendControlCommand(
+        string $action,
+        array $payload = [],
+        string $controlToken = '',
+    ): bool {
+        if ($this->client === null || !$this->client->isConnected()
+            || $action === ''
+        ) {
+            return false;
+        }
+        if (!$this->client->send(ControlMessage::command(
+            $action,
+            '',
+            $payload,
+            $controlToken,
+        ))) {
+            return false;
+        }
+        return $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
+    }
+
     public function close(): void
     {
         if ($this->client !== null) {

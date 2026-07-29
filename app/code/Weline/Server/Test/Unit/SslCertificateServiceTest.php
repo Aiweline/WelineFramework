@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\SslCertificateService;
 
@@ -148,8 +149,10 @@ class SslCertificateServiceTest extends TestCase
             {
             }
 
-            public function getCertificateMap(): array
+            public function getCertificateMap(array $certificateRoots = []): array
             {
+                unset($certificateRoots);
+
                 return [
                     'unit.test' => [
                         'cert' => '/tmp/unit.crt',
@@ -238,7 +241,7 @@ class SslCertificateServiceTest extends TestCase
         \file_put_contents($certPath, $fixture['fullchain']);
         \file_put_contents($tempDir . DIRECTORY_SEPARATOR . 'chain.pem', $fixture['chain']);
 
-        $service = new SslCertificateService();
+        $service = $this->createLocalCaCoverageService($fixture['ca']);
         $covers = new ReflectionMethod($service, 'localCaCertificateCoversRequiredSan');
         $covers->setAccessible(true);
 
@@ -254,7 +257,7 @@ class SslCertificateServiceTest extends TestCase
         \file_put_contents($certPath, $fixture['fullchain']);
         \file_put_contents($tempDir . DIRECTORY_SEPARATOR . 'chain.pem', $fixture['chain']);
 
-        $service = new SslCertificateService();
+        $service = $this->createLocalCaCoverageService($fixture['ca']);
         $covers = new ReflectionMethod($service, 'localCaCertificateCoversRequiredSan');
         $covers->setAccessible(true);
 
@@ -271,6 +274,49 @@ class SslCertificateServiceTest extends TestCase
         $this->assertTrue($match->invoke($service, 'demo.weline.localhost', '*.weline.localhost'));
         $this->assertFalse($match->invoke($service, 'foo.bar.weline.test', '*.weline.test'));
         $this->assertFalse($match->invoke($service, 'weline.test', '*.weline.test'));
+    }
+
+    public function testWildcardCertificateMapDoesNotClaimUncoveredRootDomain(): void
+    {
+        $service = new SslCertificateService();
+        $append = new ReflectionMethod($service, 'appendCertificateMapEntries');
+        $append->setAccessible(true);
+        $map = [];
+        $certificate = [
+            'cert' => '/tmp/wildcard-fullchain.pem',
+            'key' => '/tmp/wildcard-privkey.pem',
+            'chain' => '',
+            'cert_type' => SslCertificate::CERT_TYPE_WILDCARD,
+            'force_https' => 1,
+            'force_root_to_www' => 0,
+        ];
+        $arguments = [
+            &$map,
+            '*.example.test',
+            SslCertificate::CERT_TYPE_WILDCARD,
+            $certificate,
+        ];
+
+        $append->invokeArgs($service, $arguments);
+
+        $this->assertSame($certificate, $map['*.example.test'] ?? null);
+        $this->assertArrayNotHasKey('example.test', $map);
+    }
+
+    public function testGatewayCertificateRootFenceRejectsAccessibleStaleHostPath(): void
+    {
+        $inside = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        $insideFile = $inside . DIRECTORY_SEPARATOR . 'inside.pem';
+        $outsideFile = $outside . DIRECTORY_SEPARATOR . 'outside.pem';
+        \file_put_contents($insideFile, 'inside');
+        \file_put_contents($outsideFile, 'outside');
+        $service = new SslCertificateService();
+        $insideRoots = new ReflectionMethod($service, 'certificatePathsInsideRoots');
+        $insideRoots->setAccessible(true);
+
+        $this->assertTrue($insideRoots->invoke($service, [$insideFile], [$inside]));
+        $this->assertFalse($insideRoots->invoke($service, [$outsideFile], [$inside]));
     }
 
     public function testExtractLocalCaPemFromCertificateBundleReturnsEmbeddedRootCertificate(): void
@@ -338,6 +384,24 @@ class SslCertificateServiceTest extends TestCase
             public function recoverLocalCa(string $provider, string $issuer, string $certPem, string $chainPem = ''): void
             {
                 $this->recoverAndTrustLocalCaFromCertificateBundle($provider, $issuer, $certPem, $chainPem);
+            }
+        };
+    }
+
+    private function createLocalCaCoverageService(string $caPem): SslCertificateService
+    {
+        $caDir = $this->makeTempDir();
+        \file_put_contents($caDir . DIRECTORY_SEPARATOR . 'rootCA.pem', $caPem);
+
+        return new class($caDir) extends SslCertificateService {
+            public function __construct(private readonly string $caDir)
+            {
+                parent::__construct();
+            }
+
+            protected function getLocalCaDir(): string
+            {
+                return \rtrim($this->caDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
             }
         };
     }

@@ -7,6 +7,8 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
  * 维护 Worker 服务提供者
@@ -114,6 +116,38 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             . $context->runtimeSelection->effectiveTopology->value;
         $arguments[] = '--wls-listener-mode=single';
         $arguments[] = '--public-origin=' . WorkerRuntimeArgumentBuilder::publicOrigin($context);
+
+        $gatewayBackend = \strtolower(\trim((string)$context->getConfig(
+            'wls.edge.mode',
+            $context->getConfig('edge_mode', ''),
+        ))) === GatewayStartupDecision::MODE_GATEWAY;
+        if ($gatewayBackend) {
+            $arguments[] = '--protocol-edge-token-file='
+                . ProtocolEdgeRuntime::ensureTokenFile($context->instanceName);
+            $projectUuid = \strtolower(\trim((string)$context->getConfig(
+                'wls.gateway.project_uuid',
+                '',
+            )));
+            $instanceGeneration = (int)$context->getConfig(
+                'wls.gateway.instance_generation',
+                0,
+            );
+            $instanceLaunchId = \strtolower(\trim((string)$context->getConfig(
+                'wls.gateway.launch_id',
+                '',
+            )));
+            if (\preg_match('/^[a-f0-9-]{36}$/D', $projectUuid) !== 1
+                || $instanceGeneration < 1
+                || \preg_match('/^[a-f0-9]{32}$/D', $instanceLaunchId) !== 1
+            ) {
+                throw new \RuntimeException(
+                    'Gateway maintenance backend requires project UUID, instance launch ID, and monotonic instance generation.'
+                );
+            }
+            $arguments[] = '--gateway-project-uuid=' . $projectUuid;
+            $arguments[] = '--gateway-instance-generation=' . $instanceGeneration;
+            $arguments[] = '--gateway-instance-launch-id=' . $instanceLaunchId;
+        }
 
         $arguments = \array_merge($arguments, WorkerRuntimeArgumentBuilder::sharedState($context));
 

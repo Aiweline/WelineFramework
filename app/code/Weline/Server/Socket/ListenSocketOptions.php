@@ -5,6 +5,9 @@ namespace Weline\Server\Socket;
 
 final class ListenSocketOptions
 {
+    public const BIND_RETRY_ATTEMPTS = 100;
+    public const BIND_RETRY_DELAY_MICROSECONDS = 50_000;
+
     public static function isWindows(?bool $isWindows = null): bool
     {
         if ($isWindows !== null) {
@@ -79,5 +82,16 @@ final class ListenSocketOptions
             'errno' => $errno,
             'error' => \socket_strerror($errno),
         ];
+    }
+
+    public static function isAddressInUseError(int $errno, string $error): bool
+    {
+        if (\in_array($errno, [48, 98, 10048], true)) {
+            return true;
+        }
+
+        $error = \strtolower(\trim($error));
+        return \str_contains($error, 'address already in use')
+            || \str_contains($error, 'only one usage of each socket address');
     }
 }

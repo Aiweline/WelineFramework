@@ -13,35 +13,48 @@ namespace Weline\Server\Service\Edge\Gateway;
 final class GatewayPaths
 {
     public const PROTOCOL = 'wls-edge/2';
+    public const IMPLEMENTATION_LEVEL = 'wls-2.0';
+    public const SECURITY_PROFILE = 'native-broker-v1';
 
     public function home(): string
     {
         $override = \getenv('WLS_GATEWAY_HOME');
+        if ($this->isTestMode()) {
+            if ($override === false || \trim((string)$override) === '') {
+                throw new \RuntimeException(
+                    'WLS_GATEWAY_TEST_MODE requires an explicit WLS_GATEWAY_HOME below the system temporary directory.'
+                );
+            }
+            $home = $this->canonicalizeForContainment((string)$override);
+            $temporaryRoot = $this->canonicalizeForContainment(
+                (string)\sys_get_temp_dir(),
+            );
+            if (!$this->pathIsWithin($home, $temporaryRoot) || $home === $temporaryRoot) {
+                throw new \RuntimeException(
+                    'Test gateway home must be a task-specific child of the system temporary directory.'
+                );
+            }
+            return $home;
+        }
         if ($override !== false && \trim((string)$override) !== '') {
-            return \rtrim($this->normalizeAbsolutePath((string)$override), '/\\');
+            throw new \RuntimeException(
+                'WLS_GATEWAY_HOME cannot override the production WLS 2.0 trust root.'
+            );
         }
 
         if (\PHP_OS_FAMILY === 'Windows') {
-            $base = (string)(\getenv('LOCALAPPDATA') ?: \getenv('PROGRAMDATA') ?: '');
+            $base = (string)(\getenv('PROGRAMDATA') ?: '');
             if (\trim($base) === '') {
-                throw new \RuntimeException('WLS Gateway requires LOCALAPPDATA or PROGRAMDATA on Windows.');
+                throw new \RuntimeException('WLS Gateway requires PROGRAMDATA on Windows.');
             }
             return \rtrim($base, '/\\') . DIRECTORY_SEPARATOR . 'Weline'
-                . DIRECTORY_SEPARATOR . 'Gateway' . DIRECTORY_SEPARATOR . 'v2';
+                . DIRECTORY_SEPARATOR . 'Gateway';
+        }
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            return '/Library/Application Support/WelineGateway';
         }
 
-        $stateHome = (string)(\getenv('XDG_STATE_HOME') ?: '');
-        if (\trim($stateHome) === '') {
-            $userHome = (string)(\getenv('HOME') ?: '');
-            if (\trim($userHome) === '') {
-                throw new \RuntimeException('WLS Gateway requires HOME or XDG_STATE_HOME.');
-            }
-            $stateHome = \rtrim($userHome, '/\\') . DIRECTORY_SEPARATOR . '.local'
-                . DIRECTORY_SEPARATOR . 'state';
-        }
-
-        return \rtrim($stateHome, '/\\') . DIRECTORY_SEPARATOR . 'weline'
-            . DIRECTORY_SEPARATOR . 'wls-gateway' . DIRECTORY_SEPARATOR . 'v2';
+        return '/var/lib/weline-gateway';
     }
 
     public function runtimeDir(): string
@@ -51,7 +64,15 @@ final class GatewayPaths
 
     public function runDir(): string
     {
-        return $this->runtimeDir() . DIRECTORY_SEPARATOR . 'run';
+        if ($this->isTestMode()) {
+            return $this->runtimeDir() . DIRECTORY_SEPARATOR . 'run';
+        }
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return $this->runtimeDir() . DIRECTORY_SEPARATOR . 'run';
+        }
+        return \PHP_OS_FAMILY === 'Darwin'
+            ? '/var/run/weline-gateway'
+            : '/run/weline-gateway';
     }
 
     public function logDir(): string
@@ -62,6 +83,11 @@ final class GatewayPaths
     public function stateDir(): string
     {
         return $this->home() . DIRECTORY_SEPARATOR . 'state';
+    }
+
+    public function trustDir(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'trust';
     }
 
     public function slotsDir(): string
@@ -80,12 +106,46 @@ final class GatewayPaths
 
     public function activeSlotFile(): string
     {
-        return $this->stateDir() . DIRECTORY_SEPARATOR . 'active-slot';
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'active-slot';
     }
 
+    public function previousSlotFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'previous-slot';
+    }
+
+    public function upgradeIntentFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'upgrade.intent';
+    }
+
+    public function adminTokenFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'admin.token';
+    }
+
+    public function adminStoppedIntentFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'admin-stopped.intent';
+    }
+
+    /**
+     * @deprecated WLS 2.0 has no shared project/admin token. This alias is
+     * retained only for callers compiled against the checkpoint API.
+     */
     public function tokenFile(): string
     {
-        return $this->stateDir() . DIRECTORY_SEPARATOR . 'control.token';
+        return $this->adminTokenFile();
+    }
+
+    public function hostIdFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'host-id';
+    }
+
+    public function platformServiceMetadataFile(): string
+    {
+        return $this->trustDir() . DIRECTORY_SEPARATOR . 'platform-service.json';
     }
 
     public function endpointFile(): string
@@ -105,60 +165,85 @@ final class GatewayPaths
 
     public function unixSocketFile(): string
     {
-        return $this->runDir() . DIRECTORY_SEPARATOR . 'wls-edge-2.sock';
+        return $this->projectSocketFile();
+    }
+
+    public function projectSocketFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR . 'project.sock';
+    }
+
+    public function adminSocketFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR . 'admin.sock';
+    }
+
+    public function controllerSocketFile(): string
+    {
+        return $this->runDir() . DIRECTORY_SEPARATOR . 'controller.sock';
+    }
+
+    public function launcherFile(): string
+    {
+        return $this->home() . DIRECTORY_SEPARATOR . 'bin'
+            . DIRECTORY_SEPARATOR . (\PHP_OS_FAMILY === 'Windows'
+                ? 'wls-gateway-launcher.exe'
+                : 'wls-gateway-launcher');
+    }
+
+    public function serviceDefinitionFile(): string
+    {
+        if ($this->isTestMode()) {
+            return $this->stateDir() . DIRECTORY_SEPARATOR . 'service-definition.test';
+        }
+        return match (\PHP_OS_FAMILY) {
+            'Darwin' => '/Library/LaunchDaemons/com.weline.wls-gateway-v2.plist',
+            'Linux' => '/etc/systemd/system/weline-wls-gateway-v2.service',
+            'Windows' => $this->stateDir() . DIRECTORY_SEPARATOR . 'windows-service.json',
+            default => throw new \RuntimeException('Unsupported WLS Gateway platform.'),
+        };
     }
 
     public function publicHttpPort(): int
     {
-        return $this->portFromEnvironment('WLS_GATEWAY_LISTEN_HTTP', 80);
+        return $this->publicPortFromEnvironment('WLS_GATEWAY_LISTEN_HTTP', 80);
     }
 
     public function publicHttpsPort(): int
     {
-        return $this->portFromEnvironment('WLS_GATEWAY_LISTEN_HTTPS', 443);
-    }
-
-    public function controlTcpPort(): int
-    {
-        return $this->portFromEnvironment('WLS_GATEWAY_CONTROL_PORT', 27642);
+        return $this->publicPortFromEnvironment('WLS_GATEWAY_LISTEN_HTTPS', 443);
     }
 
     /**
      * @return array{transport:string,address:string}
      */
-    public function desiredEndpoint(): array
+    public function desiredEndpoint(string $channel = 'project'): array
     {
+        $channel = $this->normalizeChannel($channel);
         if (\PHP_OS_FAMILY === 'Windows') {
             return [
-                'transport' => 'tcp',
-                'address' => 'tcp://127.0.0.1:' . $this->controlTcpPort(),
+                'transport' => 'pipe',
+                'address' => '\\\\.\\pipe\\weline-wls-gateway-v2-' . $channel,
             ];
         }
 
         return [
             'transport' => 'unix',
-            'address' => 'unix://' . $this->unixSocketFile(),
+            'address' => 'unix://' . ($channel === 'admin'
+                ? $this->adminSocketFile()
+                : $this->projectSocketFile()),
         ];
     }
 
     /**
      * @return array{transport:string,address:string}
      */
-    public function endpoint(): array
+    public function endpoint(string $channel = 'project'): array
     {
-        $raw = @\file_get_contents($this->endpointFile());
-        $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
-        if (\is_array($decoded)
-            && \in_array((string)($decoded['transport'] ?? ''), ['unix', 'tcp'], true)
-            && \trim((string)($decoded['address'] ?? '')) !== ''
-        ) {
-            return [
-                'transport' => (string)$decoded['transport'],
-                'address' => (string)$decoded['address'],
-            ];
-        }
-
-        return $this->desiredEndpoint();
+        // Production endpoints are fixed trust paths. A mutable endpoint file
+        // cannot redirect a project or administrator client to another local
+        // process.
+        return $this->desiredEndpoint($channel);
     }
 
     public function activeSlot(): string
@@ -180,21 +265,42 @@ final class GatewayPaths
             $this->runDir(),
             $this->logDir(),
             $this->stateDir(),
+            $this->trustDir(),
             $this->slotsDir(),
-            $this->slotDir('A'),
-            $this->slotDir('B'),
+            $this->home() . DIRECTORY_SEPARATOR . 'snapshots',
+            \dirname($this->launcherFile()),
         ] as $directory) {
             if (!\is_dir($directory) && !@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
                 throw new \RuntimeException('Unable to create WLS Gateway directory: ' . $directory);
             }
-            @\chmod($directory, 0700);
+            if (\is_link($directory)) {
+                throw new \RuntimeException('WLS Gateway directory cannot be a symbolic link: ' . $directory);
+            }
+            $mode = (int)(@\fileperms($directory) ?: 0) & 0777;
+            // Production privilege separation deliberately promotes selected
+            // roots to 0750/0770 after the service identity exists. Repeated
+            // package-lock setup must not silently collapse those directories
+            // back to root-only 0700 and strand the downgraded Controller.
+            if ($this->isTestMode()
+                || !\in_array($mode, [0700, 0750, 0770, 0771], true)
+            ) {
+                @\chmod($directory, 0700);
+            }
         }
     }
 
-    private function portFromEnvironment(string $name, int $default): int
+    public function isTestMode(): bool
+    {
+        return (string)\getenv('WLS_GATEWAY_TEST_MODE') === '1';
+    }
+
+    private function publicPortFromEnvironment(string $name, int $default): int
     {
         $raw = \getenv($name);
         if ($raw === false || \trim((string)$raw) === '') {
+            if ($this->isTestMode()) {
+                throw new \RuntimeException($name . ' is required in WLS_GATEWAY_TEST_MODE.');
+            }
             return $default;
         }
         $normalized = \trim((string)$raw);
@@ -204,6 +310,12 @@ final class GatewayPaths
         $port = (int)$normalized;
         if ($port < 1 || $port > 65535) {
             throw new \RuntimeException($name . ' must be in 1..65535.');
+        }
+        if (!$this->isTestMode() && $port !== $default) {
+            throw new \RuntimeException($name . ' cannot override a production public port.');
+        }
+        if ($this->isTestMode() && $port <= 1024) {
+            throw new \RuntimeException($name . ' must be above 1024 in WLS_GATEWAY_TEST_MODE.');
         }
         return $port;
     }
@@ -218,5 +330,60 @@ final class GatewayPaths
             throw new \RuntimeException('WLS_GATEWAY_HOME must be an absolute path without traversal.');
         }
         return $path;
+    }
+
+    private function pathIsWithin(string $path, string $root): bool
+    {
+        $normalize = static fn (string $value): string => \strtolower(
+            \rtrim(\str_replace('\\', '/', $value), '/')
+        );
+        $path = $normalize($path);
+        $root = $normalize($root);
+        return \str_starts_with($path . '/', $root . '/');
+    }
+
+    /**
+     * Resolve the existing prefix while retaining an uncreated safe suffix.
+     *
+     * macOS commonly exposes the temporary directory through /var while the
+     * native no-follow Broker correctly resolves it as /private/var. Both the
+     * containment check and the returned host path must use the same canonical
+     * identity or a valid test gateway cannot authorize certificate roots.
+     */
+    private function canonicalizeForContainment(string $path): string
+    {
+        $path = \rtrim($this->normalizeAbsolutePath($path), '/\\');
+        $probe = $path;
+        $suffix = [];
+        while (!\file_exists($probe) && !\is_link($probe)) {
+            $leaf = \basename($probe);
+            $parent = \dirname($probe);
+            if ($leaf === '' || $leaf === '.' || $leaf === '..' || $parent === $probe) {
+                throw new \RuntimeException(
+                    'WLS_GATEWAY_HOME cannot resolve a safe existing ancestor.'
+                );
+            }
+            \array_unshift($suffix, $leaf);
+            $probe = $parent;
+        }
+        $canonical = \realpath($probe);
+        if (!\is_string($canonical) || $canonical === '') {
+            throw new \RuntimeException(
+                'WLS_GATEWAY_HOME cannot resolve a safe existing ancestor.'
+            );
+        }
+        return \rtrim($canonical, '/\\')
+            . ($suffix === []
+                ? ''
+                : DIRECTORY_SEPARATOR . \implode(DIRECTORY_SEPARATOR, $suffix));
+    }
+
+    private function normalizeChannel(string $channel): string
+    {
+        $channel = \strtolower(\trim($channel));
+        if (!\in_array($channel, ['admin', 'project'], true)) {
+            throw new \InvalidArgumentException('Gateway channel must be admin or project.');
+        }
+        return $channel;
     }
 }

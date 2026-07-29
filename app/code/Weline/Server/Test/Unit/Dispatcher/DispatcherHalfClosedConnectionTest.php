@@ -90,7 +90,7 @@ class DispatcherHalfClosedConnectionTest extends TestCase
         $this->setProperty($dispatcher, 'clientHalfClosedRequestIdleTimeoutSec', 30.0);
         $this->setProperty($dispatcher, 'connectionTimeout', 300);
         $this->setProperty($dispatcher, 'isDevMode', false);
-        $this->setProperty($dispatcher, 'banLogThrottle', []);
+        $this->setProperty($dispatcher, 'halfClosedFastCloseLogThrottle', []);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'cleanupExpiredConnections');
         $method->setAccessible(true);

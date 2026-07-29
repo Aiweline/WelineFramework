@@ -362,7 +362,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame(ServiceInstance::STATE_STOPPED, $maintenance->state);
     }
 
-    public function testVerifyAndKillRemainingProcessesSkipsGraceWaitForDisconnectedResiduals(): void
+    public function testVerifyAndKillRemainingProcessesWaitsForOsExitAfterIpcDisconnect(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
             public array $runningByPid = [];
@@ -378,8 +378,8 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                     $status[$pid] = $this->runningByPid[$pid] ?? false;
                 }
 
-                if ($pids === [101]) {
-                    $this->runningByPid[101] = false;
+                foreach ($pids as $pid) {
+                    $this->runningByPid[$pid] = false;
                 }
 
                 return $status;
@@ -414,12 +414,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
 
-        self::assertSame([], $orchestrator->batchCheckCalls);
-        self::assertSame([[101, 202]], $orchestrator->forceKillCalls);
-        self::assertSame(0, $orchestrator->sleepCalls);
+        self::assertSame([[101, 202], [101, 202]], $orchestrator->batchCheckCalls);
+        self::assertSame([], $orchestrator->forceKillCalls);
+        self::assertSame(1, $orchestrator->sleepCalls);
     }
 
-    public function testShouldWaitForStopFlowExitVerificationSkipsStoppingDispatcher(): void
+    public function testShouldWaitForStopFlowExitVerificationIncludesStoppingDispatcher(): void
     {
         $orchestrator = new ServiceOrchestrator();
         $dispatcher = new ServiceInstance(
@@ -430,10 +430,10 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             state: ServiceInstance::STATE_STOPPING
         );
 
-        self::assertFalse($this->invokePrivate($orchestrator, 'shouldWaitForStopFlowExitVerification', [$dispatcher]));
+        self::assertTrue($this->invokePrivate($orchestrator, 'shouldWaitForStopFlowExitVerification', [$dispatcher]));
     }
 
-    public function testShouldWaitForStopFlowExitVerificationSkipsConnectedStoppingWorkerGraceWindow(): void
+    public function testShouldWaitForStopFlowExitVerificationIncludesConnectedStoppingWorker(): void
     {
         $orchestrator = new ServiceOrchestrator();
         $worker = new ServiceInstance(
@@ -444,7 +444,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             state: ServiceInstance::STATE_STOPPING
         );
 
-        self::assertFalse($this->invokePrivate($orchestrator, 'shouldWaitForStopFlowExitVerification', [$worker]));
+        self::assertTrue($this->invokePrivate($orchestrator, 'shouldWaitForStopFlowExitVerification', [$worker]));
     }
 
     public function testRequestStopConsumesStopFlowImmediately(): void
@@ -805,7 +805,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
             protected function getStopVerificationTimeout(): float
             {
-                return 0.0;
+                return 0.01;
             }
 
             protected function finalizeStopAllMasterExit(): void

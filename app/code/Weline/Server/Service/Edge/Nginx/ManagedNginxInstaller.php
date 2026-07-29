@@ -154,13 +154,57 @@ final class ManagedNginxInstaller
      */
     private function writeManifestFile(string $file, array $manifest): void
     {
+        $manifest['schema_version'] = 2;
+        $manifest['role'] = 'legacy-project-nginx';
+        $manifest['implementation_level'] = 'nginx-runtime-v2';
+        unset($manifest['runtime_generation']);
+        $canonical = $this->canonicalManifest($manifest);
+        $manifest['runtime_generation'] = \hash(
+            'sha256',
+            \json_encode($canonical, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        );
         $json = \json_encode(
             $manifest,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         );
-        if (\file_put_contents($file, $json, LOCK_EX) === false) {
-            throw new \RuntimeException('Unable to write managed nginx install manifest.');
+        $temporary = $file . '.candidate.' . \bin2hex(\random_bytes(6));
+        if (\file_put_contents($temporary, $json, LOCK_EX) !== \strlen($json)) {
+            @\unlink($temporary);
+            throw new \RuntimeException('Unable to stage managed nginx install manifest.');
         }
+        @\chmod($temporary, 0644);
+        $previous = null;
+        if (\is_file($file)) {
+            $previous = $file . '.previous.' . \bin2hex(\random_bytes(6));
+            if (!@\rename($file, $previous)) {
+                @\unlink($temporary);
+                throw new \RuntimeException('Unable to preserve managed nginx install manifest.');
+            }
+        }
+        if (!@\rename($temporary, $file)) {
+            if ($previous !== null) {
+                @\rename($previous, $file);
+            }
+            @\unlink($temporary);
+            throw new \RuntimeException('Unable to publish managed nginx install manifest.');
+        }
+        if ($previous !== null) {
+            @\unlink($previous);
+        }
+    }
+
+    /** @param array<string,mixed> $manifest @return array<string,mixed> */
+    private function canonicalManifest(array $manifest): array
+    {
+        foreach ($manifest as $key => $value) {
+            if (\is_array($value)) {
+                $manifest[$key] = $this->canonicalManifest($value);
+            }
+        }
+        if (!\array_is_list($manifest)) {
+            \ksort($manifest, SORT_STRING);
+        }
+        return $manifest;
     }
 
     /**

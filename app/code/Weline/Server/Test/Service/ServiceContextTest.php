@@ -5,6 +5,9 @@ namespace Weline\Server\Test\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Runtime\EffectiveTopology;
+use Weline\Server\Service\Runtime\RequestedTopology;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 class ServiceContextTest extends TestCase
 {
@@ -22,12 +25,24 @@ class ServiceContextTest extends TestCase
             sslEnabled: true,
             sslCert: '/path/to/cert.pem',
             sslKey: '/path/to/key.pem',
-            mode: 'multi',
+            runtimeSelection: new RuntimeSelection(
+                requestedTopology: RequestedTopology::Dispatcher,
+                effectiveTopology: EffectiveTopology::Dispatcher,
+                source: 'unit',
+                osFamily: 'Linux',
+                eventLoopDriver: 'event',
+                sslEngine: 'stream',
+                listenerMode: 'single',
+                policyCompatible: true,
+                reasonCodes: ['unit_fixture'],
+                reason: 'Service context test runtime selection.',
+            ),
             daemon: false,
             debug: true,
             windowMode: false,
             envConfig: [
                 'wls' => [
+                    'edge' => ['adapter' => 'wls'],
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                     'worker_memory_limit' => '512m',
@@ -48,7 +63,10 @@ class ServiceContextTest extends TestCase
         $this->assertEquals('0.0.0.0', $this->context->host);
         $this->assertEquals(8080, $this->context->mainPort);
         $this->assertTrue($this->context->sslEnabled);
-        $this->assertEquals('multi', $this->context->mode);
+        $this->assertSame(
+            EffectiveTopology::Dispatcher,
+            $this->context->runtimeSelection->effectiveTopology,
+        );
         $this->assertFalse($this->context->daemon);
         $this->assertTrue($this->context->debug);
         $this->assertFalse($this->context->windowMode);

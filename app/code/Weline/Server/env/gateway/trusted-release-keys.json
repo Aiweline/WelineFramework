@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "keys": [],
+  "note": "Release engineering injects enabled Ed25519 public keys before a production WLS Gateway release is marked ready. Private keys never enter this repository or package."
+}

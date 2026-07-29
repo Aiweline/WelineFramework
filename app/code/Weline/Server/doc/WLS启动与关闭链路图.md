@@ -3,7 +3,8 @@
 ## 适用范围
 
 - 本文描述默认 WLS Orchestrator 模式下的实例链路，即 `php bin/w server:start [name]` 与 `php bin/w server:stop [name ...]`。
-- `--cli`、非 Nginx `--strategy`、`--no-nginx` 和 `--no-ssl` 会在 `Start::execute()` 创建 Master/Worker 前拒绝；不存在另一条公网或开发 Server 分支。
+- `--edge=auto|gateway|wls` 是 WLS 2.0 唯一 edge mode 入口；`--no-nginx`
+  等价 `--edge=wls`。普通 start 只发现/加入既有宿主网关，不安装或修复宿主服务。
 - `server:stop name-a name-b`、`server:stop --prefix <prefix>` 与 `server:stop --all` 都只在外层枚举多个实例；每个实例仍复用同一关闭协议并单独获取 stop lock。
 
 ## 启动链路图
@@ -12,17 +13,26 @@
 flowchart TB
     A["CLI: php bin/w server:start [name]"] --> B["Start::execute()"]
     B --> C{"启动分支?"}
-    C -->|退役/非 Nginx 选项| C1["启动前拒绝<br/>不创建 Master/Worker"]
+    C -->|无效/不兼容 edge 契约| C1["启动前非零拒绝<br/>不创建 Master/Worker"]
     C -->|--master-only| M1["runMasterOnly(instance)<br/>只校验 endpoint schema v4<br/>读取嵌套 runtime_selection"]
     C -->|默认 WLS| D["acquireStartLock(instance)"]
-    D --> E["getServerConfig()<br/>解析 WLS 回源端口、Worker 数与公网 TLS 意图"]
-    E --> E1["Nginx-only + RuntimeSelection 预检<br/>拒绝 --no-nginx/--no-ssl/外部边缘<br/>要求 managed=true、auto_start=true、二进制已安装且含 rewrite<br/>普通启动只读，不下载或编译"]
-    E1 --> F{"是否需要先清旧实例?"}
+    D --> E["getServerConfig()<br/>CLI > 实例 > env > auto"]
+    E --> E0["ProjectIdentityStore<br/>UUIDv4 + desired/certificate generation CAS"]
+    E0 --> E1{"EdgeRuntimeDecision"}
+    E1 -->|gateway| E2["只读 status/discover<br/>受信 wls-edge/2 ready 才加入<br/>backend 固定 loopback"]
+    E1 -->|auto unavailable| E3["稳定分配 20000–29999<br/>纯 WLS TLS + loopback bind<br/>不创建宿主服务文件"]
+    E1 -->|wls / --no-nginx| E4["纯 WLS TLS<br/>显式端口冲突即非零退出"]
+    E1 -->|legacy| E5["保持项目 Nginx 原状<br/>等待显式 promote"]
+    E2 --> F
+    E3 --> F
+    E4 --> F
+    E5 --> F
+    F{"是否需要先清旧实例?"}
     F -->|是: -r 或端口/实例冲突| G["停止前固化旧代实际监听端口<br/>stopExistingServer() 委托 server:stop"]
     F -->|否| H["检查 loopback H1、control、Dispatcher/Worker 与托管 Nginx 端口"]
     G --> G1["Restart handoff fence<br/>Windows 正常重启最多 30s；POSIX 12s；fast 6s<br/>等目标端口无监听 + scoped 进程全退出"]
     G1 --> H
-    H --> I["saveInstanceInfo()<br/>写 endpoint schema v4 + 嵌套 runtime_selection<br/>WLS SSL=false、edge_adapter=nginx"]
+    H --> I["saveInstanceInfo()<br/>endpoint schema v4 + runtime_selection<br/>project/instance/master epoch/launch id + edge decision"]
     I --> J["保存 provisional 实例配置<br/>Nginx live 前不提交 env 公网端点"]
     J --> K{"daemon?"}
     K -->|后台| L["startMasterInBackground()<br/>后台拉起 server:start --master-only<br/>并轮询 instance.json 等待 master_pid/control_port"]
@@ -40,11 +50,13 @@ flowchart TB
     T1 --> U["persistServicesInfo()<br/>broadcastRoutingPolicyToWorkers()"]
     U --> V["armServerReadyNotification()<br/>startup_phase -> running"]
     V --> V0["如属重启：恢复并确认 maintenance 快照<br/>必须先回到 READY 业务路由"]
-    V0 --> X["loopback /_wls/health 预检"]
-    X --> Y["生成候选 Nginx 配置<br/>含 ACME → Worker 路由<br/>nginx -t → 原子发布 → start/reload"]
-    Y --> Z["公网 live gate<br/>owner + generation + 证书绑定 TLS 1.3<br/>H2/H1: fresh 请求真实 WLS health<br/>H3: HTTP/3-only 真实 WLS health；本地/缓存不算<br/>TLS resume: pair-bound 有界证明"]
-    Z --> Z1["持久化 Nginx 公网事实<br/>syncServerConfigToEnv()"]
-    Z1 --> W["释放 start lock<br/>CLI 成功；Master/Nginx 常驻"]
+    V0 --> X{"effective edge mode"}
+    X -->|gateway| Y["启动项目 Agent<br/>register desired state + instance lease<br/>等待路由 ACTIVE"]
+    X -->|wls| Z["验证纯 WLS TLS/H2/H1 listener<br/>auto fallback 报告高端口限制"]
+    X -->|legacy| Z1["沿用项目托管 Nginx live gate"]
+    Y --> W["释放 start lock<br/>CLI 成功；宿主网关独立常驻"]
+    Z --> W
+    Z1 --> W
 ```
 
 ## 关闭链路图
@@ -73,8 +85,8 @@ flowchart TB
     H1 --> I["IPC ACTION_STOP -> Master"]
     I --> J["MasterProcess::stopWithProgress()<br/>ServiceOrchestrator::requestStop()"]
     J --> K["主循环调度 stopAll()"]
-    K --> L["阶段1: 停止项目托管 Nginx 公网 accept<br/>Direct/Dispatcher 停止接纳回源新请求"]
-    L --> M["阶段2: 等待 Nginx 公网连接与内部 H1 请求排水完成"]
+    K --> L["阶段1: gateway route drain / 纯 WLS listener drain<br/>共享网关本身不停机"]
+    L --> M["阶段2: 等待当前实例连接与内部请求有界排空"]
     M --> N["阶段3: releaseSharedStateConsumersForStopFlow()<br/>并发终止非共享进程"]
     N --> O["阶段4: verifyAndKillRemainingProcesses()"]
     O --> P["阶段5: closeIpcServer()<br/>Master 退出"]
@@ -95,13 +107,16 @@ flowchart TB
 - `server:stop` 可接收多个空格分隔的实例名，例如 `php bin/w server:stop api worker`；名称按输入顺序去重，逐个获取实例级 stop lock 并执行完整单实例关闭链路。某个实例锁被占用时只跳过该实例，继续处理后续名称。
 - 新启动在停止旧实例之前产生不可变 `RuntimeSelection`，并以 endpoint schema v4 写入嵌套 `runtime_selection`。`--master-only` 只接受这一个事实源；旧 endpoint、缺失/未知字段或根级 topology/listener/event/SSL 投影都在绑定端口前拒绝，不重新推导或升级。
 - 内部拓扑的 `auto` 在所有平台固定为 Direct：Linux 优先经能力验证的 `reuseport`，不可用时回退 Master-owned `shared_fd`；macOS 使用 `shared_fd`；Windows 为 Nginx 均衡的独立 `worker_ports`。所有平台仍允许显式 Dispatcher；已删除的 independent/遗留模式、配置键和命令行别名没有兼容读取入口。
-- `server:start -r` 在任何新 Session/Memory sidecar、Master 或 Worker 创建前冻结一次旧代端口快照；空集合也是已捕获的有效快照，禁止在本次启动改写运行态后重新枚举。现行快照包含托管 Nginx 公网端口、WLS loopback 主端口、控制端口与 Dispatcher/Worker 端口，排除可跨实例复用的 Session/Memory sidecar。只有目标端口全部无监听且本项目+本实例的 Nginx、Master、Dispatcher、Worker、Maintenance 与 Runtime Watchdog scoped 进程全部退出才继续。遗留 Gateway 线索只允许用于回收旧残留，不构成可再次启动的角色。
+- `server:start -r` 在创建新代前冻结旧代端口与 edge decision。共享宿主 Gateway
+  不属于项目进程树，重启/停止项目只能 drain/unregister 本实例租约，不能停止宿主
+  Controller 或 Nginx。legacy 项目 Nginx 仍按原 scoped owner 清理。
 - 重启交接超时时，端口 owner/scope 只用于诊断；`Start` 不杀 unknown/foreign 进程、不换端口、不跳过栅栏，而是中止新 Master 启动并返回非零。正常重启清理总预算在 Windows 为 30 秒、macOS/Linux 为 12 秒，fast-local 为 6 秒；Windows 的较长预算只覆盖已退出 PID 的 LISTEN 表延迟，不放宽 owner/scope 栅栏。
 - `-r` 和 `-r -f` 都会在停止旧代前保存 `app/etc/env.php` 中的原始 `system.maintenance` 值；平滑 `-r` 随后才临时开启维护态。无论新 Master 成功、超时、端口栅栏失败或中途 return/fatal，启动事务都恢复该原值：原来已开启则保持开启，原来关闭则恢复关闭。
 - 后台重启只有在新 Master 已进入 `running` 后才提交维护事务：启动进程绕过实例列表缓存，按显式实例 endpoint 直连控制面，保留本次命令的 `operation_id`，并在一个 monotonic 总 deadline 内等待该操作退出 `active/queued` 且 `maintenance_mode` 等于快照值。该恢复与确认必须发生在生成/启动 Nginx 候选和公网 health/protocol gate **之前**；否则门禁请求仍可能落到临时维护路由。Direct Master 只会在全部 READY Worker 完成维护门禁 ACK 后提交该状态；缺失 `maintenance_mode/control_operation` 字段、endpoint 不可控或超时都属于启动失败，禁止打印“维护模式已关闭”。
 - 后台 `server:start` 只有在 Master/Worker `running`、托管 Nginx owner/config generation 接管、证书指纹绑定的 TLS 1.3 握手，以及 H2/H1 fresh 请求分别真实到达 owner 绑定的 `/_wls/health?detail=1`、匹配 WLS backend identity/config generation 后才返回 `0`；配置或 ALPN 不能单独写成 `runtime_verified`。H3 还要求 HTTP/3-only fresh QUIC 请求穿过 Nginx 到达同一真实 health；Nginx 本地响应或边缘缓存不算，客户端 verifier 不可用时明确保持 pending。失败门禁按事务规则返回非零并回滚候选配置；旧 generation 无法重新证明时停止 Nginx 并保留恢复证据。
 - Nginx shared session cache/tickets 已启用。TLS 恢复门禁固定使用 `fresh-share-two-connection-pair-v1`：每对新建 SSL share，仅含 fresh issuer 与 fresh-TCP probe；有效 probe ≥ 8、`failed=0`、恢复握手 P95 ≤ 50ms。多 Worker 必须在各对 issuer/probe PID 上同时证明 same/cross，单 Worker cross 为 `not_applicable`；HTTP/3/QUIC Session Resumption 仍未验证。
-- Nginx-only 模式拒绝 `--foreground`：前台 Master 会阻塞启动命令，无法继续完成托管 Nginx 事务与公网 live gate，因此必须在创建子进程前 fail closed。
+- gateway/legacy 模式仍拒绝会阻断后续 edge live gate 的 `--foreground`；纯 WLS
+  可以按自己的 listener 契约运行。
 - `server:start -r -f` 属于停机型切换，旧实例不会走平滑排水等待，而是更快进入本地清理。
 - `server:stop -f` 仍然优先走 IPC STOP，但会把 Orchestrator 切到 `skipDrain=true`，也就是跳过关闭阶段 1/2，直接进入统一终止、校验和关闭 IPC。
 - 如果 CLI 侧等待 IPC 进度超时，且判断停机流并未继续推进，`Stop` 会强杀 Master 并执行本地 residual cleanup。
@@ -135,7 +150,9 @@ flowchart TB
 - `pid_index/name_index` 只承担 CLI 发现、兼容查询和可重建快照。索引存在时必须与独立租约一致；索引缺失不否定 Master 已知的完整租约，索引矛盾则 fail closed。
 - 探测结果只允许 `running / exited / identity_mismatch / unknown`。只有 fresh probe 得到 `running + identity_match` 才能执行一次终止动作；其余状态绝不向当前 PID 发信号。
 - Windows 索引发布禁止 `unlink(live target) -> rename`。同目录唯一临时文件写完并 flush 后先尝试原子 rename；目标替换不受支持时，在目标 `LOCK_EX` 内完整覆盖，读端 `LOCK_SH` 只能看到完整旧版或完整新版。
-- Worker 终止默认不做进程树 kill；Direct loopback H1 回源端口是共享资源，任何单槽恢复与分批退场都禁止按端口杀进程。公网端口只属于项目托管 Nginx；端口占用诊断必须分别报告实际 owner。
+- Worker 终止默认不做进程树 kill。未知公网或回源端口 owner 永远不由 WLS 提示
+  终止或自动修改；显式主端口冲突非零退出，可选 HTTP redirect 端口冲突只禁用
+  redirect。宿主网关进程必须通过后续清单、摘要与 generation fencing 才能恢复。
 
 ## 运行拓扑平台边界
 
@@ -144,11 +161,15 @@ flowchart TB
 - 业务 Worker 的每一次 READY 发送都经过进程注入的 before-ready guard：首次注册、Master ACK 超时重发、普通 TCP 自动重连和 Supervisor 自动重连都重新检查显式非 local 的 Worker credential store。门禁异常时不发送 READY、不保留 confirmed 状态；自动重连已建立的控制连接会关闭，以便数据库恢复后按重连节流再次尝试。Maintenance Worker 不使用该浏览器凭据链，因此不执行 credential store 检查。
 - 拓扑/依赖预检发生在任何 Master/Worker 创建之前；普通启动只读探测，不下载、安装或编译。Linux 的 `auto` 优先验证并选择 `reuseport` Direct，能力不可用时回退 `shared_fd`；macOS 选择 `shared_fd`，Windows 选择 `worker_ports`。Direct 最终不满足 listener/event/policy 能力时明确失败，显式 Dispatcher 仍受支持。只有 `--install-deps` 分支允许准备 PHP 依赖并用新进程复验。普通 start/reload/restart 也绝不构建 Nginx；仅显式 `server:nginx:install` 在 Unix 上可能构建，且 PCRE2/rewrite 为硬依赖。HTTP/3 只读检查已安装 Nginx 模块与真实 QUIC 门禁，不调用 PHP FFI/native 构建链。
 - macOS `worker_count=auto` 使用性能核数并受内存预算限制；启动与 Doctor/建议共用同一个 resolver，显式 `-c` 保持不变。
-- 平台无关的 `direct` 是唯一 Direct 状态值；旧平台专属值会被拒绝。WLS SSL 固定关闭，Worker 只运行明文 H1。
-- `worker_ssl`、stream TLS、EventBuffer TLS、ProtocolEdge、Caddy 与 Native Transport 都是不可达遗留代码，不是配置项或回退路径。
+- 平台无关的 `direct` 是唯一 Direct 状态值。gateway/legacy backend 使用 loopback
+  明文 H1；纯 WLS 使用 Stream TLS，提供 H2/H1，不提供 H3。
+- `worker_ssl`、EventBuffer TLS、ProtocolEdge、Caddy 与 Native Transport 是不可达
+  遗留代码；纯 WLS Stream TLS 是受支持的项目 edge。
 - Worker 通过 `--public-origin` 获得对外 scheme/authority；该 HTTPS `public_origin` 必须经 `ManagedNginxPublicOrigin::normalize()` 校验后，由 endpoint schema v4 穿过 `ServerInstanceManager` allowlist 和 `Start::runMasterOnly()` 配置恢复原样传递，缺失、非字符串或非 HTTPS 时在绑定端口前 fail closed，禁止从内部回源 `host/port` 重建；READY 首页预热与真实 HTTP/HTTPS FPC key 一致。托管 Nginx 有 `$http_host` 时原样转发，H3 空值时用 `$host:$server_port`，再由固定 trusted loopback 上的 `Host` 与 `X-Forwarded-Proto/Port` 重建公开 origin；loopback 不因此成为业务 whitelist。
 - H1 fresh 分流门禁仅允许 Nginx loopback allowlist 保护的 `/_wls/` 位置传播精确 `Connection: close`；普通业务位置清空 upstream `Connection`，持续复用 Nginx Keep-Alive 池。
-- ACME HTTP-01 固定由项目托管 Nginx 的 `/.well-known/acme-challenge/` location 转发到 Worker。Nginx-only Dispatcher 的 `httpsEnabled=false`，因此不会在普通明文 H1 upstream accept 上执行旧的 50ms inline ACME peek；Gateway/native/TLS 路径也不会被重新激活。
+- legacy ACME HTTP-01 仍由项目 Nginx challenge location 处理。WLS 2.0 Gateway 的
+  challenge 租约、精确路径开放与首次证书发布属于后续证书任务，当前阶段不得提前
+  宣称完成。
 - POSIX shared-FD listener 仅承载 loopback 明文 H1；Worker accept 后直接进入 H1 parser，不导出 TLS stream。
 - Windows 11 ARM/x64 仿真环境的同规模 H2 2000 请求 A/B 证明了 ACME accept-path 修正：修正前 2000/2000、663.15 QPS、P95 166.699ms；修正后 2000/2000、971.18 QPS、P95 103.55ms，即 QPS +46.4%、P95 -37.9%。该证据只归因“跳过每条 Nginx 明文回源连接的 50ms peek”，不用于推导跨平台绝对性能。
 
@@ -211,5 +232,7 @@ flowchart TB
 
 ## 读图建议
 
-- 启动图里，`Start.php` 负责“参数固化、锁、WLS 回源快照、项目托管 Nginx 配置事务与公网 live gate”；`MasterProcess` 负责“控制面启动与主循环”；`ServiceOrchestrator` 负责“子服务并发启动、READY 验收和运行期调度”。
+- 启动图里，`Start.php` 负责参数固化、项目身份、edge decision、端口角色和 endpoint；
+  `MasterProcess` 负责控制面与主循环；`ServiceOrchestrator` 负责子服务、READY 与排空；
+  宿主 Gateway Controller 独立于任一项目 Master。
 - 关闭图里，CLI `Stop.php` 既是停机发起方，也是最终兜底清理方；真正的统一停机协议在 `ServiceOrchestrator::stopAll()` 中完成。

@@ -174,6 +174,7 @@ $masterLeaseFile = '';
 $masterToken = '';
 $publicOrigin = '';
 $isMaintenanceWorker = false;
+$isGatewayFallbackWorker = false;
 $wlsHttpPolicyEncoded = '';
 $wlsHttpPolicySha256 = '';
 
@@ -213,6 +214,8 @@ foreach ($argv as $arg) {
         $controlPort = (int)\substr($arg, 15);
     } elseif ($arg === '--maintenance') {
         $isMaintenanceWorker = true;
+    } elseif ($arg === '--gateway-fallback') {
+        $isGatewayFallbackWorker = true;
     } elseif (\str_starts_with($arg, '--master-pid=')) {
         $masterPid = (int)\substr($arg, 13);
     } elseif (\str_starts_with($arg, '--epoch=')) {
@@ -298,14 +301,25 @@ if (!\in_array($wlsListenerMode, ['single', 'reuseport', 'shared_fd'], true)) {
     \fwrite(\STDERR, "--wls-listener-mode must be single, reuseport, or shared_fd.\n");
     exit(1);
 }
-$privateListenerRequired = $isMaintenanceWorker;
 $privateListenerHost = \strtolower(\trim((string)$host));
-if ($privateListenerRequired
-    && ($wlsListenerMode !== 'single' || !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true))
+if ($isMaintenanceWorker
+    && ($wlsListenerMode !== 'single'
+        || !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true))
 ) {
     \fwrite(\STDERR, "Private SSL Worker requires a loopback single listener.\n");
     exit(1);
 }
+if ($isGatewayFallbackWorker
+    && (!\in_array($wlsListenerMode, ['single', 'shared_fd'], true)
+        || !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true))
+) {
+    \fwrite(
+        \STDERR,
+        "Gateway fallback requires a loopback single or Master-owned shared listener.\n",
+    );
+    exit(1);
+}
+$privateListenerRequired = $isMaintenanceWorker || $isGatewayFallbackWorker;
 if (($wlsRuntimeTopology === 'dispatcher' && $wlsListenerMode !== 'single')
     || ($wlsRuntimeTopology === 'direct'
         && $wlsListenerMode === 'single'
@@ -482,7 +496,9 @@ $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $masterPid,
     $masterLeaseFile,
     $masterToken,
-    ($isMaintenanceWorker ? 'MaintenanceSSLWorker' : 'SSLWorker') . "#{$workerId}",
+    ($isMaintenanceWorker
+        ? 'MaintenanceSSLWorker'
+        : ($isGatewayFallbackWorker ? 'GatewayFallbackSSLWorker' : 'SSLWorker')) . "#{$workerId}",
     $instanceName,
     $orchestratorEpoch
 );
@@ -509,7 +525,9 @@ if ($controlPort <= 0 && !$supervisorEnabled) {
 if ($isMaintenanceWorker && !\defined('WLS_MAINTENANCE_WORKER')) {
     \define('WLS_MAINTENANCE_WORKER', true);
 }
-$_SERVER['WLS_PROCESS_ROLE'] = $isMaintenanceWorker ? 'maintenance' : 'worker';
+$_SERVER['WLS_PROCESS_ROLE'] = $isMaintenanceWorker
+    ? 'maintenance'
+    : ($isGatewayFallbackWorker ? 'gateway_fallback' : 'worker');
 $_ENV['WLS_PROCESS_ROLE'] = $_SERVER['WLS_PROCESS_ROLE'];
 @\putenv('WLS_PROCESS_ROLE=' . $_SERVER['WLS_PROCESS_ROLE']);
 $_SERVER['WLS_INSTANCE'] = $instanceName;
@@ -528,6 +546,18 @@ $_ENV['WLS_RUNTIME_TOPOLOGY'] = $wlsRuntimeTopology;
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
+$_SERVER['WLS_MASTER_EPOCH'] = (string)$orchestratorEpoch;
+$_ENV['WLS_MASTER_EPOCH'] = (string)$orchestratorEpoch;
+@\putenv('WLS_MASTER_EPOCH=' . (string)$orchestratorEpoch);
+$_SERVER['WLS_LAUNCH_ID'] = $orchestratorLaunchId;
+$_ENV['WLS_LAUNCH_ID'] = $orchestratorLaunchId;
+@\putenv('WLS_LAUNCH_ID=' . $orchestratorLaunchId);
+if (!\defined('WLS_WORKER_MASTER_EPOCH')) {
+    \define('WLS_WORKER_MASTER_EPOCH', $orchestratorEpoch);
+}
+if (!\defined('WLS_WORKER_LAUNCH_ID')) {
+    \define('WLS_WORKER_LAUNCH_ID', $orchestratorLaunchId);
+}
 if ($publicOrigin !== '') {
     $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
     $_ENV['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
@@ -667,7 +697,7 @@ $wlsStartupTraceLastStage = 'logger_bootstrap';
 $wlsWorkerGracefulExitReason = '';
 $wlsStartupTraceStartedAt = \microtime(true);
 $wlsStartupTraceLastAt = $wlsStartupTraceStartedAt;
-$wlsStartupTrace = static function (string $stage, array $context = []) use (&$wlsStartupTraceLastAt, &$wlsStartupTraceLastStage, $wlsStartupTraceStartedAt, $workerId, $port, $instanceName, $isMaintenanceWorker, $workerStartupTraceFileEnabled): void {
+$wlsStartupTrace = static function (string $stage, array $context = []) use (&$wlsStartupTraceLastAt, &$wlsStartupTraceLastStage, $wlsStartupTraceStartedAt, $workerId, $port, $instanceName, $isMaintenanceWorker, $isGatewayFallbackWorker, $workerStartupTraceFileEnabled): void {
     $now = \microtime(true);
     $wlsStartupTraceLastStage = $stage;
     $context['delta_ms'] = (int)\round(($now - $wlsStartupTraceLastAt) * 1000);
@@ -679,7 +709,9 @@ $wlsStartupTrace = static function (string $stage, array $context = []) use (&$w
             'ts' => \date('c'),
             'pid' => \getmypid(),
             'instance' => $instanceName,
-            'role' => $isMaintenanceWorker ? 'maintenance' : 'worker',
+            'role' => $isMaintenanceWorker
+                ? 'maintenance'
+                : ($isGatewayFallbackWorker ? 'gateway_fallback' : 'worker'),
             'worker_id' => $workerId,
             'port' => $port,
             'stage' => $stage,
@@ -693,11 +725,13 @@ $wlsStartupTrace = static function (string $stage, array $context = []) use (&$w
     }
     WlsLogger::info_('[StartupTrace] ' . $stage . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
 };
-$wlsWorkerExitTrace = static function (string $event, string $reason = '', array $context = []) use (&$ipcClient, &$wlsStartupTraceLastStage, $workerId, $port, $instanceName, $isMaintenanceWorker, $controlPort, $orchestratorLaunchId): void {
+$wlsWorkerExitTrace = static function (string $event, string $reason = '', array $context = []) use (&$ipcClient, &$wlsStartupTraceLastStage, $workerId, $port, $instanceName, $isMaintenanceWorker, $isGatewayFallbackWorker, $controlPort, $orchestratorLaunchId): void {
     $context = \array_merge([
         'pid' => \getmypid(),
         'instance' => $instanceName,
-        'role' => $isMaintenanceWorker ? 'maintenance' : 'worker',
+        'role' => $isMaintenanceWorker
+            ? 'maintenance'
+            : ($isGatewayFallbackWorker ? 'gateway_fallback' : 'worker'),
         'worker_id' => $workerId,
         'port' => $port,
         'control_port' => $controlPort,
@@ -737,13 +771,19 @@ $memoryDrainThreshold = $memoryDrainThreshold ?? 0.88;
 $maxRequestHeaderBytes = $maxRequestHeaderBytes ?? 65536;
 $maxRequestBodyBytes = $maxRequestBodyBytes ?? (16 * 1024 * 1024);
 $maxBufferedRequestBytes = $maxBufferedRequestBytes ?? ($maxRequestHeaderBytes + $maxRequestBodyBytes);
-$ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+$ipcRole = $isMaintenanceWorker
+    ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE
+    : ($isGatewayFallbackWorker
+        ? \Weline\Server\IPC\ControlMessage::ROLE_GATEWAY_FALLBACK
+        : \Weline\Server\IPC\ControlMessage::ROLE_WORKER);
 $earlyIpcHandler = null;
 $kernel = null;
 
 if ($controlPort > 0 || $supervisorEnabled) {
     $wlsStartupTrace('ipc_register_begin', ['control_port' => $controlPort]);
-    $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
+    $ipcSelfTag = ($isMaintenanceWorker
+        ? 'Maintenance'
+        : ($isGatewayFallbackWorker ? 'GatewayFallback' : 'Worker')) . "#{$workerId}";
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
         $ipcRole,
         \getmypid(),
@@ -1677,24 +1717,43 @@ if ($listenFd > 0) {
 // 方案1a：SO_REUSEPORT + 延迟 SSL（同端口 HTTP→HTTPS 重定向，与方案2b 行为一致）
 } elseif ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket_create')) {
     WlsLogger::info_("使用 SO_REUSEPORT + 延迟 SSL，监听 tcp://{$host}:{$port}（同端口 HTTP→HTTPS 重定向）");
-    $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-    if (!$rawSocket) {
-        WlsLogger::error_("socket_create 失败: " . \socket_strerror(\socket_last_error()));
-        exit(1);
-    }
-    if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
-        WlsLogger::warning_("设置 SO_REUSEADDR 失败");
-    }
-    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
-        WlsLogger::error_("设置 SO_REUSEPORT 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
-        @\socket_close($rawSocket);
-        exit(1);
-    }
-    if (!@\socket_bind($rawSocket, $host, $port)) {
+    $rawSocket = false;
+    $maxBindRetries = \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS;
+    for ($attempt = 1; $attempt <= $maxBindRetries; $attempt++) {
+        $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if (!$rawSocket) {
+            WlsLogger::error_("socket_create 失败: " . \socket_strerror(\socket_last_error()));
+            exit(1);
+        }
+        if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
+            WlsLogger::warning_("设置 SO_REUSEADDR 失败");
+        }
+        if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
+            WlsLogger::error_("设置 SO_REUSEPORT 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
+            @\socket_close($rawSocket);
+            exit(1);
+        }
+        if (@\socket_bind($rawSocket, $host, $port)) {
+            break;
+        }
+
         $errCode = \socket_last_error($rawSocket);
         $errMsg = \socket_strerror($errCode);
-        WlsLogger::error_("socket_bind 失败: ({$errCode}) {$errMsg}");
         @\socket_close($rawSocket);
+        $rawSocket = false;
+        if (!\Weline\Server\Socket\ListenSocketOptions::isAddressInUseError($errCode, $errMsg)
+            || $attempt >= $maxBindRetries
+        ) {
+            WlsLogger::error_("socket_bind 失败: ({$errCode}) {$errMsg}");
+            exit(1);
+        }
+        WlsLogger::warning_(
+            "socket_bind 遇到临时端口竞争，{$attempt}/{$maxBindRetries} 次重试: ({$errCode}) {$errMsg}"
+        );
+        \usleep(\Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_DELAY_MICROSECONDS);
+    }
+    if (!$rawSocket) {
+        WlsLogger::error_("socket_bind 重试后仍未获得 {$host}:{$port}");
         exit(1);
     }
     if (!@\socket_listen($rawSocket, 102400)) {
@@ -1715,42 +1774,47 @@ if ($listenFd > 0) {
 // 方案1b：使用 socket 扩展创建支持 SO_REUSEPORT 的 socket（直接 SSL，无同端口重定向）
 } elseif ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
     WlsLogger::info_("使用 socket 扩展创建 SO_REUSEPORT socket...");
-    
-    // 创建原始 socket
-    $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-    if (!$rawSocket) {
-        WlsLogger::error_("socket_create 失败: " . \socket_strerror(\socket_last_error()));
-        exit(1);
-    }
-    
-    // 设置 SO_REUSEADDR
-    if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
-        WlsLogger::warning_("设置 SO_REUSEADDR 失败");
-    }
-    
-    // 设置 SO_REUSEPORT
-    if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
-        WlsLogger::error_("设置 SO_REUSEPORT 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
-        @\socket_close($rawSocket);
-        exit(1);
-    }
-    
-    // 绑定地址
-    if (!@\socket_bind($rawSocket, $host, $port)) {
+
+    $rawSocket = false;
+    $maxBindRetries = \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS;
+    for ($attempt = 1; $attempt <= $maxBindRetries; $attempt++) {
+        $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if (!$rawSocket) {
+            WlsLogger::error_("socket_create 失败: " . \socket_strerror(\socket_last_error()));
+            exit(1);
+        }
+        if (!\Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($rawSocket)['success']) {
+            WlsLogger::warning_("设置 SO_REUSEADDR 失败");
+        }
+        if (!@\socket_set_option($rawSocket, SOL_SOCKET, SO_REUSEPORT, 1)) {
+            WlsLogger::error_("设置 SO_REUSEPORT 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
+            @\socket_close($rawSocket);
+            exit(1);
+        }
+        if (@\socket_bind($rawSocket, $host, $port)) {
+            break;
+        }
+
         $errCode = \socket_last_error($rawSocket);
         $errMsg = \socket_strerror($errCode);
-        WlsLogger::error_("socket_bind 失败: ({$errCode}) {$errMsg}");
-        
-        // 如果端口被占用，直接退出进程，不再重试
-        if ($errCode === 10048 || $errCode === 98) { // Windows: 10048, Linux: 98
-            @\socket_close($rawSocket);
-            exit(1); // 退出码 1 通知 Master 启动失败
-        }
-        
         @\socket_close($rawSocket);
+        $rawSocket = false;
+        if (!\Weline\Server\Socket\ListenSocketOptions::isAddressInUseError($errCode, $errMsg)
+            || $attempt >= $maxBindRetries
+        ) {
+            WlsLogger::error_("socket_bind 失败: ({$errCode}) {$errMsg}");
+            exit(1);
+        }
+        WlsLogger::warning_(
+            "socket_bind 遇到临时端口竞争，{$attempt}/{$maxBindRetries} 次重试: ({$errCode}) {$errMsg}"
+        );
+        \usleep(\Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_DELAY_MICROSECONDS);
+    }
+    if (!$rawSocket) {
+        WlsLogger::error_("socket_bind 重试后仍未获得 {$host}:{$port}");
         exit(1);
     }
-    
+
     // 开始监听
     if (!@\socket_listen($rawSocket, 102400)) {
         WlsLogger::error_("socket_listen 失败: " . \socket_strerror(\socket_last_error($rawSocket)));
@@ -1793,8 +1857,8 @@ if ($listenFd > 0) {
 } elseif ($deferSsl && $useReusePort && !$isWindows && \function_exists('socket_create')) {
     // 方案2b-socket：仅 SO_REUSEPORT 直连模式才用 socket 扩展（socket_export_stream + stream_socket_accept 在 Dispatcher 模式下不可靠）
     // Dispatcher 模式（$useReusePort=false）直接 fallthrough 到方案2b 的 stream_socket_server，保证 stream_socket_accept 正常工作
-    $maxBindRetries = 1;
-    $bindRetryDelay = 0;
+    $maxBindRetries = \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS;
+    $bindRetryDelay = \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_DELAY_MICROSECONDS;
     $rawSocket = false;
     $lastErrno = 0;
     $lastErrstr = '';
@@ -1820,13 +1884,16 @@ if ($listenFd > 0) {
         $lastErrstr = \socket_strerror($lastErrno);
         @\socket_close($rawSocket);
         $rawSocket = false;
-        if ($lastErrno !== 98) { // EADDRINUSE on Linux
+        if (!\Weline\Server\Socket\ListenSocketOptions::isAddressInUseError(
+            $lastErrno,
+            $lastErrstr,
+        )) {
             WlsLogger::error_("Socket 绑定失败 (defer-ssl): {$lastErrstr} (errno: {$lastErrno})");
             break;
         }
-        WlsLogger::warning_("端口 {$port} 占用 (errno: {$lastErrno})，{$bindRetryDelay} 秒后重试 ({$attempt}/{$maxBindRetries})");
+        WlsLogger::warning_("端口 {$port} 瞬时占用 (errno: {$lastErrno})，50 毫秒后重试 ({$attempt}/{$maxBindRetries})");
         if ($attempt < $maxBindRetries) {
-            \Weline\Framework\Runtime\SchedulerSystem::sleep($bindRetryDelay);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep($bindRetryDelay);
         }
     }
 
@@ -1862,13 +1929,39 @@ if ($listenFd > 0) {
         'ssl' => $deferSslOptions,
     ]);
 
-    $socket = @\stream_socket_server(
-        "tcp://{$host}:{$port}",
-        $errno,
-        $errstr,
-        STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-        $context
-    );
+    $socket = null;
+    $errno = 0;
+    $errstr = '';
+    for (
+        $attempt = 1;
+        $attempt <= \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS;
+        $attempt++
+    ) {
+        $socket = @\stream_socket_server(
+            "tcp://{$host}:{$port}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+        );
+        if ($socket) {
+            break;
+        }
+        if (!\Weline\Server\Socket\ListenSocketOptions::isAddressInUseError($errno, $errstr)) {
+            break;
+        }
+        WlsLogger::warning_(
+            "端口 {$port} 瞬时占用 (errno: {$errno})，50 毫秒后重试 "
+            . "({$attempt}/"
+            . \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS
+            . ')'
+        );
+        if ($attempt < \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS) {
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(
+                \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_DELAY_MICROSECONDS,
+            );
+        }
+    }
 
     if (!$socket) {
         WlsLogger::error_("Socket 创建失败 (defer-ssl): {$errstr} (errno: {$errno})");
@@ -1911,13 +2004,39 @@ if ($listenFd > 0) {
         ]
     ]);
 
-    $socket = @\stream_socket_server(
-        "ssl://{$host}:{$port}",
-        $errno,
-        $errstr,
-        STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
-        $context
-    );
+    $socket = null;
+    $errno = 0;
+    $errstr = '';
+    for (
+        $attempt = 1;
+        $attempt <= \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS;
+        $attempt++
+    ) {
+        $socket = @\stream_socket_server(
+            "ssl://{$host}:{$port}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+            $context
+        );
+        if ($socket) {
+            break;
+        }
+        if (!\Weline\Server\Socket\ListenSocketOptions::isAddressInUseError($errno, $errstr)) {
+            break;
+        }
+        WlsLogger::warning_(
+            "端口 {$port} 瞬时占用 (errno: {$errno})，50 毫秒后重试 "
+            . "({$attempt}/"
+            . \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS
+            . ')'
+        );
+        if ($attempt < \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_ATTEMPTS) {
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(
+                \Weline\Server\Socket\ListenSocketOptions::BIND_RETRY_DELAY_MICROSECONDS,
+            );
+        }
+    }
 
     if (!$socket) {
         WlsLogger::error_("Socket 创建失败: {$errstr} (errno: {$errno})");
@@ -2044,10 +2163,28 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
         throw new \RuntimeException('READY gate TLS session-cache channel warmup failed.');
     }
     $readyGateSharedRuntimeConnectionWarmupCompleted = true;
-    $homepageFpcProof = $runtime->runReadyGateWorkerBootstrapWarmup();
+    [$homepageFpcProof, $dynamicFirstRenderProof]
+        = \Weline\Server\Service\Runtime\WorkerReadyGateRetry::run(
+            static fn (): array => [
+                $runtime->runReadyGateWorkerBootstrapWarmup(),
+                $runtime->readyGateDynamicFirstRenderProof(),
+            ],
+            $workerId,
+            static function (
+                int $attempt,
+                \Throwable $throwable,
+                int $delay,
+            ) use ($workerId): void {
+                WlsLogger::warning_(
+                    '[WorkerWarmup] transient database contention; retrying READY gate '
+                    . "worker={$workerId}, attempt={$attempt}, delay_us={$delay}, "
+                    . 'error=' . $throwable::class
+                );
+            },
+        );
     \Weline\Server\Service\Runtime\WorkerReadinessState::markBusinessHomepageHot($homepageFpcProof);
     \Weline\Server\Service\Runtime\WorkerReadinessState::markDynamicFirstRenderProof(
-        $runtime->readyGateDynamicFirstRenderProof()
+        $dynamicFirstRenderProof
     );
     $readyGateWorkerBootstrapWarmupCompleted = true;
     WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup done worker={$workerId}");
@@ -2164,7 +2301,11 @@ $workerHealthAccessPolicy = \Weline\Server\Service\WorkerHealthAccessPolicy::boo
 if ($controlPort <= 0 && !$supervisorEnabled) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 }
-$ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+$ipcRole = $isMaintenanceWorker
+    ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE
+    : ($isGatewayFallbackWorker
+        ? \Weline\Server\IPC\ControlMessage::ROLE_GATEWAY_FALLBACK
+        : \Weline\Server\IPC\ControlMessage::ROLE_WORKER);
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
     && $supervisorEnabledRaw !== ''
@@ -2172,7 +2313,9 @@ $supervisorEnabled = $supervisorEnabledRaw !== false
 
 if ($controlPort > 0 || $supervisorEnabled) {
     $wlsStartupTrace('ipc_connect_begin', ['control_port' => $controlPort]);
-    $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
+    $ipcSelfTag = ($isMaintenanceWorker
+        ? 'Maintenance'
+        : ($isGatewayFallbackWorker ? 'GatewayFallback' : 'Worker')) . "#{$workerId}";
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
         $ipcRole,
         \getmypid(),
@@ -3096,7 +3239,11 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
     
     // 通知 Master 即将退出（先发送退出原因，再发送 exited）
     if ($ipcClient && $ipcClient->isConnected()) {
-        $exitRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+        $exitRole = $isMaintenanceWorker
+            ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE
+            : ($isGatewayFallbackWorker
+                ? \Weline\Server\IPC\ControlMessage::ROLE_GATEWAY_FALLBACK
+                : \Weline\Server\IPC\ControlMessage::ROLE_WORKER);
         $exitReason = $reason !== '' ? $reason : 'graceful';
         @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($exitReason, 0));
         $ipcClient->send(\Weline\Server\IPC\ControlMessage::exited($exitRole, \getmypid(), $port, $workerId));
@@ -3848,8 +3995,13 @@ while (true) {
             $http3Status = $http3Runtime instanceof \Weline\Server\Protocol\Http3\WorkerQuicRuntime
                 ? $http3Runtime->stats()
                 : [];
+            $drainCounters = wlsDrainConnectionCounters($longLivedConnections);
             $statusContext = [
                 'active_requests' => $activeRequests,
+                'long_lived_connections' => $drainCounters['long_lived_connections'],
+                'sse_connections' => $drainCounters['sse_connections'],
+                'websocket_connections' => $drainCounters['websocket_connections'],
+                'drain_counters_version' => 1,
             ];
             foreach ($http3Status as $http3Metric => $http3Value) {
                 if (!\is_string($http3Metric) || !\is_int($http3Value)) {
@@ -4334,6 +4486,7 @@ while (true) {
                         $policyDecision,
                         $WLS_UOPZ_EXIT_GUARD,
                         $http3FiberKey,
+                        &$longLivedConnections,
                     ): string {
                         wlsFiberRequestContextEnter(null, $http3FiberKey);
                         try {
@@ -4355,6 +4508,7 @@ while (true) {
                                 $originTokenAllowLocal,
                                 $transportPeer,
                                 $policyDecision,
+                                wlsDrainConnectionCounters($longLivedConnections),
                             );
                         } catch (\Weline\Framework\Runtime\RequestExitException $exception) {
                             throw $exception;
@@ -5826,25 +5980,39 @@ while (true) {
             $layer = (string) ($longLivedDetection['layer'] ?? 'unknown');
             $protocol = (string) ($longLivedDetection['protocol'] ?? 'long-lived');
             WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
-            if ($applyLongLivedLimit && $longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+            $quotaLongLivedCount = wlsDrainConnectionCounters(
+                $longLivedConnections,
+            )['quota_connections'];
+            if ($applyLongLivedLimit
+                && $longLivedMaxActive > 0
+                && $quotaLongLivedCount >= $longLivedMaxActive
+            ) {
                 $isWorkspaceStreamSse = $isSseProtocolRequest && \str_contains($rawRequest, '/stream-sse');
                 if ($isWorkspaceStreamSse) {
                     $waitDeadline = \microtime(true) + 1.2;
-                    while (\microtime(true) < $waitDeadline && \count($longLivedConnections) >= $longLivedMaxActive) {
+                    while (\microtime(true) < $waitDeadline
+                        && $quotaLongLivedCount >= $longLivedMaxActive
+                    ) {
                         foreach (\array_keys($longLivedConnections) as $llConnId) {
                             $llConn = $connections[$llConnId] ?? null;
                             if (!$llConn || !\is_resource($llConn)) {
                                 unset($longLivedConnections[$llConnId]);
                             }
                         }
-                        if (\count($longLivedConnections) < $longLivedMaxActive) {
+                        $quotaLongLivedCount = wlsDrainConnectionCounters(
+                            $longLivedConnections,
+                        )['quota_connections'];
+                        if ($quotaLongLivedCount < $longLivedMaxActive) {
                             break;
                         }
                         \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(50);
                     }
                 }
             }
-            if ($applyLongLivedLimit && $longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+            if ($applyLongLivedLimit
+                && $longLivedMaxActive > 0
+                && $quotaLongLivedCount >= $longLivedMaxActive
+            ) {
                 $activeRequests--;
                 $body = 'Too Many Long Connections - Retry Shortly';
                 $resp = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain; charset=utf-8\r\nRetry-After: 2\r\nContent-Length: "
@@ -5861,11 +6029,12 @@ while (true) {
                 );
                 continue;
             }
+            $longLivedConnections[$connId] = [
+                'type' => $protocol,
+                'start' => \time(),
+                'quota_exempt' => !$applyLongLivedLimit,
+            ];
             if ($applyLongLivedLimit) {
-                $longLivedConnections[$connId] = [
-                    'type' => $protocol,
-                    'start' => \time(),
-                ];
                 WlsLogger::info_(
                     '长连接槽位已分配 (connId: ' . $connId . ', protocol: ' . $protocol
                     . ', 当前长连接数: ' . \count($longLivedConnections) . ')'
@@ -5973,7 +6142,8 @@ while (true) {
             &$requestLogged,
             &$writeBuffers,
             &$writableConnections,
-            &$pendingClose
+            &$pendingClose,
+            &$longLivedConnections
         ) {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
             try {
@@ -6037,7 +6207,8 @@ while (true) {
                     $originTokenHeader,
                     $originTokenAllowLocal,
                     $transportPeer,
-                    $policyDecision
+                    $policyDecision,
+                    wlsDrainConnectionCounters($longLivedConnections),
                 );
             } catch (\Weline\Framework\Runtime\RequestExitException $e) {
                 throw $e;
@@ -6120,7 +6291,10 @@ while (true) {
             WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
             $nowSat = \time();
             if ($longLivedMaxActive > 0) {
-                $isSaturated = \count($longLivedConnections) >= $longLivedMaxActive;
+                $quotaLongLivedCount = wlsDrainConnectionCounters(
+                    $longLivedConnections,
+                )['quota_connections'];
+                $isSaturated = $quotaLongLivedCount >= $longLivedMaxActive;
                 if (
                     $isSaturated
                     && !$longLivedSaturationReported
@@ -6130,7 +6304,7 @@ while (true) {
                         $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturation(
                             $workerId,
                             $port,
-                            \count($longLivedConnections),
+                            $quotaLongLivedCount,
                             $longLivedMaxActive,
                             \count($activeFibers),
                             $fiberMaxActive
@@ -6139,7 +6313,7 @@ while (true) {
                         $longLivedSaturationReported = true;
                         $longLivedSaturationCleared = false;
                         WlsLogger::warning_(
-                            '长连接饱和上报 (long_lived_count=' . \count($longLivedConnections)
+                            '长连接饱和上报 (long_lived_count=' . $quotaLongLivedCount
                             . ", max={$longLivedMaxActive})"
                         );
                     }
@@ -6148,13 +6322,13 @@ while (true) {
                         $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturationCleared(
                             $workerId,
                             $port,
-                            \count($longLivedConnections),
+                            $quotaLongLivedCount,
                             $longLivedMaxActive
                         ));
                         $longLivedSaturationReported = false;
                         $longLivedSaturationCleared = true;
                         WlsLogger::info_(
-                            '长连接饱和解除 (long_lived_count=' . \count($longLivedConnections) . ')'
+                            '长连接饱和解除 (long_lived_count=' . $quotaLongLivedCount . ')'
                         );
                     }
                 }
@@ -7668,6 +7842,36 @@ function sslFinalizeHttpResponseAfterHandle(
     }
 }
 
+/**
+ * @param array<int,array{type?:string,quota_exempt?:bool}> $connections
+ * @return array{long_lived_connections:int,sse_connections:int,websocket_connections:int,quota_connections:int}
+ */
+function wlsDrainConnectionCounters(array $connections): array
+{
+    $counters = [
+        'long_lived_connections' => 0,
+        'sse_connections' => 0,
+        'websocket_connections' => 0,
+        'quota_connections' => 0,
+    ];
+    foreach ($connections as $connection) {
+        if (!\is_array($connection)) {
+            continue;
+        }
+        ++$counters['long_lived_connections'];
+        $protocol = \strtolower((string)($connection['type'] ?? ''));
+        if ($protocol === 'sse') {
+            ++$counters['sse_connections'];
+        } elseif (\in_array($protocol, ['websocket', 'ws'], true)) {
+            ++$counters['websocket_connections'];
+        }
+        if (($connection['quota_exempt'] ?? false) !== true) {
+            ++$counters['quota_connections'];
+        }
+    }
+    return $counters;
+}
+
 function handleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
@@ -7685,7 +7889,8 @@ function handleRequest(
     string $originTokenHeader,
     bool $originTokenAllowLocal,
     string $transportPeer = '',
-    ?\Weline\Server\Security\WorkerPolicyDecision $precomputedPolicyDecision = null
+    ?\Weline\Server\Security\WorkerPolicyDecision $precomputedPolicyDecision = null,
+    array $drainCounters = [],
 ): string {
     $policyDecision = $precomputedPolicyDecision
         ?? \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate($rawRequest, $transportPeer);
@@ -7714,20 +7919,46 @@ function handleRequest(
         
         // 高性能健康检查：使用极简响应，避免 json_encode/memory_get_usage 开销
         // 完整信息可通过 /_wls/health?detail=1 获取
-        $wantsDetail = \strpos($rawRequest, 'detail=1') !== false || \strpos($rawRequest, 'detail=true') !== false;
-        $wantsMemory = \strpos($rawRequest, 'memory=1') !== false || \strpos($rawRequest, 'memory=true') !== false;
-        $wantsStaticMemory = \strpos($rawRequest, 'static=1') !== false || \strpos($rawRequest, 'static=true') !== false;
-        $wantsObjectMemory = \strpos($rawRequest, 'objects=1') !== false || \strpos($rawRequest, 'objects=true') !== false;
+        $healthOptions = [];
+        $healthQuery = \parse_url($policyDecision->target, PHP_URL_QUERY);
+        if (\is_string($healthQuery) && $healthQuery !== '') {
+            \parse_str($healthQuery, $healthOptions);
+        }
+        $healthOptionEnabled = static function (string $name) use ($healthOptions): bool {
+            $value = $healthOptions[$name] ?? null;
+            return \is_scalar($value)
+                && \in_array(\strtolower(\trim((string)$value)), ['1', 'true'], true);
+        };
+        $wantsDetail = $healthOptionEnabled('detail');
+        $wantsMemory = $healthOptionEnabled('memory');
+        $wantsStaticMemory = $healthOptionEnabled('static');
+        $wantsObjectMemory = $healthOptionEnabled('objects');
         
         if ($wantsDetail) {
             // 详细模式：返回完整信息
+            $fiberSnapshot = \Weline\Server\Runtime\WorkerFiberSnapshot::getSnapshot();
             $health = [
                 'status' => 'healthy',
                 'instance' => $instanceName,
+                'master_epoch' => (int)WLS_WORKER_MASTER_EPOCH,
+                'launch_id' => (string)WLS_WORKER_LAUNCH_ID,
                 'worker_id' => $workerId,
                 'port' => $port,
                 'connections' => $connectionCount,
                 'active_requests' => $activeRequests - 1,
+                'long_lived_connections' => \max(
+                    0,
+                    (int)($drainCounters['long_lived_connections'] ?? 0),
+                ),
+                'sse_connections' => \max(
+                    0,
+                    (int)($drainCounters['sse_connections'] ?? 0),
+                ),
+                'websocket_connections' => \max(
+                    0,
+                    (int)($drainCounters['websocket_connections'] ?? 0),
+                ),
+                'drain_counters_version' => 1,
                 'total_requests' => $requestCount,
                 'memory_usage' => \memory_get_usage(true),
                 'memory_usage_used' => \memory_get_usage(false),
@@ -7742,6 +7973,7 @@ function handleRequest(
                     ? $GLOBALS['wlsTlsSessionCacheRuntime']->counters()
                     : [],
                 'timestamp' => \time(),
+                'fiber_count' => \count($fiberSnapshot),
             ];
             if ($wantsMemory) {
                 $health['memory_diagnostics'] = wlsWorkerMemoryHealthDiagnostics($wantsStaticMemory, $wantsObjectMemory);

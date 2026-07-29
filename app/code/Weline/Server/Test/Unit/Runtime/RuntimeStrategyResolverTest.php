@@ -79,7 +79,7 @@ final class RuntimeStrategyResolverTest extends TestCase
         );
     }
 
-    public function testWindowsAutoUsesDispatcherAndStableWorkerCount(): void
+    public function testWindowsAutoUsesNginxBalancedWorkerPortsAndStableWorkerCount(): void
     {
         $result = (new RuntimeStrategyResolver())->resolve(
             ['worker_count' => 'auto', 'mode' => 'io'],
@@ -96,8 +96,8 @@ final class RuntimeStrategyResolverTest extends TestCase
 
         $selection = $this->selection($result);
         self::assertSame('degraded', $result['status']);
-        self::assertSame(EffectiveTopology::Dispatcher, $selection->effectiveTopology);
-        self::assertSame('single', $selection->listenerMode);
+        self::assertSame(EffectiveTopology::Direct, $selection->effectiveTopology);
+        self::assertSame('worker_ports', $selection->listenerMode);
         self::assertSame(8, $result['worker_count']);
         self::assertFalse($result['supervisor_enabled']);
         self::assertSame(
@@ -110,16 +110,19 @@ final class RuntimeStrategyResolverTest extends TestCase
         );
     }
 
-    public function testExplicitDirectFailsOnWindows(): void
+    public function testExplicitDirectUsesNginxBalancedWorkerPortsOnWindows(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Windows supports only WLS Dispatcher topology');
-
-        (new RuntimeStrategyResolver())->resolve(
+        $result = (new RuntimeStrategyResolver())->resolve(
             ['worker_count' => 4],
             ['direct' => true],
             $this->profile(['os_family' => 'Windows']),
         );
+
+        $selection = $this->selection($result);
+        self::assertSame(RequestedTopology::Direct, $selection->requestedTopology);
+        self::assertSame(EffectiveTopology::Direct, $selection->effectiveTopology);
+        self::assertSame('worker_ports', $selection->listenerMode);
+        self::assertSame('cli.direct', $selection->source);
     }
 
     public function testExplicitDispatcherFallsBackToSelectWithWarning(): void
@@ -194,7 +197,7 @@ final class RuntimeStrategyResolverTest extends TestCase
     public function testWindowsRejectsDirectListenerModeConfiguration(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('listener_mode is valid only for Linux/macOS Direct topology');
+        $this->expectExceptionMessage('Windows Direct requires wls.runtime.listener_mode=auto or worker_ports');
 
         (new RuntimeStrategyResolver())->resolve(
             ['runtime' => ['listener_mode' => 'reuseport']],
@@ -218,7 +221,7 @@ final class RuntimeStrategyResolverTest extends TestCase
     public function testDirectRejectsEventBufferSslEngineDuringPreflight(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('does not support wls.ssl.engine=event_buffer');
+        $this->expectExceptionMessage('none/stream');
 
         (new RuntimeStrategyResolver())->resolve(
             ['worker_count' => 4, 'ssl' => ['engine' => 'event_buffer']],
@@ -227,16 +230,19 @@ final class RuntimeStrategyResolverTest extends TestCase
         );
     }
 
-    public function testHttpsDirectRejectsMissingOpenSslExtension(): void
+    public function testPureWlsSelectsStreamTlsEngineBeforeDependencyBootstrap(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('requires the PHP OpenSSL extension');
-
-        (new RuntimeStrategyResolver())->resolve(
-            ['worker_count' => 4, 'https' => true],
+        $result = (new RuntimeStrategyResolver())->resolve(
+            [
+                'worker_count' => 4,
+                'https' => true,
+                'edge' => ['adapter' => 'wls'],
+            ],
             [],
             $this->sharedListenerProfile(['extensions' => ['event' => true, 'openssl' => false]]),
         );
+
+        self::assertSame('stream', $this->selection($result)->sslEngine);
     }
 
     public function testLegacyTopologyIsRejectedEvenWhenRuntimeTopologyExists(): void

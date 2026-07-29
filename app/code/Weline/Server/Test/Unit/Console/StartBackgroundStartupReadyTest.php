@@ -1,6 +1,17 @@
 <?php
 declare(strict_types=1);
 
+namespace Weline\Server\Console\Server;
+
+if (!\function_exists(__NAMESPACE__ . '\__')) {
+    function __(string $text, array $args = []): string
+    {
+        return $text;
+    }
+}
+
+\defined('IS_WIN') || \define('IS_WIN', \PHP_OS_FAMILY === 'Windows');
+
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
@@ -81,13 +92,13 @@ final class StartBackgroundStartupReadyTest extends TestCase
 
         $singleWorkerWait = $this->invokeProtected($start, 'resolveBackgroundStartupReadyWaitMs', [
             'count' => 1,
-            'dispatcher_enabled' => false,
+            'runtime_selection' => $this->runtimeSelection(false),
             'ssl_enabled' => false,
             'shared_state' => [],
         ]);
         $multiServiceWait = $this->invokeProtected($start, 'resolveBackgroundStartupReadyWaitMs', [
             'count' => 4,
-            'dispatcher_enabled' => true,
+            'runtime_selection' => $this->runtimeSelection(true),
             'ssl_enabled' => true,
             'shared_state' => [
                 'session' => ['port' => 19970],
@@ -109,13 +120,13 @@ final class StartBackgroundStartupReadyTest extends TestCase
         };
 
         if (\defined('IS_WIN') && IS_WIN) {
-            self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
-            self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+            self::assertSame(30000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
+            self::assertSame(30000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
             return;
         }
 
-        self::assertSame(30000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
-        self::assertSame(60000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+        self::assertSame(10000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
+        self::assertSame(10000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
     }
 
     public function testResolveBackgroundMasterConfirmWaitHonorsEnvironmentOverride(): void
@@ -141,7 +152,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
             }
         };
 
-        self::assertSame(300000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+        self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
     }
 
     public function testResolveBackgroundMasterConfirmWaitHonorsStartupTimeoutWhenConfigured(): void
@@ -154,7 +165,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
             }
         };
 
-        self::assertSame(480000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+        self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
     }
 
     public function testResolveBackgroundStartupReadyHardWaitCoversSlowOrchestratorCycleByDefault(): void
@@ -169,7 +180,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
 
         $hardWaitMs = $this->invokeProtected($start, 'resolveBackgroundStartupReadyHardWaitMs', [
             'count' => 8,
-            'dispatcher_enabled' => true,
+            'runtime_selection' => $this->runtimeSelection(true),
             'ssl_enabled' => true,
         ]);
 
@@ -286,9 +297,9 @@ final class StartBackgroundStartupReadyTest extends TestCase
                 bool $dispatcherEnabled = false,
                 int $workerPort = 0,
                 int $httpRedirectPort = 0,
-                bool $directReusePortEnabled = false
+                string $directListenerMode = ''
             ): void {
-                unset($instanceName, $host, $port, $count, $daemon, $source, $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $directReusePortEnabled);
+                unset($instanceName, $host, $port, $count, $daemon, $source, $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $directListenerMode);
                 $this->startupInfoCalls++;
             }
 
@@ -312,7 +323,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
             true,
             18080,
             0,
-            false
+            ''
         );
 
         self::assertSame(0, $start->startupInfoCalls);
@@ -331,7 +342,7 @@ final class StartBackgroundStartupReadyTest extends TestCase
             true,
             18080,
             0,
-            false
+            ''
         );
 
         self::assertSame(1, $start->startupInfoCalls);
@@ -417,12 +428,33 @@ final class StartBackgroundStartupReadyTest extends TestCase
         $context = $this->invokeProtected($start, 'formatStartupFailureContextSummary', [
             'instance' => 'test',
             'main_port' => 443,
-            'dispatcher_enabled' => true,
+            'effective_topology' => 'dispatcher',
             'roles' => ['worker' => ['ready' => 0]],
         ]);
 
         self::assertSame(['role=worker#1 state=starting', '123'], $diagnostics);
-        self::assertSame('instance=test, main_port=443, dispatcher_enabled=true', $context);
+        self::assertSame('instance=test, main_port=443, effective_topology=dispatcher', $context);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function runtimeSelection(bool $dispatcher): array
+    {
+        return [
+            'requested_topology' => 'auto',
+            'effective_topology' => $dispatcher ? 'dispatcher' : 'direct',
+            'topology_source' => 'unit-test',
+            'os_family' => \PHP_OS_FAMILY,
+            'event_loop_driver' => 'select',
+            'ssl_engine' => 'openssl',
+            'listener_mode' => $dispatcher
+                ? 'single'
+                : (\PHP_OS_FAMILY === 'Windows' ? 'worker_ports' : 'reuseport'),
+            'policy_compatible' => true,
+            'reason_codes' => ['unit-test'],
+            'reason' => 'Unit-test runtime selection.',
+        ];
     }
 
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed

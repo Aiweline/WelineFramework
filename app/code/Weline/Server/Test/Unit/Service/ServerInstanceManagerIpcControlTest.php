@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\Runtime\RuntimeSelection;
 
 final class ServerInstanceManagerIpcControlTest extends TestCase
 {
@@ -19,12 +20,24 @@ final class ServerInstanceManagerIpcControlTest extends TestCase
         self::assertGreaterThan(0, $port);
 
         $rawData = [
+            'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+            'runtime_selection' => RuntimeSelection::fromArray([
+                'requested_topology' => 'auto',
+                'effective_topology' => 'dispatcher',
+                'topology_source' => 'unit-test',
+                'os_family' => PHP_OS_FAMILY,
+                'event_loop_driver' => 'select',
+                'ssl_engine' => 'stream',
+                'listener_mode' => 'single',
+                'policy_compatible' => true,
+                'reason_codes' => ['unit_test'],
+                'reason' => 'unit test runtime selection',
+            ])->toArray(),
             'master_pid' => 999999,
             'control_port' => $port,
             'host' => '127.0.0.1',
             'port' => 9982,
             'ssl_enabled' => false,
-            'dispatcher_enabled' => true,
             'count' => 1,
             'worker_port' => 19982,
             'http_redirect_port' => 0,

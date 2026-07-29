@@ -151,8 +151,8 @@ final class BackendStatusServiceTest extends TestCase
         self::assertTrue($dto['success']);
         self::assertSame(
             [
-                [20970, 'session_server.token'],
-                [20971, 'memory_server.token'],
+                [20970, 'session_server.20970.token'],
+                [20971, 'memory_server.20971.token'],
             ],
             $service->stateClientCalls
         );
