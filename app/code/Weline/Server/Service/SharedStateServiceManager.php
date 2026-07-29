@@ -1145,17 +1145,18 @@ class SharedStateServiceManager
                 $registryIdentity .= ' --name=' . \escapeshellarg($processName);
                 $argv[] = '--name=' . $processName;
             }
-            $commands[$role] = [
-                'command' => $registryIdentity,
-                'argv' => $argv,
-                'windowsArgv' => $argv,
-                'cwd' => $command->getWorkingDir(),
-                'block' => false,
-                'foreground' => false,
-                'enableLog' => true,
-                'childOwnsPid' => true,
-                'isolateParentHandles' => IS_WIN,
-            ];
+            $logInstanceName = \trim((string)($definition['service_instance_name'] ?? $requesterInstanceName));
+            if ($logInstanceName === '') {
+                $logInstanceName = 'default';
+            }
+            $commands[$role] = $this->buildSharedProcessBatchConfig(
+                $registryIdentity,
+                $argv,
+                $command->getWorkingDir(),
+                $processName,
+                $logInstanceName,
+                false
+            );
         }
 
         $pids = Processer::batchCreate($commands);
