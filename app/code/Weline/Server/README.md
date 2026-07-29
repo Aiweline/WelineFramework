@@ -299,7 +299,7 @@ Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 P
 │ 1. 普通启动 → 只读探测，不安装、不编译、不修改 PHP       │
 │ 2. POSIX Direct 依赖齐全 → 直接使用 libevent              │
 │ 3. POSIX Direct 依赖缺失 → 停止并给出缺失项               │
-│ 4. POSIX 显式 --install-deps → 安装并用新 PHP 复验        │
+│ 4. POSIX 显式 --install-deps → 安装/配置独立 ini 并用新 PHP 复验 │
 │ 5. Windows Nginx → Direct；纯 WLS → Dispatcher，无需安装  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -311,10 +311,12 @@ Weline Server 支持多种事件循环。普通 `server:start` 只检查当前 P
 php bin/w env:install event -y
 ```
 
+在半安装主机上显式执行 `php bin/w server:start --install-deps` 时，WLS 会先检查当前 `PHP_BINARY` 的 loaded php.ini、实际 additional ini scan dir 与 `extension_dir`。如果 `event.so` 已存在但未加载，WLS 只在实际扫描目录原子发布独立的 `99-weline-event.ini`，不修改主 php.ini；随后使用同一 PHP 二进制的新子进程验证扩展、`EventBase`、`EventBufferEvent` 以及该 ini 确实已被扫描。扫描目录不可写、存在符号链接穿越或子进程验证失败时会回滚新配置并输出诊断，不会声称安装成功。
+
 **Windows:**
-1. 只使用与当前 PHP 版本、架构、TS/NTS 和编译器 ABI 全部匹配的 `php_event.dll`。
-2. 普通启动只探测当前 PHP 已加载的扩展；只有显式 `--install-deps` 才会尝试启用并用新 PHP 子进程验证 `extension_dir` 中已有的匹配 DLL。
-3. 没有可验证 DLL 时使用 Windows 稳定兼容运行时；框架不会自动下载不明 ABI 的二进制文件。
+1. WLS 不通过 `--install-deps` 编译或下载 ext-event；Windows Nginx 的 `worker_ports` 与纯 WLS Dispatcher 保持内置 select 运行时。
+2. 如运维自行启用 ext-event，只能使用与当前 PHP 版本、架构、TS/NTS 和编译器 ABI 全部匹配的 `php_event.dll`。
+3. 普通启动只读探测当前 PHP 已加载的扩展，不会修改 php.ini 或下载不明 ABI 二进制。
 
 生产镜像建议在构建阶段执行 `env:install` 并预装 PHP 依赖。普通启动默认已经禁止安装；`--no-auto-deps` 仅保留给旧脚本表达同一默认行为，不能与 `--install-deps` 同时使用。HTTP/3 不属于 WLS/PHP 依赖，只检查公网 Nginx 的 HTTP/3/QUIC 模块与真实端点门禁。
 

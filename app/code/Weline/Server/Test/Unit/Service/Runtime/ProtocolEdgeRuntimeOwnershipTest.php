@@ -9,6 +9,170 @@ use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 final class ProtocolEdgeRuntimeOwnershipTest extends TestCase
 {
+    public function testEventConfiguratorIsNoOpWhenRuntimeIsAlreadyUsable(): void
+    {
+        $probeCalled = false;
+        $bootstrapper = new \Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper();
+        $result = $bootstrapper->configureEventExtensionForRuntime(
+            [
+                'os_family' => 'Linux',
+                'php_binary' => PHP_BINARY,
+                'event_loaded' => true,
+                'event_base_available' => true,
+                'event_buffer_available' => true,
+                'loaded_ini' => '/read-only/php.ini',
+                'scan_dirs' => [],
+                'extension_dir' => '/read-only/extensions',
+                'extension_binary' => '/read-only/extensions/event.so',
+            ],
+            static function () use (&$probeCalled): array {
+                $probeCalled = true;
+                return [];
+            },
+        );
+
+        self::assertSame('ready', $result['status']);
+        self::assertFalse($result['changed']);
+        self::assertFalse($probeCalled);
+    }
+
+    public function testEventConfiguratorPublishesIndependentIniAndVerifiesFreshChild(): void
+    {
+        [$root, $extensionDirectory, $scanDirectory, $extensionBinary] = $this->createEventConfiguratorFixture();
+        $target = $scanDirectory . DIRECTORY_SEPARATOR . '99-weline-event.ini';
+        try {
+            $bootstrapper = new \Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper();
+            $result = $bootstrapper->configureEventExtensionForRuntime(
+                $this->eventConfiguratorRuntime($extensionDirectory, $scanDirectory, $extensionBinary),
+                static function (string $phpBinary, string $publishedTarget) use ($target): array {
+                    self::assertSame(PHP_BINARY, $phpBinary);
+                    self::assertSame($target, $publishedTarget);
+                    return [
+                        'exit_code' => 0,
+                        'loaded' => true,
+                        'classes' => true,
+                        'scanned_files' => [$publishedTarget],
+                        'output' => '',
+                        'stderr' => '',
+                    ];
+                },
+            );
+
+            self::assertSame('ready', $result['status']);
+            self::assertTrue($result['changed']);
+            self::assertSame("; Managed by WLS 2.0 explicit --install-deps\nextension=event\n", \file_get_contents($target));
+            self::assertSame(0600, \fileperms($target) & 0777);
+        } finally {
+            $this->removeEventConfiguratorFixture($root, $extensionDirectory, $scanDirectory);
+        }
+    }
+
+    public function testEventConfiguratorFailsClosedWithoutSafeScanDirectory(): void
+    {
+        [$root, $extensionDirectory, $scanDirectory, $extensionBinary] = $this->createEventConfiguratorFixture();
+        try {
+            $runtime = $this->eventConfiguratorRuntime($extensionDirectory, $scanDirectory, $extensionBinary);
+            $runtime['scan_dirs'] = [];
+            $bootstrapper = new \Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper();
+            $result = $bootstrapper->configureEventExtensionForRuntime($runtime);
+
+            self::assertSame('failed', $result['status']);
+            self::assertStringContainsString('loaded_ini=', $result['diagnostics']);
+            self::assertStringContainsString('scan_dirs=', $result['diagnostics']);
+            self::assertStringContainsString('extension_dir=', $result['diagnostics']);
+        } finally {
+            $this->removeEventConfiguratorFixture($root, $extensionDirectory, $scanDirectory);
+        }
+    }
+
+    public function testEventConfiguratorRollsBackWhenFreshChildVerificationFails(): void
+    {
+        [$root, $extensionDirectory, $scanDirectory, $extensionBinary] = $this->createEventConfiguratorFixture();
+        $target = $scanDirectory . DIRECTORY_SEPARATOR . '99-weline-event.ini';
+        try {
+            $bootstrapper = new \Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper();
+            $result = $bootstrapper->configureEventExtensionForRuntime(
+                $this->eventConfiguratorRuntime($extensionDirectory, $scanDirectory, $extensionBinary),
+                static fn(): array => [
+                    'exit_code' => 9,
+                    'loaded' => false,
+                    'classes' => false,
+                    'scanned_files' => [],
+                    'output' => '',
+                    'stderr' => 'event unavailable',
+                ],
+            );
+
+            self::assertSame('failed', $result['status']);
+            self::assertFalse(\file_exists($target));
+            self::assertStringContainsString('rollback=ok', $result['diagnostics']);
+        } finally {
+            $this->removeEventConfiguratorFixture($root, $extensionDirectory, $scanDirectory);
+        }
+    }
+
+    public function testRuntimeDependencyBootstrapperConfiguresEventBeforeAndAfterInstall(): void
+    {
+        $source = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/Service/Runtime/RuntimeDependencyBootstrapper.php'
+        );
+
+        self::assertGreaterThanOrEqual(2, \substr_count($source, 'configureEventExtensionForRuntime()'));
+        self::assertStringContainsString('$dependency === \'event\'', $source);
+        self::assertStringContainsString('!$reentry && $posix && !$this->canUseEvent()', $source);
+    }
+
+    /** @return array{string,string,string,string} */
+    private function createEventConfiguratorFixture(): array
+    {
+        $root = \realpath(\sys_get_temp_dir()) . DIRECTORY_SEPARATOR . 'wls-event-config-' . \bin2hex(\random_bytes(8));
+        $extensionDirectory = $root . DIRECTORY_SEPARATOR . 'extensions';
+        $scanDirectory = $root . DIRECTORY_SEPARATOR . 'conf.d';
+        self::assertTrue(\mkdir($extensionDirectory, 0700, true));
+        self::assertTrue(\mkdir($scanDirectory, 0700, true));
+        $extensionBinary = $extensionDirectory . DIRECTORY_SEPARATOR . 'event.so';
+        self::assertNotFalse(\file_put_contents($extensionBinary, 'test-event-binary'));
+        return [$root, $extensionDirectory, $scanDirectory, $extensionBinary];
+    }
+
+    /** @return array<string, mixed> */
+    private function eventConfiguratorRuntime(
+        string $extensionDirectory,
+        string $scanDirectory,
+        string $extensionBinary,
+    ): array {
+        return [
+            'os_family' => 'Linux',
+            'php_binary' => PHP_BINARY,
+            'event_loaded' => false,
+            'event_base_available' => false,
+            'event_buffer_available' => false,
+            'loaded_ini' => '/fixture/php.ini',
+            'scan_dirs' => [$scanDirectory],
+            'extension_dir' => $extensionDirectory,
+            'extension_binary' => $extensionBinary,
+        ];
+    }
+
+    private function removeEventConfiguratorFixture(
+        string $root,
+        string $extensionDirectory,
+        string $scanDirectory,
+    ): void {
+        foreach ([
+            $scanDirectory . DIRECTORY_SEPARATOR . '99-weline-event.ini',
+            $scanDirectory . DIRECTORY_SEPARATOR . '.weline-event.ini.lock',
+            $extensionDirectory . DIRECTORY_SEPARATOR . 'event.so',
+        ] as $file) {
+            if (\is_file($file) || \is_link($file)) {
+                @\unlink($file);
+            }
+        }
+        @\rmdir($scanDirectory);
+        @\rmdir($extensionDirectory);
+        @\rmdir($root);
+    }
+
     /** @var list<string> */
     private array $cleanupFiles = [];
     /** @var list<string> */

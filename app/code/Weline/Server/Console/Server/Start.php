@@ -8739,7 +8739,7 @@ PHP;
                 'benefit' => __('安装后将使用 libevent 事件循环；实际收益以 server:benchmark 同机对比为准'),
                 'action' => IS_WIN 
                     ? __('Windows: 下载 php_event.dll 并在 php.ini 中添加 extension=event')
-                    : __('Linux/Mac: pecl install event && echo "extension=event" >> php.ini'),
+                    : __('Linux/Mac: php bin/w server:start --install-deps（仅显式安装，并以独立 scan-dir ini 验证）'),
             ];
         }
         

@@ -250,6 +250,27 @@ final class RuntimeDependencyBootstrapper
             );
         }
 
+        if (!$reentry && $posix && !$this->canUseEvent()) {
+            $eventConfiguration = $this->configureEventExtensionForRuntime();
+            $eventConfigurationStatus = (string)($eventConfiguration['status'] ?? 'failed');
+            if ($eventConfigurationStatus === 'ready') {
+                return $this->afterSuccessfulInstall(
+                    (string)__('ext-event 已在当前 PHP CLI 扫描目录中原子启用并由新 PHP 子进程验证。'),
+                    $reusePortRequired,
+                    $sslRequired,
+                    true,
+                );
+            }
+            if ($eventConfigurationStatus === 'failed') {
+                return [
+                    'status' => 'failed',
+                    'message' => (string)__('ext-event 配置自愈失败；未修改主 php.ini，已拒绝继续。'),
+                    'restart_required' => false,
+                    'output' => (string)($eventConfiguration['diagnostics'] ?? $eventConfiguration['message'] ?? ''),
+                ];
+            }
+        }
+
         if ($reentry) {
             return ($direct || !$opensslReady)
                 ? $this->result(
@@ -310,6 +331,17 @@ final class RuntimeDependencyBootstrapper
             $requiredDependencyInstalled = false;
             foreach ($dependencies as $dependency) {
                 $install = $this->installExtension($dependency);
+                if ($dependency === 'event' && ($install['success'] ?? false) === true) {
+                    $eventConfiguration = $this->configureEventExtensionForRuntime();
+                    if (($eventConfiguration['status'] ?? 'failed') !== 'ready') {
+                        $install['success'] = false;
+                        $install['output'] = \trim(
+                            (string)($install['output'] ?? '') . "\n"
+                            . (string)($eventConfiguration['message'] ?? 'ext-event configuration verification failed') . "\n"
+                            . (string)($eventConfiguration['diagnostics'] ?? '')
+                        );
+                    }
+                }
                 $verified = match ($dependency) {
                     'event' => $this->freshPhpCanUseEvent(),
                     'openssl' => $this->freshPhpCanUseOpenSsl(),
@@ -361,6 +393,400 @@ final class RuntimeDependencyBootstrapper
             @\flock($lock, \LOCK_UN);
             @\fclose($lock);
         }
+    }
+
+    private const EVENT_INI_NAME = '99-weline-event.ini';
+    private const EVENT_LOCK_NAME = '.weline-event.ini.lock';
+    private const EVENT_MANAGED_MARKER = '; Managed by WLS 2.0 explicit --install-deps';
+    private const EVENT_CHILD_TIMEOUT_SECONDS = 15;
+    private const EVENT_MAX_CAPTURE_BYTES = 262144;
+
+    /**
+     * Atomically enables an installed ext-event for the current POSIX CLI.
+     * Runtime overrides are an internal test seam; production callers omit them.
+     *
+     * @param array<string, mixed>|null $runtimeOverride
+     * @return array{status:'ready'|'absent'|'failed',changed:bool,message:string,diagnostics:string,target:?string}
+     * @internal
+     */
+    public function configureEventExtensionForRuntime(
+        ?array $runtimeOverride = null,
+        ?\Closure $childProbeOverride = null,
+    ): array {
+        $runtime = $this->eventRuntimeSnapshot($runtimeOverride);
+        $diagnostics = $this->eventDiagnostics($runtime);
+
+        if (($runtime['os_family'] ?? '') !== 'Darwin' && ($runtime['os_family'] ?? '') !== 'Linux') {
+            return $this->eventConfigurationResult('failed', false, 'ext-event 自动配置只允许 POSIX CLI。', $diagnostics);
+        }
+
+        if (($runtime['event_loaded'] ?? false) === true
+            && ($runtime['event_base_available'] ?? false) === true
+            && ($runtime['event_buffer_available'] ?? false) === true
+        ) {
+            return $this->eventConfigurationResult('ready', false, 'ext-event 已加载，无需修改配置。', $diagnostics);
+        }
+
+        $extensionBinary = (string)($runtime['extension_binary'] ?? '');
+        if ($extensionBinary === '' || !\is_file($extensionBinary)) {
+            return $this->eventConfigurationResult('absent', false, '当前 extension_dir 中尚无 event.so。', $diagnostics);
+        }
+        if (!$this->isSafeEventRegularFile($extensionBinary)) {
+            return $this->eventConfigurationResult('failed', false, 'event.so 路径包含符号链接、路径穿越或不是普通文件。', $diagnostics);
+        }
+
+        $scanDirectory = $this->selectEventScanDirectory((array)($runtime['scan_dirs'] ?? []));
+        if ($scanDirectory === null) {
+            return $this->eventConfigurationResult('failed', false, '当前 PHP CLI 没有可安全写入的实际 additional ini scan dir。', $diagnostics);
+        }
+
+        $target = $scanDirectory . DIRECTORY_SEPARATOR . self::EVENT_INI_NAME;
+        $lockPath = $scanDirectory . DIRECTORY_SEPARATOR . self::EVENT_LOCK_NAME;
+        if (\is_link($target) || (\file_exists($target) && !\is_file($target))) {
+            return $this->eventConfigurationResult('failed', false, 'WLS ext-event ini 目标不是安全普通文件。', $diagnostics, $target);
+        }
+        if (\is_link($lockPath) || (\file_exists($lockPath) && !\is_file($lockPath))) {
+            return $this->eventConfigurationResult('failed', false, 'WLS ext-event 配置锁不是安全普通文件。', $diagnostics, $target);
+        }
+
+        $lock = @\fopen($lockPath, 'c+b');
+        if (!\is_resource($lock)) {
+            return $this->eventConfigurationResult('failed', false, '无法创建 WLS ext-event 配置锁。', $diagnostics, $target);
+        }
+        @\chmod($lockPath, 0600);
+
+        try {
+            if (!@\flock($lock, \LOCK_EX)) {
+                return $this->eventConfigurationResult('failed', false, '无法独占 WLS ext-event 配置锁。', $diagnostics, $target);
+            }
+            if (!$this->openedEventFileMatchesPath($lock, $lockPath)) {
+                return $this->eventConfigurationResult('failed', false, 'WLS ext-event 配置锁在打开期间发生身份变化。', $diagnostics, $target);
+            }
+            if (\is_link($target) || (\file_exists($target) && !\is_file($target))) {
+                return $this->eventConfigurationResult('failed', false, 'WLS ext-event ini 目标在加锁后不再安全。', $diagnostics, $target);
+            }
+
+            $previousExists = \is_file($target);
+            $previousContent = $previousExists ? @\file_get_contents($target) : false;
+            if ($previousExists && !\is_string($previousContent)) {
+                return $this->eventConfigurationResult('failed', false, '无法读取既有 WLS ext-event ini。', $diagnostics, $target);
+            }
+            if ($previousExists && !\str_contains((string)$previousContent, self::EVENT_MANAGED_MARKER)) {
+                return $this->eventConfigurationResult('failed', false, '同名 ini 不属于 WLS，拒绝覆盖。', $diagnostics, $target);
+            }
+
+            $content = self::EVENT_MANAGED_MARKER . "\nextension=event\n";
+            $changed = !$previousExists || !\hash_equals((string)$previousContent, $content);
+            if ($changed && !$this->atomicPublishEventIni($target, $content)) {
+                return $this->eventConfigurationResult('failed', false, '无法原子发布 WLS ext-event ini。', $diagnostics, $target);
+            }
+
+            $probe = $this->probeFreshEventChild(
+                (string)($runtime['php_binary'] ?? PHP_BINARY),
+                $target,
+                $childProbeOverride,
+            );
+            if (!$this->eventProbePassed($probe, $target)) {
+                $rollbackOk = true;
+                if ($changed) {
+                    $rollbackOk = $previousExists
+                        ? $this->atomicPublishEventIni($target, (string)$previousContent)
+                        : (!\file_exists($target) || @\unlink($target));
+                }
+                $probeDetail = \trim((string)($probe['stderr'] ?? '') . ' ' . (string)($probe['output'] ?? ''));
+                $failureDiagnostics = $diagnostics
+                    . '; child_exit=' . (string)($probe['exit_code'] ?? -1)
+                    . '; child=' . ($probeDetail !== '' ? $probeDetail : 'event/classes/scanned-file verification failed')
+                    . '; rollback=' . ($rollbackOk ? 'ok' : 'failed');
+                return $this->eventConfigurationResult('failed', false, '新 PHP 子进程未通过 ext-event 配置验证，已拒绝发布。', $failureDiagnostics, $target);
+            }
+
+            return $this->eventConfigurationResult('ready', $changed, 'ext-event 已由独立 ini 启用并通过新 PHP 子进程验证。', $diagnostics, $target);
+        } finally {
+            @\flock($lock, \LOCK_UN);
+            @\fclose($lock);
+        }
+    }
+
+    /** @param array<string, mixed>|null $runtimeOverride @return array<string, mixed> */
+    private function eventRuntimeSnapshot(?array $runtimeOverride): array
+    {
+        if ($runtimeOverride !== null) {
+            return $runtimeOverride;
+        }
+
+        $phpBinary = PHP_BINARY;
+        $extensionDirectory = \rtrim((string)\ini_get('extension_dir'), '/\\');
+        return [
+            'os_family' => PHP_OS_FAMILY,
+            'php_binary' => $phpBinary,
+            'event_loaded' => \extension_loaded('event'),
+            'event_base_available' => \class_exists('EventBase', false),
+            'event_buffer_available' => \class_exists('EventBufferEvent', false),
+            'loaded_ini' => (string)(\php_ini_loaded_file() ?: '(none)'),
+            'scan_dirs' => $this->detectEventScanDirectories($phpBinary),
+            'extension_dir' => $extensionDirectory,
+            'extension_binary' => $extensionDirectory !== ''
+                ? $extensionDirectory . DIRECTORY_SEPARATOR . 'event.so'
+                : '',
+        ];
+    }
+
+    /** @return list<string> */
+    private function detectEventScanDirectories(string $phpBinary): array
+    {
+        $result = $this->runEventProcess([$phpBinary, '--ini']);
+        $scanValue = '';
+        if (\preg_match('/^Scan for additional \.ini files in:\s*(.+)$/mi', (string)($result['output'] ?? ''), $match)) {
+            $scanValue = \trim((string)$match[1]);
+        }
+        if ($scanValue === '' || \strcasecmp($scanValue, '(none)') === 0) {
+            $scanValue = \trim((string)(\get_cfg_var('cfg_file_scan_dir') ?: ''));
+        }
+        if ($scanValue === '' || \strcasecmp($scanValue, '(none)') === 0) {
+            return [];
+        }
+
+        $directories = [];
+        foreach (\explode(PATH_SEPARATOR, $scanValue) as $directory) {
+            $directory = \rtrim(\trim($directory), '/\\');
+            if ($directory !== '' && !\in_array($directory, $directories, true)) {
+                $directories[] = $directory;
+            }
+        }
+        return $directories;
+    }
+
+    /** @param list<mixed> $directories */
+    private function selectEventScanDirectory(array $directories): ?string
+    {
+        foreach ($directories as $directory) {
+            if (!\is_string($directory) || $directory === '') {
+                continue;
+            }
+            $directory = \rtrim($directory, '/\\');
+            if ($this->isSafeEventDirectory($directory) && \is_writable($directory)) {
+                return $directory;
+            }
+        }
+        return null;
+    }
+
+    private function isSafeEventDirectory(string $directory): bool
+    {
+        if ($directory === '' || !\str_starts_with($directory, DIRECTORY_SEPARATOR) || !\is_dir($directory)) {
+            return false;
+        }
+        $real = \realpath($directory);
+        if ($real === false || !\hash_equals($real, $directory)) {
+            return false;
+        }
+
+        $current = DIRECTORY_SEPARATOR;
+        foreach (\array_filter(\explode(DIRECTORY_SEPARATOR, \trim($directory, DIRECTORY_SEPARATOR)), 'strlen') as $component) {
+            $current = $current === DIRECTORY_SEPARATOR
+                ? $current . $component
+                : $current . DIRECTORY_SEPARATOR . $component;
+            if (\is_link($current)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function isSafeEventRegularFile(string $file): bool
+    {
+        if ($file === '' || \is_link($file) || !\is_file($file)) {
+            return false;
+        }
+        $real = \realpath($file);
+        return $real !== false
+            && \hash_equals($real, $file)
+            && $this->isSafeEventDirectory(\dirname($file));
+    }
+
+    /** @param resource $handle */
+    private function openedEventFileMatchesPath($handle, string $path): bool
+    {
+        if (\is_link($path) || !\is_file($path)) {
+            return false;
+        }
+        $opened = @\fstat($handle);
+        $named = @\lstat($path);
+        return \is_array($opened)
+            && \is_array($named)
+            && (int)($opened['dev'] ?? -1) === (int)($named['dev'] ?? -2)
+            && (int)($opened['ino'] ?? -1) === (int)($named['ino'] ?? -2);
+    }
+
+    private function atomicPublishEventIni(string $target, string $content): bool
+    {
+        $directory = \dirname($target);
+        if (!$this->isSafeEventDirectory($directory) || \is_link($target)) {
+            return false;
+        }
+        $temporary = @\tempnam($directory, '.wls-event-');
+        if (!\is_string($temporary) || $temporary === '' || \dirname($temporary) !== $directory || \is_link($temporary)) {
+            return false;
+        }
+
+        try {
+            $written = @\file_put_contents($temporary, $content, \LOCK_EX);
+            if ($written !== \strlen($content) || !@\chmod($temporary, 0600)) {
+                return false;
+            }
+            $handle = @\fopen($temporary, 'rb');
+            if (\is_resource($handle)) {
+                if (\function_exists('fsync')) {
+                    @\fsync($handle);
+                }
+                @\fclose($handle);
+            }
+            if (\is_link($target) || (\file_exists($target) && !\is_file($target))) {
+                return false;
+            }
+            if (!@\rename($temporary, $target)) {
+                return false;
+            }
+            @\chmod($target, 0600);
+            return $this->isSafeEventRegularFile($target);
+        } finally {
+            if (\is_file($temporary) || \is_link($temporary)) {
+                @\unlink($temporary);
+            }
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function probeFreshEventChild(
+        string $phpBinary,
+        string $target,
+        ?\Closure $childProbeOverride,
+    ): array {
+        if ($childProbeOverride !== null) {
+            return (array)$childProbeOverride($phpBinary, $target);
+        }
+        if ($phpBinary === '' || !\is_file($phpBinary) || !\is_executable($phpBinary)) {
+            return ['exit_code' => -1, 'output' => '', 'stderr' => 'PHP_BINARY is not executable'];
+        }
+
+        $script = <<<'PHP'
+$scanned = php_ini_scanned_files();
+$files = is_string($scanned) ? preg_split('/,\s*/', trim($scanned)) : [];
+$payload = [
+    'loaded' => extension_loaded('event'),
+    'classes' => class_exists('EventBase', false) && class_exists('EventBufferEvent', false),
+    'scanned_files' => array_values(array_filter(array_map('trim', is_array($files) ? $files : []), 'strlen')),
+];
+echo json_encode($payload, JSON_UNESCAPED_SLASHES);
+exit(($payload['loaded'] && $payload['classes']) ? 0 : 9);
+PHP;
+        $process = $this->runEventProcess([$phpBinary, '-r', $script]);
+        $decoded = \json_decode((string)($process['output'] ?? ''), true);
+        if (\is_array($decoded)) {
+            $process += $decoded;
+        }
+        return $process;
+    }
+
+    /** @param array<string, mixed> $probe */
+    private function eventProbePassed(array $probe, string $target): bool
+    {
+        if ((int)($probe['exit_code'] ?? -1) !== 0
+            || ($probe['loaded'] ?? false) !== true
+            || ($probe['classes'] ?? false) !== true
+        ) {
+            return false;
+        }
+        $expected = \realpath($target) ?: $target;
+        foreach ((array)($probe['scanned_files'] ?? []) as $scannedFile) {
+            if (!\is_string($scannedFile) || $scannedFile === '') {
+                continue;
+            }
+            $actual = \realpath($scannedFile) ?: $scannedFile;
+            if (\hash_equals($expected, $actual)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @param list<string> $command @return array{exit_code:int,output:string,stderr:string} */
+    private function runEventProcess(array $command): array
+    {
+        if (!\function_exists('proc_open')) {
+            return ['exit_code' => -1, 'output' => '', 'stderr' => 'proc_open unavailable'];
+        }
+        $process = @\proc_open(
+            $command,
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            null,
+            ['bypass_shell' => true],
+        );
+        if (!\is_resource($process)) {
+            return ['exit_code' => -1, 'output' => '', 'stderr' => 'proc_open failed'];
+        }
+        @\fclose($pipes[0]);
+        @\stream_set_blocking($pipes[1], false);
+        @\stream_set_blocking($pipes[2], false);
+        $stdout = '';
+        $stderr = '';
+        $exitCode = -1;
+        $deadline = \microtime(true) + self::EVENT_CHILD_TIMEOUT_SECONDS;
+        $status = null;
+
+        do {
+            $stdout .= (string)@\stream_get_contents($pipes[1], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stdout));
+            $stderr .= (string)@\stream_get_contents($pipes[2], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stderr));
+            $status = @\proc_get_status($process);
+            if (!\is_array($status) || !($status['running'] ?? false)) {
+                $exitCode = (int)($status['exitcode'] ?? -1);
+                break;
+            }
+            \usleep(10000);
+        } while (\microtime(true) < $deadline);
+
+        if (\is_array($status) && ($status['running'] ?? false)) {
+            @\proc_terminate($process);
+            $stderr .= ' child timeout';
+        }
+        $stdout .= (string)@\stream_get_contents($pipes[1], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stdout));
+        $stderr .= (string)@\stream_get_contents($pipes[2], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stderr));
+        @\fclose($pipes[1]);
+        @\fclose($pipes[2]);
+        $closed = @\proc_close($process);
+        if ($exitCode < 0 && \is_int($closed)) {
+            $exitCode = $closed;
+        }
+
+        return [
+            'exit_code' => $exitCode,
+            'output' => \substr($stdout, 0, self::EVENT_MAX_CAPTURE_BYTES),
+            'stderr' => \substr($stderr, 0, self::EVENT_MAX_CAPTURE_BYTES),
+        ];
+    }
+
+    /** @param array<string, mixed> $runtime */
+    private function eventDiagnostics(array $runtime): string
+    {
+        return 'php_binary=' . (string)($runtime['php_binary'] ?? '')
+            . '; loaded_ini=' . (string)($runtime['loaded_ini'] ?? '(none)')
+            . '; scan_dirs=' . \implode(PATH_SEPARATOR, \array_map('strval', (array)($runtime['scan_dirs'] ?? [])))
+            . '; extension_dir=' . (string)($runtime['extension_dir'] ?? '')
+            . '; extension_binary=' . (string)($runtime['extension_binary'] ?? '');
+    }
+
+    /** @return array{status:'ready'|'absent'|'failed',changed:bool,message:string,diagnostics:string,target:?string} */
+    private function eventConfigurationResult(
+        string $status,
+        bool $changed,
+        string $message,
+        string $diagnostics,
+        ?string $target = null,
+    ): array {
+        return \compact('status', 'changed', 'message', 'diagnostics', 'target');
     }
 
     public function relaunchCurrentStartCommand(): int
