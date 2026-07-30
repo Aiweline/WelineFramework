@@ -811,6 +811,17 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         try {
             $method = new \ReflectionMethod(Dispatcher::class, 'createIpcClient');
             $method->setAccessible(true);
+            try {
+                $method->invoke($dispatcher);
+                self::fail('Supervisor Dispatcher must reject a missing explicit hello credential.');
+            } catch (\RuntimeException $exception) {
+                self::assertSame(
+                    'Explicit Supervisor hello authentication is required.',
+                    $exception->getMessage(),
+                );
+            }
+
+            $dispatcher->setHelloAuthSecret(\str_repeat('a', 64));
             $client = $method->invoke($dispatcher);
 
             self::assertInstanceOf(SupervisorChildClient::class, $client);

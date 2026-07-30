@@ -156,6 +156,14 @@ if (!\defined('DS')) {
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
 
+$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
+    ->resolveProtectedCredentialFromArguments(
+        $argv,
+        $instanceName,
+        $masterPid,
+        $orchestratorEpoch,
+    );
+
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
