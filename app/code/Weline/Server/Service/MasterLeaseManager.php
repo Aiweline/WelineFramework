@@ -169,6 +169,44 @@ class MasterLeaseManager
         return \is_array($decoded) ? $decoded : null;
     }
 
+    /**
+     * Resolve the current managed child's credential from non-secret process
+     * identity arguments. The credential itself remains in the protected
+     * Master lease and is never required on argv.
+     *
+     * @param list<mixed> $arguments
+     */
+    public function resolveProtectedCredentialFromArguments(
+        array $arguments,
+        string $instance = '',
+        int $masterPid = 0,
+        int $masterEpoch = 0,
+    ): string {
+        $leaseFile = self::namedArgument($arguments, 'master-lease-file');
+        if ($instance === '') {
+            $instance = self::namedArgument($arguments, 'instance-name');
+        }
+        if ($instance === '' && $leaseFile !== '') {
+            $instance = \basename(\dirname($leaseFile));
+        }
+        if ($masterPid <= 0) {
+            $masterPid = (int)self::namedArgument($arguments, 'master-pid');
+        }
+        if ($masterEpoch <= 0) {
+            $masterEpoch = (int)self::namedArgument($arguments, 'epoch');
+        }
+
+        return $this->resolveProtectedCredential(
+            $leaseFile,
+            $instance,
+            $masterPid,
+            $masterEpoch,
+            self::namedArgument($arguments, 'launch-id'),
+            self::namedArgument($arguments, 'lease-id'),
+            (int)self::namedArgument($arguments, 'slot-generation'),
+        );
+    }
+
     public function resolveProtectedCredential(
         string $leaseFile,
         string $instance,
@@ -186,12 +224,12 @@ class MasterLeaseManager
             || !self::validOpaqueIdentity($childLaunchId)
             || !self::validOpaqueIdentity($childLeaseId)
         ) {
-            throw new \RuntimeException('Gateway Agent Master lease identity is incomplete.');
+            throw new \RuntimeException('WLS child Master lease identity is incomplete.');
         }
 
         $expectedPath = self::pathForInstance($instance);
         if (\is_link($leaseFile) || \is_link($expectedPath)) {
-            throw new \RuntimeException('Gateway Agent Master lease path is not trusted.');
+            throw new \RuntimeException('WLS child Master lease path is not trusted.');
         }
         $canonicalPath = \realpath($leaseFile);
         $canonicalExpectedPath = \realpath($expectedPath);
@@ -199,12 +237,12 @@ class MasterLeaseManager
             || !\is_string($canonicalExpectedPath)
             || !self::samePath($canonicalPath, $canonicalExpectedPath)
         ) {
-            throw new \RuntimeException('Gateway Agent Master lease path does not match the instance.');
+            throw new \RuntimeException('WLS child Master lease path does not match the instance.');
         }
 
         $lease = $this->readProtected($canonicalPath);
         if (!\is_array($lease)) {
-            throw new \RuntimeException('Gateway Agent Master lease is missing or invalid.');
+            throw new \RuntimeException('WLS child Master lease is missing or invalid.');
         }
         foreach ([
             'instance',
@@ -216,7 +254,7 @@ class MasterLeaseManager
             'updated_at',
         ] as $field) {
             if (!\array_key_exists($field, $lease)) {
-                throw new \RuntimeException('Gateway Agent Master lease schema is incomplete.');
+                throw new \RuntimeException('WLS child Master lease schema is incomplete.');
             }
         }
 
@@ -241,18 +279,37 @@ class MasterLeaseManager
             || \preg_match('/\A[a-f0-9]{64}\z/Di', $leaseToken) !== 1
             || (!\is_int($updatedAt) && !\is_float($updatedAt))
         ) {
-            throw new \RuntimeException('Gateway Agent Master lease identity is invalid.');
+            throw new \RuntimeException('WLS child Master lease identity is invalid.');
         }
 
         $age = \microtime(true) - (float)$updatedAt;
         if ($age < -5.0 || $age > self::HEARTBEAT_STALE_SEC) {
-            throw new \RuntimeException('Gateway Agent Master lease heartbeat is stale.');
+            throw new \RuntimeException('WLS child Master lease heartbeat is stale.');
         }
         if (!\Weline\Framework\System\Process\Processer::isRunningByPid($masterPid)) {
-            throw new \RuntimeException('Gateway Agent Master process is not running.');
+            throw new \RuntimeException('WLS child Master process is not running.');
         }
 
         return $leaseToken;
+    }
+
+    /** @param list<mixed> $arguments */
+    private static function namedArgument(array $arguments, string $name): string
+    {
+        $prefix = '--' . $name . '=';
+        foreach ($arguments as $argument) {
+            if (!\is_scalar($argument)) {
+                continue;
+            }
+            $argument = (string)$argument;
+            if (!\str_starts_with($argument, $prefix)) {
+                continue;
+            }
+
+            return \trim((string)\substr($argument, \strlen($prefix)), " \t\n\r\0\x0B\"'");
+        }
+
+        return '';
     }
 
     private static function validOpaqueIdentity(string $value): bool

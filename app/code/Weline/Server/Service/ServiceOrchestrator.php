@@ -4984,11 +4984,6 @@ class ServiceOrchestrator
         });
     }
 
-    private static function childRoleUsesArgvMasterCredential(string $role): bool
-    {
-        return $role !== ControlMessage::ROLE_GATEWAY_AGENT;
-    }
-
     private function appendInstanceIdentityArgs(string $cmd, ServiceInstance $instance): string
     {
         if ($instance->epoch > 0) {
@@ -5012,13 +5007,6 @@ class ServiceOrchestrator
         if ($this->context !== null && $this->context->masterLeaseFile !== '') {
             $cmd .= ' --master-lease-file=' . \escapeshellarg($this->context->masterLeaseFile);
         }
-        if ($this->context !== null
-            && $this->context->masterToken !== ''
-            && self::childRoleUsesArgvMasterCredential($instance->role)
-        ) {
-            $cmd .= ' --master-token=' . \escapeshellarg($this->context->masterToken);
-        }
-
         $cmd = $this->appendLinuxHttp3RouteArgs($cmd, $instance);
 
         return $cmd;
@@ -5330,12 +5318,6 @@ class ServiceOrchestrator
         }
         if ($this->context !== null && $this->context->masterLeaseFile !== '') {
             $argv[] = '--master-lease-file=' . $this->context->masterLeaseFile;
-        }
-        if ($this->context !== null
-            && $this->context->masterToken !== ''
-            && self::childRoleUsesArgvMasterCredential($instance->role)
-        ) {
-            $argv[] = '--master-token=' . $this->context->masterToken;
         }
         if ($processName !== null && $processName !== '') {
             $argv[] = '--name=' . $processName;

@@ -114,7 +114,6 @@ if ($controlPort <= 0
     || $orchestratorEpoch <= 0
     || \trim($orchestratorLaunchId) === ''
     || \trim($masterLeaseFile) === ''
-    || \trim($masterToken) === ''
 ) {
     \fwrite(\STDERR, "Authenticated Master identity is required.\n");
     exit(1);
@@ -192,6 +191,14 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 // Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
+
+$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
+    ->resolveProtectedCredentialFromArguments(
+        $argv,
+        $instanceName,
+        $masterPid,
+        $orchestratorEpoch,
+    );
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 

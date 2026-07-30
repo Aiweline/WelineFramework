@@ -1605,6 +1605,51 @@ final class GatewayProtocolSecurityTest extends TestCase
         }
     }
 
+    public function testPersistenceFailureReturnsSignedRejectionAndKeepsStatusReadable(): void
+    {
+        $testMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        $atomicFailure = \getenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE');
+        try {
+            \putenv('WLS_GATEWAY_TEST_MODE=1');
+            \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=temporary_write_or_fsync_failed');
+
+            $mutation = $this->request(
+                'admin',
+                'upgrade',
+                [],
+                'admin',
+                $this->adminSecret,
+            );
+            self::assertFalse($mutation['ok']);
+            self::assertSame('storage_unavailable', $mutation['error']['code']);
+            self::assertStringContainsString(
+                'persistent operation rejected',
+                $mutation['error']['message'],
+            );
+            $this->assertResponseSignature($mutation, $this->adminSecret);
+
+            $status = $this->request(
+                'admin',
+                'status',
+                [],
+                'admin',
+                $this->adminSecret,
+            );
+            self::assertTrue($status['ok']);
+            self::assertSame('DISK_PRESSURE', $status['payload']['state']);
+            self::assertFalse($status['payload']['storage']['mutation_ready']);
+            self::assertFalse($status['payload']['storage']['recovery_reserve_ready']);
+            $this->assertResponseSignature($status, $this->adminSecret);
+        } finally {
+            $testMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $testMode);
+            $atomicFailure === false
+                ? \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE')
+                : \putenv('WLS_GATEWAY_TEST_ATOMIC_WRITE_FAILURE=' . $atomicFailure);
+        }
+    }
+
     public function testRecoveryCircuitUsesMonotonicWindowAndReleasesOneRetry(): void
     {
         $stateProperty = new \ReflectionProperty($this->controller, 'state');

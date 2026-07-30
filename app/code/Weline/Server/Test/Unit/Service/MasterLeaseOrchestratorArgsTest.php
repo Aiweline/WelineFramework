@@ -15,7 +15,7 @@ use Weline\Server\Supervisor\Client\SupervisorChildClient;
 
 final class MasterLeaseOrchestratorArgsTest extends TestCase
 {
-    public function testGatewayAgentArgvHidesCredentialWhileLegacyRolesRemainCompatible(): void
+    public function testAllManagedChildArgvHidesCredential(): void
     {
         $orchestrator = new ServiceOrchestrator();
         $token = \str_repeat('a', 64);
@@ -61,21 +61,20 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
             ['php agent.php', new ServiceInstance(ControlMessage::ROLE_GATEWAY_AGENT, 1, 7, 'launch-ut')],
         );
 
-        self::assertTrue(\str_contains($workerCommand, '--master-token='));
-        self::assertTrue(\str_contains($workerCommand, $token));
+        self::assertTrue(\str_contains($workerCommand, '--master-lease-file='));
+        self::assertFalse(\str_contains($workerCommand, '--master-token='));
+        self::assertFalse(\str_contains($workerCommand, $token));
         self::assertTrue(\str_contains($agentCommand, '--master-lease-file='));
         self::assertFalse(\str_contains($agentCommand, '--master-token='));
         self::assertFalse(\str_contains($agentCommand, $token));
-        self::assertTrue((bool)$this->invokePrivate(
-            $orchestrator,
-            'childRoleUsesArgvMasterCredential',
-            [ControlMessage::ROLE_WORKER],
-        ));
-        self::assertFalse((bool)$this->invokePrivate(
-            $orchestrator,
-            'childRoleUsesArgvMasterCredential',
-            [ControlMessage::ROLE_GATEWAY_AGENT],
-        ));
+        $orchestratorSource = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/Service/ServiceOrchestrator.php',
+        );
+        self::assertStringNotContainsString(
+            '--master-token=',
+            $orchestratorSource,
+            'POSIX command strings and Windows detached argv must never publish the Master credential.',
+        );
     }
 
     public function testProtectedLeaseCredentialIsSharedAndInvalidStatesFailClosed(): void
@@ -98,6 +97,18 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                 1,
             );
             self::assertTrue(\hash_equals($token, $resolved));
+            self::assertSame(
+                $token,
+                $manager->resolveProtectedCredentialFromArguments([
+                    'child.php',
+                    '--master-pid=' . $masterPid,
+                    '--epoch=' . $epoch,
+                    '--launch-id=launch-ut',
+                    '--master-lease-file=' . $path,
+                    '--lease-id=lease-ut',
+                    '--slot-generation=1',
+                ], $instance),
+            );
 
             if (PHP_OS_FAMILY !== 'Windows') {
                 self::assertTrue(@\chmod($path, 0660));

@@ -14,6 +14,7 @@ use Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler;
 use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Runtime\Resumable\RuntimeTaskWatchdog;
+use Weline\Server\Service\MasterLeaseManager;
 
 /** Dedicated supervisor process for resumable task Runners. */
 final class Watch extends CommandAbstract
@@ -149,6 +150,15 @@ final class Watch extends CommandAbstract
         $masterPid = $this->integerArgument($args, 'master-pid');
         $masterLeaseFile = $this->stringArgument($args, 'master-lease-file');
         $masterToken = $this->stringArgument($args, 'master-token');
+        if ($masterToken === '') {
+            $arguments = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+            $masterToken = (new MasterLeaseManager())->resolveProtectedCredentialFromArguments(
+                \is_array($arguments) ? $arguments : [],
+                $instanceName,
+                $masterPid,
+                $epoch,
+            );
+        }
         $controlPort = SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
         if ($controlPort <= 0) {
             throw new \RuntimeException('Runtime Watchdog cannot resolve the WLS control endpoint.');
@@ -172,6 +182,7 @@ final class Watch extends CommandAbstract
             handler: $handler,
             selfTag: 'RuntimeTaskWatchdog',
             instanceCode: $instanceName,
+            helloAuthSecret: $masterToken,
         );
         // Register first, then drain the READY frame with a bounded writable
         // wait. `ControlClient::sendReady()` is intentionally non-blocking;
