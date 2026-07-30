@@ -1208,7 +1208,9 @@ class MasterProcess
 
     /**
      * Keep only launch metadata plus the Master IPC endpoint in the instance
-     * file. Service topology is not persisted here.
+     * file. The launch-selected shared-state descriptor must survive because
+     * gateway enrollment authenticates that exact Session runtime. Dynamic
+     * service topology is still kept behind Master IPC.
      *
      * @param array<string, mixed> $existingData
      * @param array<string, mixed> $masterData
@@ -1242,6 +1244,7 @@ class MasterProcess
             'protocol_edge_binary',
             'worker_port',
             'worker_base_port',
+            'shared_state',
             'gateway',
             'http_redirect_port',
             'started_by',
