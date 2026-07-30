@@ -750,6 +750,22 @@ static int wls_write_all(int fd, const char *buffer, size_t length)
     return 0;
 }
 
+static int wls_reap_controller(pid_t controller_pid, int options)
+{
+    pid_t waited;
+    do {
+        waited = waitpid(controller_pid, NULL, options);
+    } while (waited < 0 && errno == EINTR);
+    return waited == controller_pid ? 0 : -1;
+}
+
+static void wls_release_controller_socket(const char *controller_socket)
+{
+    if (unlink(controller_socket) != 0 && errno != ENOENT) {
+        fprintf(stderr, "broker controller socket cleanup failed: %s\n", strerror(errno));
+    }
+}
+
 static int wls_registry_path(char *output, size_t capacity, const char *home)
 {
     int written = snprintf(output, capacity, "%s/trust/broker-enrollments.tsv", home);
@@ -1455,7 +1471,8 @@ static int wls_serve(
             goto failed;
         }
         if (controller_pid > 0
-            && waitpid(controller_pid, NULL, WNOHANG) == controller_pid) {
+            && wls_reap_controller(controller_pid, WNOHANG) == 0) {
+            wls_release_controller_socket(controller_socket);
             controller_pid = 0;
             errno = ECHILD;
             fprintf(stderr, "broker controller exited; requesting platform restart\n");
@@ -1500,8 +1517,10 @@ static int wls_serve(
     unlink(admin_socket);
     unlink(project_socket);
     if (controller_pid > 0) {
-        kill(controller_pid, SIGTERM);
-        waitpid(controller_pid, NULL, 0);
+        (void)kill(controller_pid, SIGTERM);
+        if (wls_reap_controller(controller_pid, 0) == 0) {
+            wls_release_controller_socket(controller_socket);
+        }
     }
     close(lock_fd);
     return 0;
@@ -1512,8 +1531,10 @@ failed:
     if (admin_socket != NULL) unlink(admin_socket);
     if (project_socket != NULL) unlink(project_socket);
     if (controller_pid > 0) {
-        kill(controller_pid, SIGTERM);
-        waitpid(controller_pid, NULL, 0);
+        (void)kill(controller_pid, SIGTERM);
+        if (wls_reap_controller(controller_pid, 0) == 0) {
+            wls_release_controller_socket(controller_socket);
+        }
     }
     if (lock_fd >= 0) close(lock_fd);
     return 1;

@@ -1841,9 +1841,12 @@ static HANDLE wls_open_owned_nginx(
     const wchar_t *home,
     const wchar_t *active_slot,
     HANDLE controller,
+    DWORD adopted_nginx_pid,
     DWORD *nginx_pid
 ) {
     wchar_t expected[WLS_PATH_CHARS];
+    wchar_t expected_a[WLS_PATH_CHARS];
+    wchar_t expected_b[WLS_PATH_CHARS];
     wchar_t actual[WLS_PATH_CHARS];
     DWORD actual_length = WLS_PATH_CHARS;
     DWORD pid = 0U;
@@ -1852,6 +1855,7 @@ static HANDLE wls_open_owned_nginx(
     HANDLE snapshot = INVALID_HANDLE_VALUE;
     PROCESSENTRY32W entry;
     int parent_matches = 0;
+    int path_matches = 0;
     FILETIME controller_created;
     FILETIME controller_exited;
     FILETIME controller_kernel;
@@ -1863,15 +1867,14 @@ static HANDLE wls_open_owned_nginx(
     if (home == NULL || active_slot == NULL || controller == NULL || nginx_pid == NULL
         || (active_slot[0] != L'A' && active_slot[0] != L'B')
         || active_slot[1] != L'\0'
-        || _snwprintf_s(
-            expected,
-            WLS_PATH_CHARS,
-            _TRUNCATE,
-            L"%ls\\slots\\%ls\\bin\\nginx.exe",
-            home,
-            active_slot
-        ) < 0
-        || wls_read_nginx_pid(home, &pid) != 0) {
+        || _snwprintf_s(expected, WLS_PATH_CHARS, _TRUNCATE,
+            L"%ls\\slots\\%ls\\bin\\nginx.exe", home, active_slot) < 0
+        || _snwprintf_s(expected_a, WLS_PATH_CHARS, _TRUNCATE,
+            L"%ls\\slots\\A\\bin\\nginx.exe", home) < 0
+        || _snwprintf_s(expected_b, WLS_PATH_CHARS, _TRUNCATE,
+            L"%ls\\slots\\B\\bin\\nginx.exe", home) < 0
+        || wls_read_nginx_pid(home, &pid) != 0
+        || (adopted_nginx_pid > 0U && adopted_nginx_pid != pid)) {
         return NULL;
     }
     controller_pid = GetProcessId(controller);
@@ -1882,15 +1885,20 @@ static HANDLE wls_open_owned_nginx(
         pid
     );
     if (process == NULL
-        || !QueryFullProcessImageNameW(
-            process,
-            0U,
-            actual,
-            &actual_length
-        )
-        || _wcsicmp(expected, actual) != 0) {
+        || !QueryFullProcessImageNameW(process, 0U, actual, &actual_length)) {
         if (process != NULL) CloseHandle(process);
         return NULL;
+    }
+    path_matches = adopted_nginx_pid > 0U
+        ? (_wcsicmp(expected_a, actual) == 0 || _wcsicmp(expected_b, actual) == 0)
+        : _wcsicmp(expected, actual) == 0;
+    if (!path_matches) {
+        CloseHandle(process);
+        return NULL;
+    }
+    if (adopted_nginx_pid > 0U) {
+        *nginx_pid = pid;
+        return process;
     }
     snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0U);
     ZeroMemory(&entry, sizeof(entry));
@@ -1909,20 +1917,10 @@ static HANDLE wls_open_owned_nginx(
     } while (Process32NextW(snapshot, &entry));
     CloseHandle(snapshot);
     if (!parent_matches
-        || !GetProcessTimes(
-            controller,
-            &controller_created,
-            &controller_exited,
-            &controller_kernel,
-            &controller_user
-        )
-        || !GetProcessTimes(
-            process,
-            &nginx_created,
-            &nginx_exited,
-            &nginx_kernel,
-            &nginx_user
-        )
+        || !GetProcessTimes(controller, &controller_created, &controller_exited,
+            &controller_kernel, &controller_user)
+        || !GetProcessTimes(process, &nginx_created, &nginx_exited,
+            &nginx_kernel, &nginx_user)
         || CompareFileTime(&nginx_created, &controller_created) < 0
         || ((controller_exited.dwLowDateTime != 0U
                 || controller_exited.dwHighDateTime != 0U)
@@ -2165,6 +2163,7 @@ int wmain(int argc, wchar_t **argv)
     const wchar_t *active_slot;
     const wchar_t *runtime_generation_wide;
     const wchar_t *stop_event_name;
+    const wchar_t *adopted_nginx_pid_text;
     wchar_t expected_fencing[WLS_PATH_CHARS];
     char runtime_generation[65];
     char fencing[WLS_FENCING_BYTES * 2U + 1U];
@@ -2178,6 +2177,7 @@ int wmain(int argc, wchar_t **argv)
     WSADATA winsock;
     unsigned short controller_port = 0U;
     DWORD nginx_pid = 0U;
+    DWORD adopted_nginx_pid = 0U;
     DWORD controller_start_stage = 0U;
     ULONGLONG observation_started;
     int upgrade_marked = 0;
@@ -2213,9 +2213,25 @@ int wmain(int argc, wchar_t **argv)
     active_slot = wls_argument(argc, argv, L"--active-slot");
     runtime_generation_wide = wls_argument(argc, argv, L"--runtime-generation");
     stop_event_name = wls_argument(argc, argv, L"--stop-event");
+    adopted_nginx_pid_text = wls_argument(argc, argv, L"--adopted-nginx-pid");
+    if (adopted_nginx_pid_text != NULL) {
+        size_t index;
+        size_t length = wcslen(adopted_nginx_pid_text);
+        unsigned long long value = 0ULL;
+        if (length == 0U || length > 10U) return 64;
+        for (index = 0U; index < length; index++) {
+            if (adopted_nginx_pid_text[index] < L'0'
+                || adopted_nginx_pid_text[index] > L'9') return 64;
+            value = value * 10ULL
+                + (unsigned long long)(adopted_nginx_pid_text[index] - L'0');
+            if (value > MAXDWORD) return 64;
+        }
+        adopted_nginx_pid = (DWORD)value;
+    }
     if (admin_pipe == NULL || project_pipe == NULL || fencing_file == NULL
         || php == NULL || controller_script == NULL || home == NULL
         || active_slot == NULL || runtime_generation_wide == NULL
+        || adopted_nginx_pid_text == NULL
         || !wls_valid_stop_event(stop_event_name)
         || (active_slot[0] != L'A' && active_slot[0] != L'B')
         || active_slot[1] != L'\0'
@@ -2278,7 +2294,7 @@ int wmain(int argc, wchar_t **argv)
         fencing_file,
         controller_port,
         controller_token,
-        0U,
+        adopted_nginx_pid,
         &controller_start_stage
     );
     if (controller_process == NULL) {
@@ -2293,6 +2309,7 @@ int wmain(int argc, wchar_t **argv)
         home,
         active_slot,
         controller_process,
+        adopted_nginx_pid,
         &nginx_pid
     );
     if (nginx_process == NULL) {
