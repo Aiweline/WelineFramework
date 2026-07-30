@@ -220,7 +220,16 @@ class RequestContext
             try {
                 $callback();
             } catch (\Throwable $e) {
-                w_log_error('[RequestContext] Cleanup callback error: ' . $e->getMessage());
+                $message = '[RequestContext] Cleanup callback error: ' . $e->getMessage();
+                try {
+                    if (\function_exists('w_log_error')) {
+                        \w_log_error($message);
+                    } else {
+                        \error_log($message);
+                    }
+                } catch (\Throwable) {
+                    // Logging must never mask the original cleanup failure.
+                }
                 RequestResetException::append(
                     $failures,
                     'cleanup_callback:' . (\is_string($name) ? $name : (string)$name),
