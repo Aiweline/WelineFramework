@@ -332,6 +332,52 @@ final class GatewayPlatformServiceInstaller
         );
     }
 
+    public function restartControlPlane(string $kind): void
+    {
+        if ($this->paths->isTestMode()) {
+            if (!\hash_equals('test-session', $kind)) {
+                throw new \RuntimeException(
+                    'Test gateway cannot reload a production platform service.'
+                );
+            }
+            return;
+        }
+        $this->assertAdministrator();
+        if ($kind === 'launchd-system') {
+            $this->mustRun([
+                '/bin/launchctl',
+                'kill',
+                'HUP',
+                'system/com.weline.wls-gateway-v2',
+            ], 'launchd gateway control-plane handoff');
+            return;
+        }
+        if ($kind === 'systemd-system') {
+            $this->mustRun(
+                ['/bin/systemctl', 'daemon-reload'],
+                'systemd gateway definition reload',
+            );
+            $this->mustRun([
+                '/bin/systemctl',
+                'kill',
+                '--kill-whom=main',
+                '--signal=HUP',
+                self::SERVICE_NAME . '.service',
+            ], 'systemd gateway control-plane handoff');
+            return;
+        }
+        if ($kind === 'windows-service') {
+            $this->mustRun(
+                ['sc.exe', 'control', self::SERVICE_NAME, '6'],
+                'Windows gateway control-plane handoff',
+            );
+            return;
+        }
+        throw new \RuntimeException(
+            'Unsupported gateway platform service kind: ' . $kind
+        );
+    }
+
     public function secureInstalledRuntime(): void
     {
         if ($this->paths->isTestMode()) {

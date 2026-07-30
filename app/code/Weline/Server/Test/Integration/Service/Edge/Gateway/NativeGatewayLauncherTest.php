@@ -197,9 +197,9 @@ final class NativeGatewayLauncherTest extends TestCase
             '--run=' . $run,
             '--profile=default',
         ]);
-        self::assertSame(75, $rolledBack['code'], $rolledBack['output']);
+        self::assertSame(0, $rolledBack['code'], $rolledBack['output']);
         self::assertStringContainsString('rolled back', $rolledBack['output']);
-        self::assertFileDoesNotExist($activeMarker);
+        self::assertFileExists($activeMarker);
         self::assertFileExists($candidateMarker);
         self::assertTrue(\unlink($candidateMarker));
         self::assertSame(
@@ -207,16 +207,6 @@ final class NativeGatewayLauncherTest extends TestCase
             \file_get_contents($trust . DIRECTORY_SEPARATOR . 'active-slot'),
         );
         self::assertFileDoesNotExist($trust . DIRECTORY_SEPARATOR . 'upgrade.intent');
-
-        $restarted = $this->runCommand([
-            $this->launcher,
-            '--service',
-            '--home=' . $home,
-            '--run=' . $run,
-            '--profile=default',
-        ]);
-        self::assertSame(0, $restarted['code'], $restarted['output']);
-        self::assertFileExists($activeMarker);
     }
 
     public function testCleanCandidateRestartsDoNotConsumeCrashBudget(): void
@@ -393,6 +383,41 @@ final class NativeGatewayLauncherTest extends TestCase
         }
     }
 
+    public function testHupRebuildsBrokerUnderTheSameStableLauncherPid(): void
+    {
+        [$home, $run, , $marker] = $this->createSignedHome(true);
+        $process = \proc_open(
+            [$this->launcher, '--service', '--home=' . $home, '--run=' . $run, '--profile=default'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        try {
+            for ($attempt = 0; $attempt < 50 && !\is_file($marker); $attempt++) {
+                \usleep(100000);
+            }
+            self::assertFileExists($marker);
+            $status = \proc_get_status($process);
+            $launcherPid = (int)($status['pid'] ?? 0);
+            self::assertGreaterThan(0, $launcherPid);
+            self::assertTrue(\unlink($marker));
+            self::assertTrue(\posix_kill($launcherPid, SIGHUP));
+            for ($attempt = 0; $attempt < 50 && !\is_file($marker); $attempt++) {
+                \usleep(100000);
+            }
+            self::assertFileExists($marker);
+            $after = \proc_get_status($process);
+            self::assertTrue((bool)($after['running'] ?? false));
+            self::assertSame($launcherPid, (int)($after['pid'] ?? 0));
+        } finally {
+            @\proc_terminate($process, SIGTERM);
+            foreach ($pipes ?? [] as $pipe) {
+                \is_resource($pipe) && @\fclose($pipe);
+            }
+            self::assertSame(0, \proc_close($process));
+        }
+    }
+
     private function createSignedCandidateSlot(
         string $home,
         string $marker,
@@ -450,7 +475,7 @@ final class NativeGatewayLauncherTest extends TestCase
     }
 
     /** @return array{string,string,string,string} */
-    private function createSignedHome(): array
+    private function createSignedHome(bool $persistent = false): array
     {
         $home = $this->root . DIRECTORY_SEPARATOR . 'home';
         $run = $this->root . DIRECTORY_SEPARATOR . 'run';
@@ -465,7 +490,10 @@ final class NativeGatewayLauncherTest extends TestCase
         $marker = $this->root . DIRECTORY_SEPARATOR . 'broker-started';
         $files = [
             'bin/wls-gateway-broker' => [
-                "#!/bin/sh\nprintf '%s\\n' \"\$*\" > " . \escapeshellarg($marker) . "\nexit 0\n",
+                "#!/bin/sh\nprintf '%s\\n' \"\$*\" > " . \escapeshellarg($marker) . "\n"
+                    . ($persistent
+                        ? "trap 'exit 0' TERM INT HUP\nwhile :; do sleep 1; done\n"
+                        : "exit 0\n"),
                 0755,
             ],
             'bin/php' => ["#!/bin/sh\nexit 0\n", 0755],
