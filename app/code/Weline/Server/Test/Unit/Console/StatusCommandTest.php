@@ -13,6 +13,9 @@ if (!function_exists(__NAMESPACE__ . '\__')) {
 
 namespace Weline\Server\Test\Unit\Console;
 
+\defined('DS') || \define('DS', DIRECTORY_SEPARATOR);
+\defined('BP') || \define('BP', \rtrim(\dirname(__DIR__, 7), '\\/') . DS);
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Status;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
