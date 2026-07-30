@@ -7,9 +7,30 @@ namespace Weline\Server\Test\Unit\Console\Gateway;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Gateway\Agent;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 
 final class GatewayAgentDrainCountersTest extends TestCase
 {
+    public function testManagedProcessIdentityIsRedactedAndGenerationBound(): void
+    {
+        self::assertSame(
+            '--name=weline-wls-gateway-agent-unit --launch-id=gateway_agent-1-deadbeef',
+            Agent::managedProcessIdentity(
+                'weline-wls-gateway-agent-unit',
+                'gateway_agent-1-deadbeef',
+            ),
+        );
+        self::assertSame('', Agent::managedProcessIdentity('', 'gateway_agent-1-deadbeef'));
+        self::assertSame('', Agent::managedProcessIdentity(
+            'weline-wls-gateway-agent-unit --master-token=secret',
+            'gateway_agent-1-deadbeef',
+        ));
+        self::assertSame('', Agent::managedProcessIdentity(
+            'weline-wls-gateway-agent-unit',
+            'gateway_agent-1-deadbeef --master-token=secret',
+        ));
+    }
+
     public function testHeartbeatReplaySignalIsStrictAndBackwardCompatible(): void
     {
         self::assertFalse(Agent::heartbeatRequiresRegistrationReplay([]));
@@ -19,6 +40,55 @@ final class GatewayAgentDrainCountersTest extends TestCase
         self::assertTrue(Agent::heartbeatRequiresRegistrationReplay([
             're_register_required' => true,
         ]));
+    }
+
+    public function testHeartbeatTransportFailureDoesNotTriggerRegistrationStorm(): void
+    {
+        self::assertFalse(Agent::heartbeatFailureRequiresRegistrationReplay(
+            'WLS Gateway returned an empty response.',
+        ));
+        self::assertFalse(Agent::heartbeatFailureRequiresRegistrationReplay(
+            new \RuntimeException('Gateway request rate limit exceeded; retry_after=1.'),
+        ));
+        self::assertTrue(Agent::heartbeatFailureRequiresRegistrationReplay(
+            'Heartbeat project generation is stale or unknown.',
+        ));
+        self::assertTrue(Agent::heartbeatFailureRequiresRegistrationReplay(
+            new \DomainException('Instance lease fencing identity is stale or unknown.'),
+        ));
+    }
+
+    public function testPublicProbePreparationDoesNotRequireFreshControllerStatus(): void
+    {
+        self::assertTrue(Agent::canPreparePublicProbe(false, 'NOT_REQUIRED'));
+        self::assertTrue(Agent::canPreparePublicProbe(true, 'ACTIVE'));
+        self::assertFalse(Agent::canPreparePublicProbe(true, 'STARTING'));
+        self::assertFalse(Agent::canPreparePublicProbe(true, 'STALE'));
+    }
+
+    public function testGatewayControlRecoveryDoesNotDependOnActivePublicRoutes(): void
+    {
+        $control = [
+            'ok' => true,
+            'ready' => false,
+            'release_ready' => true,
+            'broker_ready' => true,
+            'supervisor_ready' => true,
+            'protocol' => 'wls-edge/2',
+            'implementation_level' => 'wls-2.0',
+            'security_profile' => 'native-broker-v1',
+        ];
+        self::assertTrue(Agent::gatewayControlDiscoverable($control));
+        self::assertFalse(Agent::gatewayControlDiscoverable(
+            ['ready' => true, ...$control, 'broker_ready' => false],
+        ));
+        self::assertFalse(Agent::gatewayControlDiscoverable(
+            [...$control, 'protocol' => 'wls-edge/1'],
+        ));
+        self::assertTrue(GatewayHostManager::controlPlaneAcceptsRegistration($control));
+        self::assertFalse(GatewayHostManager::controlPlaneAcceptsRegistration(
+            [...$control, 'supervisor_ready' => false],
+        ));
     }
 
     public function testPublicationKeepaliveUsesHeartbeatIntervalAndStopsOnShutdown(): void

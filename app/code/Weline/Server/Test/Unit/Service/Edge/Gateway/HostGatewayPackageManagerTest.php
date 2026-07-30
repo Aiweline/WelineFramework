@@ -155,6 +155,77 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertSame(2, \substr_count($launchd, '<integer>65536</integer>'));
     }
 
+    public function testProjectEndpointAccessPreparationKeepsTestEnrollmentLocal(): void
+    {
+        $project = $this->root . DIRECTORY_SEPARATOR . 'project';
+        self::assertTrue(\mkdir($project, 0700, true));
+        $status = @\lstat($project);
+        self::assertIsArray($status);
+
+        $result = (new GatewayPlatformServiceInstaller($this->paths))
+            ->authorizeProjectRuntimeRead(
+                $project,
+                \PHP_OS_FAMILY === 'Windows' ? null : (int)$status['uid'],
+                \PHP_OS_FAMILY === 'Windows' ? null : (int)$status['gid'],
+            );
+
+        self::assertFalse($result['applied']);
+        self::assertTrue($result['test_mode']);
+        self::assertSame('test-session', $result['service_identity']);
+        self::assertDirectoryExists(
+            $project . DIRECTORY_SEPARATOR . 'var'
+                . DIRECTORY_SEPARATOR . 'server'
+                . DIRECTORY_SEPARATOR . 'instances',
+        );
+    }
+
+    public function testProjectEndpointAccessContractIsReadOnlyAndInherited(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php'
+        );
+        self::assertStringContainsString(
+            "'u:' . \$account . ':--x'",
+            $source,
+        );
+        self::assertStringContainsString(
+            "'u:' . \$account . ':r--,g::---,m::r--,o::---'",
+            $source,
+        );
+        self::assertStringContainsString(
+            "'u::rwx,u:' . \$account . ':r-x,g::---,m::r-x,o::---'",
+            $source,
+        );
+        self::assertStringContainsString(
+            "\$account . ':(X)'",
+            $source,
+        );
+        self::assertStringContainsString(
+            "\$account . ':(OI)(CI)(RX)'",
+            $source,
+        );
+        self::assertStringContainsString(
+            'file_inherit,directory_inherit',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            "project endpoint ACL authorization', ['chmod', '0777'",
+            $source,
+        );
+        $enroll = (string)\file_get_contents(
+            \dirname(__DIR__, 5) . '/Console/Server/Gateway/Enroll.php'
+        );
+        self::assertStringContainsString(
+            '->authorizeProjectRuntimeRead(',
+            $enroll,
+        );
+        self::assertStringContainsString(
+            "\$payload['endpoint_access_prepared']",
+            $enroll,
+        );
+    }
+
     public function testExplicitHostInstallKeepsTestPackageNonReadyAndHighPortOnly(): void
     {
         $package = $this->createPackage('host-install');
@@ -573,17 +644,36 @@ final class HostGatewayPackageManagerTest extends TestCase
     public function testNativeControlPlaneHandoffContractsArePresent(): void
     {
         $gateway = \dirname(__DIR__, 5) . '/Service/Edge/Gateway';
+        $packages = (string)\file_get_contents($gateway . '/HostGatewayPackageManager.php');
         $platform = (string)\file_get_contents($gateway . '/GatewayPlatformServiceInstaller.php');
         $posix = (string)\file_get_contents($gateway . '/Native/posix/wls_gateway_launcher.c');
         $posixBroker = (string)\file_get_contents($gateway . '/Native/posix/wls_gateway_broker.c');
         $windows = (string)\file_get_contents($gateway . '/Native/windows/wls_gateway_launcher.c');
         $broker = (string)\file_get_contents($gateway . '/Native/windows/wls_gateway_broker.c');
+        self::assertStringContainsString(
+            '->secureInstalledRuntimeSlot($slotDirectory);',
+            $packages,
+        );
+        self::assertStringContainsString(
+            'public function secureInstalledRuntimeSlot(string $slotDirectory): void',
+            $platform,
+        );
+        self::assertStringContainsString(
+            '$item->isDir() ? 0750 : ($item->isExecutable() ? 0550 : 0440)',
+            $platform,
+        );
         self::assertStringContainsString("'--kill-whom=main'", $platform);
         self::assertStringContainsString("'control', self::SERVICE_NAME, '6'", $platform);
         self::assertStringContainsString('WLS_CONTROL_TREE_RELOAD', $posix);
         self::assertStringContainsString('signal_number == SIGHUP', $posix);
-        self::assertStringContainsString('wls_reap_controller(controller_pid, 0) == 0', $posixBroker);
+        self::assertStringContainsString(
+            'wls_reap_controller(controller_pid, 0, NULL) == 0',
+            $posixBroker,
+        );
         self::assertStringContainsString('wls_release_controller_socket(controller_socket)', $posixBroker);
+        self::assertStringContainsString('broker controller restart attempt', $posixBroker);
+        self::assertStringContainsString('broker controller restart ready', $posixBroker);
+        self::assertStringContainsString('broker controller restart exhausted', $posixBroker);
         self::assertStringContainsString('SERVICE_ACCEPT_PARAMCHANGE', $windows);
         self::assertStringContainsString('SERVICE_CONTROL_PARAMCHANGE', $windows);
         self::assertStringContainsString('IsProcessInJob', $windows);

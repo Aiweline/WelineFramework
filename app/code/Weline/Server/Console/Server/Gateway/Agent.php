@@ -13,6 +13,7 @@ use Weline\Server\IPC\ChildControl\ChildProcessIdentity;
 use Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler;
 use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Edge\Gateway\GatewayFallbackOutageStore;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
@@ -21,6 +22,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Edge\Gateway\GatewayPublicRouteProbe;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\GatewayRuntimeEndpointPublisher;
+use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -53,6 +55,7 @@ final class Agent extends CommandAbstract
         if ($instanceName === '') {
             throw new \RuntimeException('WLS Gateway Agent requires --instance-name.');
         }
+        $this->registerManagedProcessIdentity($args);
 
         $shutdown = false;
         $this->registerSignals($shutdown);
@@ -197,9 +200,7 @@ final class Agent extends CommandAbstract
                 $nativeEdgeState = $joinRequired
                     ? $builder->nativeEdgeState($instanceName)
                     : 'NOT_APPLICABLE';
-                $gatewayDiscoverable = (bool)($status['ok'] ?? false)
-                    && (bool)($status['ready'] ?? false)
-                    && (bool)($status['supervisor_ready'] ?? false);
+                $gatewayDiscoverable = self::gatewayControlDiscoverable($status);
                 if ($joinRequired
                     && $joinState === 'ACTIVE'
                     && $probeRegistration === null
@@ -240,10 +241,17 @@ final class Agent extends CommandAbstract
                     );
                 }
                 if ($probeRegistration === null
-                    && ($status['ok'] ?? false)
-                    && (!$joinRequired || $joinState === 'ACTIVE')
+                    && self::canPreparePublicProbe($joinRequired, $joinState)
                 ) {
                     try {
+                        // Public-route proof is intentionally independent of a
+                        // fresh Controller status response. After Agent
+                        // self-heal, the Controller may be temporarily
+                        // unavailable while the already-published Nginx route
+                        // remains healthy. Rebuild the expected identity from
+                        // this project's authoritative runtime state so real
+                        // SNI/certificate/nonce probing can distinguish
+                        // CONTROL_DEGRADED from DATA_PLANE_DOWN.
                         $probeRegistration = $builder->build($instanceName);
                     } catch (\Throwable) {
                     }
@@ -332,7 +340,7 @@ final class Agent extends CommandAbstract
                         // The live fallback lease remains authoritative.
                     }
                 }
-                if ($now - $lastHeartbeat >= self::HEARTBEAT_SECONDS && ($status['ok'] ?? false)) {
+                if ($now - $lastHeartbeat >= self::HEARTBEAT_SECONDS) {
                     $canReplayRegistration = self::canReplayRegistration(
                         $joinRequired,
                         $joinState,
@@ -350,12 +358,24 @@ final class Agent extends CommandAbstract
                         if ($canReplayRegistration) {
                             $probeRegistration = $builder->build($instanceName);
                         }
-                    } catch (\Throwable) {
-                        // Epoch changes and state rebuild require a full desired
-                        // state replay. A project requiring the authenticated
-                        // join pool must not publish its ordinary backend while
-                        // that pool is still starting.
-                        if ($canReplayRegistration) {
+                    } catch (\Throwable $throwable) {
+                        // A status read and a lease heartbeat use independent
+                        // control requests. Under a saturated data plane the
+                        // diagnostic status request may time out while the
+                        // Controller can still consume a queued heartbeat, so
+                        // lease renewal must never depend on status.ok.
+                        //
+                        // Replay full desired state only when the Controller
+                        // explicitly reports a stale/unknown lease. Retrying a
+                        // configuration mutation for an ordinary transport
+                        // timeout can starve later heartbeats behind an active
+                        // publication and turn transient load into a reload.
+                        if ($canReplayRegistration
+                            && ($status['ok'] ?? false)
+                            && self::heartbeatFailureRequiresRegistrationReplay(
+                                $throwable,
+                            )
+                        ) {
                             try {
                                 $gateway->register($instanceName);
                                 $probeRegistration = $builder->build($instanceName);
@@ -475,6 +495,18 @@ final class Agent extends CommandAbstract
                 }
                 SchedulerSystem::yieldDelay(self::TICK_MILLISECONDS);
             }
+        } catch (\Throwable $throwable) {
+            try {
+                $kernel?->sendExitReason('gateway_agent_runtime_failure', 1);
+            } catch (\Throwable) {
+            }
+            WlsLogger::error_(
+                '[WlsGatewayAgent] runtime failure: '
+                . \get_class($throwable)
+                . ': '
+                . \substr($throwable->getMessage(), 0, 2048)
+            );
+            throw $throwable;
         } finally {
             // Agent lifecycle is not project lifecycle. Explicit server:stop
             // owns route draining; an Agent recycle or self-heal must leave
@@ -483,6 +515,45 @@ final class Agent extends CommandAbstract
             $kernel?->close();
         }
         return 0;
+    }
+
+    /**
+     * POSIX Master-owned children deliberately publish their own redacted PID
+     * lease. The Agent previously omitted this step, so an IPC disconnect
+     * could not pass the identity-aware resurrection fence and the only
+     * gateway lease maintainer became permanently quarantined.
+     */
+    private function registerManagedProcessIdentity(array $args): void
+    {
+        $processName = $this->stringArgument($args, 'name');
+        $launchId = $this->stringArgument($args, 'launch-id');
+        $pid = \getmypid() ?: 0;
+        $identity = self::managedProcessIdentity($processName, $launchId);
+        if ($pid <= 0 || $identity === '') {
+            throw new \RuntimeException(
+                'WLS Gateway Agent managed process identity is incomplete.',
+            );
+        }
+
+        Processer::setPid($identity, $pid);
+        if (\PHP_OS_FAMILY !== 'Windows' && \function_exists('cli_set_process_title')) {
+            @\cli_set_process_title($processName);
+        }
+    }
+
+    public static function managedProcessIdentity(
+        string $processName,
+        string $launchId,
+    ): string {
+        $processName = \trim($processName);
+        $launchId = \trim($launchId);
+        if (\preg_match('/\A[a-zA-Z0-9._:-]{1,191}\z/D', $processName) !== 1
+            || \preg_match('/\A[a-zA-Z0-9._:-]{1,191}\z/D', $launchId) !== 1
+        ) {
+            return '';
+        }
+
+        return '--name=' . $processName . ' --launch-id=' . $launchId;
     }
 
     /**
@@ -527,12 +598,52 @@ final class Agent extends CommandAbstract
         return ($heartbeat['re_register_required'] ?? false) === true;
     }
 
+    public static function heartbeatFailureRequiresRegistrationReplay(
+        \Throwable|string $failure,
+    ): bool {
+        $message = \trim(
+            $failure instanceof \Throwable
+                ? $failure->getMessage()
+                : $failure,
+        );
+        return \in_array($message, [
+            'Heartbeat project generation is stale or unknown.',
+            'Instance lease fencing identity is stale or unknown.',
+        ], true);
+    }
+
     public static function canReplayRegistration(
         bool $joinRequired,
         string $joinState,
     ): bool {
         return !$joinRequired
             || \hash_equals('ACTIVE', \strtoupper(\trim($joinState)));
+    }
+
+    /**
+     * A native project can rebuild its public-route probe identity without a
+     * successful Controller read. Join backends additionally require their
+     * locally verified ACTIVE capability before they can be probed or replayed.
+     */
+    public static function canPreparePublicProbe(
+        bool $joinRequired,
+        string $joinState,
+    ): bool {
+        return self::canReplayRegistration($joinRequired, $joinState);
+    }
+
+    /**
+     * A gateway that has restored its authenticated control tree may accept
+     * tenant desired state even while every persisted route is STALE and the
+     * public data plane intentionally serves TLS/503. Requiring overall
+     * ready=true here creates a recovery deadlock because ACTIVE routes are
+     * themselves the condition that eventually makes the gateway ready.
+     *
+     * @param array<string,mixed> $status
+     */
+    public static function gatewayControlDiscoverable(array $status): bool
+    {
+        return GatewayHostManager::controlPlaneAcceptsRegistration($status);
     }
 
     /**
@@ -923,7 +1034,15 @@ final class Agent extends CommandAbstract
         $workerId = \max(1, $this->integerArgument($args, 'worker-id', 1));
         $masterPid = $this->integerArgument($args, 'master-pid');
         $leaseFile = $this->stringArgument($args, 'master-lease-file');
-        $masterToken = $this->stringArgument($args, 'master-token');
+        $masterToken = (new MasterLeaseManager())->resolveProtectedCredential(
+            $leaseFile,
+            $instanceName,
+            $masterPid,
+            $epoch,
+            $launchId,
+            $this->stringArgument($args, 'lease-id'),
+            $this->integerArgument($args, 'slot-generation'),
+        );
         $controlPort = SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
         $identity = new ChildProcessIdentity(
             role: ControlMessage::ROLE_GATEWAY_AGENT,
@@ -941,6 +1060,7 @@ final class Agent extends CommandAbstract
             handler: $handler,
             selfTag: 'WlsGatewayAgent',
             instanceCode: $instanceName,
+            helloAuthSecret: $masterToken,
         );
         if (!$kernel->connectAndRegister($controlPort, false)) {
             throw new \RuntimeException('WLS Gateway Agent cannot register with Master.');
@@ -963,9 +1083,11 @@ final class Agent extends CommandAbstract
                 selfTag: 'WlsGatewayAgent',
                 instance: $instanceName,
                 masterEpoch: $epoch,
+                strictLeaseFreshness: true,
             ),
         ];
     }
+
 
     /**
      * An explicit project stop is identified only by a DRAINING lease for the

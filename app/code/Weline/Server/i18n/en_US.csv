@@ -2191,6 +2191,8 @@ Endpoint：,Endpoint:
 共享网关：,共享网关：
 边缘降级：,边缘降级：
 选择原因：,"Selection reason:"
+"原生 WLS 入口排空：","Native WLS edge draining:"
+"原生 WLS 备用入口：","Native WLS fallback edge:"
 "纯 WLS 备用入口：","纯 WLS 备用入口："
 "备用 TLS 地址：","备用 TLS 地址："
 "高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。","高端口不等价于 80/443；请确认 DNS、防火墙或负载均衡可到达该端口。"
@@ -2295,6 +2297,7 @@ Windows,Windows
 "--instance %{1} 的实际 host 是 %{2}，与手动 host %{3} 冲突。","The effective host for --instance %{1} is %{2}, which conflicts with manual host %{3}."
 "--instance %{1} 的 endpoint 不是 HTTPS，不能与 --ssl 同时使用。","The endpoint for --instance %{1} is not HTTPS and cannot be combined with --ssl."
 "实例 [%{1}] 未运行，已拒绝将端口占用者归因为该实例。","Instance [%{1}] is not running; refusing to attribute the port owner to it."
+"实例 [%{1}] 未达到网关压测就绪状态：运行 Gateway Backend %{2}/%{3}。","Instance [%{1}] is not ready for gateway benchmarking: running Gateway Backend %{2}/%{3}."
 "实例 [%{1}] 的 WLS health endpoint 已健康；Worker 进程索引为 %{2}/%{3}，公网压测仍需通过当前边缘身份门禁。","The WLS health endpoint for instance [%{1}] is healthy; the Worker process index is %{2}/%{3}, but public benchmarking still requires the current edge identity gate."
 "实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。","实例 [%{1}] 未达到压测就绪状态：运行 Worker %{2}/%{3}。"
 "已停止 Worker：%{1}","已停止 Worker：%{1}"

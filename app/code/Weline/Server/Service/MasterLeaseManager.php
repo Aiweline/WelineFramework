@@ -17,6 +17,7 @@ class MasterLeaseManager
     public const STATE_STOPPING = 'stopping';
     public const HEARTBEAT_STALE_SEC = 15;
     private const TEMPORARY_STALE_SEC = 30;
+    private const MAX_PROTECTED_LEASE_BYTES = 16384;
 
     public static function pathForInstance(string $instance): string
     {
@@ -108,6 +109,180 @@ class MasterLeaseManager
 
         $decoded = \json_decode($raw, true);
         return \is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Read a security-sensitive lease without accepting symlink traversal,
+     * world-readable files, identity swaps, or oversized payloads.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function readProtected(string $path): ?array
+    {
+        if ($path === '' || \is_link($path) || !\is_file($path)) {
+            return null;
+        }
+        $before = @\lstat($path);
+        if (!\is_array($before)) {
+            return null;
+        }
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $mode = (int)($before['mode'] ?? 0);
+            if (($mode & 0170000) !== 0100000 || ($mode & 0037) !== 0) {
+                return null;
+            }
+        }
+
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened) || !self::sameLeaseIdentity($before, $opened)) {
+                return null;
+            }
+            $raw = @\stream_get_contents($handle, self::MAX_PROTECTED_LEASE_BYTES + 1);
+            if (!\is_string($raw)
+                || \strlen($raw) > self::MAX_PROTECTED_LEASE_BYTES
+                || \trim($raw) === ''
+            ) {
+                return null;
+            }
+        } finally {
+            @\fclose($handle);
+        }
+
+        $after = @\lstat($path);
+        if (!\is_array($after)
+            || \is_link($path)
+            || !self::sameLeaseIdentity($before, $after)
+        ) {
+            return null;
+        }
+        try {
+            $decoded = \json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        return \is_array($decoded) ? $decoded : null;
+    }
+
+    public function resolveProtectedCredential(
+        string $leaseFile,
+        string $instance,
+        int $masterPid,
+        int $masterEpoch,
+        string $childLaunchId,
+        string $childLeaseId,
+        int $childGeneration,
+    ): string {
+        if ($leaseFile === ''
+            || $masterPid <= 0
+            || $masterEpoch <= 0
+            || $childGeneration <= 0
+            || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $instance) !== 1
+            || !self::validOpaqueIdentity($childLaunchId)
+            || !self::validOpaqueIdentity($childLeaseId)
+        ) {
+            throw new \RuntimeException('Gateway Agent Master lease identity is incomplete.');
+        }
+
+        $expectedPath = self::pathForInstance($instance);
+        if (\is_link($leaseFile) || \is_link($expectedPath)) {
+            throw new \RuntimeException('Gateway Agent Master lease path is not trusted.');
+        }
+        $canonicalPath = \realpath($leaseFile);
+        $canonicalExpectedPath = \realpath($expectedPath);
+        if (!\is_string($canonicalPath)
+            || !\is_string($canonicalExpectedPath)
+            || !self::samePath($canonicalPath, $canonicalExpectedPath)
+        ) {
+            throw new \RuntimeException('Gateway Agent Master lease path does not match the instance.');
+        }
+
+        $lease = $this->readProtected($canonicalPath);
+        if (!\is_array($lease)) {
+            throw new \RuntimeException('Gateway Agent Master lease is missing or invalid.');
+        }
+        foreach ([
+            'instance',
+            'master_pid',
+            'control_port',
+            'master_epoch',
+            'master_token',
+            'state',
+            'updated_at',
+        ] as $field) {
+            if (!\array_key_exists($field, $lease)) {
+                throw new \RuntimeException('Gateway Agent Master lease schema is incomplete.');
+            }
+        }
+
+        $leaseInstance = $lease['instance'];
+        $leasePid = $lease['master_pid'];
+        $leasePort = $lease['control_port'];
+        $leaseEpoch = $lease['master_epoch'];
+        $leaseState = $lease['state'];
+        $leaseToken = $lease['master_token'];
+        $updatedAt = $lease['updated_at'];
+        if (!\is_string($leaseInstance)
+            || !\hash_equals($instance, $leaseInstance)
+            || !\is_int($leasePid)
+            || $leasePid !== $masterPid
+            || !\is_int($leasePort)
+            || $leasePort <= 0
+            || !\is_int($leaseEpoch)
+            || $leaseEpoch !== $masterEpoch
+            || !\is_string($leaseState)
+            || $leaseState !== self::STATE_RUNNING
+            || !\is_string($leaseToken)
+            || \preg_match('/\A[a-f0-9]{64}\z/Di', $leaseToken) !== 1
+            || (!\is_int($updatedAt) && !\is_float($updatedAt))
+        ) {
+            throw new \RuntimeException('Gateway Agent Master lease identity is invalid.');
+        }
+
+        $age = \microtime(true) - (float)$updatedAt;
+        if ($age < -5.0 || $age > self::HEARTBEAT_STALE_SEC) {
+            throw new \RuntimeException('Gateway Agent Master lease heartbeat is stale.');
+        }
+        if (!\Weline\Framework\System\Process\Processer::isRunningByPid($masterPid)) {
+            throw new \RuntimeException('Gateway Agent Master process is not running.');
+        }
+
+        return $leaseToken;
+    }
+
+    private static function validOpaqueIdentity(string $value): bool
+    {
+        return \preg_match('/\A[A-Za-z0-9_.:-]{1,160}\z/D', $value) === 1;
+    }
+
+    private static function samePath(string $left, string $right): bool
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return \strcasecmp($left, $right) === 0;
+        }
+
+        return \hash_equals($left, $right);
+    }
+
+    /** @param array<string,mixed> $left @param array<string,mixed> $right */
+    private static function sameLeaseIdentity(array $left, array $right): bool
+    {
+        $leftDevice = (int)($left['dev'] ?? 0);
+        $rightDevice = (int)($right['dev'] ?? 0);
+        $leftInode = (int)($left['ino'] ?? 0);
+        $rightInode = (int)($right['ino'] ?? 0);
+        if ($leftDevice > 0 && $rightDevice > 0 && $leftInode > 0 && $rightInode > 0) {
+            return $leftDevice === $rightDevice && $leftInode === $rightInode;
+        }
+
+        return (int)($left['size'] ?? -1) === (int)($right['size'] ?? -2)
+            && (int)($left['mtime'] ?? -1) === (int)($right['mtime'] ?? -2)
+            && (int)($left['ctime'] ?? -1) === (int)($right['ctime'] ?? -2);
     }
 
     /**

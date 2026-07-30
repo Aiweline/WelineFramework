@@ -34,6 +34,7 @@ final class HostGatewayPackageManager
         private readonly GatewayPaths $paths = new GatewayPaths(),
         private readonly NginxRuntimeArtifact $artifact = new NginxRuntimeArtifact(),
         private readonly ?string $trustedKeysFile = null,
+        private readonly ?GatewayPlatformServiceInstaller $platform = null,
     ) {
     }
 
@@ -123,6 +124,13 @@ final class HostGatewayPackageManager
             );
 
             try {
+                // NginxRuntimeArtifact deliberately publishes private 0700
+                // slots. A production POSIX Controller is then dropped to the
+                // dedicated service account, so the completed immutable slot
+                // must be sealed root-owned but group-readable/executable
+                // before any activation can reference it.
+                ($this->platform ?? new GatewayPlatformServiceInstaller($this->paths))
+                    ->secureInstalledRuntimeSlot($slotDirectory);
                 $this->ensureAdministratorCredential();
                 $this->runSlotSelfTests($slotDirectory);
                 $launcherComponent = $this->componentPath('wls-gateway-launcher');
@@ -476,13 +484,22 @@ final class HostGatewayPackageManager
         if (!\in_array($profile, $declaredProfiles, true)) {
             throw new \RuntimeException('Gateway package does not support the requested listen profile.');
         }
+        $testPackage = (string)($manifest['package_profile'] ?? '') === 'test';
         foreach (self::REQUIRED_CAPABILITIES as $capability) {
-            if (($manifest['capabilities'][$capability] ?? false) !== true) {
+            $testRuntimeDependency = $testPackage
+                && $this->paths->isTestMode()
+                && \in_array(
+                    $capability,
+                    ['self_contained_nginx', 'self_contained_php'],
+                    true,
+                );
+            if (($manifest['capabilities'][$capability] ?? false) !== true
+                && !$testRuntimeDependency
+            ) {
                 throw new \RuntimeException('Gateway package capability is missing: ' . $capability);
             }
         }
 
-        $testPackage = (string)($manifest['package_profile'] ?? '') === 'test';
         if ($this->paths->isTestMode()) {
             if (!$testPackage || ($manifest['release_ready'] ?? true) !== false) {
                 throw new \RuntimeException('Test mode only accepts non-release-ready test packages.');
