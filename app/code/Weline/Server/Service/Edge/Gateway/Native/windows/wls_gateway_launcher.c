@@ -14,6 +14,7 @@
 
 #define WLS_PATH_CHARS 32768U
 #define WLS_MAX_MANIFEST (4U * 1024U * 1024U)
+#define WLS_CONTROL_TREE_RELOAD 254U
 
 struct wls_upgrade {
     int present;
@@ -29,6 +30,7 @@ static SERVICE_STATUS wls_service_status;
 static HANDLE wls_broker_process = NULL;
 static HANDLE wls_broker_stop_event = NULL;
 static volatile LONG wls_service_stop_requested = 0;
+static volatile LONG wls_service_reload_requested = 0;
 static const wchar_t *wls_service_home = NULL;
 static const wchar_t *wls_service_run = NULL;
 
@@ -791,7 +793,98 @@ static int wls_monitor_upgrade(const wchar_t *home, wchar_t active[2])
     return active[0] == before ? 0 : 1;
 }
 
-static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
+static HANDLE wls_open_verified_job_nginx(
+    const wchar_t *home,
+    HANDLE job,
+    DWORD expected_pid,
+    DWORD *verified_pid
+) {
+    wchar_t pid_path[WLS_PATH_CHARS];
+    wchar_t actual[WLS_PATH_CHARS];
+    wchar_t expected_a[WLS_PATH_CHARS];
+    wchar_t expected_b[WLS_PATH_CHARS];
+    wchar_t slot_path[WLS_PATH_CHARS];
+    wchar_t release_manifest_path[WLS_PATH_CHARS];
+    wchar_t release_signature_path[WLS_PATH_CHARS];
+    wchar_t installed_manifest_path[WLS_PATH_CHARS];
+    unsigned char *pid_text = NULL;
+    size_t pid_length = 0U;
+    unsigned char *release_manifest = NULL;
+    size_t release_manifest_length = 0U;
+    unsigned char *installed_manifest = NULL;
+    size_t installed_manifest_length = 0U;
+    char runtime_generation[65];
+    char *end = NULL;
+    unsigned long parsed;
+    DWORD actual_length = WLS_PATH_CHARS;
+    BOOL belongs = FALSE;
+    HANDLE process = NULL;
+    const wchar_t *slot_name = NULL;
+    if (verified_pid == NULL
+        || wls_join(pid_path, WLS_PATH_CHARS, home, L"runtime\\run\\nginx.pid") != 0
+        || wls_read_file(pid_path, 64U, &pid_text, &pid_length) != 0) {
+        return NULL;
+    }
+    while (pid_length > 0U
+        && strchr("\r\n \t", ((char *)pid_text)[pid_length - 1U]) != NULL) {
+        pid_length--;
+    }
+    ((char *)pid_text)[pid_length] = '\0';
+    parsed = strtoul((const char *)pid_text, &end, 10);
+    HeapFree(GetProcessHeap(), 0U, pid_text);
+    if (pid_length == 0U || end == NULL || *end != '\0'
+        || parsed == 0UL || parsed > MAXDWORD
+        || (expected_pid > 0U && expected_pid != (DWORD)parsed)
+        || _snwprintf_s(expected_a, WLS_PATH_CHARS, _TRUNCATE,
+            L"%ls\\slots\\A\\bin\\nginx.exe", home) < 0
+        || _snwprintf_s(expected_b, WLS_PATH_CHARS, _TRUNCATE,
+            L"%ls\\slots\\B\\bin\\nginx.exe", home) < 0) {
+        return NULL;
+    }
+    process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)parsed);
+    if (process == NULL
+        || !IsProcessInJob(process, job, &belongs)
+        || !belongs
+        || !QueryFullProcessImageNameW(process, 0U, actual, &actual_length)) {
+        if (process != NULL) CloseHandle(process);
+        return NULL;
+    }
+    if (_wcsicmp(actual, expected_a) == 0) slot_name = L"A";
+    if (_wcsicmp(actual, expected_b) == 0) slot_name = L"B";
+    if (slot_name == NULL
+        || _snwprintf_s(slot_path, WLS_PATH_CHARS, _TRUNCATE,
+            L"%ls\\slots\\%ls", home, slot_name) < 0
+        || wls_join(release_manifest_path, WLS_PATH_CHARS,
+            slot_path, L"release\\manifest.json") != 0
+        || wls_join(release_signature_path, WLS_PATH_CHARS,
+            slot_path, L"release\\manifest.sig") != 0
+        || wls_join(installed_manifest_path, WLS_PATH_CHARS,
+            slot_path, L"manifest.json") != 0
+        || wls_verify_release(release_manifest_path, release_signature_path,
+            &release_manifest, &release_manifest_length) != 0
+        || wls_verify_component(release_manifest, slot_path, "bin/nginx.exe") != 0
+        || wls_read_file(installed_manifest_path, WLS_MAX_MANIFEST,
+            &installed_manifest, &installed_manifest_length) != 0
+        || wls_manifest_hex_value(installed_manifest,
+            "runtime_generation", runtime_generation) != 0) {
+        if (release_manifest != NULL) HeapFree(GetProcessHeap(), 0U, release_manifest);
+        if (installed_manifest != NULL) HeapFree(GetProcessHeap(), 0U, installed_manifest);
+        CloseHandle(process);
+        return NULL;
+    }
+    HeapFree(GetProcessHeap(), 0U, release_manifest);
+    HeapFree(GetProcessHeap(), 0U, installed_manifest);
+    *verified_pid = (DWORD)parsed;
+    return process;
+}
+
+static int wls_launch(
+    const wchar_t *home,
+    const wchar_t *run_directory,
+    HANDLE job,
+    DWORD adopted_nginx_pid,
+    DWORD *preserved_nginx_pid
+)
 {
     wchar_t active[2];
     wchar_t slot[WLS_PATH_CHARS];
@@ -812,11 +905,13 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
     wchar_t runtime_generation_wide[65];
     STARTUPINFOW startup;
     PROCESS_INFORMATION process;
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_limits;
-    HANDLE job = NULL;
     HANDLE stop_event = NULL;
+    HANDLE verified_nginx = NULL;
     DWORD broker_exit = 1U;
+    DWORD verified_nginx_pid = 0U;
     ULONGLONG stop_started = 0U;
+    if (preserved_nginx_pid == NULL || job == NULL) return 1;
+    *preserved_nginx_pid = 0U;
     if (wls_admin_stopped(home) != 0) return 0;
     if (wls_active_slot(home, active) != 0
         || wls_reconcile_upgrade(home, active, 0) != 0
@@ -901,7 +996,7 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
             L"--project-pipe \"\\\\.\\pipe\\weline-wls-gateway-v2-project\" "
             L"--fencing-file \"%ls\" --php \"%ls\" --controller \"%ls\" "
             L"--home \"%ls\" --active-slot \"%ls\" --runtime-generation \"%ls\" "
-            L"--stop-event \"%ls\"",
+            L"--stop-event \"%ls\" --adopted-nginx-pid \"%lu\"",
             broker,
             fencing,
             php,
@@ -909,7 +1004,8 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
             home,
             active,
             runtime_generation_wide,
-            stop_event_name
+            stop_event_name,
+            (unsigned long)adopted_nginx_pid
         ) < 0) {
         if (release_manifest != NULL) HeapFree(GetProcessHeap(), 0U, release_manifest);
         if (installed_manifest != NULL) HeapFree(GetProcessHeap(), 0U, installed_manifest);
@@ -919,22 +1015,23 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
     HeapFree(GetProcessHeap(), 0U, installed_manifest);
     ZeroMemory(&startup, sizeof(startup));
     ZeroMemory(&process, sizeof(process));
-    ZeroMemory(&job_limits, sizeof(job_limits));
     startup.cb = sizeof(startup);
     stop_event = CreateEventW(NULL, TRUE, FALSE, stop_event_name);
-    job = CreateJobObjectW(NULL, NULL);
-    job_limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    if (stop_event == NULL
-        || job == NULL
-        || !SetInformationJobObject(
+    if (stop_event == NULL) return 1;
+    if (adopted_nginx_pid > 0U) {
+        verified_nginx = wls_open_verified_job_nginx(
+            home,
             job,
-            JobObjectExtendedLimitInformation,
-            &job_limits,
-            sizeof(job_limits)
-        )) {
-        if (stop_event != NULL) CloseHandle(stop_event);
-        if (job != NULL) CloseHandle(job);
-        return 1;
+            adopted_nginx_pid,
+            &verified_nginx_pid
+        );
+        if (verified_nginx == NULL || verified_nginx_pid != adopted_nginx_pid) {
+            if (verified_nginx != NULL) CloseHandle(verified_nginx);
+            CloseHandle(stop_event);
+            return 1;
+        }
+        CloseHandle(verified_nginx);
+        verified_nginx = NULL;
     }
     if (!CreateProcessW(
         broker,
@@ -949,7 +1046,6 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
         &process
     )) {
         CloseHandle(stop_event);
-        CloseHandle(job);
         return 1;
     }
     if (!AssignProcessToJobObject(job, process.hProcess)
@@ -959,7 +1055,6 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
         CloseHandle(stop_event);
-        CloseHandle(job);
         return 1;
     }
     CloseHandle(process.hThread);
@@ -972,11 +1067,12 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
             wchar_t before = active[0];
             GetExitCodeProcess(process.hProcess, &broker_exit);
             if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0
+                && InterlockedCompareExchange(&wls_service_reload_requested, 0, 0) == 0
                 && wls_admin_stopped(home) == 0) {
                 if (wls_reconcile_upgrade(home, active, 1) != 0) {
                     broker_exit = 1U;
                 } else if (active[0] != before) {
-                    broker_exit = 75U;
+                    broker_exit = WLS_CONTROL_TREE_RELOAD;
                 }
             }
             break;
@@ -1004,21 +1100,38 @@ static int wls_launch(const wchar_t *home, const wchar_t *run_directory)
             break;
         }
         if (upgrade_state > 0) {
-            /*
-             * The stable launcher rolled the pointer back. Exit non-zero so
-             * Windows Service Control Manager starts the verified old slot.
-             */
-            TerminateProcess(process.hProcess, 75U);
-            WaitForSingleObject(process.hProcess, 5000U);
-            broker_exit = 75U;
+            /* Keep the service PID and shared Job while rebuilding the old slot. */
+            SetEvent(stop_event);
+            if (WaitForSingleObject(process.hProcess, 5000U) != WAIT_OBJECT_0) {
+                TerminateProcess(process.hProcess, WLS_CONTROL_TREE_RELOAD);
+                WaitForSingleObject(process.hProcess, 5000U);
+            }
+            broker_exit = WLS_CONTROL_TREE_RELOAD;
             break;
+        }
+    }
+    if ((broker_exit == WLS_CONTROL_TREE_RELOAD
+            || InterlockedCompareExchange(&wls_service_reload_requested, 0, 0) != 0)
+        && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0
+        && wls_admin_stopped(home) == 0) {
+        verified_nginx = wls_open_verified_job_nginx(
+            home,
+            job,
+            0U,
+            &verified_nginx_pid
+        );
+        if (verified_nginx == NULL) {
+            broker_exit = 1U;
+        } else {
+            CloseHandle(verified_nginx);
+            *preserved_nginx_pid = verified_nginx_pid;
+            broker_exit = WLS_CONTROL_TREE_RELOAD;
         }
     }
     wls_broker_stop_event = NULL;
     CloseHandle(process.hProcess);
     wls_broker_process = NULL;
     CloseHandle(stop_event);
-    CloseHandle(job);
     return broker_exit == 0U
         ? 0
         : (broker_exit <= 255U ? (int)broker_exit : 1);
@@ -1032,8 +1145,9 @@ static void wls_report_service(
 {
     wls_service_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
     wls_service_status.dwCurrentState = state;
-    wls_service_status.dwControlsAccepted =
-        state == SERVICE_RUNNING ? SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN : 0U;
+    wls_service_status.dwControlsAccepted = state == SERVICE_RUNNING
+        ? SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PARAMCHANGE
+        : 0U;
     wls_service_status.dwWin32ExitCode = win32_exit;
     wls_service_status.dwServiceSpecificExitCode = service_specific_exit;
     wls_service_status.dwCheckPoint = 0U;
@@ -1057,8 +1171,53 @@ static DWORD WINAPI wls_service_control(
         wls_report_service(SERVICE_STOP_PENDING, NO_ERROR, 0U);
         InterlockedExchange(&wls_service_stop_requested, 1);
         if (wls_broker_stop_event != NULL) SetEvent(wls_broker_stop_event);
+    } else if (control == SERVICE_CONTROL_PARAMCHANGE
+        && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0) {
+        InterlockedExchange(&wls_service_reload_requested, 1);
+        if (wls_broker_stop_event != NULL) SetEvent(wls_broker_stop_event);
     }
     return NO_ERROR;
+}
+
+static HANDLE wls_create_supervision_job(void)
+{
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits;
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    ZeroMemory(&limits, sizeof(limits));
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (job == NULL || !SetInformationJobObject(
+        job,
+        JobObjectExtendedLimitInformation,
+        &limits,
+        sizeof(limits)
+    )) {
+        if (job != NULL) CloseHandle(job);
+        return NULL;
+    }
+    return job;
+}
+
+static int wls_run_supervisor(const wchar_t *home, const wchar_t *run_directory)
+{
+    HANDLE job = wls_create_supervision_job();
+    DWORD adopted_nginx_pid = 0U;
+    int result = 1;
+    if (job == NULL) return 1;
+    do {
+        DWORD preserved_nginx_pid = 0U;
+        InterlockedExchange(&wls_service_reload_requested, 0);
+        result = wls_launch(
+            home,
+            run_directory,
+            job,
+            adopted_nginx_pid,
+            &preserved_nginx_pid
+        );
+        adopted_nginx_pid = preserved_nginx_pid;
+    } while (result == (int)WLS_CONTROL_TREE_RELOAD
+        && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0);
+    CloseHandle(job);
+    return result == (int)WLS_CONTROL_TREE_RELOAD ? 1 : result;
 }
 
 static VOID WINAPI wls_service_main(DWORD argc, LPWSTR *argv)
@@ -1074,7 +1233,7 @@ static VOID WINAPI wls_service_main(DWORD argc, LPWSTR *argv)
     if (wls_status_handle == NULL) return;
     wls_report_service(SERVICE_START_PENDING, NO_ERROR, 0U);
     wls_report_service(SERVICE_RUNNING, NO_ERROR, 0U);
-    result = wls_launch(wls_service_home, wls_service_run);
+    result = wls_run_supervisor(wls_service_home, wls_service_run);
     wls_report_service(
         SERVICE_STOPPED,
         result == 0 ? NO_ERROR : ERROR_SERVICE_SPECIFIC_ERROR,
@@ -1137,5 +1296,5 @@ int wmain(int argc, wchar_t **argv)
         wls_service_run = run_directory;
         return StartServiceCtrlDispatcherW(dispatch) ? 0 : 1;
     }
-    return wls_launch(home, run_directory);
+    return wls_run_supervisor(home, run_directory);
 }

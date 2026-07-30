@@ -533,7 +533,71 @@ final class HostGatewayPackageManagerTest extends TestCase
         );
     }
 
-    private function createPackage(string $suffix = 'valid'): string
+    public function testUpgradeReadinessBudgetCoversAllControllerPhases(): void
+    {
+        $budget = new \ReflectionMethod(
+            GatewayHostManager::class,
+            'upgradeReadinessTimeoutSeconds',
+        );
+        self::assertSame(60.0, $budget->invoke(null));
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 5) . '/Service/Edge/Gateway/GatewayHostManager.php'
+        );
+        self::assertStringContainsString('\\hrtime(true)', $source);
+        self::assertStringNotContainsString('\\microtime(true) + 30.0', $source);
+    }
+
+    public function testIncompatibleStableLauncherIsRejectedBeforeSlotActivation(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('stable-initial'), 'default');
+        $manager->activate($initial['slot']);
+        try {
+            $manager->stage(
+                $this->createPackage('stable-incompatible', true),
+                'default',
+            );
+            self::fail('An incompatible stable launcher must be rejected before activation.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'requires a different stable launcher',
+                $exception->getMessage(),
+            );
+        }
+        self::assertSame($initial['slot'], $this->paths->activeSlot());
+        self::assertDirectoryDoesNotExist(
+            $this->paths->slotDir($initial['slot'] === 'A' ? 'B' : 'A'),
+        );
+    }
+
+    public function testNativeControlPlaneHandoffContractsArePresent(): void
+    {
+        $gateway = \dirname(__DIR__, 5) . '/Service/Edge/Gateway';
+        $platform = (string)\file_get_contents($gateway . '/GatewayPlatformServiceInstaller.php');
+        $posix = (string)\file_get_contents($gateway . '/Native/posix/wls_gateway_launcher.c');
+        $posixBroker = (string)\file_get_contents($gateway . '/Native/posix/wls_gateway_broker.c');
+        $windows = (string)\file_get_contents($gateway . '/Native/windows/wls_gateway_launcher.c');
+        $broker = (string)\file_get_contents($gateway . '/Native/windows/wls_gateway_broker.c');
+        self::assertStringContainsString("'--kill-whom=main'", $platform);
+        self::assertStringContainsString("'control', self::SERVICE_NAME, '6'", $platform);
+        self::assertStringContainsString('WLS_CONTROL_TREE_RELOAD', $posix);
+        self::assertStringContainsString('signal_number == SIGHUP', $posix);
+        self::assertStringContainsString('wls_reap_controller(controller_pid, 0) == 0', $posixBroker);
+        self::assertStringContainsString('wls_release_controller_socket(controller_socket)', $posixBroker);
+        self::assertStringContainsString('SERVICE_ACCEPT_PARAMCHANGE', $windows);
+        self::assertStringContainsString('SERVICE_CONTROL_PARAMCHANGE', $windows);
+        self::assertStringContainsString('IsProcessInJob', $windows);
+        self::assertStringContainsString('bin/nginx.exe', $windows);
+        self::assertStringContainsString('--adopted-nginx-pid', $windows);
+        self::assertStringContainsString('adopted_nginx_pid', $broker);
+        self::assertStringContainsString('expected_a', $broker);
+        self::assertStringContainsString('expected_b', $broker);
+    }
+
+    private function createPackage(
+        string $suffix = 'valid',
+        bool $incompatibleLauncher = false,
+    ): string
     {
         $package = $this->root . DIRECTORY_SEPARATOR . 'package-' . $suffix;
         self::assertTrue(\mkdir($package . DIRECTORY_SEPARATOR . 'app', 0700, true));
@@ -547,7 +611,9 @@ final class HostGatewayPackageManagerTest extends TestCase
             'bin/' . $this->binaryName('nginx') => ["#!/bin/sh\nexit 0\n", 0755],
             'bin/' . $this->binaryName('wls-gateway-broker') => ["#!/bin/sh\nexit 0\n", 0755],
             'bin/' . $this->binaryName('wls-gateway-launcher') => [
-                "#!/bin/sh\n# {$suffix}\nexit 0\n",
+                $incompatibleLauncher
+                    ? "#!/bin/sh\n# incompatible-stable-launcher\nexit 0\n"
+                    : "#!/bin/sh\n# stable-host-launcher-v2\nexit 0\n",
                 0755,
             ],
             'LICENSES.txt' => ["WLS test package license inventory\n", 0644],

@@ -19,6 +19,7 @@
 
 #define WLS_MAX_MANIFEST (4U * 1024U * 1024U)
 #define WLS_SIGNATURE_TEXT 256U
+#define WLS_CONTROL_TREE_RELOAD 254
 
 struct wls_upgrade {
     int present;
@@ -839,8 +840,13 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
         pid_t waited;
         int upgrade_state;
         if (wls_shutdown_signal != 0) {
-            wls_terminate_broker(broker_pid, (int)wls_shutdown_signal);
-            return 0;
+            int signal_number = (int)wls_shutdown_signal;
+            wls_shutdown_signal = 0;
+            wls_terminate_broker(
+                broker_pid,
+                signal_number == SIGHUP ? SIGTERM : signal_number
+            );
+            return signal_number == SIGHUP ? WLS_CONTROL_TREE_RELOAD : 0;
         }
         waited = waitpid(broker_pid, &status, WNOHANG);
         if (waited == broker_pid) {
@@ -852,7 +858,7 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
                 && wls_reconcile_upgrade(home, active, 1) != 0) {
                 return 1;
             }
-            return active[0] == before ? exit_code : 75;
+            return active[0] == before ? exit_code : WLS_CONTROL_TREE_RELOAD;
         }
         if (waited < 0 && errno != EINTR) {
             return 1;
@@ -863,12 +869,9 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
             return 1;
         }
         if (upgrade_state > 0) {
-            /*
-             * The active pointer was rolled back. Exit non-zero so the
-             * platform supervisor launches the verified previous slot.
-             */
+            /* Keep the stable launcher PID while rebuilding the verified slot. */
             wls_terminate_broker(broker_pid, SIGTERM);
-            return 75;
+            return WLS_CONTROL_TREE_RELOAD;
         }
         while (nanosleep(&pause, &pause) != 0 && errno == EINTR) {
             if (wls_shutdown_signal != 0) break;
@@ -1011,5 +1014,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "stable launcher requires absolute --home and --run paths\n");
         return 64;
     }
-    return wls_launch(home, run_directory);
+    for (;;) {
+        int result;
+        wls_shutdown_signal = 0;
+        result = wls_launch(home, run_directory);
+        if (result != WLS_CONTROL_TREE_RELOAD) return result;
+    }
 }
