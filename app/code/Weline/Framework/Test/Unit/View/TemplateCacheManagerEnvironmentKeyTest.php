@@ -90,6 +90,27 @@ final class TemplateCacheManagerEnvironmentKeyTest extends TestCore
         self::assertSame('<?php echo "zh-cny"; ?>', file_get_contents($zhCnyFile));
     }
 
+    public function testRequestSnapshotDropsPreviousRuntimeAttributesAndStorefrontFence(): void
+    {
+        $this->applyRequestContext('USD', 'en_US');
+        \Weline\Framework\Runtime\RequestContext::set('test.previous_request_attr', 'must-not-survive');
+        \Weline\Framework\Context::current()->set('runtime.redirect_count', 7);
+        \Weline\Framework\Context::current()->set('runtime.request_count', 11);
+        $previousFence = \Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence();
+
+        $this->applyRequestContext('CNY', 'zh_Hans_CN');
+
+        self::assertNull(\Weline\Framework\Runtime\RequestContext::get('test.previous_request_attr'));
+        self::assertNull(\Weline\Framework\Cache\StorefrontCacheKeyContext::current());
+        self::assertSame(7, \Weline\Framework\Context::current()->get('runtime.redirect_count'));
+        self::assertSame(11, \Weline\Framework\Context::current()->get('runtime.request_count'));
+
+        $currentFence = \Weline\Framework\Cache\StorefrontCacheKeyContext::currentOrRequestFence();
+        self::assertNotSame($previousFence, $currentFence);
+        self::assertSame('zh_Hans_CN', $currentFence->lang);
+        self::assertSame('CNY', $currentFence->currency);
+    }
+
     private function applyRequestContext(string $currency, string $lang): void
     {
         State::resetRequestPathLocalizationCache();
