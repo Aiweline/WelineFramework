@@ -29,6 +29,7 @@
 #define WLS_CONTROLLER_START_POLL_MS 10U
 #define WLS_CONTROLLER_IO_TIMEOUT_MS 3000U
 #define WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS 90000U
+#define WLS_PROJECT_CONTROLLER_IO_TIMEOUT_MS 90000U
 
 typedef NTSTATUS (NTAPI *wls_nt_create_file_fn)(
     PHANDLE,
@@ -1613,7 +1614,7 @@ static DWORD WINAPI wls_channel_thread(LPVOID context)
             channel->controller_port,
             wcscmp(channel->channel, L"admin") == 0
                 ? WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS
-                : WLS_CONTROLLER_IO_TIMEOUT_MS
+                : WLS_PROJECT_CONTROLLER_IO_TIMEOUT_MS
         );
         if (controller == INVALID_SOCKET) goto request_cleanup;
         header_size = _snprintf_s(

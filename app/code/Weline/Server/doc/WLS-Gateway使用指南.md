@@ -1,6 +1,6 @@
 # WLS 2.0 Gateway 使用指南
 
-> 状态：实施中。edge 决策、稳定项目身份、纯 WLS 降级、Native Platform Broker、
+> 状态：实现检查点完成、跨平台发布验收中。edge 决策、稳定项目身份、纯 WLS 降级、Native Platform Broker、
 > 双通道鉴权、enrollment、证书快照、事务发布、A/B/LKG/熔断和 Controller/Nginx
 > 恢复链均已有实现与专项验证；Linux systemd、真实 80/443、宿主 reboot、legacy
 > 显式提升、fallback/rejoin、双租户 H2/H3 百万和撤销墓碑不变量已在隔离 VM 通过。
@@ -129,9 +129,21 @@ WLS TLS 入口执行固定 300 秒排空。Agent 每 10 秒重试推进事务但
 - 控制协议标识为 `wls-edge/2`；管理/项目双通道、OS peer identity、项目能力凭据、
   nonce 防重放、请求/响应认证、generation 和 fencing 均已接通。
 - `repair`、`revoke`、`transfer`、`upgrade` 属于长管理事务，客户端和 Windows
-  Native Broker 为候选验证、发布及稳定观察保留 90 秒响应窗；普通状态和项目通道仍
-  使用短超时。项目撤销会建立不可逆墓碑；后续租约扫描、后端探测和迟到消息只能保持
+  Native Broker 为候选验证、发布及稳定观察保留 90 秒响应窗；项目
+  `register/renew/drain/unregister` 同样使用 90 秒响应窗，避免首个同步 publication
+  尚未返回时发生幂等重放风暴。普通 status、own-status 和 heartbeat 仍使用短超时。
+  项目撤销会建立不可逆墓碑；后续租约扫描、后端探测和迟到消息只能保持
   `REMOVED`，并清空全部后端路由身份，不能复活路由。
+- Gateway Agent 不在 argv 或进程标题中携带 Master token；它从同实例、PID、epoch
+  和新鲜 heartbeat 绑定的受保护 Master lease 读取凭据。POSIX lease 只允许 owner
+  读写、服务组只读、other 无权限；组可写文件会被拒绝。Agent 会登记 PID/launch
+  身份，因此 IPC 断开后可以通过身份栅栏安全补位。
+- 新 A/B 槽在 active pointer 切换前封存为 root + dedicated gateway group：
+  目录 0750、可执行文件 0550、普通文件 0440。旧槽未满 24 小时回滚保留期时，
+  upgrade 必须失败，不能以“修复”为由覆盖。
+- 宿主重启恢复 TLS/503 时，项目注册只要求受信 release、Broker 与 supervisor
+  控制面 ready，不要求整体数据面已经 ready；否则会形成“注册依赖 ACTIVE、ACTIVE
+  又依赖注册”的恢复死锁。
 - 项目证书仍是唯一源；Native Broker 只从 enrollment 授权目录 no-follow 读取，
   校验私钥/SAN/权限和复制前后摘要后生成内容寻址快照。无效新证书不会替换 current。
 - WLS 2.0 v1 对全部租户关闭 Nginx TLS session cache、session ticket 和 0-RTT。
@@ -165,7 +177,7 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - WLS 2.0 v1 全局关闭 TLS session cache、ticket 与 0-RTT，跨租户和证书轮换后均不
   复用旧 TLS 1.3 会话；
 - macOS 显式启用原生集成后，Native Broker、Launcher、签名槽、崩溃回滚和真实数据面
-  恢复通过 `12 tests / 1985 assertions`；该证据不等于 launchd 安装/reboot；
+  恢复通过 `14 tests / 1964 assertions`；该证据不等于 launchd 安装/reboot；
 - `Gateway|Windows|Nginx` 跨平台门禁通过
   `257 tests / 2710 assertions / 15 capability skips`，含 Windows Native Broker
   的长管理事务 I/O 窗口；实际 Windows VM 因 Parallels 授权过期挂起，仍为
@@ -188,8 +200,12 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - v54 独立项目撤销在 30.67403 秒返回成功，约 3 分钟和三次后续采样均保持同一
   `removed_at`、空后端身份和 `REMOVED`；撤销域名中性 421，幸存租户 HTTP/2 200，
   网关保持 `HEALTHY`。多项目故障隔离夹具必须为每个项目使用独立受管 runtime；
+- 当前 Linux 隔离网关复测以 10 个独立 H2 批次完成
+  `1,000,000 started/done/succeeded`、0 failed/errored/timeout、0 非 2xx；
+  总计约 443.32 秒、约 2255.7 QPS。全程 generation 54、route ACTIVE、8/8
+  worker；结束后的 `CLOCK_STABLE` 观察自动收敛为 `HEALTHY/NONE`。
 - 使用正式框架 bootstrap 的全量 Weline_Server 回归为
-  `1327 tests / 6736 assertions / 17 platform skips`，零错误、零失败。
+  `1365 tests / 7178 assertions / 19 platform skips`，零错误、零失败。
 
 本轮已补齐 Session/无状态能力的运行时写入、认证证明、30 秒恢复观察、实例摘要心跳
 重放与多实例 generation 防抖；ACME/协议专项通过 `101 tests / 1269 assertions`，聚焦
@@ -197,10 +213,11 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 `9 tests / 334 assertions`。磁盘压力注入回归通过 `1 test / 59 assertions`，完整 Gateway 协议通过 `43 / 1055`；真实 ENOSPC/inode/只读文件系统仍需隔离主机验收。当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、
 Windows 实机、外部 CA/DNS 公网首次实签、完整
 Session daemon 实机亲和和同条件三轮性能中位数。Linux 宿主包已经完成来源、依赖、SBOM、
-自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。现有 v54
-双租户 H2/H3 百万仍证明未改动的数据面；本轮控制面提交没有在新签名宿主包上重跑百万，
-因为旧 Lima 性能宿主已被时钟故障注入锁定为 `CLOCK_UNTRUSTED`。该安全状态未被清除或
-降级，当前源码百万复测仍属于环境边界，不得写成已通过。
+自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。当前
+`controlrestart6` 候选包已由最新 Controller 源码构建并签名；在线宿主因 B 槽仍在
+回滚保留期而正确拒绝切槽。Windows Native Broker、Named Pipe/DACL 与超时策略已有
+静态和跨平台回归，只有在 Windows Service 实机/reboot 验收完成后才可声明该平台
+release-ready。
 
 完整需求、缺陷映射和验收矩阵见
 `dev/ai/plans/2026-07-27-WLS-2.0-多项目共享网关与自动恢复.md`。

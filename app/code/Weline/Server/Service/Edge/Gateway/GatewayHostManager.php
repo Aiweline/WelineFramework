@@ -50,7 +50,7 @@ final class GatewayHostManager
                     && $this->publicationStatusTransportFailureRetryable($throwable)
                     && \hrtime(true) / 1_000_000_000 < $deadline
                 ) {
-                    \usleep(200000);
+                    $this->waitForPublicationDelay(0.2, $deadline);
                     continue;
                 }
                 return [
@@ -990,9 +990,9 @@ final class GatewayHostManager
     private function submitRegistration(array $registration): array
     {
         $status = $this->status(5.0);
-        if (!($status['ok'] ?? false) || !($status['ready'] ?? false)) {
+        if (!self::controlPlaneAcceptsRegistration($status)) {
             throw new \RuntimeException(
-                'WLS Gateway is not ready for project registration: '
+                'WLS Gateway control plane is not ready for project registration: '
                     . (string)($status['reason'] ?? $status['state'] ?? 'status unavailable')
             );
         }
@@ -1008,6 +1008,35 @@ final class GatewayHostManager
             false,
             (string)$registration['project_uuid'],
         );
+    }
+
+    /**
+     * A host restart deliberately restores persisted routes as STALE and
+     * serves TLS/503 until each project replays its complete desired state.
+     * Overall ready therefore cannot be a registration prerequisite: ACTIVE
+     * routes are an output of registration. The authenticated release,
+     * Broker and supervisor tree remains the fail-closed admission boundary.
+     *
+     * @param array<string,mixed> $status
+     */
+    public static function controlPlaneAcceptsRegistration(array $status): bool
+    {
+        return ($status['ok'] ?? false) === true
+            && ($status['release_ready'] ?? false) === true
+            && ($status['broker_ready'] ?? false) === true
+            && ($status['supervisor_ready'] ?? false) === true
+            && \hash_equals(
+                GatewayPaths::PROTOCOL,
+                (string)($status['protocol'] ?? ''),
+            )
+            && \hash_equals(
+                GatewayPaths::IMPLEMENTATION_LEVEL,
+                (string)($status['implementation_level'] ?? ''),
+            )
+            && \hash_equals(
+                GatewayPaths::SECURITY_PROFILE,
+                (string)($status['security_profile'] ?? ''),
+            );
     }
 
     /**
@@ -1569,7 +1598,7 @@ final class GatewayHostManager
     private function idempotentProjectMutation(
         string $operation,
         array $payload,
-        float $timeoutSeconds = 90.0,
+        float $timeoutSeconds = 120.0,
     ): array {
         $deadline = \hrtime(true) / 1_000_000_000 + \max(1.0, $timeoutSeconds);
         while (true) {
@@ -1582,14 +1611,14 @@ final class GatewayHostManager
                 if ((\hrtime(true) / 1_000_000_000) + $retryAfter >= $deadline) {
                     return $response;
                 }
-                \usleep($retryAfter * 1_000_000);
+                $this->waitForPublicationDelay((float)$retryAfter, $deadline);
             } catch (\RuntimeException $exception) {
                 if (!$this->publicationStatusTransportFailureRetryable($exception)
                     || \hrtime(true) / 1_000_000_000 >= $deadline
                 ) {
                     throw $exception;
                 }
-                \usleep(200000);
+                $this->waitForPublicationDelay(0.2, $deadline);
             }
         }
     }

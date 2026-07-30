@@ -309,6 +309,27 @@ http {
             proxy_set_header X-Real-IP \$remote_addr;
         }
 
+        # Framework SSE is a long-lived subscription. Keep transport buffering,
+        # caching and compression disabled without changing ordinary requests.
+        location = /api/framework/stream {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+{$httpRedirectLocation}
+            proxy_set_header Upgrade \$wls_business_upstream_upgrade;
+            proxy_set_header Connection \$wls_business_upstream_connection;
+            proxy_set_header Host \$wls_upstream_authority;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_no_cache 1;
+            gzip off;
+            proxy_read_timeout 300s;
+            proxy_send_timeout 300s;
+        }
+
         location / {
             proxy_pass http://wls_backend;
             proxy_http_version 1.1;
