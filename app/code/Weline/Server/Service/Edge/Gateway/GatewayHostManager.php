@@ -11,6 +11,10 @@ final class GatewayHostManager
 {
     private const EXPLICIT_START_READY_TIMEOUT_SECONDS = 60.0;
     private const PROMOTION_ENROLLMENT_READY_TIMEOUT_SECONDS = 5.0;
+    private const UPGRADE_SHADOW_READY_SECONDS = 15.0;
+    private const UPGRADE_ACTIVATION_READY_SECONDS = 15.0;
+    private const UPGRADE_CONTROL_HANDOFF_SECONDS = 15.0;
+    private const UPGRADE_IDENTITY_PROBE_MARGIN_SECONDS = 15.0;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -853,6 +857,7 @@ final class GatewayHostManager
     public function upgrade(string $packageDirectory, string $profile = 'default'): array
     {
         $service = $this->platform->installedDefinition();
+        $before = null;
         if (!$this->paths->isTestMode()) {
             $before = $this->administratorStatus();
             if (!($before['ok'] ?? false) || !($before['ready'] ?? false)) {
@@ -873,7 +878,7 @@ final class GatewayHostManager
             $service = $this->platform->refreshDefinition($profile);
             $this->platform->secureInstalledRuntime();
             $observation = $this->packages->beginUpgradeActivation($staged);
-            $this->platform->restart((string)$service['kind']);
+            $this->platform->restartControlPlane((string)$service['kind']);
             if ($this->paths->isTestMode()) {
                 return [
                     'accepted' => true,
@@ -885,39 +890,40 @@ final class GatewayHostManager
                     'observation' => $observation,
                 ];
             }
-            $deadline = \microtime(true) + 30.0;
-            do {
-                \usleep(100000);
-                $status = $this->administratorStatus();
-                if (($status['ok'] ?? false)
-                    && ($status['ready'] ?? false)
-                    && \hash_equals(
-                        (string)$staged['slot'],
-                        (string)($status['active_slot'] ?? ''),
-                    )
-                    && \hash_equals(
-                        (string)$staged['runtime_generation'],
-                        (string)($status['runtime_generation'] ?? ''),
-                    )
-                ) {
-                    return $status + [
-                        'accepted' => true,
-                        'platform_service' => (string)$service['kind'],
-                        'observation' => $observation,
-                    ];
-                }
-            } while (\microtime(true) < $deadline);
+            $status = $this->awaitUpgradeIdentity(
+                (string)$staged['slot'],
+                (string)$staged['runtime_generation'],
+            );
+            if ($status !== null) {
+                return $status + [
+                    'accepted' => true,
+                    'platform_service' => (string)$service['kind'],
+                    'observation' => $observation,
+                ];
+            }
             throw new \RuntimeException(
-                'The candidate gateway package did not become identity-verified and ready within 30 seconds.'
+                'The candidate gateway package did not become identity-verified and ready within '
+                . (int)self::upgradeReadinessTimeoutSeconds() . ' seconds.'
             );
         } catch (\Throwable $throwable) {
             if (\is_array($observation)) {
                 try {
+                    $previousSlot = (string)$staged['previous_active_slot'];
+                    $previousGeneration = \is_array($before)
+                        ? (string)($before['runtime_generation'] ?? '')
+                        : '';
                     $this->packages->rollbackUpgradeActivation(
                         (string)$staged['slot'],
-                        (string)$staged['previous_active_slot'],
+                        $previousSlot,
                     );
-                    $this->platform->restart((string)$service['kind']);
+                    $this->platform->restartControlPlane((string)$service['kind']);
+                    if (!$this->paths->isTestMode()
+                        && $this->awaitUpgradeIdentity($previousSlot, $previousGeneration) === null
+                    ) {
+                        throw new \RuntimeException(
+                            'The previous gateway slot did not recover its verified identity after rollback.'
+                        );
+                    }
                     $this->packages->discardStaged((string)$staged['slot']);
                 } catch (\Throwable $rollback) {
                     throw new \RuntimeException(
@@ -936,6 +942,36 @@ final class GatewayHostManager
             }
             throw $throwable;
         }
+    }
+
+    /** @return array<string,mixed>|null */
+    private function awaitUpgradeIdentity(string $slot, string $runtimeGeneration): ?array
+    {
+        $deadline = \hrtime(true) / 1_000_000_000
+            + self::upgradeReadinessTimeoutSeconds();
+        do {
+            \usleep(100000);
+            $status = $this->administratorStatus();
+            if (($status['ok'] ?? false)
+                && ($status['ready'] ?? false)
+                && \hash_equals($slot, (string)($status['active_slot'] ?? ''))
+                && ($runtimeGeneration === '' || \hash_equals(
+                    $runtimeGeneration,
+                    (string)($status['runtime_generation'] ?? ''),
+                ))
+            ) {
+                return $status;
+            }
+        } while (\hrtime(true) / 1_000_000_000 < $deadline);
+        return null;
+    }
+
+    private static function upgradeReadinessTimeoutSeconds(): float
+    {
+        return self::UPGRADE_SHADOW_READY_SECONDS
+            + self::UPGRADE_ACTIVATION_READY_SECONDS
+            + self::UPGRADE_CONTROL_HANDOFF_SECONDS
+            + self::UPGRADE_IDENTITY_PROBE_MARGIN_SECONDS;
     }
 
     /**

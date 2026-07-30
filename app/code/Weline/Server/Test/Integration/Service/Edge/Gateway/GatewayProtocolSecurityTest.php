@@ -388,6 +388,11 @@ final class GatewayProtocolSecurityTest extends TestCase
         $state = (new \ReflectionProperty($this->controller, 'state'))
             ->getValue($this->controller);
         self::assertArrayHasKey('clock_untrusted_since', $state['security']);
+        $status = (new \ReflectionMethod($this->controller, 'status'))
+            ->invoke($this->controller);
+        self::assertFalse($status['clock']['trusted']);
+        self::assertGreaterThan(0, $status['clock']['recovery_remaining_seconds']);
+        self::assertTrue($status['clock']['state_persist_pending']);
 
         $stableSince = new \ReflectionProperty(
             $this->controller,
@@ -404,6 +409,48 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertArrayNotHasKey('clock_untrusted_since', $state['security']);
         self::assertSame('RECOVERING', $state['health_state']);
         self::assertSame('CLOCK_STABLE', $state['recovery']['stage']);
+    }
+
+    public function testMaintenanceRecoversAndPersistsClockTrustWithoutControlTraffic(): void
+    {
+        $clockWallAnchor = new \ReflectionProperty($this->controller, 'clockWallAnchor');
+        $clockWallAnchor->setValue($this->controller, \time() - 10);
+        $observe = new \ReflectionMethod($this->controller, 'observeWallClock');
+        self::assertFalse($observe->invoke($this->controller));
+
+        (new \ReflectionProperty($this->controller, 'clockStableSinceMonotonic'))
+            ->setValue(
+                $this->controller,
+                (\hrtime(true) / 1_000_000_000) - 31.0,
+            );
+        (new \ReflectionProperty($this->controller, 'lastHealthAt'))
+            ->setValue($this->controller, PHP_FLOAT_MAX);
+        (new \ReflectionProperty($this->controller, 'lastBackendProbeAt'))
+            ->setValue($this->controller, PHP_FLOAT_MAX);
+
+        (new \ReflectionMethod($this->controller, 'maintenance'))
+            ->invoke($this->controller);
+
+        $state = (new \ReflectionProperty($this->controller, 'state'))
+            ->getValue($this->controller);
+        self::assertArrayNotHasKey('clock_untrusted_since', $state['security']);
+        self::assertNotSame('', $state['security']['clock_retrusted_at']);
+        self::assertFalse(
+            (new \ReflectionProperty($this->controller, 'clockStatePersistPending'))
+                ->getValue($this->controller),
+        );
+        $persisted = \json_decode((string)\file_get_contents(
+            $this->home . DIRECTORY_SEPARATOR . 'state'
+                . DIRECTORY_SEPARATOR . 'gateway-state.json',
+        ), true, flags: JSON_THROW_ON_ERROR);
+        self::assertArrayNotHasKey(
+            'clock_untrusted_since',
+            $persisted['payload']['security'],
+        );
+        $status = (new \ReflectionMethod($this->controller, 'status'))
+            ->invoke($this->controller);
+        self::assertTrue($status['clock']['trusted']);
+        self::assertSame(0, $status['clock']['recovery_remaining_seconds']);
     }
 
     public function testSecurityLedgerSurvivesDerivedStateCorruptionAndFailsClosedWhenCorrupt(): void

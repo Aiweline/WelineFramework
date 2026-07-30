@@ -66,6 +66,8 @@ final class WlsEdgeGatewayController
     private int $clockWallAnchor = 0;
     private float $clockMonotonicAnchor = 0.0;
     private float $clockStableSinceMonotonic = 0.0;
+    private bool $clockStatePersistPending = false;
+    private float $lastClockStatePersistAttemptAt = 0.0;
     private string $hostBootId = '';
     private int $journalSequence = 0;
     private string $journalHead = '';
@@ -608,6 +610,19 @@ final class WlsEdgeGatewayController
             $operationState = (string)($operation['state'] ?? 'UNKNOWN');
             $operationCounts[$operationState] = ($operationCounts[$operationState] ?? 0) + 1;
         }
+        $clockUntrustedSince = (string)(
+            $this->state['security']['clock_untrusted_since'] ?? ''
+        );
+        $clockStableFor = $clockUntrustedSince !== ''
+            && $this->clockStableSinceMonotonic > 0.0
+                ? \max(0.0, $this->monotonicNow() - $this->clockStableSinceMonotonic)
+                : 0.0;
+        $clockRecoveryRemaining = $clockUntrustedSince !== ''
+            ? \max(
+                0,
+                (int)\ceil(self::CLOCK_RECOVERY_STABLE_SECONDS - $clockStableFor),
+            )
+            : 0;
         return [
             'ready' => (bool)($this->state['ready'] ?? false)
                 && $brokerReady
@@ -626,6 +641,16 @@ final class WlsEdgeGatewayController
             'generation' => (int)($this->state['active_config_generation'] ?? 0),
             'control_generation' => (int)$this->state['generation'],
             'state' => (string)$this->state['health_state'],
+            'clock' => [
+                'trusted' => $clockUntrustedSince === '',
+                'untrusted_since' => $clockUntrustedSince,
+                'retrusted_at' => (string)(
+                    $this->state['security']['clock_retrusted_at'] ?? ''
+                ),
+                'stable_for_seconds' => (int)\floor($clockStableFor),
+                'recovery_remaining_seconds' => $clockRecoveryRemaining,
+                'state_persist_pending' => $this->clockStatePersistPending,
+            ],
             'data_plane' => $nginx,
             'route_counts' => $routeCounts,
             'publication' => [
@@ -680,6 +705,7 @@ final class WlsEdgeGatewayController
             'epoch' => (string)$status['epoch'],
             'generation' => (int)$status['generation'],
             'state' => (string)$status['state'],
+            'clock' => (array)$status['clock'],
             'data_plane' => [
                 'running' => (bool)($status['data_plane']['running'] ?? false),
                 'message' => (string)($status['data_plane']['message'] ?? ''),
@@ -3341,8 +3367,11 @@ final class WlsEdgeGatewayController
         }
         if (($payload['accept_clock'] ?? false) === true) {
             unset($this->state['security']['clock_untrusted_since']);
+            $this->state['security']['clock_retrusted_at'] = \gmdate(DATE_ATOM);
             $this->clockWallAnchor = \time();
-            $this->clockMonotonicAnchor = \hrtime(true) / 1_000_000_000;
+            $this->clockMonotonicAnchor = $this->monotonicNow();
+            $this->clockStableSinceMonotonic = 0.0;
+            $this->clockStatePersistPending = true;
         }
         if (($payload['retry_h3'] ?? false) === true) {
             $previousRuntime = (string)($this->state['h3_quarantined_runtime_generation'] ?? '');
@@ -3497,8 +3526,24 @@ final class WlsEdgeGatewayController
 
     private function maintenance(): void
     {
-        $now = \microtime(true);
+        $now = $this->monotonicNow();
+        $this->observeWallClock();
         $storage = $this->storageStatus();
+        if ($this->clockStatePersistPending
+            && (bool)($storage['mutation_ready'] ?? false)
+            && $now - $this->lastClockStatePersistAttemptAt >= self::HEALTH_INTERVAL
+        ) {
+            $this->lastClockStatePersistAttemptAt = $now;
+            try {
+                $this->persistState();
+                $this->clockStatePersistPending = false;
+            } catch (\Throwable $throwable) {
+                $this->state['recovery']['stage'] = 'CLOCK_STATE_PERSIST_FAILED';
+                $this->state['recovery']['last_failure']
+                    = 'Clock trust transition was not persisted: '
+                    . $throwable->getMessage();
+            }
+        }
         if (!(bool)($storage['mutation_ready'] ?? false)) {
             $this->markDiskPressure(
                 'DISK_PRESSURE',
@@ -3535,7 +3580,7 @@ final class WlsEdgeGatewayController
                 $retryRequired = $this->probeActiveBackends();
                 $this->publishIfDirty();
                 if ($retryRequired) {
-                    $this->lastBackendProbeAt = \microtime(true)
+                    $this->lastBackendProbeAt = $this->monotonicNow()
                         - self::BACKEND_PROBE_INTERVAL
                         + self::BACKEND_PROBE_RETRY_INTERVAL;
                 }
@@ -7983,6 +8028,8 @@ final class WlsEdgeGatewayController
         ];
         $this->state['security']['nonces'] = $this->nonces;
         $this->persistState();
+        $this->clockStatePersistPending = false;
+        $this->lastClockStatePersistAttemptAt = $monotonicNow;
         $requestPayload = \is_array($request['payload'] ?? null)
             ? $request['payload']
             : [];
@@ -8072,12 +8119,16 @@ final class WlsEdgeGatewayController
     private function observeWallClock(): bool
     {
         $nowWall = \time();
-        $nowMonotonic = \hrtime(true) / 1_000_000_000;
+        $nowMonotonic = $this->monotonicNow();
         $expectedWall = $this->clockWallAnchor
             + ($nowMonotonic - $this->clockMonotonicAnchor);
         if (\abs($nowWall - $expectedWall) > 5.0) {
-            $this->state['security']['clock_untrusted_since'] ??= \gmdate(DATE_ATOM);
+            if (!isset($this->state['security']['clock_untrusted_since'])) {
+                $this->state['security']['clock_untrusted_since'] = \gmdate(DATE_ATOM);
+                $this->clockStatePersistPending = true;
+            }
             $this->state['health_state'] = 'CLOCK_UNTRUSTED';
+            $this->state['recovery']['stage'] = 'CLOCK_STABILITY_WAIT';
             $this->clockWallAnchor = $nowWall;
             $this->clockMonotonicAnchor = $nowMonotonic;
             $this->clockStableSinceMonotonic = 0.0;
@@ -8087,6 +8138,8 @@ final class WlsEdgeGatewayController
             $this->clockStableSinceMonotonic = 0.0;
             return true;
         }
+        $this->state['health_state'] = 'CLOCK_UNTRUSTED';
+        $this->state['recovery']['stage'] = 'CLOCK_STABILITY_WAIT';
         if ($this->clockStableSinceMonotonic <= 0.0) {
             $this->clockStableSinceMonotonic = $nowMonotonic;
             return false;
@@ -8099,11 +8152,10 @@ final class WlsEdgeGatewayController
 
         unset($this->state['security']['clock_untrusted_since']);
         $this->state['security']['clock_retrusted_at'] = \gmdate(DATE_ATOM);
-        if ((string)($this->state['health_state'] ?? '') === 'CLOCK_UNTRUSTED') {
-            $this->state['health_state'] = 'RECOVERING';
-        }
+        $this->state['health_state'] = 'RECOVERING';
         $this->state['recovery']['stage'] = 'CLOCK_STABLE';
         $this->clockStableSinceMonotonic = 0.0;
+        $this->clockStatePersistPending = true;
         return true;
     }
 

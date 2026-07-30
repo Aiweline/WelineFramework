@@ -600,6 +600,11 @@ final class HostGatewayPackageManager
                 if (\preg_match('/\A[a-f0-9]{64}\z/D', $trusted) === 1
                     && \hash_equals($trusted, $actual)
                 ) {
+                    if (!\hash_equals($expectedDigest, $actual)) {
+                        throw new \RuntimeException(
+                            'Gateway package requires a different stable launcher; use an explicit host bootstrap upgrade before slot activation.'
+                        );
+                    }
                     return;
                 }
                 throw new \RuntimeException(
@@ -646,6 +651,11 @@ final class HostGatewayPackageManager
                 );
             }
             $this->atomicWrite($identityFile, $actual . PHP_EOL, 0600);
+            if (!\hash_equals($expectedDigest, $actual)) {
+                throw new \RuntimeException(
+                    'Gateway package requires a different stable launcher; use an explicit host bootstrap upgrade before slot activation.'
+                );
+            }
             return;
         }
         if (\file_exists($target) || \is_link($target)) {
