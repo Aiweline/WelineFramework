@@ -4,6 +4,28 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Session;
 
+if (!defined('DS')) {
+    define('DS', DIRECTORY_SEPARATOR);
+}
+if (!defined('BP')) {
+    define('BP', dirname(__DIR__, 7) . DS);
+}
+if (!defined('APP_PATH')) {
+    define('APP_PATH', BP . 'app' . DS);
+}
+if (!defined('APP_CODE_PATH')) {
+    define('APP_CODE_PATH', APP_PATH . 'code' . DS);
+}
+if (!defined('APP_ETC_PATH')) {
+    define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
+}
+if (!defined('DEV_PATH')) {
+    define('DEV_PATH', BP . 'dev' . DS);
+}
+if (!defined('PUB')) {
+    define('PUB', BP . 'pub' . DS);
+}
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\SharedStateServiceRegistry;
 use Weline\Server\Session\Server\SessionProtocol;
