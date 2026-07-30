@@ -216,6 +216,52 @@ final class GatewayPlatformServiceInstaller
         throw new \RuntimeException('Unsupported gateway platform service kind: ' . $kind);
     }
 
+    /**
+     * Seal a newly installed immutable A/B slot for the privilege-separated
+     * Controller before the active-slot pointer can reference it.
+     *
+     * Windows slot access is inherited from the protected slots directory and
+     * refreshed after the restricted service SID exists. POSIX does not use
+     * inherited ACLs here, so every new slot must receive the dedicated
+     * controller group explicitly.
+     */
+    public function secureInstalledRuntimeSlot(string $slotDirectory): void
+    {
+        if ($this->paths->isTestMode() || \PHP_OS_FAMILY === 'Windows') {
+            return;
+        }
+        $this->assertAdministrator();
+        $resolved = \realpath($slotDirectory);
+        $allowed = \array_map(
+            static fn (string $slot): string|false => \realpath($slot),
+            [
+                $this->paths->slotDir('A'),
+                $this->paths->slotDir('B'),
+            ],
+        );
+        if (!\is_string($resolved)
+            || \is_link($slotDirectory)
+            || !\in_array($resolved, $allowed, true)
+        ) {
+            throw new \RuntimeException(
+                'Gateway runtime slot permission target is not an installed A/B slot.'
+            );
+        }
+        $account = \PHP_OS_FAMILY === 'Darwin'
+            ? '_welinegateway'
+            : 'weline-gateway';
+        $identity = \function_exists('posix_getpwnam')
+            ? @\posix_getpwnam($account)
+            : false;
+        $group = \is_array($identity) ? (int)($identity['gid'] ?? 0) : 0;
+        if ($group < 1) {
+            throw new \RuntimeException(
+                'Dedicated WLS Gateway controller identity is unavailable.'
+            );
+        }
+        $this->secureRuntimeTree($resolved, $group);
+    }
+
     /** @return array{kind:string,path:string,test_mode:bool} */
     public function installedDefinition(): array
     {
@@ -393,6 +439,144 @@ final class GatewayPlatformServiceInstaller
         $this->ensureServiceIdentityAndPermissions();
     }
 
+    /**
+     * Grant the dedicated gateway controller read-only access to project
+     * endpoint records. Certificate material is intentionally excluded: the
+     * native Broker reads enrolled certificate roots through no-follow handles.
+     *
+     * The endpoint directory receives an inheritable ACL because every atomic
+     * endpoint update replaces the file. Parent directories receive traversal
+     * only on POSIX so enrollment does not expose the rest of the project.
+     *
+     * @return array{applied:bool,test_mode:bool,instances_dir:string,service_identity:string}
+     */
+    public function authorizeProjectRuntimeRead(
+        string $projectRoot,
+        ?int $ownerUid = null,
+        ?int $ownerGid = null,
+    ): array {
+        $root = \realpath($projectRoot);
+        if (!\is_string($root)
+            || !\is_dir($root)
+            || \is_link($projectRoot)
+            || \rtrim($root, '/\\') === ''
+        ) {
+            throw new \RuntimeException(
+                'Unable to authorize an invalid project root for the WLS Gateway.'
+            );
+        }
+        $root = \rtrim($root, '/\\');
+        $instances = $this->prepareProjectEndpointDirectory(
+            $root,
+            $ownerUid,
+            $ownerGid,
+        );
+        if ($this->paths->isTestMode()) {
+            return [
+                'applied' => false,
+                'test_mode' => true,
+                'instances_dir' => $instances,
+                'service_identity' => 'test-session',
+            ];
+        }
+
+        $this->assertAdministrator();
+        $ancestors = $this->projectTraversalDirectories($root, $instances);
+        $endpointFiles = \glob($instances . DIRECTORY_SEPARATOR . '*.json');
+        $endpointFiles = \is_array($endpointFiles)
+            ? \array_values(\array_filter(
+                $endpointFiles,
+                static fn(string $file): bool => \is_file($file) && !\is_link($file),
+            ))
+            : [];
+
+        if (\PHP_OS_FAMILY === 'Linux') {
+            $account = 'weline-gateway';
+            $identity = \function_exists('posix_getpwnam')
+                ? @\posix_getpwnam($account)
+                : false;
+            if (!\is_array($identity)) {
+                throw new \RuntimeException(
+                    'The dedicated WLS Gateway service identity is unavailable.'
+                );
+            }
+            foreach ($this->linuxProjectRuntimeAclCommands(
+                $account,
+                $ancestors,
+                $instances,
+                $endpointFiles,
+            ) as $command) {
+                $this->mustRun($command, 'project endpoint ACL authorization');
+            }
+            return [
+                'applied' => true,
+                'test_mode' => false,
+                'instances_dir' => $instances,
+                'service_identity' => $account,
+            ];
+        }
+
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $account = '_welinegateway';
+            $identity = \function_exists('posix_getpwnam')
+                ? @\posix_getpwnam($account)
+                : false;
+            if (!\is_array($identity)) {
+                throw new \RuntimeException(
+                    'The dedicated WLS Gateway service identity is unavailable.'
+                );
+            }
+            foreach ($ancestors as $directory) {
+                $this->ensureDarwinAcl(
+                    $directory,
+                    'user:' . $account
+                        . ' allow search,readattr,readextattr,readsecurity',
+                );
+            }
+            $this->ensureDarwinAcl(
+                $instances,
+                'user:' . $account
+                    . ' allow list,search,readattr,readextattr,readsecurity,'
+                    . 'file_inherit,directory_inherit',
+            );
+            foreach ($endpointFiles as $file) {
+                $this->ensureDarwinAcl(
+                    $file,
+                    'user:' . $account
+                        . ' allow read,readattr,readextattr,readsecurity',
+                );
+            }
+            return [
+                'applied' => true,
+                'test_mode' => false,
+                'instances_dir' => $instances,
+                'service_identity' => $account,
+            ];
+        }
+
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $account = 'NT SERVICE\\' . self::SERVICE_NAME;
+            foreach ($this->windowsProjectRuntimeAclCommands(
+                $account,
+                $ancestors,
+                $instances,
+                $endpointFiles,
+            ) as $command) {
+                $this->mustRun($command, 'project endpoint ACL authorization');
+            }
+            return [
+                'applied' => true,
+                'test_mode' => false,
+                'instances_dir' => $instances,
+                'service_identity' => $account,
+            ];
+        }
+
+        throw new \RuntimeException(
+            'Unsupported WLS Gateway project endpoint ACL platform.'
+        );
+    }
+
     public function removeDefinition(string $kind): void
     {
         if (!$this->paths->isTestMode()) {
@@ -472,6 +656,200 @@ final class GatewayPlatformServiceInstaller
             return \str_replace(['\\', '"'], ['\\\\', '\\"'], $value);
         }
         return \str_replace(['\\', '"', '%'], ['\\\\', '\\"', '%%'], $value);
+    }
+
+    private function prepareProjectEndpointDirectory(
+        string $projectRoot,
+        ?int $ownerUid,
+        ?int $ownerGid,
+    ): string {
+        $rootStatus = @\lstat($projectRoot);
+        if (!\is_array($rootStatus)) {
+            throw new \RuntimeException('Unable to inspect the project root owner.');
+        }
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            $ownerUid ??= (int)$rootStatus['uid'];
+            $ownerGid ??= (int)$rootStatus['gid'];
+            if ((int)$rootStatus['uid'] !== $ownerUid
+                || (int)$rootStatus['gid'] !== $ownerGid
+            ) {
+                throw new \RuntimeException(
+                    'Project endpoint ACL owner proof does not match the project root.'
+                );
+            }
+        }
+
+        $directory = $projectRoot;
+        foreach (['var', 'server', 'instances'] as $segment) {
+            $directory .= DIRECTORY_SEPARATOR . $segment;
+            $created = false;
+            if (!\is_dir($directory)) {
+                if (!@\mkdir($directory, 0700) || !\is_dir($directory)) {
+                    throw new \RuntimeException(
+                        'Unable to create the project endpoint directory.'
+                    );
+                }
+                $created = true;
+            }
+            $real = \realpath($directory);
+            if (!\is_string($real)
+                || \is_link($directory)
+                || !$this->pathInside($real, $projectRoot)
+            ) {
+                throw new \RuntimeException(
+                    'Project endpoint ACL path is outside the project root.'
+                );
+            }
+            if (\PHP_OS_FAMILY !== 'Windows' && $created
+                && (!@\chown($directory, (int)$ownerUid)
+                    || !@\chgrp($directory, (int)$ownerGid))
+            ) {
+                throw new \RuntimeException(
+                    'Unable to preserve the project endpoint directory owner.'
+                );
+            }
+        }
+        return $directory;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function projectTraversalDirectories(
+        string $projectRoot,
+        string $instances,
+    ): array {
+        $directories = [];
+        $parent = \dirname($projectRoot);
+        while ($parent !== '' && $parent !== '.' && $parent !== DIRECTORY_SEPARATOR) {
+            $directories[] = $parent;
+            $next = \dirname($parent);
+            if ($next === $parent) {
+                break;
+            }
+            $parent = $next;
+        }
+        $directories[] = $projectRoot;
+        $directories[] = $projectRoot . DIRECTORY_SEPARATOR . 'var';
+        $directories[] = $projectRoot . DIRECTORY_SEPARATOR . 'var'
+            . DIRECTORY_SEPARATOR . 'server';
+        $directories[] = $instances;
+        return \array_values(\array_unique($directories));
+    }
+
+    /**
+     * @param list<string> $ancestors
+     * @param list<string> $endpointFiles
+     * @return list<list<string>>
+     */
+    private function linuxProjectRuntimeAclCommands(
+        string $account,
+        array $ancestors,
+        string $instances,
+        array $endpointFiles,
+    ): array {
+        $setfacl = \is_executable('/usr/bin/setfacl')
+            ? '/usr/bin/setfacl'
+            : '/bin/setfacl';
+        if (!\is_executable($setfacl)) {
+            throw new \RuntimeException(
+                'Linux project enrollment requires setfacl for endpoint isolation.'
+            );
+        }
+        $commands = [];
+        foreach ($ancestors as $directory) {
+            $commands[] = [$setfacl, '-m', 'u:' . $account . ':--x', $directory];
+        }
+        $commands[] = [
+            $setfacl,
+            '-m',
+            'u:' . $account . ':r-x,g::---,m::r-x,o::---',
+            $instances,
+        ];
+        $commands[] = [
+            $setfacl,
+            '-d',
+            '-m',
+            'u::rwx,u:' . $account . ':r-x,g::---,m::r-x,o::---',
+            $instances,
+        ];
+        foreach ($endpointFiles as $file) {
+            $commands[] = [
+                $setfacl,
+                '-m',
+                'u:' . $account . ':r--,g::---,m::r--,o::---',
+                $file,
+            ];
+        }
+        return $commands;
+    }
+
+    /**
+     * @param list<string> $ancestors
+     * @param list<string> $endpointFiles
+     * @return list<list<string>>
+     */
+    private function windowsProjectRuntimeAclCommands(
+        string $account,
+        array $ancestors,
+        string $instances,
+        array $endpointFiles,
+    ): array {
+        $commands = [];
+        foreach ($ancestors as $directory) {
+            $commands[] = [
+                'icacls.exe',
+                $directory,
+                '/grant:r',
+                $account . ':(X)',
+                '/C',
+                '/Q',
+            ];
+        }
+        $commands[] = [
+            'icacls.exe',
+            $instances,
+            '/grant:r',
+            $account . ':(OI)(CI)(RX)',
+            '/C',
+            '/Q',
+        ];
+        foreach ($endpointFiles as $file) {
+            $commands[] = [
+                'icacls.exe',
+                $file,
+                '/grant:r',
+                $account . ':(R)',
+                '/C',
+                '/Q',
+            ];
+        }
+        return $commands;
+    }
+
+    private function ensureDarwinAcl(string $path, string $entry): void
+    {
+        $existing = $this->runCommand(['/bin/ls', '-lde', $path], true);
+        if ($existing['code'] === 0
+            && \str_contains($existing['output'], $entry)
+        ) {
+            return;
+        }
+        $this->mustRun(
+            ['/bin/chmod', '+a', $entry, $path],
+            'project endpoint ACL authorization',
+        );
+    }
+
+    private function pathInside(string $path, string $root): bool
+    {
+        $path = \str_replace('\\', '/', \rtrim($path, '/\\'));
+        $root = \str_replace('\\', '/', \rtrim($root, '/\\'));
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $path = \strtolower($path);
+            $root = \strtolower($root);
+        }
+        return $path === $root || \str_starts_with($path, $root . '/');
     }
 
     private function assertAdministrator(): void

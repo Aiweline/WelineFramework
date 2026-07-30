@@ -10,6 +10,7 @@ namespace Weline\Server\Service\Edge\Gateway;
 final class GatewayClient
 {
     private const LONG_ADMIN_RESPONSE_TIMEOUT_SECONDS = 90.0;
+    private const LONG_PROJECT_MUTATION_RESPONSE_TIMEOUT_SECONDS = 90.0;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -148,6 +149,20 @@ final class GatewayClient
             // bounded by timeoutSeconds, but preserve the authenticated result
             // across the complete publication transaction.
             return \max($this->timeoutSeconds, self::LONG_ADMIN_RESPONSE_TIMEOUT_SECONDS);
+        }
+        if ($channel === 'project'
+            && \in_array($operation, ['register', 'renew', 'drain', 'unregister'], true)
+        ) {
+            // Project mutations may synchronously publish and validate a new
+            // Nginx generation. A two-second read timeout caused the caller to
+            // replay the same envelope while the first transaction was still
+            // running, filling the Broker handler pool and starving heartbeat
+            // and subsequent registration requests. Keep connect failures
+            // short, but wait for one authoritative authenticated result.
+            return \max(
+                $this->timeoutSeconds,
+                self::LONG_PROJECT_MUTATION_RESPONSE_TIMEOUT_SECONDS,
+            );
         }
 
         return $this->timeoutSeconds;

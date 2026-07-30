@@ -24,15 +24,20 @@ class ChildMasterGuard
         private readonly string $instance = '',
         private readonly int $masterEpoch = 0,
         private readonly float $checkIntervalSec = 2.0,
-        ?MasterLeaseManager $leaseManager = null
+        ?MasterLeaseManager $leaseManager = null,
+        private readonly bool $strictLeaseFreshness = false,
     ) {
         $this->leaseManager = $leaseManager ?? new MasterLeaseManager();
     }
 
+
     public function isEnabled(): bool
     {
-        return $this->masterPid > 0 || ($this->leaseFile !== '' && $this->masterToken !== '');
+        return $this->strictLeaseFreshness
+            || $this->masterPid > 0
+            || ($this->leaseFile !== '' && $this->masterToken !== '');
     }
+
 
     public function getLastExitReason(): string
     {
@@ -78,10 +83,15 @@ class ChildMasterGuard
     private function evaluateExitReason(): string
     {
         if ($this->leaseFile === '' || $this->masterToken === '') {
+            if ($this->strictLeaseFreshness) {
+                return 'Master lease identity is incomplete';
+            }
             return $this->isMasterPidMissing() ? "Master PID {$this->masterPid} missing" : '';
         }
 
-        $lease = $this->leaseManager->read($this->leaseFile);
+        $lease = $this->strictLeaseFreshness
+            ? $this->leaseManager->readProtected($this->leaseFile)
+            : $this->leaseManager->read($this->leaseFile);
         if ($lease === null) {
             return 'Master lease file missing or invalid: ' . $this->leaseFile;
         }
@@ -112,18 +122,23 @@ class ChildMasterGuard
         }
 
         $updatedAt = (float)($lease['updated_at'] ?? 0.0);
-        $leaseFresh = $updatedAt <= 0.0
-            || (\microtime(true) - $updatedAt) <= MasterLeaseManager::HEARTBEAT_STALE_SEC;
+        $age = \microtime(true) - $updatedAt;
+        $leaseFresh = $updatedAt > 0.0
+            && $age >= -5.0
+            && $age <= MasterLeaseManager::HEARTBEAT_STALE_SEC;
         if ($leaseFresh) {
             return '';
         }
-
+        if ($this->strictLeaseFreshness) {
+            return 'Master lease heartbeat stale';
+        }
         if ($this->masterPid <= 0 || $this->isMasterPidMissing()) {
             return 'Master lease heartbeat stale and Master PID missing';
         }
 
         return '';
     }
+
 
     private function isMasterPidMissing(): bool
     {

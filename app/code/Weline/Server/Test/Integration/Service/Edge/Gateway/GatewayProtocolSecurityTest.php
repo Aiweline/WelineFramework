@@ -91,6 +91,45 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    public function testPosixNginxIdentityRejectsUnverifiedSlotOrConfig(): void
+    {
+        $slotA = $this->home . DIRECTORY_SEPARATOR . 'slots/A/bin/nginx';
+        $slotBDir = $this->home . DIRECTORY_SEPARATOR . 'slots/B/bin';
+        self::assertTrue(\mkdir($slotBDir, 0700, true));
+        $slotB = $slotBDir . DIRECTORY_SEPARATOR . 'nginx';
+        self::assertTrue(\copy($slotA, $slotB));
+        self::assertTrue(\chmod($slotB, 0700));
+        $config = $this->home . DIRECTORY_SEPARATOR . 'runtime/conf/nginx.conf';
+        self::assertTrue(
+            \is_dir(\dirname($config))
+                || \mkdir(\dirname($config), 0700, true),
+        );
+        self::assertNotFalse(\file_put_contents($config, "events {}\nhttp {}\n"));
+        $expectedHash = (string)\hash_file('sha256', $slotA);
+        $method = new \ReflectionMethod($this->controller, 'posixNginxIdentityMatches');
+        $pid = \getmypid();
+        $command = 'nginx: master process ' . $slotB . ' -c ' . $config;
+
+        // Linux adds a /proc live-executable digest fence, so the current PHP
+        // process cannot impersonate Nginx even with a matching command.
+        self::assertSame(
+            \PHP_OS_FAMILY !== 'Linux',
+            $method->invoke($this->controller, $pid, $command, $expectedHash),
+        );
+        self::assertFalse($method->invoke(
+            $this->controller,
+            $pid,
+            'nginx: master process ' . $slotB . ' -c /tmp/other.conf',
+            $expectedHash,
+        ));
+        self::assertFalse($method->invoke(
+            $this->controller,
+            $pid,
+            $command,
+            \str_repeat('f', 64),
+        ));
+    }
+
     public function testEnrollmentIssuesHostBoundCredentialAndProjectCannotUseAdminOperation(): void
     {
         $project = $this->createProject();
@@ -120,6 +159,17 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertTrue($enrollment['ok']);
         $this->assertResponseSignature($enrollment, $this->adminSecret);
         $credential = $enrollment['payload']['credential'];
+        $credentialKeys = \array_keys($credential);
+        \sort($credentialKeys);
+        self::assertSame([
+            'credential_id',
+            'host_id',
+            'issued_at',
+            'project_uuid',
+            'protocol',
+            'schema_version',
+            'secret',
+        ], $credentialKeys);
         self::assertSame($this->hostId, $credential['host_id']);
         self::assertSame($projectUuid, $credential['project_uuid']);
         self::assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/D', $credential['credential_id']);
@@ -734,6 +784,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertStringContainsString('    keepalive 32;', $config);
         self::assertStringContainsString('    keepalive_timeout 10s;', $config);
         self::assertStringContainsString('    keepalive_requests 10000;', $config);
+        self::assertStringContainsString('  keepalive_requests 100000;', $config);
         self::assertStringNotContainsString('location = /_wls/health { return 404; }', $config);
         self::assertStringContainsString('location = /__wls_gateway_sentinel', $config);
         self::assertStringContainsString('proxy_set_header X-WLS-Edge-Token "' . $secret . '";', $config);
@@ -2217,6 +2268,220 @@ final class GatewayProtocolSecurityTest extends TestCase
         }
     }
 
+    public function testRegistrationFloodCannotConsumeLeaseHeartbeatBudget(): void
+    {
+        $rateLimit = new \ReflectionMethod($this->controller, 'assertRateLimit');
+        $principal = '123e4567-e89b-42d3-a456-426614174099';
+        for ($attempt = 0; $attempt < 5; ++$attempt) {
+            $rateLimit->invoke($this->controller, 'project', $principal, 'register');
+        }
+        try {
+            $rateLimit->invoke($this->controller, 'project', $principal, 'register');
+            self::fail('The project mutation bucket was not exhausted.');
+        } catch (\DomainException $exception) {
+            self::assertStringContainsString('rate limit exceeded', $exception->getMessage());
+        }
+
+        // Heartbeats are state-only and retain a distinct bounded budget, so
+        // an idempotent registration retry loop cannot expire a live route.
+        $rateLimit->invoke($this->controller, 'project', $principal, 'heartbeat');
+        self::assertTrue(true);
+    }
+
+    public function testControllerResponseSanitizesNestedSecretsBeforeSigning(): void
+    {
+        $marker = 'controller-response-sensitive-marker';
+        $payload = [
+            'route' => [
+                'domain' => 'public.example.test',
+                'backend' => (object)[
+                    'backend_id' => 'backend-public-a',
+                    'health' => 'READY',
+                    'credential_id' => 'credential-public-id',
+                    'credential_reference' => 'credential-public-reference',
+                    'credential_generation' => 3,
+                    'credential' => $marker,
+                    'credential.value' => $marker,
+                    'credential-material' => $marker,
+                    'credential_material_hash' => $marker,
+                    'secret_generation' => $marker,
+                    'token_identifier' => $marker,
+                    'secret_credential_id' => $marker,
+                    'token_credential_reference' => $marker,
+                    'authorization_credential_generation' => $marker,
+                    'secret_credential_digest' => $marker,
+                    'token_credential_hash' => $marker,
+                    'authorization_credential_fingerprint' => $marker,
+                    'private_key_credential_thumbprint' => $marker,
+                    'edge_capability_secret' => $marker,
+                    'API-Key' => $marker,
+                    'Authorization' => $marker,
+                    'auth.header' => $marker,
+                    'PassWord' => $marker,
+                    'pass-phrase' => $marker,
+                    'Credential' => $marker,
+                    'Signing_Key' => $marker,
+                    'PRIVATE KEY' => $marker,
+                    'secret_digest' => 'digest-public',
+                    'private_key_fingerprint' => 'fingerprint-public',
+                    'response_signature_metadata' => [
+                        'algorithm' => 'sha256',
+                        'key_id' => 'signer-public',
+                    ],
+                ],
+            ],
+            'json_serializable' => new class($marker) implements \JsonSerializable {
+                public function __construct(private readonly string $marker)
+                {
+                }
+
+                public function jsonSerialize(): mixed
+                {
+                    return (object)[
+                        'state' => 'PUBLIC',
+                        'credential_identifier' => 'json-credential-public-id',
+                        'credential_material' => $this->marker,
+                        'nested' => (object)[
+                            'status' => 'READY',
+                            'private_key' => $this->marker,
+                        ],
+                    ];
+                }
+            },
+            'self_serializing' => new class implements \JsonSerializable {
+                public function jsonSerialize(): mixed
+                {
+                    return $this;
+                }
+            },
+            'project_id' => 'project-public-a',
+            'instances' => [
+                [
+                    'instance_id' => 'instance-public-a',
+                    'state' => 'ACTIVE',
+                    'status' => 'HEALTHY',
+                    'generation' => 7,
+                    'epoch' => 'epoch-public',
+                    'timestamp' => 1234567890,
+                    'nonce_id' => 'nonce-public',
+                    'nested' => [
+                        ['To_Ken' => $marker, 'status' => 'ACTIVE'],
+                        (object)[
+                            'AuthCredential' => $marker,
+                            'thumb_print' => 'thumbprint-public',
+                        ],
+                    ],
+                ],
+                [
+                    'instance_id' => 'instance-public-b',
+                    'state' => 'STANDBY',
+                ],
+            ],
+            'hash' => 'hash-public',
+            'security_signature_status' => 'verified',
+        ];
+        $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($sockets);
+        (new \ReflectionMethod($this->controller, 'writeResponse'))->invoke(
+            $this->controller,
+            $sockets[1],
+            'response-sanitization-request',
+            false,
+            $payload,
+            'public_error_code',
+            'Public operational message.',
+            $this->adminSecret,
+        );
+        \fclose($sockets[1]);
+        $line = \fgets($sockets[0], 4 * 1024 * 1024);
+        \fclose($sockets[0]);
+        self::assertIsString($line);
+        self::assertStringNotContainsString($marker, $line);
+        $response = \json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertFalse($response['ok']);
+        self::assertSame('public_error_code', $response['error']['code']);
+        self::assertSame('Public operational message.', $response['error']['message']);
+        self::assertSame('public.example.test', $response['payload']['route']['domain']);
+        self::assertSame('project-public-a', $response['payload']['project_id']);
+        self::assertSame(
+            ['instance-public-a', 'instance-public-b'],
+            \array_column($response['payload']['instances'], 'instance_id'),
+        );
+        $backend = $response['payload']['route']['backend'];
+        foreach ([
+            'credential',
+            'credential.value',
+            'credential-material',
+            'credential_material_hash',
+            'secret_generation',
+            'token_identifier',
+            'secret_credential_id',
+            'token_credential_reference',
+            'authorization_credential_generation',
+            'secret_credential_digest',
+            'token_credential_hash',
+            'authorization_credential_fingerprint',
+            'private_key_credential_thumbprint',
+            'edge_capability_secret',
+            'API-Key',
+            'Authorization',
+            'auth.header',
+            'PassWord',
+            'pass-phrase',
+            'Credential',
+            'Signing_Key',
+            'PRIVATE KEY',
+        ] as $sensitiveKey) {
+            self::assertArrayNotHasKey($sensitiveKey, $backend);
+        }
+        self::assertSame('credential-public-id', $backend['credential_id']);
+        self::assertSame('credential-public-reference', $backend['credential_reference']);
+        self::assertSame(3, $backend['credential_generation']);
+        self::assertArrayNotHasKey(
+            'To_Ken',
+            $response['payload']['instances'][0]['nested'][0],
+        );
+        self::assertArrayNotHasKey(
+            'AuthCredential',
+            $response['payload']['instances'][0]['nested'][1],
+        );
+        self::assertSame('PUBLIC', $response['payload']['json_serializable']['state']);
+        self::assertSame(
+            'json-credential-public-id',
+            $response['payload']['json_serializable']['credential_identifier'],
+        );
+        self::assertArrayNotHasKey(
+            'credential_material',
+            $response['payload']['json_serializable'],
+        );
+        self::assertSame('READY', $response['payload']['json_serializable']['nested']['status']);
+        self::assertArrayNotHasKey(
+            'private_key',
+            $response['payload']['json_serializable']['nested'],
+        );
+        self::assertNull($response['payload']['self_serializing']);
+        self::assertSame('backend-public-a', $backend['backend_id']);
+        self::assertSame('READY', $backend['health']);
+        self::assertSame('digest-public', $backend['secret_digest']);
+        self::assertSame('fingerprint-public', $backend['private_key_fingerprint']);
+        self::assertSame(
+            ['algorithm' => 'sha256', 'key_id' => 'signer-public'],
+            $backend['response_signature_metadata'],
+        );
+        self::assertSame(
+            'thumbprint-public',
+            $response['payload']['instances'][0]['nested'][1]['thumb_print'],
+        );
+        self::assertSame(7, $response['payload']['instances'][0]['generation']);
+        self::assertSame('epoch-public', $response['payload']['instances'][0]['epoch']);
+        self::assertSame(1234567890, $response['payload']['instances'][0]['timestamp']);
+        self::assertSame('nonce-public', $response['payload']['instances'][0]['nonce_id']);
+        self::assertSame('hash-public', $response['payload']['hash']);
+        self::assertSame('verified', $response['payload']['security_signature_status']);
+        $this->assertResponseSignature($response, $this->adminSecret);
+    }
+
     public function testStalledPublicationProbeStillServicesNewControlRequest(): void
     {
         if (!\function_exists('pcntl_fork')) {
@@ -2307,6 +2572,59 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertLessThan(350.0, (float)($result['elapsed_ms'] ?? 9999));
         self::assertTrue((bool)($result['response']['ok'] ?? false));
         self::assertArrayHasKey('ready', (array)($result['response']['payload'] ?? []));
+    }
+
+    public function testPublicationProbeRejectsIncompleteBrokerWithoutExhaustingProbeBudget(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('The cooperative publication probe test requires pcntl.');
+        }
+        $controlSocket = $this->root . DIRECTORY_SEPARATOR
+            . 'publication-incomplete-control.sock';
+        $server = \stream_socket_server(
+            'unix://' . $controlSocket,
+            $errno,
+            $error,
+            \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+        );
+        self::assertIsResource($server, $error);
+        \stream_set_blocking($server, false);
+        $controlServer = new \ReflectionProperty($this->controller, 'controlServer');
+        $controlServer->setValue($this->controller, $server);
+
+        $pid = \pcntl_fork();
+        self::assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            @\fclose($server);
+            $client = @\stream_socket_client(
+                'unix://' . $controlSocket,
+                $childErrno,
+                $childError,
+                1,
+            );
+            if (!\is_resource($client)) {
+                exit(70);
+            }
+            // A readable but incomplete native envelope used to hold the
+            // Controller for the ordinary three-second client timeout.
+            @\fwrite($client, '{"broker_schema":1');
+            \usleep(250000);
+            @\fclose($client);
+            exit(0);
+        }
+
+        \usleep(30000);
+        $started = \microtime(true);
+        (new \ReflectionMethod($this->controller, 'publicationProbePause'))
+            ->invoke($this->controller);
+        $elapsedMs = (\microtime(true) - $started) * 1000;
+        \pcntl_waitpid($pid, $status);
+        @\fclose($server);
+        $controlServer->setValue($this->controller, null);
+
+        self::assertTrue(\pcntl_wifexited($status));
+        self::assertSame(0, \pcntl_wexitstatus($status));
+        self::assertLessThan(180.0, $elapsedMs);
     }
 
     public function testIdenticalRegistrationRetryReturnsPendingOperationWithoutMutation(): void

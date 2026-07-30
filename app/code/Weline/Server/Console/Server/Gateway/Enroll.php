@@ -6,6 +6,7 @@ namespace Weline\Server\Console\Server\Gateway;
 
 use Weline\Framework\Console\CommandHelper;
 use Weline\Server\Service\Edge\Gateway\GatewayCredentialStore;
+use Weline\Server\Service\Edge\Gateway\GatewayPlatformServiceInstaller;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\ProjectIdentityStore;
 
@@ -102,6 +103,16 @@ final class Enroll extends AbstractGatewayCommand
         }
         $projectUuid = $builder->projectUuid();
         try {
+            $runtimeAccess = (new GatewayPlatformServiceInstaller())
+                ->authorizeProjectRuntimeRead(
+                    $root,
+                    isset($ownerProof['project_owner_uid'])
+                        ? (int)$ownerProof['project_owner_uid']
+                        : null,
+                    isset($ownerProof['project_owner_gid'])
+                        ? (int)$ownerProof['project_owner_gid']
+                        : null,
+                );
             $response = $this->gateway()->request('enroll', [
                 'project_uuid' => $projectUuid,
                 'project_root' => $root,
@@ -136,6 +147,9 @@ final class Enroll extends AbstractGatewayCommand
             $payload['project_uuid'] = $projectUuid;
             $payload['allowed_domains'] = $domains;
             $payload['credential_installed'] = true;
+            $payload['endpoint_access_prepared'] = (bool)(
+                $runtimeAccess['applied'] ?? $runtimeAccess['test_mode'] ?? false
+            );
             if (\is_array($rotation)) {
                 $payload['project_identity_rotation'] = $rotation;
             }

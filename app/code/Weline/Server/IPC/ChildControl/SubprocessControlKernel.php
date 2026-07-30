@@ -39,7 +39,8 @@ final class SubprocessControlKernel
         private readonly bool $verboseLog = false,
         private readonly string $instanceCode = '',
         private readonly mixed $clientFactory = null,
-        ?ResurrectionCoordinatorInterface $resurrectionCoordinator = null
+        ?ResurrectionCoordinatorInterface $resurrectionCoordinator = null,
+        private readonly string $helloAuthSecret = '',
     ) {
         // 默认注入真实协调器；生产入口（bin/worker.php 等）无需改代码。
         // 显式传 null 无法绕过，因为我们把 "禁用自愈" 的决策权下放给 MasterResurrector::isChildResurrectionEnabled()
@@ -151,6 +152,12 @@ final class SubprocessControlKernel
         while ($retryAttempt < $maxStartupRetries) {
             $retryAttempt++;
             $client = $this->createClient();
+            if ($client instanceof SupervisorChildClient) {
+                $client->setHelloAuthSecret(
+                    $this->helloAuthSecret,
+                    $this->identity->role === ControlMessage::ROLE_GATEWAY_AGENT,
+                );
+            }
             $this->client = $client;
             if ($client instanceof BeforeReadyGuardAwareClientInterface) {
                 $client->setBeforeReadyGuard($this->beforeReadyGuard);

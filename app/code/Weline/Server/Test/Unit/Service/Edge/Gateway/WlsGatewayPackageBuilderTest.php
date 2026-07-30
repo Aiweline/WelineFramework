@@ -79,6 +79,21 @@ final class WlsGatewayPackageBuilderTest extends TestCase
             'CycloneDX',
             $this->json($output . DIRECTORY_SEPARATOR . 'sbom.cdx.json')['bomFormat'],
         );
+
+        $previousTestMode = \getenv('WLS_GATEWAY_TEST_MODE');
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        try {
+            $verified = (new HostGatewayPackageManager())->verifyPackage(
+                $output,
+                'default',
+            );
+            self::assertSame('test', $verified['manifest']['package_profile']);
+            self::assertFalse($verified['manifest']['release_ready']);
+        } finally {
+            $previousTestMode === false
+                ? \putenv('WLS_GATEWAY_TEST_MODE')
+                : \putenv('WLS_GATEWAY_TEST_MODE=' . $previousTestMode);
+        }
     }
 
     public function testProductionPackageRequiresTrustedKeyAndSelfContainedProvenance(): void
