@@ -417,11 +417,15 @@ static int wls_write_fencing(
         unlink(temporary);
         return -1;
     }
-    if (controller_account != NULL
-        && (fchown(fd, 0, controller_account->pw_gid) != 0 || fchmod(fd, 0640) != 0)) {
-        close(fd);
-        unlink(temporary);
-        return -1;
+    if (controller_account != NULL) {
+        if ((geteuid() == 0
+                && fchown(fd, 0, controller_account->pw_gid) != 0)
+            || (geteuid() != 0 && getegid() != controller_account->pw_gid)
+            || fchmod(fd, 0640) != 0) {
+            close(fd);
+            unlink(temporary);
+            return -1;
+        }
     }
     close(fd);
     if (rename(temporary, path) != 0) {
@@ -750,11 +754,15 @@ static int wls_write_all(int fd, const char *buffer, size_t length)
     return 0;
 }
 
-static int wls_reap_controller(pid_t controller_pid, int options)
+static int wls_reap_controller(
+    pid_t controller_pid,
+    int options,
+    int *controller_status
+)
 {
     pid_t waited;
     do {
-        waited = waitpid(controller_pid, NULL, options);
+        waited = waitpid(controller_pid, controller_status, options);
     } while (waited < 0 && errno == EINTR);
     return waited == controller_pid ? 0 : -1;
 }
@@ -1334,24 +1342,43 @@ static pid_t wls_start_controller(
     if (child != 0) {
         return child;
     }
-    if (setgroups(0, NULL) != 0
-        || setgid(account->pw_gid) != 0
-        || setuid(account->pw_uid) != 0) {
+    if ((geteuid() == 0
+            && (setgroups(0, NULL) != 0
+                || setgid(account->pw_gid) != 0
+                || setuid(account->pw_uid) != 0))
+        || (geteuid() != 0
+            && (geteuid() != account->pw_uid
+                || getegid() != account->pw_gid))) {
         _exit(126);
     }
     execl(php, php, controller, home_argument, broker_argument, (char *)NULL);
     _exit(127);
 }
 
-static int wls_wait_for_controller(const char *socket_path, pid_t controller_pid)
+static int wls_wait_for_controller(
+    const char *socket_path,
+    pid_t *controller_pid
+)
 {
     unsigned int attempt;
     struct stat status;
+    int controller_status = 0;
+    if (controller_pid == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
     for (attempt = 0U; attempt < WLS_CONTROLLER_START_ATTEMPTS; attempt++) {
         if (lstat(socket_path, &status) == 0 && S_ISSOCK(status.st_mode)) {
             return 0;
         }
-        if (controller_pid > 0 && waitpid(controller_pid, NULL, WNOHANG) == controller_pid) {
+        if (*controller_pid > 0
+            && wls_reap_controller(
+                *controller_pid,
+                WNOHANG,
+                &controller_status
+            ) == 0) {
+            *controller_pid = 0;
+            errno = ECHILD;
             return -1;
         }
         usleep(WLS_CONTROLLER_START_POLL_US);
@@ -1419,10 +1446,31 @@ static int wls_serve(
             *slash = '\0';
             if (lstat(controller_directory, &directory_status) != 0
                 || !S_ISDIR(directory_status.st_mode)
-                || S_ISLNK(directory_status.st_mode)
-                || chown(controller_directory, 0, controller_account->pw_gid) != 0
-                || chmod(controller_directory, 0771) != 0) {
+                || S_ISLNK(directory_status.st_mode)) {
                 fprintf(stderr, "broker controller run directory is unsafe\n");
+                goto failed;
+            }
+            if ((geteuid() == 0
+                    && (chown(
+                            controller_directory,
+                            0,
+                            controller_account->pw_gid
+                        ) != 0
+                        || chmod(controller_directory, 0771) != 0))
+                || (geteuid() != 0
+                    && (directory_status.st_uid != geteuid()
+                        || directory_status.st_gid != getegid()
+                        || getegid() != controller_account->pw_gid))) {
+                fprintf(
+                    stderr,
+                    "broker controller run directory owner is unsafe "
+                    "(uid=%lu gid=%lu euid=%lu egid=%lu controller_gid=%lu)\n",
+                    (unsigned long)directory_status.st_uid,
+                    (unsigned long)directory_status.st_gid,
+                    (unsigned long)geteuid(),
+                    (unsigned long)getegid(),
+                    (unsigned long)controller_account->pw_gid
+                );
                 goto failed;
             }
         }
@@ -1440,7 +1488,8 @@ static int wls_serve(
         controller_user
     );
     if (controller_pid < 0
-        || (controller_pid > 0 && wls_wait_for_controller(controller_socket, controller_pid) != 0)) {
+        || (controller_pid > 0
+            && wls_wait_for_controller(controller_socket, &controller_pid) != 0)) {
         fprintf(stderr, "broker controller launch failed: %s\n", strerror(errno));
         goto failed;
     }
@@ -1470,12 +1519,110 @@ static int wls_serve(
             if (errno == EINTR) continue;
             goto failed;
         }
-        if (controller_pid > 0
-            && wls_reap_controller(controller_pid, WNOHANG) == 0) {
+        if (controller_pid > 0) {
+            int controller_status = 0;
+            if (wls_reap_controller(
+                    controller_pid,
+                    WNOHANG,
+                    &controller_status
+                ) != 0) {
+                goto controller_alive;
+            }
+            {
+                int controller_exit_code = WIFEXITED(controller_status)
+                    ? WEXITSTATUS(controller_status)
+                    : (WIFSIGNALED(controller_status)
+                        ? 128 + WTERMSIG(controller_status)
+                        : 1);
+                unsigned int restart_attempt;
+                int controller_restarted = 0;
+                int controller_restart_failure = 1;
+                wls_release_controller_socket(controller_socket);
+                controller_pid = 0;
+                if (controller_exit_code == 0 || controller_exit_code == 79) {
+                    close(admin_fd);
+                    close(project_fd);
+                    unlink(admin_socket);
+                    unlink(project_socket);
+                    close(lock_fd);
+                    return controller_exit_code;
+                }
+                for (
+                    restart_attempt = 0U;
+                    restart_attempt < 3U;
+                    restart_attempt++
+                ) {
+                    useconds_t delay = restart_attempt == 0U
+                        ? 250000U
+                        : (restart_attempt == 1U ? 1000000U : 5000000U);
+                    fprintf(
+                        stderr,
+                        "broker controller restart attempt %u after exit %d\n",
+                        restart_attempt + 1U,
+                        controller_exit_code
+                    );
+                    if (usleep(delay) != 0 && errno != EINTR) {
+                        controller_restart_failure = errno;
+                    }
+                    if (!wls_running) {
+                        controller_restarted = -1;
+                        break;
+                    }
+                    controller_pid = wls_start_controller(
+                        php,
+                        controller,
+                        home,
+                        controller_socket,
+                        controller_user
+                    );
+                    if (controller_pid <= 0) {
+                        controller_restart_failure = errno != 0 ? errno : ECHILD;
+                        controller_pid = 0;
+                        continue;
+                    }
+                    if (wls_wait_for_controller(
+                            controller_socket,
+                            &controller_pid
+                        ) == 0) {
+                        controller_restarted = 1;
+                        fprintf(
+                            stderr,
+                            "broker controller restart ready pid=%ld\n",
+                            (long)controller_pid
+                        );
+                        break;
+                    }
+                    controller_restart_failure = errno != 0 ? errno : ECHILD;
+                    if (controller_pid > 0) {
+                        (void)kill(controller_pid, SIGTERM);
+                        if (wls_reap_controller(
+                                controller_pid,
+                                0,
+                                NULL
+                            ) == 0) {
+                            wls_release_controller_socket(controller_socket);
+                        }
+                        controller_pid = 0;
+                    }
+                }
+                if (controller_restarted < 0) {
+                    break;
+                }
+                if (controller_restarted == 0) {
+                    errno = controller_restart_failure;
+                    fprintf(
+                        stderr,
+                        "broker controller restart exhausted: %s\n",
+                        strerror(errno)
+                    );
+                    goto failed;
+                }
+            }
+        }
+controller_alive:
+        if (controller_pid < 0) {
             wls_release_controller_socket(controller_socket);
             controller_pid = 0;
-            errno = ECHILD;
-            fprintf(stderr, "broker controller exited; requesting platform restart\n");
             goto failed;
         }
         if (!upgrade_marked
@@ -1518,7 +1665,7 @@ static int wls_serve(
     unlink(project_socket);
     if (controller_pid > 0) {
         (void)kill(controller_pid, SIGTERM);
-        if (wls_reap_controller(controller_pid, 0) == 0) {
+        if (wls_reap_controller(controller_pid, 0, NULL) == 0) {
             wls_release_controller_socket(controller_socket);
         }
     }
@@ -1532,7 +1679,7 @@ failed:
     if (project_socket != NULL) unlink(project_socket);
     if (controller_pid > 0) {
         (void)kill(controller_pid, SIGTERM);
-        if (wls_reap_controller(controller_pid, 0) == 0) {
+        if (wls_reap_controller(controller_pid, 0, NULL) == 0) {
             wls_release_controller_socket(controller_socket);
         }
     }

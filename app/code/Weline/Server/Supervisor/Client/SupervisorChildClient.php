@@ -610,8 +610,27 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         return [$slotId, $leaseId, $generation];
     }
 
+    private ?string $helloAuthSecretOverride = null;
+    private bool $explicitHelloAuthSecretRequired = false;
+
+    public function setHelloAuthSecret(string $secret, bool $required = false): void
+    {
+        if ($required && $secret === '') {
+            throw new \RuntimeException('Explicit Supervisor hello authentication is required.');
+        }
+        $this->helloAuthSecretOverride = $secret !== '' ? $secret : null;
+        $this->explicitHelloAuthSecretRequired = $required;
+    }
+
     private function resolveHelloAuthSecret(): string
     {
+        if ($this->helloAuthSecretOverride !== null) {
+            return $this->helloAuthSecretOverride;
+        }
+        if ($this->explicitHelloAuthSecretRequired) {
+            throw new \RuntimeException('Explicit Supervisor hello authentication is unavailable.');
+        }
+
         $environmentSecret = (string)(\getenv('WLS_MASTER_TOKEN') ?: '');
         $argv = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
         if (!\is_array($argv)) {
@@ -630,6 +649,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
 
         return $environmentSecret;
     }
+
 
     private function sendRaw(string $message): bool
     {

@@ -512,6 +512,168 @@ final class NativeGatewayBrokerTest extends TestCase
         }
     }
 
+    public function testUnexpectedControllerExitRestartsInPlaceWithoutReplacingBrokerSockets(): void
+    {
+        if (!\function_exists('posix_getpwuid') || !\function_exists('posix_kill')) {
+            self::markTestSkipped('POSIX identity and signals are required for controller restart.');
+        }
+        $account = \posix_getpwuid(\posix_geteuid());
+        self::assertIsArray($account);
+        $controllerUser = (string)($account['name'] ?? '');
+        self::assertNotSame('', $controllerUser);
+        self::assertTrue(\chgrp($this->root, \posix_getegid()));
+
+        $home = $this->root . DIRECTORY_SEPARATOR . 'restart-home';
+        self::assertTrue(\mkdir($home, 0700));
+        $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-admin.sock';
+        $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-project.sock';
+        $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-controller.sock';
+        $lockFile = $this->root . DIRECTORY_SEPARATOR . 'restart-broker.lock';
+        $fencingFile = $this->root . DIRECTORY_SEPARATOR . 'restart-fencing';
+        $pidFile = $home . DIRECTORY_SEPARATOR . 'controller-pids.log';
+        $controllerScript = $this->root . DIRECTORY_SEPARATOR . 'restart-controller.php';
+        $controllerSource = <<<'PHP'
+<?php
+declare(strict_types=1);
+$home = '';
+$endpoint = '';
+foreach ($argv as $argument) {
+    if (str_starts_with($argument, '--home=')) {
+        $home = substr($argument, 7);
+    } elseif (str_starts_with($argument, '--broker-internal=unix://')) {
+        $endpoint = substr($argument, strlen('--broker-internal=unix://'));
+    }
+}
+if ($home === '' || $endpoint === '') {
+    exit(64);
+}
+@unlink($endpoint);
+$server = stream_socket_server(
+    'unix://' . $endpoint,
+    $errorNumber,
+    $errorMessage,
+    STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+);
+if (!is_resource($server)) {
+    exit(65);
+}
+file_put_contents(
+    $home . DIRECTORY_SEPARATOR . 'controller-pids.log',
+    getmypid() . PHP_EOL,
+    FILE_APPEND | LOCK_EX,
+);
+while (true) {
+    $client = @stream_socket_accept($server, 5);
+    if (!is_resource($client)) {
+        continue;
+    }
+    $header = @fgets($client, 4096);
+    $requestLine = @fgets($client, 4096);
+    $request = is_string($requestLine) ? json_decode($requestLine, true) : null;
+    $requestId = is_array($request) ? (string)($request['request_id'] ?? '') : '';
+    @fwrite(
+        $client,
+        json_encode([
+            'protocol' => 'wls-edge/2',
+            'request_id' => $requestId,
+            'ok' => is_string($header) && $requestId !== '',
+        ], JSON_UNESCAPED_SLASHES) . PHP_EOL,
+    );
+    @fclose($client);
+}
+PHP;
+        self::assertSame(
+            \strlen($controllerSource),
+            \file_put_contents($controllerScript, $controllerSource),
+        );
+
+        $log = $this->root . DIRECTORY_SEPARATOR . 'restart-broker.log';
+        $process = \proc_open([
+            $this->broker,
+            '--serve',
+            '--admin-socket',
+            $adminSocket,
+            '--project-socket',
+            $projectSocket,
+            '--controller-socket',
+            $controllerSocket,
+            '--lock-file',
+            $lockFile,
+            '--fencing-file',
+            $fencingFile,
+            '--php',
+            \PHP_BINARY,
+            '--controller',
+            $controllerScript,
+            '--home',
+            $home,
+            '--controller-user',
+            $controllerUser,
+        ], [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['file', $log, 'a'],
+            2 => ['file', $log, 'a'],
+        ], $pipes, null, null, ['bypass_shell' => true]);
+        self::assertIsResource($process);
+        try {
+            $deadline = \microtime(true) + 3.0;
+            while (!\file_exists($adminSocket) && \microtime(true) < $deadline) {
+                \usleep(10_000);
+            }
+            self::assertFileExists(
+                $adminSocket,
+                (string)@\file_get_contents($log),
+            );
+            $firstPids = $this->waitForControllerPids($pidFile, 1);
+            $brokerStatus = \proc_get_status($process);
+            $brokerPid = (int)($brokerStatus['pid'] ?? 0);
+            self::assertGreaterThan(0, $brokerPid);
+            $socketStatus = \lstat($adminSocket);
+            self::assertIsArray($socketStatus);
+            $socketInode = (int)$socketStatus['ino'];
+            self::assertGreaterThan(0, $socketInode);
+
+            $firstControllerPid = $firstPids[0];
+            self::assertTrue(\posix_kill($firstControllerPid, SIGTERM));
+            $controllerPids = $this->waitForControllerPids($pidFile, 2);
+            self::assertNotSame($firstControllerPid, $controllerPids[1]);
+
+            $after = \proc_get_status($process);
+            self::assertTrue($after['running'] ?? false, (string)@\file_get_contents($log));
+            self::assertSame($brokerPid, (int)($after['pid'] ?? 0));
+            $afterSocket = \lstat($adminSocket);
+            self::assertIsArray($afterSocket);
+            self::assertSame($socketInode, (int)$afterSocket['ino']);
+
+            $client = @\stream_socket_client(
+                'unix://' . $adminSocket,
+                $errorNumber,
+                $errorMessage,
+                2.0,
+            );
+            self::assertIsResource($client, $errorMessage);
+            self::assertNotFalse(@\fwrite(
+                $client,
+                '{"request_id":"after-controller-restart"}' . "\n",
+            ));
+            $response = (string)@\fgets($client, 4096);
+            @\fclose($client);
+            self::assertStringContainsString(
+                '"request_id":"after-controller-restart"',
+                $response,
+            );
+            self::assertStringContainsString('"ok":true', $response);
+        } finally {
+            if (\is_resource($process)) {
+                $status = \proc_get_status($process);
+                if ($status['running'] ?? false) {
+                    \posix_kill((int)$status['pid'], SIGTERM);
+                }
+                \proc_close($process);
+            }
+        }
+    }
+
     /** @return array{code:int,output:string} */
     private function snapshot(
         string $sourceRoot,
@@ -568,6 +730,32 @@ final class NativeGatewayBrokerTest extends TestCase
             \usleep(10_000);
         } while (\microtime(true) < $deadline);
         self::fail('Native broker evidence did not appear: ' . $path);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function waitForControllerPids(string $path, int $expected): array
+    {
+        $deadline = \microtime(true) + 10.0;
+        do {
+            $lines = \is_file($path)
+                ? \file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+                : [];
+            $pids = \is_array($lines)
+                ? \array_values(\array_filter(
+                    \array_map('intval', $lines),
+                    static fn (int $pid): bool => $pid > 0,
+                ))
+                : [];
+            if (\count($pids) >= $expected) {
+                return $pids;
+            }
+            \usleep(10_000);
+        } while (\microtime(true) < $deadline);
+        self::fail(
+            'Native broker did not start ' . $expected . ' controller generation(s).',
+        );
     }
 
     private function removeTree(string $root): void

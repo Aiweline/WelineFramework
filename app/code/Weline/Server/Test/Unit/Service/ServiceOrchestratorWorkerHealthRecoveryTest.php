@@ -8,6 +8,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\Runtime\DirectSharedListener;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\Runtime\WorkerIpcReconnectPolicy;
@@ -143,6 +144,103 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
                 $this->readPrivate($orchestrator, 'recoveryQuarantine'),
             );
         }
+    }
+
+    public function testMasterSelfAuditClassifiesDeadTransitionalSlotsForImmediateReconciliation(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        foreach ([
+            ServiceInstance::STATE_PENDING,
+            ServiceInstance::STATE_STARTING,
+            ServiceInstance::STATE_REGISTERED,
+        ] as $state) {
+            $instance = new ServiceInstance(
+                role: ControlMessage::ROLE_WORKER,
+                instanceId: 1,
+                pid: 999999,
+                state: $state,
+            );
+            $instance->setProcessTreePids(999999, 999999, 999999);
+
+            self::assertTrue($this->invokePrivate(
+                $orchestrator,
+                'isDeadRoleSlotEligibleForImmediateReconciliation',
+                [$instance],
+            ), 'dead transitional state must be reconciled: ' . $state);
+        }
+
+        foreach ([
+            ServiceInstance::STATE_READY,
+            ServiceInstance::STATE_DRAINING,
+            ServiceInstance::STATE_STOPPING,
+            ServiceInstance::STATE_STOPPED,
+            ServiceInstance::STATE_FAILED,
+        ] as $state) {
+            $instance = new ServiceInstance(
+                role: ControlMessage::ROLE_WORKER,
+                instanceId: 1,
+                pid: 999999,
+                state: $state,
+            );
+            $instance->setProcessTreePids(999999, 999999, 999999);
+
+            self::assertFalse($this->invokePrivate(
+                $orchestrator,
+                'isDeadRoleSlotEligibleForImmediateReconciliation',
+                [$instance],
+            ), 'explicit lifecycle state must keep its existing recovery path: ' . $state);
+        }
+
+        $alive = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            pid: \getmypid(),
+            state: ServiceInstance::STATE_REGISTERED,
+        );
+        $alive->setProcessTreePids(\getmypid(), \getmypid(), \getmypid());
+
+        self::assertFalse($this->invokePrivate(
+            $orchestrator,
+            'isDeadRoleSlotEligibleForImmediateReconciliation',
+            [$alive],
+        ));
+    }
+
+    public function testStartupAcceptanceQueuesDeadRegisteredWorkerBeforeReadyTimeout(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: 1,
+            launchId: 'startup-dead-registered-worker',
+            pid: 999999,
+            port: 18081,
+            state: ServiceInstance::STATE_REGISTERED,
+            startedAt: \microtime(true) - 10.0,
+        );
+        $worker->setProcessTreePids(999999, 999999, 999999);
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'startup-dead-registered-worker');
+        $worker->setMeta('generation', 1);
+        $orchestrator->getRegistry()->addInstance($worker);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 1,
+        ]);
+
+        self::assertTrue($this->invokePrivate(
+            $orchestrator,
+            'queueDeadTransitionalStartupWorkerRecovery',
+            [$worker],
+        ));
+        self::assertSame(ServiceInstance::STATE_FAILED, $worker->state);
+        self::assertSame(1, $worker->restarts);
+        self::assertArrayHasKey(
+            ControlMessage::ROLE_WORKER . ':1',
+            $this->readPrivate($orchestrator, 'resurrectQueue'),
+        );
     }
 
     public function testRecoveryQueueRejectsSlotsAfterDesiredCountBecomesZero(): void

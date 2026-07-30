@@ -291,7 +291,7 @@ final class WlsEdgeGatewayController
     /**
      * @param resource $client
      */
-    private function serveClient($client): void
+    private function serveClient($client, float $readTimeoutSeconds = 3.0): void
     {
         $responseSecret = '';
         try {
@@ -300,7 +300,23 @@ final class WlsEdgeGatewayController
                     'Unable to establish a blocking native Broker exchange.'
                 );
             }
-            \stream_set_timeout($client, 3);
+            $readTimeoutSeconds = \max(0.001, $readTimeoutSeconds);
+            $readTimeoutWholeSeconds = (int)\floor($readTimeoutSeconds);
+            $readTimeoutMicroseconds = (int)\max(
+                1,
+                \min(
+                    999999,
+                    \round(
+                        ($readTimeoutSeconds - $readTimeoutWholeSeconds)
+                            * 1_000_000,
+                    ),
+                ),
+            );
+            \stream_set_timeout(
+                $client,
+                $readTimeoutWholeSeconds,
+                $readTimeoutMicroseconds,
+            );
             $brokerPeer = null;
             if ($this->brokerInternalEndpoint !== null) {
                 $brokerLine = @\fgets($client, 8192);
@@ -420,7 +436,17 @@ final class WlsEdgeGatewayController
                     $result['operation_id'] = $this->lastQueuedOperationId;
                     $result['operation'] = $operationState;
                 }
-                $this->writeResponse($client, $requestId, true, $result, '', '', $responseSecret);
+                $this->writeResponse(
+                    $client,
+                    $requestId,
+                    true,
+                    $result,
+                    '',
+                    '',
+                    $responseSecret,
+                    $operation === 'enroll'
+                        && (string)$brokerPeer['channel'] === 'admin',
+                );
             } catch (\Throwable $throwable) {
                 $code = $throwable instanceof \DomainException ? 'rejected' : 'operation_failed';
                 $this->journal('request_rejected', [
@@ -4087,8 +4113,34 @@ final class WlsEdgeGatewayController
         if ((string)($this->publication['phase'] ?? '') === 'PENDING_PUBLICATION') {
             return;
         }
+        $file = $this->publicationFile();
+        if ((\file_exists($file) || \is_link($file)) && !@\unlink($file)) {
+            $this->markDiskPressure(
+                'PUBLICATION_CLEANUP_FAILED',
+                'publication_journal_remove_failed',
+            );
+            throw new \RuntimeException(
+                'Unable to remove the completed gateway publication journal.'
+            );
+        }
+        \clearstatcache(true, $file);
+        if (\file_exists($file) || \is_link($file)) {
+            $this->markDiskPressure(
+                'PUBLICATION_CLEANUP_FAILED',
+                'publication_journal_still_present',
+            );
+            throw new \RuntimeException(
+                'Completed gateway publication journal is still present.'
+            );
+        }
+        if (\PHP_OS_FAMILY !== 'Windows' && \function_exists('fsync')) {
+            $directory = @\fopen(\dirname($file), 'rb');
+            if (\is_resource($directory)) {
+                @\fsync($directory);
+                @\fclose($directory);
+            }
+        }
         $this->publication = null;
-        @\unlink($this->publicationFile());
     }
 
     private function markPublicationIrrevocableSecurity(): void
@@ -4818,34 +4870,38 @@ final class WlsEdgeGatewayController
             : $this->startDataPlane();
         $verified = false;
         if (($result['ok'] ?? false) === true) {
+            $testMode = ($this->slotManifest()['test_mode'] ?? false) === true;
+            $activationBudgetSeconds = $testMode ? 15.0 : 20.0;
+            $observationSeconds = $testMode ? 0.2 : 15.0;
+            $activationDeadline = \hrtime(true)
+                + (int)\round($activationBudgetSeconds * 1_000_000_000);
+            $healthySince = null;
+
             // A successful reload signal only means the master accepted the
-            // command. Old workers may still answer the first health or route
-            // probe while the new generation is becoming ready.
-            $startupDeadline = \microtime(true) + 3.0;
-            while (\microtime(true) < $startupDeadline) {
-                if ($this->publicPortsReachable($generation, true)
-                    && $this->publicRoutesReachable(true)
-                ) {
-                    $verified = true;
+            // command. Old workers may still answer while the new generation
+            // is becoming ready, so require one continuous healthy interval
+            // inside a bounded monotonic activation budget. Any failed strict
+            // probe resets the interval without weakening its identity checks.
+            do {
+                $healthy = $this->publicPortsReachable($generation, true)
+                    && $this->publicRoutesReachable(true);
+                $observedAt = \hrtime(true);
+                if ($healthy && $observedAt <= $activationDeadline) {
+                    $healthySince ??= $observedAt;
+                    if (($observedAt - $healthySince) / 1_000_000_000
+                        >= $observationSeconds
+                    ) {
+                        $verified = true;
+                        break;
+                    }
+                } else {
+                    $healthySince = null;
+                }
+                if ($observedAt >= $activationDeadline) {
                     break;
                 }
                 $this->publicationProbePause();
-            }
-            if ($verified) {
-                $observationSeconds = ($this->slotManifest()['test_mode'] ?? false) === true
-                    ? 0.2
-                    : 15.0;
-                $observationDeadline = \microtime(true) + $observationSeconds;
-                do {
-                    if (!$this->publicPortsReachable($generation, true)
-                        || !$this->publicRoutesReachable(true)
-                    ) {
-                        $verified = false;
-                        break;
-                    }
-                    $this->publicationProbePause();
-                } while (\microtime(true) < $observationDeadline);
-            }
+            } while (\hrtime(true) < $activationDeadline);
         }
         return ['verified' => $verified, 'result' => $result];
     }
@@ -4911,7 +4967,18 @@ final class WlsEdgeGatewayController
             if (!\is_resource($client)) {
                 return;
             }
-            $this->serveClient($client);
+            // The ordinary event loop may spend up to three seconds reading a
+            // complete native Broker envelope. Publication probes instead
+            // share one 25 ms wall-clock budget: an accepted-but-incomplete
+            // peer must fail closed without stretching the mandatory probe
+            // window, starving lease heartbeats, or cascading tenants into
+            // pure-WLS fallback while the Nginx data plane is still healthy.
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0.0) {
+                @\fclose($client);
+                return;
+            }
+            $this->serveClient($client, \max(0.001, $remaining / 3.0));
         }
     }
 
@@ -5939,6 +6006,11 @@ final class WlsEdgeGatewayController
             '  ssl_session_tickets off;',
             '  sendfile on;',
             '  keepalive_timeout 65;',
+            // Match the pure-WLS edge connection budget. Nginx otherwise
+            // sends GOAWAY after its default 1,000 requests per client
+            // connection; a 100-connection HTTP/2 million-request gate then
+            // stops at exactly 100,000 despite a healthy data plane.
+            '  keepalive_requests 100000;',
             // Preserve ordinary HTTP/1.1 upstream keepalive. Only WebSocket
             // handshakes may emit "Connection: upgrade"; sending "close" for
             // every non-upgrade request defeats the upstream keepalive pool
@@ -6523,13 +6595,69 @@ final class WlsEdgeGatewayController
                         \strtolower(\str_replace('/', '\\', $this->configFile())),
                     );
             } else {
-                $identityMatches = $command !== '' && \str_contains($command, $binary);
+                $identityMatches = $this->posixNginxIdentityMatches(
+                    $pid,
+                    $command,
+                    $expectedHash,
+                );
             }
             if (!$identityMatches) {
                 return ['ok' => false, 'running' => false, 'pid' => $pid, 'message' => 'adopted process identity mismatch'];
             }
         }
         return ['ok' => true, 'running' => true, 'pid' => $pid, 'message' => 'running'];
+    }
+
+    /**
+     * A/B activation may leave the verified Nginx master running from the
+     * previous immutable slot while the new Controller takes over. Accept
+     * only an A/B slot binary with the active release digest and the exact
+     * host-gateway config. Linux additionally hashes the live executable via
+     * /proc so replacing an on-disk path cannot forge process identity.
+     */
+    private function posixNginxIdentityMatches(
+        int $pid,
+        string $command,
+        string $expectedHash,
+    ): bool {
+        if ($pid < 1
+            || $command === ''
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedHash) !== 1
+            || !\str_contains($command, $this->configFile())
+        ) {
+            return false;
+        }
+
+        $matchedBinary = '';
+        foreach (['A', 'B'] as $slot) {
+            $candidate = $this->slotDir($slot)
+                . DIRECTORY_SEPARATOR . 'bin'
+                . DIRECTORY_SEPARATOR . $this->nginxBinaryName();
+            if (\str_contains($command, $candidate)
+                && \hash_equals($expectedHash, $this->fileHash($candidate))
+            ) {
+                $matchedBinary = $candidate;
+                break;
+            }
+        }
+        if ($matchedBinary === '') {
+            return false;
+        }
+
+        $liveExecutable = '/proc/' . $pid . '/exe';
+        if (\PHP_OS_FAMILY === 'Linux' && \file_exists($liveExecutable)) {
+            $liveHash = $this->fileHash($liveExecutable);
+            if ($liveHash !== '') {
+                return \hash_equals($expectedHash, $liveHash);
+            }
+        }
+
+        // Darwin has no /proc executable link. Linux also denies an
+        // unprivileged Controller access to a root-owned Nginx executable,
+        // especially after the previous slot inode has been replaced. In
+        // both cases the command comes from the kernel process table and the
+        // matched A/B slot remains immutable and package-verified.
+        return true;
     }
 
     private function publicPortsReachable(
@@ -6625,77 +6753,163 @@ final class WlsEdgeGatewayController
                 'crypto_method' => \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
             ],
         ]);
-        $socket = @\stream_socket_client(
-            'tls://127.0.0.1:' . ($httpsPort ?? (int)$this->state['public_https']),
-            $errno,
-            $error,
-            1.0,
-            STREAM_CLIENT_CONNECT,
-            $context,
-        );
-        if (!\is_resource($socket)) {
-            return false;
-        }
-        if ($cooperative) {
-            $this->serviceControlDuringPublicationProbe();
-        }
-        $params = \stream_context_get_params($socket);
-        $peerCertificate = $params['options']['ssl']['peer_certificate'] ?? null;
         $expectedFingerprint = (\is_resource($expectedCertificate)
             || $expectedCertificate instanceof \OpenSSLCertificate)
                 ? (string)@\openssl_x509_fingerprint($expectedCertificate, 'sha256')
                 : '';
-        $peerFingerprint = (\is_resource($peerCertificate)
-            || $peerCertificate instanceof \OpenSSLCertificate)
-                ? (string)@\openssl_x509_fingerprint($peerCertificate, 'sha256')
-                : '';
-        if ($expectedFingerprint === ''
-            || $peerFingerprint === ''
-            || !\hash_equals(\strtolower($expectedFingerprint), \strtolower($peerFingerprint))
-        ) {
-            @\fclose($socket);
+        if ($expectedFingerprint === '') {
             return false;
         }
-        $nonce = \bin2hex(\random_bytes(16));
-        $request = "GET /__wls_gateway_sentinel?nonce={$nonce} HTTP/1.1\r\n"
-            . "Host: {$domain}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n";
-        if (@\fwrite($socket, $request) !== \strlen($request)) {
-            @\fclose($socket);
-            return false;
-        }
-        $response = $this->readProbeResponse($socket, 262144, 2.0, $cooperative);
-        @\fclose($socket);
-        [$headerBlock, $body] = \array_pad(\explode("\r\n\r\n", $response, 2), 2, '');
-        if (!\str_starts_with($headerBlock, 'HTTP/1.1 200 ')) {
-            return false;
-        }
-        $headers = [];
-        foreach (\array_slice(\explode("\r\n", $headerBlock), 1) as $line) {
-            if (!\str_contains($line, ':')) {
-                continue;
+
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            if ($cooperative) {
+                $this->serviceControlDuringPublicationProbe();
             }
-            [$name, $value] = \explode(':', $line, 2);
-            $headers[\strtolower(\trim($name))] = \trim($value);
+            $socket = @\stream_socket_client(
+                'tls://127.0.0.1:' . ($httpsPort ?? (int)$this->state['public_https']),
+                $errno,
+                $error,
+                1.0,
+                STREAM_CLIENT_CONNECT,
+                $context,
+            );
+            if (!\is_resource($socket)) {
+                if ($attempt < 3) {
+                    $this->publicationProbePause();
+                    continue;
+                }
+                return false;
+            }
+
+            $retryable = false;
+            try {
+                if ($cooperative) {
+                    $this->serviceControlDuringPublicationProbe();
+                }
+                $params = \stream_context_get_params($socket);
+                $peerCertificate = $params['options']['ssl']['peer_certificate'] ?? null;
+                $peerFingerprint = (\is_resource($peerCertificate)
+                    || $peerCertificate instanceof \OpenSSLCertificate)
+                        ? (string)@\openssl_x509_fingerprint($peerCertificate, 'sha256')
+                        : '';
+                if ($peerFingerprint === ''
+                    || !\hash_equals(
+                        \strtolower($expectedFingerprint),
+                        \strtolower($peerFingerprint),
+                    )
+                ) {
+                    return false;
+                }
+
+                $nonce = \bin2hex(\random_bytes(16));
+                $request = "GET /__wls_gateway_sentinel?nonce={$nonce} HTTP/1.1\r\n"
+                    . "Host: {$domain}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n";
+                if (@\fwrite($socket, $request) !== \strlen($request)) {
+                    $retryable = true;
+                } else {
+                    $response = $this->readProbeResponse(
+                        $socket,
+                        262144,
+                        2.0,
+                        $cooperative,
+                    );
+                    $headerBoundary = \strpos($response, "\r\n\r\n");
+                    if ($response === '' || $headerBoundary === false) {
+                        $retryable = true;
+                    } else {
+                        $headerBlock = \substr($response, 0, $headerBoundary);
+                        $body = \substr($response, $headerBoundary + 4);
+                        $headerLines = \explode("\r\n", $headerBlock);
+                        $statusLine = (string)\array_shift($headerLines);
+                        if (\preg_match(
+                            '/\AHTTP\/1\.1 ([0-9]{3}) [^\r\n]*\z/D',
+                            $statusLine,
+                            $statusMatch,
+                        ) !== 1) {
+                            return false;
+                        }
+                        $statusCode = (int)$statusMatch[1];
+                        if (\in_array($statusCode, [502, 503, 504], true)) {
+                            $retryable = true;
+                        } elseif ($statusCode !== 200) {
+                            return false;
+                        } else {
+                            $headers = [];
+                            foreach ($headerLines as $line) {
+                                if (!\str_contains($line, ':')) {
+                                    return false;
+                                }
+                                [$name, $value] = \explode(':', $line, 2);
+                                $name = \strtolower(\trim($name));
+                                if ($name === '') {
+                                    return false;
+                                }
+                                $headers[$name] = \trim($value);
+                            }
+                            $contentLength = $headers['content-length'] ?? null;
+                            if ($contentLength !== null
+                                && \preg_match('/\A[0-9]+\z/D', $contentLength) !== 1
+                            ) {
+                                return false;
+                            }
+                            if ($body === ''
+                                || ($contentLength !== null
+                                    && \strlen($body) < (int)$contentLength)
+                            ) {
+                                $retryable = true;
+                            } elseif ($contentLength !== null
+                                && \strlen($body) !== (int)$contentLength
+                            ) {
+                                return false;
+                            } else {
+                                $health = \json_decode($body, true);
+                                $instanceId = (string)($headers['x-wls-instance-id'] ?? '');
+                                $backendInstance = $this->routeBackendInstances(
+                                    $route,
+                                )[$instanceId] ?? null;
+                                $identity = \is_array($backendInstance)
+                                    ? (array)($backendInstance['backend_identity'] ?? [])
+                                    : [];
+                                return \is_array($health)
+                                    && $identity !== []
+                                    && \hash_equals(
+                                        (string)$route['project_uuid'],
+                                        (string)($headers['x-wls-project-uuid'] ?? ''),
+                                    )
+                                    && (int)($identity['generation'] ?? 0)
+                                        === (int)($headers['x-wls-backend-generation'] ?? 0)
+                                    && \hash_equals(
+                                        $nonce,
+                                        (string)($headers['x-wls-probe-nonce'] ?? ''),
+                                    )
+                                    && \hash_equals(
+                                        $instanceId,
+                                        (string)($health['instance'] ?? ''),
+                                    )
+                                    && \hash_equals(
+                                        (string)($identity['launch_id'] ?? ''),
+                                        (string)($health['launch_id'] ?? ''),
+                                    )
+                                    && (int)($identity['master_epoch'] ?? 0)
+                                        === (int)($health['master_epoch'] ?? 0)
+                                    && \hash_equals(
+                                        $nonce,
+                                        (string)($health['nonce'] ?? ''),
+                                    );
+                            }
+                        }
+                    }
+                }
+            } finally {
+                @\fclose($socket);
+            }
+            if (!$retryable || $attempt >= 3) {
+                return false;
+            }
+            $this->publicationProbePause();
         }
-        $health = $body !== '' ? \json_decode($body, true) : null;
-        $instanceId = (string)($headers['x-wls-instance-id'] ?? '');
-        $backendInstance = $this->routeBackendInstances($route)[$instanceId] ?? null;
-        $identity = \is_array($backendInstance)
-            ? (array)($backendInstance['backend_identity'] ?? [])
-            : [];
-        return \is_array($health)
-            && $identity !== []
-            && \hash_equals(
-                (string)$route['project_uuid'],
-                (string)($headers['x-wls-project-uuid'] ?? ''),
-            )
-            && (int)($identity['generation'] ?? 0)
-                === (int)($headers['x-wls-backend-generation'] ?? 0)
-            && \hash_equals($nonce, (string)($headers['x-wls-probe-nonce'] ?? ''))
-            && \hash_equals($instanceId, (string)($health['instance'] ?? ''))
-            && \hash_equals((string)($identity['launch_id'] ?? ''), (string)($health['launch_id'] ?? ''))
-            && (int)($identity['master_epoch'] ?? 0) === (int)($health['master_epoch'] ?? 0)
-            && \hash_equals($nonce, (string)($health['nonce'] ?? ''));
+
+        return false;
     }
 
     /**
@@ -7834,7 +8048,96 @@ final class WlsEdgeGatewayController
         string $errorCode = '',
         string $message = '',
         string $responseSecret = '',
+        bool $allowEnrollmentCredential = false,
     ): void {
+        $isPublicDerivative = static function (string $normalizedKey): bool {
+            if (\preg_match(
+                '/(?:digest|hash|fingerprint|thumbprint)/',
+                $normalizedKey,
+            ) === 1) {
+                return true;
+            }
+            return \preg_match(
+                '/\A(?:response)?(?:signature|mac)(?:algorithm|version|metadata|keyid|status)?\z/D',
+                $normalizedKey,
+            ) === 1;
+        };
+        $credentialPublicSuffix = '/credential(?:id|identifier|reference|generation|digest|hash|fingerprint|thumbprint)\z/D';
+        $hasSensitiveMaterial = static function (string $normalizedKey): bool {
+            return \str_contains($normalizedKey, 'secret')
+                || \str_contains($normalizedKey, 'token')
+                || \str_contains($normalizedKey, 'authorization')
+                || \str_contains($normalizedKey, 'password')
+                || \str_contains($normalizedKey, 'passphrase')
+                || \str_contains($normalizedKey, 'apikey')
+                || \str_contains($normalizedKey, 'signingkey')
+                || \str_contains($normalizedKey, 'privatekey')
+                || \preg_match(
+                    '/(?:auth|authentication)(?:data|header|material|value|key|bearer)/',
+                    $normalizedKey,
+                ) === 1;
+        };
+        $isSensitiveKey = static function (string $key) use (
+            $credentialPublicSuffix,
+            $hasSensitiveMaterial,
+            $isPublicDerivative,
+        ): bool {
+            $normalizedKey = \strtolower((string)\preg_replace('/[^a-z0-9]+/i', '', $key));
+            if ($normalizedKey === '') {
+                return false;
+            }
+            if (\str_contains($normalizedKey, 'credential')) {
+                if (\preg_match($credentialPublicSuffix, $normalizedKey) !== 1) {
+                    return true;
+                }
+                $credentialPrefix = (string)\preg_replace(
+                    $credentialPublicSuffix,
+                    '',
+                    $normalizedKey,
+                );
+                return $hasSensitiveMaterial($credentialPrefix);
+            }
+            if ($isPublicDerivative($normalizedKey)) {
+                return false;
+            }
+            return $hasSensitiveMaterial($normalizedKey);
+        };
+        $seenObjects = new \SplObjectStorage();
+        $sanitize = function (
+            mixed $value,
+            int $depth = 0,
+        ) use (&$sanitize, $isSensitiveKey, $seenObjects): mixed {
+            if ($depth > 64) {
+                return null;
+            }
+            if (\is_object($value)) {
+                if ($seenObjects->contains($value)) {
+                    return null;
+                }
+                $object = $value;
+                $seenObjects->attach($object);
+                try {
+                    $normalized = $object instanceof \JsonSerializable
+                        ? $object->jsonSerialize()
+                        : \get_object_vars($object);
+                    return $sanitize($normalized, $depth + 1);
+                } finally {
+                    $seenObjects->detach($object);
+                }
+            }
+            if (!\is_array($value)) {
+                return $value;
+            }
+            $sanitized = [];
+            foreach ($value as $key => $item) {
+                if (\is_string($key) && $isSensitiveKey($key)) {
+                    continue;
+                }
+                $sanitized[$key] = $sanitize($item, $depth + 1);
+            }
+            return $sanitized;
+        };
+
         $response = [
             'protocol' => self::PROTOCOL,
             'request_id' => $requestId,
@@ -7844,6 +8147,63 @@ final class WlsEdgeGatewayController
         ];
         if (!$ok) {
             $response['error'] = ['code' => $errorCode, 'message' => $message];
+        }
+        $enrollmentCredential = null;
+        $credential = \is_array($payload['credential'] ?? null)
+            ? $payload['credential']
+            : null;
+        $projectUuid = \strtolower(\trim((string)($payload['project_uuid'] ?? '')));
+        $enrollment = $this->state['enrollments'][$projectUuid] ?? null;
+        $issuedAt = \is_array($credential)
+            ? (string)($credential['issued_at'] ?? '')
+            : '';
+        $issuedAtValue = $issuedAt !== ''
+            ? \DateTimeImmutable::createFromFormat(DATE_ATOM, $issuedAt)
+            : false;
+        if ($allowEnrollmentCredential
+            && $ok
+            && ($payload['accepted'] ?? false) === true
+            && \is_array($credential)
+            && \is_array($enrollment)
+            && (int)($credential['schema_version'] ?? 0) === 1
+            && \hash_equals(self::PROTOCOL, (string)($credential['protocol'] ?? ''))
+            && \hash_equals($this->hostId(), (string)($credential['host_id'] ?? ''))
+            && \preg_match('/\A[a-f0-9-]{36}\z/D', $projectUuid) === 1
+            && \hash_equals($projectUuid, (string)($credential['project_uuid'] ?? ''))
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)($credential['credential_id'] ?? ''),
+            ) === 1
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($credential['secret'] ?? ''),
+            ) === 1
+            && \hash_equals(
+                (string)($enrollment['credential_id'] ?? ''),
+                (string)$credential['credential_id'],
+            )
+            && \hash_equals(
+                (string)($enrollment['credential_secret'] ?? ''),
+                (string)$credential['secret'],
+            )
+            && (int)($enrollment['security_generation'] ?? 0)
+                === (int)($payload['security_generation'] ?? -1)
+            && $issuedAtValue instanceof \DateTimeImmutable
+            && $issuedAtValue->format(DATE_ATOM) === $issuedAt
+        ) {
+            $enrollmentCredential = [
+                'schema_version' => 1,
+                'protocol' => self::PROTOCOL,
+                'host_id' => (string)$credential['host_id'],
+                'project_uuid' => $projectUuid,
+                'credential_id' => (string)$credential['credential_id'],
+                'secret' => (string)$credential['secret'],
+                'issued_at' => $issuedAt,
+            ];
+        }
+        $response = $sanitize($response);
+        if ($enrollmentCredential !== null && \is_array($response['payload'] ?? null)) {
+            $response['payload']['credential'] = $enrollmentCredential;
         }
         if (\preg_match('/\A[a-f0-9]{64}\z/D', $responseSecret) === 1) {
             $response['signature'] = \hash_hmac(
@@ -8094,9 +8454,16 @@ final class WlsEdgeGatewayController
             ['status', 'routes', 'doctor', 'own-status', 'operation-status'],
             true,
         );
-        $rate = $readOnly ? 10.0 : ($channel === 'project' ? 1.0 : 2.0);
-        $capacity = $readOnly ? 20.0 : ($channel === 'project' ? 5.0 : 10.0);
-        $key = $channel . ':' . $principal . ':' . ($readOnly ? 'read' : 'update');
+        $leaseHeartbeat = $channel === 'project'
+            && \hash_equals('heartbeat', $operation);
+        $bucket = $readOnly ? 'read' : ($leaseHeartbeat ? 'lease' : 'update');
+        $rate = $readOnly
+            ? 10.0
+            : ($leaseHeartbeat ? 2.0 : ($channel === 'project' ? 1.0 : 2.0));
+        $capacity = $readOnly
+            ? 20.0
+            : ($leaseHeartbeat ? 5.0 : ($channel === 'project' ? 5.0 : 10.0));
+        $key = $channel . ':' . $principal . ':' . $bucket;
         $now = \hrtime(true) / 1_000_000_000;
         $window = $this->rateWindows[$key] ?? ['tokens' => $capacity, 'at' => $now];
         $tokens = \min($capacity, (float)$window['tokens'] + ($now - (float)$window['at']) * $rate);

@@ -2812,6 +2812,11 @@ class ServiceOrchestrator
         }
 
         foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $instance) {
+            if ($instance->state !== ServiceInstance::STATE_FAILED
+                && !$this->queueDeadTransitionalStartupWorkerRecovery($instance)
+            ) {
+                continue;
+            }
             if ($instance->state !== ServiceInstance::STATE_FAILED) {
                 continue;
             }
@@ -2918,6 +2923,25 @@ class ServiceOrchestrator
         }
 
         return false;
+    }
+
+    private function queueDeadTransitionalStartupWorkerRecovery(ServiceInstance $instance): bool
+    {
+        if ($instance->role !== ControlMessage::ROLE_WORKER
+            || !$this->isDeadRoleSlotEligibleForImmediateReconciliation($instance)
+        ) {
+            return false;
+        }
+
+        $this->clearStaleIpcClientIfNeeded($instance);
+        WlsLogger::warning_(
+            '[Orchestrator] 启动确认发现 worker#' . (string)$instance->instanceId
+            . ' 在 ' . $instance->state . ' 状态退出，转入有界补位'
+        );
+        $this->scheduleResurrectionWithDelay($instance, 0.0, true, false);
+
+        return $instance->state === ServiceInstance::STATE_FAILED
+            && isset($this->resurrectQueue[$instance->getKey()]);
     }
 
     /**
@@ -4960,6 +4984,11 @@ class ServiceOrchestrator
         });
     }
 
+    private static function childRoleUsesArgvMasterCredential(string $role): bool
+    {
+        return $role !== ControlMessage::ROLE_GATEWAY_AGENT;
+    }
+
     private function appendInstanceIdentityArgs(string $cmd, ServiceInstance $instance): string
     {
         if ($instance->epoch > 0) {
@@ -4983,7 +5012,10 @@ class ServiceOrchestrator
         if ($this->context !== null && $this->context->masterLeaseFile !== '') {
             $cmd .= ' --master-lease-file=' . \escapeshellarg($this->context->masterLeaseFile);
         }
-        if ($this->context !== null && $this->context->masterToken !== '') {
+        if ($this->context !== null
+            && $this->context->masterToken !== ''
+            && self::childRoleUsesArgvMasterCredential($instance->role)
+        ) {
             $cmd .= ' --master-token=' . \escapeshellarg($this->context->masterToken);
         }
 
@@ -5299,7 +5331,10 @@ class ServiceOrchestrator
         if ($this->context !== null && $this->context->masterLeaseFile !== '') {
             $argv[] = '--master-lease-file=' . $this->context->masterLeaseFile;
         }
-        if ($this->context !== null && $this->context->masterToken !== '') {
+        if ($this->context !== null
+            && $this->context->masterToken !== ''
+            && self::childRoleUsesArgvMasterCredential($instance->role)
+        ) {
             $argv[] = '--master-token=' . $this->context->masterToken;
         }
         if ($processName !== null && $processName !== '') {
@@ -20264,6 +20299,24 @@ class ServiceOrchestrator
                 $this->startInstance($provider, $slot, $this->context);
                 continue;
             }
+            // STARTING / REGISTERED 等过渡态也可能在进程退出后永久占住槽位。
+            // 旧逻辑只回收 READY 僵尸，导致自检持续报告容量不足却永远无法补齐。
+            // DRAINING / STOPPING 属于显式生命周期意图，仍由排水或停止流程收敛。
+            if ($this->isDeadRoleSlotEligibleForImmediateReconciliation($instance)) {
+                $this->clearStaleIpcClientIfNeeded($instance);
+                WlsLogger::warning_(
+                    '[Master自检] ' . $role . '#' . (string)$slot
+                    . ' 过渡态进程已退出 state=' . $instance->state . '，回收重启'
+                );
+                WlsLogger::warning_(
+                    '[MasterSelfAudit] dead transitional slot diagnostics '
+                    . $role . '#' . (string)$slot . ': ' . $this->formatInstanceRuntimeDiagnostics($instance)
+                );
+                $this->stopInstanceWithProtocol($instance);
+                $this->registry->removeInstance($role, $slot);
+                $this->startInstance($provider, $slot, $this->context);
+                continue;
+            }
             // READY 但 IPC 已断或进程已死：占槽无效，回收并重启（如 Dispatcher 僵死）
             if ($instance->state === ServiceInstance::STATE_READY) {
                 $ipcBad = $instance->ipcClientId === null
@@ -20285,6 +20338,21 @@ class ServiceOrchestrator
                 }
             }
         }
+    }
+
+    private function isDeadRoleSlotEligibleForImmediateReconciliation(ServiceInstance $instance): bool
+    {
+        if (\in_array($instance->state, [
+            ServiceInstance::STATE_READY,
+            ServiceInstance::STATE_DRAINING,
+            ServiceInstance::STATE_STOPPING,
+            ServiceInstance::STATE_STOPPED,
+            ServiceInstance::STATE_FAILED,
+        ], true)) {
+            return false;
+        }
+
+        return !$this->isInstanceServiceAlive($instance);
     }
 
     private function getTelemetryGateway(): IpcTelemetryGateway
@@ -23313,6 +23381,8 @@ class ServiceOrchestrator
         $clientRole = (string) ($clientInfo['role'] ?? '');
         $disconnectReason = (string) ($clientInfo['disconnect_reason'] ?? 'unknown');
         $trackingPid = $this->getInstanceTrackingPid($instance);
+        $instance->setMeta('last_ipc_disconnect_reason', $disconnectReason);
+        $instance->setMeta('last_ipc_disconnected_at', \microtime(true));
         WlsLogger::warning_(
             "[Orchestrator] IPC 断开: {$instance->role}#{$instance->instanceId} "
             . "(pid={$trackingPid}, client_id={$clientId}, peer={$peer}, client_state={$clientState}, client_role={$clientRole}, reason={$disconnectReason}), "
@@ -24051,6 +24121,15 @@ class ServiceOrchestrator
                 ServiceInstance::STATE_REGISTERED,
                 ServiceInstance::STATE_READY,
             ], true)) {
+                // The slot currently being recovered must not count merely
+                // because its last registry state still looks live. Otherwise
+                // a dead REGISTERED/READY worker keeps live==desired and the
+                // recovery gate permanently rejects its own replacement.
+                if ($inst->instanceId === $instanceId
+                    && !$this->isInstanceServiceAlive($inst)
+                ) {
+                    continue;
+                }
                 $live++;
             }
         }

@@ -22,7 +22,15 @@ final class GatewayClientTimeoutPolicyTest extends TestCase
             );
         }
         self::assertSame(2.0, $this->responseTimeout($client, 'admin', 'status'));
-        self::assertSame(2.0, $this->responseTimeout($client, 'project', 'repair'));
+        foreach (['register', 'renew', 'drain', 'unregister'] as $operation) {
+            self::assertSame(
+                90.0,
+                $this->responseTimeout($client, 'project', $operation),
+                $operation,
+            );
+        }
+        self::assertSame(2.0, $this->responseTimeout($client, 'project', 'heartbeat'));
+        self::assertSame(2.0, $this->responseTimeout($client, 'project', 'own-status'));
     }
 
     public function testWindowsBrokerCoversTheAdminPublicationResponseWindow(): void
@@ -37,11 +45,15 @@ final class GatewayClientTimeoutPolicyTest extends TestCase
             '#define WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS 90000U',
             $source,
         );
+        self::assertStringContainsString(
+            '#define WLS_PROJECT_CONTROLLER_IO_TIMEOUT_MS 90000U',
+            $source,
+        );
         self::assertMatchesRegularExpression(
             '/wls_connect_controller\(\s*channel->controller_port,\s*'
                 . 'wcscmp\(channel->channel, L"admin"\) == 0\s*'
                 . '\? WLS_ADMIN_CONTROLLER_IO_TIMEOUT_MS\s*'
-                . ': WLS_CONTROLLER_IO_TIMEOUT_MS\s*\)/s',
+                . ': WLS_PROJECT_CONTROLLER_IO_TIMEOUT_MS\s*\)/s',
             $source,
         );
     }
