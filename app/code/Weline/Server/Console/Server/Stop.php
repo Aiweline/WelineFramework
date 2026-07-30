@@ -161,7 +161,7 @@ class Stop extends CommandAbstract
      *
      * @param array<string, mixed> $instanceData
      */
-    private function maybeStopManagedNginx(
+    protected function maybeStopManagedNginx(
         string $instanceName,
         array $instanceData = [],
         bool $force = false,
@@ -518,14 +518,15 @@ class Stop extends CommandAbstract
             ?? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
         )));
 
-        if (!$this->maybeStopManagedNginx($name, $instanceData, $force) && !$force) {
+        $startupPhase = $this->resolveInstanceStartupPhase($instanceData);
+        $forceGatewayDrain = $force || $this->shouldBypassGracefulStopDuringBootstrap($startupPhase);
+        if (!$this->maybeStopManagedNginx($name, $instanceData, $forceGatewayDrain) && !$force) {
             $this->printer->warning(__('已中止 WLS 停止：请先修复托管 Nginx 停止故障，或显式使用强制停止。'));
             return;
         }
         
         $masterPid = $instanceInfo->masterPid;
         $controlPort = $instanceInfo->controlPort;
-        $startupPhase = $this->resolveInstanceStartupPhase($instanceData);
         
         $this->printer->setup(__('停止 Weline Server'));
         echo "\n";

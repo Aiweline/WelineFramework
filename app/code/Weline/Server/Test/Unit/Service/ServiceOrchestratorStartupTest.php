@@ -974,6 +974,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         self::assertTrue($this->readPrivateBool($orchestrator, 'running'));
         self::assertSame('startup_failure', $this->readPrivate($orchestrator, 'pendingStopReason'));
+        self::assertTrue($this->readPrivateBool($orchestrator, 'pendingStopSkipDrain'));
         self::assertSame('deferred child startup exception: startup boom', $this->readPrivate($orchestrator, 'startupFailureReason'));
 
         self::assertTrue($this->invokePrivate($orchestrator, 'consumePendingStopRequest'));
@@ -1014,6 +1015,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertTrue($startupFiber->isTerminated());
         self::assertTrue($shouldAbort);
         self::assertSame('startup_failure', $this->readPrivate($orchestrator, 'pendingStopReason'));
+        self::assertTrue($this->readPrivateBool($orchestrator, 'pendingStopSkipDrain'));
         self::assertSame([], $this->readPrivate($orchestrator, 'mainLoopTasks'));
 
         self::assertTrue($this->invokePrivate($orchestrator, 'consumePendingStopRequest'));

@@ -92,9 +92,24 @@ final class StopCommandBootstrapCleanupResidualTest extends TestCase
 
         $stop = new class($manager) extends Stop {
             public array $calls = [];
+            /** @var list<array{instance:string,force:bool}> */
+            public array $gatewayStopCalls = [];
 
             public function __construct(private readonly ServerInstanceManager $manager)
             {
+            }
+
+            protected function maybeStopManagedNginx(
+                string $instanceName,
+                array $instanceData = [],
+                bool $force = false,
+            ): bool {
+                unset($instanceData);
+                $this->gatewayStopCalls[] = [
+                    'instance' => $instanceName,
+                    'force' => $force,
+                ];
+                return true;
             }
 
             protected function printWelcome(): void
@@ -190,6 +205,10 @@ final class StopCommandBootstrapCleanupResidualTest extends TestCase
         }
 
         self::assertSame(['default'], $manager->deleted);
+        self::assertSame([[
+            'instance' => 'default',
+            'force' => true,
+        ]], $stop->gatewayStopCalls);
         self::assertSame(
             [
                 'show',
