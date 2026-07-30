@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Console;
 
+require_once \dirname(__DIR__, 7) . '/app/bootstrap_phpunit.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
 use Weline\Server\Service\MasterProcess;
