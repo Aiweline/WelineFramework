@@ -9,6 +9,40 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
 
 final class MasterProcessSharedStateRuntimeTest extends TestCase
 {
+    public function testMasterEndpointNormalizationPreservesSharedStateAttestation(): void
+    {
+        $sharedState = [
+            'session' => [
+                'role' => 'session_server',
+                'host' => '127.0.0.1',
+                'port' => 19970,
+                'token_file_name' => 'session_server.shared.token',
+                'registered' => true,
+                'shared_service' => true,
+            ],
+        ];
+        $method = new \ReflectionMethod(MasterProcess::class, 'normalizeMasterEndpointRecord');
+        $method->setAccessible(true);
+
+        $record = $method->invoke(null, [
+            'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
+            'name' => 'shared-session-instance',
+            'instance_name' => 'shared-session-instance',
+            'host' => '127.0.0.1',
+            'port' => 9502,
+            'shared_state' => $sharedState,
+            'services' => [['role' => 'worker', 'pid' => 1234]],
+        ], [
+            'master_pid' => 4321,
+            'pid' => 4321,
+            'master_enabled' => true,
+        ]);
+
+        self::assertSame($sharedState, $record['shared_state']);
+        self::assertTrue((bool)$record['shared_state']['session']['registered']);
+        self::assertArrayNotHasKey('services', $record);
+    }
+
     public function testApplySharedStateRuntimeConfigExposesRuntimeMetadataToServiceContext(): void
     {
         $master = new MasterProcess();
