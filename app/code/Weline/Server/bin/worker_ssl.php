@@ -396,6 +396,14 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
 
+$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
+    ->resolveProtectedCredentialFromArguments(
+        $argv,
+        $instanceName,
+        (int)($masterPid ?? 0),
+        $orchestratorEpoch,
+    );
+
 $wlsEndpointEdge = '';
 $wlsEndpointHttpSelection = null;
 $wlsEndpointHttp3Activation = null;

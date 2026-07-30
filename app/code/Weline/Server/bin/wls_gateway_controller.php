@@ -378,7 +378,7 @@ final class WlsEdgeGatewayController
                     $requestId,
                     false,
                     [],
-                    'unauthorized',
+                    (string)($authentication['error_code'] ?? 'unauthorized'),
                     $authError,
                     $responseSecret,
                 );
@@ -8226,7 +8226,7 @@ final class WlsEdgeGatewayController
     /**
      * @param array<string,mixed> $request
      * @param array<string,mixed> $broker
-     * @return array{error:string,secret:string,project_uuid:string}
+     * @return array{error:string,secret:string,project_uuid:string,error_code?:string}
      */
     private function authenticate(array $request, array $broker): array
     {
@@ -8387,9 +8387,29 @@ final class WlsEdgeGatewayController
             'boot_id' => $this->hostBootId,
         ];
         $this->state['security']['nonces'] = $this->nonces;
-        $this->persistState();
-        $this->clockStatePersistPending = false;
-        $this->lastClockStatePersistAttemptAt = $monotonicNow;
+        if (!$this->authenticationOperationIsReadOnly($operation)) {
+            try {
+                $this->persistState();
+                $this->clockStatePersistPending = false;
+                $this->lastClockStatePersistAttemptAt = $monotonicNow;
+            } catch (\Throwable) {
+                // Keep the authenticated nonce in memory so the same live
+                // controller still rejects a replay, but never let a
+                // read-only filesystem or exhausted inode table tear down the
+                // control plane before it can return a signed failure.
+                $this->markDiskPressure(
+                    'PERSISTENCE_UNAVAILABLE',
+                    'authentication_state_persist_failed',
+                );
+                return [
+                    'error' => 'Gateway durable authentication state is unavailable; '
+                        . 'persistent operation rejected while verified traffic is retained.',
+                    'error_code' => 'storage_unavailable',
+                    'secret' => $secret,
+                    'project_uuid' => $projectUuid,
+                ];
+            }
+        }
         $requestPayload = \is_array($request['payload'] ?? null)
             ? $request['payload']
             : [];
@@ -8411,6 +8431,15 @@ final class WlsEdgeGatewayController
             ];
         }
         return ['error' => '', 'secret' => $secret, 'project_uuid' => $projectUuid];
+    }
+
+    private function authenticationOperationIsReadOnly(string $operation): bool
+    {
+        return \in_array(
+            $operation,
+            ['status', 'routes', 'doctor', 'own-status', 'operation-status'],
+            true,
+        );
     }
 
     /**
@@ -9316,16 +9345,19 @@ final class WlsEdgeGatewayController
                 ? (int)@\filesize($this->recoveryReserveFile())
                 : 0;
         $reserveReady = $reserveBytes === $expectedReserveBytes;
+        $persistenceWritable = $reserveReady && $this->storagePersistenceWritable();
         return [
             'free_bytes' => $freeBytes,
             'minimum_mutation_free_bytes' => self::MIN_MUTATION_FREE_BYTES,
             'reserve_bytes' => $reserveBytes,
             'reserve_expected_bytes' => $expectedReserveBytes,
             'recovery_reserve_ready' => $reserveReady,
+            'persistence_writable' => $persistenceWritable,
             'pressure_marker' => $pressureMarker,
             'mutation_ready' => $freeBytes >= self::MIN_MUTATION_FREE_BYTES
                 && !$pressureMarker
-                && $reserveReady,
+                && $reserveReady
+                && $persistenceWritable,
             'snapshot_bytes' => $this->snapshotStorageBytes(),
             'snapshot_quota_bytes' => self::MAX_SNAPSHOT_BYTES,
             'journal_bytes' => \is_file($this->journalFile())
@@ -9333,6 +9365,23 @@ final class WlsEdgeGatewayController
                 : 0,
             'journal_quota_bytes' => self::MAX_JOURNAL_BYTES,
         ];
+    }
+
+    private function storagePersistenceWritable(): bool
+    {
+        try {
+            $probe = $this->stateDir() . DIRECTORY_SEPARATOR
+                . '.persistence-probe-' . \bin2hex(\random_bytes(8));
+        } catch (\Throwable) {
+            return false;
+        }
+        $handle = @\fopen($probe, 'xb');
+        if (!\is_resource($handle)) {
+            return false;
+        }
+        @\chmod($probe, 0600);
+        @\fclose($handle);
+        return @\unlink($probe);
     }
 
     private function markDiskPressure(string $stage, string $reason): void

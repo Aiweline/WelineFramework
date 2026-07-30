@@ -131,6 +131,16 @@ require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
+if ($controlPort > 0 || $masterPid > 0 || $masterLeaseFile !== '') {
+    $masterToken = (new \Weline\Server\Service\MasterLeaseManager())
+        ->resolveProtectedCredentialFromArguments(
+            $argv,
+            $instanceName,
+            $masterPid,
+            $orchestratorEpoch,
+        );
+}
+
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;
 use Weline\Server\Log\WlsLogger;

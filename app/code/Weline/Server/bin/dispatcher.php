@@ -114,7 +114,6 @@ if ($controlPort <= 0
     || $orchestratorEpoch <= 0
     || \trim($orchestratorLaunchId) === ''
     || \trim($masterLeaseFile) === ''
-    || \trim($masterToken) === ''
 ) {
     \fwrite(\STDERR, "[Dispatcher] authenticated Master identity is required.\n");
     exit(1);
@@ -132,6 +131,14 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 
 // 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
+    ->resolveProtectedCredentialFromArguments(
+        $argv,
+        $instanceName,
+        $masterPid,
+        $orchestratorEpoch,
+    );
 
 $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $masterPid,
@@ -321,6 +328,7 @@ $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
     $port
 );
 $dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
+$dispatcher->setHelloAuthSecret($masterToken);
 if ($masterPid > 0) {
     $dispatcher->setMasterPid($masterPid);
 }

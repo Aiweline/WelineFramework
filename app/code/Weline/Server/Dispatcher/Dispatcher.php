@@ -270,6 +270,7 @@ class Dispatcher
     private int $masterPid = 0;
     private int $orchestratorEpoch = 0;
     private string $orchestratorLaunchId = '';
+    private string $helloAuthSecret = '';
     private ?ChildMasterGuard $masterGuard = null;
     
     private int $lastMasterPidCheck = 0;
@@ -746,6 +747,11 @@ class Dispatcher
         $this->orchestratorEpoch = $epoch;
         $this->orchestratorLaunchId = $launchId;
     }
+
+    public function setHelloAuthSecret(string $secret): void
+    {
+        $this->helloAuthSecret = $secret;
+    }
     
     /**
      * 连接 IPC 控制通道
@@ -1110,11 +1116,13 @@ class Dispatcher
             $channelId = (string) (\getenv('WLS_SUPERVISOR_CHANNEL') ?: $this->resolveSupervisorChannelId());
             $basePath = (string) (\getenv('WLS_SUPERVISOR_BASE_PATH') ?: BP);
 
-            return new SupervisorChildClient(
+            $client = new SupervisorChildClient(
                 instanceName: $this->instanceName,
                 channelId: $channelId,
                 endpointResolver: new ControlEndpointResolver($basePath),
             );
+            $client->setHelloAuthSecret($this->helloAuthSecret, true);
+            return $client;
         }
 
         return new ControlClient();
