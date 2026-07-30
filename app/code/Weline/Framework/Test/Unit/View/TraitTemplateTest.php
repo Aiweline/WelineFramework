@@ -15,19 +15,25 @@ use Weline\Framework\UnitTest\TestCore;
 
 class TraitTemplateTest extends TestCore
 {
-    public function testProcessModuleSourceFilePath()
+    public function testProcessModuleSourceFilePath(): void
     {
         /**@var Template $ob */
         $ob   = self::getInstance(Template::class);
         $data = $ob->processModuleSourceFilePath('hooks', 'Weline_DeveloperWorkspace::hooks/title.phtml');
-        p($data);
+
+        self::assertSame(
+            ['Weline_DeveloperWorkspace::hooks/title.phtml', 'Weline_DeveloperWorkspace'],
+            $data
+        );
     }
 
-    public function testFetchTagSource()
+    public function testFetchTagSource(): void
     {
         /**@var Template $ob */
         $ob   = self::getInstance(Template::class);
-        $data = $ob->fetchTagSource('hooks', 'Weline_DeveloperWorkspace::hooks/title.phtml');
-        p($data);
+        $data = $ob->fetchTagSource('statics', 'Weline_Framework::css/test.css', false);
+
+        self::assertIsString($data);
+        self::assertStringEndsWith('/css/test.css', $data);
     }
 }
