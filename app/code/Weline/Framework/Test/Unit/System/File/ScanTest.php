@@ -16,11 +16,12 @@ use Weline\Framework\UnitTest\TestCore;
 
 class ScanTest extends TestCore
 {
-    public function testScanDirTree()
+    public function testScanDirTree(): void
     {
         /**@var Scanner $scanner */
         $scanner = ObjectManager::getInstance(Scanner::class);
-        p($scanner->scan('E:\WelineFramework\app\code\/Weline/Admin/'));
-        p($scanner->scanDirTree('E:\WelineFramework\app\code\/Weline/Admin/', 12));
+        $scanner->__init();
+
+        self::assertNotEmpty($scanner->scanDirTree(__DIR__, 1));
     }
 }

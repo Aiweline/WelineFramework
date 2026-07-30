@@ -11,13 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\Framework\System\Security;
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\UnitTest\TestCore;
 
 class EncryptTest extends TestCore
 {
-    public function testMd5_salt()
+    public function testMd5SaltIsDeterministic(): void
     {
-        p(Encrypt::md5_salt('admin', 'remain'));
+        $hash = Encrypt::md5_salt('admin', 'remain');
+
+        self::assertNotSame('', $hash);
+        self::assertSame($hash, Encrypt::md5_salt('admin', 'remain'));
     }
 }

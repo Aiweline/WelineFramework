@@ -113,6 +113,7 @@ final class TemplateCacheManagerEnvironmentKeyTest extends TestCore
 
     private function applyRequestContext(string $currency, string $lang): void
     {
+        \Weline\Framework\Runtime\RequestContext::cleanup();
         State::resetRequestPathLocalizationCache();
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
             'REQUEST_METHOD' => 'GET',
