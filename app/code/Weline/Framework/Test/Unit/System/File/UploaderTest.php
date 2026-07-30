@@ -16,10 +16,11 @@ use Weline\Framework\UnitTest\TestCore;
 
 class UploaderTest extends TestCore
 {
-    public function testCheckFilename()
+    public function testCheckFilename(): void
     {
         /**@var Uploader $uploader */
         $uploader = ObjectManager::getInstance(Uploader::class);
-        p($uploader->checkFilename('pub/media/uploader/Aiweline/Bbs/Account/Profile/logo-sm.png'));
+
+        self::assertNull($uploader->checkFilename('pub/media/uploader/Aiweline/Bbs/Account/Profile/logo-sm.png'));
     }
 }
