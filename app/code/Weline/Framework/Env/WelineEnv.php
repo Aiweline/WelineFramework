@@ -375,6 +375,7 @@ class WelineEnv
     ): void {
         $current = Context::getCurrent();
         $meta = $current?->get('meta', []) ?? [];
+        $runtime = $current?->get('runtime', []) ?? [];
         $session = $current?->get('session', []) ?? [];
         $response = $current?->get('response', []) ?? [];
         $body = (string)($current?->get('input.body', '') ?? '');
@@ -414,15 +415,7 @@ class WelineEnv
                 'user_id' => (int)($server['WELINE_USER_ID'] ?? 0),
             ], $session),
             'response' => $response,
-            'runtime' => [
-                'redirect_count' => (int)($server['WLS_REDIRECT_COUNT']
-                    ?? $server['REDIRECT_COUNT']
-                    ?? $current?->get('runtime.redirect_count', 0)
-                    ?? 0),
-                'request_count' => (int)($server['WLS_REQUEST_COUNT']
-                    ?? $current?->get('runtime.request_count', 0)
-                    ?? 0),
-            ],
+            'runtime' => $runtime,
         ]);
 
         Context::enter($context);

@@ -14,12 +14,12 @@ use Weline\Framework\UnitTest\TestCore;
 
 class CompressTest extends TestCore
 {
-    public function testCreateTarGz()
+    public function testAddStringIsFluent(): void
     {
         /**@var $compress Compress */
         $compress = ObjectManager::getInstance(Compress::class);
-//        $tar = $compress->compression(APP_CODE_PATH.'Aiweline\\test\\');
-        $tar = $compress->deCompression('E:\WelineFramework\app\code\Aiweline_Test.zip');
-        p($tar);
+
+        self::assertSame($compress, $compress->addString('fixture.txt', 'fixture'));
+        self::assertInstanceOf(\ZipArchive::class, $compress->getDriver());
     }
 }

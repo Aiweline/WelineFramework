@@ -9,28 +9,15 @@
 
 namespace Weline\Framework\Manager\UnitTest;
 
-use Aiweline\Admin\Controller\Index;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\Boot;
-use PHPUnit\Framework\TestCase;
+use Weline\Framework\UnitTest\TestCore;
 
-class ObjectManagerTest extends TestCase
+class ObjectManagerTest extends TestCore
 {
-    use Boot;
-
-    private ObjectManager $instance;
-
-    public function setUp(): void
+    public function testGetInstance(): void
     {
-        $this->instance = ObjectManager::getInstance();
-    }
+        $instance = ObjectManager::getInstance();
 
-    public function testGetInstance()
-    {
-        /**
-         * @var $index Index
-         */
-        $index = $this->instance->getInstance(Index::class);
-        p($index->test());
+        self::assertSame($instance, ObjectManager::getInstance());
     }
 }
