@@ -9,6 +9,7 @@ use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ResurrectionCoordinatorInterface;
 use Weline\Server\IPC\MasterResurrectionCoordinator;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -141,6 +142,8 @@ final class SubprocessControlKernel
             return false;
         }
 
+        $helloAuthSecret = $this->resolveHelloAuthSecret();
+
         // 启动时重试连接 Master（支持并发启动，自动等待 Master 就绪）
         $retryDelayMs = \max(50, \intval(\getenv('WLS_STARTUP_CONNECT_RETRY_DELAY_MS') ?: 250));
         $maxRetriesBySelfHealWindow = \max(1, (int) \ceil(self::CONTROL_CONNECT_SELF_HEAL_TIMEOUT_MS / $retryDelayMs));
@@ -154,8 +157,9 @@ final class SubprocessControlKernel
             $client = $this->createClient();
             if ($client instanceof SupervisorChildClient) {
                 $client->setHelloAuthSecret(
-                    $this->helloAuthSecret,
-                    $this->identity->role === ControlMessage::ROLE_GATEWAY_AGENT,
+                    $helloAuthSecret,
+                    $helloAuthSecret !== ''
+                        || $this->identity->role === ControlMessage::ROLE_GATEWAY_AGENT,
                 );
             }
             $this->client = $client;
@@ -277,6 +281,34 @@ final class SubprocessControlKernel
 
         $this->log("启动时重连 Master 失败，次数上限已达 {$maxStartupRetries}，{$lastError}");
         return false;
+    }
+
+    private function resolveHelloAuthSecret(): string
+    {
+        if ($this->helloAuthSecret !== '') {
+            return $this->helloAuthSecret;
+        }
+        $arguments = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        if (!\is_array($arguments)) {
+            return '';
+        }
+        $hasProtectedLease = false;
+        foreach ($arguments as $argument) {
+            if (\is_scalar($argument)
+                && \str_starts_with((string)$argument, '--master-lease-file=')
+            ) {
+                $hasProtectedLease = true;
+                break;
+            }
+        }
+        if (!$hasProtectedLease) {
+            return '';
+        }
+
+        return (new MasterLeaseManager())->resolveProtectedCredentialFromArguments(
+            $arguments,
+            $this->instanceCode,
+        );
     }
 
     public function sendReady(): bool
