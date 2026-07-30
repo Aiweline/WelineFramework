@@ -911,6 +911,16 @@ final class StopCommandFastLocalCleanupTest extends TestCase
                 return $this->manager;
             }
 
+            protected function maybeStopManagedNginx(
+                string $instanceName,
+                array $instanceData = [],
+                bool $force = false,
+            ): bool {
+                unset($instanceName, $instanceData, $force);
+
+                return true;
+            }
+
             protected function isMasterProcessAvailableForStop(ServerInstanceInfo $info): bool
             {
                 unset($info);

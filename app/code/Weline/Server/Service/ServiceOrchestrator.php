@@ -789,7 +789,7 @@ class ServiceOrchestrator
         }
 
         if ($this->running || $this->controlServer !== null) {
-            $requested = $this->requestStop('startup_failure');
+            $requested = $this->requestStop('startup_failure', skipDrain: true);
             WlsLogger::warning_(
                 '[Orchestrator] startup failure handed over to unified stop flow'
                 . ', requested=' . ($requested ? '1' : '0')
