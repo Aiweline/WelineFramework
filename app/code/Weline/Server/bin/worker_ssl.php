@@ -5018,7 +5018,11 @@ while (true) {
         $connectionLastActivity,
         $hotPathLogsEnabled,
         $connectionPeerIps,
-        $sharedListenerBound ? 1 : 64,
+        \Weline\Server\Service\WorkerResponseMemoryGuard::listenerAcceptBatchLimit(
+            $sharedListenerBound,
+            \PHP_OS_FAMILY,
+            (string)($eventLoopMeta['resolved'] ?? $wlsLoopDriver),
+        ),
         $applicationAdmissionOpen,
         $sharedListenerSocket,
     );
@@ -7626,6 +7630,8 @@ function sslFinalizeHttpResponseAfterHandle(
     }
     // SSE 收尾兜底：上下文标记可能先于写队列排空被重置，此时仍必须按 SSE 分支处理。
     $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
+    $runtimeDrainPending = \Weline\Server\Service\WorkerResponseMemoryGuard::hasDrainAfterResponseRequest();
+    $drainRequestedBeforeResponse = $ipcDraining || $runtimeDrainPending;
     $isHttp2Response = false;
     if (!$isSseMode && $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter && $http2StreamId > 0) {
         $response = $http2Adapter->encodeResponse($http2StreamId, $response);
@@ -7634,7 +7640,7 @@ function sslFinalizeHttpResponseAfterHandle(
             $connectionLastActivity[$connId] = \time();
             return;
         }
-        if ($ipcDraining) {
+        if ($drainRequestedBeforeResponse) {
             $response .= $http2Adapter->initiateGoaway();
         }
         $responseLenPre = \strlen($response);
@@ -7643,9 +7649,9 @@ function sslFinalizeHttpResponseAfterHandle(
         $isHttp2Response = true;
     }
     $keepAlive = $precomputedKeepAlive ?? isKeepAlive($rawRequest);
-    if ($ipcDraining && !$isSseMode && !$isHttp2Response) {
-        // H1 will close after this response during drain. Make the wire-level
-        // contract explicit before any immediate or queued write occurs.
+    if ($drainRequestedBeforeResponse && !$isSseMode && !$isHttp2Response) {
+        // H1 advertises retirement before any immediate or queued write. Keep
+        // the transport readable until the client acknowledges with FIN.
         $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
         $keepAlive = false;
         $responseLenPre = \strlen($response);
@@ -7798,13 +7804,21 @@ function sslFinalizeHttpResponseAfterHandle(
         && \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
     $http2DrainRequested = $isHttp2Response
         && $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
-        && ($ipcDraining || $http2Adapter->peerGoawayReceived());
-    $shouldClose = $isSseMode
-        || !$keepAlive
-        || (!$isHttp2Response && $ipcDraining)
-        || $forceCloseAfterResponse
-        || $responseRequestsClose
-        || $http2DrainRequested;
+        && ($drainRequestedBeforeResponse || $http2Adapter->peerGoawayReceived());
+    $awaitPeerCloseAfterDrain = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(
+        $drainRequestedBeforeResponse,
+        $isSseMode,
+        $isHttp2Response,
+    );
+    $shouldClose = !$awaitPeerCloseAfterDrain
+        && (
+            $isSseMode
+            || !$keepAlive
+            || (!$isHttp2Response && $drainRequestedBeforeResponse)
+            || $forceCloseAfterResponse
+            || $responseRequestsClose
+            || $http2DrainRequested
+        );
     if ($isHttp2Response
         && $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
         && ($http2DrainRequested

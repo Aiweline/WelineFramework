@@ -36,6 +36,19 @@ class MasterLeaseManager
         string $token
     ): string {
         $path = self::pathForInstance($instance);
+        $existing = $this->readProtected($path);
+        if ($this->isFreshForeignRunningLease(
+            $existing,
+            $instance,
+            $masterPid,
+            $controlPort,
+            $epoch,
+            $token,
+        )) {
+            throw new MasterLeaseOwnershipLostException(
+                'WLS Master lease is already owned by another live generation.'
+            );
+        }
         $this->writeLease($path, [
             'instance' => $instance,
             'master_pid' => $masterPid,
@@ -49,26 +62,72 @@ class MasterLeaseManager
         return $path;
     }
 
-    public function touchRunning(string $instance, int $masterPid, string $token): void
+    public function touchRunning(
+        string $instance,
+        int $masterPid,
+        int $controlPort,
+        int $epoch,
+        string $token
+    ): void
     {
         $path = self::pathForInstance($instance);
-        $data = $this->read($path);
-        if ($data === null) {
-            return;
-        }
-
-        $existingToken = (string)($data['master_token'] ?? '');
-        if ($existingToken !== '' && !\hash_equals($existingToken, $token)) {
-            return;
-        }
-
-        $data['instance'] = (string)($data['instance'] ?? $instance);
-        $data['master_pid'] = $masterPid;
-        $data['master_token'] = $token;
-        $data['state'] = self::STATE_RUNNING;
+        $data = $this->readProtected($path);
+        $this->assertRunningIdentity(
+            $data,
+            $instance,
+            $masterPid,
+            $controlPort,
+            $epoch,
+            $token,
+        );
         $data['updated_at'] = \microtime(true);
 
         $this->writeLease($path, $data);
+    }
+
+    /**
+     * Advance the live Master identity exactly once before launching a new
+     * infrastructure generation. This is a compare-and-swap contract: a
+     * stale caller must never overwrite a newer or foreign protected lease.
+     */
+    public function advanceRunningEpoch(
+        string $instance,
+        int $masterPid,
+        int $controlPort,
+        int $expectedEpoch,
+        int $nextEpoch,
+        string $token
+    ): string {
+        if ($expectedEpoch <= 0 || $nextEpoch !== $expectedEpoch + 1) {
+            throw new \RuntimeException('WLS Master lease epoch transition is invalid.');
+        }
+
+        $path = self::pathForInstance($instance);
+        $data = $this->readProtected($path);
+        $this->assertRunningIdentity(
+            $data,
+            $instance,
+            $masterPid,
+            $controlPort,
+            $expectedEpoch,
+            $token,
+        );
+
+        $data['master_epoch'] = $nextEpoch;
+        $data['updated_at'] = \microtime(true);
+        $this->writeLease($path, $data);
+
+        $published = $this->readProtected($path);
+        $this->assertRunningIdentity(
+            $published,
+            $instance,
+            $masterPid,
+            $controlPort,
+            $nextEpoch,
+            $token,
+        );
+
+        return $path;
     }
 
     public function markStopping(string $instance, int $masterPid, string $token): void
@@ -324,6 +383,127 @@ class MasterLeaseManager
         }
 
         return \hash_equals($left, $right);
+    }
+
+    /**
+     * @param array<string,mixed>|null $lease
+     */
+    private function assertRunningIdentity(
+        ?array $lease,
+        string $instance,
+        int $masterPid,
+        int $controlPort,
+        int $epoch,
+        string $token
+    ): void {
+        if ($instance === ''
+            || $masterPid <= 0
+            || $controlPort <= 0
+            || $epoch <= 0
+            || \preg_match('/\A[a-f0-9]{64}\z/Di', $token) !== 1
+            || !\is_array($lease)
+        ) {
+            throw new \RuntimeException('WLS Master lease running identity is incomplete.');
+        }
+
+        if ($this->isForeignRunningLease(
+            $lease,
+            $instance,
+            $masterPid,
+            $controlPort,
+            $epoch,
+            $token,
+        )) {
+            throw new MasterLeaseOwnershipLostException(
+                'WLS Master lease running identity does not match.'
+            );
+        }
+
+        $leaseInstance = $lease['instance'] ?? null;
+        $leasePid = $lease['master_pid'] ?? null;
+        $leasePort = $lease['control_port'] ?? null;
+        $leaseEpoch = $lease['master_epoch'] ?? null;
+        $leaseToken = $lease['master_token'] ?? null;
+        $leaseState = $lease['state'] ?? null;
+        $updatedAt = $lease['updated_at'] ?? null;
+        if (!\is_string($leaseInstance)
+            || !\hash_equals($instance, $leaseInstance)
+            || !\is_int($leasePid)
+            || $leasePid !== $masterPid
+            || !\is_int($leasePort)
+            || $leasePort !== $controlPort
+            || !\is_int($leaseEpoch)
+            || $leaseEpoch !== $epoch
+            || !\is_string($leaseToken)
+            || !\hash_equals($token, $leaseToken)
+            || !\is_string($leaseState)
+            || $leaseState !== self::STATE_RUNNING
+            || (!\is_int($updatedAt) && !\is_float($updatedAt))
+        ) {
+            throw new \RuntimeException('WLS Master lease running identity does not match.');
+        }
+    }
+
+    /**
+     * A complete running lease with another identity is a definitive ownership
+     * fence, not a transient read failure.
+     *
+     * @param array<string,mixed>|null $lease
+     */
+    private function isForeignRunningLease(
+        ?array $lease,
+        string $instance,
+        int $masterPid,
+        int $controlPort,
+        int $epoch,
+        string $token,
+    ): bool {
+        if (!\is_array($lease)
+            || !\is_string($lease['instance'] ?? null)
+            || !\is_int($lease['master_pid'] ?? null)
+            || !\is_int($lease['control_port'] ?? null)
+            || !\is_int($lease['master_epoch'] ?? null)
+            || !\is_string($lease['master_token'] ?? null)
+            || !\is_string($lease['state'] ?? null)
+            || (!\is_int($lease['updated_at'] ?? null) && !\is_float($lease['updated_at'] ?? null))
+            || $lease['state'] !== self::STATE_RUNNING
+        ) {
+            return false;
+        }
+
+        return !\hash_equals($instance, $lease['instance'])
+            || $masterPid !== $lease['master_pid']
+            || $controlPort !== $lease['control_port']
+            || $epoch !== $lease['master_epoch']
+            || !\hash_equals($token, $lease['master_token']);
+    }
+
+    /**
+     * @param array<string,mixed>|null $lease
+     */
+    private function isFreshForeignRunningLease(
+        ?array $lease,
+        string $instance,
+        int $masterPid,
+        int $controlPort,
+        int $epoch,
+        string $token,
+    ): bool {
+        if (!$this->isForeignRunningLease(
+            $lease,
+            $instance,
+            $masterPid,
+            $controlPort,
+            $epoch,
+            $token,
+        )) {
+            return false;
+        }
+
+        $updatedAt = (float)($lease['updated_at'] ?? 0.0);
+
+        return $updatedAt > 0.0
+            && (\microtime(true) - $updatedAt) <= self::HEARTBEAT_STALE_SEC;
     }
 
     /** @param array<string,mixed> $left @param array<string,mixed> $right */

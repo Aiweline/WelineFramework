@@ -15,6 +15,12 @@ final class GatewayPaths
     public const PROTOCOL = 'wls-edge/2';
     public const IMPLEMENTATION_LEVEL = 'wls-2.0';
     public const SECURITY_PROFILE = 'native-broker-v1';
+    /**
+     * Host-gateway upstream sockets can remain attached to one Direct
+     * SO_REUSEPORT Worker for this long. Worker reload drain deadlines must
+     * outlive this cache before retiring that Worker.
+     */
+    public const UPSTREAM_KEEPALIVE_TIMEOUT_SEC = 10;
 
     public function home(): string
     {
