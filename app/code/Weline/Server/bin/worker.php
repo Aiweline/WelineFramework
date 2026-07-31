@@ -2210,7 +2210,8 @@ while (true) {
 
             // 不能把「已 accept 但请求字节尚未到达」误当成空闲 Keep-Alive
             // 直接关闭；否则 fresh HTTP 会在 reload 窗口收到 RST。
-            // 已完成的连接会因 ipcDraining 在响应后主动 close。
+            // 已完成的连接会声明 Connection: close，并等待对端 FIN；若对端
+            // 未确认，则由软排水期限统一兜底关闭，避免上游复用竞态产生 RST。
 
             // 1. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
             if (empty($connections)) {
@@ -2657,7 +2658,11 @@ while (true) {
         $connectionLastActivity,
         $connectionPeerIps,
         $protocolEdgeTokenFile !== '',
-        $sharedListenerBound ? 1 : 64,
+        \Weline\Server\Service\WorkerResponseMemoryGuard::listenerAcceptBatchLimit(
+            $sharedListenerBound,
+            \PHP_OS_FAMILY,
+            (string)($eventLoopMeta['resolved'] ?? $wlsLoopDriver),
+        ),
     );
 
     // A single socket read may contain more than one keep-alive request. Once
@@ -3202,6 +3207,11 @@ function wlsAcceptHttpConnections(
             $connections[$connId] = $conn;
             $requestBuffers[$connId] = '';
             $connectionLastActivity[$connId] = \time();
+            // The request may already be readable before the event watcher is
+            // rebuilt for this newly accepted socket. Process one non-blocking
+            // read in this loop so a shared-listener reload cannot strand the
+            // final accepted connection until the client timeout.
+            $read[] = $conn;
         }
     }
 
@@ -4478,10 +4488,11 @@ function sendResponseAndCleanup(
     $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
     $keepAlive = $precomputedKeepAlive ?? isKeepAlive($rawRequest);
     $runtimeDrainPending = \Weline\Server\Service\WorkerResponseMemoryGuard::hasDrainAfterResponseRequest();
-    if (($ipcDraining || $runtimeDrainPending) && !$isSseMode) {
-        // The connection will be retired after this response. Advertise that
-        // fact before the first byte is written so keep-alive clients do not
-        // attempt one more request and report a length/EOF failure.
+    $drainRequestedBeforeResponse = $ipcDraining || $runtimeDrainPending;
+    if ($drainRequestedBeforeResponse && !$isSseMode) {
+        // Advertise retirement before the first byte is written. The normal
+        // HTTP peer-close handshake below then leaves Nginx/client time to
+        // observe this header and acknowledge it with FIN.
         $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
         $keepAlive = false;
         $responseLenPre = \strlen($response);
@@ -4614,12 +4625,19 @@ function sendResponseAndCleanup(
         wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
     }
 
-    $shouldClose = $isSseMode
-        || !$keepAlive
-        || $ipcDraining
-        || $runtimeDrainPending
-        || $forceCloseAfterResponse
-        || $responseRequestsClose;
+    $awaitPeerCloseAfterDrain = \Weline\Server\Service\WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(
+        $drainRequestedBeforeResponse,
+        $isSseMode,
+    );
+    $shouldClose = !$awaitPeerCloseAfterDrain
+        && (
+            $isSseMode
+            || !$keepAlive
+            || $ipcDraining
+            || $runtimeDrainPending
+            || $forceCloseAfterResponse
+            || $responseRequestsClose
+        );
     if ($shouldClose) {
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
 

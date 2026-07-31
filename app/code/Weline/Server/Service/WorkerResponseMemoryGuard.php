@@ -80,6 +80,46 @@ final class WorkerResponseMemoryGuard
         return false;
     }
 
+    /**
+     * Linux libevent can use an exclusive wake-up for a listener shared by
+     * multiple processes. Accepting only one socket from that wake-up can
+     * leave the tail of the queue dormant until a later connection arrives.
+     * Drain a bounded batch on that exact topology; keep the one-at-a-time
+     * fairness policy for Darwin and level-triggered select.
+     */
+    public static function listenerAcceptBatchLimit(
+        bool $sharedListener,
+        string $osFamily,
+        string $eventLoopDriver
+    ): int {
+        if (!$sharedListener) {
+            return 64;
+        }
+
+        return $osFamily === 'Linux' && \strtolower(\trim($eventLoopDriver)) === 'event'
+            ? 64
+            : 1;
+    }
+
+    /**
+     * During a server-initiated drain the response already advertises
+     * `Connection: close`. Keep the transport readable until the peer
+     * acknowledges that contract with FIN (or the bounded drain deadline
+     * expires) instead of closing immediately after fwrite().
+     *
+     * This prevents an upstream keepalive peer from selecting the socket in
+     * the small interval between the Worker write and its response-header
+     * parsing, which would otherwise turn the close into a request-side RST.
+     * Multiplexed protocols use their own GOAWAY/stream-drain handshake.
+     */
+    public static function shouldAwaitPeerCloseAfterDrainResponse(
+        bool $drainRequested,
+        bool $isLongLivedProtocol,
+        bool $isMultiplexedProtocol = false
+    ): bool {
+        return $drainRequested && !$isLongLivedProtocol && !$isMultiplexedProtocol;
+    }
+
     public static function shouldCompactAfterDrain(int $releasedBytes): bool
     {
         return $releasedBytes >= self::LARGE_RESPONSE_BYTES;
