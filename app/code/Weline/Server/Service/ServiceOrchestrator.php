@@ -161,6 +161,8 @@ class ServiceOrchestrator
     private const ANSI_BRIGHT_GREEN = "\033[92m";
     private const ANSI_BRIGHT_ORANGE = "\033[38;5;214m";
     private float $lastMasterLeaseTouchAt = 0.0;
+    private float $masterLeaseTouchFailureSince = 0.0;
+    private int $masterLeaseTouchFailureCount = 0;
     private float $lastHealthCheck = 0;
     private float $lastTickMainLoopSlowWarningAt = 0.0;
     private float $healthCheckInterval = 30.0;
@@ -230,6 +232,8 @@ class ServiceOrchestrator
     private float $lastMemoryPressureExitAt = 0.0;
     private float $memoryPressureShrinkFenceUntil = 0.0;
     private float $lastMemoryPressureTickAt = 0.0;
+    private bool $workerReloadCapacityTransitionInProgress = false;
+    private float $lastMemoryPressureTransitionDeferralAt = 0.0;
     /** @var array<string,int> slot_id => highest leased generation */
     private array $slotGenerationFloor = [];
 
@@ -676,11 +680,38 @@ class ServiceOrchestrator
             (new MasterLeaseManager())->touchRunning(
                 $this->context->instanceName,
                 $this->context->masterPid,
+                $this->context->controlPort,
+                $this->context->epoch,
                 $this->context->masterToken
             );
             $this->lastMasterLeaseTouchAt = $now;
+            $this->masterLeaseTouchFailureSince = 0.0;
+            $this->masterLeaseTouchFailureCount = 0;
+        } catch (MasterLeaseOwnershipLostException $throwable) {
+            $this->lastMasterLeaseTouchAt = $now;
+            $this->masterLeaseTouchFailureSince = $this->masterLeaseTouchFailureSince > 0.0
+                ? $this->masterLeaseTouchFailureSince
+                : $now;
+            $this->masterLeaseTouchFailureCount++;
+            WlsLogger::error_(
+                '[Orchestrator] Master lease 归属已被另一代接管，旧 Master 立即停止: '
+                . $throwable->getMessage()
+            );
+            $this->requestStop('master_lease_ownership_lost', skipDrain: true);
         } catch (\Throwable $throwable) {
+            $this->lastMasterLeaseTouchAt = $now;
+            $this->masterLeaseTouchFailureSince = $this->masterLeaseTouchFailureSince > 0.0
+                ? $this->masterLeaseTouchFailureSince
+                : $now;
+            $this->masterLeaseTouchFailureCount++;
             WlsLogger::warning_('[Orchestrator] Master lease 心跳刷新失败: ' . $throwable->getMessage());
+            if (($now - $this->masterLeaseTouchFailureSince) >= MasterLeaseManager::HEARTBEAT_STALE_SEC) {
+                WlsLogger::error_(
+                    '[Orchestrator] Master lease 连续不可确认超过安全窗口，Master fail closed 停止'
+                    . ' (failures=' . $this->masterLeaseTouchFailureCount . ')'
+                );
+                $this->requestStop('master_lease_unavailable', skipDrain: true);
+            }
         }
     }
 
@@ -2046,6 +2077,8 @@ class ServiceOrchestrator
         $this->http3AvailabilityActive = false;
         $this->darwinHttp3PublishedWorkerLeases = [];
         $this->lastMasterLeaseTouchAt = 0.0;
+        $this->masterLeaseTouchFailureSince = 0.0;
+        $this->masterLeaseTouchFailureCount = 0;
         $this->startupFailureReason = null;
         $this->lastControlServerCloseReason = null;
         $this->suppressWorkerEmergencyUntil = 0.0;
@@ -7259,10 +7292,10 @@ class ServiceOrchestrator
     /**
      * 发送 drain 命令给实例
      */
-    private function sendDrainToInstance(ServiceInstance $instance, ?float $timeoutSec = null): void
+    private function sendDrainToInstance(ServiceInstance $instance, ?float $timeoutSec = null): bool
     {
         if ($this->isSharedStateServiceInstance($instance)) {
-            return;
+            return false;
         }
 
         if ($instance->ipcClientId === null || $this->controlServer === null) {
@@ -7272,9 +7305,10 @@ class ServiceOrchestrator
                 );
             }
 
-            return;
+            return false;
         }
 
+        $previousState = $instance->state;
         $instance->state = ServiceInstance::STATE_DRAINING;
         $this->registry->updateInstance($instance);
         if ($instance->role === ControlMessage::ROLE_WORKER) {
@@ -7284,7 +7318,20 @@ class ServiceOrchestrator
         $ports = $instance->port !== null ? [$instance->port] : [];
         $timeout = $timeoutSec ?? $this->drainTimeout;
         $dt = (int) \max(1, \min(7200, (int) \ceil($timeout)));
-        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::drain($ports, $dt));
+        if (!$this->controlServer->sendTo($instance->ipcClientId, ControlMessage::drain($ports, $dt))) {
+            $instance->state = $previousState;
+            $this->registry->updateInstance($instance);
+            if ($instance->role === ControlMessage::ROLE_WORKER) {
+                $this->refreshDarwinHttp3RoutesAfterWorkerStateChange('worker_drain_send_failed');
+            }
+            WlsLogger::warning_(
+                "[Orchestrator] 向 {$instance->role}#{$instance->instanceId} 发送 DRAIN 失败，已恢复原状态 {$previousState}"
+            );
+
+            return false;
+        }
+
+        return true;
     }
 
     private function resolveWorkerReloadDrainTimeout(): float
@@ -7294,30 +7341,63 @@ class ServiceOrchestrator
             ? $this->drainTimeout
             : (float) $configured;
 
-        $nginxUpstreamIdleTimeout = 0.0;
-        if ($this->context?->isDirect()) {
-            $nginxUpstreamIdleTimeout = (float)(new ManagedNginxPaths())->upstreamKeepaliveTimeoutSec();
-        }
-        $nginxDrainFloor = $nginxUpstreamIdleTimeout > 0.0
+        $nginxUpstreamIdleTimeout = $this->resolveWorkerReloadUpstreamIdleTimeout();
+        $workerSoftDrainFloor = $nginxUpstreamIdleTimeout > 0.0
             ? $nginxUpstreamIdleTimeout + self::NGINX_UPSTREAM_DRAIN_SAFETY_MARGIN_SEC
+            : 0.0;
+        $masterDrainFloor = $workerSoftDrainFloor > 0.0
+            ? $workerSoftDrainFloor + self::WORKER_RELOAD_SOFT_DRAIN_MARGIN_SEC
             : 0.0;
 
         // HTTP/3 only needs a short route/retry grace, but the Worker process
         // also owns HTTP/1.1 and HTTP/2 response buffers. Never reuse the H3
         // grace as the application drain deadline. In Direct/SO_REUSEPORT mode,
         // Nginx keepalive sockets remain physically attached to the retiring
-        // Worker, so its idle timeout plus a safety margin is a hard lower bound.
-        $effective = \max(10.0, \min(300.0, $requested), $nginxDrainFloor);
+        // Worker. The Worker soft deadline must outlive the upstream idle
+        // cache, and Master must then retain a separate acknowledgement margin.
+        $effective = \max(10.0, \min(300.0, $requested), $masterDrainFloor);
         if ($nginxUpstreamIdleTimeout > 0.0) {
             WlsLogger::info_(
                 '[Orchestrator][ReloadDrainInvariant] requested_sec=' . \round($requested, 3)
                 . ', nginx_upstream_idle_sec=' . \round($nginxUpstreamIdleTimeout, 3)
                 . ', safety_margin_sec=' . self::NGINX_UPSTREAM_DRAIN_SAFETY_MARGIN_SEC
+                . ', worker_soft_floor_sec=' . \round($workerSoftDrainFloor, 3)
+                . ', master_margin_sec=' . self::WORKER_RELOAD_SOFT_DRAIN_MARGIN_SEC
                 . ', effective_sec=' . \round($effective, 3)
             );
         }
 
         return \min(7200.0, $effective);
+    }
+
+    /**
+     * Resolve the longest Nginx upstream cache that can front this Direct
+     * backend. The host gateway is intentionally considered for every
+     * Nginx-backed Direct runtime: an auto-mode project can be adopted by the
+     * host gateway without changing the Worker listener topology.
+     */
+    private function resolveWorkerReloadUpstreamIdleTimeout(): float
+    {
+        if (!$this->context?->isDirect()) {
+            return 0.0;
+        }
+        $edgeAdapter = \strtolower(\trim((string)$this->context->getConfig(
+            'wls.edge.adapter',
+            'nginx'
+        )));
+        if ($edgeAdapter !== 'nginx') {
+            return 0.0;
+        }
+
+        $edgeNginxConfig = $this->context->getConfig('wls.edge.nginx', []);
+        $managedNginx = new ManagedNginxPaths(
+            edgeNginxConfig: \is_array($edgeNginxConfig) ? $edgeNginxConfig : [],
+        );
+
+        return \max(
+            (float)$managedNginx->upstreamKeepaliveTimeoutSec(),
+            (float)GatewayPaths::UPSTREAM_KEEPALIVE_TIMEOUT_SEC,
+        );
     }
 
     /**
@@ -7327,8 +7407,15 @@ class ServiceOrchestrator
     private function resolveWorkerReloadSoftDrainTimeout(float $masterWaitSec): float
     {
         $masterWaitSec = \max(1.0, \min(7200.0, $masterWaitSec));
-        $soft = $masterWaitSec - self::WORKER_RELOAD_SOFT_DRAIN_MARGIN_SEC;
-        $soft = \max(5.0, $soft);
+        $nginxUpstreamIdleTimeout = $this->resolveWorkerReloadUpstreamIdleTimeout();
+        $upstreamRetirementFloor = $nginxUpstreamIdleTimeout > 0.0
+            ? $nginxUpstreamIdleTimeout + self::NGINX_UPSTREAM_DRAIN_SAFETY_MARGIN_SEC
+            : 0.0;
+        $soft = \max(
+            5.0,
+            $masterWaitSec - self::WORKER_RELOAD_SOFT_DRAIN_MARGIN_SEC,
+            $upstreamRetirementFloor,
+        );
         if ($soft >= $masterWaitSec) {
             $soft = \max(1.0, $masterWaitSec - 1.0);
         }
@@ -7678,6 +7765,13 @@ class ServiceOrchestrator
         string $type,
         ?int $imperialEpochSnap,
     ): void {
+        // desiredState is the Master authority for capacity. A memory-pressure
+        // shrink may already have retired the highest slot when a manual reload
+        // arrives. Including that intentionally out-of-set slot inflates the
+        // batch plan and can make an otherwise safe batch fail min_ready.
+        // Freeze the active desired set before declaring the reload capacity
+        // transition; subsequent memory-pressure mutations are deferred below.
+        $instances = $this->restrictWorkerReloadInstancesToDesiredCapacity($instances);
         $savedFullRestartOnFailure = $this->fullRestartOnFailure;
         $this->fullRestartOnFailure = false;
         $startTime = \microtime(true);
@@ -7687,6 +7781,8 @@ class ServiceOrchestrator
             && $this->context->runtimeSelection->listenerMode === 'reuseport';
         $directSurgeWorkerIds = [];
         $directTargetWorkerIds = [];
+        $previousWorkerReloadCapacityTransition = $this->workerReloadCapacityTransitionInProgress;
+        $this->workerReloadCapacityTransitionInProgress = true;
 
         try {
             $forceReload = ($type === ControlMessage::RELOAD_TYPE_FORCE);
@@ -7715,7 +7811,11 @@ class ServiceOrchestrator
             // before canonical admission is removed. shared_fd instead keeps
             // one Master-owned accept queue and uses ordinary bounded batches,
             // so it never creates temporary surge slots that must be retired.
-            $singleGenerationBatch = $forceReload || $directNewFirst;
+            // Direct new-first needs only enough hot side-by-side capacity to
+            // cover the largest bounded replacement batch. Doubling the whole
+            // pool can itself trigger host memory pressure, after which the
+            // fixed surge READY target becomes impossible to satisfy.
+            $singleGenerationBatch = $forceReload;
             if ($forceReload) {
                 WlsLogger::warning_(
                     '[Orchestrator][WorkerBatchPlan] explicit force reload accepted; '
@@ -7723,8 +7823,8 @@ class ServiceOrchestrator
                 );
             } elseif ($directNewFirst) {
                 WlsLogger::info_(
-                    '[Orchestrator][WorkerBatchPlan] Direct new-first uses one full-generation '
-                    . 'canonical batch after the full surge generation is hot'
+                    '[Orchestrator][WorkerBatchPlan] Direct new-first uses bounded canonical '
+                    . 'batches after an equivalent hot surge batch is ready'
                 );
             }
             $batches = $this->getWorkerRestartBatches($ids, $singleGenerationBatch);
@@ -7806,37 +7906,42 @@ class ServiceOrchestrator
             $this->sendReloadWaitTerminalOutcome(ControlMessage::reloadCompleted($elapsedMs, $done));
             $this->rollingRestartStabilizingUntil = \microtime(true) + $this->stabilizationSec;
         } finally {
-            if ($directSurgeWorkerIds !== []) {
-                if (!$this->isStopFlowActive()
-                    && $this->areCanonicalWorkerSlotsReady($directTargetWorkerIds)
-                ) {
-                    if (!$this->retireDirectReloadSurgeWorkers($directSurgeWorkerIds)) {
-                        // Keep the surge admission lease until an identity-safe
-                        // cleanup succeeds; generic convergence must not fall
-                        // back to a naked PID/port kill.
-                        $this->scheduleDirectReloadSurgeCleanup(
-                            $directSurgeWorkerIds,
-                            $directTargetWorkerIds
+            try {
+                if ($directSurgeWorkerIds !== []) {
+                    if (!$this->isStopFlowActive()
+                        && $this->areCanonicalWorkerSlotsReady($directTargetWorkerIds)
+                    ) {
+                        if (!$this->retireDirectReloadSurgeWorkers($directSurgeWorkerIds)) {
+                            // Keep the surge admission lease until an identity-safe
+                            // cleanup succeeds; generic convergence must not fall
+                            // back to a naked PID/port kill.
+                            $this->scheduleDirectReloadSurgeCleanup(
+                                $directSurgeWorkerIds,
+                                $directTargetWorkerIds
+                            );
+                        }
+                    } else {
+                        WlsLogger::warning_(
+                            '[Orchestrator][DirectNewFirst] phase=surge_retained'
+                            . ', surge_ids=[' . \implode(',', $directSurgeWorkerIds) . ']'
+                            . ', canonical_ids=[' . \implode(',', $directTargetWorkerIds) . ']'
+                            . ', reason=' . ($this->isStopFlowActive() ? 'stop_flow' : 'canonical_not_ready')
                         );
-                    }
-                } else {
-                    WlsLogger::warning_(
-                        '[Orchestrator][DirectNewFirst] phase=surge_retained'
-                        . ', surge_ids=[' . \implode(',', $directSurgeWorkerIds) . ']'
-                        . ', canonical_ids=[' . \implode(',', $directTargetWorkerIds) . ']'
-                        . ', reason=' . ($this->isStopFlowActive() ? 'stop_flow' : 'canonical_not_ready')
-                    );
-                    if (!$this->isStopFlowActive()) {
-                        $this->scheduleDirectReloadSurgeCleanup(
-                            $directSurgeWorkerIds,
-                            $directTargetWorkerIds
-                        );
+                        if (!$this->isStopFlowActive()) {
+                            $this->scheduleDirectReloadSurgeCleanup(
+                                $directSurgeWorkerIds,
+                                $directTargetWorkerIds
+                            );
+                        }
                     }
                 }
+                $this->fullRestartOnFailure = $savedFullRestartOnFailure;
+                $this->fullRestartRequested = false;
+                $this->fullRestartReason = '';
+            } finally {
+                $this->workerReloadCapacityTransitionInProgress =
+                    $previousWorkerReloadCapacityTransition;
             }
-            $this->fullRestartOnFailure = $savedFullRestartOnFailure;
-            $this->fullRestartRequested = false;
-            $this->fullRestartReason = '';
         }
     }
 
@@ -8096,11 +8201,36 @@ class ServiceOrchestrator
             }
 
             $ready = 0;
+            $failedSurgeIds = [];
             foreach ($expectedIdentities as $surgeId => $identity) {
                 $instance = $this->registry->getInstance(ControlMessage::ROLE_WORKER, (int)$surgeId);
                 if ($instance !== null && $this->isDirectReloadSurgeReady($instance, $identity)) {
                     $ready++;
+                    continue;
                 }
+                if (!$instance instanceof ServiceInstance
+                    || !$this->matchesDirectReloadSurgeIdentity($instance, $identity)
+                    || \in_array($instance->state, [
+                        ServiceInstance::STATE_DRAINING,
+                        ServiceInstance::STATE_STOPPING,
+                        ServiceInstance::STATE_STOPPED,
+                        ServiceInstance::STATE_FAILED,
+                    ], true)
+                    || (!$this->hasLiveDirectReloadSurgeIpc($instance)
+                        && $this->getInstanceTrackingPid($instance) > 0
+                        && !$this->isInstanceServiceAlive($instance))
+                ) {
+                    $failedSurgeIds[] = (int)$surgeId;
+                }
+            }
+            if ($failedSurgeIds !== []) {
+                $this->failWorkerBatchNotify(
+                    'reload',
+                    'Direct new-first surge exited before READY for Worker(s) ['
+                    . \implode(',', $failedSurgeIds)
+                    . ']; canonical Workers were not drained'
+                );
+                return ['status' => 'failed', 'ids' => $surgeIds];
             }
             if ($ready === \count($expectedIdentities)) {
                 if ($this->context?->isProtocolEdgeEnabled()) {
@@ -9396,8 +9526,14 @@ class ServiceOrchestrator
             \array_map('intval', $canonicalWorkerIds),
             static fn (int $id): bool => $id > 0
         )));
+        $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
+        if ($desired > 0) {
+            $canonicalWorkerIds = \array_values(\array_filter(
+                $canonicalWorkerIds,
+                static fn (int $id): bool => $id <= $desired,
+            ));
+        }
         if ($canonicalWorkerIds === []) {
-            $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
             $canonicalWorkerIds = $desired > 0 ? \range(1, $desired) : [];
         }
         if ($canonicalWorkerIds === []) {
@@ -9441,6 +9577,48 @@ class ServiceOrchestrator
         }
         if ($this->isStopFlowActive()) {
             return false;
+        }
+
+        // A failed surge can leave terminal Registry placeholders after their
+        // exact process has already exited. Prune only those dead, disconnected
+        // identities; never use them to block retirement of the still-live
+        // authenticated surge siblings.
+        $pruned = [];
+        foreach ($instances as $instanceId => $instance) {
+            if (!\in_array($instance->state, [
+                ServiceInstance::STATE_DRAINING,
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+                ServiceInstance::STATE_FAILED,
+            ], true)
+                || $this->hasLiveDirectReloadSurgeIpc($instance)
+                || $this->isInstanceServiceAlive($instance)
+            ) {
+                continue;
+            }
+
+            $this->cleanupInstancePidFile(
+                $instance,
+                $this->buildExpectedWorkerProcessIdentity($instance),
+                $this->getInstanceTrackingPid($instance),
+            );
+            $current = $this->registry->getInstance(ControlMessage::ROLE_WORKER, (int)$instanceId);
+            if ($current === $instance) {
+                $instance->state = ServiceInstance::STATE_STOPPED;
+                $this->registry->updateInstance($instance);
+                $this->registry->removeInstance(ControlMessage::ROLE_WORKER, (int)$instanceId);
+            }
+            unset($instances[$instanceId], $this->reloadWorkerProcessLeases[(int)$instanceId]);
+            $pruned[] = (int)$instanceId;
+        }
+        if ($pruned !== []) {
+            WlsLogger::info_(
+                '[Orchestrator][DirectNewFirst] phase=surge_terminal_placeholders_pruned'
+                . ', ids=[' . \implode(',', $pruned) . ']'
+            );
+        }
+        if ($instances === []) {
+            return true;
         }
 
         $canonicalWorkerIds = [];
@@ -9592,6 +9770,49 @@ class ServiceOrchestrator
         }
 
         return \max(0, $desired);
+    }
+
+    /**
+     * Keep a reload inside the current Master-owned desired capacity.
+     *
+     * Slots above desiredState are deliberate scale-down capacity, not failed
+     * reload targets. They remain owned by their scale-down/recovery lifecycle
+     * and will start with the current code if a later scale-up makes them
+     * desired again.
+     *
+     * @param ServiceInstance[] $instances
+     * @return ServiceInstance[]
+     */
+    private function restrictWorkerReloadInstancesToDesiredCapacity(array $instances): array
+    {
+        $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
+        if ($desired <= 0) {
+            return $instances;
+        }
+
+        $selected = [];
+        $excludedIds = [];
+        foreach ($instances as $instance) {
+            if (!$instance instanceof ServiceInstance) {
+                continue;
+            }
+            if ($instance->instanceId > $desired) {
+                $excludedIds[] = (int)$instance->instanceId;
+                continue;
+            }
+            $selected[] = $instance;
+        }
+
+        if ($excludedIds !== []) {
+            \sort($excludedIds, \SORT_NUMERIC);
+            WlsLogger::info_(
+                '[Orchestrator][WorkerBatchPlan] excluded slots outside current desired capacity'
+                . ', desired=' . $desired
+                . ', excluded=[' . \implode(',', $excludedIds) . ']'
+            );
+        }
+
+        return $selected;
     }
 
     /**
@@ -12440,8 +12661,30 @@ class ServiceOrchestrator
         $this->resurrectQueue = [];
         $this->resetServerReadyNotificationState();
 
-        // 4) bump epoch，旧代际进程即使迟到注册也会被拒绝
-        $nextEpoch = $this->context->epoch + 1;
+        // 4) bump epoch，旧代际进程即使迟到注册也会被拒绝。受保护
+        // Master 租约必须先通过旧身份 CAS 推进；否则新子进程会全部
+        // 因租约 epoch 不匹配而退出，也不能冒险覆盖外来 Master 身份。
+        $previousEpoch = $this->context->epoch;
+        $nextEpoch = $previousEpoch + 1;
+        try {
+            (new MasterLeaseManager())->advanceRunningEpoch(
+                $this->context->instanceName,
+                $this->context->masterPid,
+                $this->context->controlPort,
+                $previousEpoch,
+                $nextEpoch,
+                $this->context->masterToken,
+            );
+        } catch (\Throwable $throwable) {
+            WlsLogger::error_(
+                '[Orchestrator] Master lease 代际推进失败，拒绝拉起新子进程: '
+                . $throwable->getMessage(),
+                ['exception' => $throwable],
+            );
+            $this->requestStop('master_lease_epoch_advance_failed', skipDrain: true);
+            return;
+        }
+
         $this->context = $this->context->withEpoch($nextEpoch);
         $this->persistMasterEpoch($this->context);
         WlsLogger::warning_("[Orchestrator] 代际切换到 epoch={$nextEpoch}");
@@ -13673,6 +13916,8 @@ class ServiceOrchestrator
             'epoch' => $this->context?->epoch ?? 0,
             'maintenance_mode' => $this->maintenanceMode,
             'rolling_restart_in_progress' => $this->rollingRestartInProgress,
+            'worker_reload_capacity_transition_in_progress' =>
+                $this->workerReloadCapacityTransitionInProgress,
             'rolling_restart_progress' => $this->rollingRestartProgress,
             'rolling_restart_total' => $this->rollingRestartTotal,
             'policy_digest' => $this->runtimePolicyPublishedDigest,
@@ -13705,6 +13950,8 @@ class ServiceOrchestrator
                 'full_restart_count' => $this->fullRestartCount,
                 'last_sweep_killed' => $this->lastSweepKilled,
                 'last_sweep_stale_pid_files' => $this->lastSweepStalePidFiles,
+                'master_lease_touch_failure_count' => $this->masterLeaseTouchFailureCount,
+                'master_lease_touch_failure_since' => $this->masterLeaseTouchFailureSince,
                 'telemetry_bucket_count' => $metricsAggregator->getBufferedBucketCount(),
                 'telemetry_retry_queue_count' => $metricsAggregator->getRetryQueueCount(),
             ],
@@ -13759,6 +14006,8 @@ class ServiceOrchestrator
             'epoch' => $this->context?->epoch ?? 0,
             'maintenance_mode' => $this->maintenanceMode,
             'rolling_restart_in_progress' => $this->rollingRestartInProgress,
+            'worker_reload_capacity_transition_in_progress' =>
+                $this->workerReloadCapacityTransitionInProgress,
             'policy_digest' => $this->runtimePolicyPublishedDigest,
             'container_registry_digest' => $this->containerRegistryDigest,
             'policy_state' => $this->runtimePolicyState,
@@ -23988,6 +24237,9 @@ class ServiceOrchestrator
     public function scaleDownOneWorkerForMemoryPressure(
         \Weline\Server\Service\Memory\MemoryPressureController $controller
     ): bool {
+        if ($this->deferMemoryPressureCapacityMutationDuringWorkerReload('scale_down')) {
+            return false;
+        }
         $minWorkers = 1;
         $scaling = Env::get('wls.scaling', []);
         if (\is_array($scaling) && isset($scaling['min_workers']) && \is_numeric($scaling['min_workers'])) {
@@ -24011,15 +24263,24 @@ class ServiceOrchestrator
         }
 
         $newDesired = $desired - 1;
-        $this->desiredState[ControlMessage::ROLE_WORKER] = $newDesired;
-        $controller->setShrinkInProgress(true);
 
         $target = null;
         foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $instanceId => $instance) {
             if ($instanceId <= $newDesired) {
                 continue;
             }
-            if ($instance->state === ServiceInstance::STATE_DRAINING) {
+            if ($this->isDirectReloadSurgeWorker($instance)) {
+                // Temporary surge capacity belongs to the reload cleanup
+                // transaction and must never become the canonical slot chosen
+                // for a desired-state memory shrink.
+                continue;
+            }
+            if (\in_array($instance->state, [
+                ServiceInstance::STATE_DRAINING,
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+                ServiceInstance::STATE_FAILED,
+            ], true)) {
                 continue;
             }
             if ($target === null || $instanceId > $target->instanceId) {
@@ -24031,17 +24292,43 @@ class ServiceOrchestrator
             return false;
         }
 
+        $this->desiredState[ControlMessage::ROLE_WORKER] = $newDesired;
+        $controller->setShrinkInProgress(true);
         $drainDeadline = 45.0;
         if (\is_array($mp) && isset($mp['drain_deadline_sec']) && \is_numeric($mp['drain_deadline_sec'])) {
             $drainDeadline = \max(5.0, (float)$mp['drain_deadline_sec']);
         }
+        $target->setMeta('memory_pressure_scale_down', true);
+        $target->setMeta('memory_pressure_scale_down_at', $now);
+        $target->setMeta('memory_pressure_scale_down_from_desired', $desired);
+        $target->setMeta('memory_pressure_scale_down_to_desired', $newDesired);
+        $this->registry->updateInstance($target);
         WlsLogger::warning_(
             '[Orchestrator][MemoryPressure] scale_down desired=' . $desired
             . '->' . $newDesired
             . ' drain worker#' . $target->instanceId
             . ' deadline=' . $drainDeadline . 's'
         );
-        $this->sendDrainToInstance($target, $drainDeadline);
+        if (!$this->sendDrainToInstance($target, $drainDeadline)) {
+            $this->desiredState[ControlMessage::ROLE_WORKER] = $desired;
+            $controller->setShrinkInProgress(false);
+            foreach ([
+                'memory_pressure_scale_down',
+                'memory_pressure_scale_down_at',
+                'memory_pressure_scale_down_from_desired',
+                'memory_pressure_scale_down_to_desired',
+            ] as $key) {
+                $target->setMeta($key, null);
+            }
+            $this->registry->updateInstance($target);
+            WlsLogger::warning_(
+                '[Orchestrator][MemoryPressure] scale_down aborted: DRAIN delivery failed'
+                . ', desired restored=' . $desired
+                . ', worker#' . $target->instanceId
+            );
+
+            return false;
+        }
         $this->lastMemoryPressureExitAt = $now;
         $controller->getStateMachine()->markPlannedExit($now);
         $hardDrain = 120.0;
@@ -24056,6 +24343,9 @@ class ServiceOrchestrator
     public function scaleUpOneWorkerForMemoryPressure(
         \Weline\Server\Service\Memory\MemoryPressureController $controller
     ): bool {
+        if ($this->deferMemoryPressureCapacityMutationDuringWorkerReload('scale_up')) {
+            return false;
+        }
         if ($this->isGatewayNativeEdgeRoleSuppressed(ControlMessage::ROLE_WORKER)) {
             $this->desiredState[ControlMessage::ROLE_WORKER] = 0;
             return false;
@@ -24077,12 +24367,85 @@ class ServiceOrchestrator
             . '->' . $newDesired
             . ' ceiling=' . $ceiling
         );
+        $this->queueMemoryPressureRecoveredWorkerSlot($newDesired);
         // Let reconcile / non-HA slot fill start the missing slot.
         if ($this->haMode) {
             $this->reconcileDesiredState();
         } else {
             $this->reconcileWorkerSlotsWithoutHa();
         }
+
+        return true;
+    }
+
+    private function deferMemoryPressureCapacityMutationDuringWorkerReload(string $direction): bool
+    {
+        if (!$this->workerReloadCapacityTransitionInProgress
+            && !$this->rollingRestartInProgress
+        ) {
+            return false;
+        }
+
+        $now = \microtime(true);
+        if (($now - $this->lastMemoryPressureTransitionDeferralAt) >= 5.0) {
+            WlsLogger::warning_(
+                '[Orchestrator][MemoryPressure] defer ' . $direction
+                . ' while Worker reload capacity transition is active; '
+                . 'reclaim broadcast remains enabled'
+            );
+            $this->lastMemoryPressureTransitionDeferralAt = $now;
+        }
+
+        return true;
+    }
+
+    /**
+     * A pressure-reduced slot may finish its DRAIN while it is intentionally
+     * outside desiredState. If Green recovery raises desiredState before the
+     * Registry's STOPPING placeholder becomes STOPPED, generic reconciliation
+     * must not mistake that terminal placeholder for live capacity forever.
+     *
+     * Only slots tagged by scaleDownOneWorkerForMemoryPressure participate:
+     * reload/stop lifecycle slots keep their owning operation and are never
+     * hijacked by the memory controller.
+     */
+    private function queueMemoryPressureRecoveredWorkerSlot(int $instanceId): bool
+    {
+        if (!$this->isRoleSlotDesiredForRecovery(ControlMessage::ROLE_WORKER, $instanceId)) {
+            return false;
+        }
+
+        $key = ControlMessage::ROLE_WORKER . ':' . $instanceId;
+        if (isset($this->resurrectQueue[$key])) {
+            return true;
+        }
+
+        $worker = $this->registry->getInstance(ControlMessage::ROLE_WORKER, $instanceId);
+        if ($worker === null
+            || !(bool)$worker->getMeta('memory_pressure_scale_down', false)
+            || !\in_array($worker->state, [
+                ServiceInstance::STATE_DRAINING,
+                ServiceInstance::STATE_STOPPING,
+            ], true)
+        ) {
+            return false;
+        }
+
+        $fromState = $worker->state;
+        $this->scheduleResurrectionWithDelay($worker, 0.0, false, true);
+        if (!isset($this->resurrectQueue[$key])) {
+            return false;
+        }
+
+        $worker->setMeta('memory_pressure_recovery_queued_at', \microtime(true));
+        $worker->setMeta('memory_pressure_recovery_from_state', $fromState);
+        $this->registry->updateInstance($worker);
+        $this->scheduleResurrectQueueMainLoopTaskIfDue(\microtime(true));
+        WlsLogger::info_(
+            '[Orchestrator][MemoryPressure] recovered desired slot queued'
+            . ' worker#' . $instanceId
+            . ', previous_state=' . $fromState
+        );
 
         return true;
     }

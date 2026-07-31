@@ -85,6 +85,13 @@ WLS TLS 入口执行固定 300 秒排空。Agent 每 10 秒重试推进事务但
 `NATIVE_EDGE_DRAINING` 提升为 `GATEWAY_ACTIVE/DRAINED`。`desired=0` 的原生槽位
 不会被健康检查或 IPC 断线恢复逻辑复活。
 
+Master 的受保护 lease 是运行中实例的代际事实源。status、Benchmark 与生命周期命令
+会只读叠加新鲜、非倒退且进程身份匹配的 lease，因此容器/namespace 外层 PID 不会把
+健康 Master 误判为停止。heartbeat 对 instance、PID、control port、epoch 和 token
+执行完整比较：另一新鲜代际已接管时旧 Master 立即 fail-closed；lease 连续 15 秒
+不可确认时也停止，绝不反复覆盖新代状态。完整重启必须先以旧身份 CAS 推进 epoch，
+再启动下一代子进程。
+
 ### 4.1 多实例分流能力
 
 多实例默认始终是确定性首选实例加健康热备，不能仅凭 endpoint 字段开启轮询。分流需要
@@ -154,6 +161,11 @@ WLS TLS 入口执行固定 300 秒排空。Agent 每 10 秒重试推进事务但
   Linux 隔离 VM 已证明宿主 reboot 后先恢复 TLS/503、项目恢复后逐路由 ACTIVE，
   以及 90 秒故障触发、30 秒健康回切、301 秒排空释放。每个发布持久化边界的 kill
   恢复已在任务隔离 Controller/Nginx 中覆盖。
+- Linux/macOS 的 auto Direct 默认使用 Master 持有的 `shared_fd`，Linux
+  `reuseport` 仅作为显式性能选项。Linux event 共享监听会有界批量 accept，并定期
+  对账内核就绪；reload 的 Worker 软期限覆盖最长 Nginx upstream keepalive，Master
+  另留确认裕量。稳定 POSIX Launcher 在 Linux 使用 child-subreaper 并回收整棵受管
+  进程树，避免 Controller/Nginx 后代退出后积累 zombie。
 - 当前宿主网关可用于开发联调，不等同于计划完成后的生产可用声明。
 
 ## 6. 当前本机验收边界
@@ -177,7 +189,13 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
 - WLS 2.0 v1 全局关闭 TLS session cache、ticket 与 0-RTT，跨租户和证书轮换后均不
   复用旧 TLS 1.3 会话；
 - macOS 显式启用原生集成后，Native Broker、Launcher、签名槽、崩溃回滚和真实数据面
-  恢复通过 `14 tests / 1964 assertions`；该证据不等于 launchd 安装/reboot；
+  恢复通过 `14 tests / 2054 assertions`；该证据不等于 launchd 安装/reboot；
+- macOS 当前源码的两个独立纯 WLS 实例
+  `ai-test-wls2-mac-session-a-0731:29661` 与
+  `ai-test-wls2-mac-session-b-0731:29662` 真实复用同一 Session Server；
+  `SessionStateFacade` 跨实例双向读写和持久化通过，两个注册信封在连续健康 30 秒后
+  以相同证据摘要晋级 `shared_session`，两个公网入口实际协商 HTTP/2 并返回 200；
+  测试实例停止后端口和 consumer token 均已释放，既有项目共享 sidecar 未被停止；
 - `Gateway|Windows|Nginx` 跨平台门禁通过
   `257 tests / 2710 assertions / 15 capability skips`，含 Windows Native Broker
   的长管理事务 I/O 窗口；实际 Windows VM 因 Parallels 授权过期挂起，仍为
@@ -204,20 +222,38 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   `1,000,000 started/done/succeeded`、0 failed/errored/timeout、0 非 2xx；
   总计约 443.32 秒、约 2255.7 QPS。全程 generation 54、route ACTIVE、8/8
   worker；结束后的 `CLOCK_STABLE` 观察自动收敛为 `HEALTHY/NONE`。
+- Master 代际栅栏、Linux event/shared_fd 与 reload 排水修复后的纯 WLS 当前源码
+  报告
+  `benchmark_report_20260731_060651_752486_wls-health_pid137902.json`
+  为 HTTP/2 1,000,000/1,000,000 成功、0 失败、质量门禁 PASS；12810.93 QPS，
+  P95 33.601ms、P99 81.068ms。压测后 epoch 3、8/8 Worker、lease failure 0。
+- 同一修复加载到网关租户并优雅重新注册后，单次当前源码报告
+  `benchmark_report_20260731_062550_997297_wls-health_pid144076.json`
+  为 HTTP/2 1,000,000/1,000,000 成功、0 失败、八个 Worker 全命中、质量门禁
+  PASS；2982.61 QPS，P95 197.058ms、P99 301.624ms、TLS P95 14.493ms。结束后
+  route `ACTIVE`、网关 `HEALTHY`、Master lease running/epoch 9。
+- 当前聚焦回归：Gateway 协议安全 `49 tests / 1222 assertions`；Master
+  lease/epoch/overlay、reload drain、MemoryPressure、EventExtLoop、运行策略和
+  Worker 请求边界 `93 tests / 414 assertions`；Linux Native Launcher
+  `7 / 290`，macOS 同源 `7 / 266 / 1 Linux-only skip`。23 个变更 PHP 文件 lint
+  与 diff check 均通过。
 - 使用正式框架 bootstrap 的全量 Weline_Server 回归为
-  `1365 tests / 7178 assertions / 19 platform skips`，零错误、零失败。
+  `1367 tests / 7211 assertions / 19 capability skips`，零错误、零失败。
 
 本轮已补齐 Session/无状态能力的运行时写入、认证证明、30 秒恢复观察、实例摘要心跳
 重放与多实例 generation 防抖；ACME/协议专项通过 `101 tests / 1269 assertions`，聚焦
 真实数据面恢复通过 `1 test / 1465 assertions`，Native Broker/Launcher 聚焦门禁通过
-`9 tests / 334 assertions`。磁盘压力注入回归通过 `1 test / 59 assertions`，完整 Gateway 协议通过 `43 / 1055`；真实 ENOSPC/inode/只读文件系统仍需隔离主机验收。当前仍未覆盖 macOS/Windows 系统服务 ACL/reboot、
-Windows 实机、外部 CA/DNS 公网首次实签、完整
-Session daemon 实机亲和和同条件三轮性能中位数。Linux 宿主包已经完成来源、依赖、SBOM、
+`9 tests / 334 assertions`。磁盘压力注入回归通过 `1 test / 59 assertions`，完整 Gateway 协议通过 `43 / 1055`；
+Linux 隔离 ext4 已真实覆盖 ENOSPC、`IFree=0` 和只读 remount，均保持原数据面并在
+确认修复后重建 reserve、清除 marker。当前仍未覆盖 macOS/Windows 系统服务
+ACL/reboot、Windows 实机和外部 CA/DNS 公网首次实签。
+Linux 宿主包已经完成来源、依赖、SBOM、
 自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。当前
 `controlrestart6` 候选包已由最新 Controller 源码构建并签名；在线宿主因 B 槽仍在
 回滚保留期而正确拒绝切槽。Windows Native Broker、Named Pipe/DACL 与超时策略已有
-静态和跨平台回归，只有在 Windows Service 实机/reboot 验收完成后才可声明该平台
-release-ready。
+静态和跨平台回归；2026-07-31 再次恢复现有 Parallels Windows 11 VM 时，平台明确因
+限时授权过期拒绝恢复。只有在合法可运行的 Windows Service 实机/reboot 验收完成后，
+才可声明该平台 release-ready。
 
 完整需求、缺陷映射和验收矩阵见
 `dev/ai/plans/2026-07-27-WLS-2.0-多项目共享网关与自动恢复.md`。

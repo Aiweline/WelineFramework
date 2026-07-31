@@ -376,6 +376,14 @@ final class RuntimeStrategyResolver
             ? 'Windows'
             : ($profile->isLinux() ? 'Linux' : 'macOS');
 
+        $warnings = $listenerMode === 'reuseport'
+            ? [
+                'Explicit SO_REUSEPORT uses one TCP accept queue per Worker; connections already queued '
+                . 'to a retiring Worker can be reset during replacement. Use listener_mode=auto/shared_fd '
+                . 'when lossless reload is required.',
+            ]
+            : [];
+
         return $this->topologyResult(
             $requested,
             EffectiveTopology::Direct,
@@ -384,15 +392,18 @@ final class RuntimeStrategyResolver
                 ? 'auto selected ' . $listenerLabel . ' direct topology on ' . $platformLabel
                 : 'explicit direct topology with verified ' . $listenerLabel . ' support',
             $intent['reason_code'],
-            [],
+            $warnings,
             $listenerMode,
         );
     }
 
     /**
-     * Linux auto prefers a verified SO_REUSEPORT listener for kernel-level
-     * connection distribution and falls back to the Master-owned shared FD.
-     * macOS keeps the shared FD; explicit listener modes remain available.
+     * POSIX auto uses the Master-owned shared FD so every Worker consumes one
+     * accept queue. A retiring Worker can then close only its descriptor
+     * without resetting connections that the kernel has already queued.
+     * Linux SO_REUSEPORT remains an explicit performance option because its
+     * per-Worker accept queues cannot provide lossless process replacement
+     * without a privileged TCP reuseport steering program.
      */
     private function resolveDirectListenerMode(string $requested, WlsRuntimeProfile $profile): string
     {
@@ -428,10 +439,6 @@ final class RuntimeStrategyResolver
 
             return 'reuseport';
         }
-        if ($requested === 'auto' && $profile->isLinux() && $profile->supportsReusePort()) {
-            return 'reuseport';
-        }
-
         $probe = $profile->directListenerProbe();
         $sharedFdSupported = $profile->supportsDirectListener()
             && $profile->directListenerMode() === 'shared_fd';

@@ -92,6 +92,16 @@ class ServerInstanceManager
             return null;
         }
 
+        // A detached launcher can publish the PID as observed from its outer
+        // namespace while the running Master and every control-plane client
+        // observe the namespace-local PID. The protected, heartbeat-backed
+        // Master lease is the current runtime authority and is already fenced
+        // by instance, epoch and exact managed-process identity. Overlay it
+        // before building any live view so Benchmark/status/lifecycle callers
+        // do not reject a healthy Master merely because the durable endpoint
+        // still contains the launcher's outer PID.
+        $rawData = $this->overlayLiveMasterLease($name, $rawData);
+
         // A stopped endpoint is persisted as restart configuration, not as a
         // live runtime authority. Do not rehydrate strict runtime_selection
         // for an inactive record merely because another instance is scanning
@@ -818,7 +828,7 @@ class ServerInstanceManager
             return true;
         }
 
-        $lease = (new MasterLeaseManager())->read(MasterLeaseManager::pathForInstance($name));
+        $lease = (new MasterLeaseManager())->readProtected(MasterLeaseManager::pathForInstance($name));
         if (!\is_array($lease)
             || (string)($lease['instance'] ?? '') !== $name
             || (string)($lease['state'] ?? '') !== MasterLeaseManager::STATE_RUNNING
@@ -827,21 +837,25 @@ class ServerInstanceManager
         }
 
         $leasePid = (int)($lease['master_pid'] ?? 0);
+        $leaseEpoch = (int)($lease['master_epoch'] ?? 0);
+        $recordEpoch = (int)($rawData['master_epoch'] ?? $rawData['epoch'] ?? 0);
         $updatedAt = (float)($lease['updated_at'] ?? 0.0);
         if ($leasePid <= 0
             || $leasePid === $masterPid
+            || $leaseEpoch <= 0
+            || ($recordEpoch > 0 && $leaseEpoch < $recordEpoch)
             || $updatedAt <= 0.0
             || (\microtime(true) - $updatedAt) > MasterLeaseManager::HEARTBEAT_STALE_SEC
         ) {
             return false;
         }
 
-        return Processer::isManagedProcessRunning(
-            $leasePid,
-            $processName,
-            '',
-            '--name=' . $processName
-        );
+        // A fresh, protected lease from another non-regressing generation is
+        // sufficient to veto destructive cleanup. The replacement PID may be
+        // valid only in another PID namespace, where this stale Master cannot
+        // inspect it. Such a lease never authorizes signalling that PID; it
+        // only preserves the newer generation's endpoint and process indexes.
+        return true;
     }
 
     /**
@@ -969,7 +983,7 @@ class ServerInstanceManager
      */
     private function readLiveMasterLease(string $name, array $rawData): ?array
     {
-        $lease = (new MasterLeaseManager())->read(MasterLeaseManager::pathForInstance($name));
+        $lease = (new MasterLeaseManager())->readProtected(MasterLeaseManager::pathForInstance($name));
         if (!\is_array($lease)
             || (string)($lease['instance'] ?? '') !== $name
             || (string)($lease['state'] ?? '') !== MasterLeaseManager::STATE_RUNNING) {
@@ -984,7 +998,10 @@ class ServerInstanceManager
         $masterPid = (int)($lease['master_pid'] ?? 0);
         $leaseEpoch = (int)($lease['master_epoch'] ?? 0);
         $recordEpoch = (int)($rawData['master_epoch'] ?? $rawData['epoch'] ?? 0);
-        if ($masterPid <= 0 || ($recordEpoch > 0 && $leaseEpoch > 0 && $recordEpoch !== $leaseEpoch)) {
+        if ($masterPid <= 0
+            || $leaseEpoch <= 0
+            || ($recordEpoch > 0 && $leaseEpoch < $recordEpoch)
+        ) {
             return null;
         }
 
