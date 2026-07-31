@@ -36,6 +36,11 @@ final class WlsEdgeGatewayController
     private const OPERATION_RETENTION_SECONDS = 86400;
     private const CLOCK_RECOVERY_STABLE_SECONDS = 30.0;
     private const SERVICE_TREE_RESTART_EXIT = 79;
+    /**
+     * Keep synchronized with GatewayPaths::UPSTREAM_KEEPALIVE_TIMEOUT_SEC.
+     * This standalone controller cannot depend on project framework classes.
+     */
+    private const UPSTREAM_KEEPALIVE_TIMEOUT_SEC = 10;
 
     /** @var array<string,mixed> */
     private array $state = [];
@@ -6186,7 +6191,7 @@ final class WlsEdgeGatewayController
             // budget. Share one bounded pool per authenticated backend
             // identity and retire idle connections promptly.
             $lines[] = '    keepalive 32;';
-            $lines[] = '    keepalive_timeout 10s;';
+            $lines[] = '    keepalive_timeout ' . self::UPSTREAM_KEEPALIVE_TIMEOUT_SEC . 's;';
             $lines[] = '    keepalive_requests 10000;';
             foreach ($backends as $backend) {
                 if (!\is_array($backend)) {
