@@ -258,7 +258,12 @@ class Start extends CommandAbstract
         $noNginxRequested = \array_key_exists('no-nginx', $args)
             || \array_key_exists('no_nginx', $args)
             || $this->hasCliArgvToken(['--no-nginx']);
-        $edgeCliMode = $this->resolveEdgeCliMode($args);
+        try {
+            $edgeCliMode = $this->resolveEdgeCliMode($args);
+        } catch (\InvalidArgumentException $exception) {
+            $this->printer->error($exception->getMessage());
+            return 1;
+        }
         if ($noNginxRequested && $edgeCliMode !== null && $edgeCliMode !== 'wls') {
             $this->printer->error(__('--no-nginx 只能与 --edge=wls 一起使用。'));
             return 1;
@@ -508,6 +513,29 @@ class Start extends CommandAbstract
             ],
             $gatewayCapabilityDeclaration,
         );
+        if ($gatewayMode) {
+            try {
+                $configuredBackendPort = (int)($config['port'] ?? self::DEFAULT_PORT);
+                $gatewayBackendPort = $this->resolveGatewayInitialBackendPort(
+                    $instanceName,
+                    $configuredBackendPort,
+                    $portExplicit,
+                    true,
+                );
+                $config['port'] = $gatewayBackendPort;
+                $config['gateway']['backend_port'] = $gatewayBackendPort;
+                if ($gatewayBackendPort !== $configuredBackendPort) {
+                    $this->printer->note(__('已为项目分配稳定的宿主协调 loopback 回源端口：%{1}', [
+                        (string)$gatewayBackendPort,
+                    ]));
+                }
+            } catch (\Throwable $exception) {
+                $this->printer->error(__('WLS 2.0 网关回源端口分配失败：%{1}', [
+                    $exception->getMessage(),
+                ]));
+                return 1;
+            }
+        }
         $this->printer->note(__('WLS 2.0 边缘模式：%{1}（请求：%{2}）', [
             $effectiveEdgeMode,
             $edgeDecision->requestedMode,
@@ -613,8 +641,24 @@ class Start extends CommandAbstract
         $this->traceStartupPhase($instanceName, 'host-allowlist:after', [
             'public_host' => (string)($config['public_host'] ?? $host),
         ]);
-        $publicHost = (string)($config['public_host'] ?? $host);
+        try {
+            $publicHost = $this->resolveCertificateHost($config, (string)$host);
+        } catch (\Throwable $exception) {
+            $this->printer->error(__('WLS 公开 Host 规范化失败：%{1}', [
+                $exception->getMessage(),
+            ]));
+            return 1;
+        }
         $config['public_host'] = $publicHost;
+        if (($config['_certificate_preparation_deferred'] ?? false) === true) {
+            $this->completeDeferredCertificatePreparation(
+                $instanceName,
+                $config,
+                $gatewayMode,
+                $publicHost,
+            );
+            unset($config['_certificate_preparation_deferred']);
+        }
         if (\in_array(
             $edgeDecision->requestedMode,
             [
@@ -668,6 +712,8 @@ class Start extends CommandAbstract
                 $sslKey = Processer::resolveWindowsPersistentPath((string)$sslKey);
             }
             $sslEnabled = (bool) ($sslResult['ssl_enabled'] ?? true);
+            $certificatePending = $gatewayMode
+                && (($sslResult['pending_certificate'] ?? false) === true);
             $activeCertificate = null;
             if ($sslEnabled && $sslCert !== '' && $sslKey !== '') {
                 try {
@@ -711,14 +757,26 @@ class Start extends CommandAbstract
                     'key_path' => (string)$sslKey,
                     'generation' => (int)($activeCertificate['generation'] ?? 0),
                     'source_digest' => (string)($activeCertificate['source_digest'] ?? ''),
+                    'pending' => $certificatePending,
                 ];
+                $config['gateway']['certificate_pending'] = $certificatePending;
             }
             if (!$sslEnabled) {
-                $disableReason = \trim((string)($sslResult['message'] ?? ''));
-                $this->printer->warning(__('HTTPS 未启用：%{1}', [
-                    $disableReason !== '' ? $disableReason : __('SSL 证书服务返回 HTTP 模式'),
-                ]));
-                $this->printer->note(__('本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。'));
+                if ($certificatePending) {
+                    if (!$portExplicit && $port === self::DEFAULT_PORT) {
+                        $port = self::DEFAULT_PORT_FALLBACK;
+                        $config['port'] = $port;
+                    }
+                    $this->printer->note(__(
+                        '项目将先运行 loopback HTTP 回源；网关仅开放精确 ACME challenge，证书激活前普通 HTTPS 路由保持关闭。'
+                    ));
+                } else {
+                    $disableReason = \trim((string)($sslResult['message'] ?? ''));
+                    $this->printer->warning(__('HTTPS 未启用：%{1}', [
+                        $disableReason !== '' ? $disableReason : __('SSL 证书服务返回 HTTP 模式'),
+                    ]));
+                    $this->printer->note(__('本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。'));
+                }
                 $sslCert = '';
                 $sslKey = '';
             } else {
@@ -795,7 +853,10 @@ class Start extends CommandAbstract
         );
         $pureWls = $edgeAdapter->name()
             === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
-        if (!$pureWls && !$sslEnabled) {
+        if (!$pureWls
+            && !$sslEnabled
+            && !($gatewayMode && $certificatePending)
+        ) {
             $this->printer->error(__('Nginx-only 公网端点要求 TLS 1.3；已拒绝 --no-ssl。'));
             return 1;
         }
@@ -4492,27 +4553,9 @@ class Start extends CommandAbstract
             $this->printer->warning(__('参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。'));
         }
         
-        /** @var SslCertificateService $sslService */
-        $sslService = new SslCertificateService(true);
-
-        // 只有配置文件缺失时才启用持久层恢复；完整文件绝不因数据库对账阻塞配置解析。
-        // --no-ssl / 明文回源时不访问证书库，避免 CLI 启动被 DB/证书表问题阻断。
-        if (empty($config['no_ssl'])
-            && !empty($config['ssl_domain'])
-            && (!\is_file((string)($config['ssl_cert'] ?? ''))
-                || !\is_file((string)($config['ssl_key'] ?? '')))) {
-            try {
-                $sslService->ensureCertificateStorageReady();
-                $this->restoreManagedCertificateForConfig($config, $sslService, (string) $config['host']);
-            } catch (\Throwable $e) {
-                $this->printer->warning(__(
-                    '证书持久层恢复失败，已跳过并继续启动：%{1}',
-                    [$e->getMessage()]
-                ));
-            }
-        }
-
-        // 如果未显式配置 SSL，检查是否有已存在的证书可用
+        // 配置解析阶段只探测项目证书文件。持久层恢复必须等 edge 决策完成：
+        // gateway 首次缺证书要能先启动 challenge-only backend，不能在此连接项目数据库。
+        $sslService = $this->createSslCertificateService(true);
         if (empty($config['no_ssl']) && empty($config['ssl_cert']) && empty($config['ssl_key'])) {
             $this->traceStartupPhase($instanceName, 'ssl:auto-detect:before');
             $autoSsl = $this->autoDetectSslCertificates();
@@ -4553,6 +4596,21 @@ class Start extends CommandAbstract
                 }
             }
         }
+        $certificatePreparationMode = \strtolower(\trim((string)(
+            $config['edge_mode']
+            ?? ($config['edge']['mode'] ?? '')
+        )));
+        $deferCertificatePreparation = \in_array(
+            $certificatePreparationMode,
+            [
+                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO,
+                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY,
+            ],
+            true,
+        );
+        if ($deferCertificatePreparation) {
+            $config['_certificate_preparation_deferred'] = true;
+        }
         $this->traceStartupPhase($instanceName, 'ssl:file-gate', [
             'ready' => $startupCertificateFilesReady,
             'host' => $startupCertificateHost,
@@ -4562,6 +4620,8 @@ class Start extends CommandAbstract
         // 确保本地域名（0.0.0.0/127.0.0.1/localhost）有自签证书
         if (!empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'local-certificates:skipped-http-only');
+        } elseif ($deferCertificatePreparation) {
+            $this->traceStartupPhase($instanceName, 'local-certificates:deferred-edge-decision');
         } elseif ($startupCertificateFilesReady) {
             $this->traceStartupPhase($instanceName, 'local-certificates:deferred-valid-files');
         } else {
@@ -4580,6 +4640,8 @@ class Start extends CommandAbstract
         // 开发环境：确保 *.weline.test 泛域名证书存在，避免 hosts 中其他子域 TLS 主机名不匹配
         if (!empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'wildcard-certificate:skipped-http-only');
+        } elseif ($deferCertificatePreparation) {
+            $this->traceStartupPhase($instanceName, 'wildcard-certificate:deferred-edge-decision');
         } else {
             $this->traceStartupPhase($instanceName, 'wildcard-certificate:before');
             $this->ensureManagedLocalWildcardCertificate();
@@ -4589,6 +4651,8 @@ class Start extends CommandAbstract
         // 生成多域名证书映射文件（用于 SNI 支持）
         if (!empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'certificate-map:skipped-http-only');
+        } elseif ($deferCertificatePreparation) {
+            $this->traceStartupPhase($instanceName, 'certificate-map:deferred-edge-decision');
         } elseif ($startupCertificateFilesReady) {
             $this->traceStartupPhase($instanceName, 'certificate-map:deferred-valid-files');
         } else {
@@ -4823,7 +4887,7 @@ class Start extends CommandAbstract
     protected function ensureSslCertificate(string $instanceName, array $config): array
     {
         /** @var SslCertificateService $sslService */
-        $sslService = new SslCertificateService(true);
+        $sslService = $this->createSslCertificateService(true);
         $host = $config['host'] ?? '127.0.0.1';
         $certificateHost = $this->resolveCertificateHost($config, (string)$host);
         $syncDomain = $this->resolveSslDomainForSync($certificateHost, (string)($config['ssl_domain'] ?? ''));
@@ -4845,27 +4909,12 @@ class Start extends CommandAbstract
             $keyPath = $config['ssl_key'];
             
             if (!\is_file($certPath) || !\is_file($keyPath)) {
-                $sslService->ensureCertificateStorageReady();
-                $this->restoreManagedCertificateForConfig($config, $sslService, (string) $host);
-                $certPath = (string) ($config['ssl_cert'] ?? '');
-                $keyPath = (string) ($config['ssl_key'] ?? '');
-
-                // 本地/内网环境：证书文件不存在时尝试自动生成，而不是直接报错
-                if ($needsLocalCert || !\is_file($certPath) || !\is_file($keyPath)) {
-                    $sslService->cleanupInvalidSslConfigAndMap();
-                    $config['ssl_cert'] = '';
-                    $config['ssl_key'] = '';
-                    // 清除后 fall through 到下方 ensureCertificate 逻辑
-                } else {
-                    // 证书文件不存在：立即清理实例配置和映射中的失效路径，避免反复报错
-                    $sslService->cleanupInvalidSslConfigAndMap();
-                    if (!\is_file($certPath)) {
-                        return ['success' => false, 'message' => __('SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动', [$certPath])];
-                    }
-                    if (!\is_file($keyPath)) {
-                        return ['success' => false, 'message' => __('SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动', [$keyPath])];
-                    }
-                }
+                // 先降为“无文件”继续纯文件探针。是否允许访问项目证书库，必须由
+                // 已确定的 gateway/wls/legacy 模式在下方决定。
+                $config['ssl_cert'] = '';
+                $config['ssl_key'] = '';
+                $certPath = '';
+                $keyPath = '';
             }
             if (\is_file($certPath) && \is_file($keyPath)) {
                 if (!$sslService->canReuseConfiguredCertificate($certPath, $keyPath)) {
@@ -4915,14 +4964,47 @@ class Start extends CommandAbstract
             return $startupCertResult;
         }
 
-        // 文件路径无法满足当前 Host 时才启用 ORM；损坏库在这里精确失败，不能带病签发。
-        $sslService->ensureCertificateStorageReady();
+        $effectiveEdgeMode = \strtolower(\trim((string)(
+            $config['edge_mode']
+            ?? ($config['edge']['mode'] ?? ($config['gateway']['mode'] ?? ''))
+        )));
+        $gatewayCertificatePendingCandidate = !$needsLocalCert
+            && $effectiveEdgeMode
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY;
+
+        // Standalone/legacy starts may restore project-owned PEM from PostgreSQL before
+        // failing or signing. A public gateway start deliberately skips this dependency:
+        // its challenge-only backend must become available even while project storage is down.
+        if (!$gatewayCertificatePendingCandidate) {
+            $sslService->ensureCertificateStorageReady();
+            if ($this->restoreManagedCertificateForConfig($config, $sslService, (string)$host)) {
+                $restoredCertificate = $this->tryUseStartupCertificateFiles(
+                    $sslService,
+                    $domain,
+                    $syncDomain,
+                );
+                if ($restoredCertificate !== null) {
+                    $this->ensureAdditionalSslCertificates(
+                        $instanceName,
+                        $config,
+                        $domain,
+                        $sslService,
+                        (string)($restoredCertificate['cert_path'] ?? ''),
+                        (string)($restoredCertificate['key_path'] ?? ''),
+                    );
+                    return $restoredCertificate;
+                }
+            }
+        }
+
+        // 纯文件探针不启动 ORM；WLS 2.0 gateway 缺证书时必须能先启动
+        // challenge-only loopback backend，不得被项目数据库短暂不可用阻断。
         $webroot = $this->resolveAcmeWebrootForStartup($instanceName, $config);
         $email = Env::get('admin_email', 'admin@' . $domain);
 
         // 3. 先快速探测本地是否已有可复用证书，避免「明明复用却先喊『正在准备...』」的误导性输出。
-        //    hasValidLocalCertificate 只检查文件是否存在 + 有效期 + 本地 CA 复用能力，
-        //    不做任何 DNS/签发/IO 重活，耗时可忽略。
+        //    hasValidLocalCertificate 校验证书有效期、域名覆盖、私钥匹配和本地 CA 复用能力，
+        //    但不触发签发；它也是 WLS 2.0 missing-certificate 门禁的事实输入。
         $willReuse = $sslService->hasValidLocalCertificate($domain);
         if (!$willReuse) {
             // 真正要走签发/续签路径：本地 CA + CSR + 可能的 Windows 信任库操作存在长尾风险，
@@ -4930,6 +5012,25 @@ class Start extends CommandAbstract
             // w_log_info 可在事故时快速定位瓶颈。
             $this->printer->note(__('正在为 %{1} 准备 SSL 证书...', [$domain]));
         }
+
+        $wls2MissingCertificate = $this->resolveWls2MissingCertificateResult(
+            $config,
+            $domain,
+            $needsLocalCert,
+            $willReuse,
+        );
+        if ($wls2MissingCertificate !== null) {
+            if (($wls2MissingCertificate['pending_certificate'] ?? false) === true) {
+                $this->printer->note((string)$wls2MissingCertificate['message']);
+            } else {
+                $this->printer->warning((string)$wls2MissingCertificate['message']);
+            }
+            return $wls2MissingCertificate;
+        }
+
+        // 只有确实进入本地签发、legacy 签发或入库路径时才启用 ORM。
+        // 此时损坏或不可达的默认 PostgreSQL 仍精确 fail-closed，不回退 SQLite。
+        $sslService->ensureCertificateStorageReady();
 
         // 冷启动阶段：如果此时无法保证 ACME HTTP-01 校验入口已经可用（例如 dispatcher/worker 尚未就绪），
         // 则不要直接进入公网 ACME 申请流程，否则会出现必然 404（/.well-known/acme-challenge/* 未响应）。
@@ -5015,6 +5116,170 @@ class Start extends CommandAbstract
             ]));
         }
         return $result;
+    }
+
+    /**
+     * Keep certificate-service construction behind a narrow seam so the
+     * challenge-only startup boundary can be verified without initializing
+     * project persistence.
+     */
+    protected function createSslCertificateService(bool $deferCertificateStorage = false): SslCertificateService
+    {
+        return new SslCertificateService($deferCertificateStorage);
+    }
+
+    /**
+     * Finish legacy local-certificate conveniences only after auto/gateway
+     * discovery has selected the effective edge. A public gateway consumes
+     * project certificate files and must not initialize unrelated local
+     * certificate storage before its challenge-only backend is ready.
+     *
+     * @param array<string,mixed> $config
+     */
+    protected function completeDeferredCertificatePreparation(
+        string $instanceName,
+        array $config,
+        bool $gatewayMode,
+        string $publicHost,
+    ): void {
+        if (!empty($config['no_ssl'])) {
+            $this->traceStartupPhase($instanceName, 'certificate-preparation:skipped-http-only');
+            return;
+        }
+
+        $sslService = $this->createSslCertificateService(true);
+        if ($gatewayMode && !$sslService->needsSelfSignedCertificate($publicHost)) {
+            $this->traceStartupPhase($instanceName, 'certificate-preparation:skipped-public-gateway');
+            return;
+        }
+
+        $certPath = (string)($config['ssl_cert'] ?? '');
+        $keyPath = (string)($config['ssl_key'] ?? '');
+        $filesReady = $sslService->canReuseConfiguredCertificate($certPath, $keyPath)
+            && $sslService->certificateMatchesHost($certPath, $publicHost);
+        if ($filesReady) {
+            foreach ($this->collectAdditionalCertificateDomains($instanceName, $config, $publicHost) as $domain) {
+                if (!$sslService->certificateMatchesHost($certPath, $domain)) {
+                    $filesReady = false;
+                    break;
+                }
+            }
+        }
+
+        if (!$filesReady) {
+            $this->ensureLocalSelfSignedCertificates($config);
+        }
+        $this->ensureManagedLocalWildcardCertificate();
+        if (!$filesReady) {
+            $this->generateCertificateMap();
+        }
+        $this->traceStartupPhase($instanceName, 'certificate-preparation:completed-after-edge-decision', [
+            'files_ready' => $filesReady,
+            'gateway_mode' => $gatewayMode,
+        ]);
+    }
+
+    /**
+     * Enforce the WLS 2.0 no-certificate boundary before the legacy cold-start
+     * self-signed fallback can run.
+     *
+     * A gateway project may start only its private HTTP backend so the exact
+     * HTTP-01 challenge can be published. Pure WLS (including auto fallback)
+     * owns its TLS listener and therefore cannot start without an already
+     * valid project certificate. Local/development domains and the internal
+     * legacy migration mode retain their existing certificate policy.
+     *
+     * @return array<string,mixed>|null
+     */
+    protected function resolveWls2MissingCertificateResult(
+        array $config,
+        string $domain,
+        bool $needsLocalCertificate,
+        bool $willReuseCertificate,
+    ): ?array {
+        if ($needsLocalCertificate || $willReuseCertificate) {
+            return null;
+        }
+
+        $mode = \strtolower(\trim((string)(
+            $config['edge_mode']
+            ?? ($config['edge']['mode'] ?? ($config['gateway']['mode'] ?? ''))
+        )));
+        if ($mode === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY) {
+            return [
+                'success' => true,
+                'message' => (string)__(
+                    'PENDING_CERTIFICATE：%{1} 尚无可用证书；当前只允许精确 ACME HTTP-01 challenge，证书激活前不发布普通 443 路由。',
+                    [$domain],
+                ),
+                'code' => 'PENDING_CERTIFICATE',
+                'cert_path' => '',
+                'key_path' => '',
+                'issuer' => '',
+                'expires_at' => '',
+                'is_new' => false,
+                'ssl_enabled' => false,
+                'pending_certificate' => true,
+                'storage_sync_deferred' => true,
+            ];
+        }
+        if ($mode === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS) {
+            return [
+                'success' => false,
+                'message' => (string)__(
+                    'TLS_CERTIFICATE_UNAVAILABLE：纯 WLS/备用入口没有 %{1} 的有效证书，已拒绝生成隐式自签名证书。',
+                    [$domain],
+                ),
+                'code' => 'TLS_CERTIFICATE_UNAVAILABLE',
+                'cert_path' => '',
+                'key_path' => '',
+                'issuer' => '',
+                'expires_at' => '',
+                'is_new' => false,
+                'ssl_enabled' => false,
+                'pending_certificate' => false,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Every project joined to a host gateway needs a distinct loopback
+     * backend. The historical fixed 9981 fallback makes the second default
+     * project collide with the first, so fresh/default gateway starts use the
+     * same host-coordinated stable lease range as recovery listeners.
+     * Explicit ports remain authoritative.
+     */
+    protected function resolveGatewayInitialBackendPort(
+        string $instanceName,
+        int $configuredPort,
+        bool $portExplicit,
+        bool $gatewayMode,
+    ): int {
+        if (!$gatewayMode
+            || $portExplicit
+            || !\in_array($configuredPort, [
+                self::DEFAULT_PORT,
+                self::DEFAULT_PORT_FALLBACK,
+            ], true)
+        ) {
+            return $configuredPort;
+        }
+
+        $port = $this->allocateGatewayInitialBackendPort($instanceName);
+        if ($port < 20000 || $port > 29999) {
+            throw new \RuntimeException(
+                'Gateway backend allocator returned a port outside 20000-29999.',
+            );
+        }
+        return $port;
+    }
+
+    protected function allocateGatewayInitialBackendPort(string $instanceName): int
+    {
+        return (new \Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator())
+            ->allocate($instanceName . ':gateway-initial-backend');
     }
 
     protected function tryUseStartupCertificateFiles(
@@ -5363,17 +5628,26 @@ class Start extends CommandAbstract
 
     protected function resolveCertificateHost(array $config, string $host): string
     {
-        $host = \strtolower(\trim($host));
+        $rawHost = \strtolower(\trim($host));
+        if ($rawHost === '') {
+            return '127.0.0.1';
+        }
+        $host = $this->normalizeCertificateDomainCandidate($rawHost);
+        if ($host === '') {
+            throw new \RuntimeException('Certificate host is invalid after IDNA normalization.');
+        }
         if (!$this->isWildcardBindHost($host)) {
-            return $host === '' ? '127.0.0.1' : $host;
+            return $host;
         }
 
-        $publicHost = \strtolower(\trim((string)($config['public_host'] ?? '')));
+        $publicHost = $this->normalizeCertificateDomainCandidate(
+            (string)($config['public_host'] ?? ''),
+        );
         if ($this->isUsablePublicHost($publicHost)) {
             return $publicHost;
         }
 
-        $defaultProjectHost = \strtolower(\trim($this->getDefaultHost()));
+        $defaultProjectHost = $this->normalizeCertificateDomainCandidate($this->getDefaultHost());
         if ($this->isUsablePublicHost($defaultProjectHost)) {
             return $defaultProjectHost;
         }
@@ -5461,7 +5735,7 @@ class Start extends CommandAbstract
         }
 
         $domains = [];
-        $primaryKey = \strtolower(\trim($primaryDomain));
+        $primaryKey = $this->normalizeCertificateDomainCandidate($primaryDomain);
         foreach ($candidates as $candidate) {
             $domain = $this->normalizeCertificateDomainCandidate($candidate);
             if ($domain === '' || $domain === $primaryKey || $this->isWildcardBindHost($domain)) {
@@ -5491,7 +5765,24 @@ class Start extends CommandAbstract
             $candidate = \strtolower(\trim((string)\explode(':', $candidate, 2)[0]));
         }
 
-        return \rtrim($candidate, '.');
+        $candidate = \rtrim($candidate, '.');
+        $wildcard = \str_starts_with($candidate, '*.');
+        $body = $wildcard ? \substr($candidate, 2) : $candidate;
+        if ($body !== '' && \filter_var($body, FILTER_VALIDATE_IP) === false) {
+            if (!\function_exists('idn_to_ascii')) {
+                return \preg_match('/[^\x00-\x7F]/', $body) === 1 ? '' : $candidate;
+            }
+            $variant = \defined('INTL_IDNA_VARIANT_UTS46')
+                ? \constant('INTL_IDNA_VARIANT_UTS46')
+                : 0;
+            $ascii = @\idn_to_ascii($body, IDNA_DEFAULT, $variant);
+            if (!\is_string($ascii) || $ascii === '') {
+                return '';
+            }
+            $body = \strtolower($ascii);
+        }
+
+        return $wildcard ? '*.' . $body : $body;
     }
 
     /**
@@ -6040,6 +6331,8 @@ class Start extends CommandAbstract
                 === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
             && (string)($gatewayRuntime['protocol'] ?? '')
                 === \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL;
+        $gatewayCertificatePending = $gatewayMode
+            && (($gatewayRuntime['certificate_pending'] ?? false) === true);
         if ($pureWls) {
             $displayHost = $this->isUsablePublicHost($host) ? $host : '127.0.0.1';
             $scheme = $sslEnabled ? 'https' : 'http';
@@ -6090,17 +6383,25 @@ class Start extends CommandAbstract
             }
             $this->printer->keyValue([
                 __('实例名称') => $instanceName,
-                __('WLS 2.0 网关入口') => $httpsPort > 0
+                __('WLS 2.0 网关入口') => $gatewayCertificatePending
+                    ? 'PENDING_CERTIFICATE (HTTP-01 challenge only)'
+                    : ($httpsPort > 0
                     ? 'https://' . $displayHost . $httpsSuffix . '/'
-                    : (string)__('网关公网端点未验证'),
+                    : (string)__('网关公网端点未验证')),
                 __('WLS 私网回源') => 'http://127.0.0.1:' . $port,
                 __('Worker 数') => $count . ' (CPU: ' . $this->getCpuCoreCount() . ')',
-                __('公网协议') => $gatewayHealthy ? $gatewayProtocols : (string)__('未验证'),
+                __('公网协议') => $gatewayCertificatePending
+                    ? 'ACME HTTP-01 only'
+                    : ($gatewayHealthy ? $gatewayProtocols : (string)__('未验证')),
                 __('内部拓扑') => $topology,
-                __('TLS') => $gatewayHealthy
+                __('TLS') => $gatewayCertificatePending
+                    ? 'PENDING_CERTIFICATE (ordinary 443 route unpublished)'
+                    : ($gatewayHealthy
                     ? 'TLS 1.3 (Gateway certificate snapshot)'
-                    : (string)__('未验证'),
-                __('网关状态') => (string)($gatewayStatus['state'] ?? 'CONTROL_DEGRADED'),
+                    : (string)__('未验证')),
+                __('网关状态') => $gatewayCertificatePending
+                    ? 'PENDING_CERTIFICATE'
+                    : (string)($gatewayStatus['state'] ?? 'CONTROL_DEGRADED'),
                 __('网关 epoch') => (string)($gatewayStatus['epoch'] ?? $gatewayRuntime['epoch'] ?? ''),
                 __('运行模式') => $daemon ? __('后台运行（默认）') : __('前台运行'),
                 __('平台') => \PHP_OS_FAMILY,
@@ -8939,6 +9240,33 @@ PHP;
                 === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
             && (string)($gatewayRuntime['protocol'] ?? '')
                 === \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL;
+        $gatewayCertificatePending = $gatewayMode
+            && (($gatewayRuntime['certificate_pending'] ?? false) === true);
+        if ($gatewayCertificatePending) {
+            $displayHost = $this->isUsablePublicHost($host) ? $host : '127.0.0.1';
+            $httpPort = (int)($gatewayRuntime['public_http'] ?? 0);
+            $httpSuffix = $httpPort === 80 ? '' : ':' . $httpPort;
+            echo "\n";
+            $this->printer->title(__('使用说明'), '═');
+            $this->printer->keyValue([
+                __('证书状态') => 'PENDING_CERTIFICATE',
+                __('ACME HTTP-01 入口') => $httpPort > 0
+                    ? 'http://' . $displayHost . $httpSuffix
+                        . '/.well-known/acme-challenge/<token>'
+                    : (string)__('网关 HTTP challenge 端点未验证'),
+                __('查看状态') => 'php bin/w server:status ' . $instanceName,
+                __('停止服务') => 'php bin/w server:stop ' . $instanceName,
+            ], '→', 18);
+            $this->printer->note(__(
+                '普通 HTTPS、前后台页面与 REST 地址尚未发布；证书激活并由网关验证后才会开放 443 路由。'
+            ));
+            $this->printer->note(__(
+                'WLS 私网回源：http://127.0.0.1:%{1}。',
+                [$port],
+            ));
+            $this->printer->separator('─');
+            return;
+        }
         if ($pureWls) {
             $publicPort = $port;
             $backendPorts = [$port];
@@ -9618,35 +9946,43 @@ PHP;
                 $routes = \is_array($registration['routes'] ?? null)
                     ? $registration['routes']
                     : [];
-                $active = \array_values(\array_filter(
+                $publicHost = \is_array($endpoint)
+                    ? (string)($endpoint['public_host'] ?? $endpoint['host'] ?? '')
+                    : '';
+                $routeGate = $this->resolveGatewayPrimaryRouteGate(
                     $routes,
-                    static fn (mixed $route): bool => \is_array($route)
-                        && (string)($route['status'] ?? '') === 'ACTIVE',
-                ));
-                if ($active === []) {
-                    $states = \array_values(\array_unique(\array_map(
-                        static fn (mixed $route): string => \is_array($route)
-                            ? (string)($route['status'] ?? 'UNKNOWN')
-                            : 'UNKNOWN',
-                        $routes,
-                    )));
-                    $this->printer->warning(__('WLS 2.0 网关注册完成但没有 ACTIVE 路由：%{1}', [
-                        \implode(', ', $states),
+                    $publicHost,
+                    ($gatewayRuntime['certificate_pending'] ?? false) === true,
+                );
+                $publicHost = $routeGate['public_host'];
+                $primaryActive = $routeGate['active'];
+                $primaryChallengeOnly = $routeGate['challenge_only'];
+                if (!$routeGate['accepted']) {
+                    $this->printer->warning(__('WLS 2.0 网关注册后主域 %{1} 未达到 ACTIVE 或受限 challenge-only：%{2}', [
+                        $publicHost !== '' ? $publicHost : '(missing)',
+                        $routeGate['states'] !== []
+                            ? \implode(', ', $routeGate['states'])
+                            : 'NO_ROUTE',
                     ]));
                     return false;
                 }
-                $publicHost = \is_array($endpoint)
-                    ? \trim((string)($endpoint['public_host'] ?? $endpoint['host'] ?? ''))
-                    : '';
                 $edgePort = (int)($gatewayRuntime['public_https'] ?? 0);
-                if ($publicHost !== '' && $edgePort > 0) {
+                if ($primaryActive && $publicHost !== '' && $edgePort > 0) {
                     $this->syncServerConfigToEnv($publicHost, $edgePort, true);
+                }
+                if ($primaryChallengeOnly) {
+                    $this->printer->success(__('项目已以 PENDING_CERTIFICATE 注册到宿主级 WLS 2.0 Gateway'));
+                    $this->printer->note(__(
+                        '主域 %{1} 当前仅开放精确 ACME HTTP-01 challenge；普通 443 路由仍关闭。',
+                        [$publicHost],
+                    ));
+                    return true;
                 }
                 $this->printer->success(__('项目已注册到宿主级 WLS 2.0 Gateway'));
                 $this->printer->note(__('协议：%{1}，epoch：%{2}，活动路由：%{3}', [
                     \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL,
                     (string)($registration['epoch'] ?? $gatewayRuntime['epoch'] ?? ''),
-                    \count($active),
+                    (string)$routeGate['active_count'],
                 ]));
                 return true;
             }
@@ -9754,6 +10090,63 @@ PHP;
     }
 
     /**
+     * Gate startup on the current instance's exact public host. An ACTIVE
+     * route belonging to another project domain must never hide a missing or
+     * failed primary route.
+     *
+     * @param list<mixed> $routes
+     * @return array{
+     *   public_host:string,
+     *   primary_status:string,
+     *   active:bool,
+     *   challenge_only:bool,
+     *   accepted:bool,
+     *   active_count:int,
+     *   states:list<string>
+     * }
+     */
+    protected function resolveGatewayPrimaryRouteGate(
+        array $routes,
+        string $publicHost,
+        bool $certificatePending,
+    ): array {
+        $publicHost = $this->normalizeCertificateDomainCandidate($publicHost);
+        $primaryStatus = '';
+        $activeCount = 0;
+        $states = [];
+        foreach ($routes as $route) {
+            if (!\is_array($route)) {
+                $states['UNKNOWN'] = 'UNKNOWN';
+                continue;
+            }
+            $status = \strtoupper(\trim((string)($route['status'] ?? 'UNKNOWN')));
+            $status = $status !== '' ? $status : 'UNKNOWN';
+            $states[$status] = $status;
+            if ($status === 'ACTIVE') {
+                $activeCount++;
+            }
+            $routeDomain = $this->normalizeCertificateDomainCandidate(
+                (string)($route['domain'] ?? ''),
+            );
+            if ($publicHost !== '' && \hash_equals($publicHost, $routeDomain)) {
+                $primaryStatus = $status;
+            }
+        }
+        $active = $primaryStatus === 'ACTIVE';
+        $challengeOnly = $certificatePending
+            && $primaryStatus === 'PENDING_CERTIFICATE';
+        return [
+            'public_host' => $publicHost,
+            'primary_status' => $primaryStatus,
+            'active' => $active,
+            'challenge_only' => $challengeOnly,
+            'accepted' => $active || $challengeOnly,
+            'active_count' => $activeCount,
+            'states' => \array_values($states),
+        ];
+    }
+
+    /**
      * 打印结束语
      *
      * @param bool $success 是否成功
@@ -9788,15 +10181,33 @@ PHP;
             $value = \end($value);
         }
         if (\is_scalar($value) && \trim((string)$value) !== '') {
-            return \strtolower(\trim((string)$value));
+            return $this->normalizePublicEdgeCliMode((string)$value);
         }
         foreach ($_SERVER['argv'] ?? [] as $argument) {
             $argument = (string)$argument;
             if (\str_starts_with($argument, '--edge=')) {
-                return \strtolower(\trim(\substr($argument, 7)));
+                return $this->normalizePublicEdgeCliMode(
+                    \substr($argument, 7),
+                );
             }
         }
         return null;
+    }
+
+    protected function normalizePublicEdgeCliMode(string $mode): string
+    {
+        $mode = \strtolower(\trim($mode));
+        if (!\in_array($mode, [
+            \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO,
+            \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY,
+            \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS,
+        ], true)) {
+            throw new \InvalidArgumentException((string)__(
+                '--edge 仅允许 auto、gateway 或 wls；legacy 只保留给已保存的 WLS 1.x 实例。'
+            ));
+        }
+
+        return $mode;
     }
 
     /**

@@ -33,6 +33,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
     private string $broker = '';
     private string $controller = '';
     private string $curl = '';
+    private string $openssl = '';
     private string $nginxSeed = '';
     private int $httpPort = 0;
     private int $httpsPort = 0;
@@ -59,6 +60,12 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
             : (string)$this->which('curl');
         if ($this->curl === '') {
             self::markTestSkipped('curl is required for real gateway protocol acceptance.');
+        }
+        $this->openssl = $this->findTlsAcceptanceOpenSsl();
+        if ($this->openssl === '') {
+            self::markTestSkipped(
+                'OpenSSL with TLS 1.3 early-data support is required for TLS session acceptance.',
+            );
         }
         $configuredNginx = \trim((string)\getenv('WLS_GATEWAY_TEST_NGINX'));
         $this->nginxSeed = $configuredNginx !== ''
@@ -1479,7 +1486,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         $sessionFile = $this->root . DIRECTORY_SEPARATOR . 'tls-session-'
             . \bin2hex(\random_bytes(4)) . '.pem';
         $result = $this->runCommandWithInput([
-            'openssl',
+            $this->openssl,
             's_client',
             '-connect',
             '127.0.0.1:' . $this->httpsPort,
@@ -1505,7 +1512,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
     private function resumeTls13Session(string $domain, string $sessionFile): array
     {
         $result = $this->runCommandWithInput([
-            'openssl',
+            $this->openssl,
             's_client',
             '-connect',
             '127.0.0.1:' . $this->httpsPort,
@@ -1533,7 +1540,18 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
     {
         self::assertSame(
             1,
-            \preg_match('/^(New|Reused), TLSv1\\.3,/m', $output, $matches),
+            \preg_match('/^\s*Protocol\s*:\s*TLSv1\\.3\s*$/mi', $output),
+            $output,
+        );
+        self::assertSame(
+            1,
+            // OpenSSL 3.6 may retain the historical TLSv1/SSLv3 summary
+            // label while the authoritative Protocol field is TLSv1.3.
+            \preg_match(
+                '/^(New|Reused), (?:TLSv1\\.3|TLSv1\/SSLv3),/m',
+                $output,
+                $matches,
+            ),
             $output,
         );
         return (string)$matches[1];
@@ -1550,7 +1568,7 @@ final class GatewayDataPlaneRecoveryTest extends TestCase
         ));
         $before = $this->normalRequestCount($fixture);
         $result = $this->runCommandWithInput([
-            'openssl',
+            $this->openssl,
             's_client',
             '-connect',
             '127.0.0.1:' . $this->httpsPort,
@@ -2849,6 +2867,31 @@ CONF
     {
         $result = $this->runCommand(['which', $binary]);
         return $result['code'] === 0 ? \trim($result['output']) : '';
+    }
+
+    private function findTlsAcceptanceOpenSsl(): string
+    {
+        $configured = \trim((string)\getenv('WLS_GATEWAY_TEST_OPENSSL'));
+        $candidates = \array_values(\array_unique(\array_filter([
+            $configured,
+            '/opt/homebrew/bin/openssl',
+            '/opt/homebrew/opt/openssl@3/bin/openssl',
+            '/usr/local/bin/openssl',
+            '/usr/local/opt/openssl@3/bin/openssl',
+            $this->which('openssl'),
+        ], static fn (string $candidate): bool => $candidate !== '')));
+        foreach ($candidates as $candidate) {
+            if (!\is_executable($candidate)) {
+                continue;
+            }
+            $help = $this->runCommand([$candidate, 's_client', '-help']);
+            if (\str_contains($help['output'], '-tls1_3')
+                && \str_contains($help['output'], '-early_data')
+            ) {
+                return $candidate;
+            }
+        }
+        return '';
     }
 
     /**

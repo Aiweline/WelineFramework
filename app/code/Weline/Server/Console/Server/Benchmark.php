@@ -76,6 +76,10 @@ class Benchmark extends CommandAbstract
         }
         // keep-alive 会让 Nginx 回源连接粘滞到已选 Direct Worker；验证 Nginx→Worker 连接级分流时可禁用复用
         $noKeepAlive = isset($args['no-keepalive']) || isset($args['no_keepalive']) || isset($args['spread']);
+        $expectWorkerRuntimeChange = isset($args['expect-worker-runtime-change'])
+            || isset($args['expect_worker_runtime_change'])
+            || isset($args['expect-reload'])
+            || isset($args['expect_reload']);
         $physicalConnectionsRaw = $args['physical-connections'] ?? $args['physical_connections'] ?? null;
         $physicalConnections = null;
         if ($physicalConnectionsRaw !== null) {
@@ -150,6 +154,8 @@ class Benchmark extends CommandAbstract
         );
         $benchmarkContext['accept_encoding_requested'] = $acceptEncoding['requested'];
         $benchmarkContext['accept_encoding_curl'] = $acceptEncoding['curl'];
+        $benchmarkContext['worker_runtime_expectation'] =
+            $expectWorkerRuntimeChange ? 'changed' : 'stable';
         $benchmarkContext['quality_gate_thresholds'] = [
             'min_success_qps' => $minSuccessQps,
             'max_error_rate_percent' => $maxErrorRate,
@@ -2981,7 +2987,11 @@ class Benchmark extends CommandAbstract
         $after = \is_array($benchmarkContext['worker_runtime_after'] ?? null)
             ? $benchmarkContext['worker_runtime_after']
             : [];
-        $workerRuntimeRequired = (bool)($before['required'] ?? false)
+        $workerRuntimeExpectation =
+            (string)($benchmarkContext['worker_runtime_expectation'] ?? 'stable');
+        $workerRuntimeChangeExpected = $workerRuntimeExpectation === 'changed';
+        $workerRuntimeRequired = $workerRuntimeChangeExpected
+            || (bool)($before['required'] ?? false)
             || (bool)($after['required'] ?? false);
         $workerRuntimeCaptured = (bool)($before['captured'] ?? false)
             && (bool)($after['captured'] ?? false);
@@ -2996,16 +3006,32 @@ class Benchmark extends CommandAbstract
         $workerRuntimeStable = $workerRuntimeIdentityComplete
             && (int)($before['master_pid'] ?? 0) === (int)($after['master_pid'] ?? -1)
             && (array)($before['ready_fingerprint'] ?? []) === (array)($after['ready_fingerprint'] ?? []);
-        $workerRuntimeFailureReason = !$workerRuntimeCaptured || !$workerRuntimeHealthy
-            ? 'worker_runtime_not_ready'
-            : (!$workerRuntimeIdentityComplete
-                ? 'worker_runtime_identity_evidence_incomplete'
-                : 'worker_runtime_changed');
+        $workerMasterStable = $workerRuntimeIdentityComplete
+            && (int)($before['master_pid'] ?? 0) > 0
+            && (int)($before['master_pid'] ?? 0) === (int)($after['master_pid'] ?? -1);
+        $workerFingerprintChanged = $workerRuntimeIdentityComplete
+            && (array)($before['ready_fingerprint'] ?? [])
+                !== (array)($after['ready_fingerprint'] ?? []);
+        $workerRuntimePassed = $workerRuntimeChangeExpected
+            ? $workerMasterStable && $workerFingerprintChanged
+            : $workerRuntimeStable;
+        if (!$workerRuntimeCaptured || !$workerRuntimeHealthy) {
+            $workerRuntimeFailureReason = 'worker_runtime_not_ready';
+        } elseif (!$workerRuntimeIdentityComplete) {
+            $workerRuntimeFailureReason = 'worker_runtime_identity_evidence_incomplete';
+        } elseif ($workerRuntimeChangeExpected && !$workerMasterStable) {
+            $workerRuntimeFailureReason = 'worker_master_changed_during_expected_reload';
+        } elseif ($workerRuntimeChangeExpected) {
+            $workerRuntimeFailureReason = 'worker_runtime_did_not_change';
+        } else {
+            $workerRuntimeFailureReason = 'worker_runtime_changed';
+        }
         $record(
             'worker_runtime_stability',
             $workerRuntimeRequired,
-            $workerRuntimeStable,
+            $workerRuntimePassed,
             [
+                'expectation' => $workerRuntimeExpectation,
                 'before_master_pid' => $before['master_pid'] ?? null,
                 'after_master_pid' => $after['master_pid'] ?? null,
                 'before_ready_workers' => $before['ready_workers'] ?? null,
@@ -3015,10 +3041,14 @@ class Benchmark extends CommandAbstract
                 'before_lease_complete' => $before['lease_complete'] ?? null,
                 'after_lease_complete' => $after['lease_complete'] ?? null,
                 'comparison_mode' => $workerRuntimeIdentityComplete
-                    ? 'authoritative_ipc_lease_fingerprint'
+                    ? ($workerRuntimeChangeExpected
+                        ? 'same_master_authoritative_ipc_fingerprint_change'
+                        : 'authoritative_ipc_lease_fingerprint')
                     : 'fail_closed_incomplete_identity_evidence',
             ],
-            'same_master_and_ready_worker_fingerprint',
+            $workerRuntimeChangeExpected
+                ? 'same master with a changed healthy authoritative Worker fingerprint'
+                : 'same_master_and_ready_worker_fingerprint',
             $workerRuntimeFailureReason
         );
         $record(
@@ -3355,6 +3385,8 @@ class Benchmark extends CommandAbstract
             'worker_balance' => $workerBalance,
             'worker_runtime_before' => (array)($benchmarkContext['worker_runtime_before'] ?? []),
             'worker_runtime_after' => (array)($benchmarkContext['worker_runtime_after'] ?? []),
+            'worker_runtime_expectation' =>
+                (string)($benchmarkContext['worker_runtime_expectation'] ?? 'stable'),
             'quality_gate' => $qualityGate,
             'cache_source' => $cacheSource !== '' ? $cacheSource : null,
             'cache_sources' => $cacheSources,
@@ -3499,6 +3531,7 @@ class Benchmark extends CommandAbstract
                 '--max-error-rate <percent>' => __('错误率上限百分比（默认 0）'),
                 '--max-p95-ms <ms>' => __('全部完成请求 P95 上限；0 表示禁用'),
                 '--max-tls-p95-ms <ms>' => __('TLS 握手 P95 上限；0 表示禁用，启用后无握手样本亦失败'),
+                '--expect-worker-runtime-change, --expect-reload' => __('预期压测期间发生滚动 reload：要求 Master 不变、前后 Worker 身份证据健康且代际指纹发生变化'),
                 '--help' => __('显示帮助信息'),
             ],
             [],

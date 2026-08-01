@@ -10,6 +10,8 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SslCertificateService;
 
+require_once \dirname(__DIR__, 7) . '/app/bootstrap_phpunit.php';
+
 final class StartCommandArgsSolidificationTest extends TestCase
 {
     public function testNoSslFlagForcesHttpOnlyMode(): void
@@ -38,6 +40,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
             'host' => 'unit-test.weline.test',
             'ssl_cert' => '/tmp/unit-primary-cert.pem',
             'ssl_key' => '/tmp/unit-primary-key.pem',
+            'edge_mode' => 'wls',
         ]);
 
         $start->resolveConfig('default', []);
@@ -105,6 +108,273 @@ final class StartCommandArgsSolidificationTest extends TestCase
 
         $restartConfig = $start->resolveConfig('default', ['no-daemon' => true, 'r' => true]);
         self::assertTrue((bool)($restartConfig['daemon'] ?? false));
+    }
+
+    public function testPublicEdgeCliModesExcludeInternalLegacyMode(): void
+    {
+        $start = $this->createProbe();
+
+        self::assertSame('auto', $start->normalizeEdgeCli(' AUTO '));
+        self::assertSame('gateway', $start->normalizeEdgeCli('gateway'));
+        self::assertSame('wls', $start->normalizeEdgeCli('WLS'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('legacy');
+        $start->normalizeEdgeCli('legacy');
+    }
+
+    public function testUnknownPublicEdgeCliModeIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('auto');
+
+        $this->createProbe()->normalizeEdgeCli('system-nginx');
+    }
+
+    public function testGatewayWithoutPublicCertificateStartsChallengeOnly(): void
+    {
+        $result = $this->createProbe()->resolveMissingCertificate([
+            'edge_mode' => 'gateway',
+            'gateway' => ['mode' => 'gateway'],
+        ], 'shop.example.com', false, false);
+
+        self::assertIsArray($result);
+        self::assertTrue((bool)($result['success'] ?? false));
+        self::assertFalse((bool)($result['ssl_enabled'] ?? true));
+        self::assertTrue((bool)($result['pending_certificate'] ?? false));
+        self::assertSame('PENDING_CERTIFICATE', $result['code'] ?? null);
+        self::assertSame('', $result['cert_path'] ?? null);
+        self::assertSame('', $result['key_path'] ?? null);
+    }
+
+    public function testGatewayPendingCertificateDoesNotInitializeProjectStorage(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('needsSelfSignedCertificate')->willReturn(false);
+        $sslService->method('getCertificateDir')->willReturn(
+            \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-pending-cert-does-not-exist' . DIRECTORY_SEPARATOR,
+        );
+        $sslService->method('hasValidLocalCertificate')->willReturn(false);
+        $sslService->expects(self::never())->method('ensureCertificateStorageReady');
+
+        $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('gateway-pending', [
+            'host' => 'shop.example.com',
+            'public_host' => 'shop.example.com',
+            'edge_mode' => 'gateway',
+            'gateway' => ['mode' => 'gateway'],
+        ]);
+
+        self::assertTrue((bool)($result['success'] ?? false));
+        self::assertFalse((bool)($result['ssl_enabled'] ?? true));
+        self::assertTrue((bool)($result['pending_certificate'] ?? false));
+        self::assertSame('PENDING_CERTIFICATE', $result['code'] ?? null);
+    }
+
+    public function testGatewayConfigParsingWithMissingSavedCertificateDoesNotInitializeStorage(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->expects(self::never())->method('ensureCertificateStorageReady');
+
+        $probe = new StartConfigProbe([
+            'host' => 'shop.example.com',
+            'public_host' => 'shop.example.com',
+            'ssl_domain' => 'shop.example.com',
+            'ssl_cert' => '/does/not/exist/fullchain.pem',
+            'ssl_key' => '/does/not/exist/privkey.pem',
+            'edge_mode' => 'gateway',
+        ], [], $sslService);
+        $config = $probe->resolveConfig('gateway-pending-config', []);
+
+        self::assertSame('shop.example.com', $config['ssl_domain'] ?? null);
+        self::assertTrue((bool)($config['_certificate_preparation_deferred'] ?? false));
+        self::assertSame(0, $probe->localCertificateCalls);
+        self::assertSame(0, $probe->managedWildcardCertificateCalls);
+        self::assertSame(0, $probe->certificateMapCalls);
+    }
+
+    public function testPublicGatewaySkipsDeferredLocalCertificateMutation(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('needsSelfSignedCertificate')->willReturn(false);
+        $sslService->expects(self::never())->method('ensureCertificateStorageReady');
+        $probe = new StartConfigProbe(null, [], $sslService);
+
+        $probe->completeCertificatePreparation('gateway-public', [
+            'host' => 'shop.example.com',
+            'public_host' => 'shop.example.com',
+        ], true, 'shop.example.com');
+
+        self::assertSame(0, $probe->localCertificateCalls);
+        self::assertSame(0, $probe->managedWildcardCertificateCalls);
+        self::assertSame(0, $probe->certificateMapCalls);
+    }
+
+    public function testPureWlsMissingCertificateAttemptsPostgresqlRestoreBeforeFailingClosed(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('needsSelfSignedCertificate')->willReturn(false);
+        $sslService->method('getCertificateDir')->willReturn(
+            \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-standalone-cert-does-not-exist' . DIRECTORY_SEPARATOR,
+        );
+        $sslService->method('hasValidLocalCertificate')->willReturn(false);
+        $sslService->expects(self::once())->method('ensureCertificateStorageReady');
+
+        $result = (new StartConfigProbe(null, [], $sslService))->ensureSslResult('wls-no-cert', [
+            'host' => 'shop.example.com',
+            'public_host' => 'shop.example.com',
+            'edge_mode' => 'wls',
+            'gateway' => ['mode' => 'wls'],
+        ]);
+
+        self::assertFalse((bool)($result['success'] ?? true));
+        self::assertSame('TLS_CERTIFICATE_UNAVAILABLE', $result['code'] ?? null);
+    }
+
+    public function testPureWlsWithoutPublicCertificateFailsClosed(): void
+    {
+        $result = $this->createProbe()->resolveMissingCertificate([
+            'edge_mode' => 'wls',
+            'gateway' => ['requested_mode' => 'auto'],
+        ], 'shop.example.com', false, false);
+
+        self::assertIsArray($result);
+        self::assertFalse((bool)($result['success'] ?? true));
+        self::assertFalse((bool)($result['pending_certificate'] ?? true));
+        self::assertSame('TLS_CERTIFICATE_UNAVAILABLE', $result['code'] ?? null);
+        self::assertStringContainsString(
+            'TLS_CERTIFICATE_UNAVAILABLE',
+            (string)($result['message'] ?? ''),
+        );
+    }
+
+    public function testGatewayDefaultBackendUsesDistinctHostCoordinatedLease(): void
+    {
+        $probe = $this->createProbe();
+
+        self::assertSame(23456, $probe->resolveGatewayBackendPort(
+            'shop',
+            Start::DEFAULT_PORT,
+            false,
+            true,
+        ));
+        self::assertSame(23456, $probe->resolveGatewayBackendPort(
+            'shop',
+            Start::DEFAULT_PORT_FALLBACK,
+            false,
+            true,
+        ));
+        self::assertSame(9981, $probe->resolveGatewayBackendPort(
+            'shop',
+            9981,
+            true,
+            true,
+        ));
+        self::assertSame(9981, $probe->resolveGatewayBackendPort(
+            'shop',
+            9981,
+            false,
+            false,
+        ));
+        self::assertSame(2, $probe->gatewayBackendLeaseCalls);
+    }
+
+    public function testLocalExistingAndLegacyCertificatePoliciesRemainUnchanged(): void
+    {
+        $probe = $this->createProbe();
+
+        self::assertNull($probe->resolveMissingCertificate(
+            ['edge_mode' => 'wls'],
+            'project.weline.test',
+            true,
+            false,
+        ));
+        self::assertNull($probe->resolveMissingCertificate(
+            ['edge_mode' => 'gateway'],
+            'shop.example.com',
+            false,
+            true,
+        ));
+        self::assertNull($probe->resolveMissingCertificate(
+            ['edge_mode' => 'legacy'],
+            'shop.example.com',
+            false,
+            false,
+        ));
+    }
+
+    public function testGatewayPublicationGateUsesExactPrimaryDomain(): void
+    {
+        $probe = $this->createProbe();
+        $routes = [
+            ['domain' => 'other.example.com', 'status' => 'ACTIVE'],
+            ['domain' => 'shop.example.com', 'status' => 'PENDING_CERTIFICATE'],
+        ];
+
+        $withoutPendingIntent = $probe->resolvePrimaryRouteGate(
+            $routes,
+            'Shop.Example.com.',
+            false,
+        );
+        self::assertFalse($withoutPendingIntent['accepted']);
+        self::assertFalse($withoutPendingIntent['active']);
+        self::assertFalse($withoutPendingIntent['challenge_only']);
+        self::assertSame(1, $withoutPendingIntent['active_count']);
+
+        $challengeOnly = $probe->resolvePrimaryRouteGate(
+            $routes,
+            'Shop.Example.com.',
+            true,
+        );
+        self::assertTrue($challengeOnly['accepted']);
+        self::assertFalse($challengeOnly['active']);
+        self::assertTrue($challengeOnly['challenge_only']);
+        self::assertSame('PENDING_CERTIFICATE', $challengeOnly['primary_status']);
+        self::assertSame('shop.example.com', $challengeOnly['public_host']);
+    }
+
+    public function testGatewayPublicationGateAcceptsPrimaryActiveAndRejectsMissingPrimary(): void
+    {
+        $probe = $this->createProbe();
+        $active = $probe->resolvePrimaryRouteGate([
+            ['domain' => 'shop.example.com', 'status' => 'ACTIVE'],
+            ['domain' => 'other.example.com', 'status' => 'ACTIVE'],
+        ], 'shop.example.com', false);
+        self::assertTrue($active['accepted']);
+        self::assertTrue($active['active']);
+        self::assertSame(2, $active['active_count']);
+
+        $missing = $probe->resolvePrimaryRouteGate([
+            ['domain' => 'other.example.com', 'status' => 'ACTIVE'],
+        ], 'shop.example.com', true);
+        self::assertFalse($missing['accepted']);
+        self::assertSame('', $missing['primary_status']);
+    }
+
+    public function testGatewayPublicationGateNormalizesUnicodePrimaryDomain(): void
+    {
+        if (!\function_exists('idn_to_ascii')) {
+            self::markTestSkipped('IDNA normalization requires ext-intl.');
+        }
+        $ascii = (string)\idn_to_ascii(
+            'täst.example',
+            IDNA_DEFAULT,
+            INTL_IDNA_VARIANT_UTS46,
+        );
+
+        $gate = $this->createProbe()->resolvePrimaryRouteGate(
+            [['domain' => $ascii, 'status' => 'PENDING_CERTIFICATE']],
+            'TÄST.Example.',
+            true,
+        );
+
+        self::assertTrue($gate['accepted']);
+        self::assertTrue($gate['challenge_only']);
+        self::assertSame($ascii, $gate['public_host']);
+        self::assertSame(
+            $ascii,
+            $this->createProbe()->resolveCertificateDomain([], 'TÄST.Example.'),
+            '证书目录、DNS 校验与 ACME 请求必须与网关路由使用同一 IDNA 身份',
+        );
     }
 
     public function testWorkerCountAcceptsBothLongAndShortFlags(): void
@@ -305,10 +575,14 @@ final class StartCommandArgsSolidificationTest extends TestCase
 final class StartConfigProbe extends Start
 {
     public int $managedWildcardCertificateCalls = 0;
+    public int $localCertificateCalls = 0;
+    public int $certificateMapCalls = 0;
+    public int $gatewayBackendLeaseCalls = 0;
 
     public function __construct(
         private readonly ?array $savedConfig = null,
-        private readonly array $envConfig = []
+        private readonly array $envConfig = [],
+        private readonly ?SslCertificateService $sslService = null,
     ) {
     }
 
@@ -327,12 +601,107 @@ final class StartConfigProbe extends Start
         return $this->resolveGatewayFallbackBindHost($config, $startHost);
     }
 
+    public function normalizeEdgeCli(string $mode): string
+    {
+        return $this->normalizePublicEdgeCliMode($mode);
+    }
+
     public function useStartupCertificateFiles(
         SslCertificateService $sslService,
         string $domain,
         string $syncDomain
     ): ?array {
         return $this->tryUseStartupCertificateFiles($sslService, $domain, $syncDomain);
+    }
+
+    public function resolveMissingCertificate(
+        array $config,
+        string $domain,
+        bool $needsLocalCertificate,
+        bool $willReuseCertificate,
+    ): ?array {
+        return $this->resolveWls2MissingCertificateResult(
+            $config,
+            $domain,
+            $needsLocalCertificate,
+            $willReuseCertificate,
+        );
+    }
+
+    public function resolvePrimaryRouteGate(
+        array $routes,
+        string $publicHost,
+        bool $certificatePending,
+    ): array {
+        return $this->resolveGatewayPrimaryRouteGate(
+            $routes,
+            $publicHost,
+            $certificatePending,
+        );
+    }
+
+    public function resolveGatewayBackendPort(
+        string $instanceName,
+        int $configuredPort,
+        bool $portExplicit,
+        bool $gatewayMode,
+    ): int {
+        return $this->resolveGatewayInitialBackendPort(
+            $instanceName,
+            $configuredPort,
+            $portExplicit,
+            $gatewayMode,
+        );
+    }
+
+    /** @param array<string,mixed> $config */
+    public function resolveCertificateDomain(array $config, string $host): string
+    {
+        return $this->resolveCertificateHost($config, $host);
+    }
+
+    /** @param array<string,mixed> $config */
+    public function ensureSslResult(string $instanceName, array $config): array
+    {
+        $this->__init();
+
+        return $this->ensureSslCertificate($instanceName, $config);
+    }
+
+    /** @param array<string,mixed> $config */
+    public function completeCertificatePreparation(
+        string $instanceName,
+        array $config,
+        bool $gatewayMode,
+        string $publicHost,
+    ): void {
+        $this->completeDeferredCertificatePreparation(
+            $instanceName,
+            $config,
+            $gatewayMode,
+            $publicHost,
+        );
+    }
+
+    protected function createSslCertificateService(bool $deferCertificateStorage = false): SslCertificateService
+    {
+        return $this->sslService ?? parent::createSslCertificateService($deferCertificateStorage);
+    }
+
+    protected function validatePublicHostResolvesToCurrentServer(
+        string $host,
+        SslCertificateService $sslService,
+    ): array {
+        unset($host, $sslService);
+
+        return ['success' => true, 'skipped' => true];
+    }
+
+    protected function allocateGatewayInitialBackendPort(string $instanceName): int
+    {
+        unset($instanceName);
+        $this->gatewayBackendLeaseCalls++;
+        return 23456;
     }
 
     protected function getDefaultHost(): string
@@ -372,6 +741,7 @@ final class StartConfigProbe extends Start
     protected function ensureLocalSelfSignedCertificates(array $config = []): void
     {
         unset($config);
+        $this->localCertificateCalls++;
     }
 
     protected function ensureManagedLocalWildcardCertificate(): void
@@ -381,6 +751,7 @@ final class StartConfigProbe extends Start
 
     protected function generateCertificateMap(): void
     {
+        $this->certificateMapCalls++;
     }
 
     protected function calculateWorkerCount($workerCount, string $mode): int

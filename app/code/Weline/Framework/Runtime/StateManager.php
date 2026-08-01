@@ -193,9 +193,6 @@ class StateManager
                     continue; // 非静态属性，跳过
                 }
                 
-                // 确保可访问
-                $property->setAccessible(true);
-                
                 // 重置为默认值
                 $property->setValue(null, $defaultValue);
                 
@@ -562,7 +559,6 @@ class StateManager
                 if (!$property->isStatic() || !$property->isInitialized()) {
                     continue;
                 }
-                $property->setAccessible(true);
                 $snapshot[$key] = $property->getValue();
             } catch (\Throwable $e) {
                 w_log_error("[StateManager] Static snapshot '{$key}' error: " . $e->getMessage());
@@ -606,7 +602,6 @@ class StateManager
                 if (!$property->isStatic()) {
                     continue;
                 }
-                $property->setAccessible(true);
                 $property->setValue(null, $value);
             } catch (\Throwable $e) {
                 RequestResetException::append($failures, 'static:' . $key, $e);

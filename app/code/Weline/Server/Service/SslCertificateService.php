@@ -72,6 +72,9 @@ class SslCertificateService
      */
     protected const ACME_DIRECTORY_PROD = 'https://acme-v02.api.letsencrypt.org/directory';
     protected const ACME_DIRECTORY_STAGING = 'https://acme-staging-v02.api.letsencrypt.org/directory';
+    protected const GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS = 15.0;
+    protected const GATEWAY_ACME_PUBLISH_INITIAL_RETRY_MICROSECONDS = 250_000;
+    protected const GATEWAY_ACME_PUBLISH_MAX_RETRY_MICROSECONDS = 4_000_000;
     
     /**
      * LiteSSL ACME 目录（Sectigo DV）
@@ -120,7 +123,7 @@ class SslCertificateService
     /**
      * 证书模型
      */
-    protected SslCertificate $certModel;
+    protected ?SslCertificate $certModel = null;
 
     /**
      * 证书表首次启动兜底只需每进程执行一次。
@@ -171,12 +174,9 @@ class SslCertificateService
     protected array $sanEntriesCache = [];
     
     /**
-     * 证书匹配缓存 [certPath:host => bool]
-     */
-    protected array $certMatchCache = [];
-    
-    /**
-     * 证书解析缓存 [certPath => parsed_cert_array|false]
+     * 证书解析缓存。路径内容可能被续签原子替换，因此必须以内容摘要校验缓存。
+     *
+     * @var array<string,array{digest:string,parsed:array|false}>
      */
     protected array $certParseCache = [];
     
@@ -185,8 +185,8 @@ class SslCertificateService
         $this->certBaseDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS;
         $this->accountKeyPath = $this->certBaseDir . 'account.key';
         $this->updateAcmeDirectory();
-        $this->certModel = ObjectManager::getInstance(SslCertificate::class);
         if (!$deferCertificateStorage) {
+            $this->certificateModel();
             $this->ensureCertificateStorageReady();
         }
         
@@ -194,6 +194,11 @@ class SslCertificateService
         if (!\is_dir($this->certBaseDir)) {
             @\mkdir($this->certBaseDir, 0755, true);
         }
+    }
+
+    protected function certificateModel(): SslCertificate
+    {
+        return $this->certModel ??= ObjectManager::getInstance(SslCertificate::class);
     }
 
     /**
@@ -434,8 +439,9 @@ class SslCertificateService
         };
 
         try {
-            $connector = $this->certModel->getConnection()->getConnector();
-            $tableName = $this->certModel->getTable();
+            $certificateModel = $this->certificateModel();
+            $connector = $certificateModel->getConnection()->getConnector();
+            $tableName = $certificateModel->getTable();
             if ($connector->tableExist($tableName)) {
                 self::$certificateStorageReady = true;
                 return;
@@ -876,7 +882,7 @@ class SslCertificateService
      * @return array ['success' => bool, 'message' => string, 'cert_path' => string, 'key_path' => string]
      */
     /**
-     * 快速探测：本地是否已经存在可直接复用的证书文件（不触发任何签发/DNS/IO 重活）。
+     * 快速探测：本地是否已经存在可直接复用的证书文件（不触发任何签发）。
      *
      * 仅用于"是否要给用户打印『正在准备 SSL 证书...』"这类 UX 判定，
      * 真正的复用校验仍由 {@see ensureCertificate()} 自身完成。
@@ -895,7 +901,7 @@ class SslCertificateService
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
 
-        if (!\is_file($certPath) || !\is_file($keyPath) || !$this->isCertificateValid($certPath)) {
+        if (!$this->canReuseCertificateForDomain($certPath, $keyPath, $domain)) {
             return false;
         }
 
@@ -909,6 +915,18 @@ class SslCertificateService
         return true;
     }
 
+    /**
+     * 统一启动探针与实际复用分支的密钥、有效期和域名覆盖校验。
+     */
+    protected function canReuseCertificateForDomain(
+        string $certPath,
+        string $keyPath,
+        string $domain,
+    ): bool {
+        return $this->canReuseConfiguredCertificate($certPath, $keyPath)
+            && $this->certificateMatchesHost($certPath, $domain);
+    }
+
     public function ensureCertificate(string $domain, string $webroot = '', string $email = '', int $websiteId = 0): array
     {
         // 0.0.0.0 是"监听所有网卡"的绑定地址，不是真实域名，归一化为 localhost
@@ -917,7 +935,7 @@ class SslCertificateService
         }
 
         // 0. 若后台已禁用该域名的 HTTPS，直接返回「不使用 SSL」
-        $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+        $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
         if ($cert->getCertId() && !$cert->getHttpsEnabled()) {
             return [
                 'success' => true,
@@ -951,8 +969,8 @@ class SslCertificateService
             }
         }
         
-        // 1. 检查本地证书文件是否存在且未过期，若有则入库后直接使用（避免每次重新申请）
-        if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
+        // 1. 仅复用未过期、密钥配对且覆盖当前域名的证书。
+        if ($this->canReuseCertificateForDomain($certPath, $keyPath, $domain)) {
             // 启动复用路径只做入库/映射，不重复触发「从 bundle 恢复 CA + Windows 信任探测」，
             // 避免 certutil 慢调用把“使用已有证书”也拖成十几秒。
             $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, true, '', false);
@@ -3064,7 +3082,7 @@ CNF;
         string $provider = self::PROVIDER_SELF_SIGNED
     ): bool {
         try {
-            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+            $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
             $isRenewal = $cert->getCertId() > 0;
             $oldExpiresAt = $isRenewal ? $cert->getExpiresAt() : null;
             
@@ -3497,7 +3515,7 @@ CNF;
         }
 
         try {
-            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+            $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
             if (!$cert->getCertId()) {
                 $cert = ObjectManager::getInstance(SslCertificate::class);
                 $cert->clearData(true);
@@ -3607,7 +3625,7 @@ CNF;
             return $cert;
         }
         $currentId = $cert->getCertId();
-        $existing = $this->certModel->clearQuery()->loadByDomain($domain);
+        $existing = $this->certificateModel()->clearQuery()->loadByDomain($domain);
         $existingId = $existing->getCertId();
         if ($existingId > 0 && $existingId !== $currentId) {
             $existing->setData($cert->getData());
@@ -3694,7 +3712,7 @@ CNF;
     {
         $this->reconcileCertificateFiles();
 
-        $certificates = $this->certModel->clearQuery()
+        $certificates = $this->certificateModel()->clearQuery()
             ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
             ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
             ->select()
@@ -4429,7 +4447,7 @@ CNF;
             'errors' => [],
         ];
 
-        $certificates = $this->certModel->clearQuery()
+        $certificates = $this->certificateModel()->clearQuery()
             ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
             ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
             ->select()
@@ -4649,7 +4667,7 @@ CNF;
             if ($normalizedDomain === '') {
                 return ['success' => false, 'message' => __('域名不能为空'), 'cert' => null];
             }
-            $cert = $this->certModel->clearQuery()->loadByDomain($normalizedDomain);
+            $cert = $this->certificateModel()->clearQuery()->loadByDomain($normalizedDomain);
             $loadedDomain = \strtolower(\trim((string) $cert->getDomain()));
             $hadPersistedRow = $cert->getCertId() > 0 && $loadedDomain === $normalizedDomain;
             $priorCertId = $hadPersistedRow ? (int) $cert->getCertId() : 0;
@@ -4786,7 +4804,7 @@ CNF;
 
                 // 失败：正在使用的 active 记录不写库，避免续签/重申请失败把线上证书条目标成 error
                 if ($priorCertId > 0 && $priorStatus === SslCertificate::STATUS_ACTIVE) {
-                    $unchanged = $this->certModel->clearQuery()->load($priorCertId);
+                    $unchanged = $this->certificateModel()->clearQuery()->load($priorCertId);
                     $unchangedCert = ($unchanged->getCertId() === $priorCertId) ? $unchanged : null;
                     return [
                         'success' => false,
@@ -5016,7 +5034,7 @@ CNF;
      */
     public function renewExpiringCertificates(string $webroot, string $email, int $days = 30): array
     {
-        $certificates = $this->certModel->getCertificatesNeedRenew($days);
+        $certificates = $this->certificateModel()->getCertificatesNeedRenew($days);
         $results = [];
         
         foreach ($certificates as $certData) {
@@ -5969,11 +5987,79 @@ CNF;
                 $token,
                 $keyAuth,
             );
-            return $this->publishGatewayAcmeDesired($desired, $domain);
+            return $this->publishGatewayAcmeDesiredBeforeValidation($desired, $domain);
         } catch (\Throwable $throwable) {
             $this->lastAcmeError = $throwable->getMessage();
             return false;
         }
+    }
+
+    /**
+     * The Agent can report process READY just before its first registration is
+     * committed. Keep the project desired state authoritative, but wait a
+     * bounded monotonic window for the pending route and exact challenge to be
+     * published before the CA is notified. A permanent authorization or
+     * control-plane failure still fails closed after the deadline.
+     *
+     * @param array{generation:int,digest:string,challenges:list<array<string,mixed>>} $desired
+     */
+    protected function publishGatewayAcmeDesiredBeforeValidation(
+        array $desired,
+        string $requiredDomain,
+    ): bool {
+        $deadline = $this->gatewayAcmePublishMonotonicNow()
+            + self::GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS;
+        $attempt = 0;
+        while (true) {
+            if ($attempt > 0 && $this->gatewayAcmePublishMonotonicNow() >= $deadline) {
+                break;
+            }
+            if ($this->publishGatewayAcmeDesired($desired, $requiredDomain)) {
+                return true;
+            }
+            $remainingSeconds = $deadline - $this->gatewayAcmePublishMonotonicNow();
+            if ($remainingSeconds <= 0.0) {
+                break;
+            }
+            $this->waitForGatewayAcmePublishRetry($attempt++, $remainingSeconds);
+        }
+
+        if ($this->lastAcmeError === '') {
+            $this->lastAcmeError = (string)__(
+                '网关未在 %{1} 秒内确认 ACME HTTP-01 challenge 发布。',
+                [(string)(int)self::GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS],
+            );
+            $this->lastAcmeError = \str_replace(
+                '%{1}',
+                (string)(int)self::GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS,
+                $this->lastAcmeError,
+            );
+        }
+        return false;
+    }
+
+    protected function gatewayAcmePublishMonotonicNow(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    protected function waitForGatewayAcmePublishRetry(
+        int $attempt,
+        float $remainingSeconds,
+    ): void
+    {
+        $multiplier = 1 << \min(4, \max(0, $attempt));
+        $remainingMicroseconds = (int)\max(
+            0,
+            \floor($remainingSeconds * 1_000_000),
+        );
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(
+            \min(
+                self::GATEWAY_ACME_PUBLISH_MAX_RETRY_MICROSECONDS,
+                self::GATEWAY_ACME_PUBLISH_INITIAL_RETRY_MICROSECONDS * $multiplier,
+                $remainingMicroseconds,
+            ),
+        );
     }
 
     /**
@@ -6073,22 +6159,34 @@ CNF;
      */
     protected function getParsedCertificateRaw(string $certPath): array|false
     {
-        // 缓存命中
-        if (isset($this->certParseCache[$certPath])) {
-            return $this->certParseCache[$certPath];
-        }
-        
         if (!\is_file($certPath)) {
-            return $this->certParseCache[$certPath] = false;
+            unset($this->certParseCache[$certPath]);
+            return false;
         }
         
         $certData = @\file_get_contents($certPath);
         if (!$certData) {
-            return $this->certParseCache[$certPath] = false;
+            unset($this->certParseCache[$certPath]);
+            return false;
+        }
+
+        $digest = \hash('sha256', $certData);
+        $cached = $this->certParseCache[$certPath] ?? null;
+        if (\is_array($cached)
+            && ($cached['digest'] ?? '') === $digest
+            && \array_key_exists('parsed', $cached)
+        ) {
+            return $cached['parsed'];
         }
         
         $cert = @\openssl_x509_parse($certData);
-        return $this->certParseCache[$certPath] = ($cert ?: false);
+        $parsed = $cert ?: false;
+        $this->certParseCache[$certPath] = [
+            'digest' => $digest,
+            'parsed' => $parsed,
+        ];
+
+        return $parsed;
     }
     
     /**
@@ -6120,75 +6218,41 @@ CNF;
     public function certificateMatchesHost(string $certPath, string $host): bool
     {
         $host = \strtolower(\trim($host));
-        $cacheKey = $certPath . ':' . $host;
-        
-        // 缓存命中
-        if (isset($this->certMatchCache[$cacheKey])) {
-            return $this->certMatchCache[$cacheKey];
+        if ($host === '') {
+            return false;
         }
         
-        // 获取解析后的证书（使用缓存）
+        // 解析缓存按证书内容摘要校验，续签在原路径替换后不会沿用旧 SAN 结果。
         $cert = $this->getParsedCertificateRaw($certPath);
         if (!$cert) {
-            return $this->certMatchCache[$cacheKey] = false;
+            return false;
         }
         
-        $cn = \strtolower(\trim($cert['subject']['CN'] ?? ''));
-        if ($this->hostMatchesCertificateName($host, $cn)) {
-            return $this->certMatchCache[$cacheKey] = true;
-        }
-
-        $sanEntries = $this->extractCertificateSubjectAltNames((string)($cert['extensions']['subjectAltName'] ?? ''));
+        $subjectAltName = (string)($cert['extensions']['subjectAltName'] ?? '');
+        $sanEntries = $this->extractCertificateSubjectAltNames($subjectAltName);
+        $hasSubjectAltName = \trim($subjectAltName) !== '';
         foreach ($sanEntries['dns'] as $dnsName) {
             if ($this->hostMatchesCertificateName($host, $dnsName)) {
-                return $this->certMatchCache[$cacheKey] = true;
+                return true;
             }
         }
         foreach ($sanEntries['ip'] as $ipName) {
             if ($this->hostMatchesCertificateName($host, $ipName)) {
-                return $this->certMatchCache[$cacheKey] = true;
+                return true;
             }
         }
 
-        return $this->certMatchCache[$cacheKey] = false;
-        $san = $cert['extensions']['subjectAltName'] ?? '';
-        
-        // 1. 直接匹配 CN
-        if ($cn === $host) {
-            return $this->certMatchCache[$cacheKey] = true;
+        // RFC 6125: SAN 存在时不得回退到冲突 CN；只有无 SAN 的旧证书才校验 CN。
+        if ($hasSubjectAltName) {
+            return false;
         }
-        
-        // 2. localhost/127.0.0.1 互等价
-        $localhostEquivalents = ['localhost', '127.0.0.1'];
-        if (\in_array($host, $localhostEquivalents, true) && \in_array($cn, $localhostEquivalents, true)) {
-            return $this->certMatchCache[$cacheKey] = true;
+
+        $cn = \strtolower(\trim($cert['subject']['CN'] ?? ''));
+        if ($this->hostMatchesCertificateName($host, $cn)) {
+            return true;
         }
-        
-        // 3. 解析 SAN 进行匹配
-        if ($san !== '') {
-            // 标准化 SAN 字符串用于搜索
-            $sanLower = \strtolower($san);
-            
-            // 直接匹配
-            if (\str_contains($sanLower, 'dns:' . $host) || 
-                \str_contains($sanLower, 'dns: ' . $host) ||
-                \str_contains($sanLower, 'ip address:' . $host) ||
-                \str_contains($sanLower, 'ip address: ' . $host)) {
-                return $this->certMatchCache[$cacheKey] = true;
-            }
-            
-            // localhost/127.0.0.1 等价匹配
-            if (\in_array($host, $localhostEquivalents, true)) {
-                foreach ($localhostEquivalents as $equiv) {
-                    if (\str_contains($sanLower, $equiv)) {
-                        return $this->certMatchCache[$cacheKey] = true;
-                    }
-                }
-            }
-        }
-        
-        // 4. 内网 IP 必须证书中明确包含，不做通配
-        return $this->certMatchCache[$cacheKey] = false;
+
+        return false;
     }
     
     /**
@@ -6447,7 +6511,7 @@ CNF;
                 return ['success' => false, 'message' => $issuingMsg];
             }
 
-            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+            $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
             
             if (!$cert->getCertId()) {
                 return ['success' => false, 'message' => __('未找到域名证书：%{1}', [$domain])];
@@ -6615,7 +6679,7 @@ CNF;
             'deleted_domains' => [],
         ];
 
-        $query = $this->certModel->clearQuery();
+        $query = $this->certificateModel()->clearQuery();
         if ($domain !== null && \trim($domain) !== '') {
             $query->where(SslCertificate::schema_fields_DOMAIN, \strtolower(\trim($domain)));
         } else {

@@ -662,8 +662,15 @@ final class HostGatewayPackageManagerTest extends TestCase
             '$item->isDir() ? 0750 : ($item->isExecutable() ? 0550 : 0440)',
             $platform,
         );
-        self::assertStringContainsString("'--kill-whom=main'", $platform);
-        self::assertStringContainsString("'control', self::SERVICE_NAME, '6'", $platform);
+        self::assertStringContainsString(
+            'An installed stable launcher can predate the current project',
+            $platform,
+        );
+        self::assertStringContainsString('$this->restart($kind);', $platform);
+        self::assertStringNotContainsString("'--kill-whom=main'", $platform);
+        self::assertStringNotContainsString("'control', self::SERVICE_NAME, '6'", $platform);
+        self::assertStringContainsString('$this->waitForWindowsServiceState(1);', $platform);
+        self::assertStringContainsString('$this->waitForWindowsServiceState(4);', $platform);
         self::assertStringContainsString('WLS_CONTROL_TREE_RELOAD', $posix);
         self::assertStringContainsString('signal_number == SIGHUP', $posix);
         self::assertStringContainsString(
@@ -682,6 +689,27 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString('adopted_nginx_pid', $broker);
         self::assertStringContainsString('expected_a', $broker);
         self::assertStringContainsString('expected_b', $broker);
+    }
+
+    public function testWindowsServiceQueryStateParserUsesStrictScNumericState(): void
+    {
+        $parse = new \ReflectionMethod(
+            GatewayPlatformServiceInstaller::class,
+            'windowsServiceStateFromQuery',
+        );
+        self::assertSame(1, $parse->invoke(null, "STATE              : 1  STOPPED\r\n"));
+        self::assertSame(3, $parse->invoke(
+            null,
+            "        TYPE               : 10  WIN32_OWN_PROCESS\r\n"
+                . "        STATE              : 3  STOP_PENDING\r\n",
+        ));
+        self::assertSame(4, $parse->invoke(
+            null,
+            "SERVICE_NAME: weline-wls-gateway-v2\r\n"
+                . "        STATE              : 4  RUNNING\r\n",
+        ));
+        self::assertNull($parse->invoke(null, "TYPE : 1  KERNEL_DRIVER\r\n"));
+        self::assertNull($parse->invoke(null, "STATE : 8  UNKNOWN\r\n"));
     }
 
     private function createPackage(

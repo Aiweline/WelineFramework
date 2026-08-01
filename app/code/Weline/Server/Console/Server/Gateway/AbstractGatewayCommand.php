@@ -26,6 +26,8 @@ abstract class AbstractGatewayCommand extends CommandAbstract
         array $error = [],
     ): void
     {
+        $sanitized = GatewayOutputSanitizer::sanitize($payload);
+        $payload = \is_array($sanitized) ? $sanitized : [];
         if ($json) {
             $document = [
                 'schema' => self::OUTPUT_SCHEMA,
@@ -33,7 +35,12 @@ abstract class AbstractGatewayCommand extends CommandAbstract
                 'payload' => $payload,
             ];
             if (!$ok) {
-                $document['error'] = $this->normalizeError($error);
+                $normalizedError = GatewayOutputSanitizer::sanitize(
+                    $this->normalizeError($error),
+                );
+                $document['error'] = \is_array($normalizedError)
+                    ? $normalizedError
+                    : $this->normalizeError([]);
             }
             echo \json_encode(
                 $document,

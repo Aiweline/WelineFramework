@@ -77,6 +77,65 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         );
     }
 
+    public function testMasterStopsImmediatelyAfterAnotherGenerationOwnsItsLease(): void
+    {
+        $instance = 'master-lease-fence-ut-' . \bin2hex(\random_bytes(4));
+        $ownerToken = \str_repeat('e', 64);
+        $foreignToken = \str_repeat('f', 64);
+        $manager = new MasterLeaseManager();
+        $path = $manager->writeRunning($instance, 32101, 19201, 8, $foreignToken);
+        $orchestrator = new ServiceOrchestrator();
+        $context = new ServiceContext(
+            instanceName: $instance,
+            epoch: 7,
+            controlPort: 19200,
+            masterPid: 32100,
+            host: '127.0.0.1',
+            mainPort: 9502,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: RuntimeSelection::fromArray([
+                'requested_topology' => 'direct',
+                'effective_topology' => 'direct',
+                'topology_source' => 'unit-test',
+                'os_family' => PHP_OS_FAMILY,
+                'event_loop_driver' => 'select',
+                'ssl_engine' => 'stream',
+                'listener_mode' => PHP_OS_FAMILY === 'Windows' ? 'worker_ports' : 'shared_fd',
+                'policy_compatible' => true,
+                'reason_codes' => ['unit_test'],
+                'reason' => 'unit test runtime selection',
+            ]),
+            daemon: false,
+            debug: true,
+            windowMode: false,
+            envConfig: ['wls' => ['edge' => ['adapter' => 'wls']]],
+            masterLeaseFile: $path,
+            masterToken: $ownerToken,
+        );
+
+        try {
+            $this->writePrivate($orchestrator, 'context', $context);
+            $this->writePrivate($orchestrator, 'running', true);
+            $this->invokePrivate($orchestrator, 'touchMasterLeaseIfDue', [\microtime(true)]);
+
+            self::assertSame(
+                'master_lease_ownership_lost',
+                $this->readPrivate($orchestrator, 'pendingStopReason'),
+            );
+            self::assertTrue($this->readPrivate($orchestrator, 'pendingStopSkipDrain'));
+            self::assertSame(1, $this->readPrivate($orchestrator, 'masterLeaseTouchFailureCount'));
+            $lease = $manager->readProtected($path);
+            self::assertIsArray($lease);
+            self::assertSame(32101, $lease['master_pid'] ?? null);
+            self::assertSame($foreignToken, $lease['master_token'] ?? null);
+        } finally {
+            @\unlink($path);
+            @\rmdir(\dirname($path));
+        }
+    }
+
     public function testProtectedLeaseCredentialIsSharedAndInvalidStatesFailClosed(): void
     {
         $instance = 'gateway-lease-ut-' . \bin2hex(\random_bytes(4));
@@ -231,6 +290,79 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         }
     }
 
+    public function testFullRestartEpochAdvanceIsIdentityBoundAndImmediatelyUsable(): void
+    {
+        $instance = 'master-epoch-cas-ut-' . \bin2hex(\random_bytes(4));
+        $token = \hash('sha256', 'master-epoch-cas-unit-credential');
+        $masterPid = (int)\getmypid();
+        $controlPort = 19092;
+        $manager = new MasterLeaseManager();
+        $path = $manager->writeRunning($instance, $masterPid, $controlPort, 3, $token);
+
+        try {
+            $manager->advanceRunningEpoch(
+                $instance,
+                $masterPid,
+                $controlPort,
+                3,
+                4,
+                $token,
+            );
+
+            $this->assertCredentialRejected(
+                static fn (): string => $manager->resolveProtectedCredential(
+                    $path,
+                    $instance,
+                    $masterPid,
+                    3,
+                    'launch-old',
+                    'lease-old',
+                    1,
+                ),
+            );
+            self::assertSame(
+                $token,
+                $manager->resolveProtectedCredential(
+                    $path,
+                    $instance,
+                    $masterPid,
+                    4,
+                    'launch-new',
+                    'lease-new',
+                    1,
+                ),
+            );
+
+            foreach ([
+                [$masterPid + 1, $controlPort, 4, 5, $token],
+                [$masterPid, $controlPort + 1, 4, 5, $token],
+                [$masterPid, $controlPort, 3, 4, $token],
+                [$masterPid, $controlPort, 4, 6, $token],
+                [$masterPid, $controlPort, 4, 5, \hash('sha256', 'foreign-token')],
+            ] as [$pid, $port, $expected, $next, $candidateToken]) {
+                $this->assertCredentialRejected(
+                    static fn (): string => $manager->advanceRunningEpoch(
+                        $instance,
+                        $pid,
+                        $port,
+                        $expected,
+                        $next,
+                        $candidateToken,
+                    ),
+                );
+            }
+
+            $manager->touchRunning($instance, $masterPid, $controlPort, 4, $token);
+            $lease = $manager->readProtected($path);
+            self::assertIsArray($lease);
+            self::assertSame(4, $lease['master_epoch'] ?? null);
+        } finally {
+            @\unlink($path);
+            @\rmdir(\dirname($path));
+            @\rmdir(\dirname($path));
+        }
+    }
+
     public function testSupervisorHelloUsesExplicitCredentialAndRejectsEmptyStrictMode(): void
     {
         $token = \hash('sha256', 'gateway-agent-supervisor-unit-credential');
@@ -280,6 +412,14 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         $reflection = new \ReflectionProperty($object, $property);
         $reflection->setAccessible(true);
         $reflection->setValue($object, $value);
+    }
+
+    private function readPrivate(object $object, string $property): mixed
+    {
+        $reflection = new \ReflectionProperty($object, $property);
+        $reflection->setAccessible(true);
+
+        return $reflection->getValue($object);
     }
 
     /**
