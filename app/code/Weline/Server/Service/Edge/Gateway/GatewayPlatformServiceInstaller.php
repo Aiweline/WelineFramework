@@ -13,6 +13,8 @@ namespace Weline\Server\Service\Edge\Gateway;
 final class GatewayPlatformServiceInstaller
 {
     public const SERVICE_NAME = 'weline-wls-gateway-v2';
+    private const WINDOWS_SERVICE_TRANSITION_TIMEOUT_SECONDS = 30.0;
+    private const WINDOWS_SERVICE_POLL_MICROSECONDS = 100_000;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -367,10 +369,12 @@ final class GatewayPlatformServiceInstaller
         }
         if ($kind === 'windows-service') {
             $this->runCommand(['sc.exe', 'stop', self::SERVICE_NAME], true);
+            $this->waitForWindowsServiceState(1);
             $this->mustRun(
                 ['sc.exe', 'start', self::SERVICE_NAME],
                 'Windows gateway service restart',
             );
+            $this->waitForWindowsServiceState(4);
             return;
         }
         throw new \RuntimeException(
@@ -388,40 +392,16 @@ final class GatewayPlatformServiceInstaller
             }
             return;
         }
-        $this->assertAdministrator();
-        if ($kind === 'launchd-system') {
-            $this->mustRun([
-                '/bin/launchctl',
-                'kill',
-                'HUP',
-                'system/com.weline.wls-gateway-v2',
-            ], 'launchd gateway control-plane handoff');
-            return;
-        }
-        if ($kind === 'systemd-system') {
-            $this->mustRun(
-                ['/bin/systemctl', 'daemon-reload'],
-                'systemd gateway definition reload',
-            );
-            $this->mustRun([
-                '/bin/systemctl',
-                'kill',
-                '--kill-whom=main',
-                '--signal=HUP',
-                self::SERVICE_NAME . '.service',
-            ], 'systemd gateway control-plane handoff');
-            return;
-        }
-        if ($kind === 'windows-service') {
-            $this->mustRun(
-                ['sc.exe', 'control', self::SERVICE_NAME, '6'],
-                'Windows gateway control-plane handoff',
-            );
-            return;
-        }
-        throw new \RuntimeException(
-            'Unsupported gateway platform service kind: ' . $kind
-        );
+
+        // An installed stable launcher can predate the current project
+        // runtime. Treating a newer HUP/SCM control code as a mandatory
+        // cross-version contract can make that launcher exit cleanly; with a
+        // systemd Restart=on-failure policy no MainPID remains, and even the
+        // rollback handoff then fails. A full platform restart is the
+        // backwards-compatible transaction boundary: it loads the newly
+        // sealed launcher and can also start a verified rollback slot when
+        // the previous process has already exited.
+        $this->restart($kind);
     }
 
     public function secureInstalledRuntime(): void
@@ -1189,6 +1169,58 @@ final class GatewayPlatformServiceInstaller
             throw new \RuntimeException('Unable to publish the gateway service definition.');
         }
         @\chmod($path, $mode);
+    }
+
+    private function waitForWindowsServiceState(int $expectedState): void
+    {
+        if (!\in_array($expectedState, [1, 4], true)) {
+            throw new \InvalidArgumentException(
+                'Windows gateway service wait state must be STOPPED or RUNNING.'
+            );
+        }
+        $deadline = \hrtime(true) / 1_000_000_000
+            + self::WINDOWS_SERVICE_TRANSITION_TIMEOUT_SECONDS;
+        $lastState = null;
+        $lastOutput = '';
+        do {
+            $result = $this->runCommand(
+                ['sc.exe', 'query', self::SERVICE_NAME],
+                true,
+            );
+            $lastOutput = $result['output'];
+            $lastState = $result['code'] === 0
+                ? self::windowsServiceStateFromQuery($lastOutput)
+                : null;
+            if ($lastState === $expectedState) {
+                return;
+            }
+            if (\hrtime(true) / 1_000_000_000 >= $deadline) {
+                break;
+            }
+            \usleep(self::WINDOWS_SERVICE_POLL_MICROSECONDS);
+        } while (true);
+
+        throw new \RuntimeException(
+            'Windows gateway service did not reach '
+                . ($expectedState === 1 ? 'STOPPED' : 'RUNNING')
+                . ' within '
+                . (int)self::WINDOWS_SERVICE_TRANSITION_TIMEOUT_SECONDS
+                . ' seconds (last_state='
+                . ($lastState === null ? 'unknown' : (string)$lastState)
+                . '): ' . $lastOutput
+        );
+    }
+
+    private static function windowsServiceStateFromQuery(string $output): ?int
+    {
+        if (\preg_match(
+            '/^\s*STATE\s*:\s*([1-7])(?:\s|$)/mi',
+            $output,
+            $match,
+        ) !== 1) {
+            return null;
+        }
+        return (int)$match[1];
     }
 
     /** @param list<string> $command */

@@ -6,9 +6,22 @@ on:
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/env/gateway/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPortLeaseAllocator.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Console/Server/Start.php"
+      - "app/code/Weline/Server/Service/MasterProcess.php"
+      - "app/code/Weline/Server/Service/SslCertificateService.php"
+      - "app/code/Weline/Server/Session/Server/SessionServer.php"
       - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/HostGatewayPackageManagerTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/WlsGatewayPackageBuilderTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPortLeaseAllocatorTest.php"
+      - "app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterProcessDeferredSslPolicyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SslCertificateGatewayAcmePublishRetryTest.php"
+      - "app/code/Weline/Server/Test/Unit/SslCertificateServiceTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php"
+      - "app/code/Weline/Server/Test/bootstrap_pgsql.php"
       - "dev/tools/wls-gateway-package.php"
       - ".github/workflows/wls-gateway-package.yml"
   pull_request:
@@ -16,9 +29,22 @@ on:
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/env/gateway/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPortLeaseAllocator.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
+      - "app/code/Weline/Server/Console/Server/Start.php"
+      - "app/code/Weline/Server/Service/MasterProcess.php"
+      - "app/code/Weline/Server/Service/SslCertificateService.php"
+      - "app/code/Weline/Server/Session/Server/SessionServer.php"
       - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/HostGatewayPackageManagerTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/WlsGatewayPackageBuilderTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPortLeaseAllocatorTest.php"
+      - "app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/MasterProcessDeferredSslPolicyTest.php"
+      - "app/code/Weline/Server/Test/Unit/Service/SslCertificateGatewayAcmePublishRetryTest.php"
+      - "app/code/Weline/Server/Test/Unit/SslCertificateServiceTest.php"
+      - "app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php"
+      - "app/code/Weline/Server/Test/bootstrap_pgsql.php"
       - "dev/tools/wls-gateway-package.php"
       - ".github/workflows/wls-gateway-package.yml"
   workflow_dispatch:
@@ -76,20 +102,49 @@ jobs:
   package-contract:
     name: Package contract and release-gate tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: weline
+          POSTGRES_USER: weline
+          POSTGRES_PASSWORD: weline
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U weline -d weline"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
-          extensions: sodium, openssl
+          extensions: sodium, openssl, intl, pdo_pgsql
           coverage: none
       - name: Install locked PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
       - name: Validate package assembler and installer contract
         run: >-
           php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/WlsGatewayPackageBuilderTest.php
           app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/HostGatewayPackageManagerTest.php
+      - name: Validate gateway first-certificate startup contract
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayPortLeaseAllocatorTest.php
+          app/code/Weline/Server/Test/Unit/Service/MasterProcessDeferredSslPolicyTest.php
+          app/code/Weline/Server/Test/Unit/Service/SslCertificateGatewayAcmePublishRetryTest.php
+          app/code/Weline/Server/Test/Unit/SslCertificateServiceTest.php
+      - name: Validate shared-service idle shutdown consensus
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap app/code/Weline/Server/Test/bootstrap_pgsql.php
+          app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php
       - name: Validate package schema and builder syntax
         run: |
           php -l dev/tools/wls-gateway-package.php

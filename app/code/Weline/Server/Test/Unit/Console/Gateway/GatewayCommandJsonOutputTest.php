@@ -45,6 +45,41 @@ final class GatewayCommandJsonOutputTest extends TestCase
         self::assertStringNotContainsString("\033", $output);
     }
 
+    public function testOutputRecursivelyRedactsLegacyGatewaySecrets(): void
+    {
+        $command = $this->probeCommand();
+        $marker = 'must-never-reach-cli-output';
+
+        \ob_start();
+        $command->emitSuccess([
+            'routes' => [[
+                'backend_identity' => [
+                    'edge_capability_secret' => $marker,
+                    'edge_capability_digest' => \str_repeat('a', 64),
+                ],
+                'credential_id' => \str_repeat('b', 32),
+                'credential_secret' => $marker,
+                'certificate_fingerprint' => \str_repeat('c', 64),
+            ]],
+            'admin_token' => $marker,
+            'credential_installed' => true,
+            'signature' => \str_repeat('d', 64),
+        ]);
+        $output = (string)\ob_get_clean();
+        $decoded = \json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        $route = $decoded['payload']['routes'][0];
+
+        self::assertStringNotContainsString($marker, $output);
+        self::assertArrayNotHasKey('edge_capability_secret', $route['backend_identity']);
+        self::assertSame(\str_repeat('a', 64), $route['backend_identity']['edge_capability_digest']);
+        self::assertSame(\str_repeat('b', 32), $route['credential_id']);
+        self::assertArrayNotHasKey('credential_secret', $route);
+        self::assertSame(\str_repeat('c', 64), $route['certificate_fingerprint']);
+        self::assertArrayNotHasKey('admin_token', $decoded['payload']);
+        self::assertTrue($decoded['payload']['credential_installed']);
+        self::assertSame(\str_repeat('d', 64), $decoded['payload']['signature']);
+    }
+
     private function probeCommand(): object
     {
         return new class extends AbstractGatewayCommand {

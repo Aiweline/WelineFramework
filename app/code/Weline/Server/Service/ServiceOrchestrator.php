@@ -30,6 +30,8 @@ use Weline\Server\Service\Control\ControlPlaneServerInterface;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
+use Weline\Server\Service\Edge\EdgeAdapterInterface;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\MasterProcess;
@@ -39,6 +41,7 @@ use Weline\Server\Service\Provider\GatewayFallbackProvider;
 use Weline\Server\Service\Provider\GatewayJoinBackendProvider;
 use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Edge\Gateway\ProjectIdentityStore;
+use Weline\Server\Service\Memory\HostMemoryPressureCoordinator;
 use Weline\Server\Service\Provider\GatewayProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\Policy\RuntimePolicyCompiler;
@@ -83,6 +86,7 @@ class ServiceOrchestrator
     private const CONTROL_OPERATION_STATE_CANCELLED = 'cancelled';
     private const READY_CONFIRM_TIMEOUT_SEC = ControlMessage::READY_CONFIRM_TIMEOUT_SEC;
     private const MIN_READY_TIMER_POLL_USEC = 1000;
+    private const HOST_MEMORY_PRESSURE_COORDINATION_RETRY_SECONDS = 30.0;
     private const NGINX_UPSTREAM_DRAIN_SAFETY_MARGIN_SEC = 5.0;
     private const GATEWAY_FALLBACK_QUARANTINE_RETRY_SECONDS = 30.0;
     private const GATEWAY_NATIVE_DRAIN_SECONDS = 300;
@@ -232,6 +236,7 @@ class ServiceOrchestrator
     private float $lastMemoryPressureExitAt = 0.0;
     private float $memoryPressureShrinkFenceUntil = 0.0;
     private float $lastMemoryPressureTickAt = 0.0;
+    private float $lastMemoryPressureHostCoordinationInitAt = -1e12;
     private bool $workerReloadCapacityTransitionInProgress = false;
     private float $lastMemoryPressureTransitionDeferralAt = 0.0;
     /** @var array<string,int> slot_id => highest leased generation */
@@ -18693,6 +18698,122 @@ class ServiceOrchestrator
     }
 
     /**
+     * A host promotion runs as an administrator, but a failed hand-off must
+     * not restart the per-project Nginx as root. Its project Master remains
+     * alive throughout promotion and is the only process with the original
+     * runtime identity, so rollback is delegated through the authenticated
+     * project control channel and reconstructed from the live endpoint.
+     *
+     * @param array<string,mixed> $msg
+     */
+    private function handleGatewayLegacyNginxRestoreCommand(
+        array $msg,
+        int $clientId,
+    ): void {
+        $messageId = (string)($msg['msg_id'] ?? '');
+        if ($this->context === null || $this->controlServer === null) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Legacy Nginx restore requires a running project Master.',
+                $messageId,
+            ));
+            return;
+        }
+
+        try {
+            $owner = \trim((string)$this->context->instanceName);
+            $requestedOwner = \trim((string)($msg['owner_instance'] ?? ''));
+            if ($owner === ''
+                || $requestedOwner === ''
+                || !\hash_equals($owner, $requestedOwner)
+            ) {
+                throw new \RuntimeException(
+                    'Legacy Nginx restore owner does not match this project Master.'
+                );
+            }
+            $endpoint = (new ServerInstanceManager())->getRawInstanceData($owner);
+            $upstreamPort = (int)($msg['upstream_port'] ?? 0);
+            if (!\is_array($endpoint)) {
+                throw new \RuntimeException(
+                    'Legacy Nginx restore endpoint is unavailable.'
+                );
+            }
+            $endpointPort = (int)($endpoint['port'] ?? $endpoint['main_port'] ?? 0);
+            if ($upstreamPort < 1
+                || $upstreamPort > 65535
+                || $endpointPort !== $upstreamPort
+                || !\hash_equals(
+                    EdgeAdapterInterface::NAME_NGINX,
+                    (string)($endpoint['edge_adapter'] ?? ''),
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Legacy Nginx restore endpoint no longer matches the running project.'
+                );
+            }
+            $upstreamHost = \strtolower(\trim((string)(
+                $msg['upstream_host'] ?? '127.0.0.1'
+            )));
+            if (!\in_array($upstreamHost, ['127.0.0.1', '::1', 'localhost'], true)) {
+                throw new \RuntimeException(
+                    'Legacy Nginx restore accepts only a loopback upstream.'
+                );
+            }
+            $serverNames = [];
+            foreach ((array)($msg['server_names'] ?? []) as $serverName) {
+                $serverName = \trim((string)$serverName);
+                if ($serverName === ''
+                    || \str_contains($serverName, "\r")
+                    || \str_contains($serverName, "\n")
+                ) {
+                    continue;
+                }
+                $serverNames[] = $serverName;
+            }
+            if ($serverNames === []) {
+                $publicHost = \trim((string)($endpoint['public_host'] ?? ''));
+                $publicHost = $publicHost !== ''
+                    ? $publicHost
+                    : \trim((string)($endpoint['host'] ?? ''));
+                if ($publicHost !== '') {
+                    $serverNames[] = $publicHost;
+                }
+            }
+            $serverNames = \array_values(\array_unique($serverNames));
+            if ($serverNames === []) {
+                throw new \RuntimeException(
+                    'Legacy Nginx restore has no authoritative server name.'
+                );
+            }
+
+            $result = ManagedNginxService::fromEnv()->prepareAndStart(
+                $upstreamPort,
+                $upstreamHost,
+                $serverNames,
+                $owner,
+                EdgeAdapterInterface::NAME_NGINX,
+            );
+            $ok = (bool)($result['ok'] ?? false);
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                $ok,
+                $result,
+                $ok
+                    ? 'Project-owned legacy Nginx restored.'
+                    : (string)($result['message'] ?? 'Project-owned legacy Nginx restore failed.'),
+                $messageId,
+            ));
+        } catch (\Throwable $throwable) {
+            $this->controlServer->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                [],
+                'Project-owned legacy Nginx restore failed: ' . $throwable->getMessage(),
+                $messageId,
+            ));
+        }
+    }
+
+    /**
      * @return array{initial_slot:int,deferred_slots:list<int>}
      */
     private static function gatewayJoinBackendLaunchPlan(int $poolSize): array
@@ -19311,6 +19432,11 @@ class ServiceOrchestrator
             ControlMessage::ACTION_GATEWAY_AGENT_DISABLE,
         ], true)) {
             $this->handleGatewayAgentLifecycleCommand($action, $msg, $clientId);
+            return;
+        }
+
+        if ($action === ControlMessage::ACTION_GATEWAY_LEGACY_NGINX_RESTORE) {
+            $this->handleGatewayLegacyNginxRestoreCommand($msg, $clientId);
             return;
         }
 
@@ -24192,6 +24318,11 @@ class ServiceOrchestrator
         if ($this->memoryPressureController === null) {
             $this->memoryPressureController = new \Weline\Server\Service\Memory\MemoryPressureController();
         }
+        $this->memoryPressureController->requireHostCapacityCoordination();
+        $this->ensureHostMemoryPressureCoordination(
+            $context,
+            \hrtime(true) / 1_000_000_000,
+        );
         // At startup, resolved worker count == budget_ceiling (D08).
         $this->memoryPressureController->setBudgetCeiling(\max(1, $workerCount));
         $requested = $context->getConfig('wls.worker_count', null);
@@ -24214,12 +24345,56 @@ class ServiceOrchestrator
         if ($this->memoryPressureController === null) {
             $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 1);
             $this->ensureMemoryPressureController($this->context, \max(1, $desired));
+        } elseif (!$this->memoryPressureController->hasHostCapacityCoordination()) {
+            $this->ensureHostMemoryPressureCoordination(
+                $this->context,
+                \hrtime(true) / 1_000_000_000,
+            );
         }
         if ($this->memoryPressureShrinkFenceUntil > 0 && $now >= $this->memoryPressureShrinkFenceUntil) {
             $this->memoryPressureShrinkFenceUntil = 0.0;
             $this->memoryPressureController?->setShrinkInProgress(false);
         }
         $this->memoryPressureController?->maybeTick($now, $this);
+    }
+
+    private function ensureHostMemoryPressureCoordination(
+        ServiceContext $context,
+        float $nowMonotonic,
+    ): void {
+        if ($this->memoryPressureController === null
+            || $this->memoryPressureController->hasHostCapacityCoordination()
+            || ($nowMonotonic - $this->lastMemoryPressureHostCoordinationInitAt)
+                < self::HOST_MEMORY_PRESSURE_COORDINATION_RETRY_SECONDS
+        ) {
+            return;
+        }
+        $this->lastMemoryPressureHostCoordinationInitAt = $nowMonotonic;
+        try {
+            $hostStateRoot = (new ProjectIdentityStore())->hostStateRoot();
+            $projectRoot = \realpath((string)BP);
+            if (!\is_string($projectRoot) || $projectRoot === '') {
+                $projectRoot = (string)BP;
+            }
+            $owner = \hash(
+                'sha256',
+                \rtrim($projectRoot, '/\\') . "\0" . (string)$context->instanceName,
+            );
+            $this->memoryPressureController->configureHostCapacityCoordination(
+                new HostMemoryPressureCoordinator(
+                    $hostStateRoot . DIRECTORY_SEPARATOR . 'memory-pressure',
+                ),
+                $owner,
+            );
+        } catch (\Throwable $throwable) {
+            WlsLogger::warning_(
+                '[Orchestrator][MemoryPressure] host coordination initialization failed; '
+                . 'emergency shrink remains local and recovery remains deferred; '
+                . 'retry_in='
+                . self::HOST_MEMORY_PRESSURE_COORDINATION_RETRY_SECONDS
+                . 's error=' . $throwable->getMessage()
+            );
+        }
     }
 
     public function broadcastMemoryPressureLevel(string $level, int $staggerMsPerWorker = 0): void
@@ -24292,6 +24467,15 @@ class ServiceOrchestrator
             return false;
         }
 
+        $hostClaim = $controller->claimHostCapacityMutation(
+            'scale_down',
+            \hrtime(true) / 1_000_000_000,
+            $exitStagger,
+        );
+        if ($hostClaim === null) {
+            return false;
+        }
+
         $this->desiredState[ControlMessage::ROLE_WORKER] = $newDesired;
         $controller->setShrinkInProgress(true);
         $drainDeadline = 45.0;
@@ -24312,6 +24496,7 @@ class ServiceOrchestrator
         if (!$this->sendDrainToInstance($target, $drainDeadline)) {
             $this->desiredState[ControlMessage::ROLE_WORKER] = $desired;
             $controller->setShrinkInProgress(false);
+            $controller->releaseHostCapacityMutation($hostClaim);
             foreach ([
                 'memory_pressure_scale_down',
                 'memory_pressure_scale_down_at',
@@ -24358,6 +24543,19 @@ class ServiceOrchestrator
         $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
         $ceiling = $controller->getBudgetCeiling();
         if ($desired >= $ceiling) {
+            return false;
+        }
+        $recoverStagger = 20.0;
+        $mp = Env::get('wls.memory_pressure', []);
+        if (\is_array($mp) && isset($mp['exit_stagger_sec']) && \is_numeric($mp['exit_stagger_sec'])) {
+            $recoverStagger = \max(1.0, (float)$mp['exit_stagger_sec']);
+        }
+        $hostClaim = $controller->claimHostCapacityMutation(
+            'scale_up',
+            \hrtime(true) / 1_000_000_000,
+            $recoverStagger,
+        );
+        if ($hostClaim === null) {
             return false;
         }
         $newDesired = $desired + 1;

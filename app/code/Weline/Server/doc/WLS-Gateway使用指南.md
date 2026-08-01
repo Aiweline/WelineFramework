@@ -35,6 +35,11 @@ Client / 本机运维探针
 | `php bin/w server:start app -p 9986 --edge=wls` | 完全绕过网关，纯 WLS 直接提供 TLS |
 | `php bin/w server:start app -p 9986 --no-nginx` | `--edge=wls` 兼容别名 |
 
+公开 `--edge` 只接受 `auto/gateway/wls`；`--edge=legacy` 和未知值都会非零退出。
+`legacy` 是已保存 WLS 1.x 项目配置的内部兼容状态：首次只能从没有 edge mode 的
+WLS 1.x 配置识别，随后可由运行时内部持久化为 `edge_mode=legacy`，以便重启后仍等待
+显式提升；它不能用 CLI 创建。
+
 优先级为 CLI > 实例配置 > 环境配置 > `auto`。gateway/legacy scope 中 `-p` 是
 只绑定 loopback 的项目 backend；显式纯 WLS 中 `-p` 是 public port，冲突时非零
 退出，不会静默改端口。只有未显式指定端口的 auto fallback 才分配 20000–29999。
@@ -118,9 +123,26 @@ Master 的受保护 lease 是运行中实例的代际事实源。status、Benchm
 
 ### 4.2 ACME HTTP-01 事实源与网关发布
 
+- 多项目加入网关时，默认回源不再共用 9981。WLS 按项目 UUID/实例身份在
+  `20000–29999` 使用宿主锁、持久租约和实际 bind 分配独立稳定 loopback backend；
+  CLI/实例显式指定的端口仍保持权威。
+- 公网域名首次没有有效证书时，`--edge=gateway` 只启动 loopback HTTP 回源并报告
+  `PENDING_CERTIFICATE`；普通 443、后台、前台和 REST 地址都不会提前发布。
+  `--edge=wls` 以及 `auto` 的纯 WLS fallback 会返回
+  `TLS_CERTIFICATE_UNAVAILABLE`，不会为了启动成功而隐式生成公网自签名证书。
+- 既有证书只在未进入七天续期窗口、私钥与公钥配对且 SAN/CN 覆盖当前域名时
+  才可复用；SAN 存在时以 SAN 为权威，不能以冲突 CN 绕过，只有无 SAN 旧证书才回退 CN。
+  启动探针和实际签发分支共用同一判定。续签在原路径替换证书时，
+  解析缓存会按内容 SHA-256 重新校验，不会沿用旧 SAN 结果。
 - 项目在 `generated/acme-http01/.desired.json` 原子持久化 challenge generation、排序摘要和明确过期时间；每域名兼容投影仍由同一事实源生成，供纯 WLS Worker 读取。旧单文件会在已授权域名范围内迁移，符号链接、通配符 HTTP-01、非法 token/proof 一律拒绝。
-- 目标域名属于共享网关时，证书服务必须先把本代 challenge 同步发布成功，再通知 CA 发起验证。发布失败不会丢弃项目待确认状态，也不会提前通知 CA；Gateway Agent 每 10 秒观察 generation/digest 并重放，30 秒无变化也会续同步。
+- 目标域名属于共享网关时，证书服务必须先把本代 challenge 同步发布成功，再通知 CA 发起验证。Master 对明文 backend 的自动申请还要求 `gateway + wls-edge/2 + certificate_pending` 三项认证事实同时成立。首次 Agent 注册竞态使用严格 15 秒 monotonic publication barrier；退避不会越过剩余预算继续发布。失败不会丢弃项目待确认状态，也不会提前通知 CA；Gateway Agent 每 10 秒观察 generation/digest 并重放，30 秒无变化也会续同步。
 - Controller 只接受 enrollment 与当前路由同时授权的精确域名，统一按 IDNA ASCII 规范化；低 generation 拒绝，同 generation 同摘要幂等对账、异摘要拒绝。同代同摘要会在活动 lease 漂移时恢复数据面；内容相同而 generation 前进时只持久化栅栏，不触发 Nginx reload。到期清扫产生的新 generation 同步落盘。
+- 公开 Host 在写入实例状态前就转为 IDNA UTS46 ASCII，后续证书目录、DNS 归属校验、
+  ACME 命令和网关 route 不会使用不同域名身份。运行时缺少 IDNA 能力时，非 ASCII
+  域名配置会 fail-closed，不以 Unicode 原文继续注册或签发。
+- `server:start` 只按当前实例的规范化 `public_host` 判断启动成功：主域 ACTIVE 才发布
+  普通 HTTPS；显式 pending 且主域为 PENDING_CERTIFICATE 才接受 challenge-only。
+  同宿主其他域名的 ACTIVE route 不能掩盖本项目主域缺失或失败。
 - 若宿主存在网关但不承载目标域名，项目仍按纯 WLS 路径发布；只有匹配目标域名的网关注册失败才 fail-closed。未指定单域名的全量重放要求所有网关注册视图完整，绝不提交部分子集。清理 challenge 同样推进 generation 并同步空集合，失败可由 Agent 恢复。
 - 以上闭合的是项目到本机网关的数据面可达性与恢复链；外部 CA/DNS 的公网首次签发仍必须在具备真实域名、DNS 和 CA 网络的隔离环境单独验收。
 
@@ -197,11 +219,29 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   以相同证据摘要晋级 `shared_session`，两个公网入口实际协商 HTTP/2 并返回 200；
   测试实例停止后端口和 consumer token 均已释放，既有项目共享 sidecar 未被停止；
 - `Gateway|Windows|Nginx` 跨平台门禁通过
-  `257 tests / 2710 assertions / 15 capability skips`，含 Windows Native Broker
+  `283 tests / 3034 assertions / 18 capability skips`，含 Windows Native Broker
   的长管理事务 I/O 窗口；实际 Windows VM 因 Parallels 授权过期挂起，仍为
   `BLOCKED_ENVIRONMENT`；
 - legacy 80/443 显式提升已在 Linux VM 成功：promotion v50 的维护窗 69.897 秒，
   连续公网稳定观察 12.216 秒，提升后项目和宿主网关生命周期相互独立；
+- PostgreSQL 18 一次性克隆又以历史生产包的公开信任记录完成签名提升；全程未读取或
+  临时派生私钥。systemd 启动故障在 2.559 秒恢复项目 Nginx，激活成功后配置持久化
+  故障在 33.394 秒恢复；两条回滚均以 H1/H2 完整 200/133089-byte 响应确认，且旧
+  Nginx 回到项目用户身份。无故障提升维护窗 39.729 秒，路由 ACTIVE 连续稳定
+  12.054 秒，宿主 systemd/专用用户接管 80/443；项目正常停止只注销自身，宿主
+  MainPID 保持不变，重新启动后同一路由恢复 ACTIVE；
+- 同一签名 Linux 网关已完成真实 B→A 全包切换。实测证明项目运行时可能比已安装的
+  稳定 Launcher 新：若升级只发送新版 HUP/SCM 控制信号，旧 Launcher 可正常退出，
+  `Restart=on-failure` 不会重新拉起，回滚也会因无 MainPID 失败。因此 A/B 事务使用
+  平台完整 service restart 作为跨版本边界，确保加载新 Launcher，旧进程已退出时也能
+  启动回退槽。修复后连续三次终止身份已验证的 A 槽 Broker，失败计数 1→2→3，第三次
+  自动切回 B；systemd、ACTIVE route、项目 Master 及 H1/H2 200/133089-byte 响应正常。
+  Windows restart 在 stop/start 间按 SCM 数字状态进行 100ms 有界轮询，分别等待
+  STOPPED/RUNNING，单阶段最长 30 秒；该逻辑已有解析/合同回归，仍不替代 Windows 实机；
+- 旧签名槽位 PHP 8.5.8 与项目 PHP 8.5.4 对 `own-status` 浮点最短表示不同，曾导致
+  解码后重编码验签失败。客户端现在先走现行规范串，失败时保留原始 JSON 数字词法
+  重建排序规范串，HMAC 仍为强制条件；验签后递归移除 secret/token/private-key，
+  只有结构严格校验通过的 enroll 一次性凭据可交给凭据存储，CLI 再做第二层脱敏；
 - 提升后修复了 Worker 私有端口落入 Linux 临时端口范围造成的延迟
   `EADDRINUSE`。当前私有 Worker 端口在候选触及 32768 时稳定归一化到
   `10000–16999`，并统一避让主端口、控制端口、maintenance/surge 端口；真实 v53
@@ -232,18 +272,59 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   为 HTTP/2 1,000,000/1,000,000 成功、0 失败、八个 Worker 全命中、质量门禁
   PASS；2982.61 QPS，P95 197.058ms、P99 301.624ms、TLS P95 14.493ms。结束后
   route `ACTIVE`、网关 `HEALTHY`、Master lease running/epoch 9。
+- 签名 legacy 提升与跨版本验签/脱敏全部修复后的最终报告
+  `benchmark_report_20260731_153807_322176_wls-health_pid35175.json` 为 HTTP/2
+  1,000,000/1,000,000 成功、0 错误、8/8 Worker 全命中、质量门禁 PASS；
+  4268.46 QPS，P95 53.729ms、P99 84.544ms。压测前后项目 Master PID 32301、
+  网关 epoch/route generation 均稳定；结束后宿主 MainPID 25536、route ACTIVE、
+  网关 HEALTHY，status/routes 原始敏感键扫描为 0；
 - 当前聚焦回归：Gateway 协议安全 `49 tests / 1222 assertions`；Master
   lease/epoch/overlay、reload drain、MemoryPressure、EventExtLoop、运行策略和
   Worker 请求边界 `93 tests / 414 assertions`；Linux Native Launcher
   `7 / 290`，macOS 同源 `7 / 266 / 1 Linux-only skip`。23 个变更 PHP 文件 lint
   与 diff check 均通过。
 - 使用正式框架 bootstrap 的全量 Weline_Server 回归为
-  `1367 tests / 7211 assertions / 19 capability skips`，零错误、零失败。
+  `1409 tests / 7363 assertions / 20 capability skips`，零错误、零失败；当前
+  `NativeGateway(Broker|Launcher)` 聚焦复跑为
+  `12 tests / 393 assertions / 1 Linux-only skip`。
+
+- 当前源码已在同一 Linux PostgreSQL 宿主完成严格矩阵：网关 H1/H2、纯 WLS H1/H2
+  均 warmup 后三轮、每轮精确 1,000,000；双租户 H2 三轮均为两个项目各 500,000。
+  全部 0 错误并通过实际协议、body、tenant、Worker 和网关身份门禁；四类单数据面的
+  中位 QPS 依次为 5724.44、5618.14、28265.88、29517.21。
+- Controller 原位接管和 Worker rolling reload/drain 期间分别完成 300,000 次持续
+  H2 流量，均 0 错误。expected-reload 门禁证明 Master 不变、前后 Worker 身份健康
+  且代际指纹变化；真实 SSE 完成后承载 Worker 以长连接计数全零自然排空。
+- 多项目内存压力容量变更现在由同用户宿主级短租约串行化；协调状态异常时紧急缩容
+  fail-open，而恢复扩容 fail-closed；生产 claim 使用跨进程 monotonic 时间并隔离
+  reboot 后旧状态，紧急缩容可抢占恢复 claim，初始化失败按 monotonic 30 秒重试且不
+  改写原始容量上限；claim 时间窗必须是有限且位于 1–300 秒内，合法 JSON 中的异常
+  时间值也不能长期阻断紧急缩容。协调锁与 Windows 状态替换回退锁都以 250ms
+  monotonic deadline 获取；macOS/Windows boot identity 探针超时后执行有界温和/
+  强制终止。READY 后的后台首渲染、动态首渲染和 FPC process-pull 默认关闭，只有
+  显式配置才运行，避免可路由 Worker 被高成本预热阻塞。显式
+  `--expect-reload` 在无法取得唯一权威 WLS 身份时直接失败，不跳过 Worker 门禁。
+- 两个压测租户分别停止后只注销自身，宿主 Launcher/Broker/Nginx/Controller 和
+  IPv4/IPv6 80/443 保持，网关继续 `ready/HEALTHY`。在线旧槽仍有两个被 PID 1 收养
+  的无资源 zombie Master；当前源码的 child-subreaper/reaper 回归已经通过，需在
+  遵守 24 小时 A/B 保留后的正常升级或 reboot 后复验，不通过强制切槽掩盖该观察。
+
+TEST-036 的严格性能与持续流量合同已经通过，但这不等于 TASK-014 可以完成。其明文
+前置仍是 TASK-013 全绿；当前 macOS/Windows 系统服务与 ACL/reboot、Windows 实机、
+外部 CA/DNS 公网首次实签尚未全部闭合。Linux PostgreSQL legacy promote 的签名成功、
+启动失败回滚和激活后失败回滚已经闭合，不再属于发布阻断。
 
 本轮已补齐 Session/无状态能力的运行时写入、认证证明、30 秒恢复观察、实例摘要心跳
-重放与多实例 generation 防抖；ACME/协议专项通过 `101 tests / 1269 assertions`，聚焦
-真实数据面恢复通过 `1 test / 1465 assertions`，Native Broker/Launcher 聚焦门禁通过
-`9 tests / 334 assertions`。磁盘压力注入回归通过 `1 test / 59 assertions`，完整 Gateway 协议通过 `43 / 1055`；
+重放与多实例 generation 防抖；首次证书启动/发布 CI 门禁通过 `78 tests / 394 assertions`，
+并由 PostgreSQL 16 与 fail-closed bootstrap 明确禁止 SQLite。deferred 证书服务不会在
+gateway `PENDING_CERTIFICATE` 前初始化项目 ORM；配置恢复、本地/泛域证书与 SNI map
+也只会在有效 edge 决策后执行，公网 gateway 不受这些 legacy 数据库副作用阻塞，
+真正签发/入库仍要求 PostgreSQL。
+ACME/Edge Protocol 2 聚焦回归通过 `101 tests / 1520 assertions`，聚焦
+真实数据面恢复通过 `3 tests / 1662 assertions`，Native Broker/Launcher 聚焦门禁通过
+`9 tests / 334 assertions`。共享 Session 空闲关停使用进程内单调完整 grace 与向上取整的
+跨进程截止投影，发布工作流独立门禁为 `6 tests / 32 assertions`。磁盘压力注入回归通过
+`1 test / 59 assertions`，完整 Gateway 协议通过 `43 / 1055`；
 Linux 隔离 ext4 已真实覆盖 ENOSPC、`IFree=0` 和只读 remount，均保持原数据面并在
 确认修复后重建 reserve、清除 marker。当前仍未覆盖 macOS/Windows 系统服务
 ACL/reboot、Windows 实机和外部 CA/DNS 公网首次实签。

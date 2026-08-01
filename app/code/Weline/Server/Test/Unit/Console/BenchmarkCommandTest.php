@@ -168,6 +168,62 @@ final class BenchmarkCommandTest extends TestCase
         self::assertTrue($target['ssl']);
     }
 
+    public function testExpectedReloadRequiresSameMasterAndChangedHealthyWorkerFingerprint(): void
+    {
+        $command = $this->createCommand();
+        $context = $this->qualityGateContext('changed');
+
+        $gate = $command->evaluateGate($context);
+
+        self::assertTrue($gate['passed']);
+        self::assertTrue($gate['checks']['worker_runtime_stability']['passed']);
+        self::assertSame(
+            'same_master_authoritative_ipc_fingerprint_change',
+            $gate['checks']['worker_runtime_stability']['actual']['comparison_mode'],
+        );
+    }
+
+    public function testExpectedReloadFailsWhenWorkerFingerprintDoesNotChange(): void
+    {
+        $command = $this->createCommand();
+        $context = $this->qualityGateContext('changed');
+        $context['worker_runtime_after']['ready_fingerprint'] =
+            $context['worker_runtime_before']['ready_fingerprint'];
+
+        $gate = $command->evaluateGate($context);
+
+        self::assertFalse($gate['passed']);
+        self::assertContains('worker_runtime_did_not_change', $gate['failure_reasons']);
+    }
+
+    public function testExpectedReloadFailsClosedWhenTargetHasNoAuthoritativeRuntime(): void
+    {
+        $command = $this->createCommand();
+        $context = $this->qualityGateContext('changed');
+        $context['worker_runtime_before'] = [
+            'required' => false,
+            'captured' => false,
+            'healthy' => null,
+        ];
+        $context['worker_runtime_after'] = $context['worker_runtime_before'];
+
+        $gate = $command->evaluateGate($context);
+
+        self::assertFalse($gate['passed']);
+        self::assertTrue($gate['checks']['worker_runtime_stability']['evaluated']);
+        self::assertContains('worker_runtime_not_ready', $gate['failure_reasons']);
+    }
+
+    public function testDefaultBenchmarkStillRequiresStableWorkerFingerprint(): void
+    {
+        $command = $this->createCommand();
+
+        $gate = $command->evaluateGate($this->qualityGateContext('stable'));
+
+        self::assertFalse($gate['passed']);
+        self::assertContains('worker_runtime_changed', $gate['failure_reasons']);
+    }
+
     private function createCommand(): object
     {
         return new class extends Benchmark {
@@ -202,7 +258,62 @@ final class BenchmarkCommandTest extends TestCase
             {
                 return $this->resolveRuntimeWorkerCount($serverConfig);
             }
+
+            public function evaluateGate(array $context): array
+            {
+                $method = new \ReflectionMethod(Benchmark::class, 'evaluateQualityGate');
+
+                return $method->invoke(
+                    $this,
+                    [1.0],
+                    0,
+                    1.0,
+                    1,
+                    [1.0],
+                    ['evaluated' => false],
+                    $context,
+                );
+            }
         };
+    }
+
+    private function qualityGateContext(string $workerRuntimeExpectation): array
+    {
+        $snapshot = [
+            'required' => true,
+            'captured' => true,
+            'healthy' => true,
+            'identity_authoritative' => true,
+            'lease_complete' => true,
+            'master_pid' => 1001,
+            'ready_workers' => 1,
+            'ready_fingerprint' => [
+                'worker#1' => [
+                    'pid' => 2001,
+                    'lease_id' => 'lease-before',
+                    'generation' => 1,
+                ],
+            ],
+        ];
+        $after = $snapshot;
+        $after['ready_fingerprint']['worker#1'] = [
+            'pid' => 2002,
+            'lease_id' => 'lease-after',
+            'generation' => 2,
+        ];
+
+        return [
+            'quality_gate_thresholds' => [],
+            'benchmark_success_count' => 1,
+            'physical_connection_target_valid' => true,
+            'http_version_requested' => '1.1',
+            'http_version_effective' => '1.1',
+            'http_version_hits' => ['1.1' => 1],
+            'worker_runtime_expectation' => $workerRuntimeExpectation,
+            'worker_runtime_before' => $snapshot,
+            'worker_runtime_after' => $after,
+            'keep_alive' => false,
+        ];
     }
 
     private function createGatewayCommand(array $status): object

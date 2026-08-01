@@ -98,7 +98,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         }
     }
 
-    public function testDeferredDynamicWarmupDefaultsOnForOwnerWorker(): void
+    public function testDeferredDynamicWarmupDefaultsOffForEveryWorker(): void
     {
         $this->withDynamicWarmupEnv([
             'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED' => null,
@@ -119,7 +119,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         ], function (): void {
             $runtime = new WlsRuntime();
 
-            self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredDynamicFirstRenderWarmup'));
         });
     }
 
@@ -349,6 +349,18 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
     public function testDeferredBackendWarmupDefaultsOffForOwnerWorker(): void
     {
         $this->withDynamicWarmupEnv([
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP_ENABLED' => null,
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP' => null,
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID' => null,
+            'WLS_WORKER_ID' => '1',
+            'WLS_PROCESS_ROLE' => 'worker',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredBackendFirstRenderWarmup'));
+        });
+
+        $this->withDynamicWarmupEnv([
             'WLS_WORKER_BACKEND_DEFERRED_WARMUP' => '0',
             'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID' => null,
             'WLS_WORKER_ID' => '2',
@@ -414,6 +426,27 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
             $runtime = new WlsRuntime();
 
             self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredBackendFirstRenderWarmup'));
+        });
+    }
+
+    public function testDeferredFpcProcessPullDefaultsOffAndRequiresExplicitOptIn(): void
+    {
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_FPC_PROCESS_PULL_ENABLED' => null,
+            'WLS_PROCESS_ROLE' => 'worker',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredFpcProcessPullWarmup'));
+        });
+
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_FPC_PROCESS_PULL_ENABLED' => '1',
+            'WLS_PROCESS_ROLE' => 'worker',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredFpcProcessPullWarmup'));
         });
     }
 

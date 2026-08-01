@@ -77,7 +77,10 @@ final class SessionServer
     private int $startupConsumerGraceSec = 300;
     private float $emptyTokenCheckIntervalSec = 120.0;
     private float $lastEmptyTokenCheckAt = 0.0;
-    private ?int $idleShutdownDueAt = null;
+    /** Monotonic deadline used only inside this process. */
+    private ?float $idleShutdownDueAt = null;
+    /** Wall-clock projection used only for the shared registry and responses. */
+    private ?int $idleShutdownWallDueAt = null;
 
     /** 上次 bind 失败原因（供入口脚本输出到日志） */
     private ?string $lastBindError = null;
@@ -251,7 +254,8 @@ final class SessionServer
         }
 
         $this->store->loadFromFile();
-        $startupShutdownDueAt = \time() + $this->startupConsumerGraceSec;
+        $startupShutdownDueAt = $this->monotonicNow() + $this->startupConsumerGraceSec;
+        $startupShutdownWallDueAt = (int)\ceil(\microtime(true) + $this->startupConsumerGraceSec);
         $serviceRecord = [
             'role' => $this->serviceRole,
             'host' => $this->host,
@@ -264,12 +268,12 @@ final class SessionServer
         ];
         $publishedRecord = $this->sharedRegistry->updateRecord(
             $this->serviceRole,
-            static function (array $record) use ($serviceRecord, $startupShutdownDueAt): array {
+            static function (array $record) use ($serviceRecord, $startupShutdownWallDueAt): array {
                 $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
                 $nextRecord = \array_merge($record, $serviceRecord);
                 $nextRecord['consumers'] = $consumers;
                 if ($consumers === []) {
-                    $nextRecord['shutdown_due_at'] = \date('c', $startupShutdownDueAt);
+                    $nextRecord['shutdown_due_at'] = \date('c', $startupShutdownWallDueAt);
                 } else {
                     unset($nextRecord['shutdown_due_at'], $nextRecord['shutdown_requested_at']);
                 }
@@ -278,9 +282,11 @@ final class SessionServer
             }
         );
         $existingConsumers = \is_array($publishedRecord['consumers'] ?? null) ? $publishedRecord['consumers'] : [];
-        $publishedShutdownDueAt = \strtotime((string) ($publishedRecord['shutdown_due_at'] ?? ''));
         $this->idleShutdownDueAt = $existingConsumers === []
-            ? ($publishedShutdownDueAt !== false && $publishedShutdownDueAt > 0 ? $publishedShutdownDueAt : $startupShutdownDueAt)
+            ? $startupShutdownDueAt
+            : null;
+        $this->idleShutdownWallDueAt = $existingConsumers === []
+            ? $startupShutdownWallDueAt
             : null;
 
         $this->running = true;
@@ -1132,6 +1138,7 @@ final class SessionServer
 
         $this->upsertConsumerLease($consumerCode, $instanceName, $ownerType, $leaseTtl);
         $this->idleShutdownDueAt = null;
+        $this->idleShutdownWallDueAt = null;
         $this->sharedRegistry->setShutdownDueAt($this->serviceRole, null);
 
         $this->sendToClient($clientId, SessionProtocol::encodeSuccess([
@@ -1174,7 +1181,9 @@ final class SessionServer
             'consumer_released' => true,
             'consumer_code' => $consumerCode,
             'service_role' => $this->serviceRole,
-            'shutdown_due_at' => $this->idleShutdownDueAt !== null ? \date('c', $this->idleShutdownDueAt) : null,
+            'shutdown_due_at' => $this->idleShutdownWallDueAt !== null
+                ? \date('c', $this->idleShutdownWallDueAt)
+                : null,
         ]);
     }
 
@@ -1269,33 +1278,46 @@ final class SessionServer
 
     public function isSharedConsumerIdleWindowOpen(): bool
     {
-        return $this->idleShutdownDueAt !== null && \time() < $this->idleShutdownDueAt;
+        return $this->idleShutdownDueAt !== null && $this->monotonicNow() < $this->idleShutdownDueAt;
     }
 
     private function syncIdleShutdownWindow(bool $explicitConsumerShutdown = false): void
     {
         if ($this->hasActiveConsumers()) {
             $this->idleShutdownDueAt = null;
+            $this->idleShutdownWallDueAt = null;
             $this->sharedRegistry->setShutdownDueAt($this->serviceRole, null);
             return;
         }
 
         if ($explicitConsumerShutdown) {
-            $this->idleShutdownDueAt = \time() + $this->emptyTokenExitGraceSec;
-            $this->sharedRegistry->setShutdownDueAt($this->serviceRole, \date('c', $this->idleShutdownDueAt));
+            $this->idleShutdownDueAt = $this->monotonicNow() + $this->emptyTokenExitGraceSec;
+            $this->idleShutdownWallDueAt = (int)\ceil(
+                \microtime(true) + $this->emptyTokenExitGraceSec,
+            );
+            $this->sharedRegistry->setShutdownDueAt(
+                $this->serviceRole,
+                \date('c', $this->idleShutdownWallDueAt),
+            );
             return;
         }
 
         if ($this->idleShutdownDueAt === null) {
             $record = $this->sharedRegistry->getRecord($this->serviceRole);
             $shutdownDueAt = \strtotime((string) ($record['shutdown_due_at'] ?? ''));
-            $this->idleShutdownDueAt = $shutdownDueAt !== false && $shutdownDueAt > 0
+            $wallNow = \microtime(true);
+            $this->idleShutdownWallDueAt = $shutdownDueAt !== false && $shutdownDueAt > 0
                 ? $shutdownDueAt
-                : (\time() + $this->emptyTokenExitGraceSec);
-            $this->sharedRegistry->setShutdownDueAt($this->serviceRole, \date('c', $this->idleShutdownDueAt));
+                : (int)\ceil($wallNow + $this->emptyTokenExitGraceSec);
+            $remainingSeconds = \max(0.0, $this->idleShutdownWallDueAt - $wallNow);
+            $this->idleShutdownDueAt = $this->monotonicNow() + $remainingSeconds;
+            $this->sharedRegistry->setShutdownDueAt(
+                $this->serviceRole,
+                \date('c', $this->idleShutdownWallDueAt),
+            );
         }
 
-        if (\time() >= $this->idleShutdownDueAt) {
+        if ($this->monotonicNow() >= $this->idleShutdownDueAt) {
             $this->log('No shared-service consumers remain; idle shutdown reached, stopping server');
             $this->setRunning(false);
         }
@@ -1303,18 +1325,24 @@ final class SessionServer
 
     private function enforceScheduledIdleShutdown(): void
     {
-        if ($this->idleShutdownDueAt === null || \time() < $this->idleShutdownDueAt) {
+        if ($this->idleShutdownDueAt === null || $this->monotonicNow() < $this->idleShutdownDueAt) {
             return;
         }
 
         if ($this->hasActiveConsumers()) {
             $this->idleShutdownDueAt = null;
+            $this->idleShutdownWallDueAt = null;
             $this->sharedRegistry->setShutdownDueAt($this->serviceRole, null);
             return;
         }
 
         $this->log('No shared-service consumers remain; scheduled idle shutdown reached, stopping server');
         $this->setRunning(false);
+    }
+
+    private function monotonicNow(): float
+    {
+        return \hrtime(true) / 1_000_000_000.0;
     }
 
     /**

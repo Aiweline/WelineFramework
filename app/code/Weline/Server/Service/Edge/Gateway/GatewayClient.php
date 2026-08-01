@@ -126,13 +126,32 @@ final class GatewayClient
             $signature = \strtolower((string)($response['signature'] ?? ''));
             unset($response['signature']);
             $expected = \hash_hmac('sha256', self::canonicalJson($response), $secret);
-            if (\preg_match('/\A[a-f0-9]{64}\z/D', $signature) !== 1
-                || !\hash_equals($expected, $signature)
-            ) {
+            $authenticated = \preg_match('/\A[a-f0-9]{64}\z/D', $signature) === 1
+                && \hash_equals($expected, $signature);
+            if (!$authenticated && \preg_match('/\A[a-f0-9]{64}\z/D', $signature) === 1) {
+                try {
+                    // A host slot and a project can legitimately run adjacent
+                    // PHP patch versions. Re-decoding a signed JSON float and
+                    // encoding it with the other runtime can change its
+                    // shortest decimal representation, even though the value
+                    // is unchanged. Preserve numeric lexemes from the wire for
+                    // this compatibility verification; all object keys are
+                    // still recursively sorted and the HMAC remains mandatory.
+                    $wireExpected = \hash_hmac(
+                        'sha256',
+                        self::canonicalResponseFromWire($line, $signature),
+                        $secret,
+                    );
+                    $authenticated = \hash_equals($wireExpected, $signature);
+                } catch (\Throwable) {
+                    $authenticated = false;
+                }
+            }
+            if (!$authenticated) {
                 throw new \RuntimeException('WLS Gateway response authentication failed.');
             }
             $response['signature'] = $signature;
-            return $response;
+            return self::sanitizeAuthenticatedResponse($response, $channel, $request);
         } finally {
             @\fclose($socket);
         }
@@ -210,6 +229,128 @@ final class GatewayClient
             throw new \RuntimeException('Unable to canonicalize WLS Gateway request.');
         }
         return $encoded;
+    }
+
+    /**
+     * Canonicalize a controller response without changing JSON number
+     * spellings. This is a verification-only compatibility path for signed
+     * responses produced by another PHP patch version.
+     */
+    private static function canonicalResponseFromWire(
+        string $encodedResponse,
+        string $expectedSignature,
+    ): string {
+        $marker = '';
+        do {
+            $marker = '__wls_edge_number_' . \bin2hex(\random_bytes(12)) . '_';
+        } while (\str_contains($encodedResponse, $marker));
+
+        $masked = '';
+        $replacements = [];
+        $length = \strlen($encodedResponse);
+        $insideString = false;
+        $escaped = false;
+        for ($offset = 0; $offset < $length; ++$offset) {
+            $character = $encodedResponse[$offset];
+            if ($insideString) {
+                $masked .= $character;
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($character === '\\') {
+                    $escaped = true;
+                } elseif ($character === '"') {
+                    $insideString = false;
+                }
+                continue;
+            }
+            if ($character === '"') {
+                $insideString = true;
+                $masked .= $character;
+                continue;
+            }
+            if ($character !== '-' && ($character < '0' || $character > '9')) {
+                $masked .= $character;
+                continue;
+            }
+            if (\preg_match(
+                '/\A-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+\-]?[0-9]+)?/',
+                \substr($encodedResponse, $offset),
+                $match,
+            ) !== 1) {
+                throw new \RuntimeException('WLS Gateway response contains an invalid number.');
+            }
+            $number = (string)$match[0];
+            $placeholder = $marker . \count($replacements);
+            $encodedPlaceholder = '"' . $placeholder . '"';
+            $masked .= $encodedPlaceholder;
+            $replacements[$encodedPlaceholder] = $number;
+            $offset += \strlen($number) - 1;
+        }
+
+        $document = \json_decode($masked, true, 512, JSON_THROW_ON_ERROR);
+        if (!\is_array($document)
+            || !\hash_equals($expectedSignature, (string)($document['signature'] ?? ''))
+        ) {
+            throw new \RuntimeException('WLS Gateway wire response signature is invalid.');
+        }
+        unset($document['signature']);
+        return \strtr(self::canonicalJson($document), $replacements);
+    }
+
+    /**
+     * @param array<string,mixed> $response
+     * @param array<string,mixed> $request
+     * @return array<string,mixed>
+     */
+    private static function sanitizeAuthenticatedResponse(
+        array $response,
+        string $channel,
+        array $request,
+    ): array {
+        $enrollmentCredential = null;
+        $operation = (string)($request['operation'] ?? '');
+        $requestPayload = \is_array($request['payload'] ?? null) ? $request['payload'] : [];
+        $responsePayload = \is_array($response['payload'] ?? null) ? $response['payload'] : [];
+        $credential = \is_array($responsePayload['credential'] ?? null)
+            ? $responsePayload['credential']
+            : [];
+        $projectUuid = \strtolower(\trim((string)($requestPayload['project_uuid'] ?? '')));
+        if ($channel === 'admin'
+            && $operation === 'enroll'
+            && ($response['ok'] ?? false) === true
+            && (int)($credential['schema_version'] ?? 0) === 1
+            && \hash_equals(GatewayPaths::PROTOCOL, (string)($credential['protocol'] ?? ''))
+            && \hash_equals((string)($request['host_id'] ?? ''), (string)($credential['host_id'] ?? ''))
+            && \preg_match('/\A[a-f0-9-]{36}\z/D', $projectUuid) === 1
+            && \hash_equals($projectUuid, (string)($credential['project_uuid'] ?? ''))
+            && \preg_match('/\A[a-f0-9]{32}\z/D', (string)($credential['credential_id'] ?? '')) === 1
+            && \preg_match('/\A[a-f0-9]{64}\z/D', (string)($credential['secret'] ?? '')) === 1
+        ) {
+            // Preserve only the exact one-time structure required by
+            // GatewayCredentialStore. Unknown fields from an older slot never
+            // cross the authenticated client boundary.
+            $enrollmentCredential = [
+                'schema_version' => 1,
+                'protocol' => GatewayPaths::PROTOCOL,
+                'host_id' => (string)$credential['host_id'],
+                'project_uuid' => $projectUuid,
+                'credential_id' => (string)$credential['credential_id'],
+                'secret' => (string)$credential['secret'],
+                'issued_at' => (string)($credential['issued_at'] ?? ''),
+            ];
+        }
+
+        $sanitized = GatewaySensitivePayloadSanitizer::sanitize($response);
+        if (!\is_array($sanitized)) {
+            throw new \RuntimeException('WLS Gateway response sanitization failed.');
+        }
+        if ($enrollmentCredential !== null) {
+            $sanitized['payload'] = \is_array($sanitized['payload'] ?? null)
+                ? $sanitized['payload']
+                : [];
+            $sanitized['payload']['credential'] = $enrollmentCredential;
+        }
+        return $sanitized;
     }
 
     private function trustedHostId(): string

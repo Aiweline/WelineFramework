@@ -190,6 +190,10 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertSame('gateway_agent_enable', ControlMessage::ACTION_GATEWAY_AGENT_ENABLE);
         self::assertSame('gateway_agent_commit', ControlMessage::ACTION_GATEWAY_AGENT_COMMIT);
         self::assertSame('gateway_agent_disable', ControlMessage::ACTION_GATEWAY_AGENT_DISABLE);
+        self::assertSame(
+            'gateway_legacy_nginx_restore',
+            ControlMessage::ACTION_GATEWAY_LEGACY_NGINX_RESTORE,
+        );
     }
 
     public function testPromotionRuntimeEndpointTransactionCommitsOrRestoresAtomically(): void
@@ -493,6 +497,11 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertFalse($authorize->invoke(
             $server,
             7,
+            ['action' => ControlMessage::ACTION_GATEWAY_LEGACY_NGINX_RESTORE],
+        ));
+        self::assertFalse($authorize->invoke(
+            $server,
+            7,
             ['action' => ControlMessage::ACTION_RELOAD],
         ));
         self::assertFalse($authorize->invoke(
@@ -534,6 +543,14 @@ final class GatewayFallbackProviderTest extends TestCase
             8,
             [
                 'action' => ControlMessage::ACTION_GATEWAY_AGENT_DISABLE,
+                'control_token' => 'unit-control-token',
+            ],
+        ));
+        self::assertTrue($authorize->invoke(
+            $server,
+            8,
+            [
+                'action' => ControlMessage::ACTION_GATEWAY_LEGACY_NGINX_RESTORE,
                 'control_token' => 'unit-control-token',
             ],
         ));

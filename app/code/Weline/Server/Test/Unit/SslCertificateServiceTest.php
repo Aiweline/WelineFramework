@@ -313,7 +313,12 @@ class SslCertificateServiceTest extends TestCase
     }
 
     /** @return array{local_cert:string,local_pk:string} */
-    private function createSniCertificatePair(string $commonName, array $dnsNames, string $name): array
+    private function createSniCertificatePair(
+        string $commonName,
+        array $dnsNames,
+        string $name,
+        int $validDays = 30,
+    ): array
     {
         $directory = $this->makeTempDir();
         $configPath = $directory . DIRECTORY_SEPARATOR . $name . '.cnf';
@@ -351,7 +356,7 @@ class SslCertificateServiceTest extends TestCase
             $csr,
             null,
             $key,
-            2,
+            $validDays,
             \array_replace($options, ['x509_extensions' => 'v3_cert']),
             1,
         );
@@ -921,6 +926,18 @@ class SslCertificateServiceTest extends TestCase
         ));
     }
 
+    public function testDeferredCertificateStorageDoesNotInstantiateOrmModel(): void
+    {
+        $service = new SslCertificateService(true);
+        $property = new \ReflectionProperty($service, 'certModel');
+        $property->setAccessible(true);
+
+        self::assertNull(
+            $property->getValue($service),
+            'challenge-only 文件探针不得在 WLS 2.0 pending 判定前连接项目数据库',
+        );
+    }
+
     public function testHasValidLocalCertificateNormalizesWildcardBindAndRejectsEmpty(): void
     {
         $service = new SslCertificateService();
@@ -929,6 +946,47 @@ class SslCertificateServiceTest extends TestCase
         // "0.0.0.0" 归一为 localhost；本地环境下 localhost 证书也可能不存在，
         // 这里只确保方法不抛异常并返回 bool，不对具体结果断言（避免依赖真机状态）。
         $this->assertIsBool($service->hasValidLocalCertificate('0.0.0.0'));
+    }
+
+    public function testLocalCertificateReuseRejectsMismatchedKeyAndSanAfterInPlaceReplacement(): void
+    {
+        $domain = 'reuse.example.com';
+        $certificateDirectory = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'reuse';
+        $this->assertTrue(\mkdir($certificateDirectory, 0700, true));
+        $matching = $this->createSniCertificatePair($domain, [$domain], 'matching');
+        $other = $this->createSniCertificatePair('other.example.com', ['other.example.com'], 'other');
+        $conflictingSan = $this->createSniCertificatePair(
+            $domain,
+            ['other.example.com'],
+            'conflicting-san',
+        );
+        $certPath = $certificateDirectory . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $keyPath = $certificateDirectory . DIRECTORY_SEPARATOR . 'privkey.pem';
+        $service = new LocalCertificateReuseProbe($certificateDirectory);
+
+        $this->assertTrue(\copy($matching['local_cert'], $certPath));
+        $this->assertTrue(\copy($matching['local_pk'], $keyPath));
+        $this->assertTrue($service->hasValidLocalCertificate($domain));
+
+        $this->assertTrue(\copy($other['local_pk'], $keyPath));
+        $this->assertFalse($service->hasValidLocalCertificate($domain), '必须拒绝与证书不配对的私钥');
+
+        $this->assertTrue(\copy($other['local_cert'], $certPath));
+        $this->assertFalse($service->hasValidLocalCertificate($domain), '必须拒绝不覆盖当前域名的 SAN');
+
+        $this->assertTrue(\copy($conflictingSan['local_cert'], $certPath));
+        $this->assertTrue(\copy($conflictingSan['local_pk'], $keyPath));
+        $this->assertFalse(
+            $service->hasValidLocalCertificate($domain),
+            '证书存在 SAN 时不得以冲突 CN 绕过域名覆盖校验',
+        );
+
+        $this->assertTrue(\copy($matching['local_cert'], $certPath));
+        $this->assertTrue(\copy($matching['local_pk'], $keyPath));
+        $this->assertTrue(
+            $service->hasValidLocalCertificate($domain),
+            '同路径原子续签后不得沿用旧证书解析或 SAN 匹配缓存',
+        );
     }
 
     public function testGatewayHttp01PublicationFailsBeforeCaNotificationAndRemainsReplayable(): void
@@ -1010,10 +1068,30 @@ class SslCertificateServiceTest extends TestCase
     }
 }
 
+final class LocalCertificateReuseProbe extends SslCertificateService
+{
+    public function __construct(private readonly string $certificateDirectory)
+    {
+    }
+
+    public function getCertificateDir(string $domain): string
+    {
+        unset($domain);
+        return \rtrim($this->certificateDirectory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    }
+
+    protected function shouldUseTrustedLocalCertificateAuthority(string $domain): bool
+    {
+        unset($domain);
+        return false;
+    }
+}
+
 final class GatewayPublishingSslCertificateServiceDouble extends SslCertificateService
 {
     /** @var list<array<string,mixed>> */
     public array $publishedDesired = [];
+    private float $gatewayPublishNow = 0.0;
 
     public function __construct(
         private readonly ProjectAcmeHttp01ChallengeStore $challengeStore,
@@ -1033,5 +1111,19 @@ final class GatewayPublishingSslCertificateServiceDouble extends SslCertificateS
     ): bool {
         $this->publishedDesired[] = $desired;
         return $this->publicationResult;
+    }
+
+    protected function gatewayAcmePublishMonotonicNow(): float
+    {
+        return $this->gatewayPublishNow;
+    }
+
+    protected function waitForGatewayAcmePublishRetry(
+        int $attempt,
+        float $remainingSeconds,
+    ): void
+    {
+        unset($attempt);
+        $this->gatewayPublishNow += $remainingSeconds;
     }
 }

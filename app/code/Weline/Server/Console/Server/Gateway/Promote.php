@@ -67,6 +67,18 @@ final class Promote extends AbstractGatewayCommand
                 'promotion_state_incomplete',
             );
         }
+        $legacyPublicBaseline = $this->probeLegacyPublicResponses(
+            $paths->publicHttpsPort(),
+            $serverNames,
+        );
+        if (!($legacyPublicBaseline['ok'] ?? false)) {
+            return $this->failure(
+                __('旧 Nginx 的真实 HTTP/1.1 与 HTTP/2 响应未通过交接前门禁，保持原状。'),
+                $json,
+                'legacy_public_probe_failed',
+                ['legacy_public_probe' => $legacyPublicBaseline],
+            );
+        }
         $staged = null;
         $activated = false;
         $legacyStopped = false;
@@ -170,29 +182,42 @@ final class Promote extends AbstractGatewayCommand
                     $details,
                 );
             }
-            $rollback = $legacy->prepareAndStart(
-                $upstreamPort,
-                $upstreamHost,
-                $serverNames,
-                $owner,
-                'nginx',
-            );
-            if ($rollback['ok'] ?? false) {
-                try {
-                    if (\is_array($legacyRuntimeOwnership)) {
-                        $this->restoreProjectRuntimeOwnership(
-                            $legacyRuntimeRoot,
-                            (int)$legacyRuntimeOwnership['uid'],
-                            (int)$legacyRuntimeOwnership['gid'],
-                        );
-                    }
-                } catch (\Throwable $ownershipError) {
-                    $rollback = [
-                        'ok' => false,
-                        'message' => 'Legacy Nginx restarted, but project runtime ownership '
-                            . 'could not be restored: ' . $ownershipError->getMessage(),
-                    ];
+            try {
+                if (\is_array($legacyRuntimeOwnership)) {
+                    $this->restoreProjectRuntimeOwnership(
+                        $legacyRuntimeRoot,
+                        (int)$legacyRuntimeOwnership['uid'],
+                        (int)$legacyRuntimeOwnership['gid'],
+                    );
                 }
+                $rollback = $this->restoreLegacyNginxThroughProjectMaster(
+                    $owner,
+                    $upstreamPort,
+                    $upstreamHost,
+                    $serverNames,
+                );
+                if ($rollback['ok'] ?? false) {
+                    $rollbackProbe = $this->probeLegacyPublicResponses(
+                        $paths->publicHttpsPort(),
+                        $serverNames,
+                        $legacyPublicBaseline,
+                    );
+                    $details['legacy_rollback_probe'] = $rollbackProbe;
+                    if (!($rollbackProbe['ok'] ?? false)) {
+                        $rollback = [
+                            'ok' => false,
+                            'message' => 'Project-owned legacy Nginx restarted, but its '
+                                . 'complete public response did not recover: '
+                                . (string)($rollbackProbe['reason'] ?? 'probe failed'),
+                        ];
+                    }
+                }
+            } catch (\Throwable $rollbackError) {
+                $rollback = [
+                    'ok' => false,
+                    'message' => 'Project-owned legacy Nginx rollback failed: '
+                        . $rollbackError->getMessage(),
+                ];
             }
             if ($rollback['ok'] ?? false) {
                 $details['legacy_rollback'] = 'restored';
@@ -444,6 +469,243 @@ final class Promote extends AbstractGatewayCommand
             'Gateway Agent promotion commit failed: '
                 . (string)($result['message'] ?? 'Master rejected the commit command.')
         );
+    }
+
+    /**
+     * Restart legacy Nginx in the still-running project Master. The host
+     * promotion command is privileged, while the Master preserves the exact
+     * project uid/gid and must remain the process owner after rollback.
+     *
+     * @param list<string> $serverNames
+     * @return array<string,mixed>
+     */
+    private function restoreLegacyNginxThroughProjectMaster(
+        string $instanceName,
+        int $upstreamPort,
+        string $upstreamHost,
+        array $serverNames,
+    ): array {
+        $result = (new IpcControlGateway())->command(
+            $instanceName,
+            ControlMessage::ACTION_GATEWAY_LEGACY_NGINX_RESTORE,
+            '',
+            [
+                'owner_instance' => $instanceName,
+                'upstream_port' => $upstreamPort,
+                'upstream_host' => $upstreamHost,
+                'server_names' => \array_values($serverNames),
+            ],
+            30.0,
+        );
+        $data = \is_array($result['data'] ?? null) ? $result['data'] : [];
+        if (!($result['success'] ?? false) || !($data['ok'] ?? false)) {
+            throw new \RuntimeException(
+                (string)($result['message'] ?? $data['message']
+                    ?? 'Project Master rejected the legacy Nginx restore command.')
+            );
+        }
+        return $data;
+    }
+
+    /**
+     * Probe complete public responses before hand-off and after rollback.
+     * libcurl is used deliberately: unlike a header-only health check it
+     * rejects truncated Content-Length bodies and HTTP/2 stream errors.
+     *
+     * @param list<string> $serverNames
+     * @param array<string,mixed>|null $baseline
+     * @return array<string,mixed>
+     */
+    private function probeLegacyPublicResponses(
+        int $port,
+        array $serverNames,
+        ?array $baseline = null,
+    ): array {
+        $host = $this->legacyPublicProbeHost($serverNames);
+        if ($port < 1
+            || $port > 65535
+            || $host === ''
+            || !\extension_loaded('curl')
+            || !\function_exists('curl_init')
+            || !\defined('CURL_HTTP_VERSION_1_1')
+            || !\defined('CURL_HTTP_VERSION_2_0')
+            || !\defined('CURL_VERSION_HTTP2')
+            || (((int)(\curl_version()['features'] ?? 0)
+                & (int)\constant('CURL_VERSION_HTTP2')) === 0)
+        ) {
+            return [
+                'ok' => false,
+                'reason' => 'HTTP/1.1 and HTTP/2 rollback probe capability is unavailable.',
+                'host' => $host,
+                'port' => $port,
+                'probes' => [],
+            ];
+        }
+
+        $protocols = [
+            'http1.1' => (int)\constant('CURL_HTTP_VERSION_1_1'),
+            'http2' => (int)\constant('CURL_HTTP_VERSION_2_0'),
+        ];
+        $probes = [];
+        foreach ($protocols as $name => $requestedVersion) {
+            $probe = $this->probeLegacyPublicResponseOnce(
+                $host,
+                $port,
+                $requestedVersion,
+            );
+            $probes[$name] = $probe;
+            if (!($probe['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'reason' => $name . ': ' . (string)($probe['reason'] ?? 'probe failed'),
+                    'host' => $host,
+                    'port' => $port,
+                    'probes' => $probes,
+                ];
+            }
+            $expected = \is_array($baseline['probes'][$name] ?? null)
+                ? $baseline['probes'][$name]
+                : null;
+            if ($expected !== null
+                && ((int)($probe['status'] ?? 0) !== (int)($expected['status'] ?? 0)
+                    || ((int)($expected['body_bytes'] ?? 0) > 0
+                        && (int)($probe['body_bytes'] ?? 0) < 1))
+            ) {
+                return [
+                    'ok' => false,
+                    'reason' => $name . ': response no longer matches the pre-handoff baseline.',
+                    'host' => $host,
+                    'port' => $port,
+                    'probes' => $probes,
+                ];
+            }
+        }
+
+        return [
+            'ok' => true,
+            'reason' => $baseline === null
+                ? 'Pre-handoff public responses are complete.'
+                : 'Rollback public responses match the pre-handoff status and framing.',
+            'host' => $host,
+            'port' => $port,
+            'probes' => $probes,
+        ];
+    }
+
+    /** @param list<string> $serverNames */
+    private function legacyPublicProbeHost(array $serverNames): string
+    {
+        foreach ($serverNames as $serverName) {
+            $candidate = \strtolower(\rtrim(\trim((string)$serverName), '.'));
+            if ($candidate === ''
+                || $candidate === '_'
+                || \str_contains($candidate, '*')
+                || \str_contains($candidate, ':')
+                || \preg_match(
+                    '/\A[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\z/D',
+                    $candidate,
+                ) !== 1
+            ) {
+                continue;
+            }
+            return $candidate;
+        }
+        return '';
+    }
+
+    /** @return array<string,mixed> */
+    private function probeLegacyPublicResponseOnce(
+        string $host,
+        int $port,
+        int $requestedVersion,
+    ): array {
+        $bodyBytes = 0;
+        $hash = \hash_init('sha256');
+        $handle = @\curl_init('https://' . $host . ':' . $port . '/');
+        if ($handle === false) {
+            return ['ok' => false, 'reason' => 'Unable to initialize libcurl.'];
+        }
+        $sslVersion = \defined('CURL_SSLVERSION_TLSv1_3')
+            ? (int)\constant('CURL_SSLVERSION_TLSv1_3')
+            : 0;
+        if ($sslVersion > 0 && \defined('CURL_SSLVERSION_MAX_TLSv1_3')) {
+            $sslVersion |= (int)\constant('CURL_SSLVERSION_MAX_TLSv1_3');
+        }
+        $options = [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_HEADER => false,
+            CURLOPT_WRITEFUNCTION => static function (mixed $curl, string $chunk) use (&$bodyBytes, $hash): int {
+                $length = \strlen($chunk);
+                $bodyBytes += $length;
+                \hash_update($hash, $chunk);
+                return $length;
+            },
+            CURLOPT_HTTP_VERSION => $requestedVersion,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_RESOLVE => [$host . ':' . $port . ':127.0.0.1'],
+            CURLOPT_CONNECTTIMEOUT_MS => 1_500,
+            CURLOPT_TIMEOUT_MS => 8_000,
+            CURLOPT_FRESH_CONNECT => true,
+            CURLOPT_FORBID_REUSE => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROXY => '',
+            CURLOPT_USERAGENT => 'WLS-Gateway-Promotion-Rollback-Probe/2',
+            CURLOPT_HTTPHEADER => [
+                'Accept-Encoding: identity',
+                'Cache-Control: no-cache',
+                'Pragma: no-cache',
+            ],
+        ];
+        if ($sslVersion > 0) {
+            $options[CURLOPT_SSLVERSION] = $sslVersion;
+        }
+        if (\defined('CURLOPT_PROTOCOLS') && \defined('CURLPROTO_HTTPS')) {
+            $options[(int)\constant('CURLOPT_PROTOCOLS')] = (int)\constant('CURLPROTO_HTTPS');
+        }
+        if (!@\curl_setopt_array($handle, $options)) {
+            @\curl_close($handle);
+            return ['ok' => false, 'reason' => 'Unable to configure the libcurl probe.'];
+        }
+        @\curl_exec($handle);
+        $errno = (int)@\curl_errno($handle);
+        $error = (string)@\curl_error($handle);
+        $status = (int)@\curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $observedVersion = (int)@\curl_getinfo($handle, CURLINFO_HTTP_VERSION);
+        @\curl_close($handle);
+        $digest = \hash_final($hash);
+        if ($errno !== CURLE_OK) {
+            return [
+                'ok' => false,
+                'reason' => 'libcurl rejected the response framing: '
+                    . ($error !== '' ? $error : (string)$errno),
+                'curl_errno' => $errno,
+                'status' => $status,
+                'http_version' => $observedVersion,
+                'body_bytes' => $bodyBytes,
+                'body_sha256' => $digest,
+            ];
+        }
+        if ($status < 200 || $status >= 500 || $observedVersion !== $requestedVersion) {
+            return [
+                'ok' => false,
+                'reason' => 'Unexpected public status or negotiated HTTP version.',
+                'curl_errno' => 0,
+                'status' => $status,
+                'http_version' => $observedVersion,
+                'body_bytes' => $bodyBytes,
+                'body_sha256' => $digest,
+            ];
+        }
+        return [
+            'ok' => true,
+            'reason' => 'complete',
+            'curl_errno' => 0,
+            'status' => $status,
+            'http_version' => $observedVersion,
+            'body_bytes' => $bodyBytes,
+            'body_sha256' => $digest,
+        ];
     }
 
     /**
