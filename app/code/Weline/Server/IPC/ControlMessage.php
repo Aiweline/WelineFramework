@@ -295,6 +295,8 @@ class ControlMessage
     public const ACTION_GATEWAY_AGENT_ENABLE = 'gateway_agent_enable';
     public const ACTION_GATEWAY_AGENT_COMMIT = 'gateway_agent_commit';
     public const ACTION_GATEWAY_AGENT_DISABLE = 'gateway_agent_disable';
+    /** Host promotion rollback asks the still-running project Master to restore its own Nginx identity. */
+    public const ACTION_GATEWAY_LEGACY_NGINX_RESTORE = 'gateway_legacy_nginx_restore';
 
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';

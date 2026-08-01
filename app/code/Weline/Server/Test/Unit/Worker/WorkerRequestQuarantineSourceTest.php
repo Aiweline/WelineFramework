@@ -16,6 +16,7 @@ final class WorkerRequestQuarantineSourceTest extends TestCase
         self::assertStringContainsString('hasDrainAfterResponseRequest()', $source);
         self::assertStringContainsString("'request_quarantine:worker='", $source);
         self::assertStringContainsString('WorkerResponseMemoryGuard::forceConnectionCloseHeader($response)', $source);
+        self::assertStringContainsString('WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(', $source);
     }
 
     public function testWorkersUseExplicitTargetFiberSnapshotsAndUnwindCancellation(): void
@@ -28,5 +29,16 @@ final class WorkerRequestQuarantineSourceTest extends TestCase
             self::assertStringNotContainsString("['context']->restore(false)", $source, $script);
             self::assertStringContainsString('wlsUnwindRequestFiberForCancellation(', $source, $script);
         }
+    }
+
+    public function testHttpAcceptSchedulesNewConnectionForImmediateNonBlockingRead(): void
+    {
+        $source = (string)file_get_contents(BP . 'app/code/Weline/Server/bin/worker.php');
+
+        self::assertStringContainsString(
+            'shared-listener reload cannot strand the',
+            $source,
+        );
+        self::assertStringContainsString('$read[] = $conn;', $source);
     }
 }

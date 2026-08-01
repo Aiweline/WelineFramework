@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Integration\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
+use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 
 final class GatewayProtocolSecurityTest extends TestCase
 {
@@ -782,7 +783,10 @@ final class GatewayProtocolSecurityTest extends TestCase
             'proxy_pass http://' . $upstreamMatch[1] . '/_wls/health?;',
         ));
         self::assertStringContainsString('    keepalive 32;', $config);
-        self::assertStringContainsString('    keepalive_timeout 10s;', $config);
+        self::assertStringContainsString(
+            '    keepalive_timeout ' . GatewayPaths::UPSTREAM_KEEPALIVE_TIMEOUT_SEC . 's;',
+            $config,
+        );
         self::assertStringContainsString('    keepalive_requests 10000;', $config);
         self::assertStringContainsString('  keepalive_requests 100000;', $config);
         self::assertStringNotContainsString('location = /_wls/health { return 404; }', $config);

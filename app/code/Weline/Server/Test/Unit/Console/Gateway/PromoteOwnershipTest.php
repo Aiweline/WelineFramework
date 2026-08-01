@@ -117,4 +117,32 @@ final class PromoteOwnershipTest extends TestCase
         self::assertSame((int)\posix_getuid(), (int)\stat($config)['uid']);
         self::assertSame((int)\posix_getgid(), (int)\stat($config)['gid']);
     }
+
+    public function testRollbackPublicProbeSelectsOnlyAnExactSafeServerName(): void
+    {
+        $command = (new \ReflectionClass(Promote::class))->newInstanceWithoutConstructor();
+        $select = new \ReflectionMethod(Promote::class, 'legacyPublicProbeHost');
+
+        self::assertSame('shop.example.test', $select->invoke($command, [
+            '*.example.test',
+            "bad.example.test\r\nX-Injected: true",
+            'Shop.Example.Test.',
+        ]));
+        self::assertSame('', $select->invoke($command, [
+            '_',
+            '*.example.test',
+            '[::1]',
+        ]));
+    }
+
+    public function testRollbackPublicProbeFailsClosedBeforeNetworkOnInvalidPort(): void
+    {
+        $command = (new \ReflectionClass(Promote::class))->newInstanceWithoutConstructor();
+        $probe = new \ReflectionMethod(Promote::class, 'probeLegacyPublicResponses');
+        $result = $probe->invoke($command, 0, ['shop.example.test']);
+
+        self::assertFalse($result['ok'] ?? true);
+        self::assertSame(0, $result['port'] ?? null);
+        self::assertSame([], $result['probes'] ?? null);
+    }
 }

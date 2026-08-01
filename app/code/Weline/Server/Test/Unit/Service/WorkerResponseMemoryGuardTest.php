@@ -95,6 +95,59 @@ final class WorkerResponseMemoryGuardTest extends TestCase
         self::assertFalse(WorkerResponseMemoryGuard::responseRequestsConnectionClose($response));
     }
 
+    public function testShortHttpDrainWaitsForPeerCloseAcknowledgement(): void
+    {
+        self::assertTrue(WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(
+            true,
+            false,
+        ));
+    }
+
+    public function testNormalLongLivedAndMultiplexedResponsesDoNotUsePeerCloseWait(): void
+    {
+        self::assertFalse(WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(
+            false,
+            false,
+        ));
+        self::assertFalse(WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(
+            true,
+            true,
+        ));
+        self::assertFalse(WorkerResponseMemoryGuard::shouldAwaitPeerCloseAfterDrainResponse(
+            true,
+            false,
+            true,
+        ));
+    }
+
+    public function testLinuxSharedEventListenerDrainsBoundedAcceptBatch(): void
+    {
+        self::assertSame(
+            64,
+            WorkerResponseMemoryGuard::listenerAcceptBatchLimit(true, 'Linux', 'event')
+        );
+    }
+
+    public function testSharedListenerFairnessRemainsSingleAcceptOutsideLinuxEvent(): void
+    {
+        self::assertSame(
+            1,
+            WorkerResponseMemoryGuard::listenerAcceptBatchLimit(true, 'Linux', 'select')
+        );
+        self::assertSame(
+            1,
+            WorkerResponseMemoryGuard::listenerAcceptBatchLimit(true, 'Darwin', 'event')
+        );
+    }
+
+    public function testIndependentListenerKeepsFullAcceptBatch(): void
+    {
+        self::assertSame(
+            64,
+            WorkerResponseMemoryGuard::listenerAcceptBatchLimit(false, 'Linux', 'event')
+        );
+    }
+
     public function testSseWriteBufferWouldExceedWhenOverLimit(): void
     {
         $max = WorkerResponseMemoryGuard::SSE_MAX_PENDING_WRITE_BYTES;

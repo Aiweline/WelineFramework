@@ -13,6 +13,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#if defined(__linux__)
+#include <sys/prctl.h>
+#endif
+
 #ifndef WLS_RELEASE_PUBLIC_KEY_HEX
 #error "WLS_RELEASE_PUBLIC_KEY_HEX must be defined by the release build"
 #endif
@@ -35,6 +39,56 @@ static volatile sig_atomic_t wls_shutdown_signal = 0;
 static void wls_capture_shutdown_signal(int signal_number)
 {
     wls_shutdown_signal = signal_number;
+}
+
+static int wls_prepare_process_supervision(void)
+{
+#if defined(__linux__)
+    /*
+     * The launcher is PID 1 inside the production gateway namespace and
+     * therefore inherits orphaned Nginx masters after reload/recovery. Mark it
+     * as a subreaper as well so the same ownership and reaping semantics hold
+     * when it runs without a dedicated PID namespace.
+     */
+    if (prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0) {
+        return -1;
+    }
+#endif
+    return 0;
+}
+
+static pid_t wls_reap_exited_children(
+    pid_t broker_pid,
+    int *broker_status,
+    int *has_children
+) {
+    pid_t broker_waited = 0;
+    if (has_children != NULL) {
+        *has_children = 1;
+    }
+    for (;;) {
+        int status = 0;
+        pid_t waited = waitpid(-1, &status, WNOHANG);
+        if (waited > 0) {
+            if (waited == broker_pid) {
+                if (broker_status != NULL) {
+                    *broker_status = status;
+                }
+                broker_waited = waited;
+            }
+            continue;
+        }
+        if (waited == 0) {
+            return broker_waited;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
+        if (errno == ECHILD && has_children != NULL) {
+            *has_children = 0;
+        }
+        return broker_waited;
+    }
 }
 
 static int wls_join(char *output, size_t capacity, const char *left, const char *right)
@@ -811,8 +865,13 @@ static void wls_terminate_broker(pid_t broker_pid, int signal_number)
     if (broker_pid <= 0) return;
     kill(broker_pid, signal_number > 0 ? signal_number : SIGTERM);
     for (attempt = 0U; attempt < 50U; attempt++) {
-        pid_t waited = waitpid(broker_pid, &status, WNOHANG);
-        if (waited == broker_pid || (waited < 0 && errno == ECHILD)) {
+        int has_children = 1;
+        pid_t waited = wls_reap_exited_children(
+            broker_pid,
+            &status,
+            &has_children
+        );
+        if (waited == broker_pid || !has_children) {
             return;
         }
         usleep(100000);
@@ -820,6 +879,7 @@ static void wls_terminate_broker(pid_t broker_pid, int signal_number)
     kill(broker_pid, SIGKILL);
     while (waitpid(broker_pid, &status, 0) < 0 && errno == EINTR) {
     }
+    (void)wls_reap_exited_children(0, NULL, NULL);
 }
 
 static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[2])
@@ -838,6 +898,7 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
     }
     for (;;) {
         pid_t waited;
+        int has_children = 1;
         int upgrade_state;
         if (wls_shutdown_signal != 0) {
             int signal_number = (int)wls_shutdown_signal;
@@ -848,7 +909,11 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
             );
             return signal_number == SIGHUP ? WLS_CONTROL_TREE_RELOAD : 0;
         }
-        waited = waitpid(broker_pid, &status, WNOHANG);
+        waited = wls_reap_exited_children(
+            broker_pid,
+            &status,
+            &has_children
+        );
         if (waited == broker_pid) {
             char before = active[0];
             int exit_code = WIFEXITED(status)
@@ -860,7 +925,7 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
             }
             return active[0] == before ? exit_code : WLS_CONTROL_TREE_RELOAD;
         }
-        if (waited < 0 && errno != EINTR) {
+        if (!has_children) {
             return 1;
         }
         upgrade_state = wls_monitor_upgrade(home, active);
@@ -1007,6 +1072,10 @@ int main(int argc, char **argv)
     sodium_memzero(key, sizeof(key));
     if (argc == 2 && strcmp(argv[1], "--self-test") == 0) {
         return 0;
+    }
+    if (wls_prepare_process_supervision() != 0) {
+        fprintf(stderr, "stable launcher cannot establish child supervision\n");
+        return 1;
     }
     home = wls_argument(argc, argv, "--home");
     run_directory = wls_argument(argc, argv, "--run");

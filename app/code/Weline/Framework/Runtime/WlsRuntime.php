@@ -1358,8 +1358,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return false;
         }
 
-        // Backend first-render warmup is mandatory, but it runs after READY in
-        // the deferred worker warmup fiber so cold rendering cannot block pool entry.
+        // Full backend renders are not a routable-Worker readiness primitive.
+        // They may be enabled explicitly as a deferred compatibility warmup,
+        // but never run inside the READY gate by default.
         return false;
     }
 
@@ -1385,7 +1386,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP');
         }
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '1');
+            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '0');
         }
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
             return false;
@@ -3360,7 +3361,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '1');
+            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0');
         }
 
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
@@ -3489,7 +3490,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $rawFlag = Env::get('wls.worker.fpc_process_pull_enabled', null);
         }
         if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            return true;
+            return false;
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);

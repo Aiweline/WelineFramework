@@ -8,6 +8,9 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Control\ControlPlaneServerInterface;
+use Weline\Server\Service\Memory\MemoryPressureController;
+use Weline\Server\Service\Memory\HostMemoryPressureCoordinator;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\Runtime\DirectSharedListener;
 use Weline\Server\Service\Runtime\RuntimeSelection;
@@ -16,6 +19,9 @@ use Weline\Server\Service\ServiceOrchestrator;
 
 final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
 {
+    /** @var list<string> */
+    private array $memoryPressureSandboxes = [];
+
     protected function setUp(): void
     {
         if (!\defined('IS_WIN')) {
@@ -29,6 +35,10 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->memoryPressureSandboxes as $sandbox) {
+            $this->removeTree($sandbox);
+        }
+        $this->memoryPressureSandboxes = [];
         WlsLogger::reset();
     }
 
@@ -275,6 +285,222 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
             'isRoleSlotDesiredForRecovery',
             [ControlMessage::ROLE_WORKER, 1],
         ));
+    }
+
+    public function testMemoryPressureScaleDownWithoutEligibleTargetKeepsDesiredCapacity(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 8,
+        ]);
+        $controller = new MemoryPressureController();
+        $controller->setBudgetCeiling(8);
+
+        self::assertFalse($orchestrator->scaleDownOneWorkerForMemoryPressure($controller));
+        self::assertSame(
+            8,
+            $this->readPrivate($orchestrator, 'desiredState')[ControlMessage::ROLE_WORKER],
+        );
+        self::assertFalse($controller->isShrinkInProgress());
+    }
+
+    public function testMemoryPressureScaleDownSendFailureRollsBackDesiredAndWorkerState(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $controlServer = $this->createMock(ControlPlaneServerInterface::class);
+        $controlServer->expects(self::once())
+            ->method('sendTo')
+            ->willReturn(false);
+        $this->writePrivate($orchestrator, 'controlServer', $controlServer);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 8,
+        ]);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 8,
+            pid: 999999,
+            port: 18081,
+            ipcClientId: 22,
+            state: ServiceInstance::STATE_READY,
+        );
+        $orchestrator->getRegistry()->addInstance($worker);
+        $controller = new MemoryPressureController();
+        $controller->setBudgetCeiling(8);
+
+        self::assertFalse($orchestrator->scaleDownOneWorkerForMemoryPressure($controller));
+        self::assertSame(ServiceInstance::STATE_READY, $worker->state);
+        self::assertSame(
+            8,
+            $this->readPrivate($orchestrator, 'desiredState')[ControlMessage::ROLE_WORKER],
+        );
+        self::assertFalse((bool)$worker->getMeta('memory_pressure_scale_down', false));
+        self::assertFalse($controller->isShrinkInProgress());
+    }
+
+    public function testMemoryPressureScaleDownIsSerialisedAcrossProjectsOnSameHost(): void
+    {
+        $directory = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-host-memory-pressure-integration-' . \bin2hex(\random_bytes(8));
+        $this->memoryPressureSandboxes[] = $directory;
+
+        $firstOrchestrator = new ServiceOrchestrator();
+        $firstControl = $this->createMock(ControlPlaneServerInterface::class);
+        $firstControl->expects(self::once())->method('sendTo')->willReturn(true);
+        $this->writePrivate($firstOrchestrator, 'controlServer', $firstControl);
+        $this->writePrivate($firstOrchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 8,
+        ]);
+        $firstWorker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 8,
+            pid: 999998,
+            port: 18081,
+            ipcClientId: 31,
+            state: ServiceInstance::STATE_READY,
+        );
+        $firstOrchestrator->getRegistry()->addInstance($firstWorker);
+        $firstController = new MemoryPressureController();
+        $firstController->setBudgetCeiling(8);
+        $firstController->configureHostCapacityCoordination(
+            new HostMemoryPressureCoordinator($directory, \str_repeat('1', 64)),
+            \str_repeat('a', 64),
+        );
+
+        $secondOrchestrator = new ServiceOrchestrator();
+        $secondControl = $this->createMock(ControlPlaneServerInterface::class);
+        $secondControl->expects(self::never())->method('sendTo');
+        $this->writePrivate($secondOrchestrator, 'controlServer', $secondControl);
+        $this->writePrivate($secondOrchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 8,
+        ]);
+        $secondWorker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 8,
+            pid: 999997,
+            port: 18082,
+            ipcClientId: 32,
+            state: ServiceInstance::STATE_READY,
+        );
+        $secondOrchestrator->getRegistry()->addInstance($secondWorker);
+        $secondController = new MemoryPressureController();
+        $secondController->setBudgetCeiling(8);
+        $secondController->configureHostCapacityCoordination(
+            new HostMemoryPressureCoordinator($directory, \str_repeat('1', 64)),
+            \str_repeat('b', 64),
+        );
+
+        self::assertTrue(
+            $firstOrchestrator->scaleDownOneWorkerForMemoryPressure($firstController)
+        );
+        self::assertFalse(
+            $secondOrchestrator->scaleDownOneWorkerForMemoryPressure($secondController)
+        );
+        self::assertSame(
+            7,
+            $this->readPrivate($firstOrchestrator, 'desiredState')[ControlMessage::ROLE_WORKER],
+        );
+        self::assertSame(
+            8,
+            $this->readPrivate($secondOrchestrator, 'desiredState')[ControlMessage::ROLE_WORKER],
+        );
+    }
+
+    public function testMemoryPressureHostCoordinationInitializationRetriesAfterCooldown(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $controller = new MemoryPressureController();
+        $controller->requireHostCapacityCoordination();
+        $this->writePrivate(
+            $orchestrator,
+            'memoryPressureController',
+            $controller,
+        );
+        $this->writePrivate(
+            $orchestrator,
+            'lastMemoryPressureHostCoordinationInitAt',
+            100.0,
+        );
+        $context = $this->createContextWithHealthRestartCooldown(5.0);
+
+        $this->invokePrivate(
+            $orchestrator,
+            'ensureHostMemoryPressureCoordination',
+            [$context, 129.9],
+        );
+        self::assertFalse($controller->hasHostCapacityCoordination());
+
+        $this->invokePrivate(
+            $orchestrator,
+            'ensureHostMemoryPressureCoordination',
+            [$context, 130.0],
+        );
+        self::assertTrue($controller->hasHostCapacityCoordination());
+    }
+
+    public function testMemoryPressureScaleUpQueuesTaggedStoppingSlotForFencedRecovery(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 7,
+        ]);
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 8,
+            epoch: 1,
+            launchId: 'memory-pressure-worker-8',
+            pid: 999999,
+            port: 18081,
+            state: ServiceInstance::STATE_STOPPING,
+        );
+        $worker->setProcessTreePids(999999, 999999, 999999);
+        $worker->setMeta('slot_id', 'worker#8');
+        $worker->setMeta('lease_id', 'memory-pressure-worker-8');
+        $worker->setMeta('generation', 1);
+        $worker->setMeta('memory_pressure_scale_down', true);
+        $orchestrator->getRegistry()->addInstance($worker);
+
+        $controller = new MemoryPressureController();
+        $controller->setBudgetCeiling(8);
+
+        self::assertTrue($orchestrator->scaleUpOneWorkerForMemoryPressure($controller));
+        self::assertSame(
+            8,
+            $this->readPrivate($orchestrator, 'desiredState')[ControlMessage::ROLE_WORKER],
+        );
+        self::assertSame(ServiceInstance::STATE_FAILED, $worker->state);
+        self::assertSame(0, $worker->restarts);
+        $queue = $this->readPrivate($orchestrator, 'resurrectQueue');
+        self::assertArrayHasKey(ControlMessage::ROLE_WORKER . ':8', $queue);
+        self::assertTrue((bool)($queue[ControlMessage::ROLE_WORKER . ':8']['explicit_exit'] ?? false));
+        self::assertFalse((bool)($queue[ControlMessage::ROLE_WORKER . ':8']['count_failure'] ?? true));
+        self::assertSame(
+            ServiceInstance::STATE_STOPPING,
+            $worker->getMeta('memory_pressure_recovery_from_state'),
+        );
+    }
+
+    public function testMemoryPressureScaleUpDoesNotHijackUntaggedLifecycleSlot(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->getRegistry()->registerProvider(new WorkerProvider());
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 7,
+        ]);
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 8,
+            state: ServiceInstance::STATE_STOPPING,
+        );
+        $orchestrator->getRegistry()->addInstance($worker);
+        $controller = new MemoryPressureController();
+        $controller->setBudgetCeiling(8);
+
+        self::assertTrue($orchestrator->scaleUpOneWorkerForMemoryPressure($controller));
+        self::assertSame(ServiceInstance::STATE_STOPPING, $worker->state);
+        self::assertSame([], $this->readPrivate($orchestrator, 'resurrectQueue'));
     }
 
     public function testNativeDrainTransitionKeepsOriginalDeadlineAndFinalizesOnce(): void
@@ -690,5 +916,24 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
         }
 
         self::fail("property {$property} not found");
+    }
+
+    private function removeTree(string $path): void
+    {
+        if (!\is_dir($path) || \is_link($path)) {
+            return;
+        }
+        foreach ((array)@\scandir($path) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $child = $path . DIRECTORY_SEPARATOR . $entry;
+            if (\is_dir($child) && !\is_link($child)) {
+                $this->removeTree($child);
+            } else {
+                @\unlink($child);
+            }
+        }
+        @\rmdir($path);
     }
 }

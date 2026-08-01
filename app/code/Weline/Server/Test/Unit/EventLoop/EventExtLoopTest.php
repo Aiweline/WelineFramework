@@ -142,6 +142,38 @@ final class EventExtLoopTest extends TestCase
         }
     }
 
+    public function testKernelReconciliationFindsReadableAndWritableStreams(): void
+    {
+        if (!\extension_loaded('event')) {
+            $this->markTestSkipped('event extension is not loaded');
+        }
+
+        [$client, $server] = $this->createConnectedStreamPair();
+        try {
+            self::assertSame(1, \fwrite($client, 'x'));
+            $readable = [$server];
+            $writable = [];
+            $except = [];
+            self::assertSame(
+                1,
+                \stream_select($readable, $writable, $except, 0, 200_000),
+                'The kernel must publish the written byte before reconciliation is asserted.',
+            );
+
+            $loop = new EventExtLoop();
+            $method = new \ReflectionMethod($loop, 'reconcileKernelReadiness');
+            $result = $method->invoke($loop, [$server], [$client], [], []);
+
+            self::assertIsArray($result);
+            self::assertCount(2, $result);
+            self::assertSame([$server], \array_values($result[0]));
+            self::assertSame([$client], \array_values($result[1]));
+        } finally {
+            \fclose($client);
+            \fclose($server);
+        }
+    }
+
     /**
      * @return array{0: resource, 1: resource}
      */
