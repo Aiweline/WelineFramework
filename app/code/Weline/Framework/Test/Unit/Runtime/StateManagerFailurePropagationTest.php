@@ -21,6 +21,10 @@ final class StateManagerFailurePropagationTest extends TestCase
     {
         StateManager::unregisterResetCallback(self::FAILURE_CALLBACK);
         StateManager::unregisterResetCallback(self::AFTER_CALLBACK);
+        StateManager::unregisterStaticReset(
+            StateManagerPrivateStaticFixture::class,
+            'value',
+        );
         RequestContext::cleanup();
         Context::leave();
         HeaderCollector::reset();
@@ -56,5 +60,56 @@ final class StateManagerFailurePropagationTest extends TestCase
         self::assertFalse(RequestContext::has('probe'));
         self::assertArrayNotHasKey(self::class, ObjectManager::getInstances());
         self::assertNull(HeaderCollector::getInstance()->getHeader('X-Reset-Probe'));
+    }
+
+    public function testPrivateStaticStateLifecycleDoesNotUseDeprecatedReflectionAccessibility(): void
+    {
+        StateManagerPrivateStaticFixture::prime();
+        StateManager::registerStaticReset(
+            StateManagerPrivateStaticFixture::class,
+            'value',
+            'reset',
+        );
+        $failures = [];
+        $deprecations = [];
+        \set_error_handler(
+            static function (int $severity, string $message) use (&$deprecations): bool {
+                if ($severity === E_DEPRECATED) {
+                    $deprecations[] = $message;
+                    return true;
+                }
+                return false;
+            },
+        );
+        try {
+            $snapshot = StateManager::captureRegisteredStaticState();
+            StateManager::restoreRegisteredStaticState($snapshot);
+            $reset = new \ReflectionMethod(
+                StateManager::class,
+                'resetStaticProperties',
+            );
+            $reset->invokeArgs(null, [&$failures]);
+        } finally {
+            \restore_error_handler();
+        }
+
+        self::assertSame('reset', StateManagerPrivateStaticFixture::value());
+        self::assertSame([], $failures);
+        self::assertSame([], $deprecations);
+    }
+}
+
+final class StateManagerPrivateStaticFixture
+{
+    private static string $value = 'reset';
+
+    public static function prime(): void
+    {
+        self::$value = 'dirty';
+    }
+
+    public static function value(): string
+    {
+        return self::$value;
     }
 }

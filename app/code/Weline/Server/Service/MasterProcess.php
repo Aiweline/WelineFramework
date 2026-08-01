@@ -1864,7 +1864,7 @@ class MasterProcess
             return;
         }
 
-        if (!$this->sslEnabled) {
+        if (!$this->shouldTriggerDeferredSslRetryAfterStartup()) {
             return;
         }
 
@@ -1920,6 +1920,32 @@ class MasterProcess
         }
 
         $this->log(__('已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）', [$domain]));
+    }
+
+    /**
+     * Gateway first issuance deliberately uses a cleartext loopback backend,
+     * so backend sslEnabled is false while public TLS is still desired. The
+     * authenticated gateway protocol and explicit pending flag are both
+     * required before that state may trigger the project-owned ACME worker.
+     */
+    protected function shouldTriggerDeferredSslRetryAfterStartup(): bool
+    {
+        if ($this->sslEnabled) {
+            return true;
+        }
+
+        $gateway = \is_array($this->config['gateway'] ?? null)
+            ? $this->config['gateway']
+            : [];
+        return ($gateway['certificate_pending'] ?? false) === true
+            && \hash_equals(
+                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY,
+                \strtolower(\trim((string)($gateway['mode'] ?? ''))),
+            )
+            && \hash_equals(
+                \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL,
+                \trim((string)($gateway['protocol'] ?? '')),
+            );
     }
 
     private function canReusePostStartupCertificate(

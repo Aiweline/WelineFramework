@@ -5,6 +5,8 @@ namespace Weline\Server\EventLoop;
 
 final class EventExtLoop implements EventLoopInterface
 {
+    private const KERNEL_READINESS_RECONCILE_INTERVAL_SECONDS = 0.1;
+
     private \EventBase $base;
 
     /** @var array<int, \Event> */
@@ -24,6 +26,8 @@ final class EventExtLoop implements EventLoopInterface
 
     /** @var array<int, resource> */
     private array $readyWrite = [];
+
+    private float $lastKernelReadinessReconcileAt = 0.0;
 
     private \Event $timeoutEvent;
 
@@ -102,8 +106,24 @@ final class EventExtLoop implements EventLoopInterface
             return false;
         }
 
-        $read = \array_values(\array_intersect_key($this->readyRead, $this->readWatchers));
-        $write = \array_values(\array_intersect_key($this->readyWrite, $this->writeWatchers));
+        $readyRead = \array_intersect_key($this->readyRead, $this->readWatchers);
+        $readyWrite = \array_intersect_key($this->readyWrite, $this->writeWatchers);
+        $reconcileAt = \microtime(true);
+        if (($readyRead === [] && $readyWrite === [])
+            || ($reconcileAt - $this->lastKernelReadinessReconcileAt)
+                >= self::KERNEL_READINESS_RECONCILE_INTERVAL_SECONDS
+        ) {
+            [$readyRead, $readyWrite] = $this->reconcileKernelReadiness(
+                $read,
+                $write,
+                $readyRead,
+                $readyWrite,
+            );
+            $this->lastKernelReadinessReconcileAt = $reconcileAt;
+        }
+
+        $read = \array_values($readyRead);
+        $write = \array_values($readyWrite);
         $except = [];
 
         return \count($read) + \count($write);
@@ -188,6 +208,53 @@ final class EventExtLoop implements EventLoopInterface
 
         $this->writeWatchers[$rid] = $event;
         $this->writeResources[$rid] = $resource;
+    }
+
+    /**
+     * libevent is the primary readiness source. A bounded non-blocking kernel
+     * reconciliation prevents a readiness transition from being stranded
+     * across shared-listener Worker generation changes.
+     *
+     * @param array<int|string, mixed> $requestedRead
+     * @param array<int|string, mixed> $requestedWrite
+     * @param array<int, resource> $readyRead
+     * @param array<int, resource> $readyWrite
+     * @return array{0: array<int, resource>, 1: array<int, resource>}
+     */
+    private function reconcileKernelReadiness(
+        array $requestedRead,
+        array $requestedWrite,
+        array $readyRead,
+        array $readyWrite,
+    ): array {
+        $probeRead = \array_values(\array_filter($requestedRead, '\is_resource'));
+        $probeWrite = \array_values(\array_filter($requestedWrite, '\is_resource'));
+        if ($probeRead === [] && $probeWrite === []) {
+            return [$readyRead, $readyWrite];
+        }
+
+        $probeExcept = [];
+        try {
+            $changed = @\stream_select($probeRead, $probeWrite, $probeExcept, 0, 0);
+        } catch (\Throwable) {
+            return [$readyRead, $readyWrite];
+        }
+        if ($changed === false || $changed === 0) {
+            return [$readyRead, $readyWrite];
+        }
+
+        foreach ($probeRead as $resource) {
+            if (\is_resource($resource)) {
+                $readyRead[\get_resource_id($resource)] = $resource;
+            }
+        }
+        foreach ($probeWrite as $resource) {
+            if (\is_resource($resource)) {
+                $readyWrite[\get_resource_id($resource)] = $resource;
+            }
+        }
+
+        return [$readyRead, $readyWrite];
     }
 
     private function removeWatcher(int $rid, bool $read): void

@@ -7,12 +7,21 @@ WLS 2.0 启动统一使用 `--edge=auto|gateway|wls`。`auto` 只发现并加入
 不兼容时，`auto` 以稳定的 20000–29999 loopback 高端口启动纯 WLS TLS，并明确报告
 这不是 80/443 的透明替代。`gateway` 要求既有网关可用，否则非零退出；`wls` 完全
 绕过网关。`--no-nginx` 是 `--edge=wls` 的兼容别名。
+公开 CLI 会拒绝 `--edge=legacy` 及其他未知值；`legacy` 只用于首次识别没有 edge mode
+字段的已保存 WLS 1.x 项目配置。识别后运行时可以把该兼容状态内部持久化为
+`edge_mode=legacy`，确保重启前后继续等待显式提升，但新实例不能通过 CLI 主动声明。
 
 项目 UUID、desired/certificate generation 和摘要保存在 `app/etc/wls-project.json`；
 该文件随项目目录迁移，宿主只保存可重建的 UUID 路径声明、端口租约和证书快照。当前
-WLS 2.0 仍按主计划分阶段实施：edge 决策、稳定身份和项目 Agent mode 传播已经接通；
-平台 Broker、完整协议鉴权、证书事务、LKG/A-B 恢复和百万请求发布门禁完成前，不得
-把宿主网关标记为完整生产版。
+WLS 2.0 已完成平台 Broker、`wls-edge/2` 协议鉴权、证书事务、LKG/A-B 恢复以及网关
+与纯 WLS 的当前源码严格百万矩阵。网关 H1/H2、纯 WLS H1/H2 已各完成 warmup 后
+三轮精确百万，双租户 H2 三轮与 Controller 接管、Worker reload/drain 持续流量也
+全部 0 错误，TEST-036 已通过；但整体仍是 `CHECKPOINT / NOT RELEASE-READY`。
+Linux PostgreSQL legacy 80/443 已使用受信历史签名包完成启动失败、激活后失败回滚和
+成功提升；提升后最终 HTTP/2 百万仍为 1,000,000/1,000,000、0 错误。Windows
+Service/Named Pipe DACL/reboot 实机、macOS LaunchDaemon ACL/reboot，以及外部
+CA/DNS 公网首次签发尚未闭合，TASK-013 未全绿，因此 TASK-014 的发布前置仍不成立。
+完成这些外部证据前不得宣称三平台生产就绪。
 
 ## 推荐阅读
 

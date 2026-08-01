@@ -372,4 +372,5 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
             }
         }
     }
+
 }

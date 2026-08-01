@@ -53,6 +53,25 @@ final class RuntimeStrategyResolverTest extends TestCase
         self::assertSame(EffectiveTopology::Direct, $selection->effectiveTopology);
         self::assertSame('reuseport', $selection->listenerMode);
         self::assertSame('cli.direct', $selection->source);
+        self::assertNotEmpty($result['warnings']);
+        self::assertStringContainsString('lossless reload', \implode(' ', $result['warnings']));
+    }
+
+    public function testLinuxAutoPrefersSharedListenerWhenBothCapabilitiesAreAvailable(): void
+    {
+        $result = (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 4],
+            [],
+            $this->sharedListenerProfile([
+                'supports_reuse_port' => true,
+                'reuse_port_probe' => ['supported' => true],
+            ]),
+        );
+
+        $selection = $this->selection($result);
+        self::assertSame(EffectiveTopology::Direct, $selection->effectiveTopology);
+        self::assertSame('shared_fd', $selection->listenerMode);
+        self::assertSame([], $result['warnings']);
     }
 
     public function testAutoUsesDirectEvenWithSingleWorker(): void

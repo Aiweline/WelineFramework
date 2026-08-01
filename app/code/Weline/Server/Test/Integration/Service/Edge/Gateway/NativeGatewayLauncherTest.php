@@ -418,6 +418,57 @@ final class NativeGatewayLauncherTest extends TestCase
         }
     }
 
+    public function testLinuxLauncherReapsOrphanedGrandchildren(): void
+    {
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            self::markTestSkipped('Linux child-subreaper semantics are required.');
+        }
+        $orphanPidFile = $this->root . DIRECTORY_SEPARATOR . 'orphan-pid';
+        $broker = "#!/bin/sh\n"
+            . "printf '%s\\n' \"\$*\" > "
+            . \escapeshellarg($this->root . DIRECTORY_SEPARATOR . 'broker-started')
+            . "\n(\n"
+            . "  sleep 1 &\n"
+            . "  printf '%s\\n' \"\$!\" > " . \escapeshellarg($orphanPidFile) . "\n"
+            . "  exit 0\n"
+            . ") &\n"
+            . "trap 'exit 0' TERM INT HUP\n"
+            . "while :; do sleep 1; done\n";
+        [$home, $run] = $this->createSignedHome(true, $broker);
+        $process = \proc_open(
+            [$this->launcher, '--service', '--home=' . $home, '--run=' . $run, '--profile=default'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        try {
+            $deadline = \microtime(true) + 5.0;
+            while (!\is_file($orphanPidFile) && \microtime(true) < $deadline) {
+                \usleep(50_000);
+            }
+            self::assertFileExists($orphanPidFile);
+            $orphanPid = (int)\trim((string)\file_get_contents($orphanPidFile));
+            self::assertGreaterThan(0, $orphanPid);
+
+            $orphanProc = '/proc/' . $orphanPid;
+            $deadline = \microtime(true) + 5.0;
+            while (\file_exists($orphanProc) && \microtime(true) < $deadline) {
+                \usleep(50_000);
+            }
+            self::assertFileDoesNotExist(
+                $orphanProc,
+                'The launcher must reap orphaned descendants instead of retaining zombies.',
+            );
+            self::assertTrue((bool)(\proc_get_status($process)['running'] ?? false));
+        } finally {
+            @\proc_terminate($process, SIGTERM);
+            foreach ($pipes ?? [] as $pipe) {
+                \is_resource($pipe) && @\fclose($pipe);
+            }
+            self::assertSame(0, \proc_close($process));
+        }
+    }
+
     private function createSignedCandidateSlot(
         string $home,
         string $marker,
@@ -475,7 +526,10 @@ final class NativeGatewayLauncherTest extends TestCase
     }
 
     /** @return array{string,string,string,string} */
-    private function createSignedHome(bool $persistent = false): array
+    private function createSignedHome(
+        bool $persistent = false,
+        ?string $brokerOverride = null,
+    ): array
     {
         $home = $this->root . DIRECTORY_SEPARATOR . 'home';
         $run = $this->root . DIRECTORY_SEPARATOR . 'run';
@@ -488,12 +542,14 @@ final class NativeGatewayLauncherTest extends TestCase
         self::assertTrue(\mkdir($home . DIRECTORY_SEPARATOR . 'trust', 0700, true));
         self::assertTrue(\mkdir($run, 0700, true));
         $marker = $this->root . DIRECTORY_SEPARATOR . 'broker-started';
+        $broker = $brokerOverride
+            ?? ("#!/bin/sh\nprintf '%s\\n' \"\$*\" > " . \escapeshellarg($marker) . "\n"
+                . ($persistent
+                    ? "trap 'exit 0' TERM INT HUP\nwhile :; do sleep 1; done\n"
+                    : "exit 0\n"));
         $files = [
             'bin/wls-gateway-broker' => [
-                "#!/bin/sh\nprintf '%s\\n' \"\$*\" > " . \escapeshellarg($marker) . "\n"
-                    . ($persistent
-                        ? "trap 'exit 0' TERM INT HUP\nwhile :; do sleep 1; done\n"
-                        : "exit 0\n"),
+                $broker,
                 0755,
             ],
             'bin/php' => ["#!/bin/sh\nexit 0\n", 0755],
