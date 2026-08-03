@@ -157,10 +157,11 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
             file_put_contents($log, '');
         }
         
-        $shell_string = "
-#!/bin/sh
-cd $base_project_dir &&
-$php_binary bin/w cron:task:run 2>&1 >> $log";
+        $shell_string = $this->buildShellScript(
+            $base_project_dir,
+            $php_binary,
+            $log,
+        );
         file_put_contents($cron_shell_file_path, $shell_string);
         
         $this->logDev('debug', '[Linux/Crontab] Shell 脚本已写入: {path}', ['path' => $cron_shell_file_path]);
@@ -190,7 +191,7 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
             $this->logDev('debug', '[Linux/Crontab] 临时文件: {temp_file}', ['temp_file' => $temp_file]);
             
             // 安装新的crontab
-            $installCommand = "crontab " . $temp_file;
+            $installCommand = 'crontab ' . escapeshellarg($temp_file);
             exec($installCommand, $output, $return_code);
             
             $this->logCommand($installCommand, $output, $return_code);
@@ -213,6 +214,42 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
         
         $this->log('warning', '[Linux/Crontab] 定时任务已存在或名称无效: {name}', ['name' => $name]);
         return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%{1}', $name), 'result' => ''];
+    }
+
+    /**
+     * Generate a per-project single-flight wrapper. Cron may start a new
+     * minute while the previous dispatcher is still booting or scanning, so
+     * the wrapper must acquire one advisory lock before bootstrapping PHP.
+     */
+    private function buildShellScript(
+        string $baseProjectDir,
+        string $phpBinary,
+        string $logPath,
+    ): string {
+        $normalizedBase = rtrim($baseProjectDir, '/\\');
+        if ($normalizedBase === '') {
+            $normalizedBase = DIRECTORY_SEPARATOR;
+        }
+        $lockPath = $normalizedBase . DIRECTORY_SEPARATOR . 'var'
+            . DIRECTORY_SEPARATOR . 'cron-main.lock';
+
+        return '#!/bin/sh' . PHP_EOL
+            . 'CRON_PROJECT_DIR=' . escapeshellarg($normalizedBase) . PHP_EOL
+            . 'CRON_PHP_BINARY=' . escapeshellarg($phpBinary) . PHP_EOL
+            . 'CRON_LOG=' . escapeshellarg($logPath) . PHP_EOL
+            . 'CRON_LOCK_FILE=' . escapeshellarg($lockPath) . PHP_EOL
+            . 'cd "$CRON_PROJECT_DIR" || exit 1' . PHP_EOL
+            . 'if command -v lockf >/dev/null 2>&1; then' . PHP_EOL
+            . '    exec lockf -k -t 0 "$CRON_LOCK_FILE" "$CRON_PHP_BINARY"'
+            . ' bin/w cron:task:run >> "$CRON_LOG" 2>&1' . PHP_EOL
+            . 'fi' . PHP_EOL
+            . 'if command -v flock >/dev/null 2>&1; then' . PHP_EOL
+            . '    exec flock -n "$CRON_LOCK_FILE" "$CRON_PHP_BINARY"'
+            . ' bin/w cron:task:run >> "$CRON_LOG" 2>&1' . PHP_EOL
+            . 'fi' . PHP_EOL
+            . 'printf \'%s\\n\' \'Cron skipped: lockf/flock is unavailable.\''
+            . ' >> "$CRON_LOG"' . PHP_EOL
+            . 'exit 75' . PHP_EOL;
     }
 
     private function removeLegacyProjectCronEntries(string $name): void
@@ -243,7 +280,7 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
 
         $temp_file = tempnam(sys_get_temp_dir(), 'crontab_');
         file_put_contents($temp_file, implode("\n", $filtered) . "\n");
-        exec("crontab " . $temp_file, $output, $returnCode);
+        exec('crontab ' . escapeshellarg($temp_file), $output, $returnCode);
         unlink($temp_file);
 
         $this->logDev('debug', '[Linux/Crontab] Removed legacy project cron entries, return code: {code}', [
@@ -280,38 +317,68 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
     public function remove(string $name): array
     {
         $this->log('info', '[Linux/Crontab] 开始移除定时任务: {name}', ['name' => $name]);
-        
-        $jobs = $this->getJobs();
-        $originalCount = count($jobs);
-        
-        $this->logDev('debug', '[Linux/Crontab] 当前任务数: {count}', ['count' => $originalCount]);
-        
-        foreach ($jobs as $key => $job) {
-            if (str_contains($job, $name)) {
+
+        $jobs = $this->getAllJobs();
+        $filtered = [];
+        $matched = false;
+        foreach ($jobs as $job) {
+            if (str_contains($job, Schedule::cron_flag) && str_contains($job, $name)) {
+                $matched = true;
                 $this->logDev('debug', '[Linux/Crontab] 找到匹配任务，移除: {job}', ['job' => $job]);
-                unset($jobs[$key]);
+                continue;
+            }
+            $filtered[] = $job;
+        }
+
+        if ($matched) {
+            $tempFile = tempnam(sys_get_temp_dir(), 'crontab_');
+            if (!is_string($tempFile) || $tempFile === '') {
+                return [
+                    'status' => false,
+                    'msg' => '[' . PHP_OS . ']' . __('系统定时任务移除失败：无法创建临时文件。'),
+                    'result' => [],
+                ];
+            }
+            $payload = $filtered === [] ? '' : implode(PHP_EOL, $filtered) . PHP_EOL;
+            if (file_put_contents($tempFile, $payload, LOCK_EX) === false) {
+                @unlink($tempFile);
+                return [
+                    'status' => false,
+                    'msg' => '[' . PHP_OS . ']' . __('系统定时任务移除失败：无法写入临时文件。'),
+                    'result' => [],
+                ];
+            }
+            $command = 'crontab ' . escapeshellarg($tempFile);
+            $output = [];
+            exec($command, $output, $returnCode);
+            @unlink($tempFile);
+            $this->logCommand($command, $output, $returnCode);
+            if ($returnCode !== 0 || $this->exist($name)) {
+                $this->log('error', '[Linux/Crontab] 定时任务移除失败: {name}, 返回码: {code}', [
+                    'name' => $name,
+                    'code' => $returnCode,
+                ]);
+                return [
+                    'status' => false,
+                    'msg' => '[' . PHP_OS . ']' . __('系统定时任务移除失败：%{1}', $name),
+                    'result' => $output,
+                ];
             }
         }
-        
-        $jobs_string = implode(PHP_EOL, $jobs);
-        $command = "echo -e \"$jobs_string\" | crontab -";
-        
-        $this->logDev('debug', '[Linux/Crontab] 执行移除命令');
-        
-        exec($command, $output, $returnCode);
-        
-        $this->logDev('debug', '[Linux/Crontab] 移除命令返回码: {code}', ['code' => $returnCode]);
-        
-        # 删除脚本
+
         $scriptPath = Env::path_framework_generated . $name . '-cron.sh';
         if (is_file($scriptPath)) {
-            unlink($scriptPath);
+            @unlink($scriptPath);
             $this->logDev('debug', '[Linux/Crontab] 已删除脚本文件: {path}', ['path' => $scriptPath]);
         }
-        
+
         $this->log('info', '[Linux/Crontab] 定时任务已移除: {name}', ['name' => $name]);
-        
-        return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已移除：%{1}', $name), 'result' => ''];
+
+        return [
+            'status' => true,
+            'msg' => '[' . PHP_OS . ']' . __('系统定时任务已移除：%{1}', $name),
+            'result' => [],
+        ];
     }
 
     public function exist(string $name): bool
