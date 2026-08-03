@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Service;
 
-use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
-use Weline\Framework\App\Env;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * 定时调度写入的 var/cron/{execute_name}.log 及 history 归档列表/读取。
+ * 定时调度的受管进程实时日志及 var/log/cron/history 归档列表/读取。
  */
 final class CronRunLogService
 {
@@ -53,16 +51,12 @@ final class CronRunLogService
 
     public function liveLogPath(string $executeName): string
     {
-        $base = Process::logBasenameForExecuteName($executeName);
-
-        return Env::VAR_DIR . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR . 'cron' . \DIRECTORY_SEPARATOR . $base . '.log';
+        return Process::getManagedLogProcessFilePath($executeName);
     }
 
     public function historyDir(string $executeName): string
     {
-        $base = Process::logBasenameForExecuteName($executeName);
-
-        return Env::VAR_DIR . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR . 'cron' . \DIRECTORY_SEPARATOR . 'history' . \DIRECTORY_SEPARATOR . $base;
+        return Process::historyDirectoryForExecuteName($executeName);
     }
 
     /**
@@ -81,21 +75,22 @@ final class CronRunLogService
         $live = $this->liveLogPath($executeName);
         $liveExists = \is_file($live);
         $liveSize = $liveExists ? (int) \filesize($live) : 0;
-        $status = (string) ($task->getData(CronTask::schema_fields_STATUS) ?? '');
-        $pid = (int) ($task->getData(CronTask::schema_fields_PID) ?? 0);
-        $taskRunning = $status === CronStatus::RUNNING->value && $pid > 0 && Process::isProcessRunning($pid);
+        $taskRunning = $this->isTaskModelProcessRunning($task);
 
         $dir = $this->historyDir($executeName);
         $items = [];
         if (\is_dir($dir)) {
-            $files = \glob($dir . \DIRECTORY_SEPARATOR . '*.log') ?: [];
-            foreach ($files as $f) {
+            $entries = \scandir($dir) ?: [];
+            foreach ($entries as $basename) {
+                if (!$this->isValidHistoryBasename($basename)) {
+                    continue;
+                }
+                $f = $dir . \DIRECTORY_SEPARATOR . $basename;
                 if (!\is_file($f)) {
                     continue;
                 }
-                $bn = \basename($f);
                 $items[] = [
-                    'file' => $bn,
+                    'file' => $basename,
                     'mtime' => (int) \filemtime($f),
                     'size' => (int) \filesize($f),
                     'label' => \date('Y-m-d H:i:s', (int) \filemtime($f)) . ' · ' . $this->formatBytes((int) \filesize($f)),
@@ -115,29 +110,46 @@ final class CronRunLogService
     }
 
     /**
-     * @return array{success: bool, message?: string, content?: string, truncated?: bool}
+     * @return array{success: bool, code?: string, message?: string, content?: string, truncated?: bool}
      */
     public function readHistoryFile(string $executeName, string $basename): array
     {
         if (!$this->isValidExecuteName($executeName)) {
-            return ['success' => false, 'message' => (string) \__('参数 execute_name 无效')];
+            return [
+                'success' => false,
+                'code' => 'invalid_execute_name',
+                'message' => (string) \__('参数 execute_name 无效'),
+            ];
         }
-        if ($basename === '' || \str_contains($basename, '/') || \str_contains($basename, '\\') || \str_contains($basename, '..')) {
-            return ['success' => false, 'message' => (string) \__('参数 file 无效')];
+        if ($basename === ''
+            || \str_contains($basename, '/')
+            || \str_contains($basename, '\\')
+            || \str_contains($basename, '..')
+            || \preg_match('/[\x00-\x1F\x7F]/', $basename) === 1) {
+            return ['success' => false, 'code' => 'invalid_file', 'message' => (string) \__('参数 file 无效')];
         }
-        if (!\str_ends_with($basename, '.log')) {
-            return ['success' => false, 'message' => (string) \__('参数 file 无效')];
+        $task = $this->resolveTaskByIdentifier($executeName);
+        if (!$task) {
+            return ['success' => false, 'code' => 'task_not_found', 'message' => (string) \__('任务不存在')];
+        }
+        $executeName = \trim((string)($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? $executeName));
+        if (!$this->isValidHistoryBasename($basename)) {
+            return ['success' => false, 'code' => 'invalid_file', 'message' => (string) \__('参数 file 无效')];
         }
         $full = $this->historyDir($executeName) . \DIRECTORY_SEPARATOR . $basename;
         $real = \realpath($full);
         $dirReal = \realpath($this->historyDir($executeName));
         if ($real === false || $dirReal === false || !\str_starts_with($real, $dirReal . \DIRECTORY_SEPARATOR)) {
-            return ['success' => false, 'message' => (string) \__('日志文件不存在')];
+            return ['success' => false, 'code' => 'log_not_found', 'message' => (string) \__('日志文件不存在')];
         }
         $size = (int) \filesize($real);
         $truncated = $size > self::CONTENT_MAX_BYTES;
         $readLen = $truncated ? self::CONTENT_MAX_BYTES : $size;
-        $content = (string) \file_get_contents($real, false, null, 0, $readLen);
+        $content = $this->normalizeLogText((string)\file_get_contents($real, false, null, 0, $readLen));
+        if (\strlen($content) > self::CONTENT_MAX_BYTES) {
+            $content = $this->validUtf8Prefix($content, self::CONTENT_MAX_BYTES);
+            $truncated = true;
+        }
 
         return ['success' => true, 'content' => $content, 'truncated' => $truncated];
     }
@@ -169,10 +181,7 @@ final class CronRunLogService
         if (!$task) {
             return false;
         }
-        $status = (string) ($task->getData(CronTask::schema_fields_STATUS) ?? '');
-        $pid = (int) ($task->getData(CronTask::schema_fields_PID) ?? 0);
-
-        return $status === CronStatus::RUNNING->value && $pid > 0 && Process::isProcessRunning($pid);
+        return $this->isTaskModelProcessRunning($task);
     }
 
     private function formatBytes(int $bytes): string
@@ -189,7 +198,7 @@ final class CronRunLogService
 
     private const TAIL_CHUNK = 98304;
 
-    /** 当前 var/cron/{name}.log：先推已有内容，任务仍运行时继续 tail，否则短空闲后结束 */
+    /** 当前托管进程日志：先推已有内容，任务仍运行时继续 tail，否则短空闲后结束。 */
     public function streamLiveLogTail(string $executeName, SseWriter $sse): void
     {
         $r = $this->resolveLiveLogForStream($executeName);
@@ -207,18 +216,53 @@ final class CronRunLogService
             'execute_name' => $executeName,
         ]);
         $offset = 0;
+        $continuitySuffix = '';
+        $fileIdentity = null;
         $idleWhenNotRunning = 0;
         while ($sse->isAlive()) {
             \clearstatcache(true, $path);
-            $size = \is_file($path) ? (int) \filesize($path) : 0;
+            $stat = \is_file($path) ? @\stat($path) : false;
+            $size = \is_array($stat) ? (int)($stat['size'] ?? 0) : 0;
+            $currentIdentity = $this->logFileIdentity($stat);
+            if ($fileIdentity !== null && $currentIdentity !== null && $currentIdentity !== $fileIdentity) {
+                $offset = 0;
+                $continuitySuffix = '';
+            }
+            if ($currentIdentity !== null) {
+                $fileIdentity = $currentIdentity;
+            }
+            if ($size < $offset) {
+                $offset = 0;
+                $continuitySuffix = '';
+            } elseif ($offset > 0 && $continuitySuffix !== '' && $size >= $offset) {
+                $continuityLength = \strlen($continuitySuffix);
+                $continuityHandle = @\fopen($path, 'rb');
+                $actualSuffix = '';
+                if (\is_resource($continuityHandle)) {
+                    @\fseek($continuityHandle, $offset - $continuityLength);
+                    $actualSuffix = (string)@\fread($continuityHandle, $continuityLength);
+                    @\fclose($continuityHandle);
+                }
+                if (!\hash_equals($continuitySuffix, $actualSuffix)) {
+                    $offset = 0;
+                    $continuitySuffix = '';
+                }
+            }
             if ($size > $offset) {
                 $fh = @\fopen($path, 'rb');
                 if (\is_resource($fh)) {
                     \fseek($fh, $offset);
-                    $data = (string) \fread($fh, $size - $offset);
+                    while ($offset < $size && $sse->isAlive()) {
+                        $remaining = $size - $offset;
+                        $data = (string)\fread($fh, \min(self::TAIL_CHUNK, $remaining));
+                        if ($data === '') {
+                            break;
+                        }
+                        $offset += \strlen($data);
+                        $continuitySuffix = \substr($continuitySuffix . $data, -64);
+                        $this->emitLogChunks($sse, $data);
+                    }
                     \fclose($fh);
-                    $offset = $size;
-                    $this->emitLogChunks($sse, $data);
                 }
                 $idleWhenNotRunning = 0;
             }
@@ -240,6 +284,46 @@ final class CronRunLogService
         ]);
     }
 
+    private function isValidHistoryBasename(string $basename): bool
+    {
+        return \preg_match(
+            '/^[0-9]{8}-[0-9]{6}-[0-9]{6}-(?:managed|legacy)\.log$/D',
+            $basename,
+        ) === 1;
+    }
+
+    private function isTaskModelProcessRunning(CronTask $task): bool
+    {
+        $pid = (int)$task->getData(CronTask::schema_fields_PID);
+        if ($pid < 1) {
+            return false;
+        }
+        $probe = Process::probeManagedCronProcess(
+            $pid,
+            (string)$task->getData(CronTask::schema_fields_EXECUTE_NAME),
+            (string)$task->getData(CronTask::schema_fields_LAUNCH_ID),
+            (string)$task->getData(CronTask::schema_fields_RUN_TIME),
+        );
+
+        return $probe['running'] || $probe['unknown'];
+    }
+
+    /** @param array<string|int,mixed>|false $stat */
+    private function logFileIdentity(array|false $stat): ?string
+    {
+        if (!\is_array($stat)) {
+            return null;
+        }
+        $device = (int)($stat['dev'] ?? 0);
+        $inode = (int)($stat['ino'] ?? 0);
+        if ($inode > 0) {
+            return $device . ':' . $inode;
+        }
+        $created = (int)($stat['ctime'] ?? 0);
+
+        return $created > 0 ? 'ctime:' . $created : null;
+    }
+
     private function emitLogChunks(SseWriter $sse, string $data): void
     {
         while ($data !== '') {
@@ -247,5 +331,33 @@ final class CronRunLogService
             $data = \strlen($data) > self::TAIL_CHUNK ? \substr($data, self::TAIL_CHUNK) : '';
             $sse->sendEvent('chunk', ['content' => $take, 'stream' => 'stdout']);
         }
+    }
+
+    private function normalizeLogText(string $content): string
+    {
+        if ($content === '' || \preg_match('//u', $content) === 1) {
+            return $content;
+        }
+        if (\function_exists('mb_scrub')) {
+            return (string)\mb_scrub($content, 'UTF-8');
+        }
+        if (\function_exists('iconv')) {
+            $converted = @\iconv('UTF-8', 'UTF-8//IGNORE', $content);
+            if ($converted !== false) {
+                return $converted;
+            }
+        }
+
+        return '';
+    }
+
+    private function validUtf8Prefix(string $content, int $maxBytes): string
+    {
+        $prefix = \substr($content, 0, $maxBytes);
+        while ($prefix !== '' && \preg_match('//u', $prefix) !== 1) {
+            $prefix = \substr($prefix, 0, -1);
+        }
+
+        return $prefix;
     }
 }
