@@ -3,10 +3,16 @@
 提供计划任务安装状态等公开查询能力,提供计划任务安装状态等公开查询能力
 获取当前平台计划任务的安装状态,获取当前平台计划任务的安装状态
 "计划任务配置作用域，默认 Weline_Cron","计划任务配置作用域，默认 Weline_Cron"
+获取计划任务手动运行帮助,"Get scheduled task manual-run help"
+获取计划任务运行日志列表,"Get scheduled task run-log list"
+读取计划任务历史日志内容,"Read scheduled task history log content"
 系统定时任务安装成功：%{1},"System scheduled task installation succeeded: %{1}"
 系统定时任务安装失败：%{1},"System scheduled task installation failed: %{1}"
 系统定时任务已存在：%{1},"System scheduled task already exists: %{1}"
 "系统计划任务：%{1} ,成功运行!","Scheduled task: %{1} , successfully executed!"
+系统定时任务移除失败：无法创建临时文件。,"Failed to remove the system scheduled task: unable to create a temporary file."
+系统定时任务移除失败：无法写入临时文件。,"Failed to remove the system scheduled task: unable to write the temporary file."
+系统定时任务移除失败：%{1},"Failed to remove the system scheduled task: %{1}"
 系统定时任务已移除：%{1},"System scheduled task has been removed: %{1}"
 "系统计划任务：%{1} ,成功移除!","Scheduled task: %{1} , successfully removed!"
 系统定时任务维护失败：%{1}，已跳过，不影响本次系统更新。错误：%{2},系统定时任务维护失败：%{1}，已跳过，不影响本次系统更新。错误：%{2}
@@ -18,18 +24,43 @@
 锁定任务失败：%{1},"Failed to lock task: %{1}"
 解锁任务：%{1},"Unlock Task: %{1}"
 解锁任务失败：%{1},"Unlock Task Failed: %{1}"
-"参数 execute_name 不能为空","Parameter execute_name cannot be empty"
+"任务 ID 无效","The task ID is invalid."
 任务不存在,"Task does not exist"
-"本任务未在 #[CronTestHelp] 中配置 manual_help。「后缀」会写入 WELINE_CRON_MANUAL_ARGS，是否生效取决于 execute() 是否解析；留空同定时。","This task has no #[CronTestHelp] manual_help. Suffix sets WELINE_CRON_MANUAL_ARGS; only effective if execute() reads it. Empty = scheduled behavior."
-调度说明,"Scheduling instructions."
-手动参数,"Manual parameters"
-测试说明,"Test Description"
-示例,Example
-"可选「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS；任务可在 execute() 内 getenv 读取。留空则与定时调度一致。","Optional ""suffix"" will be written to the subprocess environment variable WELINE_CRON_MANUAL_ARGS; the task can read it via getenv in execute(). Leave blank to match the scheduled dispatch."
+任务存在受管运行代次，拒绝修改状态：%{1},"The task has an active managed generation; status change was rejected: %{1}"
+任务状态已变化，请刷新后重试,"The task state changed. Refresh and try again."
 "CSRF 验证失败","CSRF validation failed"
 执行名不能为空,"Execution name cannot be empty"
-请求失败,"Request failed"
-读取失败,"Read failed."
+计划任务接口,计划任务接口
+"mdi mdi-clock-outline","mdi mdi-clock-outline"
+计划任务后台（列表、锁定、手动运行等）,计划任务后台（列表、锁定、手动运行等）
+计划任务列表,计划任务列表
+"mdi mdi-format-list-bulleted","mdi mdi-format-list-bulleted"
+查看计划任务列表,查看计划任务列表
+锁定计划任务,锁定计划任务
+"mdi mdi-lock","mdi mdi-lock"
+锁定定时任务,锁定定时任务
+解锁计划任务,解锁计划任务
+"mdi mdi-lock-open","mdi mdi-lock-open"
+解锁定时任务,解锁定时任务
+手动运行帮助,手动运行帮助
+"mdi mdi-help-circle-outline","mdi mdi-help-circle-outline"
+"计划任务 SSE 手动运行说明 JSON","计划任务 SSE 手动运行说明 JSON"
+手动运行SSE（GET）,手动运行SSE（GET）
+"mdi mdi-play-network","mdi mdi-play-network"
+"计划任务真实执行 SSE 流（GET 兼容入口）","计划任务真实执行 SSE 流（GET 兼容入口）"
+手动运行SSE,手动运行SSE
+"计划任务真实执行 SSE 流","计划任务真实执行 SSE 流"
+运行日志列表,运行日志列表
+"mdi mdi-history","mdi mdi-history"
+计划任务调度日志历史与当前文件信息,计划任务调度日志历史与当前文件信息
+运行日志内容,运行日志内容
+"mdi mdi-file-document-outline","mdi mdi-file-document-outline"
+读取单次调度归档日志全文,读取单次调度归档日志全文
+运行日志SSE（GET）,运行日志SSE（GET）
+"mdi mdi-access-point","mdi mdi-access-point"
+"当前调度日志实时尾随（GET 兼容入口）","当前调度日志实时尾随（GET 兼容入口）"
+运行日志SSE,运行日志SSE
+当前调度日志实时尾随（SSE）,当前调度日志实时尾随（SSE）
 全部,All
 待执行,"To execute"
 运行中,Running
@@ -75,16 +106,20 @@ ID,ID
 留空则与定时调度一致,"Leave blank to be consistent with the scheduled schedule"
 输出,Output
 加载失败,"Failed to load"
+调度说明,"Scheduling instructions."
+手动参数,"Manual parameters"
+测试说明,"Test Description"
+示例,Example
 执行名缺失或格式无效，请刷新列表后重试,"Execution name missing or invalid format, please refresh the list and try again"
 执行名缺失或格式无效，请重新点击列表中的「运行」按钮,"Execution name missing or invalid format, please click the ""Run"" button in the list again"
 历史日志内容,"Historical Log Content"
 "【已截断】仅显示前 2MB","[Truncated] Only the first 2MB shown"
 （空）,(Empty)
-"实时尾随 var/cron 下当前日志；任务结束后自动结束流","Real-Time Tail of Current Logs Under var/cron; Stream Ends Automatically When Task Completes"
-"历史归档：任务每次正常结束或新一轮启动前会保留到 var/cron/history","History Archive: Task history is saved to var/cron/history after each normal completion or before a new round starts"
+实时尾随当前托管进程日志；任务结束且日志空闲后自动结束流,"Tail the current managed-process log in real time; the stream ends after the task finishes and the log becomes idle"
+"历史归档：上一轮托管日志会在新一轮启动前移入 var/log/cron/history","History archive: the previous managed log is moved to var/log/cron/history before the next run starts"
 "当前运行中（SSE 实时）","Currently running (SSE real-time)"
-当前日志文件（实时尾随至空闲）,"Current log file (real-time tailing until idle)."
-暂无日志。任务由系统调度跑完后会自动归档到此；也可在运行中产生当前日志文件。,"No logs. Tasks will be automatically archived here after being run by the system scheduler; current log files can also be generated during runtime."
+当前托管进程日志（实时尾随至空闲）,"Current managed-process log (real-time tailing until idle)."
+暂无日志。任务运行时会生成当前托管日志；上一轮日志会在下一轮启动前归档到此。,"No logs yet. A current managed log is created while the task runs; the previous log is archived here before the next run starts."
 "参数 execute_name 无效","Invalid parameter execute_name"
 "参数 file 无效","Invalid parameter file"
 日志文件不存在,"Log file does not exist"
@@ -92,13 +127,17 @@ ID,ID
 调度输出日志（实时）,"Scheduling output log (real-time)"
 日志流已结束,"Log stream ended"
 "未找到 CLI 入口：%{1}","CLI entry not found: %{1}"
-无法设置手动运行环境变量,"Unable to set manual runtime environment variables"
 开始执行：%{1},"Start executing: %{1}"
 无法启动子进程,"Unable to start child process"
 "proc_open 失败","proc_open failed"
 进程退出码：%{1},"Process exit code: %{1}"
 执行完成,"Execution completed"
 执行结束（非零退出码）,"Execution ended (non-zero exit code)"
+"本任务未在 #[CronTestHelp] 中配置 manual_help。「后缀」会写入 WELINE_CRON_MANUAL_ARGS，是否生效取决于 execute() 是否解析；留空同定时。","This task has no #[CronTestHelp] manual_help. Suffix sets WELINE_CRON_MANUAL_ARGS; only effective if execute() reads it. Empty = scheduled behavior."
+"可选「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS；任务可在 execute() 内 getenv 读取。留空则与定时调度一致。","Optional ""suffix"" will be written to the subprocess environment variable WELINE_CRON_MANUAL_ARGS; the task can read it via getenv in execute(). Leave blank to match the scheduled dispatch."
+请求失败,"Request failed"
+读取失败,"Read failed."
+"参数 execute_name 不能为空","Parameter execute_name cannot be empty"
 "检测到 crontab 命令不可用，正在尝试自动安装依赖...","Crontab command not found"
 "crontab 依赖已安装 ✔","Crontab dependency installed ✔"
 "系统定时任务：%{1} ,已安装！","系统定时任务：%{1} ,已安装！"
@@ -126,14 +165,48 @@ ID,ID
 调度任务收集完成！,"Scheduled task collection complete!"
 收集注册调度任务,"Collect and Register Scheduled Tasks"
 代码,Code
+计划任务子进程无法发布数据库共享锁就绪标记。,"The scheduled-task child could not publish its shared database-lock readiness marker."
+计划任务子进程的本次启动已被调度父进程取消。,"This scheduled-task child launch was cancelled by its dispatcher parent."
+"计划任务子进程未在 %{1} 毫秒内收到调度决定。","The scheduled-task child did not receive a dispatch decision within %{1} milliseconds."
 指执行的任务不存在！,"The specified task does not exist!"
+计划任务子进程对应的调度记录不存在。,"The dispatch record for the scheduled-task child does not exist."
+计划任务子进程的任务身份与调度记录不匹配。,"The scheduled-task child identity does not match its dispatch record."
 "【后台手动运行】%{1} 开始执行…","[Manual operation in the background] %{1} starts execution..."
 "【摘要】任务未返回简短摘要（若上方无其它行，可能本轮无待处理项；详情见 var/log）","[Abstract] The task did not return a short summary (if there are no other lines above, there may be no pending items this round; see var/log for details)"
+计划任务子进程执行异常：%{1},"Scheduled-task child execution failed: %{1}"
 "没有要执行的任务：%{1} , 参数：","No tasks to execute: %{1} , parameters:"
 任务进度：页(%{1}=>%{2})/目(%{3}/%{4}),"Task progress: page(%{1}=>%{2})/target(%{3}/%{4})"
+"计划任务正处于 READY 启动窗口，本次强制执行未抢占当前代次。","The scheduled task is in its READY launch window; this forced run did not take over the active generation."
+"计划任务 PID %{1} 的进程身份暂时无法确认，本轮保留 PID 并跳过。","The process identity for scheduled-task PID %{1} is temporarily unknown; this run preserved the PID and skipped it."
+"计划任务处于运行状态但缺少可验证 PID，本轮保留代次并跳过。","The scheduled task is marked running without a verifiable PID; this run preserved the generation and skipped it."
 进程已存在，请检查进程状态！进程名：%{1},"Process already exists, please check the process status! Process name: %{1}"
 "%{1} 程序ID:%{2} 正在运行中，当前强制执行正在杀死进程中...","%{1} Program ID: %{2} is running, and the current force execution is killing the process..."
 "%{1} 程序ID:%{2} 杀死失败！程序不会强制执行，请手动杀死进程后重试!","%{1} Program ID: %{2} Kill failed! The program will not be forced to execute, please kill the process manually and try again!"
+计划任务进程已被强制终止。进程ID：%{1},"The scheduled-task process was forcefully terminated. PID: %{1}"
 "%{1} 程序ID:%{2} 正在运行中，若要强制执行，请手动杀死进程后重试!或者使用配置项’-f‘的强制执行","%{1} Program ID: %{2} is running. If you want to force execution, please kill the process manually and try again! Or use the configuration item '-f' to force execution."
+计划任务进程已退出但未提交成功状态，已标记失败。进程ID：%{1},"The scheduled-task process exited without committing success and was marked failed. PID: %{1}"
+进程创建失败！请检查进程状态！%{1},"Process creation failed. Check process state. %{1}"
+"计划任务子进程未在 %{1} 毫秒内接管数据库共享锁。","The scheduled-task child did not take over the shared database lock within %{1} milliseconds."
+"计划任务子进程 PID 与启动器返回值不一致：%{1}/%{2}。","The scheduled-task child PID differs from the launcher result: %{1}/%{2}."
+"计划任务父进程丢失 PID 写入围栏，已取消本次启动。","The scheduled-task parent lost the PID write fence and cancelled this launch."
+计划任务父进程无法发布执行决定。,"The scheduled-task parent could not publish the execution decision."
+计划任务启动协议异常：%{1},"Scheduled-task launch protocol failed: %{1}"
+后台手动运行未取得新的受管任务代次，请查看调度状态后重试。,"The manual background run did not acquire a new managed generation. Check the scheduler state and try again."
+受管任务已启动，正在等待本代任务完成并转发运行日志：%{1},"The managed task has started. Waiting for this generation to finish and forwarding its log: %{1}"
+受管计划任务记录已不存在。,"The managed scheduled-task record no longer exists."
+受管计划任务代次已被替换，停止等待旧代次：%{1},"The managed scheduled-task generation was replaced; stopped waiting for the old generation: %{1}"
+受管计划任务子进程已退出但未提交终态，已由调度父进程标记失败。进程ID：%{1},"The managed scheduled-task child exited without committing a terminal state and was marked failed by the scheduler parent. PID: %{1}"
+受管计划任务失败，任务未提供错误摘要。,"The managed scheduled task failed without an error summary."
+等待受管计划任务时丢失状态围栏：%{1},"Lost the managed scheduled-task state fence while waiting: %{1}"
+"""Cron 查询器不支持的操作：%{1}""","Unsupported Cron query operation: %{1}"
+后台手动运行对应的任务记录已不存在。,"The task record for this manual background run no longer exists."
+后台手动运行代次已被替换，停止转发旧代次日志：%{1},"The manual background generation was replaced; stopped forwarding the old generation log: %{1}"
+后台手动运行失败，任务未提供错误摘要。,"The manual background run failed without an error summary."
+后台手动运行丢失受管状态围栏：%{1},"The manual background run lost its managed state fence: %{1}"
+"实时尾随 var/cron 下当前日志；任务结束后自动结束流","Real-Time Tail of Current Logs Under var/cron; Stream Ends Automatically When Task Completes"
+"历史归档：任务每次正常结束或新一轮启动前会保留到 var/cron/history","History Archive: Task history is saved to var/cron/history after each normal completion or before a new round starts"
+当前日志文件（实时尾随至空闲）,"Current log file (real-time tailing until idle)."
+暂无日志。任务由系统调度跑完后会自动归档到此；也可在运行中产生当前日志文件。,"No logs. Tasks will be automatically archived here after being run by the system scheduler; current log files can also be generated during runtime."
+无法设置手动运行环境变量,"Unable to set manual runtime environment variables"
 "%{1} 程序ID:%{2} 已运行完毕!","%{1} Program ID:%{2} Completed!"
 进程创建失败！请检查进程状态！,"Process creation failed! Please check the process status!"

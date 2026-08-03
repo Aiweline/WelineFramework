@@ -27,6 +27,8 @@ class Remove extends BaseCommand
         } else {
             $this->printing->error($result['msg']);
         }
+
+        return $result['status'] ? 0 : 1;
     }
 
     /**

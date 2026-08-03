@@ -47,6 +47,8 @@ class CronTask extends Model
     public const schema_fields_BLOCK_UNLOCK_TIMEOUT = 'block_unlock_timeout';
     #[Col('varchar', 20, default: '0', comment: '运行时间戳')]
     public const schema_fields_RUN_TIME = 'run_time';
+    #[Col('varchar', 32, default: '', comment: '当前运行代次标识')]
+    public const schema_fields_LAUNCH_ID = 'launch_id';
     #[Col('datetime', comment: '运行日期')]
     public const schema_fields_RUN_DATE = 'run_date';
     #[Col('datetime', comment: '下次运行时间')]

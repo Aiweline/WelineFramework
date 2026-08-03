@@ -1,7 +1,6 @@
-<!-- weline:module-readme:auto-generated -->
 # Weline_Cron 模块文档
 
-> 本 README 由 `dev/ai/scripts/generate-missing-module-readmes.php` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
+> 本 README 是 Weline_Cron 的长期模块契约；结构清单可由生成器辅助核对，专项行为以本模块 `doc/开发/` 文档为准。
 
 ## 当前入口
 
@@ -37,7 +36,7 @@
 - `Helper`：模块内辅助能力。 文件数：2
 - `Model`：ORM 模型与字段 schema。 文件数：1
 - `Observer`：事件观察者与订阅逻辑。 文件数：1
-- `Service`：业务编排与模块服务层。 文件数：3
+- `Service`：业务编排与模块服务层。 文件数：4
 - `etc`：模块配置。 文件数：3
 - `i18n`：国际化资源。 文件数：2
 - `view/templates`：模块模板源文件。 文件数：1
@@ -54,9 +53,31 @@
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
 
+## 后台读取与日志契约
+
+- Cron 列表页的运行帮助、历史日志列表、历史日志内容统一走 `Weline.Api.resource('cron')`，operation 分别为 `getRunHelp`、`runLogList`、`runLogContent`；禁止退回原生 `fetch/ajax`。
+- 三个 operation 都是 `frontend=true`、`auth=backend`、`mode=read`、`graph=false`。帮助使用精确资源 `Weline_Cron::cron_run_help`；日志读取使用既有精确资源 `Weline_Cron::cron_run_log`。
+- `CronAdminReadService` 是 Controller 兼容路由与 QueryProvider 的共享业务边界；旧 `run-help`、`run-log-list`、`run-log-content` 路由只保留兼容，不得复制业务判断。
+- 当前实时日志由 `Process::getManagedLogProcessFilePath()` 解析，物理位于 `var/process/{stable-managed-name}.log`。下一轮启动前，上一轮日志归档到 `var/log/cron/history/{execute-name-sha256前24位}/`，文件名严格为 `{Ymd-His}-{6位微秒}-{managed|legacy}.log`；每个任务独立保留最近 20 个文件。
+- 历史读取必须先解析真实 Cron 任务，再进入该任务哈希目录并校验完整文件名 grammar；拒绝 `/`、`\\`、`..`、控制字符和越界 symlink。正文最多返回 2 MiB，结果保持合法 UTF-8并通过 `truncated` 标记截断。
+- 实时日志仍走 SSE，单次文件读取最多 96 KiB；普通只读 operation 不得包装成 SSE，SSE 也不得伪装成普通 bin-query。
+- 一个 ACL `source_id` 只能落一条路由记录。GET/POST 或不同 Controller 方法不得复用同一 source；历史兼容的 POST 权限 `cron_run_stream`、`cron_run_log` 保留，GET 兼容入口和日志 HTTP 读取各使用唯一 source。
+
+## Setup 并发隔离契约
+
+- 完整锁生命周期、锁忙早退、`task_id + run_time + launch_id + status + PID` 围栏、READY → fenced PID CAS → GO/ABORT、PID 三态探测、身份安全终止与日志清理契约见 `app/code/Weline/Cron/doc/开发/setup_cron_database_access_coordination.md`。
+- Linux/macOS 生成的系统 Cron wrapper 使用当前项目 `var/cron-main.lock` 单航班运行；macOS 使用 `lockf -k -t 0` 持锁到命令退出，Linux 使用 `flock -n`，两者均不可用时 fail-closed，不允许每分钟父调度器重叠。
+- 顶层 `bin/w` / `bin/m` 在 bootstrap 前取得门禁，入口租约保持到 PHP 进程退出；直接命令调用才通过 `CommandResult` finalizer 在 Cli post/footer 后释放。
+- `CronTask` 只能在 SH 内延迟解析；POSIX/Windows 派生路径都必须在返回 PID 前提交 exact managed lease，受管子进程还必须在 READY 后等待父进程完成 PID 围栏并发布 GO，之后才能进入业务代码。
+- SQLite 串行父调度器必须用 `waitpid(WNOHANG)` 回收自己已经退出的 POSIX child；若 child 未提交业务终态，则按 `task_id + run_time + launch_id + RUNNING + PID` 精确 CAS 为 FAIL，禁止僵尸进程让整轮调度无限等待。
+- POSIX 对携带 required argv 围栏的 live child 不允许在 probe 后按裸 PID 发信号；没有 pidfd/稳定句柄时返回 `termination_unavailable_without_stable_handle`、保留 lease/PID，并依赖 ABORT handoff 或 child 自然退出。
+- `upgrade_after` 仍在 Setup EX 和维护模式内执行；此时触发的 Cron 会在 bootstrap 前跳过，不访问数据库。
+- `cron:remove` 必须读取并保留全部用户 crontab 条目，只移除同时匹配当前项目标识与 `cron_flag` 的条目；提交失败或回读仍存在时返回非零，成功后才删除生成脚本。
+
 ## 本模块文档资产
 
 - `app/code/Weline/Cron/doc/开发/cron_manual_sse.md`
+- `app/code/Weline/Cron/doc/开发/setup_cron_database_access_coordination.md`
 - `app/code/Weline/Cron/doc/开发/windows_cron_process_management.md`
 
 ## 维护规则
@@ -65,4 +86,4 @@
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。
-- 本 README 目前是结构稿；后续功能稳定后，应继续补模块职责、关键流程、接口与反例。
+- 结构清单变化时核对本 README；长期安全契约优先更新对应的 `doc/开发/` 专项文档。
