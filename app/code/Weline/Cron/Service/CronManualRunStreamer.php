@@ -6,7 +6,7 @@ namespace Weline\Cron\Service;
 use Weline\Framework\Http\Sse\SseWriter;
 
 /**
- * 后台 SSE：子进程执行 cron:task:run &lt;execute_name&gt; -f，可选 putenv WELINE_CRON_MANUAL_ARGS。
+ * 后台 SSE：子进程通过受管父调度路径执行 cron:task:run &lt;execute_name&gt; -f。
  * 输出合并推送，避免海量小 chunk 拖垮浏览器。
  */
 final class CronManualRunStreamer
@@ -38,25 +38,7 @@ final class CronManualRunStreamer
         }
 
         $suffix = $this->sanitizeSuffix($suffix);
-        $prevManual = \getenv(self::MANUAL_ARGS_ENV);
-        $prevSseMirror = \getenv(self::MANUAL_SSE_ENV);
-        if (!\putenv(self::MANUAL_SSE_ENV . '=1')) {
-            $sse->start();
-            $sse->sendError((string)__('无法设置手动运行环境变量'));
-
-            return;
-        }
-        if ($suffix !== '') {
-            if (!\putenv(self::MANUAL_ARGS_ENV . '=' . $suffix)) {
-                $this->restoreSseMirrorEnv($prevSseMirror);
-                $sse->start();
-                $sse->sendError((string)__('无法设置手动运行环境变量'));
-
-                return;
-            }
-        } else {
-            \putenv(self::MANUAL_ARGS_ENV);
-        }
+        $childEnvironment = $this->buildChildEnvironment($suffix);
 
         $sse->start();
         $sse->sendEvent('start', [
@@ -80,10 +62,8 @@ final class CronManualRunStreamer
             2 => ['pipe', 'w'],
         ];
 
-        $process = @\proc_open($cmd, $descriptorspec, $pipes, BP, null);
+        $process = @\proc_open($cmd, $descriptorspec, $pipes, BP, $childEnvironment);
         if (!\is_resource($process)) {
-            $this->restoreManualEnv($prevManual);
-            $this->restoreSseMirrorEnv($prevSseMirror);
             $sse->sendEvent('error', ['message' => (string)__('无法启动子进程')]);
             $sse->complete(['exit_code' => -1, 'message' => (string)__('proc_open 失败')]);
 
@@ -129,8 +109,7 @@ final class CronManualRunStreamer
             $lastChunkFlush = $now;
         };
 
-        try {
-            while (true) {
+        while (true) {
                 if (!$sse->isAlive()) {
                     @\proc_terminate($process);
                     break;
@@ -160,6 +139,7 @@ final class CronManualRunStreamer
 
                 $status = \proc_get_status($process);
                 if (!$status['running']) {
+                    $observedExitCode = (int)($status['exitcode'] ?? -1);
                     \stream_set_blocking($pipes[1], true);
                     \stream_set_blocking($pipes[2], true);
                     foreach ([[$pipes[1], 'out'], [$pipes[2], 'err']] as [$pipe, $which]) {
@@ -174,7 +154,8 @@ final class CronManualRunStreamer
                         @\fclose($pipe);
                     }
                     $tryFlush(true);
-                    $exitCode = \proc_close($process);
+                    $closedExitCode = \proc_close($process);
+                    $exitCode = $closedExitCode >= 0 ? $closedExitCode : $observedExitCode;
                     $process = null;
                     break;
                 }
@@ -182,14 +163,10 @@ final class CronManualRunStreamer
                 $sse->maybeHeartbeat();
             }
 
-            if (\is_resource($process)) {
-                @\fclose($pipes[1]);
-                @\fclose($pipes[2]);
-                $exitCode = \proc_close($process);
-            }
-        } finally {
-            $this->restoreManualEnv($prevManual);
-            $this->restoreSseMirrorEnv($prevSseMirror);
+        if (\is_resource($process)) {
+            @\fclose($pipes[1]);
+            @\fclose($pipes[2]);
+            $exitCode = \proc_close($process);
         }
 
         if ($exitCode !== 0) {
@@ -216,21 +193,30 @@ final class CronManualRunStreamer
         return $suffix;
     }
 
-    private function restoreManualEnv(string|false $prev): void
+    /** @return array<string,string> */
+    private function buildChildEnvironment(string $suffix): array
     {
-        if ($prev === false) {
-            \putenv(self::MANUAL_ARGS_ENV);
-        } else {
-            \putenv(self::MANUAL_ARGS_ENV . '=' . $prev);
+        $source = \getenv();
+        if (!\is_array($source)) {
+            $source = $_ENV;
         }
-    }
+        $environment = [];
+        foreach ($source as $key => $value) {
+            if (!\is_string($key) || (!\is_scalar($value) && !$value instanceof \Stringable)) {
+                continue;
+            }
+            if (\str_starts_with(\strtoupper($key), 'WLS_')) {
+                continue;
+            }
+            $environment[$key] = (string)$value;
+        }
+        $environment[self::MANUAL_SSE_ENV] = '1';
+        if ($suffix === '') {
+            unset($environment[self::MANUAL_ARGS_ENV]);
+        } else {
+            $environment[self::MANUAL_ARGS_ENV] = $suffix;
+        }
 
-    private function restoreSseMirrorEnv(string|false $prev): void
-    {
-        if ($prev === false) {
-            \putenv(self::MANUAL_SSE_ENV);
-        } else {
-            \putenv(self::MANUAL_SSE_ENV . '=' . $prev);
-        }
+        return $environment;
     }
 }

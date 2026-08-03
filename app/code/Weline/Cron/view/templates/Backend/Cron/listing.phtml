@@ -601,7 +601,6 @@
 use Weline\Framework\Security\Token;
 $welineCronSseCsrf = Token::create('csrf', 9, 3600);
 $welineCronRunStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-stream'), ENT_QUOTES, 'UTF-8');
-$welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-help'), ENT_QUOTES, 'UTF-8');
 ?>
 <div id="weline-cron-run-modal" class="weline-cron-run-modal" role="dialog" aria-modal="true" aria-labelledby="weline-cron-run-modal-title">
     <div class="weline-cron-run-modal-backdrop" id="weline-cron-run-modal-backdrop"></div>
@@ -648,7 +647,6 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
 (function() {
     'use strict';
     var runStreamUrl = '<?= $welineCronRunStreamUrl ?>';
-    var runHelpUrl = '<?= $welineCronRunHelpUrl ?>';
     var modal = document.getElementById('weline-cron-run-modal');
     if (!modal) return;
     var executeNamePattern = /\S/;
@@ -703,10 +701,7 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
         var body = document.getElementById('weline-cron-run-help-body');
         if (!body) return;
         body.textContent = '<?= addslashes((string) __('加载中')) ?>…';
-        fetch(runHelpUrl + '?execute_name=' + encodeURIComponent(executeName), {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        }).then(function(r) { return r.json(); }).then(function(j) {
+        cronCall('getRunHelp', { execute_name: executeName }).then(function(j) {
             if (!j || !j.success) {
                 body.textContent = (j && j.message) ? j.message : '<?= addslashes((string) __('加载失败')) ?>';
                 return;
@@ -746,8 +741,21 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
                 parts.push('\n\n<?= addslashes((string) __('示例')) ?>:\n' + j.test_help_examples.join('\n'));
             }
             body.textContent = parts.join('');
-        }).catch(function() {
-            body.textContent = '<?= addslashes((string) __('加载失败')) ?>';
+        }).catch(function(error) {
+            body.textContent = error && error.message
+                ? String(error.message)
+                : '<?= addslashes((string) __('加载失败')) ?>';
+        });
+    }
+
+    function cronCall(operation, params) {
+        return Promise.resolve().then(function() {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                throw new Error('<?= addslashes((string) __('加载失败')) ?>');
+            }
+            return window.Weline.Api.resource('cron');
+        }).then(function(api) {
+            return api[operation](params || {}, { keepBusinessResult: true, silent: true });
         });
     }
 
@@ -811,8 +819,6 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
 </script>
 
 <?php
-$welineCronLogListUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-log-list'), ENT_QUOTES, 'UTF-8');
-$welineCronLogContentUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-log-content'), ENT_QUOTES, 'UTF-8');
 $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-log-stream'), ENT_QUOTES, 'UTF-8');
 ?>
 <div id="weline-cron-log-modal" class="weline-cron-run-modal" role="dialog" aria-modal="true" aria-labelledby="weline-cron-log-modal-title">
@@ -853,8 +859,6 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
 <script>
 (function() {
     'use strict';
-    var logListUrl = '<?= $welineCronLogListUrl ?>';
-    var logContentUrl = '<?= $welineCronLogContentUrl ?>';
     var logStreamUrl = '<?= $welineCronLogStreamUrl ?>';
     var logModal = document.getElementById('weline-cron-log-modal');
     if (!logModal) return;
@@ -906,16 +910,26 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
         var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-log-terminal'];
         if (term && typeof term.stop === 'function') term.stop();
     }
+    function cronCall(operation, params) {
+        return Promise.resolve().then(function() {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                throw new Error('<?= addslashes((string) __('加载失败')) ?>');
+            }
+            return window.Weline.Api.resource('cron');
+        }).then(function(api) {
+            return api[operation](params || {}, { keepBusinessResult: true, silent: true });
+        });
+    }
     function showHistoryContent(file) {
         var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-log-terminal'];
         if (term && typeof term.stop === 'function') term.stop();
         termWrap.style.display = 'none';
         pre.style.display = 'block';
         pre.textContent = '<?= addslashes((string) __('加载中')) ?>…';
-        fetch(logContentUrl + '?execute_name=' + encodeURIComponent(currentExecuteName) + '&file=' + encodeURIComponent(file), {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        }).then(function(r) { return r.json(); }).then(function(j) {
+        cronCall('runLogContent', {
+            execute_name: currentExecuteName,
+            file: file
+        }).then(function(j) {
             if (!j || !j.success) {
                 pre.textContent = (j && j.message) ? j.message : '<?= addslashes((string) __('加载失败')) ?>';
                 return;
@@ -923,8 +937,10 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
             var t = j.content != null ? String(j.content) : '';
             if (j.truncated) t += '\n\n<?= addslashes((string) __('【已截断】仅显示前 2MB')) ?>';
             pre.textContent = t || '<?= addslashes((string) __('（空）')) ?>';
-        }).catch(function() {
-            pre.textContent = '<?= addslashes((string) __('加载失败')) ?>';
+        }).catch(function(error) {
+            pre.textContent = error && error.message
+                ? String(error.message)
+                : '<?= addslashes((string) __('加载失败')) ?>';
         });
     }
     function startLiveStream() {
@@ -943,10 +959,10 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
     function onLogSelectChange() {
         if (!sel || !sel.value) return;
         if (sel.value === '__live__') {
-            if (hint) hint.textContent = '<?= addslashes((string) __('实时尾随 var/cron 下当前日志；任务结束后自动结束流')) ?>';
+            if (hint) hint.textContent = '<?= addslashes((string) __('实时尾随当前托管进程日志；任务结束且日志空闲后自动结束流')) ?>';
             startLiveStream();
         } else {
-            if (hint) hint.textContent = '<?= addslashes((string) __('历史归档：任务每次正常结束或新一轮启动前会保留到 var/cron/history')) ?>';
+            if (hint) hint.textContent = '<?= addslashes((string) __('历史归档：上一轮托管日志会在新一轮启动前移入 var/log/cron/history')) ?>';
             showHistoryContent(sel.value);
         }
     }
@@ -966,10 +982,7 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
             termWrap.style.display = 'none';
             return;
         }
-        fetch(logListUrl + '?execute_name=' + encodeURIComponent(currentExecuteName), {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin'
-        }).then(function(r) { return r.json(); }).then(function(j) {
+        cronCall('runLogList', { execute_name: currentExecuteName }).then(function(j) {
             if (!j || !j.success) {
                 emptyEl.textContent = (j && j.message) ? j.message : '<?= addslashes((string) __('加载失败')) ?>';
                 emptyEl.style.display = 'block';
@@ -981,7 +994,7 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
                 o.value = '__live__';
                 o.textContent = j.task_running
                     ? '<?= addslashes((string) __('当前运行中（SSE 实时）')) ?>'
-                    : '<?= addslashes((string) __('当前日志文件（实时尾随至空闲）')) ?>';
+                    : '<?= addslashes((string) __('当前托管进程日志（实时尾随至空闲）')) ?>';
                 sel.appendChild(o);
             }
             (j.items || []).forEach(function(it) {
@@ -991,7 +1004,7 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
                 sel.appendChild(o);
             });
             if (sel.options.length === 0) {
-                emptyEl.textContent = '<?= addslashes((string) __('暂无日志。任务由系统调度跑完后会自动归档到此；也可在运行中产生当前日志文件。')) ?>';
+                emptyEl.textContent = '<?= addslashes((string) __('暂无日志。任务运行时会生成当前托管日志；上一轮日志会在下一轮启动前归档到此。')) ?>';
                 emptyEl.style.display = 'block';
                 termWrap.style.display = 'none';
                 var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-log-terminal'];
@@ -1000,8 +1013,10 @@ $welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/back
             }
             sel.selectedIndex = 0;
             onLogSelectChange();
-        }).catch(function() {
-            emptyEl.textContent = '<?= addslashes((string) __('加载失败')) ?>';
+        }).catch(function(error) {
+            emptyEl.textContent = error && error.message
+                ? String(error.message)
+                : '<?= addslashes((string) __('加载失败')) ?>';
             emptyEl.style.display = 'block';
             termWrap.style.display = 'none';
         });
