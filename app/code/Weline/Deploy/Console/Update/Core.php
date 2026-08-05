@@ -769,15 +769,21 @@ class Core extends CommandAbstract
         $isExistingRepo = is_dir($gitDir);
         
         if ($isExistingRepo && !$this->forceUpdate) {
-            // 增量模式：已有仓库，使用 git fetch + diff 获取变化文件
-            $this->printer->note(__('增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...'));
+            // 冲突检测已用旧 HEAD 做完。此处旧 HEAD 只记作基线，缓存仓必须前进到线上最新 tip。
+            $this->printer->note(__('冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...'));
             $this->ensureCacheOriginUsesPreferredRepo($tmpDir);
             
-            // 获取当前 HEAD
+            // 记录旧基线（仅用于算 diff）；之后 reset 到线上最新
             $currentHead = '';
             $headCode = $this->runGitCommand($tmpDir, ['rev-parse', 'HEAD'], $headOutput);
             if ($headCode === 0 && !empty($headOutput)) {
                 $currentHead = trim($headOutput[0]);
+            }
+            if ($currentHead !== '') {
+                $this->printer->note(__(
+                    '旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）',
+                    [substr($currentHead, 0, 8)]
+                ));
             }
             
             // 获取远程更新（失败则按候选列表轮换 origin 再试，仍失败才整仓重克）
@@ -817,7 +823,7 @@ class Core extends CommandAbstract
             if (!empty($currentHead)) {
                 $this->changedFiles = $this->getGitChangedFiles($tmpDir, $currentHead, $targetRef);
                 $changedCount = count($this->changedFiles);
-                $this->printer->note(__('检测到 %{1} 个变化的文件', [$changedCount]));
+                $this->printer->note(__('旧基线 → 线上 tip 变更文件：%{1} 个', [$changedCount]));
             }
             
             if ($tag) {
@@ -831,7 +837,7 @@ class Core extends CommandAbstract
                 $this->printer->success(__('✓ 已切换到标签 %{1}', [$tag]));
             } else {
                 // 重置到远程分支最新
-                $this->printer->note(__('重置到远程分支 %{1} 最新...', [$branch]));
+                $this->printer->note(__('将缓存仓重置到线上分支 %{1} 最新 tip...', [$branch]));
                 
                 // 先切换到目标分支
                 $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', $branch], $output);
@@ -859,7 +865,15 @@ class Core extends CommandAbstract
                     return;
                 }
                 
-                $this->printer->success(__('✓ 已更新到分支 %{1} 最新版本', [$branch]));
+                $newHeadOutput = [];
+                $newHead = '';
+                if ($this->runGitCommand($tmpDir, ['rev-parse', '--short', 'HEAD'], $newHeadOutput) === 0 && $newHeadOutput !== []) {
+                    $newHead = trim((string)$newHeadOutput[0]);
+                }
+                $this->printer->success(__(
+                    '✓ 缓存仓已从旧基线前进到线上最新 tip %{1}（分支 %{2}）',
+                    [$newHead !== '' ? $newHead : '?', $branch]
+                ));
             }
             
             // 显示最新提交信息
