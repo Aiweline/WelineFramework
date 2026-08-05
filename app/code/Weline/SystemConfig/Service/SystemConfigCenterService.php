@@ -11,7 +11,8 @@ class SystemConfigCenterService
 {
     public function __construct(
         private readonly SystemConfig $systemConfig,
-        private readonly SystemConfigTemplateService $templateService
+        private readonly SystemConfigTemplateService $templateService,
+        private readonly SystemConfigLockService $lockService,
     ) {
     }
 
@@ -56,17 +57,28 @@ class SystemConfigCenterService
                         );
                         $currentRow = $this->systemConfig->getScopedConfigRow($key, $moduleName, $area, $scope, $locale);
                         $source = is_array($resolved['source'] ?? null) ? $resolved['source'] : null;
+                        $sourceMeta = is_array($source['metadata'] ?? null) ? $source['metadata'] : [];
                         $isSensitive = $this->isSensitiveField($field)
                             || (bool)($source['is_sensitive'] ?? false)
                             || (int)($currentRow[SystemConfig::schema_fields_IS_SENSITIVE] ?? 0) === 1;
+                        $locked = isset($sourceMeta[SystemConfigLockService::META_ACTIVE_LOCK])
+                            && (int)$sourceMeta[SystemConfigLockService::META_ACTIVE_LOCK] > 0;
+                        $rowSuppressed = SystemConfigLockService::isRowSuppressed($currentRow);
+                        $sourceKind = $currentRow !== null
+                            ? 'exact'
+                            : ($source !== null ? 'fallback' : 'default');
 
                         $field['resolved'] = $resolved;
                         $field['current_row'] = $this->systemConfig->maskSensitiveRow($currentRow);
                         $field['base_version'] = (int)($currentRow[SystemConfig::schema_fields_VERSION] ?? 0);
-                        $field['has_override'] = $currentRow !== null;
+                        $field['has_override'] = $currentRow !== null && !$rowSuppressed;
                         $field['effective_value'] = $isSensitive ? '***' : $this->stringifyValue($resolved['value'] ?? ($field['default'] ?? ''));
                         $field['effective_source'] = $source;
+                        $field['source_kind'] = $sourceKind;
                         $field['is_sensitive'] = $isSensitive;
+                        $field['locked'] = $locked;
+                        $field['suppressed'] = $rowSuppressed;
+                        $field['lock_version'] = (int)($sourceMeta[SystemConfigLockService::META_ACTIVE_LOCK] ?? 0);
 
                         $tree['modules'][$moduleIndex]['areas'][$areaIndex]['templates'][$templateIndex]['fields'][$fieldIndex] = $field;
                     }
@@ -709,6 +721,94 @@ class SystemConfigCenterService
         }
 
         return $result;
+    }
+
+    /**
+     * TASK-P1C-002：lock 预览（下级弱覆盖清单）。
+     *
+     * @return array<string, mixed>
+     */
+    public function previewLock(
+        string $module,
+        string $area,
+        string $key,
+        ?string $scope = null,
+        ?string $locale = null,
+    ): array {
+        return $this->lockService->previewLock($module, $area, $key, $scope, $locale);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    public function lockScope(
+        string $module,
+        string $area,
+        string $key,
+        ?string $scope = null,
+        ?string $locale = null,
+        array $options = [],
+    ): array {
+        return $this->lockService->lockScope($module, $area, $key, $scope, $locale, $options);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    public function unlockScope(
+        string $module,
+        string $area,
+        string $key,
+        ?string $scope = null,
+        ?string $locale = null,
+        array $options = [],
+    ): array {
+        return $this->lockService->unlockScope($module, $area, $key, $scope, $locale, $options);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function previewRestoreSuppressed(
+        string $module,
+        string $area,
+        string $key,
+        ?string $parentScope = null,
+        ?string $locale = null,
+    ): array {
+        return $this->lockService->previewRestoreSuppressed($module, $area, $key, $parentScope, $locale);
+    }
+
+    /**
+     * @param list<array{scope:string,locale?:string}> $targets
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    public function restoreSuppressedRows(
+        string $module,
+        string $area,
+        string $key,
+        array $targets,
+        array $options = [],
+    ): array {
+        return $this->lockService->restoreSuppressedRows($module, $area, $key, $targets, $options);
+    }
+
+    /**
+     * @param list<array{scope:string,locale?:string}> $targets
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    public function discardSuppressedRows(
+        string $module,
+        string $area,
+        string $key,
+        array $targets,
+        array $options = [],
+    ): array {
+        return $this->lockService->discardSuppressedRows($module, $area, $key, $targets, $options);
     }
 
     /**

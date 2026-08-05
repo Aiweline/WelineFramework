@@ -190,6 +190,19 @@ class Create extends AbstractTable implements CreateInterface
      */
     private function convertMysqlTypesToPostgres(string $sql): string
     {
+        // Never rewrite quoted identifiers or literal/comment values. The old
+        // whole-string regex changed comments containing BLOB/JSON and made
+        // declarative schema verification permanently non-convergent.
+        $segments = preg_split(
+            '/("(?:[^"]|"")*"|\'(?:[^\']|\'\')*\')/s',
+            $sql,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE,
+        );
+        if (!is_array($segments)) {
+            return $sql;
+        }
+
         // MySQL 类型到 PostgreSQL 类型的映射
         $typeMappings = [
             // 整数类型
@@ -229,16 +242,24 @@ class Create extends AbstractTable implements CreateInterface
             // 注意：ENUM 和 SET 的完整转换需要解析值列表，这里只做基本转换
         ];
         
-        // 应用类型转换
-        foreach ($typeMappings as $pattern => $replacement) {
-            $sql = preg_replace($pattern, $replacement, $sql);
+        foreach ($segments as $position => $segment) {
+            if ($position % 2 === 1) {
+                continue;
+            }
+            foreach ($typeMappings as $pattern => $replacement) {
+                $segment = (string)preg_replace($pattern, $replacement, $segment);
+            }
+
+            // PostgreSQL does not support MySQL display lengths for these types.
+            $segment = (string)preg_replace(
+                '/\b(SMALLINT|INTEGER|BIGINT|REAL|DOUBLE PRECISION|TEXT|BYTEA|DATE|TIME|TIMESTAMP|JSONB|SERIAL|BIGSERIAL)\s*\(\s*\d+\s*\)/i',
+                '$1',
+                $segment,
+            );
+            $segments[$position] = $segment;
         }
-        
-        // 移除 SMALLINT、INTEGER、BIGINT 等类型的长度参数（PostgreSQL 不支持）
-        // 匹配模式：SMALLINT(数字) -> SMALLINT
-        $sql = preg_replace('/\b(SMALLINT|INTEGER|BIGINT|REAL|DOUBLE PRECISION|TEXT|BYTEA|DATE|TIME|TIMESTAMP|JSONB|SERIAL|BIGSERIAL)\s*\(\s*\d+\s*\)/i', '$1', $sql);
-        
-        return $sql;
+
+        return implode('', $segments);
     }
 
     public function addIndex(string $type, string $name, array|string $column, string $comment = '', string $index_method = ''): CreateInterface
@@ -350,7 +371,7 @@ class Create extends AbstractTable implements CreateInterface
         return $this;
     }
 
-    public function create(): mixed
+    public function create(bool $withImplicitTimestampColumns = true): mixed
     {
         // 字段
         $fieldDefinitions = [];
@@ -367,30 +388,33 @@ class Create extends AbstractTable implements CreateInterface
             }
         }
         
-        // 如果没有 create_time 和 update_time，添加它们
-        $hasCreateTime = false;
-        $hasUpdateTime = false;
-        foreach ($fieldDefinitions as $def) {
-            if (str_contains(strtolower($def), 'create_time')) {
-                $hasCreateTime = true;
+        // Legacy table builders keep implicit timestamps; declarative schemas
+        // opt out so their physical definition matches TableSchema exactly.
+        if ($withImplicitTimestampColumns) {
+            $hasCreateTime = false;
+            $hasUpdateTime = false;
+            foreach ($fieldDefinitions as $def) {
+                if (str_contains(strtolower($def), 'create_time')) {
+                    $hasCreateTime = true;
+                }
+                if (str_contains(strtolower($def), 'update_time')) {
+                    $hasUpdateTime = true;
+                }
             }
-            if (str_contains(strtolower($def), 'update_time')) {
-                $hasUpdateTime = true;
+
+            if (!$hasCreateTime) {
+                $create_time_comment_words = __('创建时间');
+                // PostgreSQL 使用 NOW() 或 CURRENT_TIMESTAMP
+                $fieldDefinitions[] = "\"create_time\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
+                $fieldComments[] = "COMMENT ON COLUMN {$this->table}.\"create_time\" IS '{$create_time_comment_words}';";
             }
-        }
-        
-        if (!$hasCreateTime) {
-            $create_time_comment_words = __('创建时间');
-            // PostgreSQL 使用 NOW() 或 CURRENT_TIMESTAMP
-            $fieldDefinitions[] = "\"create_time\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
-            $fieldComments[] = "COMMENT ON COLUMN {$this->table}.\"create_time\" IS '{$create_time_comment_words}';";
-        }
-        if (!$hasUpdateTime) {
-            $update_time_comment_words = __('更新时间');
-            // PostgreSQL 不支持 ON UPDATE CURRENT_TIMESTAMP，需要使用触发器
-            // 这里只设置默认值，更新需要使用触发器
-            $fieldDefinitions[] = "\"update_time\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
-            $fieldComments[] = "COMMENT ON COLUMN {$this->table}.\"update_time\" IS '{$update_time_comment_words}';";
+            if (!$hasUpdateTime) {
+                $update_time_comment_words = __('更新时间');
+                // PostgreSQL 不支持 ON UPDATE CURRENT_TIMESTAMP，需要使用触发器
+                // 这里只设置默认值，更新需要使用触发器
+                $fieldDefinitions[] = "\"update_time\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
+                $fieldComments[] = "COMMENT ON COLUMN {$this->table}.\"update_time\" IS '{$update_time_comment_words}';";
+            }
         }
         
         $fields_str = implode(',' . PHP_EOL . '    ', $fieldDefinitions);
@@ -605,4 +629,3 @@ class Create extends AbstractTable implements CreateInterface
         return $result;
     }
 }
-

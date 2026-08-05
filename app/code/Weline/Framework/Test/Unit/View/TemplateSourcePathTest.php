@@ -10,7 +10,7 @@
 namespace Weline\Framework\View;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class TemplateSourcePathTest extends TestCore
 {

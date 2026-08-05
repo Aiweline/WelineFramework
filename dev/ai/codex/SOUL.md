@@ -108,7 +108,8 @@ testing guide before loading narrower unit or E2E skills.
 - Do not edit `generated/` as source.
 - Do not add new dependencies without explicit user request.
 - Do not use `sleep`, `die`, or `exit` in WLS request/worker paths.
-- Do not leave WLS test instances running.
+- Stop automated WLS test instances; keep one running only for an explicit
+  user-acceptance handoff with its URL, status, and stop command.
 - Do not test on the default WLS port or reuse default instance names for
   isolated experiments.
 - Do not use JS `alert` or `confirm` in app UI.

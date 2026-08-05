@@ -3,10 +3,15 @@ declare(strict_types=1);
 
 namespace Weline\SystemConfig\Extends\Module\Weline_Framework\Query;
 
+use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
+use Weline\Acl\Api\Authorization\ObjectAction;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Model\SystemConfigVersion;
 use Weline\SystemConfig\Service\SystemConfigCenterService;
+use Weline\SystemConfig\Service\ConfigEnvelopeService;
+use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 use Weline\SystemConfig\Service\SystemConfigTemplateService;
 
 class SystemConfigQueryProvider implements QueryProviderInterface
@@ -14,7 +19,9 @@ class SystemConfigQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly SystemConfig $systemConfig,
         private readonly SystemConfigTemplateService $templateService,
-        private readonly SystemConfigCenterService $configCenterService
+        private readonly SystemConfigCenterService $configCenterService,
+        private readonly SystemConfigTargetScopeService $targetScopeService,
+        private readonly BackendObjectAuthorizationGuardInterface $objectAuthorizationGuard,
     ) {
     }
 
@@ -44,6 +51,16 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             'rollbackScopeConfigVersion' => $this->rollbackScopeConfigVersion($params),
             'getConfigVersions' => $this->getConfigVersions($params),
             'getConfigVersionDetail' => $this->getConfigVersionDetail($params),
+            'previewScopeLock' => $this->previewScopeLock($params),
+            'lockScope' => $this->lockScope($params),
+            'unlockScope' => $this->unlockScope($params),
+            'previewRestoreSuppressed' => $this->previewRestoreSuppressed($params),
+            'restoreSuppressedRows' => $this->restoreSuppressedRows($params),
+            'discardSuppressedRows' => $this->discardSuppressedRows($params),
+            'registerSecurityPolicyLkg' => $this->registerSecurityPolicyLkg($params),
+            'exportConfigEnvelope' => $this->exportConfigEnvelope($params),
+            'previewConfigImport' => $this->previewConfigImport($params),
+            'importConfigEnvelope' => $this->importConfigEnvelope($params),
             default => throw new \InvalidArgumentException(
                 (string)__('SystemConfig query provider does not support: %{1}', $operation)
             ),
@@ -202,6 +219,15 @@ class SystemConfigQueryProvider implements QueryProviderInterface
 
     private function saveTemplateConfig(array $params): array
     {
+        $target = $this->resolveWriteTarget($params);
+        $options = $this->extractSaveOptions($params);
+        $options['scope_identity'] = $target['identity'];
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::UPDATE,
+            $target['identity'],
+            $this->expectedGrantVersion($params),
+        );
+
         return $this->configCenterService->saveTemplateConfig(
             module: (string)($params['module'] ?? ''),
             area: (string)($params['area'] ?? SystemConfig::area_BACKEND),
@@ -209,24 +235,56 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             values: is_array($params['values'] ?? null) ? $params['values'] : [],
             inheritKeys: array_values(array_map('strval', (array)($params['inherit_keys'] ?? []))),
             baseVersions: is_array($params['base_versions'] ?? null) ? $params['base_versions'] : [],
-            scope: isset($params['scope']) ? (string)$params['scope'] : null,
+            scope: $target['storage_scope'],
             locale: isset($params['locale']) ? (string)$params['locale'] : null,
-            options: $this->extractSaveOptions($params)
+            options: $options
         );
+    }
+
+    /**
+     * TASK-P1C-004：写操作必须带显式 TargetScope（target_scope 或 website/store/channel 或完整三段 scope）。
+     *
+     * @param array<string, mixed> $params
+     * @return array{kind:string,website_code:string,store_code:string,channel_code:string,storage_scope:string,identity:\Weline\Framework\Runtime\ScopeIdentity}
+     */
+    private function resolveWriteTarget(array $params): array
+    {
+        $hasExplicit = trim((string)($params['target_scope'] ?? '')) !== ''
+            || trim((string)($params['website_code'] ?? $params['target_website'] ?? '')) !== ''
+            || trim((string)($params['store_code'] ?? $params['target_store'] ?? '')) !== ''
+            || trim((string)($params['channel_code'] ?? $params['target_channel'] ?? '')) !== ''
+            || trim((string)($params['scope'] ?? '')) !== '';
+        if (!$hasExplicit) {
+            throw new \InvalidArgumentException('system_config_write_requires_explicit_target_scope');
+        }
+
+        return $this->targetScopeService->resolveFromInput($params, allowSessionFallback: false);
     }
 
     private function precheckTemplateConfigRollback(array $params): array
     {
+        $versionId = (int)($params['version_id'] ?? 0);
+        $scope = $this->versionScopeOrDeny($versionId, ObjectAction::VIEW);
+        $this->objectAuthorizationGuard->requireForQuery(ObjectAction::VIEW, $scope);
+
         return $this->configCenterService->precheckTemplateConfigRollback(
-            (int)($params['version_id'] ?? 0),
+            $versionId,
             $this->extractRollbackContext($params)
         );
     }
 
     private function rollbackTemplateConfigVersion(array $params): array
     {
+        $versionId = (int)($params['version_id'] ?? 0);
+        $scope = $this->versionScopeOrDeny($versionId, ObjectAction::REPLAY);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::REPLAY,
+            $scope,
+            $this->expectedGrantVersion($params),
+        );
+
         return $this->configCenterService->rollbackTemplateConfigVersion(
-            (int)($params['version_id'] ?? 0),
+            $versionId,
             array_merge($this->extractRollbackContext($params), $this->extractSaveOptions($params))
         );
     }
@@ -242,6 +300,12 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             return false;
         }
 
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::UPDATE,
+            ScopeIdentity::global(),
+            $this->expectedGrantVersion($params),
+        );
+
         return $this->systemConfig->setConfig($key, $value, $module, $area);
     }
 
@@ -255,14 +319,23 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             return false;
         }
 
+        $target = $this->resolveWriteTarget($params);
+        $options = $this->extractSaveOptions($params);
+        $options['scope_identity'] = $target['identity'];
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::UPDATE,
+            $target['identity'],
+            $this->expectedGrantVersion($params),
+        );
+
         return $this->systemConfig->setScopedConfig(
             key: $key,
             value: $params['value'] ?? null,
             module: $module,
             area: $area,
-            scope: isset($params['scope']) ? (string)$params['scope'] : null,
+            scope: $target['storage_scope'],
             locale: isset($params['locale']) ? (string)$params['locale'] : null,
-            options: $this->extractSaveOptions($params)
+            options: $options
         );
     }
 
@@ -276,13 +349,22 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             return false;
         }
 
+        $target = $this->resolveWriteTarget($params);
+        $options = $this->extractSaveOptions($params);
+        $options['scope_identity'] = $target['identity'];
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::DELETE,
+            $target['identity'],
+            $this->expectedGrantVersion($params),
+        );
+
         return $this->systemConfig->deleteScopedConfig(
             key: $key,
             module: $module,
             area: $area,
-            scope: isset($params['scope']) ? (string)$params['scope'] : null,
+            scope: $target['storage_scope'],
             locale: isset($params['locale']) ? (string)$params['locale'] : null,
-            options: $this->extractSaveOptions($params)
+            options: $options
         );
     }
 
@@ -296,13 +378,22 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             return ['success' => false, 'status' => 'invalid_module'];
         }
 
+        $target = $this->resolveWriteTarget($params);
+        $options = $this->extractSaveOptions($params);
+        $options['scope_identity'] = $target['identity'];
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::UPDATE,
+            $target['identity'],
+            $this->expectedGrantVersion($params),
+        );
+
         return $this->systemConfig->saveScopeConfig(
             module: $module,
             area: $area,
             values: $values,
-            scope: isset($params['scope']) ? (string)$params['scope'] : null,
+            scope: $target['storage_scope'],
             locale: isset($params['locale']) ? (string)$params['locale'] : null,
-            options: $this->extractSaveOptions($params)
+            options: $options
         );
     }
 
@@ -312,6 +403,13 @@ class SystemConfigQueryProvider implements QueryProviderInterface
         if ($versionId <= 0) {
             return ['success' => false, 'status' => 'invalid_version'];
         }
+
+        $scope = $this->versionScopeOrDeny($versionId, ObjectAction::REPLAY);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::REPLAY,
+            $scope,
+            $this->expectedGrantVersion($params),
+        );
 
         return $this->systemConfig->rollbackScopeConfigVersion($versionId, $this->extractSaveOptions($params));
     }
@@ -324,10 +422,13 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             return [];
         }
 
+        $target = $this->resolveReadTarget($params);
+        $this->objectAuthorizationGuard->requireForQuery(ObjectAction::LIST, $target['identity']);
+
         return $this->systemConfig->getConfigVersions(
             module: $module,
             area: $area,
-            scope: isset($params['scope']) ? (string)$params['scope'] : null,
+            scope: $target['storage_scope'],
             locale: isset($params['locale']) ? (string)$params['locale'] : null,
             limit: (int)($params['limit'] ?? 50)
         );
@@ -342,8 +443,13 @@ class SystemConfigQueryProvider implements QueryProviderInterface
 
         $detail = $this->systemConfig->getConfigVersionDetail($versionId);
         if ($detail === null) {
-            return null;
+            $this->objectAuthorizationGuard->denyForQuery(
+                ObjectAction::VIEW,
+                ScopeIdentity::global(),
+            );
         }
+        $scope = $this->scopeFromVersionDetail($detail);
+        $this->objectAuthorizationGuard->requireForQuery(ObjectAction::VIEW, $scope);
 
         $changes = is_array($detail['changes'] ?? null) ? $detail['changes'] : [];
         foreach ($changes as $index => $change) {
@@ -360,6 +466,366 @@ class SystemConfigQueryProvider implements QueryProviderInterface
         $detail['changes'] = $changes;
 
         return $detail;
+    }
+
+    private function previewScopeLock(array $params): array
+    {
+        $target = $this->resolveReadTarget($params);
+        $this->objectAuthorizationGuard->requireForQuery(ObjectAction::VIEW, $target['identity']);
+
+        return $this->configCenterService->previewLock(
+            (string)($params['module'] ?? ''),
+            (string)($params['area'] ?? SystemConfig::area_BACKEND),
+            (string)($params['key'] ?? ''),
+            $target['storage_scope'],
+            (string)($params['locale'] ?? SystemConfig::LOCALE_DEFAULT),
+        );
+    }
+
+    private function lockScope(array $params): array
+    {
+        return $this->mutateLockScope($params, ObjectAction::UPDATE, 'lock');
+    }
+
+    private function unlockScope(array $params): array
+    {
+        return $this->mutateLockScope($params, ObjectAction::UNLOCK, 'unlock');
+    }
+
+    private function previewRestoreSuppressed(array $params): array
+    {
+        $target = $this->resolveReadTarget($params);
+        $this->objectAuthorizationGuard->requireForQuery(ObjectAction::VIEW, $target['identity']);
+
+        return $this->configCenterService->previewRestoreSuppressed(
+            (string)($params['module'] ?? ''),
+            (string)($params['area'] ?? SystemConfig::area_BACKEND),
+            (string)($params['key'] ?? ''),
+            $target['storage_scope'],
+        );
+    }
+
+    private function restoreSuppressedRows(array $params): array
+    {
+        return $this->mutateSuppressedRows($params, false);
+    }
+
+    private function discardSuppressedRows(array $params): array
+    {
+        return $this->mutateSuppressedRows($params, true);
+    }
+
+    private function registerSecurityPolicyLkg(array $params): array
+    {
+        $target = $this->resolveWriteTarget($params);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::UPDATE,
+            $target['identity'],
+            $this->expectedGrantVersion($params),
+        );
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\SystemConfig\Service\SecurityPolicyConfigGuard::class,
+        )->registerLkg(
+            $target['storage_scope'],
+            isset($params['locale']) ? (string)$params['locale'] : SystemConfig::LOCALE_DEFAULT,
+            \is_array($params['values'] ?? null) ? $params['values'] : [],
+            \array_values(\array_map('strval', (array)($params['inherit_keys'] ?? []))),
+        );
+    }
+
+    private function exportConfigEnvelope(array $params): array
+    {
+        $target = $this->resolveReadTarget($params);
+        $grant = $this->objectAuthorizationGuard->requireForQuery(
+            ObjectAction::EXPORT,
+            $target['identity'],
+        );
+        $module = (string)($params['module'] ?? '');
+        $area = (string)($params['area'] ?? SystemConfig::area_BACKEND);
+        $locale = (string)($params['locale'] ?? SystemConfig::LOCALE_DEFAULT);
+        if ($module === '') {
+            throw new \InvalidArgumentException('system_config_export_module_required');
+        }
+        $payload = [
+            'schema_version' => 1,
+            'module' => $module,
+            'area' => $area,
+            'scope' => $target['storage_scope'],
+            'scope_identity' => $target['identity']->toArray(),
+            'locale' => $locale,
+            'values' => $this->systemConfig->getConfigMapByModule(
+                $module,
+                $area,
+                $target['storage_scope'],
+                $locale,
+            ),
+        ];
+        $envelope = $this->configEnvelopeService()->export(
+            $payload,
+            $target['identity'],
+            (string)($params['filename'] ?? 'system-config-envelope.json'),
+            isset($params['recipient_kid']) ? (string)$params['recipient_kid'] : null,
+            isset($params['ttl_seconds']) ? (int)$params['ttl_seconds'] : null,
+        );
+
+        return [
+            'success' => true,
+            'grant_version' => $grant->matchedGrantVersion,
+            'envelope' => $envelope,
+        ];
+    }
+
+    private function previewConfigImport(array $params): array
+    {
+        $preview = $this->previewImportPayload($params);
+        $grant = $this->objectAuthorizationGuard->requireForQuery(
+            ObjectAction::VIEW,
+            $preview['scope'],
+        );
+
+        return [
+            'success' => true,
+            'grant_version' => $grant->matchedGrantVersion,
+            'package_uuid' => $preview['package_uuid'],
+            'recipient_kid' => $preview['recipient_kid'],
+            'module' => $preview['module'],
+            'area' => $preview['area'],
+            'scope' => $preview['storage_scope'],
+            'locale' => $preview['locale'],
+            'key_count' => \count($preview['values']),
+            'keys' => \array_values(\array_map('strval', \array_keys($preview['values']))),
+            'source_trusted' => false,
+        ];
+    }
+
+    private function importConfigEnvelope(array $params): array
+    {
+        $preview = $this->previewImportPayload($params);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::IMPORT,
+            $preview['scope'],
+            $this->expectedGrantVersion($params),
+        );
+        $result = null;
+        $this->configEnvelopeService()->import(
+            $preview['envelope'],
+            function (array $payload, array $aad) use (&$result, $preview): void {
+                $this->assertImportPayloadMatchesPreview($payload, $preview);
+                $result = $this->systemConfig->saveScopeConfig(
+                    module: $preview['module'],
+                    area: $preview['area'],
+                    values: $preview['values'],
+                    scope: $preview['storage_scope'],
+                    locale: $preview['locale'],
+                    options: [
+                        'operation' => 'import',
+                        'reason' => 'config_envelope_import',
+                        'scope_identity' => $preview['scope'],
+                        'metadata' => [
+                            'package_uuid' => $preview['package_uuid'],
+                            'recipient_kid' => $preview['recipient_kid'],
+                        ],
+                    ],
+                );
+                if (!\is_array($result) || empty($result['success'])) {
+                    throw new \RuntimeException('system_config_import_apply_failed');
+                }
+            },
+            isset($params['filename']) ? (string)$params['filename'] : null,
+            $preview['scope'],
+        );
+
+        return $result ?? ['success' => false, 'status' => 'import_not_applied'];
+    }
+
+    private function mutateLockScope(array $params, string $action, string $operation): array
+    {
+        $target = $this->resolveWriteTarget($params);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            $action,
+            $target['identity'],
+            $this->expectedGrantVersion($params),
+        );
+        $arguments = [
+            (string)($params['module'] ?? ''),
+            (string)($params['area'] ?? SystemConfig::area_BACKEND),
+            (string)($params['key'] ?? ''),
+            $target['storage_scope'],
+            (string)($params['locale'] ?? SystemConfig::LOCALE_DEFAULT),
+            $this->extractSaveOptions($params),
+        ];
+
+        return $operation === 'unlock'
+            ? $this->configCenterService->unlockScope(...$arguments)
+            : $this->configCenterService->lockScope(...$arguments);
+    }
+
+    private function mutateSuppressedRows(array $params, bool $discard): array
+    {
+        $target = $this->resolveWriteTarget($params);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::REPLAY,
+            $target['identity'],
+            $this->expectedGrantVersion($params),
+        );
+        $targets = \is_array($params['targets'] ?? null) ? $params['targets'] : [];
+        $arguments = [
+            (string)($params['module'] ?? ''),
+            (string)($params['area'] ?? SystemConfig::area_BACKEND),
+            (string)($params['key'] ?? ''),
+            $targets,
+            $this->extractSaveOptions($params),
+        ];
+
+        return $discard
+            ? $this->configCenterService->discardSuppressedRows(...$arguments)
+            : $this->configCenterService->restoreSuppressedRows(...$arguments);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array{
+     *   envelope:array<string,mixed>,scope:ScopeIdentity,storage_scope:string,module:string,
+     *   area:string,locale:string,values:array<string,mixed>,package_uuid:string,recipient_kid:string
+     * }
+     */
+    private function previewImportPayload(array $params): array
+    {
+        $envelope = \is_array($params['envelope'] ?? null) ? $params['envelope'] : [];
+        $preview = $this->configEnvelopeService()->previewImport(
+            $envelope,
+            isset($params['filename']) ? (string)$params['filename'] : null,
+        );
+        $payload = \is_array($preview['payload'] ?? null) ? $preview['payload'] : [];
+        if ((int)($payload['schema_version'] ?? 0) !== 1
+            || !\is_array($payload['scope_identity'] ?? null)
+            || !\is_array($payload['values'] ?? null)
+        ) {
+            throw new \RuntimeException('system_config_import_payload_invalid');
+        }
+        $scope = ScopeIdentity::fromArray($payload['scope_identity']);
+        $storageScope = (string)($payload['scope'] ?? '');
+        $resolvedTarget = $this->targetScopeService->resolveFromInput(
+            ['target_scope' => $storageScope],
+            allowSessionFallback: false,
+        );
+        if (!$scope->equals($resolvedTarget['identity'])) {
+            throw new \RuntimeException('system_config_import_scope_identity_mismatch');
+        }
+        $aadScope = (string)($preview['aad']['scope'] ?? '');
+        if ($aadScope !== $scope->canonicalKey()) {
+            throw new \RuntimeException('system_config_import_aad_scope_mismatch');
+        }
+        $module = \trim((string)($payload['module'] ?? ''));
+        $area = \trim((string)($payload['area'] ?? SystemConfig::area_BACKEND));
+        $locale = \trim((string)($payload['locale'] ?? SystemConfig::LOCALE_DEFAULT));
+        if ($module === '' || $area === '' || $locale === '') {
+            throw new \RuntimeException('system_config_import_identity_invalid');
+        }
+
+        return [
+            'envelope' => $envelope,
+            'scope' => $scope,
+            'storage_scope' => $resolvedTarget['storage_scope'],
+            'module' => $module,
+            'area' => $area,
+            'locale' => $locale,
+            'values' => $payload['values'],
+            'package_uuid' => (string)($preview['package_uuid'] ?? ''),
+            'recipient_kid' => (string)($preview['recipient_kid'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $preview
+     */
+    private function assertImportPayloadMatchesPreview(array $payload, array $preview): void
+    {
+        $hash = static fn(array $value): string => \hash(
+            'sha256',
+            (string)\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
+        );
+        if ($hash($payload) !== $hash([
+            'schema_version' => 1,
+            'module' => $preview['module'],
+            'area' => $preview['area'],
+            'scope' => $preview['storage_scope'],
+            'scope_identity' => $preview['scope']->toArray(),
+            'locale' => $preview['locale'],
+            'values' => $preview['values'],
+        ])) {
+            throw new \RuntimeException('system_config_import_preview_changed');
+        }
+    }
+
+    protected function configEnvelopeService(): ConfigEnvelopeService
+    {
+        return ConfigEnvelopeService::fromEnv();
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array{kind:string,website_code:string,store_code:string,channel_code:string,storage_scope:string,identity:ScopeIdentity}
+     */
+    private function resolveReadTarget(array $params): array
+    {
+        $hasExplicit = \array_key_exists('target_scope', $params)
+            || \array_key_exists('scope', $params)
+            || \array_key_exists('website_code', $params)
+            || \array_key_exists('store_code', $params)
+            || \array_key_exists('channel_code', $params);
+        if (!$hasExplicit) {
+            throw new \InvalidArgumentException('system_config_read_requires_explicit_target_scope');
+        }
+
+        return $this->targetScopeService->resolveFromInput($params, allowSessionFallback: false);
+    }
+
+    private function versionScopeOrDeny(int $versionId, string $action): ScopeIdentity
+    {
+        if ($versionId <= 0) {
+            $this->objectAuthorizationGuard->denyForQuery($action, ScopeIdentity::global());
+        }
+        $detail = $this->systemConfig->getConfigVersionDetail($versionId);
+        if ($detail === null) {
+            $this->objectAuthorizationGuard->denyForQuery($action, ScopeIdentity::global());
+        }
+
+        return $this->scopeFromVersionDetail($detail);
+    }
+
+    /**
+     * @param array<string, mixed> $detail
+     */
+    private function scopeFromVersionDetail(array $detail): ScopeIdentity
+    {
+        $storageScope = (string)(
+            $detail[SystemConfigVersion::schema_fields_SCOPE]
+            ?? SystemConfig::SCOPE_GLOBAL
+        );
+
+        return $this->targetScopeService->resolveFromInput(
+            ['target_scope' => $storageScope],
+            allowSessionFallback: false,
+        )['identity'];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function expectedGrantVersion(array $params): int
+    {
+        $value = $params['expected_grant_version'] ?? null;
+        if (\is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
     }
 
     private function extractSaveOptions(array $params): array
@@ -481,6 +947,7 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                         ['name' => 'inherit_keys', 'type' => 'array', 'required' => false],
                         ['name' => 'base_versions', 'type' => 'object', 'required' => false],
                         ['name' => 'reason', 'type' => 'string', 'required' => false],
+                        $this->grantVersionParam(),
                     ]),
                 ],
                 [
@@ -508,6 +975,7 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                         ['name' => 'actor_id', 'type' => 'string', 'required' => false],
                         ['name' => 'actor_name', 'type' => 'string', 'required' => false],
                         ['name' => 'reason', 'type' => 'string', 'required' => false],
+                        $this->grantVersionParam(),
                     ],
                 ],
                 [
@@ -518,6 +986,7 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                         ['name' => 'value', 'type' => 'string', 'required' => true],
                         ['name' => 'module', 'type' => 'string', 'required' => true],
                         ['name' => 'area', 'type' => 'string', 'required' => false],
+                        $this->grantVersionParam(),
                     ],
                 ],
                 [
@@ -538,6 +1007,7 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                         ['name' => 'inherit_keys', 'type' => 'array', 'required' => false],
                         ['name' => 'base_versions', 'type' => 'object', 'required' => false],
                         ['name' => 'reason', 'type' => 'string', 'required' => false],
+                        $this->grantVersionParam(),
                     ]),
                 ],
                 [
@@ -548,6 +1018,7 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                         ['name' => 'actor_id', 'type' => 'string', 'required' => false],
                         ['name' => 'actor_name', 'type' => 'string', 'required' => false],
                         ['name' => 'reason', 'type' => 'string', 'required' => false],
+                        $this->grantVersionParam(),
                     ],
                 ],
                 [
@@ -564,8 +1035,96 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                         ['name' => 'version_id', 'type' => 'int', 'required' => true],
                     ],
                 ],
+                [
+                    'name' => 'previewScopeLock',
+                    'description' => __('Preview lower-scope rows affected by locking one config key.'),
+                    'params' => $this->scopeMutationParams(false),
+                ],
+                [
+                    'name' => 'lockScope',
+                    'description' => __('Lock one config key at the explicit target scope.'),
+                    'params' => $this->scopeMutationParams(),
+                ],
+                [
+                    'name' => 'unlockScope',
+                    'description' => __('Unlock one config key at the explicit target scope.'),
+                    'params' => $this->scopeMutationParams(),
+                ],
+                [
+                    'name' => 'previewRestoreSuppressed',
+                    'description' => __('Preview suppressed lower-scope rows without mutation.'),
+                    'params' => $this->scopeMutationParams(false),
+                ],
+                [
+                    'name' => 'restoreSuppressedRows',
+                    'description' => __('Restore selected suppressed rows after replay authorization.'),
+                    'params' => array_merge($this->scopeMutationParams(), [
+                        ['name' => 'targets', 'type' => 'array', 'required' => true],
+                    ]),
+                ],
+                [
+                    'name' => 'discardSuppressedRows',
+                    'description' => __('Discard selected suppressed rows after replay authorization.'),
+                    'params' => array_merge($this->scopeMutationParams(), [
+                        ['name' => 'targets', 'type' => 'array', 'required' => true],
+                    ]),
+                ],
+                [
+                    'name' => 'registerSecurityPolicyLkg',
+                    'description' => __('Register a reviewed Scope security-header candidate before activating the exact same values.'),
+                    'params' => array_merge($this->commonModuleParams(), [
+                        ['name' => 'values', 'type' => 'object', 'required' => false],
+                        ['name' => 'inherit_keys', 'type' => 'array', 'required' => false],
+                        $this->grantVersionParam(),
+                    ]),
+                ],
+                [
+                    'name' => 'exportConfigEnvelope',
+                    'description' => __('Export one explicitly authorized scope as an encrypted configuration envelope.'),
+                    'params' => array_merge($this->commonModuleParams(), [
+                        ['name' => 'filename', 'type' => 'string', 'required' => false],
+                        ['name' => 'recipient_kid', 'type' => 'string', 'required' => false],
+                        ['name' => 'ttl_seconds', 'type' => 'int', 'required' => false],
+                    ]),
+                ],
+                [
+                    'name' => 'previewConfigImport',
+                    'description' => __('Decrypt and validate configuration envelope metadata without mutation.'),
+                    'params' => $this->configEnvelopeImportParams(false),
+                ],
+                [
+                    'name' => 'importConfigEnvelope',
+                    'description' => __('Import an encrypted configuration envelope after versioned submit authorization.'),
+                    'params' => $this->configEnvelopeImportParams(true),
+                ],
             ],
         ];
+    }
+
+    private function scopeMutationParams(bool $submit = true): array
+    {
+        $params = array_merge($this->commonModuleParams(), [
+            ['name' => 'key', 'type' => 'string', 'required' => true],
+            ['name' => 'reason', 'type' => 'string', 'required' => false],
+        ]);
+        if ($submit) {
+            $params[] = $this->grantVersionParam();
+        }
+
+        return $params;
+    }
+
+    private function configEnvelopeImportParams(bool $submit): array
+    {
+        $params = [
+            ['name' => 'envelope', 'type' => 'object', 'required' => true],
+            ['name' => 'filename', 'type' => 'string', 'required' => false],
+        ];
+        if ($submit) {
+            $params[] = $this->grantVersionParam();
+        }
+
+        return $params;
     }
 
     private function commonReadParams(bool $includeKey = false): array
@@ -622,7 +1181,11 @@ class SystemConfigQueryProvider implements QueryProviderInterface
         return [
             ['name' => 'module', 'type' => 'string', 'required' => true],
             ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('backend|frontend')],
-            ['name' => 'scope', 'type' => 'string', 'required' => false],
+            ['name' => 'scope', 'type' => 'string', 'required' => false, 'description' => __('完整三段 scope；写操作与 target_scope 二选一')],
+            ['name' => 'target_scope', 'type' => 'string', 'required' => false, 'description' => __('显式写目标；禁止依赖 Session')],
+            ['name' => 'website_code', 'type' => 'string', 'required' => false],
+            ['name' => 'store_code', 'type' => 'string', 'required' => false],
+            ['name' => 'channel_code', 'type' => 'string', 'required' => false],
             ['name' => 'locale', 'type' => 'string', 'required' => false],
         ];
     }
@@ -634,14 +1197,32 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             ['name' => 'module', 'type' => 'string', 'required' => true],
             ['name' => 'area', 'type' => 'string', 'required' => false],
             ['name' => 'scope', 'type' => 'string', 'required' => false],
+            ['name' => 'target_scope', 'type' => 'string', 'required' => false],
+            ['name' => 'website_code', 'type' => 'string', 'required' => false],
+            ['name' => 'store_code', 'type' => 'string', 'required' => false],
+            ['name' => 'channel_code', 'type' => 'string', 'required' => false],
             ['name' => 'locale', 'type' => 'string', 'required' => false],
             ['name' => 'base_versions', 'type' => 'object', 'required' => false],
             ['name' => 'reason', 'type' => 'string', 'required' => false],
+            $this->grantVersionParam(),
         ];
         if ($includeValue) {
             array_splice($params, 1, 0, [['name' => 'value', 'type' => 'mixed', 'required' => true]]);
         }
 
         return $params;
+    }
+
+    /**
+     * @return array{name:string,type:string,required:bool,description:mixed}
+     */
+    private function grantVersionParam(): array
+    {
+        return [
+            'name' => 'expected_grant_version',
+            'type' => 'int',
+            'required' => true,
+            'description' => __('预览/读取时返回的对象授权版本；提交前必须保持一致'),
+        ];
     }
 }

@@ -75,6 +75,12 @@ class GeneratePageDraftTool implements ToolInterface
 
         $content = $this->generateContent($pageType, $siteTitle, $siteDescription, $themeName);
         $suggestions = $this->generateSuggestions($pageType, $siteTitle, $siteDescription);
+        $normalizedCode = \strtolower(\preg_replace('/[^a-zA-Z0-9]+/', '_', $componentCode) ?? '');
+        $normalizedCode = \trim($normalizedCode, '_');
+        if ($normalizedCode === '') {
+            $normalizedCode = 'ai_generated_section';
+        }
+        $sectionCode = 'theme.sitebuilder.' . $normalizedCode;
 
         return [
             'success' => true,
@@ -83,6 +89,7 @@ class GeneratePageDraftTool implements ToolInterface
             'content' => $content,
             'suggestions' => $suggestions,
             'component_code' => $componentCode,
+            'component_template' => "<section class=\"ai-generated-section\" weline-code=\"{$sectionCode}\">\n    <h2>{{ title|default('AI Generated Title') }}</h2>\n    <p>{{ description|default('Generated content from brief.') }}</p>\n</section>",
             'next_step' => 'update_page_draft',
         ];
     }

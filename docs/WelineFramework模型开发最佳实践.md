@@ -418,7 +418,7 @@ app/code/Weline/YourModule/
 ```php
 namespace Weline\YourModule\test;
 
-use Weline\Framework\UnitTest\TestCore; // ✅ 继承TestCore
+use Weline\Framework\Test\TestCore; // ✅ 继承TestCore
 
 class YourModelTest extends TestCore
 {
@@ -532,7 +532,7 @@ $model->delete()->fetch();
 ### 6.2 单元测试检查
 
 - [ ] 测试文件位于`test/`目录（小写）
-- [ ] 继承自`Weline\Framework\UnitTest\TestCore`
+- [ ] 继承自`Weline\Framework\Test\TestCore`
 - [ ] 命名空间为`Weline\YourModule\test`
 - [ ] 使用`clearData() + reset() + load()`避免单例污染
 - [ ] 删除操作调用了`.fetch()`

@@ -7,10 +7,9 @@ const {
   test,
   expect,
   loginAsAdmin,
-  gotoBackend,
-  buildModuleBackendRoute,
   moduleDescribe,
   moduleCase,
+  openBackendMenuBySource,
   waitForBackendShellReady,
   submitAndExpectParam,
 } = require('../../../../../../../tests/e2e/framework');
@@ -25,7 +24,10 @@ moduleDescribe(test, MODULE, 'Weline_Acl 后台流程', () => {
     'ACL 资源列表路由可达（诚实 smoke）',
     async ({ page }) => {
       await loginAsAdmin(page);
-      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'acl'), { timeout: 60000, settleMs: 800 });
+      await openBackendMenuBySource(page, 'Weline_Acl::acl_source', {
+        urlIncludes: '/acl/backend/acl',
+        pageAnchor: '[data-testid="acl-resource-module-management"]',
+      });
       await waitForBackendShellReady(page);
       await expect(page.locator('body')).not.toContainText(FATAL);
       await expect(page.locator('#acl-list-filter-form, .weline-acl-toolbar, .card').first()).toBeVisible({ timeout: 15000 });
@@ -38,7 +40,10 @@ moduleDescribe(test, MODULE, 'Weline_Acl 后台流程', () => {
     'ACL 资源列表：填搜索词并提交',
     async ({ page }) => {
       await loginAsAdmin(page);
-      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'acl'), { timeout: 60000, settleMs: 800 });
+      await openBackendMenuBySource(page, 'Weline_Acl::acl_source', {
+        urlIncludes: '/acl/backend/acl',
+        pageAnchor: '[data-testid="acl-resource-module-management"]',
+      });
       await waitForBackendShellReady(page);
       await expect(page.locator('body')).not.toContainText(FATAL);
 
@@ -57,9 +62,9 @@ moduleDescribe(test, MODULE, 'Weline_Acl 后台流程', () => {
     'IP 白名单：搜索框交互并可见添加按钮',
     async ({ page }) => {
       await loginAsAdmin(page);
-      await gotoBackend(page, buildModuleBackendRoute(MODULE, 'ip-whitelist'), {
-        timeout: 60000,
-        settleMs: 800,
+      await openBackendMenuBySource(page, 'Weline_Acl::ip_whitelist', {
+        urlIncludes: '/acl/backend/ip-whitelist',
+        pageAnchor: '[data-testid="acl-ip-whitelist-management"]',
       });
       await waitForBackendShellReady(page);
       await expect(page.locator('body')).not.toContainText(FATAL);

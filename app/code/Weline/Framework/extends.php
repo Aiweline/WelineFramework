@@ -79,17 +79,21 @@ return [
         'Schema' => [
             'path' => 'extends/module/Weline_Framework/Schema',
             'type' => ['module'],
-            'description' => 'Schema 提供者扩展点，实现 SchemaProviderInterface 提供 TableSchema 列表，参与 setup:upgrade 的声明式 diff',
+            'description' => 'Schema 提供者扩展点：实现 SchemaProviderInterface，或专用 ShardSchemaFamilyProviderInterface（分片族）。均由 SchemaDiffStage 合入声明式 diff；单站 provision 走 ShardSchemaProvisioner',
             'required' => false,
             'multiple' => true,
             'interface' => 'Weline\Framework\Database\Schema\SchemaProviderInterface',
             'details' => [
                 'interface' => [
                     'interface' => 'Weline\Framework\Database\Schema\SchemaProviderInterface',
-                    'description' => '必须实现 getTableSchemas(): array，返回 TableSchema[]',
+                    'description' => '必须实现 getTableSchemas(): array，返回 TableSchema[]；分片族另实现 getFamilyCode/getRegisteredShardKeys/getTableSchemasForShard',
                     'required_methods' => [
-                        'getTableSchemas' => '返回本提供者声明的表结构列表',
+                        'getTableSchemas' => '返回本提供者声明的表结构列表（分片族须展开全部 registered shard）',
                     ],
+                ],
+                'shard_family' => [
+                    'interface' => 'Weline\Framework\Database\Schema\Shard\ShardSchemaFamilyProviderInterface',
+                    'description' => '可选专用接口；family code 唯一；DDL 由 ShardSchemaProvisioner 执行，业务 DML 走 DatabaseTransactionRunner',
                 ],
             ],
         ],

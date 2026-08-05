@@ -45,7 +45,7 @@ class InstallConfig
             $tmp['-------  数据库配置安装...  -------'] = $msg . '【✖】';
         }
         unset($db_config['action']);
-        $db_config['type'] = 'mysql';
+        $db_config['type'] = strtolower(trim((string)($db_config['type'] ?? 'pgsql')));
         // 参数检测
         if (CLI) {
             $this->printer->note('数据库：1、参数检测...', '系统');
@@ -53,15 +53,17 @@ class InstallConfig
         $tmp['数据库：1、参数检测...'] = '系统';
         $db_keys                     = DataInterface::db_keys;
         $db_config_check                 = array_intersect_key($db_config, $db_keys);
-        foreach ($db_keys as $db_key => $v) {
-            if (!isset($db_config_check[$db_key])) {
-                $hasErr = true;
-                $msg    = '数据库' . $db_key . '配置不能为空！示例：bin/w system:install --db-' . $db_key . '=demo';
-                if (CLI) {
-                    $this->printer->error($msg, '系统');
-                    exit();
+        if ($db_config['type'] !== 'sqlite') {
+            foreach ($db_keys as $db_key => $v) {
+                if (!isset($db_config_check[$db_key])) {
+                    $hasErr = true;
+                    $msg    = '数据库' . $db_key . '配置不能为空！示例：bin/w system:install --db-' . $db_key . '=demo';
+                    if (CLI) {
+                        $this->printer->error($msg, '系统');
+                        exit();
+                    }
+                    $tmp['缺少参数'] = $msg . '【✖】';
                 }
-                $tmp['缺少参数'] = $msg . '【✖】';
             }
         }
         // 数据库链接检测
@@ -154,7 +156,7 @@ class InstallConfig
         }
         $tmp['数据库：2、调试Debug数据库信息安装...'] = '系统';
         try {
-            Env::getInstance()->setConfig('debug_db', $sandbox_db_conf);
+            Env::getInstance()->setConfig('sandbox_db', $sandbox_db_conf);
             $msg = '数据库安装初始化成功【✔】';
             if (CLI) {
                 $this->printer->success($msg, 'OK');

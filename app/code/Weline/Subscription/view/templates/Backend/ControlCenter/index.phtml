@@ -1,0 +1,44 @@
+<?php
+$code = (string)($this->getData('workspace_code') ?? 'unknown');
+$title = (string)($this->getData('workspace_title') ?? __('订阅管理'));
+$status = (array)($this->getData('workspace_status') ?? []);
+$datasets = (array)($this->getData('workspace_datasets') ?? []);
+$form = (array)($this->getData('workspace_form') ?? []);
+$kind = (string)($form['kind'] ?? '');
+$formActionUrl = $form === [] ? '' : $this->getBackendUrl((string)($form['action'] ?? ''));
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$display = static function (mixed $value) use ($escape): string {
+    if (is_bool($value)) return $value ? (string)__('是') : (string)__('否');
+    if (is_array($value)) return $escape(json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
+    return $escape($value);
+};
+?>
+<section class="commerce-control-center" data-testid="subscription-<?= $escape($code) ?>-management" data-workspace="<?= $escape($code) ?>">
+    <div class="page-title-box d-sm-flex align-items-center justify-content-between"><h4 class="mb-sm-0"><?= $escape($title) ?></h4><span class="badge <?= $form === [] ? 'bg-info text-dark' : 'bg-success' ?>"><?= $form === [] ? __('只读诊断') : __('可管理') ?></span></div>
+    <div class="alert alert-info" role="status"><?= $form === [] ? __('此页面显示订阅、周期与调度持久化事实；生产迁移不在后台触发。') : __('创建与续费复用 Subscription 服务；续费只通过 Order 公共端口和 sandbox Payment 公共端口执行。') ?></div>
+    <?php if ($form !== []): ?>
+        <div class="card mb-3" data-testid="subscription-<?= $escape($code) ?>-write-form"><div class="card-header"><h5 class="mb-0"><?= $kind === 'renewal' ? __('执行续费尝试') : __('创建订阅') ?></h5></div><div class="card-body">
+            <w:form method="post" action="@var($formActionUrl)"><div class="row g-3">
+                <?php if ($kind === 'subscription'): ?>
+                    <div class="col-md-3"><label class="form-label"><?= __('订阅 ID') ?></label><input class="form-control" name="subscription_id" maxlength="64" required></div>
+                    <div class="col-md-3"><label class="form-label"><?= __('客户 ID') ?></label><input class="form-control" name="customer_id" maxlength="64" required></div>
+                    <div class="col-md-2"><label class="form-label"><?= __('网站 ID') ?></label><input class="form-control" type="number" min="0" name="website_id" value="0" required></div>
+                    <div class="col-md-2"><label class="form-label"><?= __('店铺 ID') ?></label><input class="form-control" type="number" min="0" name="store_id" value="0" required></div>
+                    <div class="col-md-3"><label class="form-label"><?= __('Provider') ?></label><input class="form-control" name="provider_code" value="interval_monthly" maxlength="64" required></div>
+                    <div class="col-md-3"><label class="form-label"><?= __('方案代码') ?></label><input class="form-control" name="plan_code" maxlength="128" required></div>
+                    <div class="col-md-4"><label class="form-label"><?= __('幂等键') ?></label><input class="form-control" name="idempotency_key" maxlength="128" required></div>
+                    <div class="col-md-2"><label class="form-label"><?= __('环境') ?></label><select class="form-select" name="environment"><option value="sandbox">sandbox</option></select></div>
+                <?php else: ?>
+                    <div class="col-md-5"><label class="form-label"><?= __('订阅 ID') ?></label><input class="form-control" name="subscription_id" maxlength="64" required></div>
+                    <div class="col-md-5"><label class="form-label"><?= __('Worker ID') ?></label><input class="form-control" name="worker_id" maxlength="64" required></div>
+                <?php endif; ?>
+                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit" data-testid="subscription-<?= $escape($code) ?>-submit"><?= $kind === 'renewal' ? __('执行续费') : __('创建') ?></button></div>
+            </div></w:form>
+        </div></div>
+    <?php endif; ?>
+    <?php if ($status !== []): ?><div class="card mb-3"><div class="card-body"><div class="row g-3"><?php foreach ($status as $key => $value): ?><div class="col-md-4"><div class="text-muted small"><?= $escape($key) ?></div><div class="fw-semibold"><?= $display($value) ?></div></div><?php endforeach; ?></div></div></div><?php endif; ?>
+    <?php foreach ($datasets as $dataset): ?><div class="card mb-3"><div class="card-header"><h5 class="mb-0"><?= $escape($dataset['label'] ?? '') ?></h5></div><div class="card-body">
+        <?php if (!empty($dataset['error'])): ?><div class="alert alert-warning mb-0"><?= $escape($dataset['error']) ?></div><?php elseif (empty($dataset['rows'])): ?><div class="text-muted"><?= __('当前没有记录。') ?></div><?php else: ?>
+        <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><?php foreach (array_keys($dataset['rows'][0]) as $field): ?><th><?= $escape($field) ?></th><?php endforeach; ?></tr></thead><tbody><?php foreach ($dataset['rows'] as $row): ?><tr><?php foreach ($row as $value): ?><td><?= $display($value) ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+    </div></div><?php endforeach; ?>
+</section>

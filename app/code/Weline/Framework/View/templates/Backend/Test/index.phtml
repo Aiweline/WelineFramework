@@ -1,0 +1,154 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$page = isset($page) ? (string)$page : 'modules';
+$moduleName = isset($module_name) ? (string)$module_name : '';
+$runId = isset($run_id) ? (int)$run_id : 0;
+$uiEnabled = !empty($ui_enabled);
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="framework-test-shell card"
+     id="framework-test-app"
+     data-provider="test"
+     data-page="<?= $escape($page) ?>"
+     data-module="<?= $escape($moduleName) ?>"
+     data-run-id="<?= $escape((string)$runId) ?>"
+     data-ui-enabled="<?= $uiEnabled ? '1' : '0' ?>"
+     data-url-index="<?= $escape($this->getUrl('*/backend/test')) ?>"
+     data-url-module="<?= $escape($this->getUrl('*/backend/test/module')) ?>"
+     data-url-run="<?= $escape($this->getUrl('*/backend/test/run')) ?>"
+     data-text-loading="<?= $escape(__('加载中…')) ?>"
+     data-text-empty="<?= $escape(__('暂无测试用例')) ?>"
+     data-text-api-unavailable="<?= $escape(__('Weline.Api 不可用')) ?>"
+     data-text-run-started="<?= $escape(__('已创建运行 #%{1}')) ?>"
+     data-text-enter-cases="<?= $escape(__('查看用例')) ?>"
+     data-text-run-e2e="<?= $escape(__('运行 E2E')) ?>"
+     data-text-run-unit="<?= $escape(__('运行单元')) ?>"
+     data-text-run-integration="<?= $escape(__('运行集成')) ?>"
+     data-text-run-case="<?= $escape(__('运行此用例')) ?>"
+     data-text-run-selected="<?= $escape(__('运行选中')) ?>"
+     data-text-no-selection="<?= $escape(__('请至少选择一条用例。')) ?>"
+     data-text-gui-hint="<?= $escape(__('无图形界面时请关闭「UI 测试」。')) ?>"
+     data-text-ui-saved-on="<?= $escape(__('已保存：UI 测试开启')) ?>"
+     data-text-ui-saved-off="<?= $escape(__('已保存：UI 测试关闭')) ?>"
+     data-text-error="<?= $escape(__('操作失败：%{1}')) ?>">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+                <h4 class="mb-1"><lang>测试管理</lang></h4>
+                <p class="text-muted mb-0"><lang>收集各模块用例，可按模块异步跑通 E2E。开启「UI 测试」后，总览行内运行也会带 UI；开关写入系统配置，刷新后保持。</lang></p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <div class="form-check form-switch d-flex align-items-center me-2 mb-0">
+                    <input class="form-check-input mt-0" type="checkbox" role="switch" id="ft-ui-enabled"<?= $uiEnabled ? ' checked' : '' ?>>
+                    <label class="form-check-label ms-2" for="ft-ui-enabled"><lang>UI 测试</lang></label>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="ft-refresh">
+                    <i class="mdi mdi-refresh me-1" aria-hidden="true"></i><lang>刷新目录</lang>
+                </button>
+                <a class="btn btn-outline-primary btn-sm" href="<?= $escape($this->getUrl('*/backend/test')) ?>">
+                    <i class="mdi mdi-view-list me-1" aria-hidden="true"></i><lang>模块总览</lang>
+                </a>
+            </div>
+        </div>
+
+        <div class="alert alert-info py-2" role="status">
+            <lang>「UI 测试」开启后，总览直跑 / 详情运行都会以 headed 启动；偏好保存在系统配置。服务器无图形界面时请关闭。</lang>
+        </div>
+
+        <div class="ft-status alert" id="ft-status" role="status" aria-live="polite" hidden></div>
+
+        <div id="ft-panel-modules" <?= $page === 'modules' ? '' : 'hidden' ?>>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th><lang>模块</lang></th>
+                        <th class="text-end"><lang>E2E</lang></th>
+                        <th class="text-end"><lang>单元</lang></th>
+                        <th class="text-end"><lang>集成</lang></th>
+                        <th class="text-end"><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody id="ft-module-rows">
+                    <tr><td colspan="5" class="text-muted text-center py-4"><lang>加载中…</lang></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="ft-panel-module" <?= $page === 'module' ? '' : 'hidden' ?>>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <div>
+                    <h5 class="mb-0" id="ft-module-title"><?= $escape($moduleName) ?></h5>
+                    <small class="text-muted" id="ft-module-counts"></small>
+                </div>
+            </div>
+            <ul class="nav nav-tabs mb-3" role="tablist">
+                <li class="nav-item"><button type="button" class="nav-link active" data-ft-tab="e2e"><lang>E2E</lang></button></li>
+                <li class="nav-item"><button type="button" class="nav-link" data-ft-tab="unit"><lang>单元</lang></button></li>
+                <li class="nav-item"><button type="button" class="nav-link" data-ft-tab="integration"><lang>集成</lang></button></li>
+            </ul>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                <button type="button" class="btn btn-primary btn-sm ft-run-action" id="ft-run-selected">
+                    <lang>运行选中</lang> (0)
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm ft-run-action" id="ft-run-all">
+                    <lang>运行整个模块</lang>
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                    <tr>
+                        <th style="width:2rem">
+                            <input type="checkbox" id="ft-check-all" aria-label="<?= $escape(__('选择全部用例')) ?>">
+                        </th>
+                        <th><lang>用例文件</lang></th>
+                        <th class="text-end"><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody id="ft-case-rows"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="ft-panel-run" <?= $page === 'run' ? '' : 'hidden' ?>>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>状态</lang></div><strong id="ft-run-status">—</strong></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>进度</lang></div><strong id="ft-run-percent">0%</strong></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>通过/失败</lang></div><strong id="ft-run-score">0 / 0</strong></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>当前</lang></div><strong class="d-block text-truncate" id="ft-run-current">—</strong></div></div>
+            </div>
+            <div class="progress mb-3" style="height: .75rem;">
+                <div class="progress-bar" id="ft-run-bar" style="width:0%"></div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0"><lang>实时日志</lang></h6>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="ft-rerun" hidden><lang>再次运行</lang></button>
+            </div>
+            <pre class="border rounded bg-dark text-light p-3" id="ft-run-log" style="min-height:18rem;max-height:28rem;overflow:auto;white-space:pre-wrap;"></pre>
+        </div>
+
+        <hr class="my-4">
+        <h6><lang>最近运行</lang></h6>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th><lang>模块</lang></th>
+                    <th><lang>类型</lang></th>
+                    <th><lang>状态</lang></th>
+                    <th><lang>UI</lang></th>
+                    <th><lang>时间</lang></th>
+                </tr>
+                </thead>
+                <tbody id="ft-history-rows">
+                <tr><td colspan="6" class="text-muted text-center py-3"><lang>加载中…</lang></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="@static(Weline_Framework::js/framework-test.js)&v=20260725-ui-persist-r2" defer></script>

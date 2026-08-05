@@ -1,0 +1,30 @@
+{
+    "name": "weline/module-subscription",
+    "description": "WelineFramework durable Subscription identity, scheduling and migration cutover",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-websites": "@dev",
+        "weline/module-order": "@dev",
+        "weline/module-payment": "@dev",
+        "weline/module-queue": "@dev"
+    },
+    "suggest": {
+        "weline/module-customer": "Owns the Customer identity referenced by Subscription.",
+        "weline/module-product": "Supplies Product Provider metadata for subscription plans."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Subscription\\": ""
+        }
+    },
+    "license": "MIT"
+}

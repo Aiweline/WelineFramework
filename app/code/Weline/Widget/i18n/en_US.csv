@@ -82,6 +82,8 @@ AI翻译,"AI Translate"
 部件不存在,"Widget does not exist"
 "预览失败: %{1}","Preview failed: %{1}"
 页面内容不能为空,"Page content cannot be empty"
+预览部件,预览部件
+预览页面,预览页面
 可视化编辑器,"Visual Editor"
 内容管理,"Content Management"
 标题和标识不能为空,"Title and handle cannot be empty"
@@ -92,8 +94,19 @@ AI翻译,"AI Translate"
 页面不存在,"Page does not exist"
 "加载失败: %{1}","Load failed: %{1}"
 "获取部件列表失败: %{1}","Failed to get widget list: %{1}"
+"mdi mdi-pencil-box","mdi mdi-pencil-box"
+编辑器首页,编辑器首页
+访问编辑器,访问编辑器
+保存页面,保存页面
+加载页面,加载页面
+获取部件列表,获取部件列表
 部件管理,"Widget Management"
 "获取部件详情失败: %{1}","Failed to get widget details: %{1}"
+"mdi mdi-puzzle","mdi mdi-puzzle"
+部件列表,"Widget List"
+查看部件列表,查看部件列表
+部件详情,"Component details"
+查看部件详情,查看部件详情
 确认组件不可用，操作已取消,确认组件不可用，操作已取消
 解析部件参数失败,"Failed to parse widget parameters"
 预览失败,"Preview failed"
@@ -105,7 +118,6 @@ AI翻译,"AI Translate"
 "Page preview","Page preview"
 "The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
 快速查看、筛选并预览部件详情,"Quickly view, filter, and preview part details"
-部件详情,"Component details"
 关闭,Close
 加载中...,Loading...
 操作失败,"Operation failed"
@@ -122,7 +134,6 @@ AI翻译,"AI Translate"
 所有类型,"All Types"
 筛选,Filter
 重置筛选,"Reset Filter"
-部件列表,"Widget List"
 没有找到部件,"No widgets found"
 部件名称,"Widget Name"
 描述,Description

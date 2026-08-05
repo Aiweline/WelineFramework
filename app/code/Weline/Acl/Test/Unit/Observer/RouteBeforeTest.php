@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Acl\Test\Unit\Observer;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Admin\Service\BackendRememberLoginService;
 use Weline\Acl\Model\WhiteAclSource;
 use Weline\Acl\Observer\RouteBefore;
 use Weline\Acl\Service\AclService;
@@ -15,6 +14,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\SessionInterface;
@@ -27,6 +27,18 @@ class RouteBeforeTest extends TestCase
         Runtime::resetModeCache();
         $this->setSessionFactorySingleton(null);
         parent::tearDown();
+    }
+
+    /**
+     * RouteBefore 现经 RuntimeProviderResolver 解析 RememberLogin / IdentityContext；
+     * 单测默认不注入 provider（resolve → null），避免误触 remember restore。
+     */
+    private function runtimeProviderResolver(): RuntimeProviderResolver
+    {
+        $resolver = $this->createMock(RuntimeProviderResolver::class);
+        $resolver->method('resolve')->willReturn(null);
+
+        return $resolver;
     }
 
     public function testExecuteAllowsWeShopPublicAuthRouteBeforeAclFrontendLoginGate(): void
@@ -88,7 +100,7 @@ class RouteBeforeTest extends TestCase
             $whiteAclSource,
             $aclService,
             new PublicApiAuthRouteMatcher(),
-            $this->createMock(BackendRememberLoginService::class)
+            $this->runtimeProviderResolver()
         );
 
         $route = new class($request) {
@@ -167,7 +179,7 @@ class RouteBeforeTest extends TestCase
             $whiteAclSource,
             $aclService,
             new PublicApiAuthRouteMatcher(),
-            $this->createMock(BackendRememberLoginService::class)
+            $this->runtimeProviderResolver()
         );
 
         $route = new class($request) {
@@ -246,7 +258,7 @@ class RouteBeforeTest extends TestCase
             $whiteAclSource,
             $aclService,
             new PublicApiAuthRouteMatcher(),
-            $this->createMock(BackendRememberLoginService::class)
+            $this->runtimeProviderResolver()
         );
 
         $route = new class($request) {
@@ -337,7 +349,7 @@ class RouteBeforeTest extends TestCase
             $whiteAclSource,
             $aclService,
             new PublicApiAuthRouteMatcher(),
-            $this->createMock(BackendRememberLoginService::class)
+            $this->runtimeProviderResolver()
         );
 
         $route = new class($request) {
@@ -442,14 +454,11 @@ class RouteBeforeTest extends TestCase
         $sessionFactory->expects(self::once())->method('createBackendSession')->willReturn($backendSession);
         $this->setSessionFactorySingleton($sessionFactory);
 
-        $rememberLoginService = $this->createMock(BackendRememberLoginService::class);
-        $rememberLoginService->expects(self::never())->method('restoreIfNeeded');
-
         $observer = new RouteBefore(
             $whiteAclSource,
             $aclService,
             new PublicApiAuthRouteMatcher(),
-            $rememberLoginService
+            $this->runtimeProviderResolver()
         );
 
         $route = new class($request) {

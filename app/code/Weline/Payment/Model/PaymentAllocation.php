@@ -13,7 +13,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'uniq_payment_allocation_code', columns: ['allocation_code'], type: 'UNIQUE')]
 #[Index(name: 'idx_payment_allocation_payable', columns: ['payable_type', 'payable_id'])]
 #[Index(name: 'idx_payment_allocation_intent', columns: ['intent_code', 'status'])]
+#[Index(name: 'idx_payment_allocation_attempt', columns: ['attempt_code', 'status'])]
 #[Index(name: 'idx_payment_allocation_source', columns: ['source_type', 'source_code', 'role'])]
+#[Index(name: 'uniq_payment_allocation_reservation', columns: ['reservation_id'], type: 'UNIQUE')]
 #[Index(name: 'idx_payment_allocation_created_at', columns: ['created_at'])]
 class PaymentAllocation extends Model
 {
@@ -54,6 +56,8 @@ class PaymentAllocation extends Model
     public const schema_fields_CHECKOUT_SESSION_CODE = 'checkout_session_code';
     #[Col('varchar', 96, nullable: true, comment: 'Intent code')]
     public const schema_fields_INTENT_CODE = 'intent_code';
+    #[Col('varchar', 96, nullable: true, comment: 'Cash attempt code; null for zero-cash intent')]
+    public const schema_fields_ATTEMPT_CODE = 'attempt_code';
     #[Col('varchar', 96, nullable: true, comment: 'Transaction code')]
     public const schema_fields_TRANSACTION_CODE = 'transaction_code';
     #[Col('varchar', 96, nullable: true, comment: 'Refund code')]
@@ -64,10 +68,22 @@ class PaymentAllocation extends Model
     public const schema_fields_SOURCE_CODE = 'source_code';
     #[Col('varchar', 96, nullable: true, comment: 'Asset code')]
     public const schema_fields_ASSET_CODE = 'asset_code';
+    #[Col('varchar', 64, nullable: false, comment: 'Owning Customer ID')]
+    public const schema_fields_CUSTOMER_ID = 'customer_id';
+    #[Col('int', 11, nullable: false, comment: 'Website ID including 0')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('varchar', 16, nullable: false, default: 'live', comment: 'Asset namespace')]
+    public const schema_fields_NAMESPACE = 'namespace';
+    #[Col('varchar', 64, nullable: false, comment: 'CustomerAsset reservation ID')]
+    public const schema_fields_RESERVATION_ID = 'reservation_id';
+    #[Col('varchar', 128, nullable: false, comment: 'CustomerAsset reserve event ID')]
+    public const schema_fields_RESERVE_EVENT_ID = 'reserve_event_id';
     #[Col('varchar', 32, nullable: false, default: 'payment', comment: 'Allocation role')]
     public const schema_fields_ROLE = 'role';
     #[Col('bigint', 20, nullable: false, default: 0, comment: 'Allocation amount in minor units')]
     public const schema_fields_AMOUNT_MINOR = 'amount_minor';
+    #[Col('bigint', 20, nullable: false, default: 0, comment: 'Reserved asset quantity in asset minor units')]
+    public const schema_fields_ASSET_AMOUNT_MINOR = 'asset_amount_minor';
     #[Col('varchar', 3, nullable: false, comment: 'Currency code')]
     public const schema_fields_CURRENCY_CODE = 'currency_code';
     #[Col('smallint', 2, nullable: false, default: 2, comment: 'Currency precision')]
@@ -82,6 +98,12 @@ class PaymentAllocation extends Model
     public const schema_fields_REFUNDED_AMOUNT_MINOR = 'refunded_amount_minor';
     #[Col('varchar', 32, nullable: false, default: 'draft', comment: 'Allocation status')]
     public const schema_fields_STATUS = 'status';
+    #[Col('char', 64, nullable: false, comment: 'Canonical start request hash')]
+    public const schema_fields_REQUEST_HASH = 'request_hash';
+    #[Col('int', 11, nullable: false, default: 0, comment: 'Allocation CAS version')]
+    public const schema_fields_VERSION = 'version';
+    #[Col('varchar', 64, nullable: false, comment: 'Allocation writer CAS token')]
+    public const schema_fields_CAS_TOKEN = 'cas_token';
     #[Col('text', nullable: true, comment: 'Allocation snapshot JSON')]
     public const schema_fields_ALLOCATION_SNAPSHOT = 'allocation_snapshot';
     #[Col('text', nullable: true, comment: 'Allocation metadata JSON')]
@@ -92,7 +114,7 @@ class PaymentAllocation extends Model
     public const schema_fields_UPDATED_AT = 'updated_at';
 
     public array $_unit_primary_keys = ['allocation_id'];
-    public array $_index_sort_keys = ['allocation_code', 'payable_type', 'payable_id', 'intent_code', 'source_type', 'source_code', 'role', 'status', 'created_at'];
+    public array $_index_sort_keys = ['allocation_code', 'payable_type', 'payable_id', 'intent_code', 'attempt_code', 'customer_id', 'website_id', 'source_type', 'source_code', 'role', 'status', 'created_at'];
 
     public function _init(): void
     {

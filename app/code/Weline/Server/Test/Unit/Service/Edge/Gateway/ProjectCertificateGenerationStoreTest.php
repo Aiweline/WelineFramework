@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 
 final class ProjectCertificateGenerationStoreTest extends TestCase
@@ -45,6 +46,10 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         self::assertSame(1, $first['generation']);
         self::assertFalse($first['retained_previous']);
         self::assertSame('', $first['activation_error']);
+        self::assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/D',
+            (string)$first['leaf_fingerprint_sha256'],
+        );
         self::assertFileExists($first['cert_path']);
         self::assertFileExists($first['key_path']);
         self::assertStringStartsWith(
@@ -62,6 +67,10 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         );
         self::assertSame(1, $idempotent['generation']);
         self::assertSame($first['source_digest'], $idempotent['source_digest']);
+        self::assertSame(
+            $first['leaf_fingerprint_sha256'],
+            $idempotent['leaf_fingerprint_sha256'],
+        );
         self::assertSame($first['cert_path'], $idempotent['cert_path']);
 
         $secondSource = $this->createCertificate($domain, 'second');
@@ -96,6 +105,20 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             $active['source_digest'],
             $store->active($domain)['source_digest'] ?? null,
         );
+    }
+
+    public function testDeactivationRemovesOnlyMutableSelector(): void
+    {
+        $domain = 'deactivate.example.test';
+        $source = $this->createCertificate($domain, 'deactivate');
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $active = $store->activate($domain, $source['cert'], $source['key']);
+
+        $store->deactivate($domain);
+
+        self::assertNull($store->active($domain));
+        self::assertFileExists((string)$active['cert_path']);
+        self::assertFileExists((string)$active['key_path']);
     }
 
     public function testWildcardRouteAcceptsOnlyTheExactWildcardSan(): void
@@ -191,6 +214,218 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
             self::assertSame(1, $active['generation']);
             self::assertFalse($active['retained_previous']);
         } finally {
+            $this->removeTree($outside);
+        }
+    }
+
+    public function testCertificateGenerationRejectsFilesystemRootEnrollment(): void
+    {
+        $domain = 'root-enrollment.example.test';
+        $source = $this->createCertificate($domain, 'root-enrollment');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'Enrolled certificate source root must be a canonical directory',
+        );
+        (new ProjectCertificateGenerationStore($this->root))->activate(
+            $domain,
+            $source['cert'],
+            $source['key'],
+            '',
+            ['filesystem_root' => $this->filesystemRoot()],
+        );
+    }
+
+    public function testCertificateGenerationStoreRejectsFilesystemProjectRoot(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Unable to resolve a safe WLS project root');
+        new ProjectCertificateGenerationStore($this->filesystemRoot());
+    }
+
+    public function testExtendedWindowsFilesystemRootsAreRejectedWithoutRejectingChildren(): void
+    {
+        $paths = [
+            '//',
+            '///',
+            'C:\\',
+            'C:/',
+            '\\\\server\\',
+            '\\\\server\\share\\',
+            '//server/share/',
+            '\\\\?\\C:\\',
+            '//?/C:/',
+            '\\\\?\\UNC\\server\\share\\',
+            '\\\\?\\UNC\\server\\',
+            '//?/UNC/server/share/',
+            '\\\\.\\C:\\',
+            '\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\',
+        ];
+        foreach ([
+            new ProjectCertificateGenerationStore($this->root),
+            new GatewayRegistrationBuilder(),
+        ] as $subject) {
+            $method = new \ReflectionMethod($subject, 'isFilesystemRoot');
+            foreach ($paths as $path) {
+                self::assertTrue($method->invoke($subject, $path), $path);
+            }
+            foreach ([
+                'C:\\project',
+                '\\\\server\\share\\project',
+                '\\\\?\\C:\\project',
+                '\\\\?\\UNC\\server\\share\\project',
+            ] as $path) {
+                self::assertFalse($method->invoke($subject, $path), $path);
+            }
+        }
+    }
+
+    public function testSnapshotGarbageCollectionRetainsCurrentAndPreviousGeneration(): void
+    {
+        $domain = 'gc.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $firstSource = $this->createCertificate($domain, 'gc-first');
+        $first = $store->activate($domain, $firstSource['cert'], $firstSource['key']);
+        $secondSource = $this->createCertificate($domain, 'gc-second');
+        $second = $store->activate($domain, $secondSource['cert'], $secondSource['key']);
+        $thirdSource = $this->createCertificate($domain, 'gc-third');
+        $third = $store->activate($domain, $thirdSource['cert'], $thirdSource['key']);
+        $firstDirectory = \dirname((string)$first['cert_path']);
+        self::assertTrue(\touch($firstDirectory, \time() - 604_801));
+
+        (new \ReflectionMethod($store, 'assertSnapshotStoreCapacity'))->invoke($store, 1);
+
+        self::assertDirectoryDoesNotExist($firstDirectory);
+        self::assertDirectoryExists(\dirname((string)$second['cert_path']));
+        self::assertDirectoryExists(\dirname((string)$third['cert_path']));
+    }
+
+    public function testDeactivationDoesNotAllowCertificateGenerationReuse(): void
+    {
+        $domain = 'reactivated.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $firstSource = $this->createCertificate($domain, 'reactivated-first');
+        $first = $store->activate($domain, $firstSource['cert'], $firstSource['key']);
+
+        $store->deactivate($domain);
+        self::assertNull($store->active($domain));
+
+        $secondSource = $this->createCertificate($domain, 'reactivated-second');
+        $second = $store->activate($domain, $secondSource['cert'], $secondSource['key']);
+        self::assertGreaterThan((int)$first['generation'], (int)$second['generation']);
+    }
+
+    public function testSnapshotGarbageCollectionFailsClosedOnCorruptReference(): void
+    {
+        $domain = 'gc-corrupt.example.test';
+        $store = new ProjectCertificateGenerationStore($this->root);
+        $snapshots = [];
+        foreach (['first', 'second', 'third'] as $name) {
+            $source = $this->createCertificate($domain, 'gc-corrupt-' . $name);
+            $snapshots[] = $store->activate($domain, $source['cert'], $source['key']);
+        }
+        $orphan = \dirname((string)$snapshots[0]['cert_path']);
+        self::assertTrue(\touch($orphan, \time() - 604_801));
+        $activeRoot = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/active';
+        $corrupt = $activeRoot . DIRECTORY_SEPARATOR . \str_repeat('f', 32) . '.json';
+        self::assertNotFalse(\file_put_contents($corrupt, '{}'));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($corrupt, 0600));
+        }
+
+        try {
+            (new \ReflectionMethod($store, 'assertSnapshotStoreCapacity'))->invoke($store, 1);
+            self::fail('Corrupt reference state must stop snapshot GC.');
+        } catch (\RuntimeException) {
+            self::assertDirectoryExists($orphan);
+        }
+    }
+
+    public function testGatewayEnrollmentRejectsFilesystemRoot(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'Certificate roots must be canonical, unlinked directories',
+        );
+        (new GatewayRegistrationBuilder())->enrollmentCertificateRoots(
+            $this->root,
+            ['filesystem_root' => $this->filesystemRoot()],
+        );
+    }
+
+    public function testGatewayEnrollmentRejectsFilesystemProjectRoot(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Project root for certificate enrollment is unsafe');
+        (new GatewayRegistrationBuilder())->enrollmentCertificateRoots(
+            $this->filesystemRoot(),
+        );
+    }
+
+    public function testExternalEnrollmentRejectsWritableRoot(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX permission fixture.');
+        }
+        $domain = 'writable-root.example.test';
+        $source = $this->createCertificate($domain, 'writable-root-source');
+        $outside = $this->root . '-writable-root';
+        self::assertTrue(\mkdir($outside, 0700, true));
+        $certificate = $outside . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $privateKey = $outside . DIRECTORY_SEPARATOR . 'privkey.pem';
+        self::assertTrue(\copy($source['cert'], $certificate));
+        self::assertTrue(\copy($source['key'], $privateKey));
+        self::assertTrue(\chmod($certificate, 0600));
+        self::assertTrue(\chmod($privateKey, 0600));
+        self::assertTrue(\chmod($outside, 0770));
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('group/world-writable directory');
+            (new ProjectCertificateGenerationStore($this->root))->activate(
+                $domain,
+                $certificate,
+                $privateKey,
+                '',
+                ['external' => $outside],
+            );
+        } finally {
+            @\chmod($outside, 0700);
+            $this->removeTree($outside);
+        }
+    }
+
+    public function testExternalEnrollmentRejectsWritableDescendant(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX permission fixture.');
+        }
+        $domain = 'writable-child.example.test';
+        $source = $this->createCertificate($domain, 'writable-child-source');
+        $outside = $this->root . '-writable-child';
+        $material = $outside . DIRECTORY_SEPARATOR . 'tenant';
+        self::assertTrue(\mkdir($material, 0700, true));
+        $certificate = $material . DIRECTORY_SEPARATOR . 'fullchain.pem';
+        $privateKey = $material . DIRECTORY_SEPARATOR . 'privkey.pem';
+        self::assertTrue(\copy($source['cert'], $certificate));
+        self::assertTrue(\copy($source['key'], $privateKey));
+        self::assertTrue(\chmod($certificate, 0600));
+        self::assertTrue(\chmod($privateKey, 0600));
+        self::assertTrue(\chmod($material, 0770));
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('group/world-writable directory');
+            (new ProjectCertificateGenerationStore($this->root))->activate(
+                $domain,
+                $certificate,
+                $privateKey,
+                '',
+                ['external' => $outside],
+            );
+        } finally {
+            @\chmod($material, 0700);
             $this->removeTree($outside);
         }
     }
@@ -310,6 +545,7 @@ final class ProjectCertificateGenerationStoreTest extends TestCase
         foreach ([
             $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations',
             $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations/activation.lock',
+            $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations/generation-floor.txt',
             $active['cert_path'],
             $active['key_path'],
             $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/.wls-generations/active/'
@@ -374,6 +610,20 @@ CONF
         self::assertTrue(\chmod($certificatePath, 0600));
         self::assertTrue(\chmod($keyPath, 0600));
         return ['cert' => $certificatePath, 'key' => $keyPath];
+    }
+
+    private function filesystemRoot(): string
+    {
+        $normalized = \str_replace('\\', '/', $this->root);
+        if (\preg_match('/\A([A-Za-z]:)\//D', $normalized, $match) === 1) {
+            return $match[1] . DIRECTORY_SEPARATOR;
+        }
+        if (\preg_match('#\A//([^/]+)/([^/]+)(?:/|\z)#D', $normalized, $match) === 1) {
+            return DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR
+                . $match[1] . DIRECTORY_SEPARATOR . $match[2]
+                . DIRECTORY_SEPARATOR;
+        }
+        return DIRECTORY_SEPARATOR;
     }
 
     private function changeOwnership(string $root, int $uid, int $gid): void

@@ -23,7 +23,9 @@ use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\ServerInstanceManager;
 
 class MasterResurrector
 {
@@ -235,6 +237,8 @@ class MasterResurrector
 
         try {
             $delay = $this->getDelay();
+            $previousEpoch = $this->currentMasterEpoch();
+            $spawnedMasterPid = 0;
 
             for ($retry = 0; $retry < $this->maxRetries; $retry++) {
                 // 延迟等待（给更高优先级的进程机会）
@@ -245,14 +249,35 @@ class MasterResurrector
                     return true; // 已被其他进程复活
                 }
 
-                // 尝试启动 Master
-                if ($this->startMaster()) {
-                    // 等待 Master 启动完成
-                    SchedulerSystem::sleep(2);
-
+                // A slow but still-running candidate retains this attempt's
+                // ownership. Do not create another Master merely because a
+                // cold bootstrap has not published its exact lease yet.
+                if ($spawnedMasterPid > 0
+                    && Processer::probeProcessState($spawnedMasterPid, true)
+                        !== Processer::PROCESS_STATE_EXITED
+                ) {
+                    if ($this->waitForSpawnedMaster(
+                        $spawnedMasterPid,
+                        $previousEpoch,
+                    )) {
+                        return true;
+                    }
                     if ($this->isMasterAlive()) {
                         return true;
                     }
+                    $delay = \min($delay * 2, 30);
+                    continue;
+                }
+
+                $spawnedMasterPid = $this->startMaster();
+                if ($this->waitForSpawnedMaster(
+                    $spawnedMasterPid,
+                    $previousEpoch,
+                )) {
+                    return true;
+                }
+                if ($this->isMasterAlive()) {
+                    return true;
                 }
 
                 // 失败，增加延迟后重试
@@ -295,6 +320,25 @@ class MasterResurrector
             return false;
         }
 
+        $validation = (new MasterLeaseManager())->validateRunningLease(
+            MasterLeaseManager::pathForInstance($this->instanceName),
+            expectedInstance: $this->instanceName,
+            expectedControlPort: $this->controlPort,
+            requireManagedName: true,
+        );
+        if (($validation['authorized'] ?? false) !== true) {
+            return false;
+        }
+
+        return $this->isControlPortReachable();
+    }
+
+    private function isControlPortReachable(): bool
+    {
+        if ($this->controlPort <= 0) {
+            return false;
+        }
+
         $errno  = 0;
         $errstr = '';
         $conn = @\stream_socket_client(
@@ -317,51 +361,119 @@ class MasterResurrector
      *
      * 复用 server:start --master-only 命令，与正常后台启动 Master 相同。
      */
-    private function startMaster(): bool
+    private function startMaster(): int
     {
         // Unix 权限门禁：若实例使用特权端口（<1024），非 root 子进程不允许复活 Master。
         // 否则会出现“部分进程正常，后续进程无权限”的链路污染。
         if (!$this->canResurrectWithCurrentPrivilege()) {
-            return false;
+            return 0;
         }
 
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
 
-        $masterName = \Weline\Server\Service\MasterProcess::getMasterProcessName($this->instanceName);
-        $isWin = \defined('IS_WIN') ? IS_WIN : (\stripos(PHP_OS, 'WIN') === 0);
-        if ($isWin) {
-            $bp = \str_replace("'", "''", BP);
-            $phpBin = \str_replace("'", "''", $phpBinary);
-            $scriptRel = 'bin' . DS . 'w';
-            $arguments = [
-                ...\Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
-                $scriptRel,
-                'server:start',
-                $this->instanceName,
-                '--master-only',
-                '--name=' . $masterName,
-            ];
-            $argList = \implode(',', \array_map(
-                static fn (string $argument): string => "'" . \str_replace("'", "''", $argument) . "'",
-                $arguments
-            ));
-            $psCmd = "Set-Location -LiteralPath '{$bp}'; Start-Process -FilePath '{$phpBin}' -ArgumentList {$argList} -WindowStyle Hidden -WorkingDirectory '{$bp}'";
-            $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
-            @\exec($fullCmd . ' 2>NUL');
-            return true;
-        }
-
-        $cmd = \sprintf(
-            '%s %s server:start %s --master-only --name=%s',
+        $masterName = MasterProcess::getMasterProcessName($this->instanceName);
+        $argv = [
             $phpBinary,
-            \escapeshellarg($script),
-            \escapeshellarg($this->instanceName),
-            \escapeshellarg($masterName)
-        );
+            ...\Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
+            $script,
+            'server:start',
+            $this->instanceName,
+            '--master-only',
+            '--name=' . $masterName,
+        ];
+        try {
+            // One shell-free launcher is used on every platform and returns
+            // the actual PHP child PID. A successful spawn is not yet a
+            // resurrection ACK; waitForSpawnedMaster() proves the protected
+            // lease, advanced epoch and exact control endpoint separately.
+            return Processer::createDetachedPhpArgv(
+                $argv,
+                (string)BP,
+                '--name=' . $masterName,
+                false,
+            );
+        } catch (\Throwable $throwable) {
+            \w_log_error(
+                '[MasterResurrector] exact argv Master launch failed: '
+                . $throwable->getMessage(),
+            );
+            return 0;
+        }
+    }
 
-        Processer::create($cmd, false);
-        return true;
+    private function currentMasterEpoch(): int
+    {
+        $epoch = 0;
+        $lease = (new MasterLeaseManager())->readProtected(
+            MasterLeaseManager::pathForInstance($this->instanceName),
+        );
+        if (\is_array($lease)) {
+            $epoch = \max($epoch, (int)($lease['master_epoch'] ?? 0));
+        }
+        try {
+            $endpoint = (new ServerInstanceManager())->getRawInstanceData(
+                $this->instanceName,
+            );
+            if (\is_array($endpoint)) {
+                $epoch = \max($epoch, (int)($endpoint['master_epoch'] ?? 0));
+            }
+        } catch (\Throwable) {
+        }
+        return $epoch;
+    }
+
+    /**
+     * A spawn receipt is only a candidate. Success requires the same PID to
+     * publish a fresh schema-2 Master lease at a strictly newer epoch and make
+     * the expected control endpoint reachable.
+     */
+    private function waitForSpawnedMaster(
+        int $spawnedPid,
+        int $previousEpoch,
+    ): bool {
+        if ($spawnedPid <= 0) {
+            return false;
+        }
+        $configured = null;
+        try {
+            $config = Env::getInstance()->getConfig() ?: [];
+            $configured = $config['wls']['orchestrator'][
+                'resurrect_start_confirm_seconds'
+            ] ?? null;
+        } catch (\Throwable) {
+        }
+        $isWin = \defined('IS_WIN') ? IS_WIN : PHP_OS_FAMILY === 'Windows';
+        $timeout = \is_numeric($configured)
+            ? \max(2.0, \min(120.0, (float)$configured))
+            : ($isWin ? 60.0 : 15.0);
+        $deadline = \microtime(true) + $timeout;
+        do {
+            $validation = (new MasterLeaseManager())->validateRunningLease(
+                MasterLeaseManager::pathForInstance($this->instanceName),
+                expectedInstance: $this->instanceName,
+                expectedMasterPid: $spawnedPid,
+                expectedControlPort: $this->controlPort,
+                requireManagedName: true,
+            );
+            $lease = \is_array($validation['lease'] ?? null)
+                ? $validation['lease']
+                : [];
+            if (($validation['authorized'] ?? false) === true
+                && (int)($lease['master_epoch'] ?? 0) > $previousEpoch
+                && $this->isControlPortReachable()
+            ) {
+                return true;
+            }
+            if (Processer::probeProcessState($spawnedPid, true)
+                === Processer::PROCESS_STATE_EXITED
+            ) {
+                return false;
+            }
+            SchedulerSystem::usleep(50_000);
+        } while (\microtime(true) < $deadline);
+
+        return false;
     }
 
     /**

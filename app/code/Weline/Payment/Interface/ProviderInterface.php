@@ -67,8 +67,16 @@ interface ProviderInterface
 
     public function query(QueryRequest $request): PaymentResult;
 
+    /**
+     * Verify the exact raw request bytes. This method MUST be pure: no database,
+     * cache, queue, network side effect, or payment state transition.
+     */
     public function verifyCallback(CallbackRequest $request): CallbackResult;
 
+    /**
+     * Parse an already verified callback. This method MUST be pure and MUST NOT
+     * advance Intent/Attempt/Order/Inventory state or create outbox records.
+     */
     public function parseCallback(CallbackRequest $request): CallbackResult;
 
     public function testConnection(TestConnectionRequest $request): PaymentResult;

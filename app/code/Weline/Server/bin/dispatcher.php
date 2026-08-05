@@ -74,6 +74,17 @@ $masterLeaseFile = '';
 $masterToken = '';
 $protocolEdgeTokenFile = '';
 $edgeAdapterName = 'nginx';
+$listenFd = 0;
+$gatewayHostLeaseId = '';
+$slotId = '';
+$slotLeaseId = '';
+$slotGeneration = 0;
+$windowsListenerHandoffPath = '';
+$windowsListenerHandoffId = '';
+$windowsListenerIntentDigest = '';
+$windowsListenerLeaseInstance = '';
+$windowsListenerWlsInstance = '';
+$windowsListenerMasterLaunchId = '';
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
@@ -90,19 +101,119 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--master-lease-file=')) {
         $masterLeaseFile = (string)\substr($arg, 20);
     } elseif (\str_starts_with($arg, '--master-token=')) {
-        $masterToken = (string)\substr($arg, 15);
+        \fwrite(\STDERR, "[Dispatcher] --master-token is forbidden; use the protected child ledger.\n");
+        exit(1);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
     } elseif (\str_starts_with($arg, '--protocol-edge-token-file=')) {
         $protocolEdgeTokenFile = (string)\substr($arg, 27);
     } elseif (\str_starts_with($arg, '--edge-adapter=')) {
         $edgeAdapterName = \strtolower(\trim((string)\substr($arg, 15)));
+    } elseif (\str_starts_with($arg, '--listen-fd=')) {
+        $listenFd = (int)\substr($arg, 12);
+    } elseif (\str_starts_with($arg, '--gateway-host-lease-id=')) {
+        $gatewayHostLeaseId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--gateway-host-lease-id='),
+        )));
+    } elseif (\str_starts_with($arg, '--slot-id=')) {
+        $slotId = \trim((string)\substr($arg, 10));
+    } elseif (\str_starts_with($arg, '--lease-id=')) {
+        $slotLeaseId = \strtolower(\trim((string)\substr($arg, 11)));
+    } elseif (\str_starts_with($arg, '--slot-generation=')) {
+        $slotGeneration = (int)\substr($arg, 18);
+    } elseif (\str_starts_with($arg, '--windows-listener-handoff=')) {
+        $windowsListenerHandoffPath = (string)\substr(
+            $arg,
+            \strlen('--windows-listener-handoff='),
+        );
+    } elseif (\str_starts_with($arg, '--windows-listener-handoff-id=')) {
+        $windowsListenerHandoffId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-handoff-id='),
+        )));
+    } elseif (\str_starts_with($arg, '--windows-listener-intent-digest=')) {
+        $windowsListenerIntentDigest = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-intent-digest='),
+        )));
+    } elseif (\str_starts_with($arg, '--windows-listener-lease-instance=')) {
+        $windowsListenerLeaseInstance = \trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-lease-instance='),
+        ));
+    } elseif (\str_starts_with($arg, '--windows-listener-wls-instance=')) {
+        $windowsListenerWlsInstance = \trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-wls-instance='),
+        ));
+    } elseif (\str_starts_with($arg, '--windows-listener-master-launch-id=')) {
+        $windowsListenerMasterLaunchId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-master-launch-id='),
+        )));
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
 if (!\in_array($edgeAdapterName, ['nginx', 'wls'], true)) {
     \fwrite(\STDERR, "[Dispatcher] --edge-adapter must be nginx or wls.\n");
     exit(1);
+}
+if ($listenFd !== 0
+    && ($listenFd !== 3 || \PHP_OS_FAMILY === 'Windows')
+) {
+    \fwrite(\STDERR, "[Dispatcher] inherited listener requires POSIX FD 3.\n");
+    exit(1);
+}
+if (($listenFd !== 0 || $gatewayHostLeaseId !== '')
+    && \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayHostLeaseId) !== 1
+) {
+    \fwrite(\STDERR, "[Dispatcher] inherited listener host lease identity is invalid.\n");
+    exit(1);
+}
+$windowsHandoffValues = [
+    $windowsListenerHandoffPath,
+    $windowsListenerHandoffId,
+    $windowsListenerIntentDigest,
+    $windowsListenerLeaseInstance,
+    $windowsListenerWlsInstance,
+    $windowsListenerMasterLaunchId,
+];
+$windowsHandoffPresent = \count(\array_filter(
+    $windowsHandoffValues,
+    static fn (string $value): bool => $value !== '',
+)) > 0;
+if ($windowsHandoffPresent
+    && (\PHP_OS_FAMILY !== 'Windows'
+        || \in_array('', $windowsHandoffValues, true)
+        || $listenFd !== 0
+        || !\hash_equals($windowsListenerWlsInstance, (string)$instanceName)
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerHandoffId) !== 1
+        || \preg_match('/\A[a-f0-9]{64}\z/D', $windowsListenerIntentDigest) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerMasterLaunchId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayHostLeaseId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLaunchId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $slotLeaseId) !== 1
+        || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerLeaseInstance) !== 1
+        || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerWlsInstance) !== 1
+        || \preg_match('/\Adispatcher#[1-9][0-9]*\z/D', $slotId) !== 1
+        || $slotGeneration <= 0
+        || !\hash_equals($orchestratorLaunchId, $slotLeaseId))
+) {
+    \fwrite(\STDERR, "[Dispatcher] Windows listener handoff identity is incomplete or inconsistent.\n");
+    exit(1);
+}
+if (\PHP_OS_FAMILY === 'Windows'
+    && $gatewayHostLeaseId !== ''
+    && !$windowsHandoffPresent
+) {
+    \fwrite(\STDERR, "[Dispatcher] Windows host lease requires target-bound listener adoption.\n");
+    exit(1);
+}
+if ($gatewayHostLeaseId !== '') {
+    $_SERVER['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
+    $_ENV['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
+    @\putenv('WLS_GATEWAY_HOST_LEASE_ID=' . $gatewayHostLeaseId);
 }
 $normalizedBindHost = \strtolower(\trim((string)$host));
 if ($edgeAdapterName === 'nginx' && $normalizedBindHost !== '127.0.0.1') {
@@ -132,13 +243,19 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 // 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
-$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
-    ->resolveProtectedCredentialFromArguments(
+$masterLeaseManager = new \Weline\Server\Service\MasterLeaseManager();
+$masterToken = $masterLeaseManager->resolveProtectedCredentialFromArguments(
         $argv,
         $instanceName,
         $masterPid,
         $orchestratorEpoch,
     );
+$masterRuntimeCredential = $masterLeaseManager->resolveProtectedRuntimeCredentialFromArguments(
+    $argv,
+    $instanceName,
+    $masterPid,
+    $orchestratorEpoch,
+);
 
 $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $masterPid,
@@ -160,6 +277,27 @@ if (!\function_exists('wlsDispatcherIsIpBindAddress')) {
         }
 
         return \filter_var($host, FILTER_VALIDATE_IP) !== false;
+    }
+}
+
+if (!\function_exists('wlsDispatcherNormalizeLiteralBindHost')) {
+    function wlsDispatcherNormalizeLiteralBindHost(string $host): string
+    {
+        $host = \trim($host, " \t\n\r\0\x0B[]");
+        if ($host === '' || $host === '*') {
+            return '0.0.0.0';
+        }
+        if (\strcasecmp($host, 'localhost') === 0) {
+            return '127.0.0.1';
+        }
+        $packed = @\inet_pton($host);
+        $normalized = \is_string($packed) ? @\inet_ntop($packed) : false;
+        if (!\is_string($normalized) || $normalized === '') {
+            throw new \InvalidArgumentException(
+                'Dispatcher inherited listener requires a literal IPv4/IPv6 address.'
+            );
+        }
+        return \strtolower($normalized);
     }
 }
 
@@ -219,40 +357,125 @@ if (!\function_exists('wlsDispatcherBindListenSocket')) {
     }
 }
 
-$socket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-if ($socket === false) {
-    $errorCode = \socket_last_error();
-    $errorMsg = \socket_strerror($errorCode);
-    \fwrite(STDERR, "[Dispatcher] socket_create failed: ({$errorCode}) {$errorMsg}\n");
-    exit(1);
-}
-$reuseResult = \Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($socket);
-if (!$reuseResult['success']) {
-    \fwrite(STDERR, "[Dispatcher] socket_set_option {$reuseResult['label']} failed: ({$reuseResult['errno']}) {$reuseResult['error']}\n");
-    \socket_close($socket);
-    exit(1);
-}
-$bindResult = wlsDispatcherBindListenSocket($socket, (string)$host, $port);
-if (!$bindResult['success']) {
-    $errorCode = (int)$bindResult['error_code'];
-    $errorMsg = (string)$bindResult['error_msg'];
-    \fwrite(STDERR, "[Dispatcher] socket_bind failed on {$host}:{$port}: ({$errorCode}) {$errorMsg}\n");
-    \socket_close($socket);
-    exit(1);
-}
 $requestedHost = (string)$host;
-$host = (string)$bindResult['host'];
-if ($bindResult['fallback_used']) {
-    \fwrite(STDERR, "[Dispatcher] socket_bind fallback: {$requestedHost}:{$port} failed, listening on {$host}:{$port}\n");
+$inheritedListenerStream = null;
+$windowsListenerProof = [];
+$listenerWasInherited = $listenFd !== 0 || $windowsHandoffPresent;
+if ($windowsHandoffPresent) {
+    try {
+        $importedListener = \Weline\Server\Service\Runtime\WindowsListenerHandoff::awaitChildSocket(
+            $windowsListenerHandoffPath,
+            [
+                'handoff_id' => $windowsListenerHandoffId,
+                'intent_digest' => $windowsListenerIntentDigest,
+                'lease_id' => $gatewayHostLeaseId,
+                'lease_instance' => $windowsListenerLeaseInstance,
+                'wls_instance' => $windowsListenerWlsInstance,
+                'bind_host' => wlsDispatcherNormalizeLiteralBindHost($requestedHost),
+                'port' => $port,
+                'master_launch_id' => $windowsListenerMasterLaunchId,
+                'launch_id' => $orchestratorLaunchId,
+                'slot_id' => $slotId,
+                'generation' => $slotGeneration,
+            ],
+        );
+        $socket = $importedListener['socket'];
+        $windowsListenerProof = $importedListener['proof'];
+        $host = (string)($windowsListenerProof['host'] ?? '');
+    } catch (\Throwable $throwable) {
+        \fwrite(\STDERR, '[Dispatcher] Windows listener adoption failed: '
+            . $throwable->getMessage() . "\n");
+        exit(1);
+    }
+} elseif ($listenerWasInherited) {
+    $inheritedListenerStream = @\fopen('php://fd/' . $listenFd, 'r+');
+    $socket = \is_resource($inheritedListenerStream)
+        && \function_exists('socket_import_stream')
+            ? @\socket_import_stream($inheritedListenerStream)
+            : false;
+    $actualHost = '';
+    $actualPort = 0;
+    $accepting = $socket !== false && \defined('SO_ACCEPTCONN')
+        ? @\socket_get_option($socket, \SOL_SOCKET, \SO_ACCEPTCONN)
+        : 1;
+    if ($socket === false
+        || !@\socket_getsockname($socket, $actualHost, $actualPort)
+        || $accepting !== 1
+    ) {
+        if (\is_resource($inheritedListenerStream)) {
+            @\fclose($inheritedListenerStream);
+        }
+        \fwrite(\STDERR, "[Dispatcher] inherited FD 3 is not a listening TCP socket.\n");
+        exit(1);
+    }
+    try {
+        $expectedHost = wlsDispatcherNormalizeLiteralBindHost($requestedHost);
+        $actualHost = wlsDispatcherNormalizeLiteralBindHost((string)$actualHost);
+    } catch (\Throwable $throwable) {
+        @\fclose($inheritedListenerStream);
+        \fwrite(\STDERR, '[Dispatcher] inherited listener address is invalid: '
+            . $throwable->getMessage() . "\n");
+        exit(1);
+    }
+    if ($actualHost !== $expectedHost || (int)$actualPort !== $port) {
+        @\fclose($inheritedListenerStream);
+        \fwrite(\STDERR, "[Dispatcher] inherited listener endpoint mismatch.\n");
+        exit(1);
+    }
+    $host = $actualHost;
+} else {
+    $socket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+    if ($socket === false) {
+        $errorCode = \socket_last_error();
+        $errorMsg = \socket_strerror($errorCode);
+        \fwrite(STDERR, "[Dispatcher] socket_create failed: ({$errorCode}) {$errorMsg}\n");
+        exit(1);
+    }
+    $reuseResult = \Weline\Server\Socket\ListenSocketOptions::applyRawListenSocketReuseOption($socket);
+    if (!$reuseResult['success']) {
+        \fwrite(STDERR, "[Dispatcher] socket_set_option {$reuseResult['label']} failed: ({$reuseResult['errno']}) {$reuseResult['error']}\n");
+        \socket_close($socket);
+        exit(1);
+    }
+    $bindResult = wlsDispatcherBindListenSocket($socket, (string)$host, $port);
+    if (!$bindResult['success']) {
+        $errorCode = (int)$bindResult['error_code'];
+        $errorMsg = (string)$bindResult['error_msg'];
+        \fwrite(STDERR, "[Dispatcher] socket_bind failed on {$host}:{$port}: ({$errorCode}) {$errorMsg}\n");
+        \socket_close($socket);
+        exit(1);
+    }
+    $host = (string)$bindResult['host'];
+    if ($bindResult['fallback_used']) {
+        \fwrite(STDERR, "[Dispatcher] socket_bind fallback: {$requestedHost}:{$port} failed, listening on {$host}:{$port}\n");
+    }
+    if (@\socket_listen($socket, 1024) === false) {
+        $errorCode = \socket_last_error($socket);
+        $errorMsg = \socket_strerror($errorCode);
+        \fwrite(STDERR, "[Dispatcher] socket_listen failed: ({$errorCode}) {$errorMsg}\n");
+        \socket_close($socket);
+        exit(1);
+    }
 }
-if (@\socket_listen($socket, 1024) === false) {
-    $errorCode = \socket_last_error($socket);
-    $errorMsg = \socket_strerror($errorCode);
-    \fwrite(STDERR, "[Dispatcher] socket_listen failed: ({$errorCode}) {$errorMsg}\n");
-    \socket_close($socket);
+if (!@\socket_set_nonblock($socket)) {
+    \fwrite(\STDERR, "[Dispatcher] listener could not enter non-blocking mode.\n");
+    if (\is_resource($inheritedListenerStream)) {
+        @\fclose($inheritedListenerStream);
+    } else {
+        \socket_close($socket);
+    }
     exit(1);
 }
-\socket_set_nonblock($socket);
+\Weline\Server\Service\Policy\DispatcherPolicyControl::setListenerReadiness(
+    (string)$host,
+    $port,
+    $listenerWasInherited,
+);
+if ($windowsListenerProof !== []) {
+    \Weline\Server\Service\Policy\DispatcherPolicyControl::setWindowsListenerHandoffProof(
+        $windowsListenerProof,
+    );
+}
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
@@ -328,6 +551,7 @@ $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
     $port
 );
 $dispatcher->setLifecycleTokens($orchestratorEpoch, $orchestratorLaunchId);
+$dispatcher->setHostLeaseId($gatewayHostLeaseId);
 $dispatcher->setHelloAuthSecret($masterToken);
 if ($masterPid > 0) {
     $dispatcher->setMasterPid($masterPid);
@@ -529,7 +753,7 @@ $dispatcher->configure([
     'sni_routing_enabled' => true,
     'protocol_edge_ingress_enabled' => $protocolEdgeToken !== '',
     'proxy_protocol_v2_enabled' => true,
-    'proxy_protocol_v2_secret' => $masterToken,
+    'proxy_protocol_v2_secret' => $masterRuntimeCredential,
     'proxy_protocol_v2_require_auth' => true,
     'worker_protocol_edge_token' => $protocolEdgeToken,
     'learning_mode_enabled' => true,

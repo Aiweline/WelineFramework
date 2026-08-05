@@ -37,20 +37,21 @@ readonly class ThemeLayoutVersionService
 
     /**
      * @param array<string,mixed> $identity
-     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,store_mode?:string,storage_scope?:string}
      */
     private function normalizeLayoutIdentity(array $identity = []): array
     {
-        $layoutOption = trim((string)($identity['layout_option'] ?? 'default'));
-        $scope = trim((string)($identity['scope'] ?? 'default'));
-        $targetType = trim((string)($identity['target_type'] ?? $identity['theme_layout_target_type'] ?? 'global'));
+        if (!isset($identity['target_type']) && isset($identity['theme_layout_target_type'])) {
+            $identity['target_type'] = $identity['theme_layout_target_type'];
+        }
+        if (!isset($identity['target_id']) && isset($identity['theme_layout_target_id'])) {
+            $identity['target_id'] = $identity['theme_layout_target_id'];
+        }
 
-        return [
-            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
-            'scope' => $scope !== '' ? $scope : 'default',
-            'target_type' => $targetType !== '' ? $targetType : 'global',
-            'target_id' => max(0, (int)($identity['target_id'] ?? $identity['theme_layout_target_id'] ?? 0)),
-        ];
+        /** @var ThemeLayoutScopeNormalizer $normalizer */
+        $normalizer = new ThemeLayoutScopeNormalizer(new \Weline\SystemConfig\Service\SystemConfigScopeResolver());
+
+        return $normalizer->normalize($identity);
     }
 
     private function applyVersionIdentityFilters(mixed $query, array $identity): mixed

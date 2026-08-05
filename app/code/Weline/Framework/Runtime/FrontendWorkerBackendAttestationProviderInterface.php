@@ -22,9 +22,12 @@ interface FrontendWorkerBackendAttestationProviderInterface
     ): ?FrontendWorkerBackendBinding;
 
     /**
-     * Revalidates expiry, authority, current Session identity and current user
-     * state. Implementations throw FrontendWorkerBackendAttestationException
-     * on any mismatch and must never silently downgrade to frontend authority.
+     * Revalidates authority, current Session identity and current user state.
+     * When the current backend Session is still valid, near-expiry or expired
+     * page attestations are slid to a fresh binding window so long-running
+     * runtime SSE ticket refreshes do not force a full page reload.
+     * Implementations throw FrontendWorkerBackendAttestationException on any
+     * mismatch and must never silently downgrade to frontend authority.
      */
     public function restoreBinding(
         FrontendWorkerBackendBinding $binding,

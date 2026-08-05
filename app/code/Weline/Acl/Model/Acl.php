@@ -70,10 +70,22 @@ class Acl extends \Weline\Framework\Database\Model
     public const schema_fields_SCOPE_GROUP = 'scope_group';
     #[Col(type: 'smallint', nullable: false, default: 0, comment: '是否允许外部API应用授权')]
     public const schema_fields_API_EXPOSABLE = 'api_exposable';
+    #[Col(type: 'text', nullable: true, comment: '资源结构化元数据JSON')]
+    public const schema_fields_RESOURCE_METADATA = 'resource_metadata';
 
     public const type_MENUS = 'menus';
+    public const type_PC = 'pc';
+    public const type_API = 'api';
+    public const type_QUERY = 'query';
+    public const type_TASK = 'task';
+    public const type_OPERATION = 'operation';
+
     public const acl_origin_menu_xml = 'menu_xml';
     public const acl_origin_user = 'user';
+    public const acl_origin_controller_attribute = 'controller_attribute';
+    public const acl_origin_query_provider = 'query_provider';
+    public const acl_origin_resumable_task = 'resumable_task';
+    public const acl_origin_system_operation = 'system_operation';
     public const ACCESS_MODE_READ = 'read';
     public const ACCESS_MODE_EDIT = 'edit';
 

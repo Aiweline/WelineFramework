@@ -6,6 +6,35 @@ Weline_Order 是一个符合国际电商标准的订单管理模块，提供完�
 
 订单优惠校验直接使用 Payment 的支付方式兼容能力，因此 Payment 是必需依赖。
 
+## Order Facade（P2D-001）
+
+跨模块写入边界见 [`doc/facade-api.md`](facade-api.md)：`plan` / `create` / `get`；Checkout/Payment/Inventory 不得引用内部 Model/Service。`get()` 的公开只读投影保留 `customerId`，供支付 eligibility 冻结 owner，但不暴露 Order Model。Order 作为 Payable：[`doc/payable-resolver.md`](payable-resolver.md)（`weline_order`）。退款：[`doc/refund.md`](refund.md)。发票/履约/tombstone/账户汇总：[`doc/invoice-fulfillment-tombstone.md`](invoice-fulfillment-tombstone.md)。
+
+多仓履约当前源码见 [`doc/warehouse-fulfillment.md`](warehouse-fulfillment.md)：
+durable writer flag 控制的 `legacy_default→warehouse` 新单来源、部分发货
+CAS、不可变进度账本和原仓退款重试边界。
+
+## CheckoutGroup 拓扑（P2D-002）
+
+见 [`doc/model-topology.md`](model-topology.md)：Group→Order→
+FulfillmentUnit、Order 级五类不可变快照、状态 CAS、组不变式与整组回滚。
+
+## 展示号与支付后处理（P2D-003）
+
+见 [`doc/display-number.md`](display-number.md)：展示号按
+`website/store/number_kind/display_number` 唯一，后台查号必须携带 kind
+与 Scope；支付后处理只接收冻结的 `OrderPaidContext` minor-unit DTO。
+
+## Checkout→Order 切换机制（P2D-004）
+
+见 [`doc/cutover.md`](cutover.md)：legacy Checkout writer 通过同步 critical
+事件接入 Order guard，不跨模块调用 Order 内部 Service；shadow 比对强制
+`mode=shadow`，并用 DML/lock/reservation/outbox/cache 五通道快照及完整
+item/金额/运费 owner 归一化防止假绿。`TASK-MIG-P2-ORDER` 的当前源码
+命令只允许登记的隔离 clone，并以显式 token、不可变 checkpoint/journal、
+带表前缀数据库探针和新进程 verify 完成单写切流验收；生产持久启用仍须
+独立发布授权。
+
 ## 核心功能
 
 ### 1. 订单管理
@@ -432,6 +461,17 @@ $result = $validationService->validateRuleActions('alipay', [
 - 在订单创建时自动验证，确保支付方式支持优惠方式
 - Order 不加载 Payment `Service` / `Model`，Marketing 未安装也不会导致类加载错误
 
+## 后台对象授权（TASK-P1B-004）
+
+- 订单列表在分页和输出投影前按 `LIST` 过滤；详情与编辑加载按 `VIEW/UPDATE` 校验。
+- 已有订单的对象 Scope 只从持久化 `website_id/store_id` 解析，请求参数不能改变其授权目标。
+- 新建订单必须提交显式且有效的目标 Scope；所有写入在持久化前校验当前
+  `expected_grant_version`。
+- 状态、支付和发票变更使用 `UPDATE`，退款使用 `REFUND`，发货/履约使用 `FULFILL`。
+- 旧 `adminRequest` 任意 URL/method/body 桥接已移除；`order_admin` 只发布
+  `saveStatus`、`deleteStatus`、`toggleStatus` 三个固定类型化操作。
+- 状态字典属于 Global 对象，但仍需显式 Global 授权；超级管理员不会获得隐式对象写权限。
+
 ## 测试
 
 ### 运行单元测试
@@ -454,7 +494,7 @@ php bin/w phpunit:run --module=Weline_Order --filter=Integration
 4. **事件驱动**: 关键操作触发事件，支持模块间解耦
 5. **状态机模式**: 使用状态机管理订单状态流转
 6. **国际化支持**: 所有文本使用翻译函数
-7. **权限控制**: 使用ACL注解进行权限控制
+7. **权限控制**: 路由 ACL 与对象 Scope ACL 双重控制，提交前校验授权版本
 
 ## 参考标准
 
@@ -466,6 +506,30 @@ php bin/w phpunit:run --module=Weline_Order --filter=Integration
 
 ## 版本历史
 
+- **2.12.4** - 完成 P4D-002 current source：冻结 Order 资产分配快照，
+  RefundCase 固化 cash/asset 拆分，混合与全资产退款通过独立
+  `asset_return` outbox 累计返还，现金 Provider 成功事实不因资产重试重放。
+- **2.12.2** - 消费 MIG-P3A 的 durable Warehouse writer flag；关闭时新
+  FulfillmentUnit 保持 `legacy_default`，verify/allowlist 后才记录
+  `warehouse`，原仓事实继续不可变。
+- **2.12.1** - 完成 P3A-002 current source：mode-off 新单默认逻辑仓、
+  既有仓事实保留、FulfillmentUnit qty CAS + immutable progress ledger，
+  以及现金成功后原 Warehouse 退款回库的独立幂等重试。
+- **2.11.6** - 完成 MIG-P2-ORDER current-source：隔离 clone 的
+  preflight/apply/fresh-process verify/controlled rollback 全部由显式
+  checkpoint 驱动；移除默认 token，补带前缀物理表探针、可靠非零退出码，
+  并在已有新 Order 时拒绝隐藏事实源的 `off` 回退。
+- **2.11.5** - 完成 P2D-004 current-source：移除进程级 static writer
+  guard，改为 Checkout 前置事件与 Order critical Observer；兼容 reader
+  不再吞掉新读故障，shadow comparator 强制五通道零副作用与完整计划 diff。
+- **2.11.4** - 修复 DB 模式展示号查号与 seed replay，使用冲突安全
+  upsert 实现五次有界分配；发布带 Scope ACL 的 kind-qualified
+  QueryProvider，并将支付后处理边界收紧为冻结 `OrderPaidContext`。
+- **2.11.3** - 落实 Group→Order→Item/FulfillmentUnit 数据库拓扑，
+  持久化 Order 级 Tax/Shipping 快照，补 UUID/Group 索引和状态 CAS；
+  同状态重试零写，并禁止 legacy service 改写新拓扑冻结字段。
+- **2.11.2** - 加固 Order Facade 命令边界、DB 幂等竞态恢复和 SQLite
+  事务/回滚证据；发布 `OrderFacadeInterface` DI 映射并同步标准模块依赖元数据。
 - **1.0.0** - 初始版本，实现基础订单管理功能
 
 ## 许可证

@@ -26,7 +26,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_domain_manager', 'CDN域名管理', 'mdi-web', 'CDN域名管理', '')]
+#[AclAttribute('Weline_Cdn::cdn_domain_manager', 'CDN域名管理', 'mdi-web', 'CDN域名管理', 'Weline_Cdn::cdn_manager')]
 class Domain extends BackendController
 {
     /**

@@ -86,6 +86,97 @@ class RateCalculationService
     }
 
     /**
+     * Checkout Quote path: calculate entirely in integer minor units.
+     *
+     * `weight_minor` is 1/1000 weight unit and `volume_minor` is 1/1,000,000
+     * volume unit. Quantity is an integer unit count.
+     *
+     * @param list<array<string,mixed>> $lines
+     */
+    public function calculateMinor(int $templateId, array $lines, int $currencyPrecision = 2): int
+    {
+        $template = $this->getModel()->load($templateId);
+        if (!$template->getId()) {
+            throw new \RuntimeException(__('费用模板不存在'));
+        }
+
+        return $this->calculateTemplateMinor($template, $lines, $currencyPrecision);
+    }
+
+    /**
+     * @param list<array<string,mixed>> $lines
+     */
+    public function calculateTemplateMinor(
+        RateTemplate $template,
+        array $lines,
+        int $currencyPrecision = 2,
+    ): int {
+        if ($currencyPrecision < 0 || $currencyPrecision > 6) {
+            throw new \InvalidArgumentException(__('币种精度非法'));
+        }
+        if (!(bool)$template->getData(RateTemplate::schema_fields_IS_ACTIVE)) {
+            throw new \RuntimeException(__('费用模板未启用'));
+        }
+
+        $quantity = 0;
+        $weightMinor = 0;
+        $volumeMinor = 0;
+        foreach ($lines as $line) {
+            $quantity = $this->checkedAdd($quantity, max(0, (int)($line['qty_minor'] ?? 0)));
+            $weightMinor = $this->checkedAdd($weightMinor, max(0, (int)($line['weight_minor'] ?? 0)));
+            $volumeMinor = $this->checkedAdd($volumeMinor, max(0, (int)($line['volume_minor'] ?? 0)));
+        }
+
+        $fee = $this->decimalToMinor(
+            (string)$template->getData(RateTemplate::schema_fields_BASE_FEE),
+            $currencyPrecision,
+        );
+        $type = (string)$template->getData(RateTemplate::schema_fields_CALCULATION_TYPE);
+        $fee = match ($type) {
+            RateTemplate::CALC_TYPE_FIXED => $fee,
+            RateTemplate::CALC_TYPE_QUANTITY => $this->checkedAdd(
+                $fee,
+                $this->checkedMultiply(
+                    $this->decimalToMinor(
+                        (string)$template->getData(RateTemplate::schema_fields_QUANTITY_RATE),
+                        $currencyPrecision,
+                    ),
+                    $quantity,
+                ),
+            ),
+            RateTemplate::CALC_TYPE_WEIGHT => $this->checkedAdd(
+                $fee,
+                $this->scaledCharge(
+                    (string)$template->getData(RateTemplate::schema_fields_WEIGHT_RATE),
+                    $weightMinor,
+                    1_000,
+                    $currencyPrecision,
+                ),
+            ),
+            RateTemplate::CALC_TYPE_VOLUME => $this->checkedAdd(
+                $fee,
+                $this->scaledCharge(
+                    (string)$template->getData(RateTemplate::schema_fields_VOLUME_RATE),
+                    $volumeMinor,
+                    1_000_000,
+                    $currencyPrecision,
+                ),
+            ),
+            RateTemplate::CALC_TYPE_MIXED => $this->calculateMixedMinor(
+                $template,
+                $fee,
+                $quantity,
+                $weightMinor,
+                $volumeMinor,
+                $currencyPrecision,
+            ),
+            default => throw new \RuntimeException(__('未知配送计费类型：%{1}', [$type])),
+        };
+
+        return max(0, $fee);
+    }
+
+    /**
      * 按重量计算
      * 
      * @param RateTemplate $template
@@ -152,5 +243,101 @@ class RateCalculationService
         
         return $fee;
     }
-}
 
+    private function calculateMixedMinor(
+        RateTemplate $template,
+        int $baseMinor,
+        int $quantity,
+        int $weightMinor,
+        int $volumeMinor,
+        int $currencyPrecision,
+    ): int {
+        $config = $template->getMixedConfig();
+        $fee = $baseMinor;
+        if (!empty($config['weight']['enabled'])) {
+            $fee = $this->checkedAdd($fee, $this->scaledCharge(
+                (string)($config['weight']['rate'] ?? '0'),
+                $weightMinor,
+                1_000,
+                $currencyPrecision,
+            ));
+        }
+        if (!empty($config['volume']['enabled'])) {
+            $fee = $this->checkedAdd($fee, $this->scaledCharge(
+                (string)($config['volume']['rate'] ?? '0'),
+                $volumeMinor,
+                1_000_000,
+                $currencyPrecision,
+            ));
+        }
+        if (!empty($config['quantity']['enabled'])) {
+            $fee = $this->checkedAdd(
+                $fee,
+                $this->checkedMultiply(
+                    $this->decimalToMinor(
+                        (string)($config['quantity']['rate'] ?? '0'),
+                        $currencyPrecision,
+                    ),
+                    $quantity,
+                ),
+            );
+        }
+
+        return $fee;
+    }
+
+    private function scaledCharge(
+        string $decimalRate,
+        int $dimensionMinor,
+        int $dimensionScale,
+        int $currencyPrecision,
+    ): int {
+        $rateMinor = $this->decimalToMinor($decimalRate, $currencyPrecision);
+        $product = $this->checkedMultiply($rateMinor, $dimensionMinor);
+
+        return intdiv($this->checkedAdd($product, intdiv($dimensionScale, 2)), $dimensionScale);
+    }
+
+    private function decimalToMinor(string $decimal, int $precision): int
+    {
+        $decimal = trim($decimal);
+        if (!preg_match('/^\+?([0-9]+)(?:\.([0-9]+))?$/D', $decimal, $match)) {
+            throw new \InvalidArgumentException(__('配送金额格式非法'));
+        }
+        $whole = (int)$match[1];
+        $fraction = (string)($match[2] ?? '');
+        $scale = 10 ** $precision;
+        $minor = $this->checkedMultiply($whole, $scale);
+        if ($precision === 0) {
+            if ($fraction !== '' && (int)$fraction[0] >= 5) {
+                $minor = $this->checkedAdd($minor, 1);
+            }
+            return $minor;
+        }
+        $padded = str_pad($fraction, $precision + 1, '0');
+        $minor = $this->checkedAdd($minor, (int)substr($padded, 0, $precision));
+        if ((int)$padded[$precision] >= 5) {
+            $minor = $this->checkedAdd($minor, 1);
+        }
+
+        return $minor;
+    }
+
+    private function checkedAdd(int $left, int $right): int
+    {
+        if ($right > 0 && $left > PHP_INT_MAX - $right) {
+            throw new \OverflowException(__('配送金额加法溢出'));
+        }
+
+        return $left + $right;
+    }
+
+    private function checkedMultiply(int $left, int $right): int
+    {
+        if ($left !== 0 && $right > intdiv(PHP_INT_MAX, $left)) {
+            throw new \OverflowException(__('配送金额乘法溢出'));
+        }
+
+        return $left * $right;
+    }
+}

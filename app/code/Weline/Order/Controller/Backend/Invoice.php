@@ -2,80 +2,72 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Order\Controller\Backend;
 
+use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Order\Service\InvoiceService;
+use Weline\Framework\Service\Query\FrontendQueryException;
+use Weline\Order\Service\OrderTradeAdminCommandException;
+use Weline\Order\Service\OrderTradeAdminCommandService;
 
-/**
- * 发票管理控制器
- */
-#[Acl('Weline_Order::invoice_manage', '发票管理', 'mdi-file-document', '发票管理', 'Weline_Order::order_manage')]
-class Invoice extends BackendController
+#[Acl('Weline_Order::invoice_controller', '订单发票控制器', 'mdi-file-document', '支付 effect 驱动的订单发票管理', 'Weline_Backend::order_group')]
+final class Invoice extends BackendController
 {
-    private InvoiceService $invoiceService;
-    
+    use OrderObjectAuthorizationTrait;
+
+    private readonly OrderTradeAdminCommandService $commands;
+
     public function __construct(ObjectManager $objectManager)
     {
-        $this->invoiceService = $objectManager->getInstance(InvoiceService::class);
+        $this->commands = $objectManager->getInstance(OrderTradeAdminCommandService::class);
     }
-    
-    /**
-     * 生成发票
-     */
-    #[Acl('Weline_Order::invoice_generate', '生成发票', 'mdi-file-plus', '生成发票')]
-    public function generate()
+
+    #[Acl('Weline_Order::invoice_manage', '查看订单发票', 'mdi-format-list-bulleted', '查看支付 effect 和最小发票', 'Weline_Backend::order_group')]
+    public function index(): string
     {
-        $orderId = (int)$this->request->getPost('order_id');
-        
-        if (!$orderId) {
-            $this->getMessageManager()->addError(__('订单ID不能为空'));
-            $this->redirect('order/backend/order/index');
-            return;
+        $candidates = [];
+        foreach ($this->commands->invoiceCandidates() as $row) {
+            $grant = $this->orderActionGrant((int)$row['order_id'], ObjectAction::UPDATE);
+            if (!$grant['allowed']) {
+                continue;
+            }
+            $candidates[] = $row + ['expected_grant_version' => $grant['grant_version']];
         }
-        
-        try {
-            $this->invoiceService->generateInvoice($orderId);
-            $this->getMessageManager()->addSuccess(__('发票生成成功'));
-        } catch (\Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
+        $invoices = [];
+        foreach ($this->commands->invoices() as $row) {
+            if ($this->orderActionGrant((int)$row['order_id'], ObjectAction::VIEW)['allowed']) {
+                $invoices[] = $row;
+            }
         }
-        
-        // 生成发票后返回订单详情
-        $this->redirect('order/backend/order/view?id=' . $orderId);
+        $this->assign('candidates', $candidates);
+        $this->assign('invoices', $invoices);
+
+        return $this->fetch();
     }
-    
-    /**
-     * 打印发票
-     */
-    #[Acl('Weline_Order::invoice_print', '打印发票', 'mdi-printer', '打印发票')]
-    public function print()
+
+    #[Acl('Weline_Order::invoice_execute', '处理开票 effect', 'mdi-file-plus', '在 Payment outbox 事务内幂等生成最小发票', 'Weline_Order::invoice_manage')]
+    public function execute(): mixed
     {
-        $invoiceId = (int)$this->request->getParam('id');
-        
-        if (!$invoiceId) {
-            $this->getMessageManager()->addError(__('发票ID不能为空'));
-            $this->redirect('order/backend/order/index');
-            return;
-        }
-        
+        $outboxCode = trim((string)$this->request->getPost('outbox_code', ''));
         try {
-            $invoice = $this->invoiceService->printInvoice($invoiceId);
-            $this->assign('invoice', $invoice);
-            return $this->fetch('print');
-        } catch (\Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('order/backend/order/index');
+            $context = $this->commands->invoiceContext($outboxCode);
+            $this->requireOrderSubmit((int)$context['order_id'], ObjectAction::UPDATE);
+            $result = $this->commands->invoice($outboxCode);
+            $this->getMessageManager()->addSuccess((string)__(
+                !empty($result['replayed']) ? '开票 effect 已幂等重放' : '支付 effect 已完成开票',
+            ));
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
+        } catch (OrderTradeAdminCommandException $exception) {
+            $this->getMessageManager()->addError($exception->errorCode());
+        } catch (\Throwable) {
+            $this->getMessageManager()->addError((string)__('开票操作失败，请稍后重试。'));
         }
+
+        return $this->redirect('weline_order/backend/invoice/index');
     }
 }
-

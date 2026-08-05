@@ -16,6 +16,10 @@ final class WorkerResponseMemoryGuard
     private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.85;
     private static ?array $runtimeCacheThresholds = null;
     private static ?string $drainAfterResponseReason = null;
+    private static int $incompleteRequestFiberCancelStreak = 0;
+
+    /** Consecutive incomplete Fiber cancels before Worker quarantine. */
+    public const INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK = 3;
 
     /** SSE 等长连接写队列上限：客户端读慢时防止无限积压导致 Worker OOM */
     public const SSE_MAX_PENDING_WRITE_BYTES = 8388608;
@@ -129,6 +133,23 @@ final class WorkerResponseMemoryGuard
     {
         $reason = \trim($reason);
         self::$drainAfterResponseReason = $reason !== '' ? $reason : 'memory_pressure';
+    }
+
+    public static function noteIncompleteRequestFiberCancel(): int
+    {
+        self::$incompleteRequestFiberCancelStreak++;
+
+        return self::$incompleteRequestFiberCancelStreak;
+    }
+
+    public static function clearIncompleteRequestFiberCancelStreak(): void
+    {
+        self::$incompleteRequestFiberCancelStreak = 0;
+    }
+
+    public static function incompleteRequestFiberCancelStreak(): int
+    {
+        return self::$incompleteRequestFiberCancelStreak;
     }
 
     public static function consumeDrainAfterResponseReason(): ?string

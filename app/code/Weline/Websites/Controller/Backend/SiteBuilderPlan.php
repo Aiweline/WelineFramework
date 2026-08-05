@@ -6,6 +6,7 @@ namespace Weline\Websites\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\Sse\CollectingSseWriter;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Websites\Model\AiSiteBuilderEvent;
@@ -48,6 +49,13 @@ class SiteBuilderPlan extends BackendController
         $draftPublicId = \trim((string)$this->getRequestBodyValue('draft_public_id', ''));
         $references = $this->normalizeReferenceUrls($this->getRequestBodyValue('reference_urls', ''));
         $buildMode = $this->normalizeBuildMode((string)$this->getRequestBodyValue('build_mode', ''));
+        $contentLocale = \trim((string)(
+            $this->getRequestBodyValue('content_locale', '')
+            ?: $this->getRequestBodyValue('language', '')
+            ?: $this->getRequestBodyValue('default_locale', '')
+        ));
+        $planLocale = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
+        $languageCodes = $this->normalizeLocaleList($this->getRequestBodyValue('language_codes', []));
 
         if ($description === '' && $references === []) {
             return $this->fetchJson(['success' => false, 'message' => __('Please provide a site request or reference URL first')]);
@@ -61,6 +69,9 @@ class SiteBuilderPlan extends BackendController
                 'initial_description' => $description,
                 'description' => $description,
                 'reference_urls' => $references,
+                'content_locale' => $contentLocale,
+                'plan_locale' => $planLocale,
+                'language_codes' => $languageCodes,
                 'chat_messages' => [],
                 'fake_mode' => $this->isFakeModeRequested() ? 1 : 0,
             ], $buildMode);
@@ -74,6 +85,16 @@ class SiteBuilderPlan extends BackendController
         $payload['pending_plan_action'] = 'generate';
         $payload['build_mode'] = $buildMode;
         $payload['fake_mode'] = $this->isFakeModeRequested() ? 1 : (int)($payload['fake_mode'] ?? 0);
+        if ($contentLocale !== '') {
+            $payload['content_locale'] = $contentLocale;
+            $payload['default_locale'] = $contentLocale;
+        }
+        if ($planLocale !== '') {
+            $payload['plan_locale'] = $planLocale;
+        }
+        if ($languageCodes !== []) {
+            $payload['language_codes'] = $languageCodes;
+        }
         $payload['chat_messages'] = $this->appendDraftMessage($payload['chat_messages'] ?? [], 'user', $description);
         $this->planDraftService->savePayload($draft->getId(), $adminId, $payload);
 
@@ -85,6 +106,34 @@ class SiteBuilderPlan extends BackendController
         ]);
     }
 
+    #[Acl('Weline_Websites::site_builder_agent_create_session', 'Polish Site Brief', 'mdi mdi-auto-fix', 'Polish the one-sentence site requirement', 'Weline_Websites::site_builder_agent')]
+    public function postPolishDescription(): string
+    {
+        $adminId = $this->getAdminId();
+        if ($adminId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('Login required')]);
+        }
+
+        $description = \trim((string)$this->getRequestBodyValue('description', ''));
+        $contentLocale = \trim((string)(
+            $this->getRequestBodyValue('content_locale', '')
+            ?: $this->getRequestBodyValue('language', '')
+            ?: $this->getRequestBodyValue('default_locale', '')
+        ));
+        $planLocale = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
+        $languageCodes = $this->normalizeLocaleList($this->getRequestBodyValue('language_codes', []));
+
+        return $this->fetchJson(
+            $this->planGenerationService->polishDescription(
+                $description,
+                $this->isFakeModeRequested(),
+                $contentLocale,
+                $planLocale,
+                $languageCodes
+            )
+        );
+    }
+
     #[Acl('Weline_Websites::site_builder_agent_create_session', 'Revise Draft Site Plan', 'mdi mdi-comment-edit-outline', 'Revise an existing site planning draft', 'Weline_Websites::site_builder_agent')]
     public function postRevise(): string
     {
@@ -92,6 +141,13 @@ class SiteBuilderPlan extends BackendController
         $draftPublicId = \trim((string)$this->getRequestBodyValue('draft_public_id', ''));
         $message = \trim((string)$this->getRequestBodyValue('message', ''));
         $references = $this->normalizeReferenceUrls($this->getRequestBodyValue('reference_urls', ''));
+        $contentLocale = \trim((string)(
+            $this->getRequestBodyValue('content_locale', '')
+            ?: $this->getRequestBodyValue('language', '')
+            ?: $this->getRequestBodyValue('default_locale', '')
+        ));
+        $planLocale = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
+        $languageCodes = $this->normalizeLocaleList($this->getRequestBodyValue('language_codes', []));
 
         if ($adminId <= 0 || $draftPublicId === '' || $message === '') {
             return $this->fetchJson(['success' => false, 'message' => __('Invalid draft revision payload')]);
@@ -105,6 +161,16 @@ class SiteBuilderPlan extends BackendController
         $payload = $draft->getPayloadArray();
         if ($references !== []) {
             $payload['reference_urls'] = $references;
+        }
+        if ($contentLocale !== '') {
+            $payload['content_locale'] = $contentLocale;
+            $payload['default_locale'] = $contentLocale;
+        }
+        if ($planLocale !== '') {
+            $payload['plan_locale'] = $planLocale;
+        }
+        if ($languageCodes !== []) {
+            $payload['language_codes'] = $languageCodes;
         }
         $payload['pending_plan_message'] = $message;
         $payload['pending_plan_action'] = 'revise';
@@ -120,23 +186,23 @@ class SiteBuilderPlan extends BackendController
     }
 
     #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan', 'mdi mdi-access-point', 'Stream site plan generation', 'Weline_Websites::site_builder_agent')]
-    public function getStream(): void
+    public function getStream(): mixed
     {
-        $this->handleStreamSse();
+        return $this->handleStreamSse();
     }
 
     #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan SSE', 'mdi mdi-access-point-network', 'Stream site plan generation via SSE endpoint', 'Weline_Websites::site_builder_agent')]
-    public function getStreamSse(): void
+    public function getStreamSse(): mixed
     {
-        $this->handleStreamSse();
+        return $this->handleStreamSse();
     }
 
-    private function handleStreamSse(): void
+    private function handleStreamSse(): mixed
     {
         @\set_time_limit(0);
         @\ignore_user_abort(true);
 
-        $sse = new SseWriter();
+        $sse = $this->createSseWriter();
         $sse->start();
 
         $adminId = $this->getAdminId();
@@ -144,17 +210,20 @@ class SiteBuilderPlan extends BackendController
         if ($adminId <= 0 || $draftPublicId === '') {
             $sse->sendError((string)__('Invalid plan stream parameters'));
             $sse->complete(['success' => false]);
-            return;
+            return $this->finishSseIfCollect($sse);
         }
 
         $draft = $this->planDraftService->loadByPublicId($draftPublicId, $adminId);
         if (!$draft instanceof AiSitePlanDraft) {
             $sse->sendError((string)__('Plan draft not found'));
             $sse->complete(['success' => false]);
-            return;
+            return $this->finishSseIfCollect($sse);
         }
 
         $payload = $draft->getPayloadArray();
+        if ($this->isFakeModeRequested()) {
+            $payload['fake_mode'] = 1;
+        }
         $pendingMessage = \trim((string)($payload['pending_plan_message'] ?? $payload['description'] ?? ''));
         $sse->sendEvent('start', [
             'message' => (string)__('Plan generation started'),
@@ -178,6 +247,32 @@ class SiteBuilderPlan extends BackendController
                     }
                 }
             );
+
+            $version = $this->planDraftService->appendPlanVersion(
+                $draft->getId(),
+                $adminId,
+                $plan,
+                (string)($payload['pending_plan_action'] ?? 'generate'),
+                $pendingMessage
+            );
+            if ($version === null || $version->getId() <= 0) {
+                throw new \RuntimeException((string)__('Failed to persist plan version'));
+            }
+
+            // 重新加载，避免沿用过期 $draft payload 覆盖刚写入的 current_version_id / current_plan
+            $fresh = $this->planDraftService->loadByPublicId($draft->getPublicId(), $adminId);
+            $latestPayload = $fresh instanceof AiSitePlanDraft ? $fresh->getPayloadArray() : $draft->getPayloadArray();
+            $latestPayload['pending_plan_message'] = '';
+            $latestPayload['pending_plan_action'] = '';
+            $latestPayload['current_plan'] = $plan;
+            $latestPayload['current_plan_version_id'] = $version->getId();
+            $latestPayload['build_mode'] = (string)($plan['build_mode'] ?? ($fresh instanceof AiSitePlanDraft ? $fresh->getBuildMode() : $draft->getBuildMode()));
+            $latestPayload['chat_messages'] = $this->appendDraftMessage(
+                $latestPayload['chat_messages'] ?? [],
+                'assistant',
+                (string)($plan['plan_markdown'] ?? '')
+            );
+            $this->planDraftService->savePayload($draft->getId(), $adminId, $latestPayload);
         } catch (\Throwable $throwable) {
             $message = (string)$throwable->getMessage();
             $sse->sendError($message !== '' ? $message : (string)__('Plan generation failed'));
@@ -186,34 +281,14 @@ class SiteBuilderPlan extends BackendController
                 'draft_public_id' => $draft->getPublicId(),
                 'message' => $message,
             ]);
-            return;
+            return $this->finishSseIfCollect($sse);
         }
-
-        $version = $this->planDraftService->appendPlanVersion(
-            $draft->getId(),
-            $adminId,
-            $plan,
-            (string)($payload['pending_plan_action'] ?? 'generate'),
-            $pendingMessage
-        );
-
-        $latestPayload = $draft->getPayloadArray();
-        $latestPayload['pending_plan_message'] = '';
-        $latestPayload['pending_plan_action'] = '';
-        $latestPayload['current_plan'] = $plan;
-        $latestPayload['build_mode'] = (string)($plan['build_mode'] ?? $draft->getBuildMode());
-        $latestPayload['chat_messages'] = $this->appendDraftMessage(
-            $latestPayload['chat_messages'] ?? [],
-            'assistant',
-            (string)($plan['plan_markdown'] ?? '')
-        );
-        $this->planDraftService->savePayload($draft->getId(), $adminId, $latestPayload);
 
         $sse->sendEvent('done', [
             'success' => true,
             'message' => (string)__('Plan generation finished'),
             'draft_public_id' => $draft->getPublicId(),
-            'version_id' => $version?->getId() ?? 0,
+            'version_id' => $version->getId(),
             'plan' => $plan,
             'draft' => $this->planDraftService->buildDraftView($draft->getPublicId(), $adminId),
         ]);
@@ -222,6 +297,30 @@ class SiteBuilderPlan extends BackendController
             'draft_public_id' => $draft->getPublicId(),
             'plan' => $plan,
         ]);
+
+        return $this->finishSseIfCollect($sse);
+    }
+
+    private function isSseCollectMode(): bool
+    {
+        return (string)$this->request->getGet('collect', '') === '1'
+            || (string)$this->request->getPost('collect', '') === '1';
+    }
+
+    /** @return SseWriter|CollectingSseWriter */
+    private function createSseWriter(): object
+    {
+        return $this->isSseCollectMode() ? new CollectingSseWriter() : new SseWriter();
+    }
+
+    /** @param SseWriter|CollectingSseWriter $sse */
+    private function finishSseIfCollect(object $sse): ?string
+    {
+        if ($sse instanceof CollectingSseWriter) {
+            return \json_encode($sse->toArray(), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        }
+
+        return null;
     }
 
     #[Acl('Weline_Websites::site_builder_agent_set_stage', 'Confirm Draft Site Plan', 'mdi mdi-check-circle-outline', 'Confirm the latest generated plan draft', 'Weline_Websites::site_builder_agent')]
@@ -481,9 +580,42 @@ class SiteBuilderPlan extends BackendController
             'registrar_account_id' => $draft->getRegistrarAccountId(),
             'site_ready' => $siteReady,
             'fake_mode' => !empty($payload['fake_mode']) ? 1 : 0,
+            'default_language' => (string)($payload['content_locale'] ?? $payload['default_locale'] ?? $payload['default_language'] ?? ''),
+            'default_locale' => (string)($payload['content_locale'] ?? $payload['default_locale'] ?? $payload['default_language'] ?? ''),
+            'plan_locale' => (string)($payload['plan_locale'] ?? $payload['content_locale'] ?? $payload['default_locale'] ?? ''),
+            'language_codes' => $this->normalizeLocaleList($payload['language_codes'] ?? []),
         ];
 
         return $scope;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeLocaleList(mixed $raw): array
+    {
+        if (\is_string($raw)) {
+            $raw = \preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        }
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($raw as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $value = \trim(\str_replace('-', '_', (string)$item));
+            if ($value === '' || !\preg_match('/^[A-Za-z]{2,3}(?:_[A-Za-z0-9]{2,8}){0,3}$/', $value)) {
+                continue;
+            }
+            if (!\in_array($value, $values, true)) {
+                $values[] = $value;
+            }
+        }
+
+        return $values;
     }
 
     /**

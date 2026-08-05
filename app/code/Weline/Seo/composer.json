@@ -7,7 +7,8 @@
         "php": "^8.4",
         "weline/module-ai": "@dev",
         "weline/module-backend": "@dev",
-        "weline/module-url-manager": "@dev"
+        "weline/module-url-manager": "@dev",
+        "weline/module-i18n": "@dev"
     },
     "suggest": {
         "weline/module-websites": "Adds the Websites target label to embedded SEO administration.",

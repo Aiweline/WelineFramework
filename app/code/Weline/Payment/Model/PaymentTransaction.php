@@ -16,6 +16,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_order_id', columns: ['order_id'])]
 #[Index(name: 'idx_method_code', columns: ['method_code'])]
 #[Index(name: 'idx_status', columns: ['status'])]
+#[Index(name: 'idx_transaction_scope', columns: ['scope'])]
 class PaymentTransaction extends AbstractModel
 {
     public const schema_table = 'weline_payment_transaction';
@@ -39,6 +40,8 @@ class PaymentTransaction extends AbstractModel
     public const schema_fields_CURRENCY = 'currency';
     #[Col('varchar', 20, default: 'pending', comment: '支付状态')]
     public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 160, nullable: false, default: 'default.default.default', comment: 'Persisted payment object scope')]
+    public const schema_fields_SCOPE = 'scope';
     #[Col('text', comment: '请求数据JSON')]
     public const schema_fields_REQUEST_DATA = 'request_data';
     #[Col('text', comment: '响应数据JSON')]
@@ -52,7 +55,7 @@ class PaymentTransaction extends AbstractModel
     #[Col('datetime', comment: '支付完成时间')]
     public const schema_fields_PAID_AT = 'paid_at';
     public array $_unit_primary_keys = ['transaction_id'];
-    public array $_index_sort_keys = ['transaction_id', 'order_id', 'transaction_no', 'status'];
+    public array $_index_sort_keys = ['transaction_id', 'order_id', 'transaction_no', 'status', 'scope'];
 /**
      * 是否待支付
      * 

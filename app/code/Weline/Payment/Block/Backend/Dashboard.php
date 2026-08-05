@@ -13,10 +13,12 @@ namespace Weline\Payment\Block\Backend;
 
 use Throwable;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\View\Block;
 use Weline\Payment\Model\PaymentAttempt;
 use Weline\Payment\Model\PaymentIntent;
 use Weline\Payment\Model\PaymentTransaction;
+use Weline\Payment\Service\PaymentReconciliationService;
 
 class Dashboard extends Block
 {
@@ -25,11 +27,27 @@ class Dashboard extends Block
     /**
      * @return array<string, mixed>
      */
-    public function getDashboardData(): array
+    public function getDashboardData(ScopeIdentity $targetScope): array
     {
-        $transactions = $this->loadRows(PaymentTransaction::class, PaymentTransaction::schema_fields_CREATED_AT);
-        $intents = $this->loadRows(PaymentIntent::class, PaymentIntent::schema_fields_CREATED_AT);
-        $attempts = $this->loadRows(PaymentAttempt::class, PaymentAttempt::schema_fields_CREATED_AT);
+        $storageScope = $targetScope->isGlobal() ? 'global' : $targetScope->toLegacyScopeString();
+        $transactions = $this->loadRows(
+            PaymentTransaction::class,
+            PaymentTransaction::schema_fields_CREATED_AT,
+            PaymentTransaction::schema_fields_SCOPE,
+            $storageScope,
+        );
+        $intents = $this->loadRows(
+            PaymentIntent::class,
+            PaymentIntent::schema_fields_CREATED_AT,
+            PaymentIntent::schema_fields_SCOPE,
+            $storageScope,
+        );
+        $attempts = $this->loadRows(
+            PaymentAttempt::class,
+            PaymentAttempt::schema_fields_CREATED_AT,
+            PaymentAttempt::schema_fields_SCOPE,
+            $storageScope,
+        );
 
         $transactionStats = $this->buildTransactionStats($transactions['rows']);
         $intentStats = $this->buildPaymentObjectStats(
@@ -86,6 +104,7 @@ class Dashboard extends Block
             ],
             []
         );
+        $reconciliation = $this->loadReconciliation($targetScope);
 
         return [
             'generated_at' => date('Y-m-d H:i:s'),
@@ -94,23 +113,63 @@ class Dashboard extends Block
                 'transactions' => $transactions + ['label' => 'weline_payment_transaction'],
                 'intents' => $intents + ['label' => 'weline_payment_intent'],
                 'attempts' => $attempts + ['label' => 'weline_payment_attempt'],
+                'reconciliation' => [
+                    'label' => 'payment_invariant_scan',
+                    'error' => (string)($reconciliation['error'] ?? ''),
+                    'limited' => !empty($reconciliation['scan_truncated']),
+                    'count' => (int)($reconciliation['diff_count'] ?? 0),
+                    'rows' => [],
+                ],
             ],
             'transactions' => $transactionStats,
             'intents' => $intentStats,
             'attempts' => $attemptStats,
+            'reconciliation' => $reconciliation,
             'summary' => $this->buildSummary($transactionStats, $intentStats, $attemptStats),
-            'gaps' => $this->buildGaps($transactions, $intents, $attempts),
+            'gaps' => $this->buildGaps($transactions, $intents, $attempts, $reconciliation),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadReconciliation(ScopeIdentity $targetScope): array
+    {
+        try {
+            /** @var PaymentReconciliationService $service */
+            $service = ObjectManager::getInstance(PaymentReconciliationService::class);
+
+            return $service->inspect($targetScope);
+        } catch (Throwable $throwable) {
+            return [
+                'ok' => false,
+                'mode' => PaymentReconciliationService::MODE_DRY_RUN,
+                'scope' => $targetScope->isGlobal() ? 'global' : $targetScope->toLegacyScopeString(),
+                'diff_count' => 0,
+                'diffs' => [],
+                'diffs_truncated' => false,
+                'scan_truncated' => false,
+                'metrics' => ['diff_total' => 0, 'diff_by_code' => []],
+                'invariants' => [],
+                'error' => $throwable->getMessage(),
+            ];
+        }
     }
 
     /**
      * @return array{rows: array<int, array<string, mixed>>, error: string, limited: bool, count: int}
      */
-    private function loadRows(string $modelClass, string $orderField): array
+    private function loadRows(
+        string $modelClass,
+        string $orderField,
+        string $scopeField,
+        string $storageScope,
+    ): array
     {
         try {
             $model = ObjectManager::getInstance($modelClass);
             $rows = $model->reset()
+                ->where($scopeField, $storageScope)
                 ->order($orderField, 'DESC')
                 ->limit(self::MAX_ROWS)
                 ->select()
@@ -294,7 +353,12 @@ class Dashboard extends Block
      * @param array<string, mixed> $attempts
      * @return array<int, array<string, string>>
      */
-    private function buildGaps(array $transactions, array $intents, array $attempts): array
+    private function buildGaps(
+        array $transactions,
+        array $intents,
+        array $attempts,
+        array $reconciliation,
+    ): array
     {
         $gaps = [];
 
@@ -316,9 +380,21 @@ class Dashboard extends Block
             'detail' => '独立退款模型尚未进入当前最小统计口径，页面暂以 transaction/refund status 和 intent refund status 标记退款入口。',
         ];
         $gaps[] = [
-            'title' => 'payment_ledger / reconciliation_difference',
-            'detail' => '缺少账本 checksum 与对账差异模型，无法证明退款金额、净收款和对账异常的财务一致性。',
+            'title' => 'payment_ledger checksum',
+            'detail' => '当前 P2F 对账覆盖支付状态与唯一 effect；跨结算周期的总账 checksum 和净收款财务一致性仍属于后续账本阶段。',
         ];
+        if (!empty($reconciliation['scan_truncated'])) {
+            $gaps[] = [
+                'title' => 'payment invariant scan',
+                'detail' => '对账扫描达到安全上限，repair 会 fail closed；请按更细 Scope 执行或先归档历史数据。',
+            ];
+        }
+        if (!empty($reconciliation['error'])) {
+            $gaps[] = [
+                'title' => 'payment invariant scan',
+                'detail' => (string)$reconciliation['error'],
+            ];
+        }
         $gaps[] = [
             'title' => 'backend menu',
             'detail' => '本轮写入范围未包含 etc/backend/menu.xml，Dashboard 可通过路由直达，侧边栏菜单仍需后续接入。',

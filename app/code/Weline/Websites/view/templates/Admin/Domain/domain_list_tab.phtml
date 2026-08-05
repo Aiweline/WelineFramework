@@ -1178,6 +1178,35 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     </div>
 </div>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_websites) return;
+  g.__bqAdmin_websites=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['websites']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('websites').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
 (function() {
     'use strict';
@@ -1624,7 +1653,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             return Promise.reject(new Error('Weline.Api is not ready'));
         }
 
-        return window.Weline.Api.request(urls.getDnsAccounts, { method: 'GET', silent: true })
+        return bqAdmin['websites'](urls.getDnsAccounts, { method: 'GET', silent: true })
             .then(unwrapApiResponse);
     }
 
@@ -1663,7 +1692,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             fd.append('bind_cdn_account_id', String(bindCdn));
             domains.forEach(function(d) { fd.append('domains[]', d); });
 
-            fetch(urls.importDomains, { method: 'POST', body: fd })
+            bqAdmin['websites'](urls.importDomains, { method: 'POST', body: fd })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.code === 200) {
@@ -1729,7 +1758,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         var tbody = document.getElementById('weline-domain-list-body');
         tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('加载中...') ?></p></td></tr>';
 
-        fetch(urls.domainList + '?' + params.toString())
+        bqAdmin['websites'](urls.domainList + '?' + params.toString())
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -1793,7 +1822,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 checkAllFetched();
                 return;
             }
-            fetch(urls.remoteDomains + '?account_id=' + acc.id)
+            bqAdmin['websites'](urls.remoteDomains + '?account_id=' + acc.id)
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.code === 200 && data.data && data.data.domains) {
@@ -2190,7 +2219,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
         tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4"><i class="mdi mdi-loading mdi-spin" style="font-size:1.5rem;"></i><p class="mt-2 mb-0"><?= __('正在获取远程域名列表...') ?></p></td></tr>';
 
-        fetch(urls.remoteDomains + '?account_id=' + accountId)
+        bqAdmin['websites'](urls.remoteDomains + '?account_id=' + accountId)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2295,7 +2324,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         fd.append('auto_resolve', autoResolve ? '1' : '0');
         domains.forEach(function(d) { fd.append('domains[]', d); });
 
-        fetch(urls.importDomains, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.importDomains, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2317,7 +2346,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在检测解析...') ?>', 'info');
         var fd = new FormData();
         fd.append('domain_id', domainId);
-        fetch(urls.checkResolve, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.checkResolve, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2343,7 +2372,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在批量检测解析...') ?>', 'info');
         var fd = new FormData();
         fd.append('domain_ids', JSON.stringify(ids));
-        fetch(urls.batchCheckResolve, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.batchCheckResolve, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2372,7 +2401,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         var tbody = document.getElementById('weline-dns-records-body');
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i></td></tr>';
 
-        fetch(urls.dnsRecords + '?domain_id=' + domainId)
+        bqAdmin['websites'](urls.dnsRecords + '?domain_id=' + domainId)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2444,7 +2473,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在同步DNS记录...') ?>', 'info');
         var fd = new FormData();
         fd.append('domain_id', currentDomainId);
-        fetch(urls.syncDnsRecords, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.syncDnsRecords, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2479,7 +2508,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         fd.append('value', document.getElementById('weline-dns-form-value').value);
         fd.append('ttl', document.getElementById('weline-dns-form-ttl').value || 600);
 
-        fetch(urls.addDnsRecord, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.addDnsRecord, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2522,7 +2551,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         fd.append('record_id', recordId);
         fd.append('type', type);
         fd.append('host', host);
-        fetch(urls.deleteDnsRecord, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.deleteDnsRecord, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2561,7 +2590,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     function doDeleteDomain(domainId) {
         var fd = new FormData();
         fd.append('domain_ids', JSON.stringify([domainId]));
-        fetch(urls.deleteDomains, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.deleteDomains, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200 || data.code === 207) {
@@ -2605,7 +2634,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     function doBatchDeleteDomains(domainIds) {
         var fd = new FormData();
         fd.append('domain_ids', JSON.stringify(domainIds));
-        fetch(urls.deleteDomains, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.deleteDomains, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200 || data.code === 207) {
@@ -2623,7 +2652,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在自动解析到本服务器...') ?>', 'info');
         var fd = new FormData();
         fd.append('domain_id', currentDomainId);
-        fetch(urls.autoResolve, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.autoResolve, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2639,7 +2668,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
     function refreshServerIp() {
         toast('<?= __('正在刷新服务器IP...') ?>', 'info');
-        fetch(urls.refreshServerIp, { method: 'POST' })
+        bqAdmin['websites'](urls.refreshServerIp, { method: 'POST' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2670,7 +2699,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         var fd = new FormData();
         fd.append('domain_id', domainId);
         prefixes.forEach(function(p) { fd.append('prefixes[]', p); });
-        fetch(urls.transferToPool, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.transferToPool, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2710,7 +2739,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         var fd = new FormData();
         ids.forEach(function(id) { fd.append('domain_ids[]', id); });
         prefixes.forEach(function(p) { fd.append('prefixes[]', p); });
-        fetch(urls.batchTransferToPool, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.batchTransferToPool, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2772,7 +2801,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在批量转存（检查IP）...') ?>', 'info');
         var fd = new FormData();
         fd.append('domain_ids', JSON.stringify(ids));
-        fetch(urls.batchTransferToPoolWithIpCheck, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.batchTransferToPoolWithIpCheck, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2819,7 +2848,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在批量解析到本地服务器...') ?>', 'info');
         var fd = new FormData();
         fd.append('domain_ids', JSON.stringify(ids));
-        fetch(urls.batchResolveToLocal, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.batchResolveToLocal, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -2888,7 +2917,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         select.innerHTML = '<option value=""><?= __('-- 加载中... --') ?></option>';
         if (accountNoDataTip) accountNoDataTip.style.display = 'none';
 
-        fetch(urls.getRegistrarAccounts)
+        bqAdmin['websites'](urls.getRegistrarAccounts)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200 && data.data && data.data.accounts) {
@@ -2945,7 +2974,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         fd.append('account_id', accountId);
         fd.append('domains', JSON.stringify(batchChangeNsSelectedDomains.slice(0, 1)));
 
-        fetch(urls.getAccountNameservers, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.getAccountNameservers, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200 && data.data) {
@@ -2998,7 +3027,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             fd.append('domain_ids', JSON.stringify(batchChangeNsSelectedIds));
             fd.append('target_account_id', accountId);
 
-            fetch(urls.batchSwitchToAccount, { method: 'POST', body: fd })
+            bqAdmin['websites'](urls.batchSwitchToAccount, { method: 'POST', body: fd })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     submitBtn.disabled = false;
@@ -3045,7 +3074,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 fd.append('target_provider', provider);
             }
 
-            fetch(urls.batchChangeNameservers, { method: 'POST', body: fd })
+            bqAdmin['websites'](urls.batchChangeNameservers, { method: 'POST', body: fd })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     submitBtn.disabled = false;
@@ -3092,7 +3121,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         document.getElementById('weline-batch-add-dns-use-server-ip').checked = false;
         onBatchAddDnsUseServerIpChange();
 
-        fetch(urls.refreshServerIp)
+        bqAdmin['websites'](urls.refreshServerIp)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200 && data.data && data.data.ip) {
@@ -3147,7 +3176,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在批量添加DNS记录...') ?>', 'info');
         submitBtn.disabled = true;
 
-        fetch(urls.batchAddDnsRecords, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.batchAddDnsRecords, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 submitBtn.disabled = false;
@@ -3256,7 +3285,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
         submitBtn.disabled = true;
         toast('<?= __('正在创建域名...') ?>', 'info');
-        fetch(urls.createManualDomain, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.createManualDomain, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 submitBtn.disabled = false;
@@ -3506,7 +3535,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             progressBadge.textContent = current + '/' + total;
         };
 
-        var es = new EventSource(sseUrl);
+        var es = new (function(u){ console.warn('EventSource disabled', u); return {close:function(){}, addEventListener:function(){}}; })(sseUrl);
 
         var allEvents = ['init','sync_records','sync_records_done','add_zone','add_zone_done',
             'switch_ns','switch_ns_done','push_records','update_domain','update_pool',
@@ -3675,7 +3704,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         toast('<?= __('正在设置账户...') ?>', 'info');
         submitBtn.disabled = true;
 
-        fetch(urls.batchSetAccounts, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.batchSetAccounts, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 submitBtn.disabled = false;
@@ -3706,7 +3735,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         var fd = new FormData();
         fd.append('domain_ids', JSON.stringify(ids));
 
-        fetch(urls.detectDnsProvider, { method: 'POST', body: fd })
+        bqAdmin['websites'](urls.detectDnsProvider, { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -3739,7 +3768,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     function doCleanupDnsProviderDomains() {
         toast('<?= __('正在清理 DNS 服务商域名...') ?>', 'info');
 
-        fetch(urls.cleanupDnsProviderDomains, { method: 'POST' })
+        bqAdmin['websites'](urls.cleanupDnsProviderDomains, { method: 'POST' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
@@ -3766,7 +3795,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             accountNoDataTip.style.display = 'none';
         }
 
-        fetch(urls.getRegistrarAccounts)
+        bqAdmin['websites'](urls.getRegistrarAccounts)
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.code === 200 && data.data && data.data.accounts) {

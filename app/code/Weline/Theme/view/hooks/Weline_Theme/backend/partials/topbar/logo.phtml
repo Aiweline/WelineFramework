@@ -1,6 +1,6 @@
 <?php
 /**
- * Backend Topbar Logo - resolved from the Backend public configuration API.
+ * Backend Topbar Logo - resolved from Backend/SiteBrand config; falls back to theme icon when logo_sm is empty.
  * @hook-priority 100
  */
 use Weline\Framework\Manager\ObjectManager;
@@ -12,7 +12,7 @@ $logoDark = $siteBrand->resolveBackendLogoUrl($this, 'logo_dark', 70, 70);
 $logoLight = $siteBrand->resolveBackendLogoUrl($this, 'logo_light', 70, 70);
 $logoSm = $siteBrand->resolveMediaUrl('logo_sm', 50, 50);
 if ($logoSm === '') {
-    $logoSm = $siteBrand->resolveBackendLogoUrl($this, 'logo_dark', 50, 50);
+    $logoSm = $siteBrand->resolveIconUrl($this, 50);
 }
 
 $homeUrl = $this->getBackendUrl('admin');

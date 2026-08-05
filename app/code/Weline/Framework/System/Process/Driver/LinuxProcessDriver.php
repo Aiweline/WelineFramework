@@ -733,21 +733,38 @@ class LinuxProcessDriver extends AbstractProcessDriver
             return $info;
         }
         
-        // 回退到 ps 命令（macOS 和其他 Unix）
+        // Fallback for macOS / other Unix. Never put `comm` in the same
+        // whitespace-split row as `lstart`: multi-word COMM values such as
+        // "nginx: master process" shift %mem/%cpu into the start-time field.
         $output = [];
-        $this->executeCommand("ps -p {$pid} -o pid,comm,%mem,%cpu,lstart 2>/dev/null", $output);
-        
-        if (\count($output) > 1) {
-            $parts = \preg_split('/\s+/', \trim($output[1]));
-            if (\count($parts) >= 5) {
-                $info['name'] = $parts[1] ?? '';
-                $info['memory'] = ($parts[2] ?? '') . '%';
-                $info['cpu'] = ($parts[3] ?? '') . '%';
-                $info['start_time'] = \implode(' ', \array_slice($parts, 4));
-                $info['exists'] = true;
+        $this->executeCommand(
+            "ps -p {$pid} -o pid=,%mem=,%cpu=,lstart= 2>/dev/null",
+            $output,
+        );
+        foreach ($output as $line) {
+            $line = \trim((string) $line);
+            if ($line === '') {
+                continue;
             }
+            if (\preg_match('/\A(\d+)\s+(\S+)\s+(\S+)\s+(.+?)\s*\z/D', $line, $matches) !== 1
+                || (int) $matches[1] !== $pid
+            ) {
+                continue;
+            }
+            $info['memory'] = $matches[2] . '%';
+            $info['cpu'] = $matches[3] . '%';
+            $info['start_time'] = \preg_replace('/\s+/', ' ', \trim($matches[4])) ?? \trim($matches[4]);
+            $info['exists'] = true;
+            break;
         }
-        
+
+        $nameOutput = [];
+        $this->executeCommand("ps -p {$pid} -o comm= 2>/dev/null", $nameOutput);
+        if (!empty($nameOutput[0])) {
+            $info['name'] = \trim((string) $nameOutput[0]);
+            $info['exists'] = true;
+        }
+
         // 获取完整命令行
         $cmdOutput = [];
         $this->executeCommand("ps -p {$pid} -o args= 2>/dev/null", $cmdOutput);

@@ -4,9 +4,14 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Runtime;
 
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 
 final class RuntimeCapabilityDetector
 {
+    private const MAX_PROC_TEXT_BYTES = 1024 * 1024;
+    private const MAX_CPU_COUNT = 256;
+    private const COMMAND_TIMEOUT_SECONDS = 5.0;
+
     /** @var array<string, array<string, mixed>> */
     private static array $directListenerProbeCache = [];
 
@@ -106,7 +111,7 @@ final class RuntimeCapabilityDetector
         $performance = $logical;
         $source = PHP_OS_FAMILY === 'Linux' ? 'linux_nproc' : 'logical_cpu';
 
-        if (PHP_OS_FAMILY !== 'Darwin' || empty($functions['shell_exec'])) {
+        if (PHP_OS_FAMILY !== 'Darwin') {
             return [
                 'logical' => $logical,
                 'physical' => $physical,
@@ -115,7 +120,10 @@ final class RuntimeCapabilityDetector
             ];
         }
 
-        $detectedPhysical = $this->readPositiveIntegerCommand('sysctl -n hw.physicalcpu 2>/dev/null');
+        $sysctl = $this->posixCommandPath('sysctl');
+        $detectedPhysical = $sysctl !== null
+            ? $this->readPositiveIntegerCommand([$sysctl, '-n', 'hw.physicalcpu'])
+            : null;
         if ($detectedPhysical !== null) {
             $physical = \min($logical, $detectedPhysical);
             $performance = $physical;
@@ -124,9 +132,9 @@ final class RuntimeCapabilityDetector
 
         // Apple Silicon exposes the high-performance cluster as perflevel0.
         // Intel macOS has no perflevel key and intentionally keeps the physical-core fallback.
-        $detectedPerformance = $this->readPositiveIntegerCommand(
-            'sysctl -n hw.perflevel0.physicalcpu 2>/dev/null'
-        );
+        $detectedPerformance = $sysctl !== null
+            ? $this->readPositiveIntegerCommand([$sysctl, '-n', 'hw.perflevel0.physicalcpu'])
+            : null;
         if ($detectedPerformance !== null && $detectedPerformance <= $physical) {
             $performance = $detectedPerformance;
             $source = 'darwin_perflevel0';
@@ -140,20 +148,20 @@ final class RuntimeCapabilityDetector
         ];
     }
 
-    private function readPositiveIntegerCommand(string $command): ?int
+    /** @param list<string> $command */
+    private function readPositiveIntegerCommand(array $command): ?int
     {
-        $output = @\shell_exec($command);
-        if (!\is_string($output)) {
+        $result = GatewayBoundedCommandRunner::run($command, self::COMMAND_TIMEOUT_SECONDS);
+        if ((int)($result['code'] ?? 1) !== 0) {
             return null;
         }
-
-        $output = \trim($output);
-        if ($output === '' || !\ctype_digit($output)) {
+        $output = \trim((string)($result['output'] ?? ''));
+        if (\preg_match('/\A[1-9][0-9]*\z/D', $output) !== 1) {
             return null;
         }
 
         $value = (int)$output;
-        return $value > 0 ? $value : null;
+        return $value > 0 && $value <= self::MAX_CPU_COUNT ? $value : null;
     }
 
     /**
@@ -162,19 +170,22 @@ final class RuntimeCapabilityDetector
     private function detectCpuCores(array $functions): int
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            return \max(1, (int) (\getenv('NUMBER_OF_PROCESSORS') ?: 4));
+            $raw = \trim((string)\getenv('NUMBER_OF_PROCESSORS'));
+            $count = \preg_match('/\A[1-9][0-9]*\z/D', $raw) === 1 ? (int)$raw : 4;
+            return \max(1, \min(self::MAX_CPU_COUNT, $count));
         }
 
-        if (!empty($functions['shell_exec'])) {
-            $nproc = @\shell_exec('nproc 2>/dev/null');
-            if (\is_string($nproc) && \trim($nproc) !== '' && \ctype_digit(\trim($nproc))) {
-                return \max(1, (int) \trim($nproc));
-            }
-
-            $sysctl = @\shell_exec('sysctl -n hw.ncpu 2>/dev/null');
-            if (\is_string($sysctl) && \trim($sysctl) !== '' && \ctype_digit(\trim($sysctl))) {
-                return \max(1, (int) \trim($sysctl));
-            }
+        $nproc = $this->posixCommandPath('nproc');
+        $detected = $nproc !== null ? $this->readPositiveIntegerCommand([$nproc]) : null;
+        if ($detected !== null) {
+            return $detected;
+        }
+        $sysctl = $this->posixCommandPath('sysctl');
+        $detected = $sysctl !== null
+            ? $this->readPositiveIntegerCommand([$sysctl, '-n', 'hw.ncpu'])
+            : null;
+        if ($detected !== null) {
+            return $detected;
         }
 
         return 4;
@@ -222,20 +233,23 @@ final class RuntimeCapabilityDetector
     private function detectTotalMemoryMb(array $functions): ?int
     {
         if (PHP_OS_FAMILY === 'Linux' && \is_file('/proc/meminfo')) {
-            $raw = @\file_get_contents('/proc/meminfo');
+            $raw = $this->readBoundedLocalFile('/proc/meminfo', self::MAX_PROC_TEXT_BYTES);
             if (\is_string($raw) && \preg_match('/^MemTotal:\s+(\d+)\s+kB/m', $raw, $m)) {
                 return (int) \floor(((int) $m[1]) / 1024);
             }
         }
 
-        if (PHP_OS_FAMILY === 'Darwin' && !empty($functions['shell_exec'])) {
-            $bytes = @\shell_exec('sysctl -n hw.memsize 2>/dev/null');
-            if (\is_string($bytes) && \trim($bytes) !== '' && \ctype_digit(\trim($bytes))) {
-                return (int) \floor(((int) \trim($bytes)) / 1048576);
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $sysctl = $this->posixCommandPath('sysctl');
+            if ($sysctl !== null) {
+                $bytes = $this->readUnsignedIntegerCommand([$sysctl, '-n', 'hw.memsize']);
+                if ($bytes !== null) {
+                    return (int) \floor($bytes / 1048576);
+                }
             }
         }
 
-        if (PHP_OS_FAMILY === 'Windows' && !empty($functions['shell_exec'])) {
+        if (PHP_OS_FAMILY === 'Windows') {
             $registryMemoryMb = $this->detectWindowsRegistryMemoryMb();
             if ($registryMemoryMb !== null) {
                 return $registryMemoryMb;
@@ -243,11 +257,16 @@ final class RuntimeCapabilityDetector
 
             $powershell = $this->resolveWindowsCommandPath('powershell');
             if ($powershell !== null) {
-                $cmd = $this->quoteWindowsCommand($powershell)
-                    . ' -NoProfile -Command "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory" 2>NUL';
-                $bytes = @\shell_exec($cmd);
-                if (\is_string($bytes) && \trim($bytes) !== '' && \ctype_digit(\trim($bytes))) {
-                    return (int) \floor(((int) \trim($bytes)) / 1048576);
+                $bytes = $this->readUnsignedIntegerCommand([
+                    $powershell,
+                    '-NoLogo',
+                    '-NoProfile',
+                    '-NonInteractive',
+                    '-Command',
+                    '(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory',
+                ]);
+                if ($bytes !== null) {
+                    return (int) \floor($bytes / 1048576);
                 }
             }
         }
@@ -266,11 +285,15 @@ final class RuntimeCapabilityDetector
             return null;
         }
 
-        $command = $this->quoteWindowsCommand($reg)
-            . ' query "HKLM\HARDWARE\RESOURCEMAP\System Resources\Physical Memory"'
-            . ' /v .Translated 2>NUL';
-        $output = @\shell_exec($command);
-        if (!\is_string($output)
+        $result = GatewayBoundedCommandRunner::run([
+            $reg,
+            'query',
+            'HKLM\HARDWARE\RESOURCEMAP\System Resources\Physical Memory',
+            '/v',
+            '.Translated',
+        ], self::COMMAND_TIMEOUT_SECONDS);
+        $output = (string)($result['output'] ?? '');
+        if ((int)($result['code'] ?? 1) !== 0
             || !\preg_match('/REG_RESOURCE_LIST\s+([0-9a-f]+)/i', $output, $match)
         ) {
             return null;
@@ -709,24 +732,66 @@ final class RuntimeCapabilityDetector
      */
     private function commandExists(string $command, array $functions): bool
     {
-        if (empty($functions['exec'])) {
+        if (empty($functions['exec']) && empty($functions['proc_open'])) {
             return false;
         }
 
-        $output = [];
-        $exitCode = 1;
         if (PHP_OS_FAMILY === 'Windows') {
             return $this->resolveWindowsCommandPath($command) !== null;
-        } else {
-            @\exec('command -v ' . \escapeshellarg($command) . ' 2>/dev/null', $output, $exitCode);
         }
 
-        return $exitCode === 0 && $output !== [];
+        return $this->posixCommandPath($command) !== null;
     }
 
-    private function quoteWindowsCommand(string $path): string
+    private function posixCommandPath(string $command): ?string
     {
-        return '"' . \str_replace('"', '\"', $path) . '"';
+        if (PHP_OS_FAMILY === 'Windows'
+            || \preg_match('/\A[a-zA-Z0-9._+-]+\z/D', $command) !== 1
+        ) {
+            return null;
+        }
+        foreach (['/usr/sbin', '/usr/bin', '/sbin', '/bin', '/opt/homebrew/bin', '/usr/local/bin'] as $directory) {
+            $candidate = $directory . '/' . $command;
+            if (\is_file($candidate) && \is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /** @param list<string> $command */
+    private function readUnsignedIntegerCommand(array $command): ?int
+    {
+        $result = GatewayBoundedCommandRunner::run($command, self::COMMAND_TIMEOUT_SECONDS);
+        $output = \trim((string)($result['output'] ?? ''));
+        if ((int)($result['code'] ?? 1) !== 0
+            || \preg_match('/\A[1-9][0-9]*\z/D', $output) !== 1
+        ) {
+            return null;
+        }
+        $value = \filter_var($output, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => PHP_INT_MAX],
+        ]);
+
+        return \is_int($value) ? $value : null;
+    }
+
+    private function readBoundedLocalFile(string $path, int $maximumBytes): ?string
+    {
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        try {
+            $contents = @\stream_get_contents($handle, $maximumBytes + 1);
+        } finally {
+            @\fclose($handle);
+        }
+
+        return \is_string($contents) && \strlen($contents) <= $maximumBytes
+            ? $contents
+            : null;
     }
 
     private function resolveWindowsCommandPath(string $command): ?string

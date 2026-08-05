@@ -114,11 +114,8 @@ class AttackRecoveryHandler implements ObserverInterface
             return;
         }
         
-        // 获取账户凭据
-        $credentials = $accountModel->getData('credentials');
-        if (\is_string($credentials)) {
-            $credentials = \json_decode($credentials, true) ?: [];
-        }
+        // 获取账户凭据（支持 secret_ref 密封；禁止直接 json_decode）
+        $credentials = $accountModel->getCredentialsArray();
         
         try {
             // 调用适配器关闭攻击防护模式

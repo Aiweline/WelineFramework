@@ -18,6 +18,7 @@ use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrateg
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\IdentifierFormatterInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\TableNameStrategyInterface;
 use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Transaction\TransactionCoordinator;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Database\Helper\Tool;
 use Weline\Framework\App\Exception;
@@ -34,7 +35,7 @@ use Weline\Framework\Runtime\RequestLifecycleTrace;
  * 2. 各适配器仅实现 prepareSql()：先 buildAst($action)，再将 AST 编译为方言 SQL
  * 唯一不经 AST 的入口为 query(string $sql)，用于执行原始 SQL。
  */
-abstract class QueryAst implements QueryInterface
+abstract class QueryAst implements WriteIntentQueryInterface
 {
     use SqlTrait;
 
@@ -1416,6 +1417,7 @@ abstract class QueryAst implements QueryInterface
         $this->insert_need_fields = [];
         $this->insert_update_where_fields = [];
         $this->find_fields = '';
+        $this->single_updates = [];
         $this->dec_inc_updates = [];
         $this->total = 0;
         $this->_fallback_data = [];
@@ -1425,23 +1427,51 @@ abstract class QueryAst implements QueryInterface
 
     public function beginTransaction(): void
     {
-        if (!$this->getConnectionInterface()->inTransaction()) {
-            $this->getConnectionInterface()->beginTransaction();
-        }
+        TransactionCoordinator::beginQuery($this, function (): void {
+            $connection = $this->getConnectionInterface();
+            if (!$connection->inTransaction()) {
+                $connection->beginTransaction();
+            }
+        });
+    }
+
+    public function beginWriteTransaction(): void
+    {
+        TransactionCoordinator::beginQuery($this, function (): void {
+            $connection = $this->getConnectionInterface();
+            if (!$connection->inTransaction()) {
+                $connection->beginTransaction();
+            }
+        }, true);
     }
 
     public function rollBack(): void
     {
-        if($this->getConnectionInterface()->inTransaction()) {
-            $this->getConnectionInterface()->rollBack();
-        }
+        TransactionCoordinator::rollBackQuery($this, function (): void {
+            $connection = $this->getConnectionInterface();
+            if ($connection->inTransaction()) {
+                $connection->rollBack();
+            }
+        });
     }
 
     public function commit(): void
     {
-        if ($this->getConnectionInterface()->inTransaction()) {
-            $this->getConnectionInterface()->commit();
-        }
+        TransactionCoordinator::commitQuery(
+            $this,
+            function (): void {
+                $connection = $this->getConnectionInterface();
+                if ($connection->inTransaction()) {
+                    $connection->commit();
+                }
+            },
+            function (): void {
+                $connection = $this->getConnectionInterface();
+                if ($connection->inTransaction()) {
+                    $connection->rollBack();
+                }
+            }
+        );
     }
 
     /**

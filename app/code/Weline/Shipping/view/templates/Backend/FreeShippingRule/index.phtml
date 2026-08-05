@@ -9,7 +9,7 @@ $rules = $this->getData('rules') ?? [];
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row">
+<div class="row" data-testid="shipping-free-rule-management">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('免邮规则') ?></h4>
@@ -25,6 +25,18 @@ $embed = $this->getData('embed') ?? false;
                     </div>
                 </div>
 <?php endif; ?>
+
+                <div class="row mb-3"><div class="col-12"><div class="card" data-testid="shipping-free-rule-create-form">
+                    <div class="card-header"><h5 class="card-title mb-0"><?= __('新增免邮规则') ?></h5></div>
+                    <div class="card-body"><w:form method="post" action="@backend-url('shipping/backend/freeshippingrule/save')"><div class="row g-3">
+                        <div class="col-md-3"><label class="form-label"><?= __('规则名称') ?></label><input class="form-control" name="rule_name" maxlength="255" required></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('规则代码') ?></label><input class="form-control" name="rule_code" maxlength="50" required></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('条件类型') ?></label><select class="form-select" name="condition_type"><option value="order_amount"><?= __('订单金额') ?></option></select></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('最低金额') ?></label><input class="form-control" type="number" min="0" step="0.01" name="min_order_amount" value="99.00" required></div>
+                        <div class="col-md-1"><label class="form-label"><?= __('优先级') ?></label><input class="form-control" type="number" min="0" name="priority" value="10"></div>
+                        <div class="col-md-2 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-free-rule-submit"><?= __('创建') ?></button></div>
+                    </div></w:form></div>
+                </div></div></div>
 
                 <div class="row">
                     <div class="col-12">
@@ -53,12 +65,12 @@ $embed = $this->getData('embed') ?? false;
                                             <?php /** @var FreeShippingRule $rule */ ?>
                                             <?php foreach ($rules as $rule): ?>
                                                 <tr>
-                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::fields_RULE_NAME)) ?></td>
-                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::fields_RULE_CODE)) ?></td>
-                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::fields_CONDITION_TYPE)) ?></td>
-                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::fields_PRIORITY)) ?></td>
+                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::schema_fields_RULE_NAME)) ?></td>
+                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::schema_fields_RULE_CODE)) ?></td>
+                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::schema_fields_CONDITION_TYPE)) ?></td>
+                                                    <td><?= htmlspecialchars($rule->getData(FreeShippingRule::schema_fields_PRIORITY)) ?></td>
                                                     <td>
-                                                        <?php if ($rule->getData(FreeShippingRule::fields_IS_ACTIVE)): ?>
+                                                        <?php if ($rule->getData(FreeShippingRule::schema_fields_IS_ACTIVE)): ?>
                                                             <span class="badge bg-success"><?= __('启用') ?></span>
                                                         <?php else: ?>
                                                             <span class="badge bg-secondary"><?= __('禁用') ?></span>

@@ -46,7 +46,41 @@ class PaymentLockService
             return $lock;
         }
 
-        $lock ??= $this->newLockModel();
+        if ($lock instanceof PaymentLock) {
+            $oldOwnerHash = (string) $lock->getData(PaymentLock::schema_fields_OWNER_TOKEN_HASH);
+            $ownerHash = $this->hashOwnerToken($ownerToken);
+            $candidate = $this->newLockModel();
+            $candidate->getQuery(false)
+                ->where(PaymentLock::schema_fields_ID, (int) $lock->getId())
+                ->where(PaymentLock::schema_fields_OWNER_TOKEN_HASH, $oldOwnerHash)
+                ->update([
+                    PaymentLock::schema_fields_OWNER_TOKEN_HASH => $ownerHash,
+                    PaymentLock::schema_fields_STATUS => PaymentLock::STATUS_ACQUIRED,
+                    PaymentLock::schema_fields_ACTIVE_FLAG => 1,
+                    PaymentLock::schema_fields_TTL_SECONDS => max(1, $ttlSeconds),
+                    PaymentLock::schema_fields_ACQUIRED_AT => $now,
+                    PaymentLock::schema_fields_EXPIRES_AT => $expiresAt,
+                    PaymentLock::schema_fields_RELEASED_AT => null,
+                    PaymentLock::schema_fields_RELEASE_REASON => null,
+                    PaymentLock::schema_fields_METADATA_JSON => json_encode(
+                        $metadata,
+                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                    ),
+                    PaymentLock::schema_fields_UPDATED_AT => $now,
+                ])
+                ->fetch();
+            $claimed = $this->loadByScopeHash($scope['scope_hash']);
+            if (!$claimed instanceof PaymentLock
+                || !$this->isActive($claimed, $now)
+                || !$this->matchesOwnerToken($claimed, $ownerToken)
+            ) {
+                throw new \RuntimeException('payment_lock_already_acquired');
+            }
+
+            return $claimed;
+        }
+
+        $lock = $this->newLockModel();
         $this->writeScope($lock, $scope);
         $lock->setData(PaymentLock::schema_fields_OWNER_TOKEN_HASH, $this->hashOwnerToken($ownerToken))
             ->setData(PaymentLock::schema_fields_LOCK_CODE, $lock->getData(PaymentLock::schema_fields_LOCK_CODE) ?: $this->buildLockCode($scope['scope_hash']))
@@ -156,7 +190,7 @@ class PaymentLockService
     private function newLockModel(): PaymentLock
     {
         /** @var PaymentLock $lock */
-        $lock = $this->objectManager->getInstance(PaymentLock::class);
+        $lock = $this->objectManager->getInstance(PaymentLock::class, [], false);
 
         return $lock;
     }
@@ -164,7 +198,9 @@ class PaymentLockService
     private function loadByScopeHash(string $scopeHash): ?PaymentLock
     {
         $lock = $this->newLockModel();
-        $lock->load(PaymentLock::schema_fields_LOCK_SCOPE_HASH, $scopeHash);
+        $lock->where(PaymentLock::schema_fields_LOCK_SCOPE_HASH, $scopeHash)
+            ->find()
+            ->fetch();
 
         return $lock->getId() ? $lock : null;
     }

@@ -3,19 +3,27 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Extends\Module\Weline_Framework\Query;
 
+use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
+use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Payment\Api\Data\AvailabilityRequest;
 use Weline\Payment\Api\Data\AvailabilityResult;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Model\PaymentMethod;
 use Weline\Payment\Service\PaymentMethodManager;
+use Weline\Payment\Service\PaymentObjectScopeService;
+use Weline\Payment\Service\PaymentTransactionAccessService;
 
 class PaymentQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly PaymentMethodManager $methodManager,
-        private readonly ObjectManager $objectManager
+        private readonly ObjectManager $objectManager,
+        private readonly PaymentObjectScopeService $objectScopeService,
+        private readonly PaymentTransactionAccessService $transactionAccess,
+        private readonly BackendObjectAuthorizationGuardInterface $objectAuthorizationGuard,
     ) {
     }
 
@@ -32,11 +40,41 @@ class PaymentQueryProvider implements QueryProviderInterface
             'getPaymentMethod' => $this->getPaymentMethod((string)($params['code'] ?? $params['method_code'] ?? ''), $params),
             'getPaymentMethodSummary' => $this->getPaymentMethodSummary($params),
             'getPaymentDashboardSummary' => $this->getPaymentDashboardSummary($params),
-            'registerProviders' => $this->registerProviders(),
+            'registerProviders' => $this->registerProviders($params),
+            'queryTransactionStatus' => $this->queryTransactionStatus($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Payment query provider does not support operation: %{1}', [$operation])
             ),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function queryTransactionStatus(array $params): array
+    {
+        $id = (int)($params['id'] ?? 0);
+        $record = $this->transactionAccess->find($id);
+        if ($record === null) {
+            $this->objectAuthorizationGuard->denyForQuery(
+                ObjectAction::REPLAY,
+                ScopeIdentity::global(),
+            );
+        }
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::REPLAY,
+            $record['scope'],
+            $this->expectedGrantVersion($params),
+        );
+
+        try {
+            $this->transactionAccess->queryStatus($record['transaction']);
+
+            return ['success' => true, 'message' => (string)__('支付状态查询成功')];
+        } catch (\Throwable) {
+            return ['success' => false, 'message' => (string)__('支付状态查询失败')];
+        }
     }
 
     /**
@@ -101,6 +139,17 @@ class PaymentQueryProvider implements QueryProviderInterface
      */
     private function getPaymentMethodSummary(array $params): array
     {
+        $params = $this->authorizeAdminRead($params, ObjectAction::LIST);
+
+        return $this->paymentMethodSummaryPayload($params);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function paymentMethodSummaryPayload(array $params): array
+    {
         $registered = $this->methodManager->registerAllProviders();
         $rows = $this->getAllPaymentMethodRows();
         $active = $this->getActivePaymentMethods($params);
@@ -129,7 +178,8 @@ class PaymentQueryProvider implements QueryProviderInterface
      */
     private function getPaymentDashboardSummary(array $params): array
     {
-        $summary = $this->getPaymentMethodSummary($params);
+        $params = $this->authorizeAdminRead($params, ObjectAction::VIEW);
+        $summary = $this->paymentMethodSummaryPayload($params);
 
         return [
             'success' => true,
@@ -145,13 +195,51 @@ class PaymentQueryProvider implements QueryProviderInterface
     /**
      * @return array<string, mixed>
      */
-    private function registerProviders(): array
+    private function registerProviders(array $params): array
     {
+        $target = $this->objectScopeService->fromExplicitTarget($params);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::UPDATE,
+            $target,
+            $this->expectedGrantVersion($params),
+        );
+
         return [
             'success' => true,
             'source' => 'Weline_Payment',
             'providers_registered' => $this->methodManager->registerAllProviders(),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function authorizeAdminRead(array $params, string $action): array
+    {
+        $target = $this->objectScopeService->fromExplicitTarget($params);
+        $this->objectAuthorizationGuard->requireForQuery($action, $target);
+        $params['scope'] = $target->isGlobal()
+            ? 'global'
+            : $target->toLegacyScopeString();
+
+        return $params;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function expectedGrantVersion(array $params): int
+    {
+        $value = $params['expected_grant_version'] ?? null;
+        if (\is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
     }
 
     /**
@@ -442,7 +530,7 @@ class PaymentQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
-                    'params' => [],
+                    'params' => $this->adminTargetParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read payment method readiness summary for SystemConfig adapters.',
                 ],
@@ -452,21 +540,77 @@ class PaymentQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
-                    'params' => [],
+                    'params' => $this->adminTargetParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read payment dashboard readiness summary.',
                 ],
                 [
                     'name' => 'registerProviders',
-                    'frontend' => false,
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Payment::payment_method_edit',
+                    ],
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 2,
-                    'params' => [],
+                    'params' => [
+                        ...$this->adminTargetParams(),
+                        $this->grantVersionParam(),
+                    ],
                     'returns' => $commonReturns,
                     'summary' => 'Register payment providers discovered from module extensions.',
                 ],
+                [
+                    'name' => 'queryTransactionStatus',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Payment::payment_transaction_query',
+                    ],
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        ['name' => 'id', 'type' => 'int', 'required' => true],
+                        $this->grantVersionParam(),
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Replay one persisted transaction status query after object authorization.',
+                ],
             ],
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function adminTargetParams(): array
+    {
+        return [
+            [
+                'name' => 'target_scope',
+                'type' => 'string',
+                'required' => true,
+                'description' => __('显式后台目标 scope；可使用 global 或完整 website.store.channel'),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function grantVersionParam(): array
+    {
+        return [
+            'name' => 'expected_grant_version',
+            'type' => 'int',
+            'required' => true,
+            'description' => __('读取/预览返回的对象授权版本；提交前必须保持一致'),
         ];
     }
 }

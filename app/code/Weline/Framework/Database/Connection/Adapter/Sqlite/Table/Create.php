@@ -15,11 +15,23 @@ use Weline\Framework\Database\Connection\Api\Sql\AbstractTable;
 use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
 use Weline\Framework\Database\Helper\Standar;
 
-use function PHPUnit\Framework\exactly;
-
 class Create extends AbstractTable implements CreateInterface
 {
     public string $additional_for_sqlite = ';';
+
+    protected function formatTableName(string $table): string
+    {
+        $formatted = $this->getConnector()->formatTableName($table);
+        $parts = \preg_split('/\s*\.\s*/', \trim($formatted));
+        $physicalTable = \trim((string) \end($parts), "`\"[] \t\n\r\0\x0B");
+        if ($physicalTable === '') {
+            throw new \InvalidArgumentException('SQLite table name cannot be empty');
+        }
+
+        // A SQLite connection owns one database file. Logical database/schema
+        // qualifiers from models must never be emitted unless ATTACH was used.
+        return $this->getConnector()->quoteTable($physicalTable);
+    }
 
     public function createTable(string $table, string $comment = ''): CreateInterface
     {
@@ -74,7 +86,13 @@ class Create extends AbstractTable implements CreateInterface
 
     public function addIndex(string $type, string $name, array|string $column, string $comment = '', string $index_method = ''): CreateInterface
     {
-        $name = Standar::getIndexName($this->table,$name);
+        // Keep the configured logical database in the globally-scoped SQLite
+        // index identity, while the ON clause continues to use the one physical
+        // database file's unqualified table name.
+        $name = Standar::getIndexName(
+            $this->getConnector()->formatTableName($this->table),
+            $name,
+        );
         # sqlite 不支持索引引擎指定  $index_method = $index_method ? "USING {$index_method}" : '';
         $index_method = '';
         $type = strtoupper($type);
@@ -88,7 +106,15 @@ class Create extends AbstractTable implements CreateInterface
         $column_str = implode(',', $column);
         switch ($type) {
             case self::index_type_UNIQUE:
-                $this->indexes[] = "UNIQUE ({$column_str}) {$index_method}";
+                // SQLite table-level UNIQUE constraints are materialized as
+                // anonymous sqlite_autoindex_* entries.  Keep the declared
+                // logical name by publishing a real external UNIQUE index.
+                $this->index_outs[] = [
+                    'name' => $name,
+                    'column' => $column_str,
+                    'type' => $type,
+                    'method' => $index_method
+                ];
                 break;
             case self::index_type_DEFAULT:
             case self::index_type_FULLTEXT:
@@ -148,17 +174,22 @@ class Create extends AbstractTable implements CreateInterface
     {
         $on_delete_str = $on_delete ? 'on delete cascade' : '';
         $on_update_str = $on_update ? 'on update cascade' : '';
+        $references_table = $this->formatTableName($references_table);
         $this->foreign_keys[] = "constraint {$FK_Name} foreign key ({$FK_Field}) references {$references_table}({$references_field}) {$on_delete_str} {$on_update_str}";
         return $this;
     }
 
-    public function create(): mixed
+    public function create(bool $withImplicitTimestampColumns = true): mixed
     {
         // 字段
-        if (!array_key_exists('`create_time`', $this->fields) && !array_key_exists('create_time', $this->fields)) {
+        if ($withImplicitTimestampColumns
+            && !array_key_exists('`create_time`', $this->fields)
+            && !array_key_exists('create_time', $this->fields)) {
             $this->fields['`create_time`'] = "`create_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ";
         }
-        if (!array_key_exists('`update_time`', $this->fields) && !array_key_exists('update_time', $this->fields)) {
+        if ($withImplicitTimestampColumns
+            && !array_key_exists('`update_time`', $this->fields)
+            && !array_key_exists('update_time', $this->fields)) {
             $this->fields['`update_time`'] = "`update_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ";
         }
         $fields_str = implode(',' . PHP_EOL, $this->fields);
@@ -193,7 +224,10 @@ class Create extends AbstractTable implements CreateInterface
         if (!empty($this->index_outs)) {
             foreach ($this->index_outs as $key => $value) {
                 // 确保索引名被引号包裹，避免特殊字符导致语法错误
-                $index_outs .= "CREATE INDEX IF NOT EXISTS `{$value['name']}` ON {$this->table} ({$value['column']}) {$value['method']};\n";
+                $unique = strtoupper((string)($value['type'] ?? '')) === self::index_type_UNIQUE
+                    ? 'UNIQUE '
+                    : '';
+                $index_outs .= "CREATE {$unique}INDEX IF NOT EXISTS `{$value['name']}` ON {$this->table} ({$value['column']}) {$value['method']};\n";
             }
         }
 

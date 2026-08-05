@@ -13,6 +13,7 @@ namespace Weline\Order\Service;
 
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Database\AbstractModel;
+use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderItem;
@@ -31,20 +32,60 @@ class OrderService
         'business_code',
         'business_name',
     ];
+    private const IMMUTABLE_SCOPE_FIELDS = [
+        Order::schema_fields_WEBSITE_ID,
+        Order::schema_fields_STORE_ID,
+        Order::schema_fields_SCOPE_SNAPSHOT_JSON,
+    ];
+    private const IMMUTABLE_TOPOLOGY_FIELDS = [
+        'items',
+        Order::schema_fields_ORDER_UUID,
+        Order::schema_fields_CHECKOUT_GROUP_UUID,
+        Order::schema_fields_WEBSITE_ID,
+        Order::schema_fields_STORE_ID,
+        Order::schema_fields_CURRENCY,
+        Order::schema_fields_SUBTOTAL,
+        Order::schema_fields_SHIPPING_AMOUNT,
+        Order::schema_fields_TAX_AMOUNT,
+        Order::schema_fields_DISCOUNT_AMOUNT,
+        Order::schema_fields_GRAND_TOTAL,
+        Order::schema_fields_MONEY_SNAPSHOT_JSON,
+        Order::schema_fields_CATALOG_SNAPSHOT_JSON,
+        Order::schema_fields_SCOPE_SNAPSHOT_JSON,
+        Order::schema_fields_TAX_SNAPSHOT_JSON,
+        Order::schema_fields_SHIPPING_SNAPSHOT_JSON,
+        Order::schema_fields_IS_SHIPPING_CHARGE_OWNER,
+        Order::schema_fields_SPLIT_KEY,
+    ];
+    private const IMMUTABLE_SNAPSHOT_FIELDS = [
+        Order::schema_fields_ORDER_UUID,
+        Order::schema_fields_CHECKOUT_GROUP_UUID,
+        Order::schema_fields_MONEY_SNAPSHOT_JSON,
+        Order::schema_fields_CATALOG_SNAPSHOT_JSON,
+        Order::schema_fields_SCOPE_SNAPSHOT_JSON,
+        Order::schema_fields_TAX_SNAPSHOT_JSON,
+        Order::schema_fields_SHIPPING_SNAPSHOT_JSON,
+        Order::schema_fields_IS_SHIPPING_CHARGE_OWNER,
+        Order::schema_fields_SPLIT_KEY,
+    ];
+    public const ERROR_TOPOLOGY_IMMUTABLE = 'order_topology_snapshot_immutable';
 
     private ObjectManager $objectManager;
     private OrderStateMachine $stateMachine;
     private EventsManager $eventsManager;
     private ?DiscountValidationService $discountValidationService = null;
+    private ?Order $orderModel = null;
     
     public function __construct(
         ObjectManager $objectManager,
         OrderStateMachine $stateMachine,
-        EventsManager $eventsManager
+        EventsManager $eventsManager,
+        ?Order $orderModel = null,
     ) {
         $this->objectManager = $objectManager;
         $this->stateMachine = $stateMachine;
         $this->eventsManager = $eventsManager;
+        $this->orderModel = $orderModel;
     }
     
     /**
@@ -67,6 +108,10 @@ class OrderService
      */
     private function getOrderModel(): Order
     {
+        if ($this->orderModel !== null) {
+            $model = clone $this->orderModel;
+            return $model->clear();
+        }
         return $this->objectManager->getInstance(Order::class);
     }
     
@@ -93,8 +138,13 @@ class OrderService
         $this->validateOrderData($data);
         
         // 开始事务
-        $connection = $this->getOrderModel()->getConnection();
-        $connection->beginTransaction();
+        $transaction = $this->getOrderModel();
+        $ownsTransaction = TransactionContext::transactionState(
+            $transaction->getConnection()->getConnector(),
+        ) === null;
+        if ($ownsTransaction) {
+            $transaction->beginTransaction();
+        }
         
         try {
             // 创建订单主记录
@@ -135,10 +185,12 @@ class OrderService
             }
             
             // 记录订单历史
-            $this->addHistory($order->getId(), Order::STATUS_PENDING, __('订单已创建'));
+            $this->addHistory($order->getId(), Order::STATUS_PENDING, \__('订单已创建'));
             
             // 提交事务
-            $connection->commit();
+            if ($ownsTransaction) {
+                $transaction->commit();
+            }
             
             // 触发订单创建事件
             $this->eventsManager->dispatch('Weline_Order::order_created', [
@@ -148,8 +200,10 @@ class OrderService
             
             return $order;
             
-        } catch (\Exception $e) {
-            $connection->rollBack();
+        } catch (\Throwable $e) {
+            if ($ownsTransaction) {
+                $transaction->rollBack();
+            }
             throw $e;
         }
     }
@@ -165,10 +219,38 @@ class OrderService
     public function updateOrder(int $orderId, array $data): Order
     {
         $order = $this->getOrder($orderId);
+        foreach (self::IMMUTABLE_SNAPSHOT_FIELDS as $field) {
+            if (\array_key_exists($field, $data)) {
+                throw new OrderFacadeConflictException(
+                    self::ERROR_TOPOLOGY_IMMUTABLE,
+                    \__('订单冻结快照不可修改'),
+                    ['order_id' => $orderId, 'field' => $field],
+                );
+            }
+        }
+        if ($this->isTopologyOrder($order)) {
+            foreach (self::IMMUTABLE_TOPOLOGY_FIELDS as $field) {
+                if (\array_key_exists($field, $data)) {
+                    throw new OrderFacadeConflictException(
+                        self::ERROR_TOPOLOGY_IMMUTABLE,
+                        \__('新订单拓扑的冻结字段不可修改'),
+                        ['order_id' => $orderId, 'field' => $field],
+                    );
+                }
+            }
+        }
+        foreach (self::IMMUTABLE_SCOPE_FIELDS as $field) {
+            unset($data[$field]);
+        }
         
         // 开始事务
-        $connection = $this->getOrderModel()->getConnection();
-        $connection->beginTransaction();
+        $transaction = $this->getOrderModel();
+        $ownsTransaction = TransactionContext::transactionState(
+            $transaction->getConnection()->getConnector(),
+        ) === null;
+        if ($ownsTransaction) {
+            $transaction->beginTransaction();
+        }
         
         try {
             $this->stripUnavailableBusinessSourceFields($order, $data);
@@ -199,10 +281,12 @@ class OrderService
             $order->save();
             
             // 记录订单历史
-            $this->addHistory($orderId, $order->getData(Order::schema_fields_STATUS), __('订单已更新'));
+            $this->addHistory($orderId, $order->getData(Order::schema_fields_STATUS), \__('订单已更新'));
             
             // 提交事务
-            $connection->commit();
+            if ($ownsTransaction) {
+                $transaction->commit();
+            }
             
             // 触发订单更新事件
             $this->eventsManager->dispatch('Weline_Order::order_updated', [
@@ -212,8 +296,10 @@ class OrderService
             
             return $order;
             
-        } catch (\Exception $e) {
-            $connection->rollBack();
+        } catch (\Throwable $e) {
+            if ($ownsTransaction) {
+                $transaction->rollBack();
+            }
             throw $e;
         }
     }
@@ -231,7 +317,7 @@ class OrderService
         $order = $this->getOrder($orderId);
         
         if (!$order->canCancel()) {
-            throw new \Exception(__('订单当前状态不允许取消'));
+            throw new \Exception(\__('订单当前状态不允许取消'));
         }
         
         // 使用状态机转换状态
@@ -260,7 +346,7 @@ class OrderService
         $order = $this->getOrderModel()->reset()->load($orderId);
         
         if (!$order->getId()) {
-            throw new \Exception(__('订单不存在'));
+            throw new \Exception(\__('订单不存在'));
         }
         
         return $order;
@@ -469,31 +555,37 @@ class OrderService
     private function validateOrderData(array $data): void
     {
         $required = [
-            'items' => __('订单项'),
+            'items' => \__('订单项'),
         ];
         
         foreach ($required as $field => $label) {
             if (empty($data[$field])) {
-                throw new \Exception(__('%{1}不能为空', [$label]));
+                throw new \Exception(\__('%{1}不能为空', [$label]));
             }
         }
         
         if (!is_array($data['items']) || empty($data['items'])) {
-            throw new \Exception(__('订单项不能为空'));
+            throw new \Exception(\__('订单项不能为空'));
         }
         
         // 验证订单项
         foreach ($data['items'] as $item) {
             if (empty($item['product_name'])) {
-                throw new \Exception(__('商品名称不能为空'));
+                throw new \Exception(\__('商品名称不能为空'));
             }
             if (empty($item['qty_ordered']) && empty($item['quantity'])) {
-                throw new \Exception(__('商品数量不能为空'));
+                throw new \Exception(\__('商品数量不能为空'));
             }
             if (!isset($item['price'])) {
-                throw new \Exception(__('商品价格不能为空'));
+                throw new \Exception(\__('商品价格不能为空'));
             }
         }
+    }
+
+    private function isTopologyOrder(Order $order): bool
+    {
+        return \trim((string)$order->getData(Order::schema_fields_ORDER_UUID)) !== ''
+            || \trim((string)$order->getData(Order::schema_fields_CHECKOUT_GROUP_UUID)) !== '';
     }
 
     /**
@@ -572,7 +664,7 @@ class OrderService
             ?: 'order';
         $businessName = $this->firstBusinessString($data, ['business_name', 'business_label'], 160)
             ?: $this->firstBusinessString($business, ['name', 'business_name', 'business_label'], 160)
-            ?: $this->uniqueItemBusinessString($items, ['business_name', 'business_label'], 160, (string)__('混合业务订单'))
+            ?: $this->uniqueItemBusinessString($items, ['business_name', 'business_label'], 160, (string)\__('混合业务订单'))
             ?: ($fallback['business_name'] ?? '')
             ?: 'Weline Order';
 

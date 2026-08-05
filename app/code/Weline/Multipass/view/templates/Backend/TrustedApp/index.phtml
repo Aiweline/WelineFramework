@@ -395,7 +395,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 
                 var formData = new FormData();
                 formData.append('app_id', appId);
-                window.Weline.Api.post(rotateUrl, formData)
+                bqAdmin['multipass'](rotateUrl, formData)
                     .then(function(res) {
                         var data = normalizeResponse(res);
                         if (data.success || data.code === 200) {
@@ -414,7 +414,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     document.getElementById('trustedAppForm').addEventListener('submit', function(e) {
         e.preventDefault();
         var formData = new FormData(this);
-        window.Weline.Api.post(saveUrl, formData)
+        bqAdmin['multipass'](saveUrl, formData)
             .then(function(res) {
                 var data = normalizeResponse(res);
                 if (data.success || data.code === 200) {

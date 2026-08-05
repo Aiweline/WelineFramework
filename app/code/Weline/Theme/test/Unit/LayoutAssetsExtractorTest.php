@@ -12,7 +12,7 @@ namespace Weline\Theme\Test\Unit;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Theme\Helper\AssetsExtractor;
 use Weline\Theme\Helper\LayoutAssetsManager;
 use Weline\Theme\Model\WelineTheme;

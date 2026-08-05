@@ -19,7 +19,7 @@ use Weline\Eav\Model\Test;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use function PHPUnit\Framework\assertTrue;
 
 class EavTest extends TestCore

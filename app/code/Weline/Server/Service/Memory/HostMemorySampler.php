@@ -3,12 +3,17 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Memory;
 
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+
 /**
  * Whole-host / cgroup memory pressure sampling.
  * Pressure source is homologous with the capacity limit (cgroup current/max or Available/MemTotal).
  */
 final class HostMemorySampler
 {
+    private const MAX_PROBE_BYTES = 65536;
+    private const COMMAND_TIMEOUT_SECONDS = 0.25;
+
     /**
      * @return array{
      *   pressure_ratio:float,
@@ -57,8 +62,24 @@ final class HostMemorySampler
                     'cgroup_current_mb' => $cgroupCurrent,
                 ];
             }
-            $available = $availableMb ?? 0;
-            $available = \max(0, \min($available, $limitMb));
+            // Fail open on capacity when Available cannot be observed. Treating a
+            // missing Darwin vm_stat probe as "0 MB free" falsely trips CRITICAL
+            // and drains worker#2 ~15s after every Master start.
+            if ($availableMb === null) {
+                return [
+                    'pressure_ratio' => 0.0,
+                    'pressure_source' => 'unknown',
+                    'limit_mb' => $limitMb,
+                    'used_mb' => 0,
+                    'available_mb' => null,
+                    'mem_total_mb' => $memTotalMb,
+                    'swap_used_mb' => $swapUsedMb,
+                    'psi_some_avg10' => $psi,
+                    'cgroup_max_mb' => $cgroupMax,
+                    'cgroup_current_mb' => $cgroupCurrent,
+                ];
+            }
+            $available = \max(0, \min($availableMb, $limitMb));
             $pressure = 1.0 - ($available / $limitMb);
             $usedMb = $limitMb - $available;
             $source = 'meminfo';
@@ -93,7 +114,7 @@ final class HostMemorySampler
     private function readMeminfo(): array
     {
         if (PHP_OS_FAMILY === 'Linux' && \is_file('/proc/meminfo')) {
-            $raw = @\file_get_contents('/proc/meminfo');
+            $raw = $this->readBoundedFile('/proc/meminfo');
             if (!\is_string($raw) || $raw === '') {
                 return ['mem_total_mb' => null, 'mem_available_mb' => null, 'swap_used_mb' => null];
             }
@@ -134,32 +155,76 @@ final class HostMemorySampler
      */
     private function readDarwinMemory(): array
     {
-        $total = null;
+        static $cachedTotalMb = null;
+        static $cachedPageSize = null;
+        $total = \is_int($cachedTotalMb) && $cachedTotalMb > 0
+            ? $cachedTotalMb
+            : null;
         $available = null;
-        if (\function_exists('shell_exec')) {
-            $bytes = @\shell_exec('sysctl -n hw.memsize 2>/dev/null');
-            if (\is_string($bytes) && \trim($bytes) !== '' && \ctype_digit(\trim($bytes))) {
-                $total = (int)\floor(((int)\trim($bytes)) / 1048576);
+        if ($total === null) {
+            $bytes = $this->runProbe(['/usr/sbin/sysctl', '-n', 'hw.memsize']);
+            $totalBytes = $this->boundedDecimal(\trim($bytes));
+            if ($totalBytes !== null) {
+                $total = (int)\floor($totalBytes / 1048576);
+                if ($total > 0) {
+                    $cachedTotalMb = $total;
+                }
             }
-            $vm = @\shell_exec('vm_stat 2>/dev/null');
-            if (\is_string($vm) && $vm !== '') {
-                $pageSize = 4096;
-                if (\preg_match('/page size of\s+(\d+)\s+bytes/i', $vm, $m)) {
-                    $pageSize = \max(1, (int)$m[1]);
+        }
+        $pageSize = \is_int($cachedPageSize) && $cachedPageSize > 0
+            ? $cachedPageSize
+            : null;
+        if ($pageSize === null) {
+            $pageSizeRaw = $this->runProbe(['/usr/sbin/sysctl', '-n', 'hw.pagesize']);
+            $parsedPageSize = $this->boundedDecimal(\trim($pageSizeRaw));
+            if ($parsedPageSize !== null
+                && $parsedPageSize >= 4096
+                && $parsedPageSize <= 65536
+            ) {
+                $pageSize = $parsedPageSize;
+                $cachedPageSize = $pageSize;
+            }
+        }
+        $vm = $this->runProbe(['/usr/bin/vm_stat']);
+        if ($vm !== '') {
+            if (\preg_match('/page size of\s+(\d+)\s+bytes/i', $vm, $m)) {
+                $parsedPageSize = $this->boundedDecimal((string)$m[1]);
+                if ($parsedPageSize !== null
+                    && $parsedPageSize >= 4096
+                    && $parsedPageSize <= 65536
+                ) {
+                    $pageSize = $parsedPageSize;
+                    $cachedPageSize = $pageSize;
                 }
-                $free = 0;
-                $inactive = 0;
-                $speculative = 0;
-                if (\preg_match('/Pages free:\s+(\d+)/i', $vm, $m)) {
-                    $free = (int)$m[1];
-                }
-                if (\preg_match('/Pages inactive:\s+(\d+)/i', $vm, $m)) {
-                    $inactive = (int)$m[1];
-                }
-                if (\preg_match('/Pages speculative:\s+(\d+)/i', $vm, $m)) {
-                    $speculative = (int)$m[1];
-                }
-                $available = (int)\floor((($free + $inactive + $speculative) * $pageSize) / 1048576);
+            }
+            // Without an observed page size, Apple Silicon (16 KiB) would be
+            // under-counted 4x with the historical 4 KiB default and trip CRITICAL.
+            if ($pageSize === null) {
+                return [
+                    'mem_total_mb' => $total,
+                    'mem_available_mb' => null,
+                    'swap_used_mb' => null,
+                ];
+            }
+            $free = 0;
+            $inactive = 0;
+            $speculative = 0;
+            $purgeable = 0;
+            if (\preg_match('/Pages free:\s+(\d+)/i', $vm, $m)) {
+                $free = $this->boundedDecimal((string)$m[1]) ?? 0;
+            }
+            if (\preg_match('/Pages inactive:\s+(\d+)/i', $vm, $m)) {
+                $inactive = $this->boundedDecimal((string)$m[1]) ?? 0;
+            }
+            if (\preg_match('/Pages speculative:\s+(\d+)/i', $vm, $m)) {
+                $speculative = $this->boundedDecimal((string)$m[1]) ?? 0;
+            }
+            if (\preg_match('/Pages purgeable:\s+(\d+)/i', $vm, $m)) {
+                $purgeable = $this->boundedDecimal((string)$m[1]) ?? 0;
+            }
+            $pages = $this->checkedSum([$free, $inactive, $speculative, $purgeable]);
+            if ($pages !== null && $pages <= \intdiv(PHP_INT_MAX, $pageSize)) {
+                $available = (int)\floor(($pages * $pageSize) / 1048576);
             }
         }
 
@@ -214,10 +279,10 @@ final class HostMemorySampler
         if ($raw === '' || \strtolower($raw) === 'max') {
             return null;
         }
-        if (!\ctype_digit($raw)) {
+        $bytes = $this->boundedDecimal($raw);
+        if ($bytes === null) {
             return null;
         }
-        $bytes = (int)$raw;
         // Guard absurd host-wide "unlimited" sentinels (near 2^63).
         if ($bytes <= 0 || $bytes >= (PHP_INT_MAX >> 1)) {
             return null;
@@ -243,11 +308,12 @@ final class HostMemorySampler
             return null;
         }
         $raw = \trim($raw);
-        if ($raw === '' || !\ctype_digit($raw)) {
+        $bytes = $this->boundedDecimal($raw);
+        if ($bytes === null) {
             return null;
         }
 
-        return (int)\floor(((int)$raw) / 1048576);
+        return (int)\floor($bytes / 1048576);
     }
 
     private function readPsiSomeAvg10(): ?float
@@ -256,7 +322,7 @@ final class HostMemorySampler
         if (!\is_file($path)) {
             return null;
         }
-        $raw = @\file_get_contents($path);
+        $raw = $this->readBoundedFile($path);
         if (!\is_string($raw) || $raw === '') {
             return null;
         }
@@ -264,7 +330,8 @@ final class HostMemorySampler
             return null;
         }
 
-        return (float)$m[1];
+        $value = (float)$m[1];
+        return \is_finite($value) && $value >= 0.0 && $value <= 100.0 ? $value : null;
     }
 
     /**
@@ -276,12 +343,170 @@ final class HostMemorySampler
             if (!\is_file($path)) {
                 continue;
             }
-            $raw = @\file_get_contents($path);
+            $raw = $this->readBoundedFile($path);
             if (\is_string($raw) && $raw !== '') {
                 return $raw;
             }
         }
 
         return null;
+    }
+
+    /** @param list<string> $command */
+    private function runProbe(array $command): string
+    {
+        if (!isset($command[0]) || !\is_file($command[0]) || !\is_executable($command[0])) {
+            return '';
+        }
+        $timeout = self::COMMAND_TIMEOUT_SECONDS;
+        if (PHP_OS_FAMILY === 'Darwin') {
+            // Master inherits many FDs; 250ms is too tight for vm_stat/sysctl and
+            // empty samples previously collapsed into CRITICAL false positives.
+            $timeout = 1.5;
+        }
+        $stdout = '';
+        try {
+            $result = GatewayBoundedCommandRunner::run($command, $timeout);
+            $stdout = \trim((string)($result['stdout'] ?? $result['output'] ?? ''));
+            // Under Master FD inheritance the bounded runner often returns 125
+            // even when the probe already wrote a valid payload.
+            if ($stdout === '' || ((int)($result['code'] ?? 1) !== 0 && !$this->looksLikeDarwinProbeOutput($command, $stdout))) {
+                $stdout = '';
+            }
+        } catch (\Throwable) {
+            $stdout = '';
+        }
+        if ($stdout === '') {
+            $stdout = $this->runProbeDirect($command);
+        }
+
+        return $stdout;
+    }
+
+    /** @param list<string> $command */
+    private function looksLikeDarwinProbeOutput(array $command, string $stdout): bool
+    {
+        $binary = (string)($command[0] ?? '');
+        if (\str_ends_with($binary, '/vm_stat')) {
+            return \preg_match('/Pages free:\s+\d+/i', $stdout) === 1;
+        }
+        if (\str_ends_with($binary, '/sysctl')) {
+            return \preg_match('/\A[0-9]+\z/D', \trim($stdout)) === 1;
+        }
+
+        return $stdout !== '';
+    }
+
+    /** @param list<string> $command */
+    private function runProbeDirect(array $command): string
+    {
+        if (!\function_exists('proc_open') || $command === []) {
+            return '';
+        }
+        $pipes = [];
+        $process = @\proc_open(
+            $command,
+            [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            null,
+            null,
+            ['bypass_shell' => true],
+        );
+        if (!\is_resource($process)) {
+            return '';
+        }
+        $stdout = '';
+        try {
+            if (isset($pipes[1]) && \is_resource($pipes[1])) {
+                $chunk = @\stream_get_contents($pipes[1], self::MAX_PROBE_BYTES + 1);
+                if (\is_string($chunk) && \strlen($chunk) <= self::MAX_PROBE_BYTES) {
+                    $stdout = $chunk;
+                }
+            }
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    @\fclose($pipe);
+                }
+            }
+            @\proc_close($process);
+        }
+
+        return \trim($stdout);
+    }
+
+    private function readBoundedFile(string $path): ?string
+    {
+        if ($path === '' || \str_contains($path, "\0") || \is_link($path)) {
+            return null;
+        }
+        $before = @\lstat($path);
+        if (!\is_array($before)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($before['nlink'] ?? 0) !== 1
+        ) {
+            return null;
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened)
+                || (int)($opened['dev'] ?? -1) !== (int)($before['dev'] ?? -2)
+                || (int)($opened['ino'] ?? -1) !== (int)($before['ino'] ?? -2)
+                || ((((int)($opened['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($opened['nlink'] ?? 0) !== 1
+            ) {
+                return null;
+            }
+            $contents = @\stream_get_contents($handle, self::MAX_PROBE_BYTES + 1);
+        } finally {
+            @\fclose($handle);
+        }
+        $after = @\lstat($path);
+
+        return \is_string($contents)
+            && \strlen($contents) <= self::MAX_PROBE_BYTES
+            && \is_array($after)
+            && !\is_link($path)
+            && (int)($after['dev'] ?? -1) === (int)($before['dev'] ?? -2)
+            && (int)($after['ino'] ?? -1) === (int)($before['ino'] ?? -2)
+                ? $contents
+                : null;
+    }
+
+    private function boundedDecimal(string $value): ?int
+    {
+        $value = \trim($value);
+        $maximum = (string)PHP_INT_MAX;
+        if ($value === ''
+            || \preg_match('/\A[0-9]+\z/D', $value) !== 1
+            || \strlen($value) > \strlen($maximum)
+            || (\strlen($value) === \strlen($maximum) && \strcmp($value, $maximum) > 0)
+        ) {
+            return null;
+        }
+
+        return (int)$value;
+    }
+
+    /** @param list<int> $values */
+    private function checkedSum(array $values): ?int
+    {
+        $sum = 0;
+        foreach ($values as $value) {
+            if ($value < 0 || $value > PHP_INT_MAX - $sum) {
+                return null;
+            }
+            $sum += $value;
+        }
+
+        return $sum;
     }
 }

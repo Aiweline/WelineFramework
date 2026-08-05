@@ -1,0 +1,27 @@
+{
+    "name": "weline/module-tax",
+    "description": "WelineFramework scoped tax rules, deterministic engine, shadow verification and durable LKG",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-websites": "@dev"
+    },
+    "suggest": {
+        "weline/module-checkout": "Consumes the Tax engine after TASK-P3B-002 is accepted.",
+        "weline/module-order": "Stores frozen Tax snapshots after TASK-P3B-002 is accepted."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Tax\\": ""
+        }
+    },
+    "license": "MIT"
+}

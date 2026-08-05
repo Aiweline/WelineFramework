@@ -36,7 +36,7 @@ moduleDescribe(test, MODULE, 'Weline_SystemConfig 路由 smoke', () => {
       await expect(page.locator('body')).not.toContainText(FATAL);
       await expect(page.locator('body')).toContainText(/统一配置中心|System Config|配置中心/i);
       // TargetScope 选择器存在于 DOM（可见性/切换由权威 flow plan-p1c-sec07 断言）
-      await expect(page.locator('#wsc-website-code')).toBeAttached({ timeout: 20000 });
+      await expect(page.locator('#wsc-website-code_wrapper')).toBeAttached({ timeout: 20000 });
     }
   );
 });

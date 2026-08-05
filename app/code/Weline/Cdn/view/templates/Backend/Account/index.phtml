@@ -34,8 +34,8 @@ $escapeAttr = static function (mixed $value): string {
 </div>
 
 <!-- 操作栏 -->
-<div class="action-toolbar">
-    <div class="action-toolbar-left">
+<div class="action-toolbar" data-testid="cdn-account-management">
+    <div class="action-toolbar-left" data-testid="cdn-account-create">
         <block class='Weline\Component\Block\OffCanvas'
                template='Weline_Component::off-canvas.phtml'
                title='@lang(添加账户)'
@@ -175,9 +175,9 @@ $escapeAttr = static function (mixed $value): string {
                                         <button type="button" 
                                                 class="btn btn-danger" 
                                                 w-delete="true"
-                                                w-url="@backend-url('*/backend/account/delete')"
-                                                w-method="POST"
-                                                w-var-id="<?= $account->getData('account_id') ?>"
+                                                data-provider="cdn"
+                                                data-operation="deleteAccount"
+                                                w-var-account_id="<?= $account->getData('account_id') ?>"
                                                 w-msg="<?= __('确定要删除账户 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($account->getData('name'))) ?>"
                                                 title="<?= __('删除账户') ?>">
                                             <i class="mdi mdi-delete"></i> <?= __('删除') ?>
@@ -262,14 +262,9 @@ $escapeAttr = static function (mixed $value): string {
     window.CdnAccountManager = {
         setDefault: function(id) {
             confirmAction('<?= __('确定要设置此账户为默认账户吗？') ?>', function() {
-                var opts = {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ id: id }).toString()
-                };
-                var req = window.Weline.Api.request(setDefaultUrl, opts);
-                req.then(function(res) {
-                    var data = (res && res.data) || res;
+                Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('cdn').setDefaultAccount({ account_id: id }); })
+                .then(function(data) {
                     if (data.success) {
                         if (typeof Swal !== 'undefined') {
                             Swal.fire({

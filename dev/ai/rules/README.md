@@ -1,13 +1,10 @@
-# Rules Relocated
+# Rules relocated
 
-历史 `.mdc` 规则已迁移到：
+This directory is intentionally not an active rule layer.
 
-- `dev/ai/archive/rules/`
+- Repository-wide rules: `dev/ai/global-constraints.md`
+- Skill routing: `dev/ai/skills/_index.md`
+- Cursor adapters: `.cursor/rules/*.mdc`
+- Historical rules and protocols: `dev/ai/archive/rules/`
 
-当前规则总入口只有一个：
-
-- `dev/ai/global-constraints.md`
-
-`dev/ai/skills/_index.md` 只作为技能路由索引，不维护总则正文。
-
-仍保留于本目录的 **Cursor `alwaysApply` 规则镜像**：见各 `.mdc`（例如 `cross-module-w-query.mdc` 跨模块禁止直接调类、读数据强制 w_query 且先 query:help）。总则正文以 `dev/ai/global-constraints.md` 为准。
+Do not add `alwaysApply` mirrors here. Put a cross-task rule in the global owner, a domain workflow in its canonical skill/module documentation, or a host-specific conditional pointer in that host's adapter directory.

@@ -83,7 +83,7 @@ class OrderStatusService
         if (!$status) {
             // 如果状态不存在，尝试从翻译文件获取
             $translationKey = 'order_status_' . $code;
-            $translated = __($translationKey);
+            $translated = \__($translationKey);
             if ($translated !== $translationKey) {
                 return $translated;
             }
@@ -101,7 +101,7 @@ class OrderStatusService
 
         // 使用翻译系统获取翻译
         $translationKey = 'order_status_' . $code;
-        $translated = __($translationKey);
+        $translated = \__($translationKey);
         
         // 如果翻译不存在，返回状态默认名称
         if ($translated === $translationKey) {

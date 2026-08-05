@@ -6,7 +6,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Framework\Router\Service\RouteUpdateService;
-use Weline\Framework\UnitTest\Service\TestCollectionService;
+use Weline\Framework\Test\Service\TestCollectionService;
 
 require dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'bootstrap.php';
 

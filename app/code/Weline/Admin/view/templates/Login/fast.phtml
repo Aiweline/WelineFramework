@@ -456,7 +456,7 @@ $iconsCss = (string)$this->fetchTagSourceFile('statics', 'Weline_Admin::assets/c
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-            <w:form class="login-form" action="@var($postUrl)" method="post" data-login-form csrf="off">
+            <w:form class="login-form" action="@var($postUrl)" method="post" data-login-form csrf="off" captcha="required" intent="admin.login">
                 <?= $this->getFormKey($postUrl) ?>
                 <?php if ($returnUrl !== ''): ?>
                     <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') ?>">

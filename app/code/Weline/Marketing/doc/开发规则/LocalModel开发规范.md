@@ -135,7 +135,7 @@ Test/
 #### 2.1 类命名
 
 - 测试类名: `*Test.php` 或 `Test*.php`
-- 继承: `PHPUnit\Framework\TestCase` 或 `Weline\Framework\UnitTest\TestCore`
+- 继承: `PHPUnit\Framework\TestCase` 或 `Weline\Framework\Test\TestCore`
 
 #### 2.2 测试方法命名
 

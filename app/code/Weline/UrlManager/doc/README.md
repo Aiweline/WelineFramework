@@ -34,6 +34,7 @@
 - `Model`：ORM 模型与字段 schema。 文件数：2
 - `Observer`：事件观察者与订阅逻辑。 文件数：2
 - `Plugin`：插件扩展点。 文件数：1
+- `Setup`：安装/升级数据装配；字段和索引 DDL 仍由 Model attribute 与 SchemaDiff 负责。 文件数：1
 - `etc`：模块配置。 文件数：4
 - `i18n`：国际化资源。 文件数：2
 - `view/templates`：模块模板源文件。 文件数：3
@@ -67,3 +68,11 @@
 `Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface` 提供非空重写列表、当前网站 ID
 和按网站/path 的精确查询，结果为不可变 `UrlRewriteRecord`。可选集成必须经 Runtime Provider
 解析，不能直接实例化 `UrlRewrite` Model，也不能在模块缺失时产生类加载错误。
+
+## path 精确查询与三库索引
+
+`url_rewrite.path` 保持 `TEXT` 和原文，不使用 MySQL 前缀索引，因为前缀相等不能代表完整路径相等。模型保存时按 path 原始字节计算小写十六进制 SHA-256，写入可空迁移列 `path_fingerprint`；查询索引为 `(website_id, path_fingerprint, rewrite_id)`。
+
+指纹只是候选集索引键。`UrlRewrite::findLatestByWebsiteAndPath()` 必须再用 PHP 严格 `===` 比较存储 path 与输入原始字节，避免 MySQL 默认 collation 的大小写/重音等值影响，并防御理论上的 SHA-256 碰撞。迁移窗口内只有 `path_fingerprint IS NULL` 或空字符串的旧行可进入兼容候选集，仍由 PHP 原始字节比较决定是否命中；候选集继续使用 `(website_id, path_fingerprint, rewrite_id)` 索引，正常 miss 不会退化为 TEXT path 全表扫描。非空但不匹配的指纹必须失败关闭。
+
+`Setup/Upgrade.php` 是纯数据 phase-1 迁移：先对全表指纹与 path 做无写入预检，然后在写事务内回填缺失值并再次全表校验。列和索引 DDL 只由 `#[Col]` / `#[Index]` 与 `php bin/w setup:upgrade` 处理，Upgrade 不执行手写 DDL。

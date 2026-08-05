@@ -69,7 +69,7 @@ class Backup extends BackendController
             $this->sendDownload((string)$this->request->getParam('filename', ''));
         }
 
-        if (!$this->isPost()) {
+        if (!$this->request->isPost()) {
             return $this->jsonResponse(false, __('无效的请求方法'));
         }
         

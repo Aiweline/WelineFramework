@@ -3,9 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\Database;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Database\Model\Migration;
+use Weline\Framework\Database\Schema\SchemaCheckpointDataException;
 
 /**
  * 数据库迁移模型测试
@@ -44,6 +45,7 @@ class MigrationTest extends TestCore
     {
         $this->assertEquals('pending', Migration::STATUS_PENDING);
         $this->assertEquals('installed', Migration::STATUS_INSTALLED);
+        $this->assertEquals('superseded', Migration::STATUS_SUPERSEDED);
         $this->assertEquals('rolled_back', Migration::STATUS_ROLLED_BACK);
         $this->assertEquals('failed', Migration::STATUS_FAILED);
     }
@@ -279,6 +281,57 @@ class MigrationTest extends TestCore
         $this->assertGreaterThanOrEqual(2, $stats['total']);
         $this->assertGreaterThanOrEqual(1, $stats['installed']);
         $this->assertGreaterThanOrEqual(1, $stats['failed']);
+    }
+
+    public function testSchemaCheckpointIgnoresLegacySupersededRevision(): void
+    {
+        $tables = ['weline_test_checkpoint' => hash('sha256', 'legacy-superseded')];
+        $this->recordSchemaCheckpointFixture(Migration::STATUS_SUPERSEDED, $tables);
+        $activeId = $this->recordSchemaCheckpointFixture(Migration::STATUS_INSTALLED, $tables);
+
+        $checkpoint = $this->migrationModel->getSchemaCheckpoint('Weline_Test', '1.0.0');
+
+        $this->assertNotNull($checkpoint);
+        $this->assertSame($activeId, $checkpoint['migration_id']);
+        $this->assertSame($tables, $checkpoint['tables']);
+    }
+
+    public function testSchemaCheckpointStillRejectsUnexpectedInactiveStatus(): void
+    {
+        $tables = ['weline_test_checkpoint' => hash('sha256', 'failed-checkpoint')];
+        $this->recordSchemaCheckpointFixture(Migration::STATUS_FAILED, $tables);
+
+        $this->expectException(SchemaCheckpointDataException::class);
+        $this->migrationModel->getSchemaCheckpoint('Weline_Test', '1.0.0');
+    }
+
+    /**
+     * @param array<string, string> $tables
+     */
+    private function recordSchemaCheckpointFixture(string $status, array $tables): int
+    {
+        $checksum = $this->migrationModel->schemaCheckpointChecksum(
+            $tables,
+            Migration::SCHEMA_CHECKPOINT_FORMAT_CURRENT,
+        );
+
+        return $this->migrationModel->recordMigration([
+            'module_name' => 'Weline_Test',
+            'version' => '1.0.0',
+            'migration_file' => Migration::SCHEMA_CHECKPOINT_FILE,
+            'description' => 'Schema checkpoint fixture',
+            'status' => $status,
+            'dependencies' => [],
+            'checksum' => $checksum,
+            'migration_type' => Migration::SCHEMA_CHECKPOINT_TYPE,
+            'operation_kind' => Migration::SCHEMA_CHECKPOINT_OPERATION,
+            'schema_after_checksum' => $checksum,
+            'operation_payload' => json_encode([
+                'format' => Migration::SCHEMA_CHECKPOINT_FORMAT_CURRENT,
+                'tables' => $tables,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'executed_at' => date('Y-m-d H:i:s'),
+        ]);
     }
 
     private function cleanupMigrationFixtures(): void

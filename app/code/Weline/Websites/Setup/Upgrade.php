@@ -11,17 +11,22 @@ use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DomainPoolLifecycleService;
 use Weline\Websites\Service\DefaultWebsiteService;
+use Weline\Websites\Service\StoreChannelSeedService;
 
 class Upgrade implements UpgradeInterface
 {
     /**
-     * 升级：1) 确保默认网站存在并绑定 127.0.0.1 / localhost；2) 回填 domain_pool.site_created
+     * 升级：1) 确保默认网站存在并绑定 127.0.0.1 / localhost；2) 回填 domain_pool.site_created；
+     * 3) 幂等补种每个 Website 的 default Store 与 default SalesChannel
      */
     public function setup(Setup $setup, Context $context): void
     {
         /** @var DefaultWebsiteService $defaultWebsiteService */
         $defaultWebsiteService = ObjectManager::getInstance(DefaultWebsiteService::class);
         $defaultWebsiteService->ensureDefaultWebsite();
+        /** @var StoreChannelSeedService $storeChannelSeed */
+        $storeChannelSeed = ObjectManager::getInstance(StoreChannelSeedService::class);
+        $storeChannelSeed->ensureDefaults();
         /** @var DomainPool $pool */
         $pool = ObjectManager::getInstance(DomainPool::class);
         $pool->syncSiteCreatedFromWebsiteDomainTable();

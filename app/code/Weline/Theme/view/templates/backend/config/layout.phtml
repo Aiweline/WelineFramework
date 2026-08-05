@@ -143,11 +143,11 @@ document.getElementById('layout-config-form').addEventListener('submit', functio
     });
     
     var layoutSaveUrl = '<?= $this->getUrl('theme/backend/config/layout/save') ?>';
-    var req = window.Weline.Api.request(layoutSaveUrl, { method: 'POST', body: frontendData });
+    var req = WelineThemeBinQuery.request(layoutSaveUrl, { method: 'POST', body: frontendData });
     req.then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (data.status === 'success') {
-            return window.Weline.Api.request(layoutSaveUrl, { method: 'POST', body: backendData });
+            return WelineThemeBinQuery.request(layoutSaveUrl, { method: 'POST', body: backendData });
         } else {
             throw new Error(data.message || '<?= __('保存失败') ?>');
         }

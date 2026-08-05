@@ -602,9 +602,29 @@ return [
             'allow_php_unserialize' => false,
         ],
         'headers' => [
-            // 留空表示不输出；后续可按环境接入 Report-Only / 正式 CSP
+            // 留空表示不输出。后台若启用 CSP，须允许内联 style/script 以及主题内嵌 data:image 图标：
+            // default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'
             'csp_report_only' => '',
             'csp' => '',
+            'cors_origins' => '',
+        ],
+        // CDN/Storage 等 secret_ref 主密钥（生产必须为高强度随机串；仅 ENV_TEST/DEV 可空）
+        'secret_ref_key' => '',
+        // 跨实例配置包 AEAD（TASK-P1D-003 / DEC-021）；默认关闭 fail-closed
+        'config_envelope' => [
+            'enabled' => false,
+            'instance_id' => 'replace-instance-id',
+            'active_kid' => '',
+            // kid => ['status' => 'active|decrypt_only|revoked', 'public_key_base64' => '', 'secret_key_base64' => '']
+            'keys' => [
+            ],
+        ],
+        // Scope HTTP 限流（TASK-P1D-004-RATE）；默认关闭
+        'scope_rate_limit' => [
+            'enabled' => false,
+            'bucket' => 'http',
+            'limit' => 120,
+            'window' => 60,
         ],
         'view' => [
             // 兼容当前主题行为；后续可逐步收紧为 none / prefix 等策略

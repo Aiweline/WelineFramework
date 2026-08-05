@@ -13,8 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Payment',
     __DIR__,
-    '1.0.2',
+    '1.8.5',
     '支付管理模块，提供统一的支付接口标准，支持第三方支付供应商通过模块扩展机制接入',
-    ['Weline_Framework', 'Weline_Backend', 'Weline_Frontend', 'Weline_I18n', 'Weline_Hook', 'Weline_Theme', 'Weline_Eav', 'Weline_SystemConfig']
+    ['Weline_Framework', 'Weline_Backend', 'Weline_Frontend', 'Weline_I18n', 'Weline_Hook', 'Weline_Theme', 'Weline_Eav', 'Weline_Inventory', 'Weline_Queue', 'Weline_SystemConfig']
 );
-

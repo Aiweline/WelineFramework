@@ -45,6 +45,9 @@ final class SupervisorServer
 
     private string $helloAuthSecret = '';
 
+    /** @var null|callable(array<string,mixed>):string */
+    private mixed $helloAuthSecretResolver = null;
+
     /** @var array<string, int> */
     private array $usedHelloAuthNonces = [];
 
@@ -134,6 +137,18 @@ final class SupervisorServer
     public function setHelloAuthSecret(string $secret): void
     {
         $this->helloAuthSecret = \trim($secret);
+    }
+
+    /**
+     * Resolve a subject-specific secret only after the complete HELLO tuple is
+     * available. When configured, an empty/failed resolution is fail-closed
+     * and never falls back to the generation-wide compatibility secret.
+     *
+     * @param callable(array<string,mixed>):string $resolver
+     */
+    public function setHelloAuthSecretResolver(callable $resolver): void
+    {
+        $this->helloAuthSecretResolver = $resolver;
     }
 
     public function closeSessionById(int $sessionId, string $disconnectReason = 'server_close_client'): void
@@ -606,10 +621,21 @@ final class SupervisorServer
     /** @param array<string, mixed> $message */
     private function authenticateHello(array $message): bool
     {
-        if ($this->helloAuthSecret === '') {
+        $secret = $this->helloAuthSecret;
+        if ($this->helloAuthSecretResolver !== null) {
+            try {
+                $secret = \trim((string)($this->helloAuthSecretResolver)($message));
+            } catch (\Throwable) {
+                return false;
+            }
+            if ($secret === '') {
+                return false;
+            }
+        }
+        if ($secret === '') {
             return true;
         }
-        if (!SupervisorMessage::verifyHelloAuthentication($message, $this->helloAuthSecret)) {
+        if (!SupervisorMessage::verifyHelloAuthentication($message, $secret)) {
             return false;
         }
 

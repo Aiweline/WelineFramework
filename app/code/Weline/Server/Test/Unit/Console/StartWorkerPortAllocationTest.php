@@ -5,6 +5,8 @@ namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
+use Weline\Server\Service\MasterLeaseManager;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
@@ -221,6 +223,8 @@ final class StartWorkerPortAllocationTest extends TestCase
                 'schema_version' => RuntimeSelection::ENDPOINT_SCHEMA_VERSION,
                 'name' => 'long-running',
                 'master_pid' => 43210,
+                'master_epoch' => 7,
+                'control_port' => 30210,
                 'worker_port' => 19983,
                 'count' => 4,
                 'runtime_selection' => $this->runtimeSelection()->toArray(),
@@ -228,8 +232,38 @@ final class StartWorkerPortAllocationTest extends TestCase
             ], JSON_PRETTY_PRINT),
         );
 
-        $start = new class($runtimeDir) extends Start {
-            public function __construct(private readonly string $runtimeDir)
+        $leaseManager = new class extends MasterLeaseManager {
+            public function validateRunningLease(
+                string $path,
+                string $expectedInstance = '',
+                int $expectedMasterPid = 0,
+                int $expectedEpoch = 0,
+                string $expectedToken = '',
+                int $expectedControlPort = 0,
+                bool $requireManagedName = false,
+            ): array {
+                unset(
+                    $path,
+                    $expectedToken,
+                    $requireManagedName,
+                );
+                $authorized = $expectedInstance === 'long-running'
+                    && $expectedMasterPid === 43210
+                    && $expectedEpoch === 7
+                    && $expectedControlPort === 30210;
+                return [
+                    'authorized' => $authorized,
+                    'veto' => $authorized,
+                    'foreign_pid_namespace' => false,
+                    'lease' => null,
+                ];
+            }
+        };
+        $start = new class($runtimeDir, $leaseManager) extends Start {
+            public function __construct(
+                private readonly string $runtimeDir,
+                private readonly MasterLeaseManager $leaseManager,
+            )
             {
             }
 
@@ -244,11 +278,9 @@ final class StartWorkerPortAllocationTest extends TestCase
                 return $this->runtimeDir . DIRECTORY_SEPARATOR;
             }
 
-            protected function isRecordedMasterReservationOwnerRunning(
-                string $instanceName,
-                int $masterPid,
-            ): bool {
-                return $instanceName === 'long-running' && $masterPid === 43210;
+            protected function getMasterLeaseManager(): MasterLeaseManager
+            {
+                return $this->leaseManager;
             }
         };
 
@@ -256,6 +288,80 @@ final class StartWorkerPortAllocationTest extends TestCase
             19987,
             $this->invokeProtected($start, 'findAvailableWorkerPortBase', 19982, 4, 20, 'new-instance'),
         );
+    }
+
+    public function testWallClockAndFileAgeCannotAuthorizeStartupReservation(): void
+    {
+        $start = new class extends Start {
+            public function active(array $data): bool
+            {
+                return $this->isWorkerPortReservationActive($data, 'legacy.json');
+            }
+        };
+
+        self::assertFalse($start->active([
+            'name' => 'legacy',
+            'worker_port' => 19983,
+            'master_pid' => 0,
+            'pid' => \getmypid(),
+            'startup_phase' => 'bootstrapping',
+            'lifecycle_state' => 'starting',
+            'started_timestamp' => \time(),
+        ]));
+    }
+
+    public function testBootBoundMonotonicLiveStarterKeepsWorkerRangeReserved(): void
+    {
+        $pid = (int)\getmypid();
+        $now = 100.0;
+        $bootId = \str_repeat('a', 64);
+        $namespace = PHP_OS_FAMILY === 'Linux' ? 'pid:[123]' : '';
+        $identity = new MasterLeaseRuntimeIdentity(
+            static fn(): string => $bootId,
+            static fn(): float => $now,
+            static fn(int $candidate): array => [
+                'exists' => $candidate === $pid,
+                'name' => 'php',
+                'command' => 'php bin/w server:start startup',
+                'start_time' => 'fixed-startup-birth',
+            ],
+            static fn(): bool => true,
+            static fn(int $candidate): ?string => $candidate > 0 ? $namespace : null,
+        );
+        $owner = $identity->captureOwner($pid);
+        $start = new class($identity) extends Start {
+            public function __construct(private readonly MasterLeaseRuntimeIdentity $identity)
+            {
+            }
+
+            public function active(array $data): bool
+            {
+                return $this->isWorkerPortReservationActive($data, 'startup.json');
+            }
+
+            protected function getMasterLeaseRuntimeIdentity(): MasterLeaseRuntimeIdentity
+            {
+                return $this->identity;
+            }
+
+            protected function isStartLockHeldBy(string $instanceName, int $expectedPid): bool
+            {
+                return $instanceName === 'startup' && $expectedPid === \getmypid();
+            }
+        };
+
+        self::assertTrue($start->active([
+            'name' => 'startup',
+            'worker_port' => 19983,
+            'master_pid' => 0,
+            'pid' => $pid,
+            'startup_phase' => 'bootstrapping',
+            'lifecycle_state' => 'starting',
+            'started_monotonic' => 95.0,
+            'startup_host_boot_id' => $bootId,
+            'startup_process_birth' => $owner['birth'],
+            'startup_pid_namespace_id' => $owner['pid_namespace_id'],
+        ]));
     }
 
     public function testFailedStartupReleasesSharedStateConsumerTokens(): void

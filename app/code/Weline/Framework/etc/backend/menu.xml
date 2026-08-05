@@ -18,4 +18,34 @@
           parent="Weline_Framework::system_service_group"
           icon="mdi mdi-chip" 
           order="90"/>
+
+    <menu source="Weline_Framework::event_delivery_view"
+          name="event_delivery_view"
+          title="异步事件死信运维"
+          action="weline_framework/backend/event-delivery"
+          parent="Weline_Framework::system_service_group"
+          icon="mdi mdi-email-alert-outline"
+          order="100">
+        <menu source="Weline_Framework::event_delivery_replay"
+              name="event_delivery_replay"
+              title="重放异步事件死信"
+              action=""
+              icon="mdi mdi-replay"
+              order="10"/>
+        <menu source="Weline_Framework::event_delivery_all_websites"
+              name="event_delivery_all_websites"
+              title="查看全部网站异步事件"
+              action=""
+              icon="mdi mdi-web"
+              order="20"/>
+    </menu>
+
+    <!-- 开发者 → 开发工作台：测试管理 -->
+    <menu source="Weline_Framework::test:view"
+          name="test_view"
+          title="测试管理"
+          action="weline_framework/backend/test"
+          parent="Weline_Backend::dev_workspace"
+          icon="mdi mdi-flask-outline"
+          order="50"/>
 </menus>

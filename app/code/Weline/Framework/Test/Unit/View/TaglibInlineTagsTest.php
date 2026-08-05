@@ -6,8 +6,7 @@
 
 namespace Weline\Framework\Test\Unit\View;
 
-use Weline\Framework\App\Env;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
@@ -137,7 +136,7 @@ class TaglibInlineTagsTest extends TestCore
     }
 
     /**
-     * <theme:css> 标签必须输出正确格式的 href：开发 /Vendor/Module/view/theme/...，生产 /static/{theme}/Vendor/Module/view/theme/...
+     * <theme:css> 必须保留运行期主题解析，避免把某个 website/theme 的 URL 烘焙进共享编译缓存。
      */
     public function testThemeCssTagOutputFormat(): void
     {
@@ -146,31 +145,22 @@ class TaglibInlineTagsTest extends TestCore
 
         $this->assertStringNotContainsString('<theme:css>', $result, '原始 <theme:css> 标签应被替换');
         $this->assertStringContainsString('<link', $result, '应输出 link 标签');
-        $this->assertMatchesRegularExpression(
-            "#href='([^']+)'#",
+        $this->assertStringContainsString(
+            '$__themeCssHref = $this->fetchTagSource(',
             $result,
-            '应包含 href 属性'
+            '主题 CSS URL 应在渲染期按当前上下文解析'
         );
-        preg_match("#href='([^']+)'#", $result, $m);
-        $href = $m[1];
-        $pathOnly = preg_replace('#\?v=.*$#', '', $href);
-        if (defined('DEV') && DEV) {
-            $this->assertStringContainsString(
-                '/Weline/Theme/view/theme/',
-                $pathOnly,
-                '开发环境 theme:css href 应包含 /Weline/Theme/view/theme/'
-            );
-            $this->assertStringContainsString('frontend/assets/css/theme.css', $pathOnly, '路径应包含主题相对路径');
-        } else {
-            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
-            $theme = str_replace('\\', '/', $theme);
-            $this->assertStringStartsWith('/static/' . $theme . '/', $pathOnly, '生产环境 theme:css href 应以 /static/{theme}/ 开头');
-            $this->assertStringContainsString('Weline/Theme/view/theme/', $pathOnly, '应包含模块 theme 路径');
-        }
+        $this->assertStringContainsString(
+            "htmlspecialchars((string)\$__themeCssHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')",
+            $result,
+            '运行期 href 必须进行 HTML 属性转义'
+        );
+        $this->assertStringContainsString('frontend/assets/css/theme.css', $result);
+        $this->assertStringContainsString('rel="stylesheet"', $result);
     }
 
     /**
-     * <theme:js> 标签必须输出正确格式的 src：开发 /Vendor/Module/view/theme/...，生产 /static/{theme}/Vendor/Module/view/theme/...
+     * <theme:js> 必须保留运行期主题解析，避免把某个 website/theme 的 URL 烘焙进共享编译缓存。
      */
     public function testThemeJsTagOutputFormat(): void
     {
@@ -179,26 +169,17 @@ class TaglibInlineTagsTest extends TestCore
 
         $this->assertStringNotContainsString('<theme:js>', $result, '原始 <theme:js> 标签应被替换');
         $this->assertStringContainsString('<script', $result, '应输出 script 标签');
-        $this->assertMatchesRegularExpression(
-            "#src='([^']+)'#",
+        $this->assertStringContainsString(
+            '$__themeJsSrc = $this->fetchTagSource(',
             $result,
-            '应包含 src 属性'
+            '主题 JS URL 应在渲染期按当前上下文解析'
         );
-        preg_match("#src='([^']+)'#", $result, $m);
-        $src = $m[1];
-        $pathOnly = preg_replace('#\?v=.*$#', '', $src);
-        if (defined('DEV') && DEV) {
-            $this->assertStringContainsString(
-                '/Weline/Theme/view/theme/',
-                $pathOnly,
-                '开发环境 theme:js src 应包含 /Weline/Theme/view/theme/'
-            );
-            $this->assertStringContainsString('frontend/assets/js/theme.js', $pathOnly, '路径应包含主题相对路径');
-        } else {
-            $theme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'];
-            $theme = str_replace('\\', '/', $theme);
-            $this->assertStringStartsWith('/static/' . $theme . '/', $pathOnly, '生产环境 theme:js src 应以 /static/{theme}/ 开头');
-            $this->assertStringContainsString('Weline/Theme/view/theme/', $pathOnly, '应包含模块 theme 路径');
-        }
+        $this->assertStringContainsString(
+            "htmlspecialchars((string)\$__themeJsSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')",
+            $result,
+            '运行期 src 必须进行 HTML 属性转义'
+        );
+        $this->assertStringContainsString('frontend/assets/js/theme.js', $result);
+        $this->assertStringContainsString('</script>', $result);
     }
 }

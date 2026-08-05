@@ -150,7 +150,7 @@ document.getElementById('feed-form').addEventListener('submit', function(e) {
     
     var feedUrl = '<?= $this->getUrl('geo/backend/feed/save') ?>';
     var feedOpts = { method: 'POST', body: formData };
-    window.Weline.Api.request(feedUrl, feedOpts)
+    bqAdmin['geo'](feedUrl, feedOpts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {

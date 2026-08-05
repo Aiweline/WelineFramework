@@ -34,7 +34,6 @@ $options = [
     'epoch' => '0',
     'launch-id' => '',
     'master-lease-file' => '',
-    'master-token' => '',
     'name' => '',
 ];
 $upstreams = [];
@@ -48,6 +47,9 @@ foreach ($argv as $argument) {
         continue;
     }
     [$name, $value] = \explode('=', \substr($argument, 2), 2);
+    if ($name === 'master-token') {
+        throw new \RuntimeException('Protocol Edge --master-token is forbidden.');
+    }
     if ($name === 'upstream') {
         $value = \trim($value);
         if ($value !== '') {
@@ -106,7 +108,8 @@ $masterPid = (int)$options['master-pid'];
 $epoch = (int)$options['epoch'];
 $launchId = (string)$options['launch-id'];
 $masterLeaseFile = (string)$options['master-lease-file'];
-$masterToken = (string)$options['master-token'];
+$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
+    ->resolveProtectedCredentialFromArguments($argv, $instanceName, $masterPid, $epoch);
 
 ErrorBootstrap::init('ProtocolEdge:' . $publicPort . '@' . $instanceName, [
     'instance' => $instanceName,

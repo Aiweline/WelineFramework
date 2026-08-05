@@ -8,6 +8,7 @@ use Weline\Backend\Api\Auth\BackendUserContext;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Backend\Api\Runtime\BackendWarmupContext;
 use Weline\Backend\Model\BackendUser;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
@@ -15,9 +16,15 @@ final class BackendUserContextProvider implements BackendUserContextProviderInte
 {
     public function current(): ?BackendUserContext
     {
-        $warmupUser = BackendWarmupContext::currentUser();
-        if ($warmupUser instanceof BackendUser) {
-            return $this->map($warmupUser);
+        // A warmup identity is valid only on the explicitly marked internal
+        // warmup request. Never let a stale RequestContext value outrank the
+        // authenticated browser session in a long-running WLS worker.
+        $request = ObjectManager::getInstance(Request::class);
+        if (BackendWarmupContext::isInternalWarmupRequest($request)) {
+            $warmupUser = BackendWarmupContext::currentUser();
+            if ($warmupUser instanceof BackendUser) {
+                return $this->map($warmupUser);
+            }
         }
 
         $user = SessionFactory::getInstance()->createBackendSession()->getUser();

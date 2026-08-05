@@ -9,31 +9,42 @@ use ReflectionClass;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
+use Weline\Framework\Http\NoRouterException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\StorefrontNavigationScope;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Observer\DetectWebsite;
+use Weline\Websites\Service\Exception\ScopeResolutionException;
+use Weline\Websites\Service\ScopeResolver;
 
+/** TEST-P1A-03 and TEST-P1A-04: canonical scope resolution and localization URL ordering. */
 final class DetectWebsiteTest extends TestCase
 {
     /**
      * @var array<string, mixed>
      */
     private array $objectManagerInstancesBackup = [];
+    private DetectWebsiteScopeResolverSpy $scopeResolver;
 
     protected function setUp(): void
     {
         parent::setUp();
         DetectWebsite::clearProcessCache();
         $this->objectManagerInstancesBackup = $this->getObjectManagerInstances();
+        $this->scopeResolver = new DetectWebsiteScopeResolverSpy();
+        RequestContext::resetWelineVars();
         RequestContext::init();
+        $this->setObjectManagerInstances($this->objectManagerInstancesBackup);
     }
 
     protected function tearDown(): void
     {
-        $this->setObjectManagerInstances($this->objectManagerInstancesBackup);
+        $this->setObjectManagerInstances($this->objectManagerInstancesBackup, false);
         DetectWebsite::clearProcessCache();
+        RequestContext::resetWelineVars();
         RequestContext::init();
         parent::tearDown();
     }
@@ -169,6 +180,299 @@ final class DetectWebsiteTest extends TestCase
         $this->assertNull($matchEvent->getData('website_id'));
     }
 
+    public function testWebsiteUrlRequiresACompletePathSegmentBoundary(): void
+    {
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub([[
+            'website_id' => 8,
+            'code' => 'shop',
+            'url' => 'https://example.com/shop',
+            'default_currency' => 'USD',
+            'default_language' => 'en_US',
+            'default_timezone' => 'UTC',
+        ]]);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([]);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        self::assertNull($observer->resolveWebsiteContext('https://example.com/shopper'));
+        self::assertSame(8, $observer->resolveWebsiteContext('https://example.com/shop')?->websiteId);
+        self::assertSame(8, $observer->resolveWebsiteContext('https://example.com/shop/order')?->websiteId);
+    }
+
+    public function testWebsiteUrlUsesLongestCompletePathWithinTheSameHostRank(): void
+    {
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub([
+            [
+                'website_id' => 8,
+                'code' => 'root',
+                'url' => 'https://example.com/',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+            [
+                'website_id' => 9,
+                'code' => 'shop',
+                'url' => 'https://example.com/shop',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+        ]);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([]);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        self::assertSame(9, $observer->resolveWebsiteContext('https://example.com/shop/order')?->websiteId);
+        self::assertSame(8, $observer->resolveWebsiteContext('https://example.com/shopper')?->websiteId);
+    }
+
+    public function testExactHostOutranksSingleWwwAliasBeforePathSpecificity(): void
+    {
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub([
+            [
+                'website_id' => 8,
+                'code' => 'exact',
+                'url' => 'https://www.example.com/',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+            [
+                'website_id' => 9,
+                'code' => 'alias-shop',
+                'url' => 'https://example.com/shop',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+        ]);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([]);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        self::assertSame(8, $observer->resolveWebsiteContext('https://www.example.com/shop/order')?->websiteId);
+    }
+
+    public function testWebsiteDomainRequiresACompletePathSegmentBoundary(): void
+    {
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub([[
+            'website_id' => 9,
+            'code' => 'domain-shop',
+            'url' => 'https://canonical.example.test',
+            'default_currency' => 'USD',
+            'default_language' => 'en_US',
+            'default_timezone' => 'UTC',
+        ]]);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([[
+            WebsiteDomain::schema_fields_WEBSITE_ID => 9,
+            WebsiteDomain::schema_fields_DOMAIN => 'example.com',
+            WebsiteDomain::schema_fields_SUB_PATH => 'shop',
+            WebsiteDomain::schema_fields_STATUS => WebsiteDomain::STATUS_ACTIVE,
+        ]]);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        self::assertNull($observer->resolveWebsiteContext('https://example.com/shopper'));
+        self::assertSame(9, $observer->resolveWebsiteContext('https://example.com/shop/order')?->websiteId);
+    }
+
+    public function testEqualPriorityWebsiteRoutesFailClosed(): void
+    {
+        $websiteRows = [];
+        foreach ([[10, 'shop-a'], [11, 'shop-b']] as [$websiteId, $code]) {
+            $websiteRows[] = [
+                'website_id' => $websiteId,
+                'code' => $code,
+                'url' => 'https://example.com/shop',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ];
+        }
+
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub($websiteRows);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([]);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        try {
+            $observer->resolveWebsiteContext('https://example.com/shop/order');
+            self::fail('Equal-priority Website routes must be rejected.');
+        } catch (ScopeResolutionException $exception) {
+            self::assertSame('website_route_ambiguous', $exception->reason);
+            self::assertSame(409, $exception->httpStatus);
+        }
+    }
+
+    public function testCanonicallyEquivalentWebsitePathsFailClosed(): void
+    {
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub([
+            [
+                'website_id' => 12,
+                'code' => 'plain-shop',
+                'url' => 'https://example.com/shop',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+            [
+                'website_id' => 13,
+                'code' => 'encoded-shop',
+                'url' => 'https://example.com/%73hop',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+        ]);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([]);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        $this->assertAmbiguousWebsiteRoute(
+            static fn() => $observer->resolveWebsiteContext('https://example.com/shop/item'),
+        );
+    }
+
+    public function testEqualPriorityDomainAndWebsiteUrlConflictFailClosed(): void
+    {
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub([
+            [
+                'website_id' => 14,
+                'code' => 'url-shop',
+                'url' => 'https://example.com/shop',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+            [
+                'website_id' => 15,
+                'code' => 'domain-shop',
+                'url' => 'https://canonical.example.test',
+                'default_currency' => 'USD',
+                'default_language' => 'en_US',
+                'default_timezone' => 'UTC',
+            ],
+        ]);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub([[
+            WebsiteDomain::schema_fields_WEBSITE_ID => 15,
+            WebsiteDomain::schema_fields_DOMAIN => 'example.com',
+            WebsiteDomain::schema_fields_SUB_PATH => 'shop',
+            WebsiteDomain::schema_fields_STATUS => WebsiteDomain::STATUS_ACTIVE,
+        ]]);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        $this->assertAmbiguousWebsiteRoute(
+            static fn() => $observer->resolveWebsiteContext('https://example.com/shop/item'),
+        );
+    }
+
+    public function testProcessSiteInstallsScopeOnceAndPublishesMatchingMetadata(): void
+    {
+        $site = new DetectWebsiteRowsStub([]);
+        $site->setData([
+            Website::schema_fields_ID => 0,
+            Website::schema_fields_CODE => 'default',
+            Website::schema_fields_NAME => '系统默认站点',
+            Website::schema_fields_URL => 'https://shop.example.test',
+            Website::schema_fields_DEFAULT_CURRENCY => 'USD',
+            Website::schema_fields_DEFAULT_LANGUAGE => 'en_US',
+            Website::schema_fields_DEFAULT_TIMEZONE => 'UTC',
+        ]);
+        $observer = new DetectWebsite();
+        $event = new Event(['data' => new DataObject([
+            'url' => 'https://shop.example.test/catalog?__store=default&__channel=default',
+        ])]);
+
+        $observer->processSite($event, $site);
+        $firstMeta = $event->getData('scope_meta');
+        $observer->processSite($event, $site);
+
+        self::assertSame(1, $this->scopeResolver->calls);
+        self::assertSame($firstMeta, $event->getData('scope_meta'));
+        self::assertSame(RequestContext::scopeMetadata(), $event->getData('scope_meta'));
+        self::assertSame(0, $event->getData('scope_meta')['website_id'] ?? null);
+        self::assertSame('default.default.default', \Weline\Framework\Runtime\ScopeContext::getScope());
+    }
+
+    public function testProcessSiteStripsEitherLocalizationOrderBeforeStoreResolution(): void
+    {
+        $site = new DetectWebsiteRowsStub([]);
+        $site->setData([
+            Website::schema_fields_ID => 17,
+            Website::schema_fields_CODE => 'localized-shop',
+            Website::schema_fields_NAME => 'Localized shop',
+            Website::schema_fields_URL => 'https://shop.example.test/site',
+            Website::schema_fields_DEFAULT_CURRENCY => 'CNY',
+            Website::schema_fields_DEFAULT_LANGUAGE => 'zh_Hans_CN',
+            Website::schema_fields_DEFAULT_TIMEZONE => 'Asia/Shanghai',
+        ]);
+        foreach (['en_US/USD', 'USD/en_US'] as $localizationOrder) {
+            RequestContext::resetWelineVars();
+            RequestContext::init();
+            RequestContext::setWelineUserCurrency('USD');
+            RequestContext::setWelineUserLang('en_US');
+            $event = new Event(['data' => new DataObject([
+                'url' => 'https://shop.example.test/site/' . $localizationOrder . '/store/item?__store=default',
+            ])]);
+
+            (new DetectWebsite())->processSite($event, $site);
+
+            self::assertSame(
+                'https://shop.example.test/site/store/item?__store=default',
+                $this->scopeResolver->lastTrustedRequestUrl,
+            );
+            self::assertSame('USD', $event->getData('scope_meta')['currency'] ?? null);
+            self::assertSame('en_US', $event->getData('scope_meta')['locale'] ?? null);
+            self::assertSame('/store/item', $event->getData('scope_route_path'));
+        }
+    }
+
+    public function testProcessSiteRejectsMissingWebsiteIdInsteadOfCoercingItToZero(): void
+    {
+        $site = new DetectWebsiteRowsStub([]);
+        $site->setData([
+            Website::schema_fields_CODE => 'default',
+            Website::schema_fields_NAME => '损坏站点',
+            Website::schema_fields_URL => 'https://shop.example.test',
+            Website::schema_fields_DEFAULT_CURRENCY => 'USD',
+            Website::schema_fields_DEFAULT_LANGUAGE => 'en_US',
+            Website::schema_fields_DEFAULT_TIMEZONE => 'UTC',
+        ]);
+        $event = new Event(['data' => new DataObject(['url' => 'https://shop.example.test/'])]);
+
+        try {
+            (new DetectWebsite())->processSite($event, $site);
+            self::fail('Missing website_id must terminate the request.');
+        } catch (NoRouterException $exception) {
+            self::assertSame(503, $exception->getCode());
+            self::assertNull(RequestContext::scopeIdentity());
+            self::assertSame(0, $this->scopeResolver->calls);
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -186,8 +490,11 @@ final class DetectWebsiteTest extends TestCase
     /**
      * @param array<string, mixed> $instances
      */
-    private function setObjectManagerInstances(array $instances): void
+    private function setObjectManagerInstances(array $instances, bool $withScopeResolver = true): void
     {
+        if ($withScopeResolver) {
+            $instances[ScopeResolver::class] = $this->scopeResolver;
+        }
         $reflection = new ReflectionClass(ObjectManager::class);
         $property = $reflection->getProperty('instances');
         $property->setAccessible(true);
@@ -200,6 +507,17 @@ final class DetectWebsiteTest extends TestCase
         $property = $reflection->getProperty('cache');
         $property->setAccessible(true);
         $property->setValue($observer, $cache);
+    }
+
+    private function assertAmbiguousWebsiteRoute(callable $operation): void
+    {
+        try {
+            $operation();
+            self::fail('Equal-priority Website routes must be rejected.');
+        } catch (ScopeResolutionException $exception) {
+            self::assertSame('website_route_ambiguous', $exception->reason);
+            self::assertSame(409, $exception->httpStatus);
+        }
     }
 }
 
@@ -396,6 +714,16 @@ final class DetectWebsiteRowsStub extends Website
         return $this->data[$key] ?? null;
     }
 
+    public function hasData(string $key = ''): bool
+    {
+        return $key === '' ? $this->data !== [] : \array_key_exists($key, $this->data);
+    }
+
+    public function getName(): string
+    {
+        return (string)($this->data[Website::schema_fields_NAME] ?? '');
+    }
+
     public function getUrl(): string
     {
         return (string)($this->data['url'] ?? '');
@@ -424,6 +752,43 @@ final class DetectWebsiteRowsStub extends Website
     public function getDefaultTimezone(): string
     {
         return (string)($this->data['default_timezone'] ?? 'UTC');
+    }
+}
+
+final class DetectWebsiteScopeResolverSpy extends ScopeResolver
+{
+    public int $calls = 0;
+    public string $lastTrustedRequestUrl = '';
+
+    public function __construct()
+    {
+    }
+
+    public function resolve(
+        int $websiteId,
+        string $websiteCode,
+        string $trustedRequestUrl,
+        array $params = [],
+        ?string $defaultRoutePath = null,
+    ): StorefrontNavigationScope {
+        $this->calls++;
+        $this->lastTrustedRequestUrl = $trustedRequestUrl;
+        RequestContext::setWelineStoreId(11);
+        RequestContext::setWelineStoreCode('default');
+        RequestContext::setWelineStoreMode('normal');
+        RequestContext::setWelineChannelId(21);
+        RequestContext::setWelineChannelCode('default');
+        $identity = ScopeIdentity::channel(
+            $websiteId,
+            $websiteCode,
+            'default',
+            'default',
+            ScopeIdentity::MODE_NORMAL,
+        );
+        RequestContext::installScopeIdentity($identity);
+        RequestContext::setStorefrontRoutePath($defaultRoutePath ?? '/');
+
+        return new StorefrontNavigationScope($identity, $defaultRoutePath ?? '/');
     }
 }
 

@@ -16,12 +16,31 @@ File: Main Js File
         $("#side-menu").metisMenu();
     }
 
+    function persistVerticalMenuCollapsedState() {
+        if ($(window).width() < 992) {
+            return;
+        }
+        if (typeof setThemeConfig !== 'function' && typeof window.setThemeConfig !== 'function') {
+            return;
+        }
+        var collapsed = $('body').hasClass('vertical-collpsed');
+        var save = typeof window.setThemeConfig === 'function' ? window.setThemeConfig : setThemeConfig;
+        save({
+            layouts: {
+                'data-keep-enlarged': collapsed ? 'true' : '',
+                'class': collapsed ? 'vertical-collpsed' : ''
+            },
+            'icon-sidebar': collapsed
+        }, false);
+    }
+
     function initLeftMenuCollapse() {
         $('#vertical-menu-btn').on('click', function (event) {
             event.preventDefault();
             $('body').toggleClass('sidebar-enable');
             if ($(window).width() >= 992) {
                 $('body').toggleClass('vertical-collpsed');
+                persistVerticalMenuCollapsedState();
             } else {
                 $('body').removeClass('vertical-collpsed');
             }

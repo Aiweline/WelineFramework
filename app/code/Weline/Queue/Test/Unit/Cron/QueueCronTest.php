@@ -16,7 +16,7 @@ final class QueueCronTest extends TestCase
         self::assertStringContainsString('hasQueueDoneMarker($output, $queue)', $reconcileSource);
         self::assertStringContainsString("str_contains(\$haystack, 'QUEUE_DONE')", $source);
         self::assertLessThan(
-            \strpos($reconcileSource, 'setStatus($queue::status_error)'),
+            \strpos($reconcileSource, 'Queue::schema_fields_status => Queue::status_error'),
             \strpos($reconcileSource, 'hasQueueDoneMarker($output, $queue)'),
             'QUEUE_DONE marker must be checked before marking a reconciled queue as error.'
         );
@@ -28,6 +28,20 @@ final class QueueCronTest extends TestCase
 
         self::assertStringContainsString('QueueDispatchService', $source);
         self::assertStringContainsString('$this->queueDispatchService->dispatchPendingAutoQueues();', $source);
+        self::assertStringContainsString('异步事件投递维护失败，已跳过并继续消费普通队列', $source);
+        self::assertMatchesRegularExpression(
+            '/asyncEventQueueReconciler->run\(\);\s*\} catch \(\\\\Throwable/',
+            $source
+        );
+        $dispatchOffset = \strpos($source, '$this->queueDispatchService->dispatchPendingAutoQueues();');
+        $reconcileOffset = \strpos($source, '$this->asyncEventQueueReconciler->run();');
+        self::assertNotFalse($dispatchOffset);
+        self::assertNotFalse($reconcileOffset);
+        self::assertLessThan(
+            $dispatchOffset,
+            $reconcileOffset,
+            'Async reconcile must stay before ordinary queue dispatch.'
+        );
     }
 
     private function extractPrivateMethodSource(string $source, string $methodName): string

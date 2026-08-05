@@ -13,6 +13,7 @@ namespace Weline\Widget\Taglib;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
 use Weline\Framework\Taglib\TaglibInterface;
@@ -31,16 +32,8 @@ use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;
  */
 class Widget implements TaglibInterface
 {
-    /**
-     * 静态缓存 WidgetData 实例，避免每次调用都通过 ObjectManager 获取
-     */
-    private static ?WidgetData $widgetDataInstance = null;
-    
-    /**
-     * Widget 渲染结果缓存（仅在同一请求内有效）
-     * Key: md5(type + name + serialized params)
-     */
-    private static array $renderCache = [];
+    private const REQUEST_STATE_KEY = 'widget.taglib.render_state.v1';
+    private const MAX_RENDER_DEPTH = 10;
     
     /**
      * 标签名称
@@ -125,10 +118,8 @@ class Widget implements TaglibInterface
 
             try {
                 // 运行时只从注册表读取，不执行扫描
-                if (self::$widgetDataInstance === null) {
-                    self::$widgetDataInstance = ObjectManager::getInstance(WidgetData::class);
-                }
-                $widgetData = self::$widgetDataInstance;
+                /** @var WidgetData $widgetData */
+                $widgetData = ObjectManager::getInstance(WidgetData::class);
                 
                 // 验证部件类型
                 if (!$widgetData->isValidType($type)) {
@@ -195,8 +186,9 @@ class Widget implements TaglibInterface
             $cacheKey = md5($type . '|' . $name . '|' . $templatePath . '|' . serialize($params));
             
             // 检查缓存（form_key 不能缓存，否则 key 不对）
-            if (isset(self::$renderCache[$cacheKey])) {
-                $cached = self::$renderCache[$cacheKey];
+            $renderCache = self::renderCache();
+            if (isset($renderCache[$cacheKey])) {
+                $cached = $renderCache[$cacheKey];
                 if (!str_contains($cached, 'name="form_key"')) {
                     return $cached;
                 }
@@ -218,7 +210,7 @@ class Widget implements TaglibInterface
         if (!empty($template)) {
             $result = self::renderTemplate($template, $params);
             if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
-                self::$renderCache[$cacheKey] = $result;
+                self::cacheRender($cacheKey, $result);
             }
             return $result;
         }
@@ -228,7 +220,7 @@ class Widget implements TaglibInterface
         if (!empty($widgetTemplate)) {
             $result = self::renderTemplate($widgetTemplate, $params);
             if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
-                self::$renderCache[$cacheKey] = $result;
+                self::cacheRender($cacheKey, $result);
             }
             return $result;
         }
@@ -238,7 +230,7 @@ class Widget implements TaglibInterface
         if ($widgetTemplateContent !== '') {
             $result = self::renderRuntimeTemplateContent($widgetTemplateContent, $params);
             if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
-                self::$renderCache[$cacheKey] = $result;
+                self::cacheRender($cacheKey, $result);
             }
             return $result;
         }
@@ -254,7 +246,7 @@ class Widget implements TaglibInterface
                 $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
                 $result = self::renderTemplate($templatePath, $params);
                 if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
-                    self::$renderCache[$cacheKey] = $result;
+                    self::cacheRender($cacheKey, $result);
                 }
                 return $result;
             }
@@ -319,25 +311,22 @@ class Widget implements TaglibInterface
      */
     private static function renderTemplate(string $templatePath, array $params): string
     {
-        // 递归保护：防止无限递归
-        static $renderDepth = 0;
-        static $maxDepth = 10;
-        static $renderingTemplates = []; // 跟踪正在渲染的模板，防止循环引用
-        
-        if ($renderDepth >= $maxDepth) {
+        $state = self::requestState();
+        if ($state['render_depth'] >= self::MAX_RENDER_DEPTH) {
             w_log_error("Widget 模板渲染递归深度超限: {$templatePath}", [], 'WidgetTaglib');
             return '<!-- Widget 错误: 模板渲染递归深度超限 -->';
         }
         
         // 检查循环引用
         $templateKey = md5($templatePath . serialize($params));
-        if (isset($renderingTemplates[$templateKey])) {
+        if (isset($state['rendering_templates'][$templateKey])) {
             w_log_error("Widget 模板渲染检测到循环引用: {$templatePath}", [], 'WidgetTaglib');
             return '<!-- Widget 错误: 模板渲染循环引用 -->';
         }
         
-        $renderDepth++;
-        $renderingTemplates[$templateKey] = true;
+        $state['render_depth']++;
+        $state['rendering_templates'][$templateKey] = true;
+        self::storeRequestState($state);
         try {
             /** @var Template $template */
             $template = ObjectManager::getInstance(Template::class);
@@ -349,8 +338,10 @@ class Widget implements TaglibInterface
             w_log_error("Widget 模板渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
             return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
         } finally {
-            $renderDepth = max(0, $renderDepth - 1);
-            unset($renderingTemplates[$templateKey]);
+            $state = self::requestState();
+            $state['render_depth'] = max(0, $state['render_depth'] - 1);
+            unset($state['rendering_templates'][$templateKey]);
+            self::storeRequestState($state);
         }
     }
 
@@ -359,7 +350,48 @@ class Widget implements TaglibInterface
      */
     public static function resetRequestState(): void
     {
-        self::$renderCache = [];
+        RequestContext::remove(self::REQUEST_STATE_KEY);
+    }
+
+    /** @return array<string, string> */
+    private static function renderCache(): array
+    {
+        return self::requestState()['render_cache'];
+    }
+
+    private static function cacheRender(string $cacheKey, string $html): void
+    {
+        $state = self::requestState();
+        $state['render_cache'][$cacheKey] = $html;
+        self::storeRequestState($state);
+    }
+
+    /**
+     * @return array{
+     *     render_cache: array<string, string>,
+     *     render_depth: int,
+     *     rendering_templates: array<string, bool>
+     * }
+     */
+    private static function requestState(): array
+    {
+        $state = RequestContext::get(self::REQUEST_STATE_KEY, []);
+        if (!is_array($state)) {
+            $state = [];
+        }
+
+        return [
+            'render_cache' => is_array($state['render_cache'] ?? null) ? $state['render_cache'] : [],
+            'render_depth' => max(0, (int)($state['render_depth'] ?? 0)),
+            'rendering_templates' => is_array($state['rendering_templates'] ?? null)
+                ? $state['rendering_templates']
+                : [],
+        ];
+    }
+
+    private static function storeRequestState(array $state): void
+    {
+        RequestContext::set(self::REQUEST_STATE_KEY, $state);
     }
 
     /**
@@ -420,4 +452,3 @@ class Widget implements TaglibInterface
                '属性：type（必需，部件类型）、name（必需，部件名称）、params（可选，JSON 格式的参数）。';
     }
 }
-

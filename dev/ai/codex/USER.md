@@ -15,9 +15,9 @@ file.
 - Keep progress updates short and factual.
 - Final reports should include changed files, verification evidence, accessible
   routes or paths, and known risks.
-- After any feature/fix delivery, explicitly map each change to a verification
-  URL. Prefer absolute Markdown links on the running dedicated WLS test
-  instance so the user can open them in the built-in Browser immediately.
+- For browser-visible or live HTTP delivery, map each change to a real,
+  reachable verification URL. For CLI, backend-only, or documentation work,
+  provide the corresponding command or file path instead of inventing a URL.
 
 ## Execution Style
 
@@ -33,10 +33,9 @@ file.
 
 - Current macOS workspace root: `/Users/weline/Project/Official/框架`.
 - Historical Windows core root: `E:\WelineFramework\DEV-workspace`.
-- For local backend/admin verification, development credentials are
-  `admin/admin`.
-- When development requires backend interaction, use `admin/admin` instead of
-  blocking on credential requests.
+- For local backend/admin verification, use credentials already configured in
+  the local environment or supplied by the user. Do not publish reusable
+  credentials in repository guidance.
 - Database reads and writes are allowed when needed for diagnosis,
   verification, or controlled setup changes.
 - Prefer framework ORM, model/service flows, and system update commands such as
@@ -59,9 +58,11 @@ file.
 ## Testing Preferences
 
 - Use `dev/ai/skills/testing/SKILL.md` when the user asks how to write tests.
-- Do not create or update test artifacts unless the user explicitly asks for
-  test work.
-- For WLS tests, prefer isolated test instances and stop them after use.
+- Add or update focused test artifacts when they are a proportionate part of
+  the requested implementation; do not create broad suites or fixtures that
+  are unrelated to the task.
+- For WLS tests, prefer isolated instances and stop them after automated use;
+  keep one running only when explicitly handing it to the user for acceptance.
 - For browser-visible features, use Codex Browser smoke when local runtime is
   available; report browser/runtime blockers honestly.
 

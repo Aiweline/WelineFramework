@@ -29,7 +29,7 @@ $isNew = !$status || !$status->getId();
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <w:form id="weline-order-status-form" method="post" action="@var($this->getBackendUrl('order/backend/status/save'))">
+                <w:form id="weline-order-status-form" data-testid="order-status-form" method="post" action="@var($this->getBackendUrl('weline_order/backend/status/save'))">
                     <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <?php if ($status && $status->getId()): ?>
                         <input type="hidden" name="id" value="<?= $status->getId() ?>">
@@ -150,7 +150,7 @@ $isNew = !$status || !$status->getId();
                         <button type="submit" class="btn btn-primary">
                             <i class="mdi mdi-content-save me-2"></i><?= __('保存') ?>
                         </button>
-                        <a href="<?= $this->getBackendUrl('order/backend/status/index') ?>" class="btn btn-secondary">
+                        <a href="<?= $this->getBackendUrl('weline_order/backend/status/index') ?>" class="btn btn-secondary">
                             <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
                         </a>
                     </div>
@@ -170,19 +170,28 @@ $isNew = !$status || !$status->getId();
             e.preventDefault();
             
             var formData = new FormData(form);
-            
-            fetch(form.action, {
-                method: 'POST',
-                body: formData
+            var payload = new URLSearchParams();
+            formData.forEach(function(value, key) {
+                if (!(typeof File !== 'undefined' && value instanceof File)) {
+                    payload.append(key, String(value));
+                }
+            });
+            var grantVersion = parseInt(formData.get('expected_grant_version') || '0', 10);
+
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api) {
+                return api.resource('order_admin').saveStatus({
+                    payload: payload.toString(),
+                    expected_grant_version: grantVersion
+                });
             })
-            .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
                     if (typeof BackendToast !== 'undefined') {
                         BackendToast.success(data.message || '<?= __('保存成功') ?>');
                     }
                     setTimeout(function() {
-                        location.href = '<?= $this->getBackendUrl("order/backend/status/index") ?>';
+                        location.href = '<?= $this->getBackendUrl("weline_order/backend/status/index") ?>';
                     }, 1500);
                 } else {
                     if (typeof BackendToast !== 'undefined') {

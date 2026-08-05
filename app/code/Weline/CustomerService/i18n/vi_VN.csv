@@ -1,6 +1,10 @@
 ﻿客服消息翻译,"Dịch tin nhắn dịch vụ khách hàng"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"Mô-đun dịch vụ khách hàng yêu cầu dịch vụ dịch thuật thông qua sự kiện này. Dữ liệu sự kiện bao gồm văn bản cần dịch"
 "Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
+"Missing URL","Missing URL"
+"Unsupported customer service admin path","Unsupported customer service admin path"
+"Controller missing: %{1}","Controller missing: %{1}"
+"Action missing: %{1}","Action missing: %{1}"
 "Session and message content are required.","Session and message content are required."
 "Session ID is required.","Session ID is required."
 "Language code is required.","Language code is required."
@@ -43,6 +47,11 @@
 删除失败：%{1},"Xóa thất bại: %{1}"
 获取成功,"Lấy thành công"
 获取统计数据失败：%{1},"Không thể lấy thống kê: %{1}"
+客服人员,客服人员
+查看客服人员,查看客服人员
+保存客服人员,保存客服人员
+删除客服人员,删除客服人员
+查看客服统计,查看客服统计
 会话管理,"Quản lý phiên"
 加载会话失败：%{1},"Không thể tải phiên: %{1}"
 会话不存在,"Phiên không tồn tại"
@@ -50,8 +59,14 @@
 加载会话详情失败：%{1},"Không thể tải chi tiết phiên: %{1}"
 会话已关闭,"Phiên đã đóng"
 关闭会话失败：%{1},"Đóng phiên thất bại: %{1}"
+查看会话,查看会话
+查看会话详情,查看会话详情
+关闭会话,"Đóng phiên"
 客服配置,"Cấu hình dịch vụ khách hàng"
 加载配置失败：%{1},"Không thể tải cấu hình: %{1}"
+客服配置管理,客服配置管理
+查看客服配置,查看客服配置
+保存客服配置,保存客服配置
 您不是客服人员，无法使用工作台,"Bạn không phải đại lý dịch vụ khách hàng"
 客服工作台,"Bảng điều khiển dịch vụ khách hàng"
 加载工作台失败：%{1},"Không thể tải bảng điều khiển: %{1}"
@@ -65,12 +80,14 @@
 分配会话失败：%{1},"Phân công phiên thất bại: %{1}"
 无权关闭此会话,"Không có quyền đóng phiên này"
 获取客服状态失败：%{1},"Không thể lấy trạng thái đại lý: %{1}"
+客服聊天工作台,客服聊天工作台
+查看工作台,查看工作台
+查看客服工作台,查看客服工作台
 等待中,"Đang chờ"
 暂无消息,"Không có tin nhắn"
 接单,"Chấp nhận"
 暂无会话,"Không có phiên"
 会话,Phiên
-关闭会话,"Đóng phiên"
 输入消息...,"Nhập tin nhắn..."
 发送,Gửi
 发送失败,"Gửi thất bại"

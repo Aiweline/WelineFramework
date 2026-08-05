@@ -10,6 +10,7 @@
 namespace Weline\Framework\Module\Helper;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\CompiledPhpArrayWriter;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
@@ -32,6 +33,7 @@ class Data extends AbstractHelper
     private File $file;
     private Scan $scan;
     private ModuleScanService $moduleScanService;
+    private CompiledPhpArrayWriter $compiledPhpArrayWriter;
     
     /** @var array 收集的控制器属性事件数据，用于批量发送 */
     private array $collected_controller_attributes_events = [];
@@ -42,7 +44,8 @@ class Data extends AbstractHelper
     public function __construct(
         File $file,
         Scan $scan,
-        $moduleScanService = null
+        $moduleScanService = null,
+        ?CompiledPhpArrayWriter $compiledPhpArrayWriter = null
     )
     {
         $this->file = $file;
@@ -50,6 +53,7 @@ class Data extends AbstractHelper
         $this->moduleScanService = $moduleScanService instanceof ModuleScanService
             ? $moduleScanService
             : new ModuleScanService($scan);
+        $this->compiledPhpArrayWriter = $compiledPhpArrayWriter ?? new CompiledPhpArrayWriter();
     }
 
     public function getClassNamespace(\Weline\Framework\System\File\Data\File $controllerFile)
@@ -216,6 +220,7 @@ class Data extends AbstractHelper
                                 'params' => $params
                             ];
                             $this->collectFrontendQueryBinRouteAlias($name, $params);
+                            $this->collectFrontendStreamRouteAlias($name, $params);
 
                             // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
@@ -786,10 +791,7 @@ class Data extends AbstractHelper
      */
     public function updateModules(array &$modules)
     {
-        $this->file->open(Env::path_MODULES_FILE, $this->file::mode_w_add);
-        $text = '<?php return ' . w_var_export($modules, true) . ';';
-        $this->file->write($text);
-        $this->file->close();
+        $this->compiledPhpArrayWriter->write(Env::path_MODULES_FILE, $modules);
         Env::getInstance()->getModuleList(true);
 
         // 非 defer 模式下立即刷新注册表，确保新模块的 event/hook/extends 立即生效
@@ -836,6 +838,38 @@ class Data extends AbstractHelper
         if (
             $class === ''
             || !is_a($class, \Weline\Framework\Controller\Api\QueryBin::class, true)
+        ) {
+            return;
+        }
+
+        $aliasParams = $params;
+        $aliasParams['base_router'] = 'framework';
+        $aliasParams['router'] = preg_replace('#^api/#', '', $route) ?: $route;
+
+        $this->collected_route_registrations[] = [
+            'type' => RegisterDataInterface::ROUTER,
+            'module_name' => $moduleName,
+            'params' => $aliasParams,
+        ];
+    }
+
+    /**
+     * Same strip-prefix issue as query-bin: EventSource hits /api/framework/stream,
+     * but Router::Api() matches after removing the outer /api segment.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function collectFrontendStreamRouteAlias(string $moduleName, array $params): void
+    {
+        $route = (string)($params['router'] ?? '');
+        if (!str_starts_with($route, 'api/framework/stream')) {
+            return;
+        }
+
+        $class = (string)($params['class'] ?? '');
+        if (
+            $class === ''
+            || !is_a($class, \Weline\Framework\Controller\Api\Stream::class, true)
         ) {
             return;
         }

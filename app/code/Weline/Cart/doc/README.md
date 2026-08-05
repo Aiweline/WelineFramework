@@ -13,13 +13,24 @@
 
 Cart add/update can optionally resolve the requested item through a catalog-owned snapshot provider before mutating the cart.
 
-- Public contract: `Weline\Cart\Api\CartItemSnapshotProviderInterface`.
-- Provider path: `extends/module/Weline_Cart/CartItemSnapshotProvider/{ProviderName}.php`.
+- Public contract (V1)：`Weline\Cart\Api\CartItemSnapshotProviderInterface`（`int productId`）。
+- Public contract (V2)：见 [`cart-v2.md`](cart-v2.md)（`OfferIdentity` + Scope + server selection hash）。
+- Provider path V1：`extends/module/Weline_Cart/CartItemSnapshotProvider/{ProviderName}.php`。
+- Provider path V2：`extends/module/Weline_Cart/CartItemSnapshotProviderV2/{ProviderName}.php`。
 - Providers are discovered from the compiled Extends registry; after adding one, run `php bin/w setup:upgrade` before serving traffic.
-- A provider returns `null` when it does not own the requested product. The first provider returning an array owns the snapshot.
+- A V1 provider returns `null` when it does not own the requested product. The first provider returning an array owns the snapshot.
 - Sync add forms may pass source context with `source_app`, `source_module`, `business_module`, `business_code`, `business_name`, and `product_type`; Cart stores these fields on the item and Checkout can carry them into orders.
 
 When the provider returns stock/status fields, Cart blocks unavailable items and caps requested quantity to available stock. Cart does not directly depend on product-module classes; a catalog provider may use its own service or published Query contract to build the snapshot.
+
+Cart V2 storefront ownership is server-authoritative. Browser requests may carry
+an opaque guest token, but `customer_id` is never accepted as an owner
+credential; the current login is resolved through the optional public Customer
+facade. Website/Store/Channel parameters are normalized by one Scope resolver,
+and guest→customer merge preflights both Scope and currency before either cart
+is mutated. When the request already has a trusted frozen Scope, explicit
+Website/Store/Channel input must match it exactly; a mismatch fails with
+`cart_scope_request_conflict` before cart lookup or mutation.
 
 ## Returned Item Shape
 

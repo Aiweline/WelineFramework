@@ -121,7 +121,7 @@ class DiscountValidationService
             $allActions = $this->discountActionSupport()->getAllDiscountActions();
             foreach ($unsupported as $code) {
                 $actionName = $allActions[$code]['name'] ?? $code;
-                $result['messages'][] = sprintf(__('支付方式不支持优惠方式：%s'), $actionName);
+                $result['messages'][] = sprintf(\__('支付方式不支持优惠方式：%s'), $actionName);
             }
         }
 

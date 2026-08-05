@@ -19,10 +19,13 @@ class WebsiteSaveAfter implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        $websiteId = (int)$event->getData('website_id');
-        if ($websiteId <= 0) {
+        $eventData = $event->getData();
+        if (!is_array($eventData)
+            || !array_key_exists('website_id', $eventData)
+            || $eventData['website_id'] === null) {
             return;
         }
+        $websiteId = $this->normalizeWebsiteId($eventData['website_id']);
 
         $postData = $event->getData('post_data');
         if (!is_array($postData)) {
@@ -39,22 +42,14 @@ class WebsiteSaveAfter implements ObserverInterface
             return;
         }
 
-        try {
-            $this->protocolConfig->saveForWebsite($websiteId, [
-                'robots_enabled' => $this->flag($seo, 'robots_enabled', true),
-                'sitemap_enabled' => $this->flag($seo, 'sitemap_enabled', true),
-                'google_extended' => (string)($seo['google_extended'] ?? 'allow'),
-                'robots_extra' => (string)($seo['robots_extra'] ?? ''),
-            ]);
+        $this->protocolConfig->saveForWebsite($websiteId, [
+            'robots_enabled' => $this->flag($seo, 'robots_enabled', true),
+            'sitemap_enabled' => $this->flag($seo, 'sitemap_enabled', true),
+            'google_extended' => (string)($seo['google_extended'] ?? 'allow'),
+            'robots_extra' => (string)($seo['robots_extra'] ?? ''),
+        ]);
 
-            $this->saveWebsiteAccounts($websiteId, $seo, $postData);
-        } catch (\Throwable $e) {
-            w_log_error(sprintf(
-                '[Weline_Seo] website_save_after failed: website_id=%d, error=%s',
-                $websiteId,
-                $e->getMessage()
-            ));
-        }
+        $this->saveWebsiteAccounts($websiteId, $seo, $postData);
     }
 
     /**
@@ -136,5 +131,20 @@ class WebsiteSaveAfter implements ObserverInterface
         }
 
         return in_array(strtolower((string)$value), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function normalizeWebsiteId(mixed $value): int
+    {
+        if (is_int($value)) {
+            $websiteId = $value;
+        } elseif (is_string($value) && preg_match('/^\d+$/D', $value) === 1) {
+            $websiteId = (int)$value;
+        } else {
+            throw new \InvalidArgumentException(__('website_id 必须是非负整数'));
+        }
+        if ($websiteId < 0) {
+            throw new \InvalidArgumentException(__('website_id 不能为负数'));
+        }
+        return $websiteId;
     }
 }

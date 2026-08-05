@@ -10,7 +10,7 @@
 namespace Weline\Framework\System\File;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class CompressTest extends TestCore
 {

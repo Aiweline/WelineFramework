@@ -19,23 +19,31 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Framework\System\Process\Processer;
 use Weline\Queue\Api\QueueConsumerInterface;
+use Weline\Queue\Exception\QueueDeferredCompletionException;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface as LegacyQueueInterface;
+use Weline\Queue\Service\QueueDispatchService;
 
 class Run implements \Weline\Framework\Console\CommandInterface
 {
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
     private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [];
+    private const CONSUMER_BOOTSTRAP_FAILURE_PREFIX = 'QUEUE_CONSUMER_BOOTSTRAP_FAILED:';
 
     private Printing $printing;
     private Queue $queue;
+    private QueueDispatchService $queueDispatchService;
 
-    public function __construct(Printing $printing, Queue $queue)
-    {
+    public function __construct(
+        Printing $printing,
+        Queue $queue,
+        ?QueueDispatchService $queueDispatchService = null,
+    ) {
         $this->printing = $printing;
         $this->queue = $queue;
+        $this->queueDispatchService = $queueDispatchService
+            ?? ObjectManager::getInstance(QueueDispatchService::class);
     }
 
     /**
@@ -47,20 +55,78 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
         $id = $args['id'] ?? 0;
         $force = !empty($args['f']) || !empty($args['force']);
+        $dispatchToken = \strtolower(\trim((string)(
+            $args['dispatch-token'] ?? $args['dispatch_token'] ?? ''
+        )));
+        $launchId = \strtolower(\trim((string)(
+            $args['launch-id'] ?? $args['launch_id'] ?? ''
+        )));
+        $workerQueueTaskName = \trim((string)($args['name'] ?? ''));
         if ($id == 0) {
             $this->printing->error(__('请输入队列ID。 '));
             $this->printing->success(__('正确示例：php bin/w queue:run --id=1'));
             exit();
         }
-        $queue = $this->newQueueModel()->load($id);
+        if (($dispatchToken === '' && $launchId !== '')
+            || ($dispatchToken !== '' && (
+                \preg_match('/^[a-f0-9]{64}$/', $dispatchToken) !== 1
+                || $launchId === ''
+                || !\hash_equals($dispatchToken, $launchId)
+                || $workerQueueTaskName === ''
+            ))
+        ) {
+            $this->printing->warning(__('Queue Worker 启动身份参数无效，未读取或执行队列。'));
+
+            return 'QUEUE_NOOP: queue_worker_identity_invalid';
+        }
+        if ($dispatchToken !== '') {
+            $workerPid = $this->currentProcessId();
+            $workerQueueId = (int)$id;
+            $this->registerShutdownCallback(function () use (
+                $workerQueueId,
+                $dispatchToken,
+                $workerPid,
+                $workerQueueTaskName,
+            ): void {
+                $this->queueDispatchService->releaseClaimedWorkerLeaseByTaskName(
+                    $workerQueueId,
+                    $dispatchToken,
+                    $workerPid,
+                    $workerQueueTaskName,
+                );
+            });
+        }
+        $queue = $this->loadFreshQueue((int)$id);
         if (empty($queue->getId())) {
             $this->printing->error(__('队列不存在。 '));
             $this->printing->success(__('正确示例：php bin/w queue:run --id=%{1}', $id));
+            if ($dispatchToken !== '') {
+                return 'QUEUE_NOOP: queue_not_found';
+            }
             exit();
+        }
+        if ($queue->isScopeQuarantined()) {
+            $message = (string)__('队列 Scope 已 quarantine，拒绝领取或执行。');
+            $this->printing->error($message);
+            throw new \RuntimeException('queue_scope_quarantined: ' . $message);
+        }
+        if ($dispatchToken !== '') {
+            $claimedQueue = $this->queueDispatchService->attachClaimedWorker(
+                $workerQueueId,
+                $dispatchToken,
+                $workerPid,
+            );
+            if (!$claimedQueue instanceof Queue) {
+                $message = (string)__('Queue 派发令牌无效或已过期，Worker 不执行任何消费者。');
+                $this->printing->warning($message);
+
+                return 'QUEUE_NOOP: queue_dispatch_fence_rejected';
+            }
+            $queue = $claimedQueue;
         }
         $takeoverOnly = !empty($args['takeover-only']) || !empty($args['no-execute']);
         if ($force && $takeoverOnly) {
-            $this->printing->note('Force takeover now returns after releasing the queue; execution remains owned by the system scheduler.');
+            $this->printing->note(__('强制接管会在释放队列后立即返回；后续执行由系统调度器负责。'));
             $takeover = w_query('queue', 'takeover', [
                 'queue_id' => (int)$id,
                 'force' => true,
@@ -69,9 +135,10 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 'mark_force_rebuild' => true,
                 'clear_output' => false,
             ]);
+            $defaultMessage = (string)__('队列接管完成，等待系统调度。');
             $message = \is_array($takeover)
-                ? (string)($takeover['message'] ?? 'Queue takeover completed; waiting for system scheduler.')
-                : 'Queue takeover completed; waiting for system scheduler.';
+                ? (string)($takeover['message'] ?? $defaultMessage)
+                : $defaultMessage;
             if (!\is_array($takeover) || empty($takeover['success'])) {
                 $this->printing->error($message);
                 exit();
@@ -80,25 +147,16 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
             return $message;
         }
-        $currentPid = (int)getmypid();
+        $currentPid = $this->currentProcessId();
         $existingPid = (int)($queue->getPid() ?: 0);
         $existingStatus = \trim((string)$queue->getStatus());
-        $sameQueueRunning = false;
-        if ($existingStatus === $queue::status_running) {
-            if ($existingPid > 0 && $existingPid !== $currentPid) {
-                $sameQueueRunning = Processer::isRunningByPid($existingPid);
-            } elseif ($existingPid === 0) {
-                // 无 pid 但状态仍是 running，按“正在执行”处理，避免并发重复消费。
-                $sameQueueRunning = true;
-            }
-        }
-        if ($sameQueueRunning) {
+        if ($existingStatus === $queue::status_running && $existingPid !== $currentPid) {
             if (!$force) {
                 $this->printing->error(__('队列 #%{1} 正在运行中，禁止重复运行（pid=%{2}）。', [$id, (string)($existingPid > 0 ? $existingPid : '-')]));
                 $this->printing->warning(__('如需接管，请使用 --force；系统会先终止当前同 ID 任务后再启动新任务。'));
                 exit();
             }
-            $this->printing->warning(__('强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。', [$id, (string)($existingPid > 0 ? $existingPid : '-')]));
+            $this->printing->warning(__('强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先安全接管并交回系统调度；当前 CLI 不直接执行。', [$id, (string)($existingPid > 0 ? $existingPid : '-')]));
             $takeover = w_query('queue', 'takeover', [
                 'queue_id' => (int)$id,
                 'force' => true,
@@ -107,9 +165,10 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 'mark_force_rebuild' => true,
                 'clear_output' => false,
             ]);
+            $defaultMessage = (string)__('队列接管完成，等待系统调度。');
             $message = \is_array($takeover)
-                ? (string)($takeover['message'] ?? 'Queue takeover completed; waiting for system scheduler.')
-                : 'Queue takeover completed; waiting for system scheduler.';
+                ? (string)($takeover['message'] ?? $defaultMessage)
+                : $defaultMessage;
             if (!\is_array($takeover) || empty($takeover['success'])) {
                 $this->printing->error($message);
                 exit();
@@ -117,87 +176,135 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note($message);
 
             return $message;
-        } elseif ($existingStatus === $queue::status_running && $existingPid > 0 && !Processer::isRunningByPid($existingPid)) {
-            // 兜底：running + 僵尸 pid，自动回收，允许本次继续执行。
-            $queue->setStatus($queue::status_pending)
-                ->setPid(0)
-                ->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . __('检测到历史运行进程不存在，已自动回收为 pending。')))
-                ->save();
         }
 
-        # 获取执行者
-        $type = $queue->getType();
-        $queueClass = \ltrim((string)$type->getData('class'), '\\');
-        $this->applyCliMemoryLimitForQueueClass($queueClass);
-        if ($force) {
-            $content = \json_decode((string)$queue->getContent(), true);
-            if (\is_array($content)) {
-                $content['_force_rebuild'] = 1;
-                // 强制重跑同一个队列 ID 时先清空历史 result/process，避免旧日志（含历史乱码）干扰本次观察
-                $queue->setContent((string)(\json_encode($content, \JSON_UNESCAPED_UNICODE) ?: (string)$queue->getContent()))
-                    ->setResult('')
-                    ->setProcess('')
-                    ->save();
+        if ($dispatchToken === '') {
+            $claimed = $this->queueDispatchService->claimQueueForManualRun(
+                (int)$id,
+                $currentPid,
+                [],
+                $force,
+            );
+            if (empty($claimed['confirmed'])) {
+                $message = (string)($claimed['message'] ?? __('队列 CLI 认领失败。'));
+                $this->printing->error($message);
+
+                return 'QUEUE_NOOP: queue_manual_claim_failed';
+            }
+            if ($force && !empty($claimed['force_prepared'])) {
                 $this->printing->warning(__('已启用强制模式(-f)：本次执行将优先使用队列类中的强制重建逻辑。'));
                 $this->printing->note(__('已清空该队列历史输出，本次仅展示最新执行过程。'));
             }
+            $queue = $this->loadFreshQueue((int)$id);
         }
-        /** @var FrameworkTaskConsumerInterface|QueueConsumerInterface|LegacyQueueInterface $queue_execute */
-        $queue_execute = ObjectManager::getInstance($queueClass);
-        if (
-            !$queue_execute instanceof FrameworkTaskConsumerInterface
-            && !$queue_execute instanceof QueueConsumerInterface
-            && !$queue_execute instanceof LegacyQueueInterface
-        ) {
-            throw new \LogicException(
-                FrameworkTaskConsumerInterface::class . '|' . QueueConsumerInterface::class . '|' . LegacyQueueInterface::class
-            );
-        }
-        $validate_result = $this->validateQueueConsumer($queue_execute, $queue);
-        if (is_bool($validate_result) and $validate_result) {
-            $queue->setStatus($queue::status_running)
-                ->setPid((int)getmypid())
-                ->setResult($queue->getResult() . PHP_EOL . __('正在执行...'))
-                ->save();
-            try {
-                $queue->setExecutionArgs($args); # 记录执行参数
-                $result = $this->executeQueueConsumer($queue_execute, $queue);
-                // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
-                $queue = $this->newQueueModel()->load($id);
-                if ($this->shouldPreserveQueueStateAfterExecute($queue)) {
-                    $queue->setResult(\trim($queue->getResult() . PHP_EOL . $result))
-                        ->save();
-                    $this->printing->title(__('闃熷垪鎵ц璇︽儏') . ' queue_id=' . $id);
-                    $this->printing->note($queue->getResult());
 
-                    return $result;
-                }
-                $queue->setStatus($queue::status_done)
-                    ->setPid(0)
-                    ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
-                    ->save();
-                $this->printing->title(__('队列执行详情') . ' queue_id=' . $id);
-                $this->printing->note($queue->getResult());
-            } catch (\Throwable $e) {
-                $result = $e->getMessage();
-                $queue = $this->newQueueModel()->load($id);
-                $queue->setStatus($queue::status_error)
-                    ->setPid(0)
-                    ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
-                    ->save();
-                $this->printing->title(__('队列执行详情（失败）') . ' queue_id=' . $id);
-                $this->printing->note($queue->getResult());
-                $this->printing->error($result);
-                throw $e;
+        $consumerExecutionStarted = false;
+        try {
+            # 类型解析、消费者实例化与 validate 均已位于 ownership 异常收口内。
+            $type = $queue->getType();
+            $queueClass = \ltrim((string)$type->getData('class'), '\\');
+            $this->applyCliMemoryLimitForQueueClass($queueClass);
+            /** @var FrameworkTaskConsumerInterface|QueueConsumerInterface|LegacyQueueInterface $queue_execute */
+            $queue_execute = ObjectManager::getInstance($queueClass);
+            if (
+                !$queue_execute instanceof FrameworkTaskConsumerInterface
+                && !$queue_execute instanceof QueueConsumerInterface
+                && !$queue_execute instanceof LegacyQueueInterface
+            ) {
+                throw new \LogicException(
+                    FrameworkTaskConsumerInterface::class . '|' . QueueConsumerInterface::class . '|' . LegacyQueueInterface::class
+                );
             }
-        } else {
-            $result = __('队列消息内容验证不通过。') . ($validate_result ? __('验证结果：') : '');
+            $validate_result = $this->validateQueueConsumer($queue_execute, $queue);
+            if ($validate_result) {
+                $marked = $this->queueDispatchService->markQueueWorkerExecutingSafely(
+                    (int)$id,
+                    $dispatchToken,
+                    $currentPid,
+                );
+                if (empty($marked['confirmed'])) {
+                    $message = (string)($marked['message'] ?? __('Queue Worker 已失去当前执行代次 ownership。'));
+                    $this->printing->warning($message);
+
+                    return 'QUEUE_NOOP: queue_worker_fence_lost';
+                }
+                if (\is_array($marked['data'] ?? null)) {
+                    $queue->clearData()->setData($marked['data']);
+                }
+                $queue->setExecutionArgs($args); # 记录执行参数
+                // From this point on, failures belong to the consumer itself.
+                // Resolution, construction, interface checks, validation and
+                // ownership activation are bootstrap failures and receive a
+                // stable code before the Worker exits.
+                $consumerExecutionStarted = true;
+                $result = $this->executeQueueConsumer($queue_execute, $queue);
+                $completed = $this->queueDispatchService->completeQueueWorkerSafely(
+                    (int)$id,
+                    $dispatchToken,
+                    $currentPid,
+                    $result,
+                );
+                if (empty($completed['confirmed'])) {
+                    $this->printing->warning(
+                        (string)($completed['message'] ?? __('Queue Worker 终态因执行代次变化未写入。'))
+                    );
+                }
+                $this->printing->title(__('队列执行详情') . ' queue_id=' . $id);
+                $this->printing->note((string)($completed['data'][Queue::schema_fields_result] ?? $result));
+            } else {
+                $result = (string)__('队列消息内容验证不通过。');
+                $this->printing->error($result);
+                $this->queueDispatchService->failQueueWorkerSafely(
+                    (int)$id,
+                    $dispatchToken,
+                    $currentPid,
+                    $result,
+                    true,
+                );
+            }
+        } catch (QueueDeferredCompletionException $deferred) {
+            $result = $deferred->queueResult();
+            $deferredCompletion = $this->queueDispatchService->deferQueueWorkerSafely(
+                (int)$id,
+                $dispatchToken,
+                $currentPid,
+                $deferred->queueContent(),
+                $deferred->processMessage(),
+                $result,
+                $deferred->notBefore(),
+            );
+            if (empty($deferredCompletion['confirmed'])) {
+                $this->printing->warning(
+                    (string)($deferredCompletion['message']
+                        ?? __('Queue Worker 延期终态因执行代次变化未写入。'))
+                );
+
+                return 'QUEUE_NOOP: queue_worker_fence_lost';
+            }
+            $this->printing->title(__('队列已安全延期') . ' queue_id=' . $id);
+            $this->printing->note(
+                (string)($deferredCompletion['data'][Queue::schema_fields_result] ?? $result)
+            );
+        } catch (\Throwable $e) {
+            $failureDetail = $e->getMessage() !== '' ? $e->getMessage() : $e::class;
+            $bootstrapFailure = !$consumerExecutionStarted;
+            $result = $bootstrapFailure
+                ? self::CONSUMER_BOOTSTRAP_FAILURE_PREFIX . $failureDetail
+                : $failureDetail;
+            $failed = $this->queueDispatchService->failQueueWorkerSafely(
+                (int)$id,
+                $dispatchToken,
+                $currentPid,
+                $result,
+                false,
+                $bootstrapFailure ? self::CONSUMER_BOOTSTRAP_FAILURE_PREFIX : '',
+            );
+            $this->printing->title(__('队列执行详情（失败）') . ' queue_id=' . $id);
+            $this->printing->note((string)($failed['data'][Queue::schema_fields_result] ?? $result));
             $this->printing->error($result);
-            $queue->setStatus($queue::status_error)
-                ->setPid(0)
-                ->setResult($result . PHP_EOL . $queue->getResult())
-                ->save();
+            throw $e;
         }
+
         return $result;
     }
 
@@ -216,25 +323,18 @@ class Run implements \Weline\Framework\Console\CommandInterface
         FrameworkTaskConsumerInterface|QueueConsumerInterface|LegacyQueueInterface $consumer,
         Queue $queue
     ): string {
+        // P1b：Scope 感知消费者执行前校验信封 kind + 必需维度（fail-closed）
+        if ($consumer instanceof \Weline\Queue\Api\ScopedQueueConsumerInterface) {
+            (new \Weline\Queue\Service\ScopedQueueConsumerGuard())->assertStoredEnvelopeAccepted(
+                $consumer,
+                $queue->getScopeEnvelope(),
+            );
+        }
         if ($consumer instanceof QueueConsumerInterface) {
             return $consumer->execute($queue);
         }
 
         return $consumer->execute($queue);
-    }
-
-    private function shouldPreserveQueueStateAfterExecute(Queue $queue): bool
-    {
-        $status = \trim((string)$queue->getStatus());
-        if ($status === '' || $queue->isFinished()) {
-            return false;
-        }
-
-        return \in_array($status, [
-            $queue::status_pending,
-            $queue::status_error,
-            $queue::status_stop,
-        ], true);
     }
 
     /**
@@ -248,6 +348,24 @@ class Run implements \Weline\Framework\Console\CommandInterface
     private function newQueueModel(): Queue
     {
         return (clone $this->queue)->clearData()->clearQuery();
+    }
+
+    protected function registerShutdownCallback(callable $callback): void
+    {
+        \register_shutdown_function($callback);
+    }
+
+    protected function currentProcessId(): int
+    {
+        return (int)\getmypid();
+    }
+
+    protected function loadFreshQueue(int $queueId): Queue
+    {
+        $queue = $this->newQueueModel();
+        $queue->where(Queue::schema_fields_ID, $queueId)->find()->fetch();
+
+        return $queue;
     }
 
     private function disableCliExecutionTimeout(): void
@@ -370,6 +488,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             [
                 '-h, --help' => '显示帮助信息',
                 '-f, --force' => '强制模式：将 _force_rebuild 注入队列内容，并清 result，避免历史输出干扰本次执行',
+                '--dispatch-token' => '内部派发 fencing token；不匹配时 Worker 立即 no-op',
             ],
             [],
             []

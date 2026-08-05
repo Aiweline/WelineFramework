@@ -11,10 +11,14 @@ declare(strict_types=1);
 
 namespace Weline\Order\Controller\Backend;
 
+use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
+use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Model\OrderStatus;
 use Weline\Order\Model\OrderStatusTranslation;
 use Weline\Order\Service\OrderStatusService;
@@ -22,7 +26,7 @@ use Weline\Order\Service\OrderStatusService;
 /**
  * 订单状态管理控制器
  */
-#[Acl('Weline_Order::status_manage', '订单状态管理', 'mdi-flag', '订单状态管理', 'Weline_Order::order_manage')]
+#[Acl('Weline_Order::status_controller', '订单状态控制器', 'mdi-flag', '订单状态管理', 'Weline_Backend::order_group')]
 class Status extends BackendController
 {
     private OrderStatusService $statusService;
@@ -37,16 +41,30 @@ class Status extends BackendController
     /**
      * 状态列表页
      */
-    #[Acl('Weline_Order::status_index', '查看订单状态', 'mdi-format-list-bulleted', '查看订单状态列表')]
+    #[Acl('Weline_Order::status_manage', '查看订单状态', 'mdi-format-list-bulleted', '查看订单状态列表', 'Weline_Backend::order_group')]
     public function index()
     {
+        try {
+            $this->objectAuthorizationGuard()->requireForQuery(ObjectAction::LIST, ScopeIdentity::global());
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
+        }
         /** @var OrderStatus $statusModel */
         $statusModel = ObjectManager::getInstance(OrderStatus::class);
         $statuses = $statusModel->order(OrderStatus::schema_fields_SORT_ORDER, 'ASC')
             ->select()
-            ->fetch();
+            ->fetch()
+            ->getItems();
         
         $this->assign('statuses', $statuses);
+        $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, ScopeIdentity::global());
+        $deleteGrant = $this->objectAuthorizationGuard()->check(ObjectAction::DELETE, ScopeIdentity::global());
+        $this->assign('status_grant_versions', [
+            ObjectAction::UPDATE => $updateGrant->allowed ? $updateGrant->matchedGrantVersion : 0,
+            ObjectAction::DELETE => $deleteGrant->allowed ? $deleteGrant->matchedGrantVersion : 0,
+        ]);
         
         return $this->fetch();
     }
@@ -54,9 +72,16 @@ class Status extends BackendController
     /**
      * 编辑状态
      */
-    #[Acl('Weline_Order::status_edit', '编辑订单状态', 'mdi-pencil', '编辑订单状态')]
+    #[Acl('Weline_Order::status_edit', '编辑订单状态', 'mdi-pencil', '编辑订单状态', 'Weline_Order::status_manage')]
     public function edit()
     {
+        try {
+            $this->objectAuthorizationGuard()->requireForQuery(ObjectAction::VIEW, ScopeIdentity::global());
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
+        }
         $id = (int)$this->request->getParam('id');
         
         /** @var OrderStatus $statusModel */
@@ -65,7 +90,7 @@ class Status extends BackendController
         if ($id) {
             $statusModel->load($id);
             if (!$statusModel->getId()) {
-                $this->getMessageManager()->addError(__('状态不存在'));
+                $this->getMessageManager()->addError(\__('状态不存在'));
                 return $this->redirect('*/status/index');
             }
         }
@@ -86,6 +111,11 @@ class Status extends BackendController
         
         $this->assign('status', $statusModel);
         $this->assign('translations', $translations);
+        $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, ScopeIdentity::global());
+        $this->assign(
+            'expected_grant_version',
+            $updateGrant->allowed ? $updateGrant->matchedGrantVersion : 0,
+        );
         
         return $this->fetch();
     }
@@ -93,9 +123,16 @@ class Status extends BackendController
     /**
      * 保存状态
      */
-    #[Acl('Weline_Order::status_save', '保存订单状态', 'mdi-content-save', '保存订单状态')]
+    #[Acl('Weline_Order::status_save', '保存订单状态', 'mdi-content-save', '保存订单状态', 'Weline_Order::status_manage')]
     public function save()
     {
+        try {
+            $this->objectAuthorizationGuard()->requireForQuery(ObjectAction::UPDATE, ScopeIdentity::global());
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $this->error($exception->getMessage());
+        }
         $id = (int)$this->request->getParam('id');
         $code = trim((string)$this->request->getParam('code', ''));
         $name = trim((string)$this->request->getParam('name', ''));
@@ -107,7 +144,7 @@ class Status extends BackendController
         $translations = $this->request->getParam('translations', []);
         
         if (empty($code) || empty($name)) {
-            return $this->error(__('状态代码和名称不能为空'));
+            return $this->error(\__('状态代码和名称不能为空'));
         }
         
         /** @var OrderStatus $statusModel */
@@ -117,7 +154,7 @@ class Status extends BackendController
         if ($id) {
             $statusModel->load($id);
             if (!$statusModel->getId()) {
-                return $this->error(__('状态不存在'));
+                return $this->error(\__('状态不存在'));
             }
             $oldStatus = clone $statusModel;
             // 如果修改了代码，检查新代码是否已存在
@@ -125,7 +162,7 @@ class Status extends BackendController
                 $existing = ObjectManager::getInstance(OrderStatus::class);
                 $existing->load(OrderStatus::schema_fields_CODE, $code);
                 if ($existing->getId()) {
-                    return $this->error(__('状态代码已存在'));
+                    return $this->error(\__('状态代码已存在'));
                 }
             }
         } else {
@@ -133,10 +170,21 @@ class Status extends BackendController
             $existing = ObjectManager::getInstance(OrderStatus::class);
             $existing->load(OrderStatus::schema_fields_CODE, $code);
             if ($existing->getId()) {
-                return $this->error(__('状态代码已存在'));
+                return $this->error(\__('状态代码已存在'));
             }
         }
         
+        try {
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::UPDATE,
+                ScopeIdentity::global(),
+                $this->expectedGrantVersion(),
+            );
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $this->error($exception->getMessage());
+        }
         // 触发保存前事件
         $eventData = [
             'status' => $statusModel,
@@ -186,25 +234,33 @@ class Status extends BackendController
         }
         
         // 触发保存后事件
-        $this->eventsManager->dispatch('Weline_Order::order_status_saved', [
+        $savedEventData = [
             'status' => $statusModel,
             'old_status' => $oldStatus,
             'code' => $code,
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Order::order_status_saved', $savedEventData);
         
-        return $this->success(__('状态保存成功'));
+        return $this->success(\__('状态保存成功'));
     }
 
     /**
      * 删除状态
      */
-    #[Acl('Weline_Order::status_delete', '删除订单状态', 'mdi-delete', '删除订单状态')]
+    #[Acl('Weline_Order::status_delete', '删除订单状态', 'mdi-delete', '删除订单状态', 'Weline_Order::status_manage')]
     public function delete()
     {
+        try {
+            $this->objectAuthorizationGuard()->requireForQuery(ObjectAction::DELETE, ScopeIdentity::global());
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $this->error($exception->getMessage());
+        }
         $id = (int)$this->request->getParam('id');
         
         if (!$id) {
-            return $this->error(__('缺少状态ID'));
+            return $this->error(\__('缺少状态ID'));
         }
         
         /** @var OrderStatus $statusModel */
@@ -212,12 +268,12 @@ class Status extends BackendController
         $statusModel->load($id);
         
         if (!$statusModel->getId()) {
-            return $this->error(__('状态不存在'));
+            return $this->error(\__('状态不存在'));
         }
         
         // 系统状态不能删除
         if ($statusModel->isSystem()) {
-            return $this->error(__('系统状态不能删除'));
+            return $this->error(\__('系统状态不能删除'));
         }
         
         // 检查是否有订单使用此状态
@@ -226,9 +282,20 @@ class Status extends BackendController
             ->count();
         
         if ($count > 0) {
-            return $this->error(__('该状态正在被使用，不能删除'));
+            return $this->error(\__('该状态正在被使用，不能删除'));
         }
         
+        try {
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::DELETE,
+                ScopeIdentity::global(),
+                $this->expectedGrantVersion(),
+            );
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $this->error($exception->getMessage());
+        }
         // 触发删除前事件
         $eventData = [
             'status' => $statusModel,
@@ -247,24 +314,32 @@ class Status extends BackendController
         $statusModel->delete();
         
         // 触发删除后事件
-        $this->eventsManager->dispatch('Weline_Order::order_status_deleted', [
+        $deletedEventData = [
             'status_id' => $id,
             'code' => $eventData['code'],
-        ]);
+        ];
+        $this->eventsManager->dispatch('Weline_Order::order_status_deleted', $deletedEventData);
         
-        return $this->success(__('状态删除成功'));
+        return $this->success(\__('状态删除成功'));
     }
 
     /**
      * 切换启用状态
      */
-    #[Acl('Weline_Order::status_toggle', '切换订单状态', 'mdi-toggle-switch', '切换订单状态启用状态')]
+    #[Acl('Weline_Order::status_toggle', '切换订单状态', 'mdi-toggle-switch', '切换订单状态启用状态', 'Weline_Order::status_manage')]
     public function toggle()
     {
+        try {
+            $this->objectAuthorizationGuard()->requireForQuery(ObjectAction::UPDATE, ScopeIdentity::global());
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $this->error($exception->getMessage());
+        }
         $id = (int)$this->request->getParam('id');
         
         if (!$id) {
-            return $this->error(__('缺少状态ID'));
+            return $this->error(\__('缺少状态ID'));
         }
         
         /** @var OrderStatus $statusModel */
@@ -272,14 +347,42 @@ class Status extends BackendController
         $statusModel->load($id);
         
         if (!$statusModel->getId()) {
-            return $this->error(__('状态不存在'));
+            return $this->error(\__('状态不存在'));
         }
         
         $isActive = $statusModel->isActive() ? 0 : 1;
+        try {
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::UPDATE,
+                ScopeIdentity::global(),
+                $this->expectedGrantVersion(),
+            );
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $this->error($exception->getMessage());
+        }
         $statusModel->setData(OrderStatus::schema_fields_IS_ACTIVE, $isActive)
             ->save();
         
-        return $this->success(__('状态状态已更新'));
+        return $this->success(\__('状态状态已更新'));
+    }
+
+    private function objectAuthorizationGuard(): BackendObjectAuthorizationGuardInterface
+    {
+        return ObjectManager::getInstance(BackendObjectAuthorizationGuardInterface::class);
+    }
+
+    private function expectedGrantVersion(): int
+    {
+        $value = $this->request->getParam('expected_grant_version', 0);
+        if (\is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
     }
 }
-

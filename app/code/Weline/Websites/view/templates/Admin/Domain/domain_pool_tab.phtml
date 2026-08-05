@@ -251,6 +251,35 @@ $formKey = (string) $this->getFormKeyValue();
     <ul class="pagination pagination-sm justify-content-center mb-0" id="weline-pool-pagination"></ul>
 </nav>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_websites) return;
+  g.__bqAdmin_websites=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['websites']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('websites').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
 (function(){
 'use strict';
@@ -340,7 +369,7 @@ function loadPage(page) {
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></td></tr>';
     var u = poolListUrl + (poolListUrl.indexOf('?') >= 0 ? '&' : '?') + 'page=' + encodeURIComponent(currentPage) + '&page_size=' + encodeURIComponent(pageSize);
-    fetch(u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
+    bqAdmin['websites'](u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
             return;
@@ -398,7 +427,7 @@ function postJson(url, dry) {
     var fd = new FormData();
     fd.append('dry_run', dry ? '1' : '0');
     if (formKey) fd.append('form_key', formKey);
-    return fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); });
+    return bqAdmin['websites'](url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); });
 }
 function showInlineAlert(message, type) {
     var el = document.getElementById('weline-pool-alert');
@@ -527,7 +556,7 @@ document.getElementById('weline-pool-tbody').addEventListener('click', function(
     var id = t.getAttribute('data-pool-id');
     if (!id) return;
     var u = poolFlowLogUrl + (poolFlowLogUrl.indexOf('?') >= 0 ? '&' : '?') + 'pool_id=' + encodeURIComponent(id);
-    fetch(u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
+    bqAdmin['websites'](u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data || !data.data.items) {
             toastError(data.msg || 'Error');
             return;

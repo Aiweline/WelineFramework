@@ -49,3 +49,8 @@
 - 涉及字段结构时，用 `#[Col]` / `#[Index]` 和 `php bin/w setup:upgrade`。
 - 涉及控制器路由时，用 `php bin/w setup:upgrade --route`。
 - 本 README 目前是结构稿；后续功能稳定后，应继续补模块职责、关键流程、接口与反例。
+
+## 布局计划 Cron
+
+- `LayoutSchedule.end_time` 是可空的 `datetime`。活动计划到期查询只使用 `end_time <= 当前时间`；SQL 对 `NULL` 的比较不会命中，因此不需要也不能再把时间列与空字符串比较。
+- 未设置结束时间的活动计划保持运行；只有已设置且早于或等于当前时间的活动计划会进入结束流程。

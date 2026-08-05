@@ -35,11 +35,91 @@ class CustomerServiceQueryProvider implements QueryProviderInterface
             'setLanguage' => $this->setLanguage($params),
             'serviceStatus' => $this->serviceStatus(),
             'sendVerification' => $this->sendVerification($params),
+            'adminRequest' => $this->adminRequest($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Unsupported customer service provider operation: %{1}', $operation)
             ),
         };
     }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function adminRequest(array $params): mixed
+    {
+        $url = trim((string)($params['url'] ?? ''));
+        $method = strtoupper(trim((string)($params['method'] ?? 'GET'))) ?: 'GET';
+        $headers = is_array($params['headers'] ?? null) ? $params['headers'] : [];
+        $body = array_key_exists('body', $params) && $params['body'] !== null ? (string)$params['body'] : '';
+        if ($url === '') {
+            return ['success' => false, 'message' => (string)__('Missing URL')];
+        }
+        $parts = parse_url($url);
+        $path = strtolower((string)($parts['path'] ?? ''));
+        foreach (['/customerservice/backend/', '/customer-service/backend/'] as $marker) {
+            $pos = strpos($path, $marker);
+            if ($pos !== false) {
+                $path = substr($path, $pos);
+                break;
+            }
+        }
+        if (!preg_match('#^/(?:customerservice|customer-service)/backend/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#', $path, $m)) {
+            return ['success' => false, 'message' => (string)__('Unsupported customer service admin path')];
+        }
+        $controllerSeg = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $m[1])));
+        $actionSeg = str_replace('-', '', (string)($m[2] ?? 'index'));
+        $class = 'Weline\\CustomerService\\Controller\\Backend\\' . $controllerSeg;
+        if (!class_exists($class)) {
+            return ['success' => false, 'message' => (string)__('Controller missing: %{1}', $controllerSeg)];
+        }
+        $queryParams = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $queryParams);
+        }
+        $bodyParams = [];
+        if ($body !== '') {
+            $ct = '';
+            foreach ($headers as $name => $value) {
+                if (strtolower((string)$name) === 'content-type') { $ct = strtolower((string)$value); break; }
+            }
+            if (str_contains($ct, 'application/json') || str_starts_with(ltrim($body), '{')) {
+                $decoded = json_decode($body, true);
+                $bodyParams = is_array($decoded) ? $decoded : [];
+            } else {
+                parse_str($body, $bodyParams);
+                if (!is_array($bodyParams)) { $bodyParams = []; }
+            }
+        }
+        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        foreach ($queryParams as $k => $v) { $request->setGet((string)$k, $v); }
+        foreach ($bodyParams as $k => $v) { $request->setPost((string)$k, $v); }
+        $request->setData('params', array_merge($queryParams, $bodyParams));
+        $request->getParameterBag()->setBody($bodyParams);
+        $request->getParameterBag()->setRawBody($body);
+        $controller = ObjectManager::getInstance($class);
+        $candidates = [$actionSeg, 'get' . ucfirst($actionSeg), 'post' . ucfirst($actionSeg)];
+        if ($method === 'POST') {
+            array_unshift($candidates, 'post' . ucfirst($actionSeg));
+        } else {
+            array_unshift($candidates, 'get' . ucfirst($actionSeg));
+        }
+        // console path helpers: /sessions -> getSessions
+        if ($actionSeg !== '' && !str_starts_with(strtolower($actionSeg), 'get') && !str_starts_with(strtolower($actionSeg), 'post')) {
+            $candidates[] = 'get' . ucfirst($actionSeg);
+            $candidates[] = 'post' . ucfirst($actionSeg);
+        }
+        foreach (array_unique($candidates) as $candidate) {
+            if (!method_exists($controller, $candidate)) continue;
+            $response = $controller->{$candidate}();
+            if (is_string($response)) {
+                $decoded = json_decode($response, true);
+                if (json_last_error() === JSON_ERROR_NONE) return $decoded;
+            }
+            return $response;
+        }
+        return ['success' => false, 'message' => (string)__('Action missing: %{1}', $actionSeg)];
+    }
+
 
     private function session(array $params): array
     {

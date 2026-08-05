@@ -41,3 +41,25 @@ body[data-layout="horizontal"][data-layout-size="boxed"] {
     max-width: $boxed-layout-width;
   }
 }
+
+// 平板及以下：盒装布局改为满宽，避免小屏两侧大块空白
+@media (max-width: 991.98px) {
+  body[data-layout-size="boxed"] {
+    #layout-wrapper,
+    #page-topbar,
+    .footer {
+      max-width: 100%;
+    }
+
+    &.vertical-collpsed .footer {
+      max-width: 100%;
+    }
+  }
+
+  body[data-layout="horizontal"][data-layout-size="boxed"] {
+    .container-fluid,
+    .navbar-header {
+      max-width: 100%;
+    }
+  }
+}

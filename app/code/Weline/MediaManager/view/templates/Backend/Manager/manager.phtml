@@ -172,8 +172,15 @@
                         <div class="mmf-ai-ref-picker-empty" id="mmf-ai-ref-picker-empty" style="display:none;"><lang>当前目录暂无图片，请先上传或切换到包含图片的文件夹</lang></div>
                         <div class="mmf-ai-ref-picker-no-match" id="mmf-ai-ref-picker-no-match" style="display:none;"><lang>没有匹配的图片</lang></div>
                     </div>
-                    <label class="mmf-ai-field-label" for="mmf-ai-prompt"><lang>提示词</lang></label>
+                    <div class="mmf-ai-prompt-head">
+                        <label class="mmf-ai-field-label" for="mmf-ai-prompt"><lang>提示词</lang></label>
+                        <div class="mmf-ai-prompt-actions">
+                            <button type="button" class="mmf-btn mmf-btn-ghost mmf-ai-prompt-action" id="mmf-ai-btn-polish" title="@lang{AI 润色}"><lang>AI 润色</lang></button>
+                            <button type="button" class="mmf-btn mmf-btn-ghost mmf-ai-prompt-action" id="mmf-ai-btn-clear-prompt" title="@lang{清空}"><lang>清空</lang></button>
+                        </div>
+                    </div>
                     <textarea class="mmf-ai-prompt" id="mmf-ai-prompt" rows="5" placeholder=""></textarea>
+                    <div class="mmf-ai-prompt-error" id="mmf-ai-prompt-error" style="display:none;"></div>
                     <div class="mmf-ai-batch-panel" id="mmf-ai-batch-panel" style="display:none;">
                         <label class="mmf-ai-field-label"><lang>批量提示词（每行一条）</lang></label>
                         <textarea class="mmf-ai-batch-prompts" id="mmf-ai-batch-prompts" rows="4"></textarea>
@@ -343,6 +350,11 @@
                 aiTabImage2Image: '@lang{图生图}',
                 aiTabBatch: '@lang{批量生成}',
                 aiPrompt: '@lang{提示词}',
+                aiPromptClear: '@lang{清空}',
+                aiPromptPolish: '@lang{AI 润色}',
+                aiPromptPolishing: '@lang{正在润色…}',
+                aiPromptPolishDone: '@lang{润色完成}',
+                aiPromptPolishFailed: '@lang{润色失败}',
                 aiGenerate: '@lang{开始生成}',
                 aiContinue: '@lang{继续修图}',
                 aiSave: '@lang{保存}',

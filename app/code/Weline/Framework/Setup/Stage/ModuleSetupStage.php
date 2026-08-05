@@ -141,6 +141,22 @@ class ModuleSetupStage extends AbstractStage
     }
     
     /**
+     * @return list<Module>
+     */
+    public function getInstallTasks(): array
+    {
+        return $this->installTasks;
+    }
+
+    /**
+     * @return list<Module>
+     */
+    public function getUpgradeTasks(): array
+    {
+        return $this->upgradeTasks;
+    }
+
+    /**
      * @inheritDoc
      */
     public function commit(): void
@@ -154,40 +170,13 @@ class ModuleSetupStage extends AbstractStage
             return;
         }
         
-        // 先执行所有升级任务（升级应该在安装之前）
-        foreach ($this->upgradeTasks as $module) {
-            try {
-                // 记录执行前的状态（用于回滚）
-                $this->executedTasks[] = [
-                    'module' => $module->getName(),
-                    'type' => 'upgrade',
-                ];
-                
-                // 执行模块升级
-                $this->moduleHandle->setupUpgrade($module);
-                $this->hasModuleInstalledOrUpgraded = true;
-            } catch (\Exception $e) {
-                $this->addError(__('模块 %{1} 升级失败：%{2}', [
-                    $module->getName(),
-                    $e->getMessage()
-                ]));
-                
-                // 回滚已执行的任务
-                $this->rollback();
-                throw new Exception(__('模块升级失败：%{1}', [$e->getMessage()]), 0, $e);
-            }
-        }
-        
-        // 再执行所有安装任务
+        // 同批先 Install 后 Upgrade（新模块可被同批 upgrade 依赖）
         foreach ($this->installTasks as $module) {
             try {
-                // 记录执行前的状态（用于回滚）
                 $this->executedTasks[] = [
                     'module' => $module->getName(),
                     'type' => 'install',
                 ];
-                
-                // 执行模块安装
                 $this->moduleHandle->setupInstall($module);
                 $this->hasModuleInstalledOrUpgraded = true;
             } catch (\Exception $e) {
@@ -195,10 +184,32 @@ class ModuleSetupStage extends AbstractStage
                     $module->getName(),
                     $e->getMessage()
                 ]));
-                
-                // 回滚已执行的任务
                 $this->rollback();
-                throw new Exception(__('模块安装失败：%{1}', [$e->getMessage()]), 0, $e);
+                throw new Exception(__(
+                    '模块安装失败：%{1}。注意：前置 Schema 可能已应用，Setup 脚本仍待重跑（setup_version 未推进）。',
+                    [$e->getMessage()]
+                ), 0, $e);
+            }
+        }
+
+        foreach ($this->upgradeTasks as $module) {
+            try {
+                $this->executedTasks[] = [
+                    'module' => $module->getName(),
+                    'type' => 'upgrade',
+                ];
+                $this->moduleHandle->setupUpgrade($module);
+                $this->hasModuleInstalledOrUpgraded = true;
+            } catch (\Exception $e) {
+                $this->addError(__('模块 %{1} 升级失败：%{2}', [
+                    $module->getName(),
+                    $e->getMessage()
+                ]));
+                $this->rollback();
+                throw new Exception(__(
+                    '模块升级失败：%{1}。注意：前置 Schema 可能已应用，Setup 脚本仍待重跑（setup_version 未推进）。',
+                    [$e->getMessage()]
+                ), 0, $e);
             }
         }
         
@@ -214,31 +225,13 @@ class ModuleSetupStage extends AbstractStage
         if (!$this->prepared) {
             return;
         }
-        
-        // 注意：模块安装/升级的回滚比较复杂，因为：
-        // 1. 安装脚本可能创建了数据库表、文件等
-        // 2. 升级脚本可能修改了数据结构
-        // 
-        // 这里我们只记录回滚操作，实际的回滚应该由：
-        // 1. 模块的 Remove 脚本处理（卸载）
-        // 2. 数据库迁移系统处理（数据回滚）
-        // 3. 文件系统备份恢复
-        
-        // 按逆序回滚（最后执行的最先回滚）
-        $executedTasks = array_reverse($this->executedTasks);
-        
-        foreach ($executedTasks as $task) {
-            // 这里可以添加回滚逻辑
-            // 例如：如果是安装，可以调用卸载脚本
-            // 如果是升级，可以尝试恢复到之前的版本
-        }
-        
+
+        // 已执行的 Install/Upgrade 脚本无法在此原子撤销；仅清理本阶段内存状态。
+        // 运维应修复脚本后再次 setup:upgrade（依赖 setup_version 未推进以保留 pending）。
         $this->prepared = false;
         $this->committed = false;
         $this->executedTasks = [];
         $this->hasModuleInstalledOrUpgraded = false;
-        
-        // 注意：这里不清空 installTasks 和 upgradeTasks，因为可能需要在回滚后重新准备
     }
     
     /**

@@ -2,29 +2,15 @@
 
 namespace Weline\DataTable\Helper;
 
+use Weline\Framework\Runtime\RequestContext;
+
 /**
  * 表格上下文管理助手类
  * 用于管理d-table标签的属性继承和字段配置
  */
 class TableContext
 {
-    /**
-     * 存储表格上下文的静态数组
-     * @var array
-     */
-    private static array $tableContexts = [];
-
-    /**
-     * 当前渲染栈，用于跟踪标签的渲染顺序
-     * @var array
-     */
-    private static array $renderStack = [];
-
-    /**
-     * 存储模板中定义的字段配置
-     * @var array
-     */
-    private static array $templateFields = [];
+    private const REQUEST_STATE_KEY = 'datatable.table_context.state.v1';
 
     /**
      * 设置表格上下文
@@ -33,14 +19,16 @@ class TableContext
      */
     public static function setTableContext(string $scope, array $attributes): void
     {
-        self::$tableContexts[$scope] = $attributes;
+        $state = self::requestState();
+        $state['table_contexts'][$scope] = $attributes;
         
         // 将当前表格推入渲染栈
-        self::$renderStack[] = [
+        $state['render_stack'][] = [
             'type' => 'table',
             'scope' => $scope,
             'attributes' => $attributes
         ];
+        self::storeRequestState($state);
     }
 
     /**
@@ -50,7 +38,8 @@ class TableContext
      */
     public static function getTableContext(string $scope): ?array
     {
-        return self::$tableContexts[$scope] ?? null;
+        $state = self::requestState();
+        return $state['table_contexts'][$scope] ?? null;
     }
 
     /**
@@ -59,10 +48,11 @@ class TableContext
      */
     public static function getCurrentTableContext(): ?array
     {
+        $renderStack = self::requestState()['render_stack'];
         // 从渲染栈中查找最近的表格上下文
-        for ($i = count(self::$renderStack) - 1; $i >= 0; $i--) {
-            if (self::$renderStack[$i]['type'] === 'table') {
-                return self::$renderStack[$i]['attributes'];
+        for ($i = count($renderStack) - 1; $i >= 0; $i--) {
+            if ($renderStack[$i]['type'] === 'table') {
+                return $renderStack[$i]['attributes'];
             }
         }
         return null;
@@ -76,11 +66,13 @@ class TableContext
      */
     public static function pushChildTag(string $tagType, string $scope, array $attributes): void
     {
-        self::$renderStack[] = [
+        $state = self::requestState();
+        $state['render_stack'][] = [
             'type' => $tagType,
             'scope' => $scope,
             'attributes' => $attributes
         ];
+        self::storeRequestState($state);
     }
 
     /**
@@ -88,7 +80,9 @@ class TableContext
      */
     public static function popTag(): void
     {
-        array_pop(self::$renderStack);
+        $state = self::requestState();
+        array_pop($state['render_stack']);
+        self::storeRequestState($state);
     }
 
     /**
@@ -97,15 +91,17 @@ class TableContext
      */
     public static function clearTableContext(string $scope): void
     {
-        unset(self::$tableContexts[$scope]);
+        $state = self::requestState();
+        unset($state['table_contexts'][$scope]);
         
         // 从渲染栈中移除对应的表格
-        foreach (self::$renderStack as $key => $item) {
+        foreach ($state['render_stack'] as $key => $item) {
             if ($item['type'] === 'table' && $item['scope'] === $scope) {
-                unset(self::$renderStack[$key]);
+                unset($state['render_stack'][$key]);
             }
         }
-        self::$renderStack = array_values(self::$renderStack);
+        $state['render_stack'] = array_values($state['render_stack']);
+        self::storeRequestState($state);
     }
 
     /**
@@ -114,7 +110,7 @@ class TableContext
      */
     public static function getAllTableContexts(): array
     {
-        return self::$tableContexts;
+        return self::requestState()['table_contexts'];
     }
 
     /**
@@ -131,7 +127,7 @@ class TableContext
         }
 
         // 如果渲染栈中没有，则从全局上下文中查找
-        foreach (self::$tableContexts as $tableScope => $tableContext) {
+        foreach (self::requestState()['table_contexts'] as $tableScope => $tableContext) {
             // 检查子scope是否是表格scope的子scope
             if (str_starts_with($childScope, $tableScope) || empty($childScope)) {
                 return $tableContext;
@@ -242,7 +238,7 @@ class TableContext
      */
     public static function getRenderStack(string $belong=''): array
     {
-        $stack = self::$renderStack;
+        $stack = self::requestState()['render_stack'];
         if ($belong) {
             $stack = array_filter($stack, function($item) use ($belong) {
                 return $item['type'] === $belong;
@@ -259,7 +255,9 @@ class TableContext
      */
     public static function clearRenderStack(): void
     {
-        self::$renderStack = [];
+        $state = self::requestState();
+        $state['render_stack'] = [];
+        self::storeRequestState($state);
     }
 
     /**
@@ -271,8 +269,9 @@ class TableContext
      */
     public static function recordTemplateField(string $scope, string $belong, string $fieldName, array $fieldAttributes): void
     {
-        if (!isset(self::$templateFields[$scope])) {
-            self::$templateFields[$scope] = [
+        $state = self::requestState();
+        if (!isset($state['template_fields'][$scope])) {
+            $state['template_fields'][$scope] = [
                 't-header' => [],
                 't-filter' => [],
                 'd-form' => []
@@ -280,7 +279,7 @@ class TableContext
         }
 
         // 添加字段到对应的类型中
-        self::$templateFields[$scope][$belong][$fieldName] = array_merge([
+        $state['template_fields'][$scope][$belong][$fieldName] = array_merge([
             'name' => $fieldName,
             'belong' => $belong,
             'template_defined' => true, // 标记为模板中定义的字段
@@ -289,6 +288,7 @@ class TableContext
             'sortable' => false, // 默认不可排序
             'editable' => false, // 默认不可编辑
         ], $fieldAttributes);
+        self::storeRequestState($state);
     }
 
     /**
@@ -299,15 +299,16 @@ class TableContext
      */
     public static function getTemplateFields(string $scope, string $belong = ''): array
     {
-        if (!isset(self::$templateFields[$scope])) {
+        $templateFields = self::requestState()['template_fields'];
+        if (!isset($templateFields[$scope])) {
             return [];
         }
 
         if ($belong) {
-            return self::$templateFields[$scope][$belong] ?? [];
+            return $templateFields[$scope][$belong] ?? [];
         }
 
-        return self::$templateFields[$scope];
+        return $templateFields[$scope];
     }
 
     /**
@@ -478,7 +479,9 @@ class TableContext
      */
     public static function clearTemplateFields(string $scope): void
     {
-        unset(self::$templateFields[$scope]);
+        $state = self::requestState();
+        unset($state['template_fields'][$scope]);
+        self::storeRequestState($state);
     }
 
     /**
@@ -486,7 +489,9 @@ class TableContext
      */
     public static function clearAllTemplateFields(): void
     {
-        self::$templateFields = [];
+        $state = self::requestState();
+        $state['template_fields'] = [];
+        self::storeRequestState($state);
     }
 
     /**
@@ -494,8 +499,32 @@ class TableContext
      */
     public static function clearAll(): void
     {
-        self::$tableContexts = [];
-        self::$renderStack = [];
-        self::$templateFields = [];
+        RequestContext::remove(self::REQUEST_STATE_KEY);
     }
-} 
+
+    /**
+     * @return array{
+     *     table_contexts: array<string, array>,
+     *     render_stack: list<array{type:string, scope:string, attributes:array}>,
+     *     template_fields: array<string, array>
+     * }
+     */
+    private static function requestState(): array
+    {
+        $state = RequestContext::get(self::REQUEST_STATE_KEY, []);
+        if (!is_array($state)) {
+            $state = [];
+        }
+
+        return [
+            'table_contexts' => is_array($state['table_contexts'] ?? null) ? $state['table_contexts'] : [],
+            'render_stack' => is_array($state['render_stack'] ?? null) ? array_values($state['render_stack']) : [],
+            'template_fields' => is_array($state['template_fields'] ?? null) ? $state['template_fields'] : [],
+        ];
+    }
+
+    private static function storeRequestState(array $state): void
+    {
+        RequestContext::set(self::REQUEST_STATE_KEY, $state);
+    }
+}

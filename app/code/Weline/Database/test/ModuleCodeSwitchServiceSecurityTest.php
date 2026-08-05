@@ -6,7 +6,7 @@ namespace Weline\Database\test;
 
 use Weline\Database\Service\ModuleCodeSwitchService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 final class ModuleCodeSwitchServiceSecurityTest extends TestCore
 {

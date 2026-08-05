@@ -1,679 +1,529 @@
 <?php
 /**
- * Sitemap管理页面
- *
  * @var \Weline\Framework\View\Template $this
  * @var array $websites
  * @var array $providers
- * @var array $module_sitemaps
+ * @var array $summary
  */
-
-
-$websites = $websites ?? [];
-$providers = $providers ?? [];
-$moduleSitemaps = $module_sitemaps ?? [];
-$websiteStats = $website_stats ?? [];
-$escapeAttr = static function ($value): string {
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-};
-
-// 获取前台根 URL（后台上下文中需要使用 getBaseHost 获取纯域名）
-$request = $this->getRequest();
-$frontendBaseUrl = $request->getBaseHost();
-if (!preg_match('/^https?:\/\//i', $frontendBaseUrl)) {
-    $scheme = $request->isSecure() ? 'https' : 'http';
-    $host = $request->getHttpHost();
-    $frontendBaseUrl = $scheme . '://' . $host;
-}
-$frontendBaseUrl = rtrim($frontendBaseUrl, '/');
-?>
-<!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0 font-size-18">
-                                <i class="mdi mdi-sitemap me-2"></i>
-                                <lang>Sitemap管理</lang>
-                            </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><span>
-                                            <lang>SEO管理</lang>
-                                        </span></li>
-                                    <li class='breadcrumb-item active'>
-                                        <lang>Sitemap管理</lang>
-                                    </li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-<script>
-(function () {
-    'use strict';
-
-    if (window.__seoSitemapActionsBound) {
-        return;
+$websites = is_array($websites ?? null) ? $websites : [];
+$providers = is_array($providers ?? null) ? $providers : [];
+$summary = is_array($summary ?? null) ? $summary : [];
+$seoWebsiteSelectOptions = [];
+foreach ($websites as $websiteOption) {
+    if (!is_array($websiteOption)) {
+        continue;
     }
-    window.__seoSitemapActionsBound = true;
+    $optionWebsiteId = (int)($websiteOption['website_id'] ?? $websiteOption['id'] ?? -1);
+    if ($optionWebsiteId < 0) {
+        continue;
+    }
+    $seoWebsiteSelectOptions[] = [
+        'value' => (string)$optionWebsiteId,
+        'label' => (string)($websiteOption['name'] ?? __('站点 %{1}', $optionWebsiteId)),
+        'meta' => (string)($websiteOption['code'] ?? ''),
+    ];
+}
+$seoWebsiteSelectOptionsJson = json_encode($seoWebsiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+?>
+<link rel="stylesheet" href="@static(Weline_Seo::css/seo-admin.css)?v=20260726-sitemap-multi-domain-2">
+<script src="@static(Weline_Seo::js/seo-admin.js)?v=20260726-sitemap-multi-domain-6" defer></script>
 
-    document.addEventListener('click', function (event) {
-        var actionTrigger = event.target.closest('[data-seo-sitemap-action]');
-        if (actionTrigger) {
-            var action = actionTrigger.getAttribute('data-seo-sitemap-action');
+<main class="seo-admin" data-seo-admin-page="sitemap" data-testid="seo-sitemap-management"
+      data-api-unavailable="<?= htmlspecialchars((string)__('Weline API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
+      data-resource-unavailable="<?= htmlspecialchars((string)__('SEO 后台 API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
+      data-copied="<?= htmlspecialchars((string)__('Sitemap URL 已复制'), ENT_QUOTES, 'UTF-8') ?>"
+      data-copy-failed="<?= htmlspecialchars((string)__('复制失败'), ENT_QUOTES, 'UTF-8') ?>"
+      data-select-website="<?= htmlspecialchars((string)__('请至少选择一个站点，或启用“操作全部站点”'), ENT_QUOTES, 'UTF-8') ?>"
+      data-running="<?= htmlspecialchars((string)__('操作正在执行，请勿重复提交。'), ENT_QUOTES, 'UTF-8') ?>"
+      data-completed="<?= htmlspecialchars((string)__('操作完成'), ENT_QUOTES, 'UTF-8') ?>"
+      data-failed="<?= htmlspecialchars((string)__('操作失败'), ENT_QUOTES, 'UTF-8') ?>"
+      data-backend-failed="<?= htmlspecialchars((string)__('SEO 后台操作失败'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-load-failed="<?= htmlspecialchars((string)__('加载 Sitemap URL 失败'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-empty="<?= htmlspecialchars((string)__('暂无 Sitemap URL；请先同步 Provider。'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-updated="<?= htmlspecialchars((string)__('Sitemap URL 已更新'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-deleted="<?= htmlspecialchars((string)__('Sitemap URL 已删除'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-select-rows="<?= htmlspecialchars((string)__('请先勾选要操作的 URL'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-confirm-delete="<?= htmlspecialchars((string)__('确认删除选中的 URL？Provider 下次同步可能重建它们；长期排除请改用停用。'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-active="<?= htmlspecialchars((string)__('启用'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-inactive="<?= htmlspecialchars((string)__('停用'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-default-locale="<?= htmlspecialchars((string)__('默认桶'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-save="<?= htmlspecialchars((string)__('保存'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-delete="<?= htmlspecialchars((string)__('删除'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-all-providers="<?= htmlspecialchars((string)__('全部 Provider'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-all-locales="<?= htmlspecialchars((string)__('全部语言'), ENT_QUOTES, 'UTF-8') ?>"
+      data-url-reconfirm-delete="<?= htmlspecialchars((string)__('再次点击确认删除选中的 URL'), ENT_QUOTES, 'UTF-8') ?>">
+    <div class="row">
+        <div class="col-12"><template>Weline_Component::message.phtml</template></div>
+    </div>
 
-            if (action === 'copy-url') {
-                event.preventDefault();
-                event.stopPropagation();
-                if (typeof window.copyToClipboard === 'function') {
-                    window.copyToClipboard(actionTrigger.getAttribute('data-copy-url') || '');
+    <header class="seo-admin__header">
+        <div>
+            <p class="seo-admin__eyebrow"><lang>SEO 运维</lang></p>
+            <h1 class="seo-admin__title"><i class="mdi mdi-sitemap" aria-hidden="true"></i> <lang>Sitemap管理</lang></h1>
+            <p class="seo-admin__description"><lang>URL 同步只更新数据库；生成负责原子发布 canonical 文件；提交只发送给已绑定的平台。</lang></p>
+        </div>
+        <div class="seo-admin__actions" aria-label="<?= htmlspecialchars((string)__('Sitemap 批量操作'), ENT_QUOTES, 'UTF-8') ?>">
+            <button type="button" class="btn btn-outline-primary" data-seo-operation="syncSitemapUrls">
+                <i class="mdi mdi-database-sync-outline" aria-hidden="true"></i> <lang>同步 URL</lang>
+            </button>
+            <button type="button" class="btn btn-primary" data-seo-operation="generateSitemaps">
+                <i class="mdi mdi-file-cog-outline" aria-hidden="true"></i> <lang>生成 canonical</lang>
+            </button>
+            <button type="button" class="btn btn-outline-success" data-seo-operation="submitSitemaps">
+                <i class="mdi mdi-send-check-outline" aria-hidden="true"></i> <lang>提交平台</lang>
+            </button>
+        </div>
+    </header>
+
+    <section class="seo-kpi-grid" aria-label="<?= htmlspecialchars((string)__('Sitemap 概览'), ENT_QUOTES, 'UTF-8') ?>">
+        <?php
+        $kpis = [
+            ['icon' => 'mdi-web', 'value' => (int)($summary['website_count'] ?? 0), 'label' => __('站点')],
+            ['icon' => 'mdi-link-variant', 'value' => (int)($summary['active_urls'] ?? 0), 'label' => __('活跃 URL')],
+            ['icon' => 'mdi-translate', 'value' => (int)($summary['locale_buckets'] ?? 0), 'label' => __('语言桶')],
+            ['icon' => 'mdi-file-check-outline', 'value' => (int)($summary['generated_websites'] ?? 0), 'label' => __('已生成')],
+            ['icon' => 'mdi-cloud-upload-outline', 'value' => (int)($summary['submission_ready_websites'] ?? 0), 'label' => __('可提交')],
+        ];
+        foreach ($kpis as $kpi):
+        ?>
+            <article class="seo-kpi">
+                <i class="mdi <?= htmlspecialchars($kpi['icon'], ENT_QUOTES, 'UTF-8') ?>" aria-hidden="true"></i>
+                <div><strong><?= number_format($kpi['value']) ?></strong><span><?= htmlspecialchars((string)$kpi['label'], ENT_QUOTES, 'UTF-8') ?></span></div>
+            </article>
+        <?php endforeach; ?>
+    </section>
+
+    <section class="seo-admin__panel">
+        <div class="seo-toolbar">
+            <div class="seo-toolbar__websites">
+                <span class="visually-hidden"><lang>选择站点</lang></span>
+                <w:websites:website:select
+                    id="seo_website_ids"
+                    name="seo_website_ids"
+                    value=""
+                    display=""
+                    options="seoWebsiteSelectOptionsJson"
+                    multiple="true"
+                    empty-label="@lang(请选择站点)"
+                    placeholder="@lang(搜索站点名称或编码)"
+                    class="seo-website-select"
+                    on-select="handleSeoWebsiteSelectChange"
+                />
+            </div>
+            <label class="seo-toolbar__filter">
+                <span class="visually-hidden"><lang>Provider 筛选</lang></span>
+                <select class="form-select" data-seo-filter="provider">
+                    <option value=""><lang>全部 Provider</lang></option>
+                    <?php foreach ($providers as $provider): ?>
+                        <option value="<?= htmlspecialchars((string)($provider['module'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                            <?= htmlspecialchars((string)($provider['module'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label class="seo-toolbar__filter">
+                <span class="visually-hidden"><lang>生成状态筛选</lang></span>
+                <select class="form-select" data-seo-filter="status">
+                    <option value=""><lang>全部状态</lang></option>
+                    <option value="generated"><lang>已生成</lang></option>
+                    <option value="pending"><lang>待生成</lang></option>
+                    <option value="submission-ready"><lang>可提交</lang></option>
+                </select>
+            </label>
+            <div class="form-check form-switch seo-toolbar__switch">
+                <input class="form-check-input" type="checkbox" id="seoAllSites" data-seo-all-sites>
+                <label class="form-check-label" for="seoAllSites"><lang>操作全部站点</lang></label>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary seo-toolbar__action" data-seo-select-all><lang>选择当前结果</lang></button>
+        </div>
+
+        <div class="seo-operation-result" data-seo-operation-result role="status" aria-live="polite"></div>
+
+        <div class="seo-site-list" data-seo-site-list>
+            <?php if ($websites === []): ?>
+                <div class="seo-empty-state"><i class="mdi mdi-web-off" aria-hidden="true"></i><p><lang>暂无可管理站点</lang></p></div>
+            <?php endif; ?>
+            <?php foreach ($websites as $website):
+                $websiteId = (int)($website['website_id'] ?? $website['id'] ?? -1);
+                if ($websiteId < 0) { continue; }
+                $stats = is_array($website['stats'] ?? null) ? $website['stats'] : [];
+                $canonical = is_array($website['canonical'] ?? null) ? $website['canonical'] : null;
+                $fileTree = is_array($website['sitemap_file_tree'] ?? null) ? $website['sitemap_file_tree'] : [];
+                $treeTargets = is_array($fileTree['targets'] ?? null) ? $fileTree['targets'] : [];
+                $publicSitemapUrl = trim((string)($fileTree['public_url'] ?? ''));
+                $publicSitemapUrls = is_array($fileTree['public_urls'] ?? null) ? $fileTree['public_urls'] : [];
+                if ($publicSitemapUrls === [] && $publicSitemapUrl !== '') {
+                    $publicSitemapUrls[] = [
+                        'url' => $publicSitemapUrl,
+                        'domain' => (string)(parse_url($publicSitemapUrl, PHP_URL_HOST) ?: ''),
+                        'is_canonical' => true,
+                        'is_primary' => true,
+                    ];
                 }
-                return;
-            }
-
-            if (action === 'generate' && typeof window.generateSitemap === 'function') {
-                event.preventDefault();
-                window.generateSitemap();
-                return;
-            }
-
-            if (action === 'generate-provider' && typeof window.generateByProvider === 'function') {
-                event.preventDefault();
-                window.generateByProvider(actionTrigger.getAttribute('data-provider-module') || '');
-                return;
-            }
-
-            if (action === 'generate-all' && typeof window.generateByAllProviders === 'function') {
-                event.preventDefault();
-                window.generateByAllProviders();
-                return;
-            }
-        }
-
-        var toggleTrigger = event.target.closest('[data-seo-sitemap-toggle]');
-        if (!toggleTrigger) {
-            return;
-        }
-
-        var toggleType = toggleTrigger.getAttribute('data-seo-sitemap-toggle');
-        if (toggleType === 'website' && typeof window.toggleWebsite === 'function') {
-            window.toggleWebsite(toggleTrigger);
-            return;
-        }
-        if (toggleType === 'scope' && typeof window.toggleScope === 'function') {
-            window.toggleScope(toggleTrigger);
-        }
-    });
-})();
-</script>
-
-                <!-- 消息提示区域 -->
-                <div class='row'>
-                    <div class="col-12">
-                        <w:template name="Weline_Component::message.phtml"/>
+                $treeLimits = is_array($fileTree['limits'] ?? null) ? $fileTree['limits'] : [];
+                $scopeStats = is_array($stats['scope_stats'] ?? null) ? $stats['scope_stats'] : [];
+                $providerModules = array_values(array_unique(array_filter(array_map(static fn(array $row): string => (string)($row['module'] ?? ''), $scopeStats))));
+                $locales = [];
+                foreach ($scopeStats as $row) {
+                    foreach ((array)($row['locales'] ?? []) as $locale) { $locales[(string)$locale] = true; }
+                }
+                $generated = !empty($fileTree['generated']);
+                $submissionReady = !empty($website['submission_ready']);
+                $domainSearchParts = [];
+                foreach ($publicSitemapUrls as $publicOriginRow) {
+                    if (!is_array($publicOriginRow)) {
+                        continue;
+                    }
+                    $domainSearchParts[] = (string)($publicOriginRow['domain'] ?? '');
+                    $domainSearchParts[] = (string)($publicOriginRow['url'] ?? '');
+                }
+                $searchText = strtolower(implode(' ', [
+                    (string)($website['name'] ?? ''), (string)($website['code'] ?? ''),
+                    (string)($website['domain'] ?? ''), (string)($website['url'] ?? ''),
+                    ...$domainSearchParts,
+                ]));
+            ?>
+                <article class="seo-site-card"
+                         data-seo-site
+                         data-website-id="<?= (int)$websiteId ?>"
+                         data-search="<?= htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') ?>"
+                         data-providers="<?= htmlspecialchars(implode(' ', $providerModules), ENT_QUOTES, 'UTF-8') ?>"
+                         data-status="<?= $generated ? 'generated' : 'pending' ?><?= $submissionReady ? ' submission-ready' : '' ?>">
+                    <div class="seo-site-card__select">
+                        <input class="form-check-input" type="checkbox" value="<?= $websiteId ?>" data-seo-website-id aria-label="<?= htmlspecialchars(__('选择站点 %{1}', (string)($website['name'] ?? $websiteId)), ENT_QUOTES, 'UTF-8') ?>">
                     </div>
-                </div>
-
-                <!-- SEO 模块工作原理手风琴 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="accordion mb-3" id="seoWorkflowAccordion">
-                            <div class="accordion-item" style="border: 2px solid #667eea; border-radius: 8px; overflow: hidden;">
-                                <h2 class="accordion-header" id="headingWorkflow">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWorkflow" aria-expanded="false" aria-controls="collapseWorkflow" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; font-weight: 600;">
-                                        <i class="mdi mdi-information-outline me-2" style="font-size: 20px;"></i>
-                                        <lang>SEO 模块工作原理</lang>
-                                        <span class="badge bg-light text-dark ms-2" style="font-size: 11px;"><lang>点击查看</lang></span>
-                                    </button>
-                                </h2>
-                                <div id="collapseWorkflow" class="accordion-collapse collapse" aria-labelledby="headingWorkflow" data-bs-parent="#seoWorkflowAccordion">
-                                    <div class="accordion-body" style="background: #f8f9fa; padding: 20px;">
-                                        
-                                        <!-- 工作流程概览 -->
-                                        <div class="workflow-overview mb-4">
-                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
-                                                <i class="mdi mdi-chart-timeline-variant me-2"></i>
-                                                <lang>工作流程概览</lang>
-                                            </h5>
-                                            <div class="workflow-steps" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                                                <!-- 步骤 1 -->
-                                                <div class="step-card" style="background: #fff; border-left: 4px solid #667eea; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                    <div class="step-number" style="width: 32px; height: 32px; background: #667eea; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">1</div>
-                                                    <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>URL 数据采集</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>各模块通过 SitemapUrlProvider 提供 URL 数据，包括页面、产品、分类等</lang></p>
-                                                </div>
-                                                
-                                                <!-- 步骤 2 -->
-                                                <div class="step-card" style="background: #fff; border-left: 4px solid #764ba2; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                    <div class="step-number" style="width: 32px; height: 32px; background: #764ba2; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">2</div>
-                                                    <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>平台适配器生成</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml</lang></p>
-                                                </div>
-                                                
-                                                <!-- 步骤 3 -->
-                                                <div class="step-card" style="background: #fff; border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                    <div class="step-number" style="width: 32px; height: 32px; background: #28a745; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">3</div>
-                                                    <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>自动提交</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap</lang></p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- 架构说明 -->
-                                        <div class="architecture-section mb-4">
-                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
-                                                <i class="mdi mdi-sitemap me-2"></i>
-                                                <lang>架构设计</lang>
-                                            </h5>
-                                            <div class="row">
-                                                <div class="col-md-6 mb-3">
-                                                    <div class="architecture-card" style="background: #fff; padding: 15px; border-radius: 8px; height: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                        <h6 style="font-weight: 600; margin-bottom: 12px; color: #667eea;">
-                                                            <i class="mdi mdi-puzzle-outline me-2"></i>
-                                                            <lang>Provider 扩展机制</lang>
-                                                        </h6>
-                                                        <ul class="mb-0" style="font-size: 13px; line-height: 1.8; padding-left: 20px;">
-                                                            <li><lang>各模块通过 <code>extends/module/Weline_Seo/SitemapUrlProvider/</code> 注册自己的 URL 提供器</lang></li>
-                                                            <li><lang>实现 <code>SitemapUrlProviderInterface</code> 接口</lang></li>
-                                                            <li><lang>返回稳定 <code>url_key</code>，SEO 模块负责增量同步</lang></li>
-                                                            <li><lang>URL 数据统一存储在 <code>weline_sitemap_url</code> 表</lang></li>
-                                                        </ul>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6 mb-3">
-                                                    <div class="architecture-card" style="background: #fff; padding: 15px; border-radius: 8px; height: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                        <h6 style="font-weight: 600; margin-bottom: 12px; color: #764ba2;">
-                                                            <i class="mdi mdi-cog-outline me-2"></i>
-                                                            <lang>平台适配器模式</lang>
-                                                        </h6>
-                                                        <ul class="mb-0" style="font-size: 13px; line-height: 1.8; padding-left: 20px;">
-                                                            <li><lang>每个搜索引擎平台有独立的适配器</lang></li>
-                                                            <li><lang>适配器负责生成符合平台规范的 XML 文件</lang></li>
-                                                            <li><lang>处理平台特定限制（文件大小、URL 数量）</lang></li>
-                                                            <li><lang>实现平台特定的提交协议</lang></li>
-                                                        </ul>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- 目录结构 -->
-                                        <div class="directory-section mb-4">
-                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
-                                                <i class="mdi mdi-folder-outline me-2"></i>
-                                                <lang>目录结构</lang>
-                                            </h5>
-                                            <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                <pre style="margin: 0; font-size: 12px; line-height: 1.6; color: #333; background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto;"><code>pub/sitemaps/
-├── default/                             # 站点目录
-│   ├── google/                          # Google 平台目录
-│   │   ├── sitemap.xml                  # Google 平台索引
-│   │   └── sitemap_product_1.xml        # 产品模块 URL
-│   ├── bing/                            # Bing 平台目录
-│   │   ├── sitemap.xml                  # Bing 平台索引
-│   │   └── ...
-│   ├── baidu/                           # Baidu 平台目录
-│   │   ├── sitemap.xml                  # Baidu 平台索引（10MB 限制）
-│   │   └── ...
-│   └── yandex/                          # 其他已绑定平台目录
-│       └── ...
-└── shop_us/                             # 其他站点
-    └── ...</code></pre>
-                                            </div>
-                                        </div>
-
-                                        <!-- 平台限制对比 -->
-                                        <div class="platform-limits mb-4">
-                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
-                                                <i class="mdi mdi-speedometer me-2"></i>
-                                                <lang>平台规范对比</lang>
-                                            </h5>
-                                            <div style="background: #fff; padding: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                <table class="table table-bordered mb-0" style="font-size: 13px;">
-                                                    <thead style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff;">
-                                                        <tr>
-                                                            <th style="border: none; padding: 12px;"><lang>平台</lang></th>
-                                                            <th style="border: none; padding: 12px;"><lang>最大 URL 数量</lang></th>
-                                                            <th style="border: none; padding: 12px;"><lang>最大文件大小</lang></th>
-                                                            <th style="border: none; padding: 12px;"><lang>提交方式</lang></th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <tr>
-                                                            <td style="padding: 10px;"><span class="badge" style="background: #4285f4;">Google</span></td>
-                                                            <td style="padding: 10px;">50,000</td>
-                                                            <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;">Search Console API</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td style="padding: 10px;"><span class="badge" style="background: #008373;">Bing</span></td>
-                                                            <td style="padding: 10px;">50,000</td>
-                                                            <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;">Webmaster API / IndexNow</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td style="padding: 10px;"><span class="badge" style="background: #2932e1;">Baidu</span></td>
-                                                            <td style="padding: 10px;">50,000</td>
-                                                            <td style="padding: 10px;">10 MB ⚠️</td>
-                                                            <td style="padding: 10px;">Baidu LinkSubmit API</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td style="padding: 10px;"><span class="badge" style="background: #111827;">IndexNow</span></td>
-                                                            <td style="padding: 10px;">50,000</td>
-                                                            <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;">IndexNow</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td style="padding: 10px;"><span class="badge" style="background: #6c757d;"><lang>长尾平台</lang></span></td>
-                                                            <td style="padding: 10px;">50,000</td>
-                                                            <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;"><lang>Sitemap 生成 / 手动或自然发现</lang></td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        <!-- 核心接口 -->
-                                        <div class="interfaces-section">
-                                            <h5 class="mb-3" style="color: #667eea; font-weight: 600;">
-                                                <i class="mdi mdi-code-braces me-2"></i>
-                                                <lang>核心接口</lang>
-                                            </h5>
-                                            <div class="row">
-                                                <div class="col-lg-6 mb-3">
-                                                    <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                        <h6 style="font-weight: 600; margin-bottom: 10px;">SitemapUrlProviderInterface</h6>
-                                                        <p class="text-muted mb-2" style="font-size: 12px;"><lang>模块实现此接口以提供 URL 数据</lang></p>
-                                                        <pre style="margin: 0; font-size: 11px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"><code>interface SitemapUrlProviderInterface {
-    public function getScope(): string;
-    public function getModule(): string;
-    public function getWebsiteIds(): array;
-    public function getUrlsForWebsite(int $websiteId): array;
-    public function getDescription(): string;
-    public function isEnabled(): bool;
-}</code></pre>
-                                                    </div>
-                                                </div>
-                                                <div class="col-lg-6 mb-3">
-                                                    <div style="background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                                                        <h6 style="font-weight: 600; margin-bottom: 10px;">SitemapPlatformAdapterInterface</h6>
-                                                        <p class="text-muted mb-2" style="font-size: 12px;"><lang>平台适配器接口，处理平台特定逻辑</lang></p>
-                                                        <pre style="margin: 0; font-size: 11px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"><code>interface SitemapPlatformAdapterInterface {
-    public function generateSitemapFiles(...): array;
-    public function submitSitemap(...): array;
-    public function getMaxUrlsPerFile(): int;
-    public function getMaxFileSizeBytes(): int;
-}</code></pre>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- 快速链接 -->
-                                        <div class="quick-links mt-4 pt-3" style="border-top: 2px dashed #dee2e6;">
-                                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                                <div>
-                                                    <i class="mdi mdi-bookmark-outline me-2" style="color: #667eea;"></i>
-                                                    <strong style="color: #667eea;"><lang>相关文档</lang>:</strong>
-                                                    <span class="text-muted ms-2" style="font-size: 12px;"><lang>（在开发文档中搜索查看）</lang></span>
-                                                </div>
-                                                <div class="d-flex gap-2 flex-wrap">
-                                                    <a href="<?= $this->getUrl('dev/tool/docs') ?>?search=Sitemap+架构" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="<?= __('在开发文档中搜索：Sitemap 架构设计') ?>">
-                                                        <i class="mdi mdi-file-document-outline me-1"></i><lang>架构设计文档</lang>
-                                                    </a>
-                                                    <a href="<?= $this->getUrl('dev/tool/docs') ?>?search=Sitemap+扩展" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success" title="<?= __('在开发文档中搜索：Sitemap扩展开发指南') ?>">
-                                                        <i class="mdi mdi-puzzle-outline me-1"></i><lang>扩展开发指南</lang>
-                                                    </a>
-                                                </div>
-                                            </div>
-                                            <div class="alert alert-info mt-3 mb-0" style="font-size: 12px; padding: 10px 15px;">
-                                                <i class="mdi mdi-information-outline me-1"></i>
-                                                <lang>提示：如果搜索不到文档，请先在开发空间运行命令</lang>：<code>php bin/w doc:import</code> <lang>导入模块文档到数据库</lang>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <!-- 左侧：生成控制 + Provider 列表 -->
-                    <div class="col-xl-4">
-                        <!-- 手动生成 Sitemap -->
-                        <div class="card">
-                            <div class="card-body">
-                                <h4 class="card-title mb-4">
-                                    <i class="mdi mdi-cog-outline me-2"></i>
-                                    <lang>手动生成</lang>
-                                </h4>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label"><lang>选择站点</lang></label>
-                                    <select class="form-select" id="website_id">
-                                        <option value="0"><lang>全站生成</lang></option>
-                                        <?php foreach ($websites as $website): ?>
-                                        <?php 
-                                        $websiteId = $website['website_id'] ?? $website['id'] ?? 0;
-                                        $websiteName = $website['name'] ?? $website['domain'] ?? __('站点') . ' ' . $websiteId;
-                                        ?>
-                                        <option value="<?= $websiteId ?>"><?= htmlspecialchars($websiteName) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <button type="button" class="btn btn-primary w-100" id="generateBtn" data-seo-sitemap-action="generate">
-                                    <i class="mdi mdi-refresh me-2"></i><lang>生成Sitemap</lang>
-                                </button>
-                                <p class="text-muted mt-2 mb-0" style="font-size: 12px;">
-                                    <i class="mdi mdi-alert-circle-outline me-1" style="color: #f39c12;"></i>
-                                    <lang>注意：请先点击下方"同步所有 Provider"按钮同步 URL 数据，然后再点击此按钮生成 sitemap 文件</lang>
+                    <div class="seo-site-card__main">
+                        <div class="seo-site-card__heading">
+                            <div>
+                                <h2><?= htmlspecialchars((string)($website['name'] ?? __('站点 %{1}', $websiteId)), ENT_QUOTES, 'UTF-8') ?></h2>
+                                <p>
+                                    <code><?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code>
+                                    <span>ID <?= $websiteId ?></span>
+                                    <?php if ($websiteId === 0): ?><span class="badge bg-primary"><lang>系统默认站</lang></span><?php endif; ?>
                                 </p>
                             </div>
-                        </div>
-                        
-                        <!-- Sitemap 生成器（Provider）列表 -->
-                        <div class="card">
-                            <div class="card-body">
-                                <h4 class="card-title mb-4">
-                                    <i class="mdi mdi-puzzle-outline me-2"></i>
-                                    <lang>Sitemap URL Provider</lang>
-                                    <span class="badge bg-primary ms-2"><?= count($providers) ?></span>
-                                </h4>
-                                
-                                <?php if (!empty($providers)): ?>
-                                    <?php foreach ($providers as $provider): ?>
-                                    <div class="provider-card">
-                                        <div class="provider-header">
-                                            <div class="provider-info">
-                                                <div class="provider-icon">
-                                                    <i class="mdi mdi-puzzle"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="provider-name"><?= htmlspecialchars($provider['module']) ?></div>
-                                                    <div class="provider-scope">
-                                                        scope: <?= htmlspecialchars($provider['scope']) ?>
-                                                        <?php if (!empty($provider['enabled'])): ?>
-                                                            <span class="badge bg-success ms-1"><lang>启用</lang></span>
-                                                        <?php else: ?>
-                                                            <span class="badge bg-secondary ms-1"><lang>停用</lang></span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="provider-desc">
-                                            <?= htmlspecialchars($provider['description']) ?>
-                                        </div>
-                                        <div class="provider-actions">
-                                            <button type="button" class="btn btn-sm btn-outline-primary"
-                                                    data-seo-sitemap-action="generate-provider"
-                                                    data-provider-module="<?= $escapeAttr($provider['module'] ?? '') ?>">
-                                                <i class="mdi mdi-refresh me-1"></i><lang>生成</lang>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <?php endforeach; ?>
-                                    
-                                    <button type="button" class="btn btn-success w-100 mt-3" data-seo-sitemap-action="generate-all">
-                                        <i class="mdi mdi-refresh-auto me-2"></i><lang>同步所有 Provider</lang>
-                                    </button>
-                                <?php else: ?>
-                                    <div class="text-center text-muted py-4">
-                                        <i class="mdi mdi-puzzle-outline" style="font-size: 40px; opacity: 0.3;"></i>
-                                        <p class="mt-2 mb-0"><lang>暂无注册的 Sitemap URL Provider</lang></p>
-                                        <p class="small"><lang>其他模块可通过 SitemapUrlProvider 扩展点注册</lang></p>
-                                    </div>
-                                <?php endif; ?>
+                            <div class="seo-status-stack">
+                                <span class="seo-status <?= $generated ? 'is-success' : 'is-warning' ?>">
+                                    <i class="mdi <?= $generated ? 'mdi-check-circle-outline' : 'mdi-clock-outline' ?>" aria-hidden="true"></i>
+                                    <?= $generated ? __('canonical 已生成') : __('等待生成') ?>
+                                </span>
+                                <span class="seo-status <?= $submissionReady ? 'is-info' : 'is-muted' ?>">
+                                    <?= $submissionReady ? __('已绑定提交账户') : __('可生成，尚未绑定提交账户') ?>
+                                </span>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-primary"
+                                        data-seo-manage-urls
+                                        data-website-id="<?= $websiteId ?>"
+                                        data-website-name="<?= htmlspecialchars((string)($website['name'] ?? __('站点 %{1}', $websiteId)), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-website-code="<?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <i class="mdi mdi-link-variant" aria-hidden="true"></i> <lang>管理 URL</lang>
+                                </button>
                             </div>
                         </div>
 
-                        <?php if (!empty($websiteStats)): ?>
-                        <div class="card">
-                            <div class="card-body">
-                                <h4 class="card-title mb-3">
-                                    <i class="mdi mdi-database-search-outline me-2"></i>
-                                    <lang>Sitemap URL 数据</lang>
-                                </h4>
-                                <?php foreach ($websiteStats as $stat): ?>
-                                <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
-                                    <div>
-                                        <div class="fw-medium"><?= htmlspecialchars($stat['website_name'] ?: ($stat['website_code'] ?? 'Website')) ?></div>
-                                        <div class="text-muted small"><?= htmlspecialchars($stat['website_code'] ?? '') ?></div>
-                                    </div>
-                                    <div class="text-end">
-                                        <span class="badge bg-primary"><?= (int)($stat['url_count'] ?? 0) ?> URL</span>
-                                        <div class="text-muted small"><?= (int)($stat['platform_count'] ?? 0) ?> <lang>个平台</lang></div>
-                                    </div>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
+                        <div class="seo-site-card__metrics">
+                            <span><strong><?= number_format((int)($stats['url_count'] ?? 0)) ?></strong> <lang>URL</lang></span>
+                            <span><strong><?= count($locales) ?></strong> <lang>语言桶</lang></span>
+                            <span><strong><?= (int)($canonical['total_files'] ?? 0) ?></strong> <lang>canonical 文件</lang></span>
+                            <span><strong><?= count($publicSitemapUrls) ?></strong> <lang>域名 Sitemap</lang></span>
+                            <span><strong><?= (int)($stats['platform_count'] ?? 0) ?></strong> <lang>提交平台</lang></span>
                         </div>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <!-- 右侧：Sitemap 文件列表 -->
-                    <div class="col-xl-8">
-                        <!-- 多平台 Sitemap（pub/sitemaps/{site}/{platform}/ 目录） -->
-                        <?php if (!empty($moduleSitemaps)): ?>
-                        <div class="card mb-3">
-                            <div class="card-body">
-                                <h4 class="card-title mb-4">
-                                    <i class="mdi mdi-sitemap me-2"></i>
-                                    <lang>多平台 Sitemap</lang>
-                                    <span class="source-badge module ms-2"><lang>自动生成</lang></span>
-                                </h4>
-                                
-                                <div class="sitemap-tree" id="sitemapTree">
-                                    <?php foreach ($moduleSitemaps as $websiteCode => $websiteData): ?>
-                                    <?php $siteUrl = rtrim($websiteData['website_url'] ?? $frontendBaseUrl, '/'); ?>
-                                    <div class="website-node" 
-                                         data-website-name="<?= $escapeAttr(strtolower((string)($websiteData['website_name'] ?? ''))) ?>"
-                                         data-website-code="<?= $escapeAttr(strtolower((string)$websiteCode)) ?>"
-                                         data-website-domain="<?= $escapeAttr(strtolower((string)($websiteData['website_domain'] ?? ''))) ?>">
-                                        <!-- 站点头部 -->
-                                        <div class="website-header module-header" data-seo-sitemap-toggle="website" data-bs-toggle="collapse" data-bs-target="#module-files-<?= $escapeAttr($websiteCode) ?>">
-                                            <div class="website-info">
-                                                <i class="mdi mdi-web website-icon"></i>
-                                                <div>
-                                                    <div class="website-name"><?= htmlspecialchars($websiteData['website_name']) ?></div>
-                                                    <?php if (!empty($websiteData['website_domain'])): ?>
-                                                    <div class="website-domain"><?= htmlspecialchars($websiteData['website_domain']) ?></div>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                            <div class="d-flex align-items-center gap-3">
-                                                <span class="badge bg-primary"><?= $websiteData['platform_count'] ?? 0 ?> <lang>个平台</lang></span>
-                                                <span class="file-count"><?= $websiteData['total_files'] ?? 0 ?> <lang>个文件</lang></span>
-                                                <i class="mdi mdi-chevron-down toggle-icon"></i>
+
+                        <div class="seo-chip-row" aria-label="<?= htmlspecialchars((string)__('语言与 Provider'), ENT_QUOTES, 'UTF-8') ?>">
+                            <?php foreach (array_keys($locales) as $locale): ?>
+                                <span class="seo-chip"><i class="mdi mdi-translate" aria-hidden="true"></i><?= htmlspecialchars($locale === 'default' ? __('默认桶') : $locale, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endforeach; ?>
+                            <?php foreach ($providerModules as $module): ?>
+                                <span class="seo-chip is-provider"><?= htmlspecialchars($module, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <details class="seo-sitemap-tree"<?= $generated ? ' open' : '' ?>>
+                            <summary class="seo-sitemap-tree__root">
+                                <span class="seo-tree-node__icon"><i class="mdi mdi-sitemap" aria-hidden="true"></i></span>
+                                <span class="seo-tree-node__identity">
+                                    <strong><lang>主 Sitemap 文件</lang></strong>
+                                    <code>/sitemap.xml</code>
+                                </span>
+                                <span class="seo-tree-node__metrics">
+                                    <strong><?= number_format((int)($fileTree['total_urls'] ?? 0)) ?></strong> <lang>URL</lang>
+                                    <span aria-hidden="true">·</span>
+                                    <strong><?= number_format((int)($fileTree['child_sitemap_count'] ?? 0)) ?></strong> <lang>个下级 XML</lang>
+                                    <span aria-hidden="true">·</span>
+                                    <strong><?= count($publicSitemapUrls) ?></strong> <lang>个域名入口</lang>
+                                </span>
+                                <i class="mdi mdi-chevron-down seo-tree-node__chevron" aria-hidden="true"></i>
+                            </summary>
+
+                            <div class="seo-sitemap-tree__body">
+                                <div class="seo-sitemap-public-urls" aria-label="<?= htmlspecialchars((string)__('站点各域名 Sitemap 地址'), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?php if ($publicSitemapUrls === []): ?>
+                                        <div class="seo-sitemap-index-card is-public">
+                                            <div class="seo-sitemap-index-card__identity">
+                                                <span><lang>当前站点 Sitemap 地址</lang></span>
+                                                <code><?= htmlspecialchars((string)__('站点缺少可用基础 URL'), ENT_QUOTES, 'UTF-8') ?></code>
                                             </div>
                                         </div>
-                                        
-                                        <div class="collapse website-files" id="module-files-<?= htmlspecialchars($websiteCode) ?>">
-                                            <!-- 平台列表 -->
-                                            <?php if (!empty($websiteData['platforms'])): ?>
-                                            <?php foreach ($websiteData['platforms'] as $platformCode => $platformData): ?>
-                                            <?php $color = $platformData['platform_color'] ?? '#6c757d'; ?>
-                                            <?php $colorAttr = $escapeAttr($color); ?>
-                                            <div class="platform-group" style="border-left: 4px solid <?= $colorAttr ?>; margin-left: 15px; margin-top: 10px; border-radius: 4px; overflow: hidden;">
-                                                <!-- 平台头部 -->
-                                                <div class="file-item" style="background: <?= $colorAttr ?>15; cursor: pointer;" data-seo-sitemap-toggle="scope" data-bs-toggle="collapse" data-bs-target="#platform-<?= $escapeAttr($websiteCode) ?>-<?= $escapeAttr($platformCode) ?>">
-                                                    <div class="file-info" style="flex: 1;">
-                                                        <i class="mdi mdi-cloud-outline file-icon" style="color: <?= $colorAttr ?>; font-size: 24px;"></i>
-                                                        <div class="file-details" style="flex: 1;">
-                                                            <span class="file-name d-flex align-items-center flex-wrap gap-1">
-                                                                <strong style="color: <?= $colorAttr ?>;"><?= htmlspecialchars($platformData['platform_name']) ?></strong>
-                                                                <span class="badge ms-2" style="background: <?= $colorAttr ?>; color: #fff;"><?= $platformData['module_count'] ?? 0 ?> <lang>个模块</lang></span>
-                                                                <span class="badge bg-secondary ms-1"><?= $platformData['file_count'] ?? 0 ?> <lang>个文件</lang></span>
-                                                                <?php 
-                                                                // 显示 SEO 账户信息
-                                                                $seoAccount = $platformData['seo_account'] ?? null;
-                                                                if ($seoAccount): 
-                                                                ?>
-                                                                <span class="ms-2 text-muted" style="font-size: 12px;">
-                                                                    <i class="mdi mdi-account-key me-1"></i><?= htmlspecialchars($seoAccount['account_name']) ?>
-                                                                </span>
-                                                                <?php if ($seoAccount['is_auto_submit']): ?>
-                                                                <span class="badge bg-success ms-1" title="<?= __('已启用自动提交') ?>">
-                                                                    <i class="mdi mdi-check-circle"></i> <lang>自动提交</lang>
-                                                                </span>
-                                                                <?php else: ?>
-                                                                <span class="badge bg-warning text-dark ms-1" title="<?= __('未启用自动提交') ?>">
-                                                                    <i class="mdi mdi-pause-circle"></i> <lang>手动</lang>
-                                                                </span>
-                                                                <?php endif; ?>
-                                                                <?php if ($seoAccount['enable_cron_push']): ?>
-                                                                <span class="badge bg-info ms-1" title="<?= __('定时任务推送URL') ?>">
-                                                                    <i class="mdi mdi-clock-outline"></i> <lang>定时推送</lang>
-                                                                </span>
-                                                                <?php endif; ?>
-                                                                <?php endif; ?>
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="d-flex align-items-center gap-2">
-                                                        <?php if (!empty($platformData['index'])): ?>
-                                                        <button type="button"
-                                                                class="btn btn-sm"
-                                                                style="background: <?= $colorAttr ?>; color: #fff;"
-                                                                data-seo-sitemap-action="copy-url"
-                                                                data-copy-url="<?= $escapeAttr($siteUrl . $platformData['index']['url']) ?>">
-                                                            <i class="mdi mdi-content-copy me-1"></i><lang>复制提交URL</lang>
-                                                        </button>
+                                    <?php else: ?>
+                                        <?php foreach ($publicSitemapUrls as $publicOrigin):
+                                            if (!is_array($publicOrigin)) { continue; }
+                                            $originSitemapUrl = trim((string)($publicOrigin['url'] ?? ''));
+                                            if ($originSitemapUrl === '') { continue; }
+                                            $originDomain = trim((string)($publicOrigin['domain'] ?? ''));
+                                            if ($originDomain === '') {
+                                                $originDomain = (string)(parse_url($originSitemapUrl, PHP_URL_HOST) ?: '');
+                                            }
+                                            $isCanonicalOrigin = !empty($publicOrigin['is_canonical']);
+                                            $isPrimaryOrigin = !empty($publicOrigin['is_primary']);
+                                            $originLabel = $isCanonicalOrigin
+                                                ? (string)__('站点配置 URL Sitemap')
+                                                : (string)__('域名 Sitemap');
+                                        ?>
+                                            <div class="seo-sitemap-index-card is-public<?= $isCanonicalOrigin ? ' is-canonical' : '' ?>">
+                                                <div class="seo-sitemap-index-card__identity">
+                                                    <span>
+                                                        <?= htmlspecialchars($originLabel, ENT_QUOTES, 'UTF-8') ?>
+                                                        <?php if ($originDomain !== ''): ?>
+                                                            <small>· <?= htmlspecialchars($originDomain, ENT_QUOTES, 'UTF-8') ?></small>
                                                         <?php endif; ?>
-                                                        <i class="mdi mdi-chevron-down toggle-icon"></i>
-                                                    </div>
+                                                        <?php if ($isCanonicalOrigin): ?>
+                                                            <small class="seo-sitemap-origin-badge"><lang>canonical</lang></small>
+                                                        <?php elseif ($isPrimaryOrigin): ?>
+                                                            <small class="seo-sitemap-origin-badge"><lang>主域名</lang></small>
+                                                        <?php endif; ?>
+                                                    </span>
+                                                    <code title="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?></code>
                                                 </div>
-                                                
-                                                <!-- 平台内容 -->
-                                                <div class="collapse" id="platform-<?= $escapeAttr($websiteCode) ?>-<?= $escapeAttr($platformCode) ?>">
-                                                    <!-- 平台总索引 sitemap.xml -->
-                                                    <?php if (!empty($platformData['index'])): ?>
-                                                    <?php $platformIndex = $platformData['index']; ?>
-                                                    <div class="file-item" style="margin-left: 20px; background: <?= $colorAttr ?>20;">
-                                                        <div class="file-info">
-                                                            <i class="mdi mdi-file-tree file-icon" style="color: <?= $colorAttr ?>;"></i>
-                                                            <div class="file-details">
-                                                                <span class="file-name">
-                                                                    <strong><?= htmlspecialchars($platformIndex['name']) ?></strong>
-                                                                    <span class="badge ms-2" style="background: <?= $colorAttr ?>; color: #fff;"><lang>平台总索引</lang></span>
-                                                                </span>
-                                                                <div class="file-meta">
-                                                                    <span><i class="mdi mdi-harddisk"></i> <?= $platformIndex['size_formatted'] ?></span>
-                                                                    <span><i class="mdi mdi-clock-outline"></i> <?= $platformIndex['modified'] ?></span>
-                                                                </div>
-                                                            </div>
+                                                <div class="seo-sitemap-file__actions">
+                                                    <button type="button" class="btn btn-sm btn-primary" data-seo-copy="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                                        <i class="mdi mdi-content-copy" aria-hidden="true"></i> <lang>复制</lang>
+                                                    </button>
+                                                    <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($originSitemapUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                                        <lang>打开</lang> <i class="mdi mdi-open-in-new" aria-hidden="true"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </div>
+
+                                <p class="seo-sitemap-limit">
+                                    <i class="mdi mdi-call-split" aria-hidden="true"></i>
+                                    <?= htmlspecialchars((string)__('单个 Sitemap 最多 %{1} 个 URL、%{2} MiB；超过任一上限会自动分割。', [
+                                        number_format((int)($treeLimits['max_urls'] ?? 50000)),
+                                        number_format(((int)($treeLimits['max_bytes'] ?? 52428800)) / 1048576),
+                                    ]), ENT_QUOTES, 'UTF-8') ?>
+                                </p>
+
+                                <div class="seo-sitemap-tree__branch">
+                                    <?php foreach ($treeTargets as $target):
+                                        if (!is_array($target)) { continue; }
+                                        $targetCode = (string)($target['target'] ?? '');
+                                        $targetGenerated = !empty($target['generated']);
+                                        $targetIndex = is_array($target['index'] ?? null) ? $target['index'] : [];
+                                        $targetIndexUrl = trim((string)($targetIndex['url'] ?? ''));
+                                        $targetGroups = is_array($target['groups'] ?? null) ? $target['groups'] : [];
+                                        $targetName = $targetCode === 'canonical'
+                                            ? (string)__('Canonical 文件索引')
+                                            : trim((string)($target['platform_name'] ?? ''));
+                                        if ($targetName === '') { $targetName = $targetCode; }
+                                    ?>
+                                        <details class="seo-sitemap-target <?= $targetGenerated ? 'is-generated' : 'is-pending' ?>"<?= $targetCode === 'canonical' ? ' open' : '' ?>>
+                                            <summary>
+                                                <span class="seo-tree-node__icon"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i></span>
+                                                <span class="seo-tree-node__identity">
+                                                    <strong><?= htmlspecialchars($targetName, ENT_QUOTES, 'UTF-8') ?></strong>
+                                                    <code><?= htmlspecialchars($targetCode, ENT_QUOTES, 'UTF-8') ?>/sitemap.xml</code>
+                                                </span>
+                                                <span class="seo-tree-node__metrics">
+                                                    <strong><?= number_format((int)($target['total_urls'] ?? 0)) ?></strong> <lang>URL</lang>
+                                                    <span aria-hidden="true">·</span>
+                                                    <strong><?= number_format((int)($target['shard_count'] ?? 0)) ?></strong> <lang>个下级 XML</lang>
+                                                    <span aria-hidden="true">·</span>
+                                                    <strong><?= number_format((int)($target['bucket_count'] ?? 0)) ?></strong> <lang>个语言分组</lang>
+                                                </span>
+                                                <i class="mdi mdi-chevron-down seo-tree-node__chevron" aria-hidden="true"></i>
+                                            </summary>
+
+                                            <div class="seo-sitemap-target__body">
+                                                <?php if ($targetGenerated): ?>
+                                                    <div class="seo-sitemap-index-card">
+                                                        <div class="seo-sitemap-index-card__identity">
+                                                            <span><lang>索引文件</lang></span>
+                                                            <code title="<?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?></code>
+                                                            <small>
+                                                                <?= number_format((int)($target['shard_count'] ?? 0)) ?> <lang>个索引条目</lang>
+                                                                <span aria-hidden="true">·</span>
+                                                                <?= number_format((int)($targetIndex['size'] ?? 0)) ?> <lang>字节</lang>
+                                                                <?php if (!empty($target['generated_at'])): ?>
+                                                                    <span aria-hidden="true">·</span> <lang>生成于</lang> <?= htmlspecialchars((string)$target['generated_at'], ENT_QUOTES, 'UTF-8') ?>
+                                                                <?php endif; ?>
+                                                            </small>
                                                         </div>
-                                                        <div class="file-actions">
-                                                            <button type="button"
-                                                                    class="btn btn-sm me-1"
-                                                                    style="background: rgba(<?= hexdec(substr($color, 1, 2)) ?>, <?= hexdec(substr($color, 3, 2)) ?>, <?= hexdec(substr($color, 5, 2)) ?>, 0.3); color: <?= $colorAttr ?>; border: 1px solid <?= $colorAttr ?>;"
-                                                                    data-seo-sitemap-action="copy-url"
-                                                                    data-copy-url="<?= $escapeAttr($siteUrl . $platformIndex['url']) ?>"
-                                                                    title="<?= __('复制地址') ?>">
-                                                                <i class="mdi mdi-content-copy"></i>
-                                                            </button>
-                                                            <a href="<?= $escapeAttr($siteUrl . $platformIndex['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="background: <?= $colorAttr ?>; color: #fff;" title="<?= __('打开查看') ?>">
-                                                                <i class="mdi mdi-open-in-new me-1"></i><lang>查看</lang>
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                    <?php endif; ?>
-                                                    
-                                                    <!-- 模块文件列表 -->
-                                                    <?php if (!empty($platformData['modules'])): ?>
-                                                    <?php foreach ($platformData['modules'] as $moduleName => $moduleData): ?>
-                                                    <div class="module-group" style="margin-left: 20px; margin-top: 8px;">
-                                                        <div class="d-flex align-items-center mb-2" style="padding: 6px 12px; background: #f8f9fa; border-radius: 4px;">
-                                                            <i class="mdi mdi-puzzle-outline me-2" style="color: #6c757d;"></i>
-                                                            <span class="fw-medium"><?= ucfirst(htmlspecialchars($moduleName)) ?></span>
-                                                            <span class="badge bg-secondary ms-2"><?= $moduleData['file_count'] ?? count($moduleData['files']) ?> <lang>个分片</lang></span>
-                                                        </div>
-                                                        <?php foreach ($moduleData['files'] as $file): ?>
-                                                        <div class="file-item" style="margin-left: 15px; padding: 6px 12px;">
-                                                            <div class="file-info">
-                                                                <i class="mdi mdi-file-xml-box file-icon" style="color: #667eea;"></i>
-                                                                <div class="file-details">
-                                                                    <span class="file-name" style="font-size: 0.9rem;"><?= htmlspecialchars($file['name']) ?></span>
-                                                                    <div class="file-meta" style="font-size: 0.8rem;">
-                                                                        <span><i class="mdi mdi-harddisk"></i> <?= $file['size_formatted'] ?></span>
-                                                                        <span><i class="mdi mdi-clock-outline"></i> <?= htmlspecialchars($file['modified']) ?></span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="file-actions">
-                                                                <button type="button"
-                                                                        class="btn btn-outline-secondary btn-sm me-1"
-                                                                        style="padding: 3px 10px;"
-                                                                        data-seo-sitemap-action="copy-url"
-                                                                        data-copy-url="<?= $escapeAttr($siteUrl . $file['url']) ?>"
-                                                                        title="<?= __('复制地址') ?>">
-                                                                    <i class="mdi mdi-content-copy"></i>
+                                                        <?php if ($targetIndexUrl !== ''): ?>
+                                                            <div class="seo-sitemap-file__actions">
+                                                                <button type="button" class="btn btn-sm btn-link" data-seo-copy="<?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                                                    <i class="mdi mdi-content-copy" aria-hidden="true"></i> <lang>复制索引地址</lang>
                                                                 </button>
-                                                                <a href="<?= $escapeAttr($siteUrl . $file['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm" style="padding: 3px 10px;" title="<?= __('打开查看') ?>">
-                                                                    <i class="mdi mdi-open-in-new"></i>
+                                                                <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($targetIndexUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                                                    <lang>打开索引</lang> <i class="mdi mdi-open-in-new" aria-hidden="true"></i>
                                                                 </a>
                                                             </div>
-                                                        </div>
-                                                        <?php endforeach; ?>
+                                                        <?php endif; ?>
                                                     </div>
-                                                    <?php endforeach; ?>
+                                                <?php else: ?>
+                                                    <p class="seo-language-group__pending"><lang>索引待生成；同步 URL 后执行“生成 canonical”。</lang></p>
+                                                <?php endif; ?>
+
+                                                <div class="seo-sitemap-target__branch">
+                                                    <?php if ($targetGroups === []): ?>
+                                                        <div class="seo-language-files__empty">
+                                                            <i class="mdi mdi-translate-off" aria-hidden="true"></i>
+                                                            <span><lang>暂无语言文件；请先同步 URL，再生成 canonical Sitemap。</lang></span>
+                                                        </div>
                                                     <?php endif; ?>
+
+                                                    <?php foreach ($targetGroups as $group):
+                                                        if (!is_array($group)) { continue; }
+                                                        $locale = (string)($group['locale'] ?? '');
+                                                        $fileLocaleLabel = $locale === '' ? (string)__('默认桶（locale 未声明）') : $locale;
+                                                        $fileLocaleText = (string)__('语言：%{1}', $fileLocaleLabel);
+                                                        $groupFiles = is_array($group['files'] ?? null) ? $group['files'] : [];
+                                                        $groupGenerated = !empty($group['generated']);
+                                                        $urlCount = $group['url_count'] ?? null;
+                                                    ?>
+                                                        <details class="seo-sitemap-bucket <?= $groupGenerated ? 'is-generated' : 'is-pending' ?>">
+                                                            <summary>
+                                                                <span class="seo-tree-node__icon"><i class="mdi mdi-translate" aria-hidden="true"></i></span>
+                                                                <span class="seo-tree-node__identity">
+                                                                    <strong><?= htmlspecialchars($locale === '' ? (string)__('默认桶') : $locale, ENT_QUOTES, 'UTF-8') ?></strong>
+                                                                    <span><code><?= htmlspecialchars((string)($group['module'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code> · <?= htmlspecialchars((string)($group['scope'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                                                </span>
+                                                                <span class="seo-tree-node__metrics">
+                                                                    <strong><?= $urlCount === null ? '—' : number_format((int)$urlCount) ?></strong> <lang>URL</lang>
+                                                                    <span aria-hidden="true">·</span>
+                                                                    <strong><?= number_format((int)($group['file_count'] ?? 0)) ?></strong> <lang>个 XML 分片</lang>
+                                                                </span>
+                                                                <i class="mdi mdi-chevron-down seo-tree-node__chevron" aria-hidden="true"></i>
+                                                            </summary>
+
+                                                            <div class="seo-sitemap-bucket__files">
+                                                                <?php if (!$groupGenerated): ?>
+                                                                    <p class="seo-language-group__pending"><lang>该语言已有 URL 数据，但当前 manifest 中还没有对应 XML 文件。</lang></p>
+                                                                <?php endif; ?>
+
+                                                                <?php foreach ($groupFiles as $file):
+                                                                    if (!is_array($file)) { continue; }
+                                                                    $fileUrl = trim((string)($file['url'] ?? ''));
+                                                                ?>
+                                                                    <div class="seo-sitemap-file">
+                                                                        <div class="seo-sitemap-file__name">
+                                                                            <i class="mdi mdi-file-xml-box" aria-hidden="true"></i>
+                                                                            <code title="<?= htmlspecialchars((string)($file['filename'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($file['filename'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code>
+                                                                        </div>
+                                                                        <div class="seo-sitemap-file__meta">
+                                                                            <span class="seo-sitemap-file__locale" aria-label="<?= htmlspecialchars($fileLocaleText, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($fileLocaleText, ENT_QUOTES, 'UTF-8') ?>">
+                                                                                <i class="mdi mdi-translate" aria-hidden="true"></i>
+                                                                                <?= htmlspecialchars($fileLocaleText, ENT_QUOTES, 'UTF-8') ?>
+                                                                            </span>
+                                                                            <span><strong><?= number_format((int)($file['count'] ?? 0)) ?></strong> <lang>URL</lang></span>
+                                                                            <span><?= number_format((int)($file['size'] ?? 0)) ?> <lang>字节</lang></span>
+                                                                            <?php if (!empty($file['lastmod'])): ?>
+                                                                                <span><lang>最近内容更新</lang> <?= htmlspecialchars((string)$file['lastmod'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                                            <?php endif; ?>
+                                                                        </div>
+                                                                        <?php if ($fileUrl !== ''): ?>
+                                                                            <div class="seo-sitemap-file__actions">
+                                                                                <button type="button" class="btn btn-sm btn-link" data-seo-copy="<?= htmlspecialchars($fileUrl, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars((string)__('复制 %{1} 的 URL', (string)($file['filename'] ?? '')), ENT_QUOTES, 'UTF-8') ?>">
+                                                                                    <i class="mdi mdi-content-copy" aria-hidden="true"></i> <lang>复制文件地址</lang>
+                                                                                </button>
+                                                                                <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($fileUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                                                                                    <lang>打开文件</lang> <i class="mdi mdi-open-in-new" aria-hidden="true"></i>
+                                                                                </a>
+                                                                            </div>
+                                                                        <?php endif; ?>
+                                                                    </div>
+                                                                <?php endforeach; ?>
+                                                            </div>
+                                                        </details>
+                                                    <?php endforeach; ?>
                                                 </div>
                                             </div>
-                                            <?php endforeach; ?>
-                                            <?php else: ?>
-                                            <div class="empty-website">
-                                                <?php if (!empty($websiteData['error'])): ?>
-                                                    <?php if ($websiteData['error'] === 'no_urls'): ?>
-                                                        <i class="mdi mdi-alert-outline" style="color: #ff9800;"></i>
-                                                        <p class="mb-0" style="color: #ff9800;">
-                                                            <strong><lang>该站点没有 URL 数据</lang></strong><br>
-                                                            <small><lang>请先点击上方的"同步所有 Provider"按钮生成 URL 数据</lang></small>
-                                                        </p>
-                                                    <?php elseif ($websiteData['error'] === 'no_seo_account'): ?>
-                                                        <i class="mdi mdi-alert-circle-outline" style="color: #f44336;"></i>
-                                                        <p class="mb-2" style="color: #f44336;">
-                                                            <strong><lang>该站点未绑定 SEO 账户</lang></strong><br>
-                                                            <small><lang>已有</lang> <?= $websiteData['total_urls'] ?? 0 ?> <lang>条 URL 数据，但无法生成 sitemap 文件</lang></small>
-                                                        </p>
-                                                        <p class="mb-0" style="font-size: 12px;">
-                                                            <a href="<?= $this->getBackendUrl('websites/backend/website/index') ?>" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                                <i class="mdi mdi-cog me-1"></i><lang>站点管理</lang>
-                                                            </a>
-                                                            <lang>或</lang>
-                                                            <a href="<?= $this->getBackendUrl('seo/backend/account/index') ?>" target="_blank" class="btn btn-sm btn-outline-success">
-                                                                <i class="mdi mdi-account-key me-1"></i><lang>SEO 账户管理</lang>
-                                                            </a>
-                                                        </p>
-                                                    <?php else: ?>
-                                                        <i class="mdi mdi-cloud-off-outline"></i>
-                                                        <p class="mb-0"><lang>该站点暂无平台 Sitemap 文件</lang></p>
-                                                    <?php endif; ?>
-                                                <?php else: ?>
-                                                    <i class="mdi mdi-cloud-off-outline"></i>
-                                                    <p class="mb-0"><lang>该站点暂无平台 Sitemap 文件</lang></p>
-                                                <?php endif; ?>
-                                            </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
+                                        </details>
                                     <?php endforeach; ?>
                                 </div>
-                                
-                                <!-- 分页控件 -->
-                                <div class="d-flex justify-content-between align-items-center mt-4 pt-3" style="border-top: 1px solid #dee2e6;" id="paginationContainer">
-                                    <div class="text-muted">
-                                        <span id="pageInfo"></span>
-                                    </div>
-                                    <nav>
-                                        <ul class="pagination pagination-sm mb-0" id="pagination"></ul>
-                                    </nav>
-                                </div>
                             </div>
-                        </div>
-                        <?php endif; ?>
+                        </details>
                     </div>
-                </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+        <div class="seo-empty-state d-none" data-seo-filter-empty><i class="mdi mdi-filter-off-outline" aria-hidden="true"></i><p><lang>没有符合筛选条件的站点</lang></p></div>
+    </section>
+
+    <div class="offcanvas offcanvas-end seo-url-manager" tabindex="-1" id="seoUrlManager" aria-labelledby="seoUrlManagerLabel" data-seo-url-manager>
+        <div class="offcanvas-header">
+            <div>
+                <h5 class="offcanvas-title" id="seoUrlManagerLabel"><lang>Sitemap URL 管理</lang></h5>
+                <p class="seo-url-manager__subtitle mb-0" data-seo-url-manager-subtitle></p>
+            </div>
+            <button type="button" class="btn-close text-reset" data-seo-url-manager-close aria-label="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="seo-url-manager__toolbar">
+                <input type="search" class="form-control form-control-sm" data-seo-url-keyword placeholder="<?= htmlspecialchars((string)__('搜索 URL'), ENT_QUOTES, 'UTF-8') ?>">
+                <select class="form-select form-select-sm" data-seo-url-module>
+                    <option value=""><lang>全部 Provider</lang></option>
+                </select>
+                <select class="form-select form-select-sm" data-seo-url-locale>
+                    <option value=""><lang>全部语言</lang></option>
+                </select>
+                <select class="form-select form-select-sm" data-seo-url-status>
+                    <option value=""><lang>全部状态</lang></option>
+                    <option value="1"><lang>启用</lang></option>
+                    <option value="0"><lang>停用</lang></option>
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-seo-url-reload>
+                    <i class="mdi mdi-refresh" aria-hidden="true"></i> <lang>刷新</lang>
+                </button>
+            </div>
+            <div class="seo-url-manager__bulk">
+                <label class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" data-seo-url-select-all>
+                    <span class="form-check-label"><lang>全选当前页</lang></span>
+                </label>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-bulk-status="1"><lang>批量启用</lang></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-bulk-status="0"><lang>批量停用</lang></button>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-seo-url-bulk-delete><lang>批量删除</lang></button>
+            </div>
+            <div class="seo-url-manager__result" data-seo-url-result hidden></div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle seo-url-table">
+                    <thead>
+                    <tr>
+                        <th scope="col" style="width:36px"></th>
+                        <th scope="col"><lang>URL</lang></th>
+                        <th scope="col"><lang>Provider</lang></th>
+                        <th scope="col"><lang>语言</lang></th>
+                        <th scope="col"><lang>更新频率</lang></th>
+                        <th scope="col"><lang>优先级</lang></th>
+                        <th scope="col"><lang>状态</lang></th>
+                        <th scope="col"><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody data-seo-url-tbody>
+                    <tr><td colspan="8" class="text-muted text-center py-4"><lang>请选择站点后打开</lang></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="seo-url-manager__pager">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-prev><lang>上一页</lang></button>
+                <span data-seo-url-page-info></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-seo-url-next><lang>下一页</lang></button>
+            </div>
+            <p class="seo-url-manager__hint text-muted mb-0">
+                <lang>停用会保留记录并排除出下次生成；删除后 Provider 同步可能重建该 URL。</lang>
+            </p>
+        </div>
+    </div>
+</main>

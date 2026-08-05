@@ -50,16 +50,24 @@ final class RuntimeRunnerInvocation
      * The child PID is authoritative even when a platform launcher returned a
      * transient helper PID to its parent.
      */
-    public function withCurrentProcessIdentity(): self
+    public function withCurrentProcessIdentity(?callable $liveCommandReader = null): self
     {
         $pid = getmypid() ?: 0;
         if ($pid < 1) {
             throw new RuntimeException('Unable to resolve the current Runtime Runner pid.');
         }
 
-        $liveCommand = trim(Processer::getProcessCommandLine($pid, true));
+        $liveCommandReader ??= static fn (int $processId): string => Processer::getProcessCommandLine(
+            $processId,
+            true,
+        );
+        $liveCommand = trim((string)$liveCommandReader($pid));
         if ($liveCommand === '') {
-            throw new RuntimeException('Unable to capture the Runtime Runner live process identity.');
+            // Some hardened service sandboxes deliberately deny ps/proc
+            // inspection to the child itself. The immutable CLI invocation is
+            // still independently fenced by task/generation/runner/launch
+            // tokens, while the Watchdog performs the later OS-level probe.
+            $liveCommand = implode(' ', (new RuntimeRunnerCommand(BP, $this))->toArgv());
         }
 
         return new self(

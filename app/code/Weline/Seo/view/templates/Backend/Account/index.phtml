@@ -1,323 +1,92 @@
 <?php
-/**
- * SEO 账户列表
- *
- * @var \Weline\Framework\View\Template $this
- */
-
+/** @var \Weline\Framework\View\Template $this */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Service\PlatformVisual;
 
-/** @var array $accounts */
-$accounts = $accounts ?? [];
-$scope = $scope ?? '';
-$module = $module ?? '';
-$isAjax = $is_ajax ?? false;
-/** @var PlatformVisual $platformVisual */
-$platformVisual = ObjectManager::getInstance(PlatformVisual::class);
-
-// 平台颜色映射
-$platformColors = [
-    'google' => '#4285F4',
-    'bing' => '#00809D',
-    'baidu' => '#2932E1',
-    'yandex' => '#FF0000',
-    'naver' => '#03C75A',
-    'seznam' => '#CC0000',
-    'yep' => '#111827',
-    'internetarchive' => '#333333',
-    'amazonbot' => '#FF9900',
-    'yahoo' => '#6001D2',
-    'duckduckgo' => '#DE5833',
-    '360' => '#19B955',
-    'sogou' => '#FF7A00',
-    'shenma' => '#2F80ED',
-    'toutiao' => '#F04142',
-    'brave' => '#FB542B',
-    'qwant' => '#5C97FF',
-    'ecosia' => '#008009',
-    'startpage' => '#6573FF',
-    'swisscows' => '#D71920',
-    'mojeek' => '#7D4BC6',
-    'petal' => '#CF0A2C',
-    'daum' => '#1A73E8',
-    'coccoc' => '#00A651',
-    'mailru' => '#005FF9',
-    'rambler' => '#315EFB',
-    'you' => '#7B61FF',
-    'kagi' => '#FFB319',
-    'aol' => '#111111',
-    'ask' => '#D9362A',
-    'quark' => '#08A6FF',
-    'metager' => '#FF8000',
-    'gibiru' => '#2E7D32',
-];
-
-// 辅助函数：获取平台颜色
-function getPlatformColor($platform, $colors) {
-    $platform = strtolower(trim($platform));
-    return $colors[$platform] ?? '#6c757d';
-}
+$accounts = is_array($accounts ?? null) ? $accounts : [];
+$scope = (string)($scope ?? '');
+/** @var PlatformVisual $visual */
+$visual = ObjectManager::getInstance(PlatformVisual::class);
+$createUrl = $this->getBackendUrl('seo/backend/account/form', ['scope' => $scope]);
+$bindingUrl = $this->getBackendUrl('seo/backend/website-account');
 ?>
-<?php if (!$isAjax): ?>
-<!-- 消息提示 -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-                
-                <!-- Page Title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <i class="mdi mdi-account-key me-2"></i>
-                                <lang>SEO账户列表</lang>
-                            </h4>
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><span>
-                                            <lang>SEO管理</lang>
-                                        </span></li>
-                                    <li class='breadcrumb-item active'>
-                                        <lang>账户管理</lang>
-                                    </li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-<?php endif; ?>
+<link rel="stylesheet" href="@static(Weline_Seo::css/seo-admin.css)">
+<script src="@static(Weline_Seo::js/seo-admin.js)" defer></script>
 
-                <div class="row mb-3">
-                    <div class="col-12 d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0"><lang>SEO账户列表</lang></h4>
-                        <button type="button"
-                                class="btn btn-primary"
-                                data-bs-toggle="offcanvas"
-                                data-bs-target="#seoAccountOffcanvas"
-                                data-seo-account-action="load-form"
-                                data-account-id="0">
-                            <i class="mdi mdi-plus-circle-outline me-1"></i>
-                            <lang>新增账户</lang>
-                        </button>
-                    </div>
-                </div>
+<main class="seo-admin" data-seo-admin-page="account" data-testid="seo-account-management"
+      data-api-unavailable="<?= htmlspecialchars((string)__('Weline API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
+      data-resource-unavailable="<?= htmlspecialchars((string)__('SEO 后台 API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
+      data-stats-completed="<?= htmlspecialchars((string)__('统计同步完成'), ENT_QUOTES, 'UTF-8') ?>"
+      data-stats-failed="<?= htmlspecialchars((string)__('统计同步失败'), ENT_QUOTES, 'UTF-8') ?>">
+    <div class="row"><div class="col-12"><template>Weline_Component::message.phtml</template></div></div>
+    <header class="seo-admin__header">
+        <div>
+            <p class="seo-admin__eyebrow"><lang>SEO 运维</lang></p>
+            <h1 class="seo-admin__title"><i class="mdi mdi-account-key-outline" aria-hidden="true"></i> <lang>SEO 账户</lang></h1>
+            <p class="seo-admin__description"><lang>统一管理平台能力、自动提交、URL Push、站点绑定和统计同步；敏感配置在列表中始终脱敏。</lang></p>
+        </div>
+        <div class="seo-admin__actions">
+            <a class="btn btn-outline-primary" href="<?= htmlspecialchars($bindingUrl, ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-link-variant" aria-hidden="true"></i> <lang>站点绑定</lang></a>
+            <a class="btn btn-primary" href="<?= htmlspecialchars($createUrl, ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-plus-circle-outline" aria-hidden="true"></i> <lang>新增账户</lang></a>
+        </div>
+    </header>
 
-                <div class="card">
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped mb-0">
-                                <thead>
-                                <tr>
-                                    <th style="width: 30px;"></th>
-                                    <th><lang>ID</lang></th>
-                                    <th><lang>名称</lang></th>
-                                    <th><lang>供应商</lang></th>
-                                    <th><lang>绑定站点</lang></th>
-                                    <th><lang>SEO 数据</lang></th>
-                                    <th><lang>启用</lang></th>
-                                    <th><lang>操作</lang></th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <?php if (empty($accounts)): ?>
-                                    <tr>
-                                        <td colspan="8" class="text-center text-muted">
-                                            <lang>暂无账户</lang>
-                                        </td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php foreach ($accounts as $account): 
-                                        $accountId = (int)($account['account_id'] ?? 0);
-                                        $boundCount = (int)($account['bound_websites_count'] ?? 0);
-                                        $stats = $account['stats'] ?? null;
-                                        $hasStats = $stats && ($stats['indexed_pages'] > 0 || $stats['clicks'] > 0 || $stats['impressions'] > 0);
-                                        $platformCode = (string)($account['platform'] ?? $account['provider'] ?? '');
-                                        $platformColor = getPlatformColor($platformCode, $platformColors);
-                                    ?>
-                                        <tr>
-                                            <td>
-                                                <?php if ($hasStats): ?>
-                                                <button class="btn btn-sm btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#stats-<?= $accountId ?>" aria-expanded="false">
-                                                    <i class="mdi mdi-chevron-down"></i>
-                                                </button>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?= $accountId ?></td>
-                                            <td>
-                                                <strong><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES) ?></strong>
-                                                <br>
-                                                <small class="text-muted"><?= htmlspecialchars((string)($account['scope'] ?? ''), ENT_QUOTES) ?></small>
-                                            </td>
-                                            <td>
-                                                <span class="d-inline-flex align-items-center gap-2">
-                                                    <?= $platformVisual->renderIcon($platformCode, $platformCode, $platformColor, 26) ?>
-                                                    <span class="badge" style="background-color: <?= htmlspecialchars($platformColor, ENT_QUOTES) ?>;">
-                                                        <?= htmlspecialchars($platformCode, ENT_QUOTES) ?>
-                                                    </span>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <?php if ($boundCount > 0): ?>
-                                                <span class="badge bg-success"><?= $boundCount ?> <lang>个站点</lang></span>
-                                                <?php else: ?>
-                                                <span class="badge bg-secondary"><lang>未绑定</lang></span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if ($hasStats): ?>
-                                                <div class="d-flex flex-wrap gap-2" style="font-size: 12px;">
-                                                    <span class="text-success" title="<?= __('已收录页面') ?>">
-                                                        <i class="mdi mdi-check-circle"></i> <?= number_format($stats['indexed_pages']) ?>
-                                                    </span>
-                                                    <span class="text-primary" title="<?= __('点击量') ?>">
-                                                        <i class="mdi mdi-cursor-default-click"></i> <?= number_format($stats['clicks']) ?>
-                                                    </span>
-                                                    <span class="text-info" title="<?= __('展示量') ?>">
-                                                        <i class="mdi mdi-eye"></i> <?= number_format($stats['impressions']) ?>
-                                                    </span>
-                                                    <?php if ($stats['error_count'] > 0): ?>
-                                                    <span class="text-danger" title="<?= __('错误数') ?>">
-                                                        <i class="mdi mdi-alert-circle"></i> <?= number_format($stats['error_count']) ?>
-                                                    </span>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <?php if ($stats['last_sync_at']): ?>
-                                                <small class="text-muted d-block"><?= __('同步') ?>: <?= date('m-d H:i', strtotime($stats['last_sync_at'])) ?></small>
-                                                <?php endif; ?>
-                                                <?php else: ?>
-                                                <span class="text-muted" style="font-size: 12px;"><lang>暂无数据</lang></span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if ((int)($account['is_active'] ?? 0) === 1): ?>
-                                                    <span class="badge bg-success"><lang>启用</lang></span>
-                                                <?php else: ?>
-                                                    <span class="badge bg-secondary"><lang>禁用</lang></span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <div class="btn-group">
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-primary"
-                                                            data-seo-account-action="load-form"
-                                                            data-account-id="<?= $accountId ?>"
-                                                            data-bs-toggle="offcanvas" 
-                                                            data-bs-target="#seoAccountOffcanvas"
-                                                            title="<?= __('编辑') ?>">
-                                                        <i class="mdi mdi-pencil"></i>
-                                                    </button>
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-success"
-                                                            data-seo-account-action="load-website-binding"
-                                                            data-account-id="<?= $accountId ?>"
-                                                            data-bs-toggle="offcanvas" 
-                                                            data-bs-target="#websiteBindingOffcanvas"
-                                                            title="<?= __('绑定站点') ?>">
-                                                        <i class="mdi mdi-web"></i>
-                                                        <?php if ($boundCount > 0): ?>
-                                                        <span class="badge bg-light text-dark"><?= $boundCount ?></span>
-                                                        <?php endif; ?>
-                                                    </button>
-                                                    <?php if ($boundCount > 0): ?>
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-info"
-                                                            data-seo-account-action="sync-stats"
-                                                            data-account-id="<?= $accountId ?>"
-                                                            title="<?= __('同步统计数据') ?>">
-                                                        <i class="mdi mdi-sync"></i>
-                                                    </button>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        <?php if ($hasStats): ?>
-                                        <tr class="collapse" id="stats-<?= $accountId ?>">
-                                            <td colspan="8" class="bg-light p-3">
-                                                <div class="row g-3">
-                                                    <div class="col-md-3">
-                                                        <div class="card border-success h-100">
-                                                            <div class="card-body text-center">
-                                                                <h4 class="text-success mb-1"><?= number_format($stats['indexed_pages']) ?></h4>
-                                                                <small class="text-muted"><lang>已收录</lang></small>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-3">
-                                                        <div class="card border-primary h-100">
-                                                            <div class="card-body text-center">
-                                                                <h4 class="text-primary mb-1"><?= number_format($stats['clicks']) ?></h4>
-                                                                <small class="text-muted"><lang>点击量</lang></small>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-3">
-                                                        <div class="card border-info h-100">
-                                                            <div class="card-body text-center">
-                                                                <h4 class="text-info mb-1"><?= number_format($stats['impressions']) ?></h4>
-                                                                <small class="text-muted"><lang>展示量</lang></small>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-3">
-                                                        <div class="card border-warning h-100">
-                                                            <div class="card-body text-center">
-                                                                <h4 class="text-warning mb-1"><?= number_format($stats['submitted_urls']) ?></h4>
-                                                                <small class="text-muted"><lang>已提交URL</lang></small>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <?php if ($stats['last_sync_at']): ?>
-                                                <div class="text-end mt-2">
-                                                    <small class="text-muted">
-                                                        <i class="mdi mdi-clock-outline me-1"></i>
-                                                        <lang>最后同步</lang>: <?= $stats['last_sync_at'] ?>
-                                                    </small>
-                                                </div>
-                                                <?php endif; ?>
-                                            </td>
-                                        </tr>
-                                        <?php endif; ?>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-<script>
-(function () {
-    'use strict';
-
-    if (window.__seoAccountListActionsBound) {
-        return;
-    }
-    window.__seoAccountListActionsBound = true;
-
-    document.addEventListener('click', function (event) {
-        var trigger = event.target.closest('[data-seo-account-action]');
-        if (!trigger) {
-            return;
+    <section class="seo-kpi-grid seo-kpi-grid--accounts">
+        <?php
+        $activeCount = 0; $bindingCount = 0; $indexed = 0; $errors = 0;
+        foreach ($accounts as $account) {
+            $activeCount += (int)($account['is_active'] ?? 0) === 1 ? 1 : 0;
+            $bindingCount += (int)($account['bound_websites_count'] ?? 0);
+            $indexed += (int)($account['stats']['indexed_pages'] ?? 0);
+            $errors += (int)($account['stats']['error_count'] ?? 0);
         }
+        foreach ([
+            ['mdi-account-multiple-outline', count($accounts), __('账户')],
+            ['mdi-check-decagram-outline', $activeCount, __('启用')],
+            ['mdi-web-check', $bindingCount, __('站点绑定')],
+            ['mdi-database-check-outline', $indexed, __('已收录页面')],
+            ['mdi-alert-circle-outline', $errors, __('平台错误')],
+        ] as [$icon, $value, $label]): ?>
+            <article class="seo-kpi"><i class="mdi <?= $icon ?>" aria-hidden="true"></i><div><strong><?= number_format($value) ?></strong><span><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span></div></article>
+        <?php endforeach; ?>
+    </section>
 
-        var accountId = Number.parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0;
-        var action = trigger.getAttribute('data-seo-account-action');
-
-        if (action === 'load-form' && typeof window.loadSeoAccountForm === 'function') {
-            window.loadSeoAccountForm(accountId);
-            return;
-        }
-        if (action === 'load-website-binding' && typeof window.loadWebsiteBindingForm === 'function') {
-            window.loadWebsiteBindingForm(accountId);
-            return;
-        }
-        if (action === 'sync-stats' && typeof window.syncAccountStats === 'function') {
-            event.preventDefault();
-            window.syncAccountStats(accountId);
-        }
-    });
-})();
-</script>
+    <section class="seo-admin__panel">
+        <div class="seo-toolbar seo-toolbar--accounts">
+            <label class="seo-search">
+                <span class="visually-hidden"><lang>搜索账户</lang></span><i class="mdi mdi-magnify" aria-hidden="true"></i>
+                <input class="form-control" type="search" data-seo-account-search placeholder="<?= htmlspecialchars((string)__('搜索账户名称、平台或 scope'), ENT_QUOTES, 'UTF-8') ?>">
+            </label>
+            <?php if ($scope !== ''): ?><span class="seo-chip is-provider">scope: <?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 seo-account-table">
+                <thead><tr>
+                    <th><lang>账户</lang></th><th><lang>平台与能力</lang></th><th><lang>绑定</lang></th>
+                    <th><lang>SEO 数据</lang></th><th><lang>状态</lang></th><th class="text-end"><lang>操作</lang></th>
+                </tr></thead>
+                <tbody>
+                <?php if ($accounts === []): ?>
+                    <tr><td colspan="6"><div class="seo-empty-state"><i class="mdi mdi-account-off-outline" aria-hidden="true"></i><p><lang>暂无 SEO 账户</lang></p></div></td></tr>
+                <?php endif; ?>
+                <?php foreach ($accounts as $account):
+                    $accountId = (int)($account['account_id'] ?? 0);
+                    $platform = (string)($account['platform'] ?? $account['provider'] ?? '');
+                    $stats = is_array($account['stats'] ?? null) ? $account['stats'] : [];
+                    $editUrl = $this->getBackendUrl('seo/backend/account/form', ['id' => $accountId, 'scope' => $scope]);
+                    $search = strtolower(implode(' ', [(string)($account['name'] ?? ''), $platform, (string)($account['scope'] ?? '')]));
+                ?>
+                    <tr data-seo-account-row data-search="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>">
+                        <td><strong><?= htmlspecialchars((string)($account['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><small class="d-block text-muted">ID <?= $accountId ?> · <?= htmlspecialchars((string)(($account['scope'] ?? '') !== '' ? $account['scope'] : __('全局')), ENT_QUOTES, 'UTF-8') ?></small></td>
+                        <td><span class="d-inline-flex align-items-center gap-2"><?= $visual->renderIcon($platform, $platform, '#2563eb', 28) ?><code><?= htmlspecialchars($platform, ENT_QUOTES, 'UTF-8') ?></code></span><div class="seo-chip-row mt-1"><?php if (!empty($account['enable_cron_sitemap'])): ?><span class="seo-chip"><lang>Sitemap 提交</lang></span><?php endif; ?><?php if (!empty($account['enable_cron_push_urls'])): ?><span class="seo-chip"><lang>URL Push</lang></span><?php endif; ?></div></td>
+                        <td><?php if ((int)($account['bound_websites_count'] ?? 0) > 0): ?><span class="seo-status is-success"><?= (int)$account['bound_websites_count'] ?> <lang>个站点</lang></span><?php else: ?><span class="seo-status is-muted"><lang>未绑定</lang></span><?php endif; ?></td>
+                        <td><div class="seo-account-metrics"><span title="<?= htmlspecialchars((string)__('已收录页面'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-check-circle-outline text-success"></i><?= number_format((int)($stats['indexed_pages'] ?? 0)) ?></span><span title="<?= htmlspecialchars((string)__('点击量'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-cursor-default-click-outline text-primary"></i><?= number_format((int)($stats['clicks'] ?? 0)) ?></span><span title="<?= htmlspecialchars((string)__('错误数'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-alert-circle-outline text-danger"></i><?= number_format((int)($stats['error_count'] ?? 0)) ?></span></div><?php if (!empty($stats['last_sync_at'])): ?><small class="text-muted"><?= htmlspecialchars((string)$stats['last_sync_at'], ENT_QUOTES, 'UTF-8') ?></small><?php endif; ?></td>
+                        <td><span class="seo-status <?= (int)($account['is_active'] ?? 0) === 1 ? 'is-success' : 'is-muted' ?>"><?= (int)($account['is_active'] ?? 0) === 1 ? __('启用') : __('禁用') ?></span></td>
+                        <td class="text-end"><div class="btn-group"><a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars((string)__('编辑'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-pencil-outline"></i></a><?php if ((int)($account['bound_websites_count'] ?? 0) > 0): ?><button type="button" class="btn btn-sm btn-outline-info" data-seo-sync-account="<?= $accountId ?>" data-loading-label="<?= htmlspecialchars((string)__('同步中'), ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars((string)__('同步统计数据'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-sync"></i></button><?php endif; ?></div></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>

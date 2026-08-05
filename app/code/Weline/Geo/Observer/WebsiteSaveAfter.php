@@ -17,10 +17,13 @@ class WebsiteSaveAfter implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        $websiteId = (int)$event->getData('website_id');
-        if ($websiteId <= 0) {
+        $eventData = $event->getData();
+        if (!is_array($eventData)
+            || !array_key_exists('website_id', $eventData)
+            || $eventData['website_id'] === null) {
             return;
         }
+        $websiteId = $this->normalizeWebsiteId($eventData['website_id']);
 
         $postData = $event->getData('post_data');
         if (!is_array($postData)) {
@@ -33,21 +36,13 @@ class WebsiteSaveAfter implements ObserverInterface
             return;
         }
 
-        try {
-            $this->protocolConfig->saveForWebsite($websiteId, [
-                'llms_enabled' => $this->flag($geo, 'llms_enabled', true),
-                'feed_enabled' => $this->flag($geo, 'feed_enabled', true),
-                'auto_push' => $this->flag($geo, 'auto_push', true),
-                'feed_id' => (int)($geo['feed_id'] ?? 0),
-                'llms_intro' => (string)($geo['llms_intro'] ?? ''),
-            ]);
-        } catch (\Throwable $e) {
-            w_log_error(sprintf(
-                '[Weline_Geo] website_save_after failed: website_id=%d, error=%s',
-                $websiteId,
-                $e->getMessage()
-            ));
-        }
+        $this->protocolConfig->saveForWebsite($websiteId, [
+            'llms_enabled' => $this->flag($geo, 'llms_enabled', true),
+            'feed_enabled' => $this->flag($geo, 'feed_enabled', true),
+            'auto_push' => $this->flag($geo, 'auto_push', true),
+            'feed_id' => (int)($geo['feed_id'] ?? 0),
+            'llms_intro' => (string)($geo['llms_intro'] ?? ''),
+        ]);
     }
 
     /**
@@ -65,5 +60,20 @@ class WebsiteSaveAfter implements ObserverInterface
         }
 
         return in_array(strtolower((string)$value), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function normalizeWebsiteId(mixed $value): int
+    {
+        if (is_int($value)) {
+            $websiteId = $value;
+        } elseif (is_string($value) && preg_match('/^\d+$/D', $value) === 1) {
+            $websiteId = (int)$value;
+        } else {
+            throw new \InvalidArgumentException(__('website_id 必须是非负整数'));
+        }
+        if ($websiteId < 0) {
+            throw new \InvalidArgumentException(__('website_id 不能为负数'));
+        }
+        return $websiteId;
     }
 }

@@ -142,7 +142,7 @@ interface ConnectorInterface
     /**
      * 读取表索引（不含主键）。方言由适配器实现。
      *
-     * @return list<array{name: string, columns: list<string>, unique: bool}>
+     * @return list<array{name: string, columns: list<string>, unique: bool, method?: string}>
      */
     public function getTableIndexes(string $table): array;
 
@@ -211,4 +211,16 @@ interface ConnectorInterface
      * 方言由各适配器实现。
      */
     public function getDefaultTableAdditional(): string;
+
+    /**
+     * 按声明式 schema 建表。PRIMARY KEY / AUTO_INCREMENT 等方言规则由各适配器实现。
+     *
+     * @param array{
+     *   comment?: string,
+     *   columns?: list<array{name:string,type?:string,length?:int|string|null,nullable?:bool,primaryKey?:bool,autoIncrement?:bool,default?:mixed,comment?:string,unique?:bool}>,
+     *   indexes?: list<array{name:string,columns:list<string>,type?:string,method?:string,comment?:string}>,
+     *   foreignKeys?: list<array{name:string,columns:list<string>,referencesTable:string,referencesColumns:list<string>,onDeleteCascade?:bool,onUpdateCascade?:bool}>
+     * } $schema
+     */
+    public function createTableFromSchema(string $tableName, array $schema): void;
 }

@@ -391,18 +391,36 @@
             var providerSelect = document.getElementById('weline-ai-provider-code');
             var accountNameInput = document.getElementById('weline-ai-account-name');
             var baseUrlInput = document.getElementById('weline-ai-base-url');
-            
+            var apiKeyInput = document.getElementById('weline-ai-api-key');
             var selectedOption = providerSelect.options[providerSelect.selectedIndex];
-            
+            var nameDefaults = {};
+            var urlDefaults = {};
+            Array.prototype.forEach.call(providerSelect.options, function(option) {
+                var name = String(option.getAttribute('data-name') || '').trim();
+                var url = String(option.getAttribute('data-base-url') || '').trim();
+                if (name) nameDefaults[name] = true;
+                if (url) urlDefaults[url] = true;
+            });
+
+            function shouldFollow(current, defaults) {
+                var value = String(current || '').trim();
+                return value === '' || !!defaults[value];
+            }
+
             if (selectedOption.value) {
                 var providerName = selectedOption.getAttribute('data-name');
-                if (providerName && !accountNameInput.value.trim()) {
+                if (providerName && shouldFollow(accountNameInput.value, nameDefaults)) {
                     accountNameInput.value = providerName;
                 }
-                
+
                 var baseUrl = selectedOption.getAttribute('data-base-url');
-                if (baseUrl && !baseUrlInput.value.trim()) {
+                if (baseUrl && shouldFollow(baseUrlInput.value, urlDefaults)) {
                     baseUrlInput.value = baseUrl;
+                }
+
+                // 新建页切换供应商时清空旧密钥
+                if (apiKeyInput && !providerSelect.readOnly) {
+                    apiKeyInput.value = '';
                 }
             }
         },

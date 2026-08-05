@@ -275,7 +275,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
             false,
             false,
         ));
-        self::assertSame(2, $probe->gatewayBackendLeaseCalls);
+        self::assertSame(3, $probe->gatewayBackendLeaseCalls);
     }
 
     public function testLocalExistingAndLegacyCertificatePoliciesRemainUnchanged(): void
@@ -697,11 +697,14 @@ final class StartConfigProbe extends Start
         return ['success' => true, 'skipped' => true];
     }
 
-    protected function allocateGatewayInitialBackendPort(string $instanceName): int
+    protected function allocateGatewayInitialBackendPort(
+        string $instanceName,
+        ?int $exactPort = null,
+    ): int
     {
         unset($instanceName);
         $this->gatewayBackendLeaseCalls++;
-        return 23456;
+        return $exactPort ?? 23456;
     }
 
     protected function getDefaultHost(): string

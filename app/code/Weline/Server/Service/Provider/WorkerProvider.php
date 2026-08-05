@@ -13,6 +13,7 @@ use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Service\Runtime\DirectSharedListener;
 use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
+use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
 
 /**
  * Worker 服务提供者
@@ -98,11 +99,10 @@ class WorkerProvider extends AbstractServiceProvider
         ];
 
         if ($pureWls && $context->sslEnabled) {
-            if ($context->sslCert === '' || $context->sslKey === '') {
-                throw new \RuntimeException('Pure WLS HTTPS requires certificate and private-key paths.');
-            }
-            $arguments[] = '--ssl-cert=' . $context->sslCert;
-            $arguments[] = '--ssl-key=' . $context->sslKey;
+            $arguments = \array_merge(
+                $arguments,
+                ServingManifestRuntimeFence::workerArguments($context),
+            );
             $arguments = \array_merge($arguments, WorkerRuntimeArgumentBuilder::protocolPolicy($context));
         }
 
@@ -131,7 +131,10 @@ class WorkerProvider extends AbstractServiceProvider
                 'wls.gateway.launch_id',
                 '',
             )));
-            if (\preg_match('/^[a-f0-9-]{36}$/D', $projectUuid) !== 1
+            if (\preg_match(
+                '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D',
+                $projectUuid,
+            ) !== 1
                 || $instanceGeneration < 1
                 || \preg_match('/^[a-f0-9]{32}$/D', $instanceLaunchId) !== 1
             ) {
@@ -142,10 +145,27 @@ class WorkerProvider extends AbstractServiceProvider
             $arguments[] = '--gateway-project-uuid=' . $projectUuid;
             $arguments[] = '--gateway-instance-generation=' . $instanceGeneration;
             $arguments[] = '--gateway-instance-launch-id=' . $instanceLaunchId;
+            $arguments = \array_merge(
+                $arguments,
+                WorkerRuntimeArgumentBuilder::gatewayBackendCapability($context),
+            );
         }
 
         if ($direct && $listenerMode === 'shared_fd') {
             $arguments[] = '--listen-fd=' . DirectSharedListener::INHERITED_FD;
+            $handoff = $context->getConfig('wls.gateway.startup_listener_handoff', []);
+            if (\is_array($handoff)
+                && (string)($handoff['transport'] ?? '') === 'posix_inherited_fd'
+                && ($handoff['continuous_ownership'] ?? false) === true
+                && (int)($handoff['fd'] ?? 0) === DirectSharedListener::INHERITED_FD
+                && (int)($handoff['port'] ?? 0) === $port
+                && \preg_match(
+                    '/\A[a-f0-9]{32}\z/D',
+                    (string)($handoff['lease_id'] ?? ''),
+                ) === 1
+            ) {
+                $arguments[] = '--gateway-host-lease-id=' . (string)$handoff['lease_id'];
+            }
         } elseif ($direct && !\in_array($listenerMode, ['reuseport', 'worker_ports'], true)) {
             throw new \InvalidArgumentException(
                 'Direct topology requires listener mode reuseport, shared_fd, or worker_ports.'

@@ -10,6 +10,7 @@ return [
         'Weline_SystemConfig' => '*',
     ],
     "optional" => [
+        'Weline_Captcha' => '*',
     ],
     "provides" => [
         \Weline\Admin\Api\Notification\SystemNotificationDirectoryInterface::class => \Weline\Admin\Service\SystemNotificationDirectory::class,

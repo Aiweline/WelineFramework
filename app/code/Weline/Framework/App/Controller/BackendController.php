@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\App\Controller;
 
 use Weline\Framework\App\State;
-use Weline\Framework\Cache\Pool\CachePool;
+use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
@@ -30,7 +30,7 @@ use Weline\Framework\Session\SessionFactory;
  */
 class BackendController extends PcController
 {
-    protected CachePool $cache;
+    protected CachePoolInterface $cache;
     
     /** 认证 Session（使用新架构） */
     protected AuthenticatedSessionInterface $session;

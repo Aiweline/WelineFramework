@@ -1,6 +1,6 @@
 # Codex Repo Context Map for WelineFramework
 
-Last refreshed: 2026-07-04.
+Last refreshed: 2026-07-29.
 
 This is a repo-local context map for Codex. It is not the same as Codex
 generated memories under `~/.codex/memories`, and it must not override
@@ -28,12 +28,12 @@ when the task involves code or commits, and preserve unrelated user changes.
 1. `AGENTS.md`
 2. `AI-ENTRY.md`
 3. `dev/ai/global-constraints.md`
-4. `dev/ai/codex/SOUL.md`
-5. `dev/ai/codex/USER.md`
-6. This file
-7. `dev/ai/skills/_index.md`
-8. Relevant module `README.md` or `doc/README.md`
-9. Target source code
+4. `dev/ai/skills/_index.md`
+5. Relevant module `doc/AI-INDEX.md`
+6. Target source, configuration, existing tests, and runtime evidence
+
+Load `SOUL.md`, `USER.md`, or this context map only when architecture,
+runtime, workflow, or stable workspace preferences are relevant.
 
 Do not default-load task history under `dev/ai/codex/tasks/**` or
 `dev/ai/archive/**` unless restoring a task or checking history.
@@ -97,7 +97,7 @@ Common module shape:
 - `test/e2e/` or `Test/e2e/`
 - `doc/` or `README.md`
 
-Before working inside a module, check its local `README.md` or `doc/README.md`
+Before working inside a module, check its owning README or documentation index
 if present.
 
 `app/code/GuoLaiRen` has moved to the release target repository
@@ -169,7 +169,7 @@ PHP tests:
   module already uses another convention.
 - Use `app/bootstrap_phpunit.php` for framework bootstrap.
 - Use `PHPUnit\Framework\TestCase` for isolated logic.
-- Use `Weline\Framework\UnitTest\TestCore` only when framework context is
+- Use `Weline\Framework\Test\TestCore` only when framework context is
   needed.
 - Integration tests must clean up rows, files, queue items, cache keys, and
   config entries they create.
@@ -183,10 +183,11 @@ E2E tests:
 
 Default policy:
 
-- Do not create or update unit tests, fixtures, regression cases, or E2E specs
-  unless the user explicitly asks.
-- For ordinary development validation, use real entrypoints, HTTP, WLS,
-  Browser smoke, existing commands, and documentation checks.
+- Read and run relevant existing tests whenever useful.
+- Add or update focused tests when they are proportionate to the requested
+  behavior; do not create unrelated broad fixtures or E2E suites.
+- Match validation to the changed surface: real entrypoints, HTTP, WLS,
+  Browser, focused tests, existing commands, or documentation checks.
 
 ## WLS Rules
 
@@ -195,10 +196,11 @@ Default policy:
   as important as process state.
 - Logs under `var/log/wls` are high-signal.
 - Code changes usually need `server:reload`.
-- Master/startup/dispatcher changes usually need `server:restart -r`.
+- Master/startup/dispatcher changes usually need `server:start {instance} -r`.
 - Use isolated test instances with unique names and ports above the default.
 - Never test on default WLS port `9501`.
-- Always stop WLS test instances after verification.
+- Stop WLS test instances after automated verification. Keep one running only
+  for an explicit user-acceptance handoff, then report its stop command.
 - Avoid blocking or terminating functions in WLS worker paths.
 - For orphan/default-instance bugs, verify live runtime state before deleting
   metadata or killing by broad process-name prefix.
@@ -212,8 +214,8 @@ Default policy:
 - Frontend route check: `php bin/w http:request /`
 - Backend route check: `php bin/w http:request admin -b`
 - API route check: `php bin/w http:request rest/v1/module/action -api`
-- WLS isolated start: `php bin/w server:start -p 9502 -n ai-test-{id}`
-- WLS stop isolated: `php bin/w server:stop -n ai-test-{id}`
+- WLS isolated start: `php bin/w server:start ai-test-{id} -p {available-port>=9502}`
+- WLS stop isolated: `php bin/w server:stop ai-test-{id}`
 - PHPUnit module: `php bin/w phpunit:run --module=Vendor_Module`
 - PHPUnit class: `php bin/w phpunit:run --name=ClassNameTest`
 - E2E module: `php bin/w e2e:run --module=Vendor_Module --project=chromium`
@@ -226,7 +228,8 @@ Prefer:
 - `fd`
 - `jq`
 - `yq`
-- CodeGraphContext for code graph context when useful
+- the project-intelligence contract supplied by the active runtime
+- bounded exact-path `rg` when that primary path is unavailable
 
 Avoid broad recursive scans through:
 
@@ -235,4 +238,3 @@ Avoid broad recursive scans through:
 - `var`
 - nested `node_modules`
 - large generated frontend dependency folders
-

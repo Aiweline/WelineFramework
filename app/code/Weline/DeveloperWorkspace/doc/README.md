@@ -12,6 +12,14 @@
 - `Weline_Api`、`Weline_Server`、`Weline_Visitor`、`Weline_Websites`、`Weline_Seo` 是按能力启用的可选模块，必须在 `etc/module.php` 与 Composer `suggest` 同步声明。
 - 新代码禁止引用其他模块的 `Model/Service/Helper/Controller`。跨模块返回值必须是标量、数组或 `Api` 下的不可变数据对象。
 
+## 浏览器文档页 API 契约
+
+- `/dev/tool/docs` 与 `/dev/tool/docs/api` 是独立页面，必须先配置并加载官方 `weline-api` / Theme loader，再调用 `Weline.load('api')`。
+- 文档目录、搜索与 API 调试统一通过 `developer_workspace` QueryProvider 桥接；API runtime 缺失时必须失败并保留控制台证据，不得回退到未初始化的 `window.Weline.Api` 或原生业务请求。
+- 公开文档浏览页只调用 `developer_workspace.docsRequest`；该操作仅允许 `GET /dev/tool/docs/{tree|documents|document|search}`。通用 `adminRequest` 继续要求后台身份，禁止为了公开文档读取而放宽其鉴权。
+- `docsRequest` 的浏览器兼容响应必须保留原文档接口的 JSON 形状（数组仍为数组），不得套用后台桥的 `{success,data}` 数组包装。
+- 开发面板的 shell、session、document、routes、trace、DB explain 与 SEO crawl 必须经 `developer_workspace.panelRequest` 的固定路由/方法白名单；该 Query 操作仍由 `PanelAccessService` 执行 DEV 或生产 token-cookie 二次鉴权，禁止原生 `fetch` 和任意 URL 代理。
+
 ## 统计信息
 
 - 总文章数: 929

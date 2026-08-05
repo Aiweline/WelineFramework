@@ -95,8 +95,15 @@ final class NodePool
         string $originalCode = '',
         bool $isEcho = true
     ): PhpPlaceholder {
-        // 占位符是唯一的，用它作为 key
-        $key = $placeholder;
+        // 占位符序号只在单个模板内唯一；不同模板都会从 __PHP_0__ 重新计数。
+        // 缓存键必须覆盖节点的完整不可变身份，避免 WLS 连续编译时串用其他模板的表达式。
+        $key = hash('sha256', serialize([
+            $line,
+            $placeholder,
+            $expression,
+            $originalCode,
+            $isEcho,
+        ]));
         
         if (isset(self::$phpNodes[$key])) {
             return self::$phpNodes[$key];

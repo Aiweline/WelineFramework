@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Memory;
 
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
+
 /**
  * Same-user host coordination for memory-pressure capacity mutations.
  *
@@ -20,8 +23,6 @@ final class HostMemoryPressureCoordinator
     private const CLOCK_ROLLBACK_TOLERANCE_SECONDS = 1.0;
     private const LOCK_ACQUIRE_TIMEOUT_SECONDS = 0.25;
     private const LOCK_RETRY_MICROSECONDS = 10000;
-    private const PROCESS_TERMINATION_GRACE_SECONDS = 0.5;
-    private const PROCESS_TERMINATION_POLL_MICROSECONDS = 10000;
 
     private readonly string $stateDirectory;
     private readonly string $stateFile;
@@ -432,29 +433,43 @@ final class HostMemoryPressureCoordinator
             throw new \RuntimeException('Linux boot identity is unavailable.');
         }
         if (\PHP_OS_FAMILY === 'Darwin') {
-            $bootTime = $this->boundedCommandOutput([
-                '/usr/sbin/sysctl',
-                '-n',
-                'kern.boottime',
-            ]);
-            if (\preg_match(
-                '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}/',
-                $bootTime,
-                $matches,
-            ) === 1) {
-                return \hash(
-                    'sha256',
-                    'darwin:' . $matches[1] . ':' . $matches[2],
-                );
+            $bootTime = '';
+            try {
+                $result = GatewayBoundedCommandRunner::run([
+                    '/usr/sbin/sysctl',
+                    '-n',
+                    'kern.boottime',
+                ], 3.0);
+                $bootTime = \trim((string)($result['stdout'] ?? $result['output'] ?? ''));
+            } catch (\Throwable) {
+                $bootTime = '';
             }
-            throw new \RuntimeException('macOS boot identity is unavailable.');
+            if ($bootTime === ''
+                || \preg_match(
+                    '/\A\{\s*sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)\s*\}/',
+                    $bootTime,
+                    $matches,
+                ) !== 1
+            ) {
+                $bootTime = GatewayHostBootIdentity::platformToken();
+                if (\preg_match('/\Adarwin-(\d+)-(\d+)\z/D', $bootTime, $matches) !== 1) {
+                    throw new \RuntimeException('macOS boot identity is unavailable.');
+                }
+            }
+            return \hash(
+                'sha256',
+                'darwin:' . $matches[1] . ':' . $matches[2],
+            );
         }
         if (\PHP_OS_FAMILY === 'Windows') {
             $systemRoot = \rtrim((string)\getenv('SystemRoot'), '\\/');
-            $powershell = $systemRoot !== ''
-                ? $systemRoot
-                    . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
-                : 'powershell.exe';
+            if ($systemRoot === '') {
+                throw new \RuntimeException(
+                    'Windows system root is unavailable for the boot identity probe.'
+                );
+            }
+            $powershell = $systemRoot
+                . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
             $bootTime = $this->boundedCommandOutput([
                 $powershell,
                 '-NoLogo',
@@ -485,84 +500,18 @@ final class HostMemoryPressureCoordinator
         array $command,
         float $timeoutSeconds = 3.0,
     ): string {
-        $nullDevice = \PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
-        $process = @\proc_open($command, [
-            0 => ['file', $nullDevice, 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, null, null, ['bypass_shell' => true]);
-        if (!\is_resource($process)) {
-            throw new \RuntimeException(
-                'Unable to start the host memory-pressure boot identity probe.'
-            );
-        }
-        \stream_set_blocking($pipes[1], false);
-        \stream_set_blocking($pipes[2], false);
-        $stdout = '';
-        $stderr = '';
-        $deadline = (\hrtime(true) / 1_000_000_000)
-            + \max(0.1, $timeoutSeconds);
-        $status = \proc_get_status($process);
-        while (($status['running'] ?? false)
-            && (\hrtime(true) / 1_000_000_000) < $deadline
-        ) {
-            $read = [$pipes[1], $pipes[2]];
-            $write = null;
-            $except = null;
-            @\stream_select($read, $write, $except, 0, 100_000);
-            foreach ($read as $stream) {
-                $chunk = (string)@\stream_get_contents($stream);
-                if ($stream === $pipes[1]) {
-                    $stdout .= $chunk;
-                } else {
-                    $stderr .= $chunk;
-                }
-            }
-            $status = \proc_get_status($process);
-        }
-        $timedOut = (bool)($status['running'] ?? false);
-        if ($timedOut) {
-            @\proc_terminate($process);
-            $terminationDeadline = (\hrtime(true) / 1_000_000_000)
-                + self::PROCESS_TERMINATION_GRACE_SECONDS;
-            do {
-                \usleep(self::PROCESS_TERMINATION_POLL_MICROSECONDS);
-                $status = \proc_get_status($process);
-            } while (($status['running'] ?? false)
-                && (\hrtime(true) / 1_000_000_000) < $terminationDeadline
-            );
-        }
-        if ($status['running'] ?? false) {
-            @\proc_terminate($process, 9);
-            $killDeadline = (\hrtime(true) / 1_000_000_000)
-                + self::PROCESS_TERMINATION_GRACE_SECONDS;
-            do {
-                \usleep(self::PROCESS_TERMINATION_POLL_MICROSECONDS);
-                $status = \proc_get_status($process);
-            } while (($status['running'] ?? false)
-                && (\hrtime(true) / 1_000_000_000) < $killDeadline
-            );
-        }
-        $stdout .= (string)@\stream_get_contents($pipes[1]);
-        $stderr .= (string)@\stream_get_contents($pipes[2]);
-        @\fclose($pipes[1]);
-        @\fclose($pipes[2]);
-        $exitCode = @\proc_close($process);
-        if ($timedOut) {
-            throw new \RuntimeException(
-                'Host memory-pressure boot identity probe timed out.'
-            );
-        }
-        if (($status['running'] ?? false)
-            || ($exitCode !== 0 && (int)($status['exitcode'] ?? -1) !== 0)
-        ) {
+        $result = GatewayBoundedCommandRunner::run(
+            $command,
+            \max(0.1, $timeoutSeconds),
+        );
+        if ((int)$result['code'] !== 0) {
             throw new \RuntimeException(
                 'Host memory-pressure boot identity probe failed: '
-                . \trim($stderr),
+                    . \trim((string)$result['output']),
             );
         }
 
-        return \trim($stdout);
+        return \trim((string)$result['stdout']);
     }
 
     private function normaliseAbsolutePath(string $path): string

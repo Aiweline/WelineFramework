@@ -15,6 +15,8 @@
     const decoder = new TextDecoder('utf-8', { fatal: true });
 
     let workerSession = null;
+    let workerScopeBootstrapId = '';
+    let workerBackendBootstrapId = '';
     let handshakePromise = null;
 
     self.addEventListener('message', async (event) => {
@@ -24,6 +26,28 @@
 
         try {
             const config = normalizeConfig(message.config || {});
+            if (message.type === 'scope-bootstrap' || message.type === 'backend-bootstrap') {
+                const session = await ensureSession(config);
+                self.postMessage({
+                    id,
+                    ok: true,
+                    status: 200,
+                    statusText: 'OK',
+                    headers: {},
+                    body: {
+                        ok: true,
+                        data: {
+                            scope_bound: session.scope_bound === true,
+                            attested_area: String(session.attested_area || 'frontend'),
+                            expires_at: Number(session.expires_at || 0),
+                        },
+                        error: null,
+                        request_id: '',
+                    },
+                    maintenance: false,
+                });
+                return;
+            }
             const packetPayload = buildPayload(message, config);
             const capability = resolveCapability(packetPayload);
             await ensureSession(config);
@@ -60,15 +84,46 @@
     });
 
     function normalizeConfig(config) {
+        const deployVersion = String(config.deployVersion || config.deploy_version || 'dev').trim();
+        const workerBuildId = String(config.workerBuildId || config.worker_build_id || 'dev').trim();
+        if (!/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$/.test(deployVersion)
+            || !/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$/.test(workerBuildId)) {
+            throw Object.assign(new Error('Invalid Weline worker deploy/build identifier.'), {
+                code: 'protocol_error',
+            });
+        }
+        const rawScopeBootstrapId = String(
+            config.scopeBootstrapId || config.scope_bootstrap_id || ''
+        ).trim();
+        if (rawScopeBootstrapId !== '' && !/^[A-Za-z0-9_-]{43}$/.test(rawScopeBootstrapId)) {
+            throw Object.assign(new Error('Invalid Weline worker Scope bootstrap ID.'), {
+                code: 'scope_bootstrap_invalid',
+            });
+        }
+        const rawBackendBootstrapId = String(
+            config.backendBootstrapId || config.backend_bootstrap_id || ''
+        ).trim();
+        if (rawBackendBootstrapId !== '' && !/^[A-Za-z0-9_-]{43}$/.test(rawBackendBootstrapId)) {
+            throw Object.assign(new Error('Invalid Weline worker backend bootstrap ID.'), {
+                code: 'backend_attestation_invalid',
+            });
+        }
+        if (rawScopeBootstrapId !== '' && rawBackendBootstrapId !== '') {
+            throw Object.assign(new Error('Worker storefront and backend bootstraps are mutually exclusive.'), {
+                code: 'protocol_error',
+            });
+        }
         const normalized = {
             endpoint: config.endpoint || '/api/framework/query-bin',
-            deployVersion: config.deployVersion || config.deploy_version || 'dev',
-            workerBuildId: config.workerBuildId || config.worker_build_id || 'dev',
+            deployVersion,
+            workerBuildId,
             locale: normalizeLocale(config.locale || config.currentLang || config.current_lang || ''),
             defaultCurrency: normalizeCurrencyCode(config.defaultCurrency || config.default_currency || 'CNY'),
             availableCurrencies: normalizeCurrencyList(
                 config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies || []
             ),
+            scopeBootstrapId: rawScopeBootstrapId,
+            backendBootstrapId: rawBackendBootstrapId,
         };
         normalized.currency = normalizeCurrency(config.currency || config.currentCurrency || config.current_currency || '', normalized);
 
@@ -193,15 +248,38 @@
             workerSession &&
             workerSession.expires_at > now + 5 &&
             workerSession.deploy_version === config.deployVersion &&
-            workerSession.worker_build_id === config.workerBuildId
+            workerSession.worker_build_id === config.workerBuildId &&
+            workerScopeBootstrapId === config.scopeBootstrapId &&
+            workerBackendBootstrapId === config.backendBootstrapId
         ) {
             return workerSession;
+        }
+
+        if (workerSession && (workerSession.scope_bound === true || workerSession.attested_area === 'backend')) {
+            const backendSession = workerSession.attested_area === 'backend';
+            throw Object.assign(new Error(backendSession
+                ? 'The backend page attestation has expired or changed. Reload the page to continue.'
+                : 'The page Scope has expired or changed. Reload the page to continue.'), {
+                code: backendSession ? 'backend_attestation_invalid' : 'scope_reload_required',
+                status: 401,
+            });
+        }
+        if (workerSession && (
+            workerScopeBootstrapId !== config.scopeBootstrapId ||
+            workerBackendBootstrapId !== config.backendBootstrapId
+        )) {
+            throw Object.assign(new Error('The page Worker bootstrap changed while this worker was active.'), {
+                code: 'scope_context_conflict',
+                status: 409,
+            });
         }
 
         if (!handshakePromise) {
             handshakePromise = (async () => {
                 const session = await handshake(config);
                 workerSession = session;
+                workerScopeBootstrapId = config.scopeBootstrapId;
+                workerBackendBootstrapId = config.backendBootstrapId;
                 return session;
             })().finally(() => {
                 handshakePromise = null;
@@ -212,11 +290,18 @@
     }
 
     async function handshake(config) {
-        const rawBody = encodePacket({
+        const handshakePayload = {
             type: 'handshake',
             deploy_version: config.deployVersion,
             worker_build_id: config.workerBuildId,
-        });
+        };
+        if (config.scopeBootstrapId) {
+            handshakePayload.scope_bootstrap_id = config.scopeBootstrapId;
+        }
+        if (config.backendBootstrapId) {
+            handshakePayload.backend_bootstrap_id = config.backendBootstrapId;
+        }
+        const rawBody = encodePacket(handshakePayload);
 
         const response = await fetch(config.endpoint, {
             method: 'POST',
@@ -234,8 +319,22 @@
         const body = decodeResponsePacket(response, new Uint8Array(await response.arrayBuffer()));
         if (!response.ok || !body || body.ok !== true || !body.data) {
             const message = body && body.error ? body.error.message : 'Weline worker handshake failed.';
-            throw Object.assign(new Error(message), { code: 'auth_error', status: response.status });
+            const code = body && body.error && body.error.code
+                ? String(body.error.code)
+                : 'auth_error';
+            throw Object.assign(new Error(message), { code, status: response.status });
         }
+
+        const attestedArea = String(body.data.attested_area || 'frontend');
+        if ((attestedArea !== 'frontend' && attestedArea !== 'backend')
+            || (config.backendBootstrapId && attestedArea !== 'backend')
+            || (!config.backendBootstrapId && attestedArea === 'backend')) {
+            throw Object.assign(new Error('Weline worker handshake returned an invalid authority area.'), {
+                code: 'backend_attestation_invalid',
+                status: 401,
+            });
+        }
+        body.data.attested_area = attestedArea;
 
         return body.data;
     }
@@ -301,17 +400,10 @@
             const contentType = response && response.headers && typeof response.headers.get === 'function'
                 ? (response.headers.get('content-type') || '')
                 : '';
-            const bytes = Array.from(responseBytes.slice(0, 32))
-                .map((byte) => byte.toString(16).padStart(2, '0'))
-                .join(' ');
-            const ascii = Array.from(responseBytes.slice(0, 600))
-                .map((byte) => (byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.'))
-                .join('');
             const message = [
                 error instanceof Error ? error.message : String(error),
                 `(HTTP ${status}${contentType ? ', ' + contentType : ''})`,
-                bytes ? `bytes=${bytes}` : 'bytes=empty',
-                ascii ? `preview=${ascii}` : '',
+                `response_bytes=${responseBytes.length}`,
             ].filter(Boolean).join(' ');
             throw Object.assign(new Error(message), {
                 code: 'protocol_error',

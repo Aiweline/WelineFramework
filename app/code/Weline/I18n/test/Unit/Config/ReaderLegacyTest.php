@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace I18n\Config;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\I18n\Config\Reader;
 
 class ReaderLegacyTest extends TestCore

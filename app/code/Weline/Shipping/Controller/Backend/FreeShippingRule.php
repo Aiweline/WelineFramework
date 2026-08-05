@@ -15,15 +15,18 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\FreeShippingRule as FreeShippingRuleModel;
+use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
 #[Acl('Weline_Shipping::free_shipping_rule', '免邮规则管理', 'mdi-gift', '免邮规则管理', 'Weline_Backend::shipping_group')]
 class FreeShippingRule extends BackendController
 {
     private FreeShippingRuleModel $rule;
+    private ShippingConfigurationAdminService $adminService;
 
     public function __construct(ObjectManager $objectManager)
     {
         $this->rule = $objectManager->getInstance(FreeShippingRuleModel::class);
+        $this->adminService = $objectManager->getInstance(ShippingConfigurationAdminService::class);
     }
 
     /**
@@ -43,6 +46,18 @@ class FreeShippingRule extends BackendController
 
         return $this->fetch();
     }
-}
 
+    #[Acl('Weline_Shipping::free_shipping_rule_save', '保存免邮规则', 'mdi-content-save', '创建免邮规则')]
+    public function save()
+    {
+        try {
+            if (!$this->request->isPost()) throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            $this->adminService->createFreeShippingRule((array)$this->request->getPost());
+            $this->getMessageManager()->addSuccess(__('免邮规则创建成功。'));
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
+        }
+        return $this->redirect('shipping/backend/freeshippingrule/index');
+    }
+}
 

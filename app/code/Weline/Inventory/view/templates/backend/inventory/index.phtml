@@ -1,0 +1,64 @@
+<?php
+/** @var string $title @var string $section @var int $website_id @var array $rows @var array $columns @var string $error */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="container-fluid"
+     data-testid="inventory-management-<?= $escape($section) ?>"
+     data-management-section="<?= $escape($section) ?>">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div><h4 class="mb-1"><?= $escape($title) ?></h4><div class="text-muted"><lang>库存内核管理工作台</lang> · website_id=<?= $website_id ?></div></div>
+        <form method="get" class="d-flex gap-2">
+            <input class="form-control" type="number" min="0" name="website_id" value="<?= $website_id ?>" aria-label="<lang>网站 ID</lang>">
+            <button class="btn btn-primary" type="submit"><lang>切换网站</lang></button>
+        </form>
+    </div>
+
+    <?php if ($section === 'warehouses'): ?>
+        <div class="card mb-3"><div class="card-body">
+            <w:form method="post" action="@backend-url('*/backend/inventory/create-warehouse')" csrf="auto"
+                    class="row g-3" data-testid="inventory-warehouse-create-form">
+                <div class="col-md-2"><label class="form-label"><lang>网站 ID</lang></label><input class="form-control" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div class="col-md-3"><label class="form-label"><lang>仓代码</lang></label><input class="form-control" name="warehouse_code" maxlength="64" required></div>
+                <div class="col-md-3"><label class="form-label"><lang>仓名称</lang></label><input class="form-control" name="name" maxlength="128" required></div>
+                <div class="col-md-1"><label class="form-label"><lang>模式</lang></label><select class="form-select" name="mode"><option value="normal">normal</option><option value="test">test</option></select></div>
+                <div class="col-md-2"><label class="form-label"><lang>类型</lang></label><select class="form-select" name="warehouse_type"><option value="physical">physical</option><option value="logical">logical</option></select></div>
+                <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>创建</lang></button></div>
+            </w:form>
+        </div></div>
+    <?php elseif ($section === 'authorizations'): ?>
+        <div class="card mb-3"><div class="card-body">
+            <w:form method="post" action="@backend-url('*/backend/inventory/authorize-warehouse')" csrf="auto"
+                    class="row g-3" data-testid="inventory-warehouse-authorization-form">
+                <div class="col-md-2"><label class="form-label"><lang>网站 ID</lang></label><input class="form-control" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div class="col-md-3"><label class="form-label"><lang>Store ID</lang></label><input class="form-control" type="number" min="1" name="store_id" required></div>
+                <div class="col-md-3"><label class="form-label"><lang>Warehouse ID</lang></label><input class="form-control" type="number" min="1" name="warehouse_id" required></div>
+                <div class="col-md-2"><label class="form-label"><lang>默认逻辑仓</lang></label><select class="form-select" name="is_default"><option value="0">否</option><option value="1">是</option></select></div>
+                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>授权</lang></button></div>
+            </w:form>
+        </div></div>
+    <?php elseif ($section === 'adjustments'): ?>
+        <div class="card mb-3"><div class="card-body">
+            <w:form method="post" action="@backend-url('*/backend/inventory/adjust-stock')" csrf="auto"
+                    class="row g-3" data-testid="inventory-stock-adjust-form">
+                <div class="col-md-2"><label class="form-label"><lang>网站 ID</lang></label><input class="form-control" type="number" min="0" name="website_id" value="<?= $website_id ?>" required></div>
+                <div class="col-md-2"><label class="form-label"><lang>Store ID</lang></label><input class="form-control" type="number" min="1" name="store_id" required></div>
+                <div class="col-md-2"><label class="form-label"><lang>Offer ID</lang></label><input class="form-control" type="number" min="1" name="offer_id" required></div>
+                <div class="col-md-2"><label class="form-label"><lang>在手库存</lang></label><input class="form-control" type="number" min="0" name="on_hand_minor" required></div>
+                <div class="col-md-2"><label class="form-label"><lang>命令 ID</lang></label><input class="form-control" name="command_id" maxlength="96" required></div>
+                <div class="col-md-1"><label class="form-label"><lang>策略</lang></label><select class="form-select" name="strategy"><option value="strict">strict</option><option value="oversell">oversell</option><option value="preorder">preorder</option><option value="unlimited">unlimited</option></select></div>
+                <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><lang>提交</lang></button></div>
+            </w:form>
+        </div></div>
+    <?php endif; ?>
+
+    <?php if ($error !== ''): ?>
+        <div class="alert alert-danger" role="alert"><?= $escape($error) ?></div>
+    <?php elseif ($rows === []): ?>
+        <div class="card"><div class="card-body text-center py-5"><i class="mdi mdi-database-off-outline fs-1 text-muted"></i><p class="mt-2 mb-0"><lang>暂无数据</lang></p></div></div>
+    <?php else: ?>
+        <div class="card"><div class="table-responsive"><table class="table table-striped table-hover mb-0">
+            <thead><tr><?php foreach ($columns as $column): ?><th><?= $escape($column) ?></th><?php endforeach; ?></tr></thead>
+            <tbody><?php foreach ($rows as $row): ?><tr><?php foreach ($columns as $column): ?><td><?= $escape($row[$column] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody>
+        </table></div></div>
+    <?php endif; ?>
+</div>

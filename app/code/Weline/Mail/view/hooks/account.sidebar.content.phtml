@@ -14,6 +14,6 @@ if (!AccountSidebarContentGate::accepts('mail')) {
     return;
 }
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section" id="mail-section" data-account-section="mail" hidden>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="mail-section" data-account-section="mail" hidden weline-code="mail.account_sidebar_content.mail_section">
     <?= $this->fetch('Weline_Mail::templates/frontend/account/mail.phtml') ?>
 </section>

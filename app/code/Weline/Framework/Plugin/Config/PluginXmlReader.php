@@ -81,7 +81,7 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
      */
     public function read(): array
     {
-        if ($plugin = $this->pluginCache->getCustom('plugin')) {
+        if ($plugin = $this->pluginCache->get('plugin')) {
             return $plugin;
         }
         $plugin_interceptors_list = [];
@@ -110,7 +110,7 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
             );
             unset($module_plugin_interceptors);
         }
-        $this->pluginCache->setCustom('plugin', $plugin_interceptors_list);
+        $this->pluginCache->set('plugin', $plugin_interceptors_list);
         return $plugin_interceptors_list;
     }
 

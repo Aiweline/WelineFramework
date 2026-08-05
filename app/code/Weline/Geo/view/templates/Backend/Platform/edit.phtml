@@ -122,7 +122,7 @@ document.getElementById('platform-form').addEventListener('submit', function(e) 
     
     var url = '<?= $this->getUrl('geo/backend/platform/save') ?>';
     var opts = { method: 'POST', body: formData };
-    window.Weline.Api.request(url, opts)
+    bqAdmin['geo'](url, opts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {

@@ -1,0 +1,164 @@
+﻿数据读取失败，请检查库存模块状态与数据库连接,数据读取失败，请检查库存模块状态与数据库连接
+操作失败：%{1},操作失败：%{1}
+"%{1} 不能为空且最多 %{2} 字符","%{1} 不能为空且最多 %{2} 字符"
+"%{1} 必须是正整数","%{1} 必须是正整数"
+"%{1} 必须是非负整数","%{1} 必须是非负整数"
+库存,库存
+查看库存投影,查看库存投影
+库存调整,库存调整
+查看库存调整事件,查看库存调整事件
+仓库,仓库
+查看仓库,查看仓库
+仓库授权,仓库授权
+查看仓库授权,查看仓库授权
+库存预占,库存预占
+查看库存预占,查看库存预占
+预占租约,预占租约
+查看预占租约,查看预占租约
+库存账本,库存账本
+查看库存不可变账本,查看库存不可变账本
+库存迁移,库存迁移
+查看库存迁移状态,查看库存迁移状态
+创建仓库,创建仓库
+创建仓库授权,创建仓库授权
+提交库存调整,提交库存调整
+设置商品可用库存,设置商品可用库存
+"Website ID 不能为负","Website ID 不能为负"
+仓代码不能为空,"Warehouse code is required"
+仓模式无效：%{1},"Invalid warehouse mode: %{1}"
+仓类型无效：%{1},"Invalid warehouse type: %{1}"
+"仓授权 Scope 无效","Invalid warehouse authorization scope"
+库存内核管理工作台,库存内核管理工作台
+"网站 ID","网站 ID"
+切换网站,切换网站
+仓代码,仓代码
+仓名称,仓名称
+模式,模式
+类型,类型
+创建,创建
+"Store ID","Store ID"
+默认逻辑仓,默认逻辑仓
+授权,授权
+"Offer ID","Offer ID"
+在手库存,在手库存
+"命令 ID","命令 ID"
+策略,策略
+提交,提交
+暂无数据,暂无数据
+"attempt_started_at 不能晚于当前 UTC 时间","attempt_started_at 不能晚于当前 UTC 时间"
+"Attempt 已达 lease 硬上限，禁止新增预占并需 reconcile","Attempt 已达 lease 硬上限，禁止新增预占并需 reconcile"
+"Lease assign CAS 失败","Lease assign CAS 失败"
+"Lease 重放 owner/queued 负载冲突","Lease 重放 owner/queued 负载冲突"
+"Lease 重放 attempt_started_at 冲突","Lease 重放 attempt_started_at 冲突"
+"Lease 持久化时间或版本不满足硬上限不变量","Lease 持久化时间或版本不满足硬上限不变量"
+"仅 lease owner Attempt 可续租","仅 lease owner Attempt 可续租"
+"排队 Order 不续租，须重新 availability/reserve","排队 Order 不续租，须重新 availability/reserve"
+"expected lease_version 必须 >= 1","expected lease_version 必须 >= 1"
+"Lease version 冲突","Lease version 冲突"
+"已达 lease 硬上限，停止续租并需 reconcile","已达 lease 硬上限，停止续租并需 reconcile"
+"Lease 已过期，禁止复活","Lease 已过期，禁止复活"
+"Lease renew CAS 失败","Lease renew CAS 失败"
+"Lease queued 标记 CAS 失败","Lease queued 标记 CAS 失败"
+"lease_owner_attempt_code 不能为空","lease_owner_attempt_code 不能为空"
+"lease_owner_attempt_code 超出 64 字符限制","lease_owner_attempt_code 超出 64 字符限制"
+"Lease 时间字段无效：%{1}","Lease 时间字段无效：%{1}"
+"Reservation 不存在：%{1}","Reservation 不存在：%{1}"
+"禁止对非 reserved 续租/复活：%{1}","禁止对非 reserved 续租/复活：%{1}"
+"website_id 不能小于 0","website_id 不能小于 0"
+未知库存管理区段：%{1},未知库存管理区段：%{1}
+"on_hand 不能为负","on_hand 不能为负"
+"allowance 不能为负","allowance 不能为负"
+"Ledger 重放竞争需要回滚","Ledger 重放竞争需要回滚"
+"库存设置 CAS 重试耗尽","库存设置 CAS 重试耗尽"
+"可售库存不足：offer=%{1} need=%{2}","可售库存不足：offer=%{1} need=%{2}"
+"库存预占 minor 累加溢出","库存预占 minor 累加溢出"
+"库存预占 CAS 重试耗尽","库存预占 CAS 重试耗尽"
+"Commit ledger 已存在但 Reservation 状态不一致","Commit ledger 已存在但 Reservation 状态不一致"
+"Reservation 已 committed 但缺少 commit ledger","Reservation 已 committed 但缺少 commit ledger"
+"只能 commit reserved 状态：%{1}","只能 commit reserved 状态：%{1}"
+"Reservation quantity_minor 必须为正","Reservation quantity_minor 必须为正"
+"reserved_minor 小于待 commit 数量","reserved_minor 小于待 commit 数量"
+"Commit ledger 重放竞争需要回滚","Commit ledger 重放竞争需要回滚"
+"Commit Reservation 状态 CAS 失败","Commit Reservation 状态 CAS 失败"
+"库存 commit CAS 重试耗尽","库存 commit CAS 重试耗尽"
+退款回库数量必须为正数,退款回库数量必须为正数
+退款回库重放数量与原请求不一致,退款回库重放数量与原请求不一致
+"退款回库 ledger 重放竞争需要回滚","退款回库 ledger 重放竞争需要回滚"
+"退款回库库存 CAS 重试耗尽","退款回库库存 CAS 重试耗尽"
+"Reservation patch 字段为空或不受支持：%{1}","Reservation patch 字段为空或不受支持：%{1}"
+"expiry batch limit 必须在 1..1000","expiry batch limit 必须在 1..1000"
+"Reservation 终态缺少对应 immutable ledger","Reservation 终态缺少对应 immutable ledger"
+"reserved_minor 小于待释放数量","reserved_minor 小于待释放数量"
+"释放/过期 ledger 重放竞争需要回滚","释放/过期 ledger 重放竞争需要回滚"
+"释放/过期 Reservation 状态 CAS 失败","释放/过期 Reservation 状态 CAS 失败"
+"库存释放/过期 CAS 重试耗尽","库存释放/过期 CAS 重试耗尽"
+"website_id/store_id 须 >=0 且 offer_id>0：%{1}/%{2}/%{3}","website_id/store_id 须 >=0 且 offer_id>0：%{1}/%{2}/%{3}"
+库存行不存在,库存行不存在
+"Ledger 唯一约束冲突：%{1}","Ledger 唯一约束冲突：%{1}"
+"idempotency_key/request_hash 不能为空","idempotency_key/request_hash 不能为空"
+"idempotency_key/request_hash 超出 128/64 字符限制","idempotency_key/request_hash 超出 128/64 字符限制"
+"reservation_uuid 不能为空且最多 36 字符","reservation_uuid 不能为空且最多 36 字符"
+"Initial lease 字段必须完整且不得扩展","Initial lease 字段必须完整且不得扩展"
+"lease_owner_attempt_code 不能为空且最多 64 字符","lease_owner_attempt_code 不能为空且最多 64 字符"
+"Initial lease version/queued_order 无效","Initial lease version/queued_order 无效"
+"Initial lease 时间不满足 2h 硬上限","Initial lease 时间不满足 2h 硬上限"
+"Reservation 重放 lease owner/queued 负载冲突","Reservation 重放 lease owner/queued 负载冲突"
+"UTC datetime 格式无效：%{1}","UTC datetime 格式无效：%{1}"
+"Ledger idempotency payload 冲突","Ledger idempotency payload 冲突"
+"库存 transition idempotency hash 冲突","库存 transition idempotency hash 冲突"
+"库存 transition 重放 reservation/quantity 负载冲突","库存 transition 重放 reservation/quantity 负载冲突"
+"库存预占 idempotency hash 冲突：key=%{1}","库存预占 idempotency hash 冲突：key=%{1}"
+"库存预占 idempotency payload 冲突：key=%{1}","库存预占 idempotency payload 冲突：key=%{1}"
+"库存 Reservation 不存在","库存 Reservation 不存在"
+"Reservation 已绑定不同 Warehouse","Reservation 已绑定不同 Warehouse"
+"原 Warehouse/Offer 库存入口不存在","原 Warehouse/Offer 库存入口不存在"
+"WarehouseQuota CAS 重试耗尽","WarehouseQuota CAS 重试耗尽"
+"reservation_uuid 无效","reservation_uuid 无效"
+仓代码/名称不能为空且不得超过字段长度,仓代码/名称不能为空且不得超过字段长度
+仓模式或类型无效,仓模式或类型无效
+"store_id 与 warehouse_id 必须是正整数","store_id 与 warehouse_id 必须是正整数"
+"库存调整 Scope 或数量无效","库存调整 Scope 或数量无效"
+"command_id 格式无效","command_id 格式无效"
+"website_id 不能为负","website_id 不能为负"
+"预占完成后缺少可分配 lease 的 reserved 行","预占完成后缺少可分配 lease 的 reserved 行"
+"仓 website_id、代码和名称不能为空","仓 website_id、代码和名称不能为空"
+仓写入后无法回读：%{1},仓写入后无法回读：%{1}
+仓授权被拒绝,"Warehouse authorization was rejected"
+"Store 不存在：%{1}","Store does not exist: %{1}"
+"Store 与仓不属于同一 Website","Store and warehouse do not belong to the same Website"
+"Store %{1} 已停用或不在 active 生命周期","Store %{1} is disabled or is not active"
+仓授权请求与既有绑定冲突,"Warehouse authorization conflicts with the existing binding"
+"Store 已存在不同的默认逻辑仓","Store already has a different default logical warehouse"
+仓不存在,"Warehouse does not exist"
+仓已停用,"Warehouse is disabled"
+"Store 环境与仓模式不兼容","Store environment is incompatible with warehouse mode"
+默认仓必须是逻辑仓,"The default warehouse must be logical"
+"Store mode 不受支持：%{1}","Unsupported Store mode: %{1}"
+仓授权写入冲突,"Warehouse authorization write conflict"
+"Store %{1}/%{2} 默认仓缺失","Default warehouse is missing for Store %{1}/%{2}"
+"Store %{1}/%{2} 默认逻辑仓不唯一","Default logical warehouse is ambiguous for Store %{1}/%{2}"
+"Website %{1} 无 mode=%{2} 默认逻辑仓","Website %{1} has no default logical warehouse for mode=%{2}"
+"Website %{1} 默认逻辑仓不唯一（mode=%{2}）","Website %{1} has multiple default logical warehouses for mode=%{2}"
+未知库存策略：%{1},未知库存策略：%{1}
+"库存数量必须为正整数 minor：%{1}","库存数量必须为正整数 minor：%{1}"
+"on_hand/reserved 不能为负","on_hand/reserved 不能为负"
+"库存 minor 加法溢出","库存 minor 加法溢出"
+"MIG-P3A：P2 库存迁到默认逻辑仓（仅登记的隔离 clone）","MIG-P3A: migrate P2 inventory to default logical Warehouses (registered isolated clones only)"
+打印帮助,"Print help"
+"只读清点历史、映射冲突、Schema 与逐 Offer 守恒","Read-only inventory of history, mapping conflicts, schema, and per-Offer conservation"
+"checkpoint 后在登记 clone 上锁表事务映射；写入模式保持 off","After checkpointing, map transactionally under table locks on a registered clone; keep writer mode off"
+"新进程复核 checkpoint、历史摘要、映射计划与逐 Offer 守恒","Verify checkpoint, history digests, mapping plans, and per-Offer conservation in a fresh process"
+"verify 成功后按 website 开启新写路径","Enable the new writer by Website only after verification succeeds"
+"按 checkpoint 关闭新写路径；保留历史与已映射事实","Disable the new writer by checkpoint while retaining history and mapped facts"
+"migration registry 已登记的 mig_clone_*","A mig_clone_* registered in the migration registry"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify/allowlist/rollback)"
+"allowlist 网站 ID；可重复或逗号分隔","Allowlisted Website ID; repeat or use comma-separated values"
+显示本帮助,"Show this help"
+"""Website ID 不能为负""","Website ID must not be negative"
+"normal 库存不得映到 test 仓","normal 库存不得映到 test 仓"
+"test 库存不得映到 normal 真仓","test 库存不得映到 normal 真仓"
+发货数量必须为正,发货数量必须为正
+履约单元不存在,履约单元不存在
+"履约 CAS 冲突","履约 CAS 冲突"
+累计发货超过可发数量,累计发货超过可发数量
+"仓维 writer 在当前 rollout 不可写","仓维 writer 在当前 rollout 不可写"

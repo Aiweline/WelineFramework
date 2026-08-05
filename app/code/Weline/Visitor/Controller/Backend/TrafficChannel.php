@@ -17,6 +17,7 @@ use Weline\Visitor\Service\PixelChannelHotTotalsService;
 use Weline\Visitor\Service\PixelChannelLandingUrlService;
 use Weline\Visitor\Service\PixelChannelTimelineService;
 use Weline\Visitor\Service\PixelChannelUpdateService;
+use Weline\Visitor\Service\PixelStatisticsService;
 
 /**
  * 流量渠道后台：列表（B03）+ 新建（B04）+ 编辑/停用（B05）+ 详情总计（B10）。
@@ -343,5 +344,11 @@ class TrafficChannel extends BackendController
         $this->assign('medium_by_type', PixelChannelCreateService::MEDIUM_BY_TRAFFIC_TYPE);
         $this->assign('default_utm_source', PixelChannelCreateService::DEFAULT_UTM_SOURCE);
         $this->assign('landing_preview', $preview);
+        $websiteSelectOptions = PixelStatisticsService::buildWebsiteSelectOptions();
+        $this->assign('website_select_options', $websiteSelectOptions);
+        $this->assign(
+            'website_select_options_json',
+            \json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]'
+        );
     }
 }

@@ -27,6 +27,13 @@ return [
             'required' => false,
             'multiple' => true,
         ],
+        'OptimizationTargetAdapter' => [
+            'path' => 'extends/module/Weline_Seo/OptimizationTargetAdapter',
+            'interface' => 'Weline\Seo\Interface\OptimizationTargetAdapterInterface',
+            'description' => 'SEO continuous-optimization target adapter extension point (content ownership stays in the adapter module).',
+            'required' => false,
+            'multiple' => true,
+        ],
         'SitemapAdapter' => [
             'path' => 'extends/module/Weline_Seo/SitemapAdapter',
             'interface' => 'Weline\Seo\Interface\SitemapPlatformAdapterInterface',

@@ -13,12 +13,12 @@ namespace Weline\Framework\Setup\Stage;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\System\File\Io\File;
+use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
 
 /**
  * 文件更新阶段
  * 
- * 职责：管理模块文件、函数文件等的批量更新，确保一次性写入
+ * 职责：管理模块文件、函数文件等的批量更新，经 AtomicCompiledFilePublisher 原子写入
  * 
  * @package Weline\Framework\Setup\Stage
  */
@@ -146,21 +146,12 @@ class FileUpdateStage extends AbstractStage
         }
         
         $failedFiles = [];
-        
-        // 一次性写入所有文件
+        $publisher = new AtomicCompiledFilePublisher();
+
+        // 原子发布所有文件（temp+rename，避免半截 PHP）
         foreach ($this->fileData as $filePath => $content) {
             try {
-                // 确保目录存在
-                $dir = dirname($filePath);
-                if (!is_dir($dir)) {
-                    mkdir($dir, 0755, true);
-                }
-                
-                // 写入文件
-                $file = new File();
-                $file->open($filePath, $file::mode_w_add);
-                $file->write($content);
-                $file->close();
+                $publisher->publish($filePath, $content === '' ? "<?php\n" : $content);
             } catch (\Exception $e) {
                 $failedFiles[] = $filePath;
                 $this->addError(__('写入文件 %{1} 失败：%{2}', [$filePath, $e->getMessage()]));
@@ -184,6 +175,7 @@ class FileUpdateStage extends AbstractStage
             return;
         }
         
+        $publisher = new AtomicCompiledFilePublisher();
         // 恢复原始文件内容
         foreach ($this->originalFileData as $filePath => $originalContent) {
             try {
@@ -193,11 +185,7 @@ class FileUpdateStage extends AbstractStage
                         @unlink($filePath);
                     }
                 } else {
-                    // 恢复原始内容
-                    $file = new File();
-                    $file->open($filePath, $file::mode_w_add);
-                    $file->write($originalContent);
-                    $file->close();
+                    $publisher->publish($filePath, $originalContent === '' ? "<?php\n" : $originalContent);
                 }
             } catch (\Exception $e) {
                 // 回滚失败，记录错误但不抛出异常

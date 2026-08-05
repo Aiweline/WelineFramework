@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Queue',
     __DIR__,
-    '1.1.1',
+    '1.2.2',
     '消息队列：目前使用数据库做消息队列。',
     [
         'Weline_Eav'

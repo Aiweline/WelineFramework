@@ -9,10 +9,12 @@
 
 namespace Weline\Framework\Event\Config;
 
+use Weline\Framework\Api\Event\AsyncPayloadMapperInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
 
@@ -145,7 +147,9 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             !isset($config['config']['_attribute']['noNamespaceSchemaLocation'])
             || 'urn:Weline_Framework::Event/etc/xsd/event.xsd' !== $config['config']['_attribute']['noNamespaceSchemaLocation']
         ) {
-            die(__('%{1} 事件必须设置：noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"', [$module_and_file]));
+            throw new EventConfigurationException(
+                __('%{1} 事件必须设置：noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"', [$module_and_file])
+            );
         }
         if (!isset($config['config']['_value']['event'])) {
             return null;
@@ -157,7 +161,9 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         if ($firstEventKey !== null && is_int($firstEventKey)) {
             foreach ($config['config']['_value']['event'] as $event) {
                 if (!isset($event['_attribute']['name'])) {
-                    die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
+                    throw new EventConfigurationException(
+                        __('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file])
+                    );
                 }
                 try {
                     $this->validateEventSpec($event['_attribute']['name'], $moduleName, $eventSpecs, $module_and_file);
@@ -165,15 +171,24 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                     w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
                 }
                 if (!isset($event['_value']) || !is_array($event['_value']) || !isset($event['_value']['observer'])) {
-                    die(__('%{1} 事件Event的_value格式错误或缺少observer节点', [$module_and_file]));
+                    throw new EventConfigurationException(__('%{1} 事件Event的_value格式错误或缺少observer节点', [$module_and_file]));
                 }
                 $observers = $event['_value']['observer'];
-                $this->collectObservers($observers, $event['_attribute']['name'], $module_event_observers, $module_and_file);
+                $this->collectObservers(
+                    $observers,
+                    $event['_attribute']['name'],
+                    $module_event_observers,
+                    $module_and_file,
+                    (array)$event['_attribute'],
+                    $moduleName,
+                );
             }
         } else {
             $eventNode = $config['config']['_value']['event'];
             if (!isset($eventNode['_attribute']['name'])) {
-                die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
+                throw new EventConfigurationException(
+                    __('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file])
+                );
             }
             try {
                 $this->validateEventSpec($eventNode['_attribute']['name'], $moduleName, $eventSpecs, $module_and_file);
@@ -181,10 +196,17 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
             }
             if (!isset($eventNode['_value']) || !is_array($eventNode['_value']) || !isset($eventNode['_value']['observer'])) {
-                die(__('%{1} 事件Event的_value格式错误或缺少observer节点', [$module_and_file]));
+                throw new EventConfigurationException(__('%{1} 事件Event的_value格式错误或缺少observer节点', [$module_and_file]));
             }
             $observers = $eventNode['_value']['observer'];
-            $this->collectObservers($observers, $eventNode['_attribute']['name'], $module_event_observers, $module_and_file);
+            $this->collectObservers(
+                $observers,
+                $eventNode['_attribute']['name'],
+                $module_event_observers,
+                $module_and_file,
+                (array)$eventNode['_attribute'],
+                $moduleName,
+            );
         }
         return $module_event_observers;
     }
@@ -196,19 +218,147 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
         array $observers,
         string $eventName,
         array &$module_event_observers,
-        string $module_and_file
+        string $module_and_file,
+        array $eventAttributes = [],
+        string $moduleName = '',
     ): void {
+        if (!preg_match('/^[A-Za-z0-9_{}:-]+$/', $eventName)) {
+            throw new EventConfigurationException(__('事件名包含非法字符：%{1}', [$eventName]));
+        }
         $firstKey = array_key_first($observers);
         $list = ($firstKey !== null && is_int($firstKey)) ? $observers : [$observers];
+        $hasAsync = false;
+        foreach ($list as $item) {
+            if (strtolower((string)($item['_attribute']['delivery'] ?? 'sync')) === 'async') {
+                $hasAsync = true;
+                break;
+            }
+        }
+        $schemaVersion = (int)($eventAttributes['schema_version'] ?? 0);
+        $mapperClass = ltrim(trim((string)($eventAttributes['async_mapper'] ?? '')), '\\');
+        $dataContract = trim((string)($eventAttributes['data_contract'] ?? ''));
+        if ($hasAsync) {
+            $this->validateAsyncEventContract($eventName, $schemaVersion, $mapperClass, $dataContract);
+        }
         foreach ($list as $item) {
             if (!isset($item['_attribute']['name'], $item['_attribute']['instance'])) {
-                die(__('%{1} 观察者Observer没有设置name/instance属性：<observer name="..." instance="..."/>', [$module_and_file]));
+                throw new EventConfigurationException(
+                    __('%{1} 观察者Observer没有设置name/instance属性：<observer name="..." instance="..."/>', [$module_and_file])
+                );
             }
             $attr = $item['_attribute'];
             $attr['disabled'] = $attr['disabled'] ?? 'false';
             $attr['shared'] = $attr['shared'] ?? 'true';
             $attr['sort'] = $attr['sort'] ?? 10000;
+            $attr['delivery'] = strtolower((string)($attr['delivery'] ?? 'sync'));
+            $attr['failure_explicit'] = array_key_exists('failure', $attr);
+            $attr['retry_explicit'] = array_key_exists('retry', $attr);
+            $attr['coalesce_explicit'] = array_key_exists('coalesce', $attr);
+            $attr['timeout_explicit'] = array_key_exists('timeout', $attr);
+            $attr['failure'] = strtolower((string)($attr['failure'] ?? 'critical'));
+            $attr['retry'] = strtolower((string)($attr['retry'] ?? ($attr['delivery'] === 'async' ? 'standard' : 'none')));
+            $attr['coalesce'] = strtolower((string)($attr['coalesce'] ?? 'none'));
+            $attr['timeout'] = (int)($attr['timeout'] ?? 30);
+            $this->validateObserverPolicy($eventName, $attr);
+            $attr['event_schema_version'] = $schemaVersion;
+            $attr['event_async_mapper'] = $mapperClass;
+            $attr['event_data_contract'] = $dataContract;
+            $observerKey = $moduleName . '::' . trim((string)$attr['name']);
+            if ($moduleName === '' || strlen($observerKey) > 191) {
+                throw new EventConfigurationException(
+                    __('事件 %{1} 的 observer_key 无效或超过 191 字节', [$eventName])
+                );
+            }
+            $attr['module'] = $moduleName;
+            $attr['observer_key'] = $observerKey;
+            $attr['instance_hash'] = $this->observerInstanceHash((string)$attr['instance']);
+            foreach ((array)($module_event_observers[$eventName] ?? []) as $existingObserver) {
+                if ((string)($existingObserver['observer_key'] ?? '') === $observerKey) {
+                    throw new EventConfigurationException(
+                        __('事件 %{1} 存在重复 observer_key：%{2}', [$eventName, $observerKey])
+                    );
+                }
+            }
             $module_event_observers[$eventName][] = $attr;
+        }
+    }
+
+    private function observerInstanceHash(string $instance): string
+    {
+        $instance = ltrim(trim($instance), '\\');
+        $material = $instance;
+        try {
+            if (class_exists($instance)) {
+                $file = (new \ReflectionClass($instance))->getFileName();
+                if (is_string($file) && is_file($file)) {
+                    $material .= '|' . hash_file('sha256', $file);
+                }
+            }
+        } catch (\Throwable) {
+        }
+        return hash('sha256', $material);
+    }
+
+    private function validateAsyncEventContract(
+        string $eventName,
+        int $schemaVersion,
+        string $mapperClass,
+        string $dataContract,
+    ): void {
+        if ($schemaVersion < 1 || $mapperClass === '' || $dataContract === '') {
+            throw new EventConfigurationException(
+                __('异步事件 %{1} 必须声明 schema_version、async_mapper 和 data_contract', [$eventName])
+            );
+        }
+        try {
+            $mapper = ObjectManager::getInstance($mapperClass);
+        } catch (\Throwable $exception) {
+            throw new EventConfigurationException(
+                __('异步事件 %{1} 的 Mapper 无法实例化：%{2}', [$eventName, $mapperClass]),
+                previous: $exception,
+            );
+        }
+        if (!$mapper instanceof AsyncPayloadMapperInterface
+            || $mapper->eventName() !== $eventName
+            || $mapper->schemaVersion() !== $schemaVersion) {
+            throw new EventConfigurationException(
+                __('异步事件 %{1} 的 Mapper 契约或 schema 版本不匹配', [$eventName])
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $attr */
+    private function validateObserverPolicy(string $eventName, array $attr): void
+    {
+        $delivery = (string)$attr['delivery'];
+        if (!in_array($delivery, ['sync', 'async'], true)) {
+            throw new EventConfigurationException(__('事件 %{1} 的 Observer delivery 只允许 sync|async', [$eventName]));
+        }
+        if ($delivery === 'sync') {
+            if (!in_array((string)$attr['failure'], ['critical', 'isolated'], true)) {
+                throw new EventConfigurationException(__('事件 %{1} 的 sync Observer failure 只允许 critical|isolated', [$eventName]));
+            }
+            if (($attr['retry_explicit'] ?? false)
+                || ($attr['coalesce_explicit'] ?? false)
+                || ($attr['timeout_explicit'] ?? false)) {
+                throw new EventConfigurationException(
+                    __('事件 %{1} 的 sync Observer 不允许 retry/coalesce/timeout', [$eventName]),
+                );
+            }
+            return;
+        }
+        if (($attr['failure_explicit'] ?? false) === true) {
+            throw new EventConfigurationException(
+                __('事件 %{1} 的 async Observer 不允许 failure；失败由 retry 策略处理', [$eventName]),
+            );
+        }
+        if (!in_array((string)$attr['retry'], ['none', 'standard'], true)
+            || !in_array((string)$attr['coalesce'], ['none', 'latest'], true)
+            || (int)$attr['timeout'] < 1
+            || (int)$attr['timeout'] > 3600) {
+            throw new EventConfigurationException(
+                __('事件 %{1} 的 async Observer retry/coalesce/timeout 策略无效', [$eventName])
+            );
         }
     }
 

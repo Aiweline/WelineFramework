@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\Database;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Database\Console\Db\Migrate\Upgrade;
 use Weline\Database\Console\Db\Migrate\Rollback;

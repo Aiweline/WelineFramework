@@ -10,6 +10,7 @@
 namespace Weline\Framework\Router\Helper;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
 
 class Data
 {
@@ -122,7 +123,7 @@ class Data
     }
 
     /**
-     * 将大数组流式写入为 PHP return 文件，逐项 fwrite，避免整表 var_export 占用过多内存。
+     * 将大数组组装为 PHP return 文件后原子发布（temp+rename），避免目标路径先截断再写导致半截文件。
      *
      * @param string $path 文件路径
      * @param array $data 数组数据
@@ -130,26 +131,21 @@ class Data
      */
     private function writeArrayToPhpFile(string $path, array &$data): void
     {
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        $fh = fopen($path, 'wb');
-        if ($fh === false) {
-            throw new \Weline\Framework\App\Exception(__('无法打开文件：%{1}', [$path]));
-        }
-        fwrite($fh, "<?php return [\n");
+        $payload = "<?php return [\n";
         $first = true;
         foreach ($data as $key => $value) {
             if (!$first) {
-                fwrite($fh, ",\n");
+                $payload .= ",\n";
             }
             $first = false;
-            fwrite($fh, var_export($key, true) . ' => ' . var_export($value, true));
+            $payload .= var_export($key, true) . ' => ' . var_export($value, true);
         }
-        fwrite($fh, "\n];\n");
-        fclose($fh);
-        $this->invalidatePhpFileCache($path);
+        $payload .= "\n];\n";
+        try {
+            (new AtomicCompiledFilePublisher())->publish($path, $payload);
+        } catch (\Throwable $e) {
+            throw new \Weline\Framework\App\Exception(__('无法原子写入文件：%{1}：%{2}', [$path, $e->getMessage()]), 0, $e);
+        }
     }
 
     private function invalidatePhpFileCache(string $path): void

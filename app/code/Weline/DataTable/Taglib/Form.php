@@ -11,6 +11,7 @@ namespace Weline\DataTable\Taglib;
 use Weline\DataTable\Helper\FrontendAccess;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\DataTable\Helper\TableContext;
+use Weline\Framework\View\Form\FormRenderer;
 use Weline\Framework\View\Template;
 
 class Form implements TaglibInterface
@@ -367,7 +368,18 @@ class Form implements TaglibInterface
             $formHtml .= '</h3>';
             $formHtml .= '</div>';
             
-            $formHtml .= '<form class="' . $class . ' ' . $layoutClass . ' ' . $modeClass . '" id="' . $id . '" action="' . $action . '" method="' . $method . '" data-model="' . $modelStr . '" data-scope="' . $scopeStr . '" data-mode="' . $modeStr . '" data-record-id="' . $recordIdStr . '" data-form-mode="inline">';
+            $formHtml .= FormRenderer::open([
+                'class' => $class . ' ' . $layoutClass . ' ' . $modeClass,
+                'id' => $id,
+                'action' => $action,
+                'method' => $method,
+                'data-model' => $modelStr,
+                'data-scope' => $scopeStr,
+                'data-mode' => $modeStr,
+                'data-record-id' => $recordIdStr,
+                'data-form-mode' => 'inline',
+                'intent' => 'datatable.inline',
+            ]);
             $formHtml .= '<div class="w-form-body">';
             $formHtml .= '<div class="w-form-fields" id="w-form-fields-' . $id . '">';
             $formHtml .= '<!-- 鎵嬪姩璁剧疆鐨勫瓧娈?-->';
@@ -396,7 +408,7 @@ class Form implements TaglibInterface
             $formHtml .= '</button>';
             $formHtml .= '</div>';
             $formHtml .= '</div>';
-            $formHtml .= '</form>';
+            $formHtml .= FormRenderer::close();
             $formHtml .= '</div>';
         } else {
             // Modal妯″紡锛氱敓鎴愭ā鎬佹HTML锛堥粯璁わ級
@@ -415,7 +427,18 @@ class Form implements TaglibInterface
             $formHtml .= '</button>';
             $formHtml .= '</div>';
             
-            $formHtml .= '<form class="' . $class . ' ' . $layoutClass . ' ' . $modeClass . '" id="' . $id . '" action="' . $action . '" method="' . $method . '" data-model="' . $modelStr . '" data-scope="' . $scopeStr . '" data-mode="' . $modeStr . '" data-record-id="' . $recordIdStr . '" data-form-mode="modal">';
+            $formHtml .= FormRenderer::open([
+                'class' => $class . ' ' . $layoutClass . ' ' . $modeClass,
+                'id' => $id,
+                'action' => $action,
+                'method' => $method,
+                'data-model' => $modelStr,
+                'data-scope' => $scopeStr,
+                'data-mode' => $modeStr,
+                'data-record-id' => $recordIdStr,
+                'data-form-mode' => 'modal',
+                'intent' => 'datatable.modal',
+            ]);
             $formHtml .= '<div class="w-form-body">';
             $formHtml .= '<div class="w-form-fields" id="w-form-fields-' . $id . '">';
             $formHtml .= '<!-- 鎵嬪姩璁剧疆鐨勫瓧娈?-->';
@@ -444,7 +467,7 @@ class Form implements TaglibInterface
             $formHtml .= '</button>';
             $formHtml .= '</div>';
             $formHtml .= '</div>';
-            $formHtml .= '</form>';
+            $formHtml .= FormRenderer::close();
             $formHtml .= '</div>';
             
             $formHtml .= '</div>'; // w-form-modal-container
@@ -2015,4 +2038,3 @@ body[data-topbar="dark"] .w-loading-fields {
 CSS;
     }
 }
-

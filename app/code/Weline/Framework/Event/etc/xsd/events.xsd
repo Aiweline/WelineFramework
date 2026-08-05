@@ -53,6 +53,9 @@
             <xs:element name="observer" type="observerDeclaration" minOccurs="1" maxOccurs="unbounded"/>
         </xs:sequence>
         <xs:attribute name="name" type="eventName" use="required"/>
+        <xs:attribute name="schema_version" type="xs:positiveInteger" use="optional"/>
+        <xs:attribute name="async_mapper" type="xs:string" use="optional"/>
+        <xs:attribute name="data_contract" type="xs:string" use="optional"/>
     </xs:complexType>
 
     <xs:complexType name="observerDeclaration">
@@ -96,16 +99,56 @@
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>
+        <xs:attribute name="delivery" use="optional" default="sync">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="sync"/>
+                    <xs:enumeration value="async"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="failure" use="optional" default="critical">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="critical"/>
+                    <xs:enumeration value="isolated"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="retry" use="optional">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="none"/>
+                    <xs:enumeration value="standard"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="coalesce" use="optional">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="none"/>
+                    <xs:enumeration value="latest"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="timeout" use="optional">
+            <xs:simpleType>
+                <xs:restriction base="xs:positiveInteger">
+                    <xs:minInclusive value="1"/>
+                    <xs:maxInclusive value="3600"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
     </xs:complexType>
 
     <xs:simpleType name="eventName">
         <xs:annotation>
             <xs:documentation>
-                事件名称只能包含 [a-zA-Z0-9_]。
+                事件名称只能包含 [A-Za-z0-9_{}:-]。
             </xs:documentation>
         </xs:annotation>
         <xs:restriction base="xs:string">
-            <xs:pattern value="[a-zA-Z0-9_]+"/>
+            <xs:pattern value="[A-Za-z0-9_{}:-]+"/>
         </xs:restriction>
     </xs:simpleType>
 </xs:schema>

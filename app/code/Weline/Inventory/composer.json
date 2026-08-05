@@ -1,0 +1,25 @@
+{
+    "name": "weline/module-inventory",
+    "description": "WelineFramework Store-scoped inventory ledger and reservation contracts",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-websites": "@dev"
+    },
+    "suggest": {
+        "weline/module-product": "Provides product catalog metadata for inventory integrations."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Inventory\\": ""
+        }
+    },
+    "license": "MIT"
+}

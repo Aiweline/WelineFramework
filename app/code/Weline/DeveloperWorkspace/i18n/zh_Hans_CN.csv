@@ -1,5 +1,9 @@
 ﻿"API 文档收集后","API 文档收集后"
 "DeveloperWorkspace 汇总 API 文档后触发，允许其他模块通过事件追加 SDK、协议或扩展 API 文档。","DeveloperWorkspace 汇总 API 文档后触发，允许其他模块通过事件追加 SDK、协议或扩展 API 文档。"
+异步事件验收台不支持操作：%{1},异步事件验收台不支持操作：%{1}
+"执行异步资源变更 WebUI 验收步骤","执行异步资源变更 WebUI 验收步骤"
+"异步资源变更 WebUI 验收台","异步资源变更 WebUI 验收台"
+"通过 w_changed() 实测 Outbox、Delivery、Queue 与异步 Observer。","通过 w_changed() 实测 Outbox、Delivery、Queue 与异步 Observer。"
 开发工具面板,开发工具面板
 在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。,在页面中显示开发工具面板，提供路由查看、API文档等功能。仅在开发模式下显示。
 开发工具面板-扩展标签,开发工具面板-扩展标签
@@ -20,9 +24,13 @@
 使用控制器,使用控制器
 模组事件,模组事件
 WelineFramework插件功能,WelineFramework插件功能
+"Weline_DeveloperWorkspace Upgrade: idempotent DocumentUniqueKeyHealer","Weline_DeveloperWorkspace Upgrade: idempotent DocumentUniqueKeyHealer"
 开发助手,开发助手
 关闭沙盒环境,关闭沙盒环境
 沙盒启动Key,沙盒启动Key
+"异步验收探针只接受 ResourceChange v1","异步验收探针只接受 ResourceChange v1"
+异步验收探针标识不匹配,异步验收探针标识不匹配
+"Weline_DeveloperWorkspace: before_schema_diff_commit — DocumentUniqueKeyHealer","Weline_DeveloperWorkspace: before_schema_diff_commit — DocumentUniqueKeyHealer"
 文档ID不能为空,文档ID不能为空
 文档不存在,文档不存在
 文档路径信息不完整,文档路径信息不完整
@@ -38,6 +46,39 @@ WelineFramework插件功能,WelineFramework插件功能
 文件上传失败！,文件上传失败！
 未知,未知
 获取成功,获取成功
+开发文档管理,开发文档管理
+"fa fa-list-alt","fa fa-list-alt"
+管理开发文档,管理开发文档
+文档列表,文档列表
+"mdi mdi-translate","mdi mdi-translate"
+保存文档管理配置,保存文档管理配置
+"mdi mdi-content-save","mdi mdi-content-save"
+扫描文档翻译适配器,扫描文档翻译适配器
+"mdi mdi-magnify-scan","mdi mdi-magnify-scan"
+执行文档翻译任务,执行文档翻译任务
+"mdi mdi-play","mdi mdi-play"
+重试失败文档翻译任务,重试失败文档翻译任务
+"mdi mdi-replay","mdi mdi-replay"
+测试文档翻译适配器,测试文档翻译适配器
+"mdi mdi-test-tube","mdi mdi-test-tube"
+文档删除,文档删除
+"fa fa-delete","fa fa-delete"
+文档编辑,文档编辑
+"fa fa-edit","fa fa-edit"
+文档添加,文档添加
+"fa fa-plus","fa fa-plus"
+文档保存,文档保存
+"fa fa-save","fa fa-save"
+id,id
+content,content
+文档成功！ID:,文档成功！ID:
+dev/tool/admin/document,dev/tool/admin/document
+文档上传,文档上传
+"fa fa-upload","fa fa-upload"
+文档查看,文档查看
+"fa fa-eye","fa fa-eye"
+文档列表API,文档列表API
+"fa fa-list","fa fa-list"
 分类ID不能为空,分类ID不能为空
 分类不存在,分类不存在
 系统分类不允许删除,系统分类不允许删除
@@ -54,6 +95,17 @@ WelineFramework插件功能,WelineFramework插件功能
 系统分类不允许拖动排序,系统分类不允许拖动排序
 排序已保存,排序已保存
 保存失败：,保存失败：
+dev-document-catalog-manager,dev-document-catalog-manager
+"fa fa-book-o","fa fa-book-o"
+文档分类管理器,文档分类管理器
+dev-document-manager,dev-document-manager
+文档分类列表,文档分类列表
+文档分类树,文档分类树
+文档分类删除,文档分类删除
+文档分类保存,文档分类保存
+"fa fa-sort","fa fa-sort"
+文档分类排序,文档分类排序
+文档分类查看,文档分类查看
 无效的请求方法,无效的请求方法
 启动Key错误,启动Key错误
 沙盒环境已关闭！接下来操作的数据将影响正式线上数据库。,沙盒环境已关闭！接下来操作的数据将影响正式线上数据库。
@@ -61,11 +113,22 @@ WelineFramework插件功能,WelineFramework插件功能
 沙盒启动Key不能为空,沙盒启动Key不能为空
 沙盒启动Key设置成功,沙盒启动Key设置成功
 沙盒环境已关闭,沙盒环境已关闭
+沙盒管理,沙盒管理
+"fa fa-database","fa fa-database"
 加载Debug配置失败：%{1},加载Debug配置失败：%{1}
 保存成功,保存成功
 保存失败：%{1},保存失败：%{1}
+Debug配置,Debug配置
+查看Debug配置,查看Debug配置
+保存Debug配置,保存Debug配置
 加载沙盒配置失败：%{1},加载沙盒配置失败：%{1}
+沙盒配置,沙盒配置
+查看沙盒配置,查看沙盒配置
+保存沙盒配置,保存沙盒配置
 加载开发面板配置失败：%{1},加载开发面板配置失败：%{1}
+开发面板配置,开发面板配置
+查看开发面板配置,查看开发面板配置
+保存开发面板配置,保存开发面板配置
 WelineFramework开发文档,WelineFramework开发文档
 搜索关键词不能为空,搜索关键词不能为空
 API文档管理,API文档管理
@@ -88,7 +151,6 @@ Completion,Completion
 "当天文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。","当天文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。"
 "当月文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。","当月文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。"
 "开启后，非源语言页面会显示 missing、pending、translated、stale、failed 等状态，方便调试；源语言页面不显示 translated 状态。","开启后，非源语言页面会显示 missing、pending、translated、stale、failed 等状态，方便调试；源语言页面不显示 translated 状态。"
-管理开发文档,管理开发文档
 "开发文档编辑器 有新的开发文档时可以随时编辑","开发文档编辑器 有新的开发文档时可以随时编辑"
 保存,保存
 返回,返回
@@ -217,12 +279,28 @@ jstree库未加载，请刷新页面重试,jstree库未加载，请刷新页面�
 系统,系统
 新建文档,新建文档
 新建一篇开发文档,新建一篇开发文档
-开发面板配置,开发面板配置
 提示,提示
 开发面板配置功能正在开发中，敬请期待。,开发面板配置功能正在开发中，敬请期待。
-沙盒配置,沙盒配置
 沙盒配置功能正在开发中，敬请期待。,沙盒配置功能正在开发中，敬请期待。
-Debug配置,Debug配置
+异步资源变更验收台,异步资源变更验收台
+"真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。","真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。"
+"1. 发起资源变更","1. 发起资源变更"
+"2. 推进异步链路","2. 推进异步链路"
+刷新状态,刷新状态
+"点击“发起资源变更”创建一个仅用于验收的 async_probe 资源。","点击“发起资源变更”创建一个仅用于验收的 async_probe 资源。"
+"HTTP / w_changed","HTTP / w_changed"
+"请求内构造 ResourceChange v1","请求内构造 ResourceChange v1"
+Outbox,Outbox
+与事务一起提交,与事务一起提交
+"Delivery / Queue","Delivery / Queue"
+"Relay 展开并建立队列尝试","Relay 展开并建立队列尝试"
+"Async Observer","Async Observer"
+"Worker 执行探针并进入 succeeded","Worker 执行探针并进入 succeeded"
+"Event ID","Event ID"
+"Probe ID","Probe ID"
+"探针 Delivery","探针 Delivery"
+异步性证明,异步性证明
+"原始证据 JSON","原始证据 JSON"
 Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发中，敬请期待。
 返回欢迎页,返回欢迎页
 返回上一页,返回上一页
@@ -281,6 +359,16 @@ AI运行时提供器不可用。,AI运行时提供器不可用。
 "AI translation adapter returned invalid JSON segments.","AI translation adapter returned invalid JSON segments."
 "AI translation adapter returned a segment without id or text.","AI translation adapter returned a segment without id or text."
 "AI translation adapter missed segment id: %{1}","AI translation adapter missed segment id: %{1}"
+"DocumentUniqueKeyHealer: remapped document.category_id for %{1} catalog loser(s)","DocumentUniqueKeyHealer: remapped document.category_id for %{1} catalog loser(s)"
+"DocumentUniqueKeyHealer: remapped translation/job refs for %{1} document loser(s)","DocumentUniqueKeyHealer: remapped translation/job refs for %{1} document loser(s)"
+"DocumentUniqueKeyHealer: skip %{1} (table missing)","DocumentUniqueKeyHealer: skip %{1} (table missing)"
+"DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3}","DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3}"
+"DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3} backup=%{4}","DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3} backup=%{4}"
+"DocumentUniqueKeyHealer: backup failed for %{1}: %{2}","DocumentUniqueKeyHealer: backup failed for %{1}: %{2}"
+"DocumentUniqueKeyHealer: backup table %{1} was not created","DocumentUniqueKeyHealer: backup table %{1} was not created"
+"异步事件 producer 未开启：event.async.producer_enabled=false","异步事件 producer 未开启：event.async.producer_enabled=false"
+"HTTP 请求返回时探针 Observer 尚未成功；Relay 可能已经并发创建 pending Delivery。","HTTP 请求返回时探针 Observer 尚未成功；Relay 可能已经并发创建 pending Delivery。"
+"event_id 格式无效","event_id 格式无效"
 正在清理旧的自动导入文档和分类...,正在清理旧的自动导入文档和分类...
 "找到 %{count} 个模块包含 doc 目录，开始扫描...","找到 %{count} 个模块包含 doc 目录，开始扫描..."
 "[%{current}/%{total}] 正在扫描模块: %{name}","[%{current}/%{total}] 正在扫描模块: %{name}"
@@ -306,3 +394,4 @@ AI运行时提供器不可用。,AI运行时提供器不可用。
 "📡 开始导入API文档...","📡 开始导入API文档..."
 "API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
 "API文档导入失败: %{error}","API文档导入失败: %{error}"
+"""API 文档收集后""","API 文档收集后"

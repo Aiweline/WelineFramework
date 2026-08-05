@@ -1,0 +1,351 @@
+<?php
+/**
+ * Weline_CustomerAsset — read-only asset projection in the official account
+ * layout. No Customer model/session access and no browser business request.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 165
+ * @hook-sort-order 11
+ * @hook-solo false
+ */
+use Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface;
+use Weline\Customer\Service\AccountSidebarContentGate;
+use Weline\CustomerAsset\Model\AssetLedger;
+use Weline\CustomerAsset\Service\AccountAssetPresenter;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+
+if (!AccountSidebarContentGate::accepts('assets')) {
+    return;
+}
+$projectionProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+    ->resolve(AccountSidebarProjectionProviderInterface::class);
+if (!$projectionProvider instanceof AccountSidebarProjectionProviderInterface) {
+    throw new \LogicException(
+        'Required Customer account sidebar projection provider is unavailable.',
+    );
+}
+$projection = $projectionProvider->forSections('assets');
+if ($projection === null) {
+    return;
+}
+/** @var AccountAssetPresenter $presenter */
+$presenter = ObjectManager::getInstance(AccountAssetPresenter::class);
+$assetView = $presenter->present(
+    $projection->getCustomerId(),
+    $projection->getWebsiteId(),
+);
+$escape = static fn (mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES,
+    'UTF-8',
+);
+$amount = static fn (int $value): string => number_format($value, 0, '.', ',');
+$assetLabels = [
+    'credit' => (string)__('储值余额'),
+    'points' => (string)__('积分'),
+    'wcoin' => (string)__('WCoin'),
+];
+$eventLabels = [
+    AssetLedger::TYPE_CREDIT => (string)__('增加'),
+    AssetLedger::TYPE_RESERVE => (string)__('预占'),
+    AssetLedger::TYPE_RELEASE => (string)__('释放'),
+    AssetLedger::TYPE_COMMIT => (string)__('扣减'),
+    AssetLedger::TYPE_RETURN => (string)__('返还'),
+];
+?>
+<section class="account-hook-section account-index__section d-none motor-account-section customer-asset-account" id="assets-section" data-account-section="assets" hidden aria-labelledby="customerAssetTitle" weline-code="customer_asset.hook.account_sidebar_content.assets_section">
+    <div class="account-card customer-asset-account__panel">
+        <header class="account-card__header customer-asset-account__header">
+            <div>
+                <h2 class="account-card__title" id="customerAssetTitle"><lang>我的资产</lang></h2>
+                <p class="customer-asset-account__description"><lang>当前站点的资产余额与最近账本记录。</lang></p>
+            </div>
+            <span class="customer-asset-account__scope"><lang>当前站点</lang></span>
+        </header>
+        <div class="account-card__body">
+            <?php if ($assetView['state'] === 'unauthenticated'): ?>
+                <div class="customer-asset-account__state" role="status">
+                    <i class="ri-lock-line" aria-hidden="true"></i>
+                    <div>
+                        <strong><lang>需要登录</lang></strong>
+                        <p><lang>登录后可查看当前站点的资产余额和最近变动。</lang></p>
+                    </div>
+                </div>
+            <?php elseif ($assetView['state'] === 'error'): ?>
+                <div class="customer-asset-account__state customer-asset-account__state--error" role="alert">
+                    <i class="ri-error-warning-line" aria-hidden="true"></i>
+                    <div>
+                        <strong><lang>暂时无法读取资产</lang></strong>
+                        <p><lang>请稍后重试；资产账本不会因此发生变化。</lang></p>
+                    </div>
+                </div>
+            <?php elseif ($assetView['state'] === 'empty'): ?>
+                <div class="customer-asset-account__state" role="status">
+                    <i class="ri-wallet-3-line" aria-hidden="true"></i>
+                    <div>
+                        <strong><lang>还没有资产账户</lang></strong>
+                        <p><lang>使用支持的储值、积分或 WCoin 后，余额会显示在这里。</lang></p>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="customer-asset-account__grid" role="list">
+                    <?php foreach ($assetView['accounts'] as $account): ?>
+                        <?php
+                        $assetCode = (string)$account['asset_code'];
+                        $assetLabel = $assetLabels[$assetCode] ?? strtoupper($assetCode);
+                        ?>
+                        <article class="customer-asset-account__asset" role="listitem">
+                            <header class="customer-asset-account__asset-header">
+                                <div>
+                                    <span class="customer-asset-account__eyebrow"><lang>资产账户</lang></span>
+                                    <h3><?= $escape($assetLabel) ?></h3>
+                                </div>
+                                <span class="customer-asset-account__code"><?= $escape($assetCode) ?></span>
+                            </header>
+                            <div class="customer-asset-account__balances" role="list">
+                                <div class="customer-asset-account__balance customer-asset-account__balance--primary" role="listitem">
+                                    <span class="customer-asset-account__balance-label"><lang>可用余额</lang></span>
+                                    <strong class="customer-asset-account__amount"><?= $amount((int)$account['available_minor']) ?></strong>
+                                </div>
+                                <div class="customer-asset-account__balance" role="listitem">
+                                    <span class="customer-asset-account__balance-label"><lang>已预占</lang></span>
+                                    <strong class="customer-asset-account__amount"><?= $amount((int)$account['reserved_minor']) ?></strong>
+                                </div>
+                                <div class="customer-asset-account__balance" role="listitem">
+                                    <span class="customer-asset-account__balance-label"><lang>当前可使用</lang></span>
+                                    <strong class="customer-asset-account__amount"><?= $amount((int)$account['reservable_minor']) ?></strong>
+                                </div>
+                            </div>
+                            <p class="customer-asset-account__unit"><lang>余额按资产最小单位展示</lang></p>
+                            <div class="customer-asset-account__ledger">
+                                <h4><lang>最近变动</lang></h4>
+                                <?php if ($account['ledger'] === []): ?>
+                                    <p class="customer-asset-account__ledger-empty"><lang>暂无账本记录</lang></p>
+                                <?php else: ?>
+                                    <ol>
+                                        <?php foreach ($account['ledger'] as $entry): ?>
+                                            <?php
+                                            $eventType = (string)$entry['event_type'];
+                                            $eventLabel = $eventLabels[$eventType] ?? $eventType;
+                                            $eventModifier = isset($eventLabels[$eventType])
+                                                ? $eventType
+                                                : 'unknown';
+                                            $timestamp = strtotime((string)$entry['created_at']);
+                                            ?>
+                                            <li>
+                                                <span class="customer-asset-account__event customer-asset-account__event--<?= $escape($eventModifier) ?>"><?= $escape($eventLabel) ?></span>
+                                                <strong><?= $amount((int)$entry['amount_minor']) ?></strong>
+                                                <time datetime="<?= $timestamp ? date('c', $timestamp) : '' ?>"><?= $timestamp ? date('Y-m-d H:i', $timestamp) : '-' ?></time>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ol>
+                                <?php endif; ?>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+.customer-asset-account {
+    color: var(--weline-theme-text);
+}
+
+.customer-asset-account__header {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.customer-asset-account__description,
+.customer-asset-account__state p,
+.customer-asset-account__unit,
+.customer-asset-account__ledger-empty {
+    color: var(--weline-theme-text-muted);
+    margin: 0.35rem 0 0;
+}
+
+.customer-asset-account__scope,
+.customer-asset-account__code,
+.customer-asset-account__event {
+    background: var(--weline-theme-surface-subtle);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border-radius: var(--weline-theme-radius-full);
+    color: var(--weline-theme-text-muted);
+    display: inline-flex;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.3rem 0.65rem;
+}
+
+.customer-asset-account__grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+}
+
+.customer-asset-account__asset {
+    background: var(--weline-theme-surface);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border-radius: var(--weline-theme-radius-xl);
+    box-shadow: var(--weline-theme-shadow-sm);
+    min-width: 0;
+    padding: 1.1rem;
+}
+
+.customer-asset-account__asset-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+}
+
+.customer-asset-account__asset-header h3 {
+    font-size: 1.1rem;
+    margin: 0.2rem 0 0;
+}
+
+.customer-asset-account__eyebrow {
+    color: var(--weline-theme-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.customer-asset-account__balances {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 1rem 0 0;
+}
+
+.customer-asset-account__balance {
+    background: var(--weline-theme-surface-subtle);
+    border-radius: var(--weline-theme-radius-lg);
+    min-width: 0;
+    padding: 0.75rem;
+}
+
+.customer-asset-account__balance-label {
+    color: var(--weline-theme-text-muted);
+    display: block;
+    font-size: 0.72rem;
+}
+
+.customer-asset-account__amount {
+    display: block;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    margin: 0.25rem 0 0;
+    overflow-wrap: anywhere;
+}
+
+.customer-asset-account__balance--primary {
+    background: var(--weline-theme-primary-subtle);
+}
+
+.customer-asset-account__balance--primary .customer-asset-account__amount {
+    font-size: 1.35rem;
+}
+
+.customer-asset-account__ledger {
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    margin-top: 1rem;
+    padding-top: 1rem;
+}
+
+.customer-asset-account__ledger h4 {
+    font-size: 0.9rem;
+    margin: 0 0 0.65rem;
+}
+
+.customer-asset-account__ledger ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.customer-asset-account__ledger li {
+    align-items: center;
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: auto minmax(3.5rem, auto) minmax(7.5rem, 1fr);
+    padding: 0.55rem 0;
+}
+
+.customer-asset-account__ledger li + li {
+    border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+}
+
+.customer-asset-account__ledger strong {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.customer-asset-account__ledger time {
+    color: var(--weline-theme-text-muted);
+    font-size: 0.78rem;
+    text-align: right;
+}
+
+.customer-asset-account__state {
+    align-items: flex-start;
+    background: var(--weline-theme-surface-subtle);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border-radius: var(--weline-theme-radius-xl);
+    display: flex;
+    gap: 0.85rem;
+    padding: 1rem;
+}
+
+.customer-asset-account__state > i {
+    font-size: 1.35rem;
+}
+
+.customer-asset-account__state--error {
+    background: var(--weline-theme-danger-subtle);
+}
+
+@media (max-width: 640px) {
+    .customer-asset-account__header,
+    .customer-asset-account__asset-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .customer-asset-account__scope,
+    .customer-asset-account__code {
+        align-self: flex-start;
+    }
+
+    .customer-asset-account__balances {
+        grid-template-columns: 1fr;
+    }
+
+    .customer-asset-account__ledger li {
+        grid-template-columns: auto 1fr;
+    }
+
+    .customer-asset-account__ledger time {
+        grid-column: 1 / -1;
+        text-align: left;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .customer-asset-account *,
+    .customer-asset-account *::before,
+    .customer-asset-account *::after {
+        scroll-behavior: auto;
+        transition-duration: 0.01ms;
+    }
+}
+</style>

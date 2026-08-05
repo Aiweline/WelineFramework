@@ -395,9 +395,17 @@ foreach ($themes as $themeItem) {
     let apiPromise = null;
     let runtimeApiPromise = null;
     const PREVIEW_TASK_STORAGE_PREFIX = 'weline.theme.preview.task.';
-    const activePreviewStreams = new Map();
-    const activeVirtualThemeStreams = new Map();
+    const activePreviewPolls = new Map();
+    const activeVirtualThemePolls = new Map();
     const activePreviewTargets = new Set();
+    const RUNTIME_TERMINAL = {
+        completed: true,
+        failed: true,
+        cancelled: true,
+        expired: true,
+        recovery_unsafe: true,
+        event_backlog_limit: true,
+    };
     let activeBatchTaskId = null;
     let activeSingleTaskId = null;
 
@@ -433,11 +441,7 @@ foreach ($themes as $themeItem) {
     function getRuntimeApi() {
         if (!runtimeApiPromise) {
             runtimeApiPromise = getApi().then(function(api) {
-                api = resolveFullApiModule(api);
-                if (typeof api.createStream !== 'function') {
-                    throw new Error('<?= addslashes(__('可恢复任务 API 不可用。')) ?>');
-                }
-                return api;
+                return resolveFullApiModule(api);
             });
         }
         return runtimeApiPromise;
@@ -454,32 +458,16 @@ foreach ($themes as $themeItem) {
         return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
     }
 
-    function streamPayload(event) {
-        if (!event) {
-            return {};
-        }
-        if (event.data && typeof event.data === 'object') {
-            return event.data;
-        }
-        try {
-            const value = JSON.parse(String(event.data || '{}'));
-            return value && typeof value === 'object' ? value : {};
-        } catch (error) {
-            return {};
-        }
-    }
-
     function normalizeRuntimeTaskHandle(value) {
         if (!value || typeof value !== 'object'
             || typeof value.task_id !== 'string' || !value.task_id
-            || typeof value.lease_id !== 'string' || !value.lease_id
-            || typeof value.stream_channel !== 'string' || !value.stream_channel) {
+            || typeof value.lease_id !== 'string' || !value.lease_id) {
             throw new Error('<?= addslashes(__('后台任务启动响应无效。')) ?>');
         }
         return {
             task_id: value.task_id,
             lease_id: value.lease_id,
-            stream_channel: value.stream_channel,
+            stream_channel: typeof value.stream_channel === 'string' ? value.stream_channel : '',
         };
     }
 
@@ -496,7 +484,7 @@ foreach ($themes as $themeItem) {
                 descriptor: descriptor,
             }));
         } catch (error) {
-            // StreamHandle persists its cursor/lease independently when storage is available.
+            // sessionStorage is optional and never controls task lifetime.
         }
     }
 
@@ -532,7 +520,29 @@ foreach ($themes as $themeItem) {
     }
 
     function taskFailureMessage(payload, fallback) {
-        return String(payload?.reason || payload?.message || payload?.error_code || fallback);
+        return String(
+            payload?.terminal_reason
+            || payload?.reason
+            || payload?.message
+            || payload?.error_code
+            || fallback
+        );
+    }
+
+    function runtimeResultData(snap) {
+        const result = snap && snap.result;
+        if (!result || typeof result !== 'object') {
+            return {};
+        }
+        if (result.data && typeof result.data === 'object') {
+            return result.data;
+        }
+        return result;
+    }
+
+    function checkpointState(snap) {
+        const state = snap && snap.checkpoint && snap.checkpoint.state;
+        return state && typeof state === 'object' ? state : {};
     }
 
     function setPreviewCancelButton(id, enabled) {
@@ -540,6 +550,59 @@ foreach ($themes as $themeItem) {
         if (button) {
             button.disabled = !enabled;
         }
+    }
+
+    function createPollHandle(api, task) {
+        let stopped = false;
+        return {
+            task_id: task.task_id,
+            close: function() { stopped = true; },
+            stopped: function() { return stopped; },
+            cancel: async function(reason) {
+                stopped = true;
+                await api.resource('runtime_task').cancel({
+                    task_id: task.task_id,
+                    intent_id: createPreviewRequestId('theme-cancel'),
+                    reason: reason || '<?= addslashes(__('用户明确取消')) ?>',
+                }, { silent: true });
+            },
+        };
+    }
+
+    function sleepMs(ms) {
+        return new Promise(function(resolve) {
+            window.setTimeout(resolve, ms);
+        });
+    }
+
+    async function pollRuntimeTask(api, task, handle, onUpdate, intervalMs) {
+        const taskApi = api.resource('runtime_task');
+        const wait = Number(intervalMs) > 0 ? Number(intervalMs) : 1000;
+        let lastVersion = -1;
+        while (!handle.stopped()) {
+            try {
+                await taskApi.touch({
+                    task_id: task.task_id,
+                    lease_id: task.lease_id,
+                }, { silent: true });
+            } catch (error) {
+                // Lease renew is best-effort; status polling remains authoritative.
+            }
+            const snap = await taskApi.status({ task_id: task.task_id }, { silent: true });
+            const version = Number(snap && snap.checkpoint && snap.checkpoint.version || 0);
+            const status = String(snap && snap.status || '');
+            if (version !== lastVersion || RUNTIME_TERMINAL[status]) {
+                lastVersion = version;
+                if (typeof onUpdate === 'function') {
+                    onUpdate(snap || {});
+                }
+            }
+            if (RUNTIME_TERMINAL[status]) {
+                return snap || {};
+            }
+            await sleepMs(wait);
+        }
+        return null;
     }
 
     async function startThemePreviewTask(input) {
@@ -555,83 +618,53 @@ foreach ($themes as $themeItem) {
         return { api: api, task: task };
     }
 
-    function createThemePreviewStream(api, task) {
-        return api.createStream(task.stream_channel, {
-            task_id: task.task_id,
-            lease_id: task.lease_id,
-        }, {
-            eventTypes: [
-                'start', 'progress', 'runtime_reset', 'runtime_snapshot',
-                'completed', 'failed', 'cancelled', 'expired',
-                'recovery_unsafe', 'event_backlog_limit',
-            ],
-            storageKey: 'theme-preview:' + task.task_id,
-        });
-    }
-
     async function runAiVirtualThemeTask(payload, onProgress) {
         const api = await getRuntimeApi();
         const task = normalizeRuntimeTaskHandle(await api.resource('runtime_task').start({
             type_code: 'theme.virtual_theme_generation',
             input: payload
         }, { silent: true }));
-        const stream = api.createStream(task.stream_channel, {
-            task_id: task.task_id,
-            lease_id: task.lease_id
-        }, {
-            eventTypes: [
-                'start', 'progress', 'runtime_reset', 'runtime_snapshot',
-                'completed', 'failed', 'cancelled', 'expired',
-                'recovery_unsafe', 'event_backlog_limit'
-            ],
-            storageKey: 'theme-virtual-theme:' + task.task_id
-        });
-        activeVirtualThemeStreams.set(task.task_id, stream);
-
-        return new Promise(function(resolve, reject) {
-            let settled = false;
-            const finish = function(callback, value) {
-                if (settled) {
-                    return;
+        const handle = createPollHandle(api, task);
+        activeVirtualThemePolls.set(task.task_id, handle);
+        try {
+            const snap = await pollRuntimeTask(api, task, handle, function(update) {
+                const state = checkpointState(update);
+                if (typeof onProgress === 'function') {
+                    onProgress({
+                        current: Number(state.next_index || state.current || 0),
+                        total: Number(state.total || 0),
+                        message: state.message || '',
+                    });
                 }
-                settled = true;
-                activeVirtualThemeStreams.delete(task.task_id);
-                stream.close();
-                callback(value);
-            };
-            stream.addEventListener('progress', function(event) {
-                onProgress?.(streamPayload(event));
             });
-            stream.addEventListener('completed', function(event) {
-                const terminal = streamPayload(event);
-                finish(resolve, terminal.result || terminal.data || {});
-            });
-            ['failed', 'cancelled', 'expired', 'recovery_unsafe', 'event_backlog_limit'].forEach(function(type) {
-                stream.addEventListener(type, function(event) {
-                    const terminal = streamPayload(event);
-                    finish(reject, new Error(taskFailureMessage(terminal, '<?= addslashes(__('虚拟主题任务失败')) ?>')));
-                });
-            });
-            stream.start().catch(function(error) {
-                finish(reject, error);
-            });
-        });
+            if (!snap) {
+                throw new Error('<?= addslashes(__('虚拟主题任务已断开')) ?>');
+            }
+            const status = String(snap.status || '');
+            if (status === 'completed') {
+                return runtimeResultData(snap);
+            }
+            throw new Error(taskFailureMessage(snap, '<?= addslashes(__('虚拟主题任务失败')) ?>'));
+        } finally {
+            activeVirtualThemePolls.delete(task.task_id);
+            handle.close();
+        }
     }
 
     async function cancelThemePreviewTask(taskId, reason) {
-        const stream = activePreviewStreams.get(taskId);
-        if (!stream) {
+        const handle = activePreviewPolls.get(taskId);
+        if (!handle) {
             return;
         }
-        await stream.cancel(reason || '<?= addslashes(__('用户明确取消')) ?>');
+        await handle.cancel(reason || '<?= addslashes(__('用户明确取消')) ?>');
     }
 
     window.addEventListener('pagehide', function() {
-        activePreviewStreams.forEach(function(stream) {
-            stream.close(); // detach only; task cancellation is always explicit
+        activePreviewPolls.forEach(function(handle) {
+            handle.close(); // detach only; task cancellation is always explicit
         });
-        activeVirtualThemeStreams.forEach(function(stream) {
-            stream.close(); // detach only; VirtualTheme task lifetime is lease based
+        activeVirtualThemePolls.forEach(function(handle) {
+            handle.close();
         });
     });
 
@@ -1110,13 +1143,13 @@ foreach ($themes as $themeItem) {
     }
 
     async function attachSinglePreviewTask(api, task, descriptor) {
-        if (activePreviewStreams.has(task.task_id)) {
+        if (activePreviewPolls.has(task.task_id)) {
             return null;
         }
         const targetKey = previewTargetKey(descriptor.theme_id, descriptor.area);
         const card = findThemeCard(descriptor.theme_id, descriptor.area);
-        const stream = createThemePreviewStream(api, task);
-        activePreviewStreams.set(task.task_id, stream);
+        const handle = createPollHandle(api, task);
+        activePreviewPolls.set(task.task_id, handle);
         activePreviewTargets.add(targetKey);
         activeSingleTaskId = task.task_id;
         setPreviewCancelButton('cancelSinglePreviewTask', true);
@@ -1126,16 +1159,12 @@ foreach ($themes as $themeItem) {
         }
 
         let finished = false;
-        let resolveCompletion;
-        const completion = new Promise(function(resolve) {
-            resolveCompletion = resolve;
-        });
         const finish = function(outcome) {
             if (finished) {
-                return;
+                return outcome;
             }
             finished = true;
-            activePreviewStreams.delete(task.task_id);
+            activePreviewPolls.delete(task.task_id);
             activePreviewTargets.delete(targetKey);
             clearPreviewTask(task.task_id);
             if (activeSingleTaskId === task.task_id) {
@@ -1145,68 +1174,57 @@ foreach ($themes as $themeItem) {
             if (card) {
                 setThemeCardGenerating(card, false);
             }
-            resolveCompletion(outcome);
+            handle.close();
+            return outcome;
         };
-        const resultForTarget = function(payload) {
-            const results = payload?.result?.results;
-            return Array.isArray(results)
-                ? results.find(function(item) { return item && item.key === targetKey; })
-                : null;
+        const resultForTarget = function(data) {
+            const results = data && data.results;
+            if (Array.isArray(results)) {
+                return results.find(function(item) { return item && item.key === targetKey; }) || null;
+            }
+            if (results && typeof results === 'object') {
+                return results[targetKey] || null;
+            }
+            return null;
         };
 
-        stream.addEventListener('progress', function(event) {
-            const payload = streamPayload(event);
-            if (Number(payload.theme_id) === Number(descriptor.theme_id) && payload.area === descriptor.area
-                && payload.success === false && card) {
-                setThemeCardStatus(card, 'error', String(payload.error || payload.message || descriptor.error_message || '<?= __('生成失败') ?>'));
-            }
-        });
-        stream.addEventListener('runtime_snapshot', function(event) {
-            const state = streamPayload(event)?.checkpoint?.state || {};
-            const result = state.results ? state.results[targetKey] : null;
-            if (result) {
-                applySinglePreviewResult(descriptor, result);
-            }
-        });
-        stream.addEventListener('completed', function(event) {
-            const result = resultForTarget(streamPayload(event));
-            const success = applySinglePreviewResult(descriptor, result || {
-                success: false,
-                error: '<?= __('未找到预览图任务结果') ?>',
+        try {
+            const snap = await pollRuntimeTask(api, task, handle, function(update) {
+                const state = checkpointState(update);
+                const partial = state.results ? state.results[targetKey] : null;
+                if (partial) {
+                    applySinglePreviewResult(descriptor, partial);
+                } else if (partial === undefined && state.current && Number(state.current.theme_id) === Number(descriptor.theme_id)
+                    && state.current.area === descriptor.area && card) {
+                    setThemeCardStatus(card, 'info', String(state.message || descriptor.status_message || '<?= __('正在生成') ?>'));
+                }
             });
-            finish({ success: success });
-        });
-        const terminalFailure = function(event, fallback) {
-            const message = taskFailureMessage(streamPayload(event), fallback);
-            applySinglePreviewResult(descriptor, { success: false, error: message });
-            finish({ success: false, error: message });
-        };
-        stream.addEventListener('failed', function(event) {
-            terminalFailure(event, '<?= __('预览图生成失败') ?>');
-        });
-        stream.addEventListener('cancelled', function(event) {
-            terminalFailure(event, '<?= __('预览图生成已取消') ?>');
-        });
-        stream.addEventListener('expired', function(event) {
-            terminalFailure(event, '<?= __('客户端失联超时，预览图任务已停止') ?>');
-        });
-        stream.addEventListener('recovery_unsafe', function(event) {
-            terminalFailure(event, '<?= __('预览图任务无法安全恢复') ?>');
-        });
-        stream.addEventListener('event_backlog_limit', function(event) {
-            terminalFailure(event, '<?= __('预览图任务事件达到资源上限') ?>');
-        });
-        stream.addEventListener('terminal', function() {
-            finish({ success: false });
-        });
-        stream.addEventListener('error', function() {
-            if (descriptor.show_modal) {
-                setSinglePreviewModalState('working', '<?= __('连接暂时中断，正在重连…') ?>');
+            if (!snap) {
+                return finish({ success: false, detached: true });
             }
-        });
-
-        await stream.start();
-        return completion;
+            const status = String(snap.status || '');
+            if (status === 'completed') {
+                const result = resultForTarget(runtimeResultData(snap));
+                const success = applySinglePreviewResult(descriptor, result || {
+                    success: false,
+                    error: '<?= __('未找到预览图任务结果') ?>',
+                });
+                return finish({ success: success });
+            }
+            const message = taskFailureMessage(snap, status === 'cancelled'
+                ? '<?= __('预览图生成已取消') ?>'
+                : (status === 'expired'
+                    ? '<?= __('客户端失联超时，预览图任务已停止') ?>'
+                    : '<?= __('预览图生成失败') ?>'));
+            applySinglePreviewResult(descriptor, { success: false, error: message });
+            return finish({ success: false, error: message });
+        } catch (error) {
+            const message = error && error.message
+                ? String(error.message)
+                : '<?= __('预览图生成失败') ?>';
+            applySinglePreviewResult(descriptor, { success: false, error: message });
+            return finish({ success: false, error: message });
+        }
     }
 
     async function generateSinglePreview(themeId, area, options = {}) {
@@ -1372,82 +1390,89 @@ foreach ($themes as $themeItem) {
     }
 
     async function attachBatchPreviewTask(api, task, descriptor) {
-        if (activePreviewStreams.has(task.task_id)) {
+        if (activePreviewPolls.has(task.task_id)) {
             return null;
         }
-        const stream = createThemePreviewStream(api, task);
-        activePreviewStreams.set(task.task_id, stream);
+        const handle = createPollHandle(api, task);
+        activePreviewPolls.set(task.task_id, handle);
         activeBatchTaskId = task.task_id;
         setPreviewCancelButton('cancelBatchPreviewTask', true);
         let finished = false;
-        let resolveCompletion;
-        const completion = new Promise(function(resolve) {
-            resolveCompletion = resolve;
-        });
         const finish = function(outcome) {
             if (finished) {
-                return;
+                return outcome;
             }
             finished = true;
-            activePreviewStreams.delete(task.task_id);
+            activePreviewPolls.delete(task.task_id);
             clearPreviewTask(task.task_id);
             if (activeBatchTaskId === task.task_id) {
                 activeBatchTaskId = null;
                 setPreviewCancelButton('cancelBatchPreviewTask', false);
             }
-            resolveCompletion(outcome);
+            handle.close();
+            return outcome;
         };
         const silent = !!descriptor.silent;
-        stream.addEventListener('start', function(event) {
-            if (!silent) {
-                setBatchPreviewProgress(streamPayload(event));
-            }
-        });
-        stream.addEventListener('progress', function(event) {
-            const payload = streamPayload(event);
-            if (!silent) {
-                setBatchPreviewProgress(payload);
-            }
-            const card = findThemeCard(payload?.theme_id, payload?.area);
-            if (!card) {
-                return;
-            }
-            if (payload?.success) {
-                updateThemeCardPreview(card, payload.image_url || '');
-                setThemeCardStatus(card, 'success', '<?= __('自动生成完成') ?>');
-                setThemeCardGenerating(card, false);
-            } else if (payload?.error) {
-                setThemeCardStatus(card, 'error', String(payload.error));
-                setThemeCardGenerating(card, false);
-            } else {
-                setThemeCardStatus(card, 'info', String(payload?.message || '<?= __('自动生成中') ?>'));
-            }
-        });
-        stream.addEventListener('runtime_snapshot', function(event) {
-            const state = streamPayload(event)?.checkpoint?.state || {};
+        const applyCheckpointProgress = function(state) {
             if (!silent) {
                 setBatchPreviewProgress({
                     current: state.next_index || 0,
                     total: Number(state.total || Object.keys(state.results || {}).length),
-                    message: '<?= __('已恢复预览图任务订阅') ?>',
+                    message: String(state.message || '<?= __('自动生成中') ?>'),
                 });
             }
-        });
-        stream.addEventListener('completed', function(event) {
-            const result = streamPayload(event)?.result || {};
-            if (!silent) {
-                renderBatchPreviewSummary(result);
-            } else {
-                renderBatchPreviewSummary(result);
-                document.querySelectorAll('.theme-card.is-generating').forEach(function(card) {
+            const results = state.results && typeof state.results === 'object' ? state.results : {};
+            Object.keys(results).forEach(function(key) {
+                const payload = results[key];
+                if (!payload || typeof payload !== 'object') {
+                    return;
+                }
+                const card = findThemeCard(payload.theme_id, payload.area);
+                if (!card) {
+                    return;
+                }
+                if (payload.success) {
+                    updateThemeCardPreview(card, payload.image_url || '');
+                    setThemeCardStatus(card, 'success', '<?= __('自动生成完成') ?>');
                     setThemeCardGenerating(card, false);
-                });
+                } else if (payload.error) {
+                    setThemeCardStatus(card, 'error', String(payload.error));
+                    setThemeCardGenerating(card, false);
+                }
+            });
+            const current = state.current;
+            if (current && typeof current === 'object') {
+                const card = findThemeCard(current.theme_id, current.area);
+                if (card) {
+                    setThemeCardStatus(card, 'info', String(state.message || '<?= __('自动生成中') ?>'));
+                }
             }
-            finish({ success: Number(result.failed || 0) === 0 });
-        });
-        const terminalFailure = function(event, fallback) {
+        };
+
+        try {
+            const snap = await pollRuntimeTask(api, task, handle, function(update) {
+                applyCheckpointProgress(checkpointState(update));
+            });
+            if (!snap) {
+                return finish({ success: false, detached: true });
+            }
+            const status = String(snap.status || '');
+            if (status === 'completed') {
+                const result = runtimeResultData(snap);
+                renderBatchPreviewSummary(result);
+                if (silent) {
+                    document.querySelectorAll('.theme-card.is-generating').forEach(function(card) {
+                        setThemeCardGenerating(card, false);
+                    });
+                }
+                return finish({ success: Number(result.failed || 0) === 0 });
+            }
             const elements = batchPreviewElements();
-            const message = taskFailureMessage(streamPayload(event), fallback);
+            const message = taskFailureMessage(snap, status === 'cancelled'
+                ? '<?= __('批量预览图生成已取消') ?>'
+                : (status === 'expired'
+                    ? '<?= __('客户端失联超时，批量预览图任务已停止') ?>'
+                    : '<?= __('批量预览图生成失败') ?>'));
             if (!silent) {
                 if (elements.status) {
                     elements.status.textContent = message;
@@ -1462,28 +1487,13 @@ foreach ($themes as $themeItem) {
                     setThemeCardStatus(card, 'error', message);
                 });
             }
-            finish({ success: false, error: message });
-        };
-        stream.addEventListener('failed', function(event) {
-            terminalFailure(event, '<?= __('批量预览图生成失败') ?>');
-        });
-        stream.addEventListener('cancelled', function(event) {
-            terminalFailure(event, '<?= __('批量预览图生成已取消') ?>');
-        });
-        stream.addEventListener('expired', function(event) {
-            terminalFailure(event, '<?= __('客户端失联超时，批量预览图任务已停止') ?>');
-        });
-        stream.addEventListener('recovery_unsafe', function(event) {
-            terminalFailure(event, '<?= __('批量预览图任务无法安全恢复') ?>');
-        });
-        stream.addEventListener('event_backlog_limit', function(event) {
-            terminalFailure(event, '<?= __('批量预览图任务事件达到资源上限') ?>');
-        });
-        stream.addEventListener('terminal', function() {
-            finish({ success: false });
-        });
-        await stream.start();
-        return completion;
+            return finish({ success: false, error: message });
+        } catch (error) {
+            const message = error && error.message
+                ? String(error.message)
+                : '<?= __('批量预览图生成失败') ?>';
+            return finish({ success: false, error: message });
+        }
     }
 
     async function runBatchPreviewGeneration() {
@@ -1539,14 +1549,14 @@ foreach ($themes as $themeItem) {
             return;
         }
         entries.forEach(function(entry) {
-            if (activePreviewStreams.has(entry.task.task_id)) {
+            if (activePreviewPolls.has(entry.task.task_id)) {
                 return;
             }
             const restore = entry.descriptor.kind === 'single'
                 ? attachSinglePreviewTask(api, entry.task, entry.descriptor)
                 : attachBatchPreviewTask(api, entry.task, entry.descriptor);
             restore.catch(function(error) {
-                console.warn('Unable to restore Theme preview task stream', error);
+                console.warn('Unable to restore Theme preview task poll', error);
             });
         });
     }

@@ -68,7 +68,7 @@ $themeConfigPayload = [
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
-    'assetVersion' => '20260606-language-flag',
+    'assetVersion' => '20260727-smart-dropdown-v2',
     'deployVersion' => ($__dv = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
     'workerBuildId' => ($__dv !== null && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
     'api' => [
@@ -542,6 +542,6 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     })();
 </script>
 
-<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260606-language-flag"></script>
+<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260727-smart-dropdown-v2"></script>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>
 <w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>

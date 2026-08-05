@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.6.4',
+    "version" => '1.7.1',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -17,11 +17,20 @@ return [
     "optional" => [
         'Weline_Ai' => '*',
         'Weline_Server' => '*',
+        'Weline_Product' => '*',
     ],
     "provides" => [
         \Weline\Websites\Api\WebsiteTargetLookupInterface::class => \Weline\Websites\Api\WebsiteTargetLookup::class,
         \Weline\Websites\Api\Catalog\WebsiteCatalogInterface::class => \Weline\Websites\Service\WebsiteCatalog::class,
+        \Weline\Websites\Api\Catalog\StoreCatalogInterface::class => \Weline\Websites\Service\StoreCatalog::class,
+        \Weline\Websites\Api\Catalog\SalesChannelCatalogInterface::class => \Weline\Websites\Service\SalesChannelCatalog::class,
         \Weline\Websites\Api\Localization\WebsiteCurrencyCatalogInterface::class => \Weline\Websites\Service\CurrentWebsiteCurrencyCatalog::class,
+        \Weline\Websites\Api\Localization\WebsiteLanguageAssignmentInterface::class => \Weline\Websites\Service\Localization\WebsiteLanguageAssignment::class,
+        \Weline\Framework\Runtime\StorefrontWebsiteCodeResolverInterface::class => \Weline\Websites\Observer\DetectWebsite::class,
+        \Weline\Framework\Runtime\StorefrontWebsiteContextResolverInterface::class => \Weline\Websites\Observer\DetectWebsite::class,
+        \Weline\Framework\Runtime\StorefrontScopeInstallerInterface::class => \Weline\Websites\Observer\DetectWebsite::class,
+        \Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface::class => \Weline\Websites\Integration\Framework\FrontendWorkerScopeProvider::class,
+        \Weline\Websites\Api\ScopeMaintenanceRepositoryInterface::class => \Weline\Websites\Service\OrmScopeMaintenanceRepository::class,
         \Weline\Backend\Api\Runtime\FrontendStartPageRouteProviderInterface::class => \Weline\Websites\Integration\Backend\FrontendStartPageRouteProvider::class,
         \Weline\Server\Api\Tls\AcmeDnsTxtPollPolicyProviderInterface::class => \Weline\Websites\Integration\Server\AcmeDnsTxtPollPolicyProvider::class,
         \Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface::class => \Weline\Websites\Integration\Server\ActiveCertificateDomainSource::class,

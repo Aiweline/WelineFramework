@@ -11,8 +11,20 @@ const bootstrapRuntime = getRuntimeInfo({ refresh: true });
 const proxyUrl = new URL(bootstrapRuntime.proxy.origin);
 let wlsStartAttempted = false;
 
-function resolveRuntime() {
-  return getRuntimeInfo({ refresh: true });
+// runtime-info 解析要同步 fork PHP（秒级开销），绝不能每个请求都做；
+// 用短 TTL 缓存，正常流量走缓存，过期后才重新解析。
+const RUNTIME_CACHE_TTL_MS = 5000;
+let cachedRuntimeInfo = bootstrapRuntime;
+let cachedRuntimeAt = Date.now();
+
+function resolveRuntime(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedRuntimeInfo && (now - cachedRuntimeAt) < RUNTIME_CACHE_TTL_MS) {
+    return cachedRuntimeInfo;
+  }
+  cachedRuntimeInfo = getRuntimeInfo({ refresh: true });
+  cachedRuntimeAt = Date.now();
+  return cachedRuntimeInfo;
 }
 
 function maybeStartWls(runtime) {

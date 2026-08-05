@@ -22,6 +22,8 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
 
 final class GatewayFallbackProviderTest extends TestCase
 {
+    private const HOST_LEASE_ID = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
     /** @var list<string> */
     private array $temporaryFiles = [];
 
@@ -70,6 +72,7 @@ final class GatewayFallbackProviderTest extends TestCase
             port: 24567,
             certificate: $certificate,
             privateKey: $privateKey,
+            hostLeaseId: self::HOST_LEASE_ID,
         );
 
         $command = $provider->buildCommand(1, $context);
@@ -108,6 +111,7 @@ final class GatewayFallbackProviderTest extends TestCase
             port: 19999,
             certificate: $this->temporaryFile('certificate'),
             privateKey: $this->temporaryFile('private-key'),
+            hostLeaseId: self::HOST_LEASE_ID,
         );
 
         $this->expectException(\RuntimeException::class);
@@ -125,6 +129,7 @@ final class GatewayFallbackProviderTest extends TestCase
             certificate: $this->temporaryFile('certificate'),
             privateKey: $this->temporaryFile('private-key'),
             inheritedListener: true,
+            hostLeaseId: self::HOST_LEASE_ID,
         );
 
         $command = $provider->buildCommand(1, $this->context());
@@ -141,6 +146,7 @@ final class GatewayFallbackProviderTest extends TestCase
             privateKey: $this->temporaryFile('private-key'),
             bindHost: '::',
             publicOrigin: 'https://shop.example.test:24570',
+            hostLeaseId: self::HOST_LEASE_ID,
         );
 
         $command = $provider->buildCommand(1, $this->context());
@@ -151,6 +157,30 @@ final class GatewayFallbackProviderTest extends TestCase
             $command->arguments,
         );
         self::assertNotContains('--public-origin=https://[::]:24570', $command->arguments);
+        self::assertContains(
+            '--gateway-host-lease-id=' . self::HOST_LEASE_ID,
+            $command->arguments,
+        );
+    }
+
+    public function testSslFallbackWorkerAcceptsLeaseBoundLiteralPublicBindPolicy(): void
+    {
+        $source = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/bin/worker_ssl.php',
+        );
+
+        self::assertStringContainsString(
+            '\\filter_var($privateListenerHost, FILTER_VALIDATE_IP) === false',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            "!\\in_array(\$privateListenerHost, ['127.0.0.1', '::1'], true)",
+            $source,
+        );
+        self::assertStringContainsString(
+            "\\preg_match('/^[a-f0-9]{32}\$/D', \$gatewayHostLeaseId)",
+            $source,
+        );
     }
 
     public function testProviderRejectsUnresolvedBindHostname(): void
@@ -160,6 +190,7 @@ final class GatewayFallbackProviderTest extends TestCase
             certificate: $this->temporaryFile('certificate'),
             privateKey: $this->temporaryFile('private-key'),
             bindHost: 'bind.example.test',
+            hostLeaseId: self::HOST_LEASE_ID,
         );
 
         $this->expectException(\RuntimeException::class);
@@ -188,6 +219,7 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertTrue(Agent::canReplayRegistration(true, 'ACTIVE'));
         self::assertTrue(Agent::canReplayRegistration(false, 'NOT_REQUIRED'));
         self::assertSame('gateway_agent_enable', ControlMessage::ACTION_GATEWAY_AGENT_ENABLE);
+        self::assertSame('gateway_agent_status', ControlMessage::ACTION_GATEWAY_AGENT_STATUS);
         self::assertSame('gateway_agent_commit', ControlMessage::ACTION_GATEWAY_AGENT_COMMIT);
         self::assertSame('gateway_agent_disable', ControlMessage::ACTION_GATEWAY_AGENT_DISABLE);
         self::assertSame(
@@ -398,6 +430,7 @@ final class GatewayFallbackProviderTest extends TestCase
             inheritedListener: \PHP_OS_FAMILY !== 'Windows',
             runtimeEnabled: true,
             instanceCount: 3,
+            hostLeaseId: self::HOST_LEASE_ID,
         );
 
         self::assertTrue($agent->isEnabled($context));
@@ -487,6 +520,11 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertFalse($authorize->invoke(
             $server,
             7,
+            ['action' => ControlMessage::ACTION_GATEWAY_AGENT_STATUS],
+        ));
+        self::assertFalse($authorize->invoke(
+            $server,
+            7,
             ['action' => ControlMessage::ACTION_GATEWAY_AGENT_COMMIT],
         ));
         self::assertFalse($authorize->invoke(
@@ -534,6 +572,14 @@ final class GatewayFallbackProviderTest extends TestCase
             $server,
             8,
             [
+                'action' => ControlMessage::ACTION_GATEWAY_AGENT_STATUS,
+                'control_token' => 'unit-control-token',
+            ],
+        ));
+        self::assertTrue($authorize->invoke(
+            $server,
+            8,
+            [
                 'action' => ControlMessage::ACTION_GATEWAY_AGENT_COMMIT,
                 'control_token' => 'unit-control-token',
             ],
@@ -572,6 +618,28 @@ final class GatewayFallbackProviderTest extends TestCase
             'protocol_edge' => 'disabled',
             'alt_svc' => false,
         ];
+        $capabilityEvidence = [
+            'schema' => 'wls-session-capability/1',
+            'reason' => 'unit-isolated',
+        ];
+        $gateway += [
+            'project_uuid' => '123e4567-e89b-42d3-a456-426614174099',
+            'instance_generation' => 17,
+            'launch_id' => \str_repeat('a', 32),
+        ];
+        $gateway['backend_capability_launch'] ??= [
+            'schema' => \Weline\Server\Service\Edge\Gateway\GatewayBackendCapabilityResolver::LAUNCH_SNAPSHOT_SCHEMA,
+            'instance_generation' => 17,
+            'launch_id' => \str_repeat('a', 32),
+            'mode' => 'isolated',
+            'evidence' => $capabilityEvidence,
+            'evidence_digest' => \hash(
+                'sha256',
+                \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson(
+                    $capabilityEvidence,
+                ),
+            ),
+        ];
         return new ServiceContext(
             instanceName: 'unit-gateway-fallback',
             epoch: 3,
@@ -604,11 +672,7 @@ final class GatewayFallbackProviderTest extends TestCase
                         'adapter' => 'wls',
                         'mode' => $edgeMode,
                     ],
-                    'gateway' => $gateway + [
-                        'project_uuid' => '123e4567-e89b-42d3-a456-426614174099',
-                        'instance_generation' => 17,
-                        'launch_id' => \str_repeat('a', 32),
-                    ],
+                    'gateway' => $gateway,
                     'http' => $http,
                 ],
             ],

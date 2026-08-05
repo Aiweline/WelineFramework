@@ -1,89 +1,58 @@
 ---
 name: 安全权限工程师-ACL与后台安全
-description: Security engineer skill for backend ACL structure, menu visibility control, and administrative access safety.
-version: 1.1.1
+description: Design or diagnose Weline backend ACL structure, menu visibility, permission annotations, source IDs, and administrative access. Use when an admin surface needs protection or an ACL path misbehaves; use module configuration skills for ordinary menu wiring and session security for state isolation.
 ---
 
-# Role
+# ACL and backend security
 
-This skill owns backend ACL structure, menu visibility rules, and administrative access safety in WelineFramework. It ensures backend surfaces are exposed only through consistent permission wiring and predictable menu behavior.
+## Contract
 
-# When To Use
+- Menu visibility is not authorization; every protected Controller/action needs the owning ACL declaration.
+- `menu.xml`, source IDs, parent relationships, and permission annotations must describe the same tree.
+- Distinguish menu-visible permissions from control-only/action permissions.
 
-- Use for backend ACL design, `menu.xml`, permission annotations, menu visibility, and admin-surface access review.
-- Use for keywords such as ACL, menu, backend permission, admin access, source id, and menu hierarchy.
-- Use when an admin feature must be protected or an existing permission path behaves incorrectly.
+## ACL tags and menu visibility
 
-# Source Material
+Weline authorization resources use one source grammar:
 
-- `AI-ENTRY.md`
-- `CLAUDE.md`
-- `dev/ai/skills/acl-permission-system/SKILL.md`
-- `dev/ai/skills/module-development/SKILL.md`
-- `dev/ai/skills/config-and-env/SKILL.md`
+`Vendor_Module::tag1:tag2:code`
 
-# Responsibilities
+- The final segment is the leaf resource code; preceding segments are ordered
+  tags. Use `Weline\Framework\Authorization\Resource\SourceIdParser`; do not
+  parse or compose tagged source IDs by hand.
+- Backend menu resources come from the owning module's
+  `etc/backend/menu.xml`. Controller/action resources come from
+  `#[Weline\Framework\Acl\Acl]`. Do not invent an `acl.xml`.
+- A role may receive an exact leaf source or a tag-path grant. Tag-path grants
+  expand to matching concrete resources during ACL synchronization; they do not
+  authorize unknown or disabled resources.
+- `AclTag` metadata controls tag name, description, color and sort order only.
+  Metadata never grants access.
+- Parent menus provide topology and ancestor visibility. A parent grant is not
+  a substitute for the leaf Controller/action permission.
+- Use the same module, ordered tags and leaf code semantics for a menu and its
+  destination Controller. Non-menu actions may use a more specific leaf under
+  the same tag path.
+- No permission means both: the menu is absent and direct route access is
+  denied. Verify both outcomes; proving only one is a failure.
+- QueryProvider, background-task and operation resources also require exact,
+  enabled source IDs. Never infer permission from a route prefix or visible
+  parent menu.
 
-- Design and repair admin permission paths and menu relationships.
-- Keep controller permission annotations aligned with menu source definitions.
-- Distinguish menu-visible permissions from permission-only controls.
-- Prevent accidental admin exposure caused by missing or inconsistent ACL wiring.
+## Workflow
 
-# Workflow
+1. Identify the backend route, owning module, intended roles, menu source, and action scope.
+2. Inspect `menu.xml` and Controller permission annotations together.
+3. Align source identifiers and permission type without broadening access.
+4. Validate a permitted and denied user through the real backend route, using only supplied/local credentials.
+5. Report visibility, authorization, denial behavior, and any auth blocker.
 
-1. Identify the target backend feature, menu path, and required access scope.
-2. Read the current `menu.xml` structure and controller permission annotations together.
-3. Align menu nesting, source identifiers, and controller-level ACL declarations.
-4. Confirm whether the permission should be menu-visible or control-only.
-5. Validate backend visibility and denied-access behavior through the real admin path.
-6. For local backend verification, use the development default `admin/admin` for the baseline allowed path unless the user supplied other credentials.
-7. Record any admin documentation updates if behavior changed.
-8. Escalate broader auth or session design concerns to the relevant security or runtime role.
+## Validation
 
-# Weline Rules
-
-- Keep module boundaries intact.
-- Do not hardcode user-facing text.
-- Use i18n for user-facing text.
-- Prefer small, isolated, testable changes.
-- Provide HTTP or backend validation evidence where relevant.
-
-# Inputs Required
-
-- The owning module, backend page, and intended permission scope.
-- Existing menu structure and controller annotations.
-- Expected role-based access behavior.
-- Validation path for allowed and denied access.
-
-# Expected Output
-
-- Corrected or newly defined ACL and backend menu wiring.
-- Evidence showing both visibility and access-control behavior.
-- Any required documentation note for admin behavior changes.
-
-# Validation
-
-- Check that `menu.xml` hierarchy and controller permission annotations align.
-- Verify admin users with and without the permission see the correct behavior.
-- Verify menu-visible items use the correct permission type.
-- Verify the backend path fails safely when access is denied.
-- In local development verification, do not block on missing admin credentials; use `admin/admin` unless the task explicitly targets other roles or auth failure behavior.
-
-# Constraints
-
-- Do not treat menu visibility as a substitute for real controller permission control.
-- Do not leave source identifiers inconsistent across menu and controller layers.
-- Do not redesign session or auth internals under this skill unless the task explicitly requires it.
-- Do not expose new admin surfaces without validation.
-
-# Shared Collaboration Contract
-
-This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
-
-Before and during work:
-
-- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
-- Keep work inside this specialist's ownership boundary.
-- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
-- Do not silently expand scope to fix another agent's area.
-- Include collaboration status in the final report.
+- A hidden menu with an unprotected Controller fails.
+- A visible menu with an inconsistent/unknown source fails.
+- A tag shown in the role editor without matching concrete resources fails.
+- A source placed in an invented `acl.xml` instead of the framework collection
+  surfaces fails.
+- Denied access must fail safely and permitted access must reach the intended action.
+- Update owning admin documentation only when the permission model or operator workflow changed.

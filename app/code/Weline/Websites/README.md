@@ -30,6 +30,22 @@ default_timezone = Asia/Shanghai
 
 判断站点是否存在时不要用 `empty($websiteId)`、`if (!$websiteId)`、`$websiteId <= 0`、`$websiteId > 0`、`getId()` 真值判断等方式过滤默认站点；应显式区分“参数缺失”和“参数值为 0”，以 `code = default`、`array_key_exists('website_id', ...)` 或 `hasData(Website::schema_fields_ID)` 为准。
 
+## Store 商品复制向导
+
+后台 `websites/admin/store-copy/wizard` 通过 `Weline.Api.resource('product_copy')`
+执行 `createDraft → preview → commit(request_hash)`，不得改用原生
+Ajax/XHR/fetch/axios。取消只允许作用于 `state=draft` 的未提交草稿；
+草稿提交成功或取消后，提交与取消入口都必须禁用，已提交目标独立保留。
+
+## 网站写入与 ResourceChange
+
+`add`、`edit`、`quickSave` 和 `deleteDelete` 都在同一主库事务内完成 Website、域名、货币、语言、两个 start-page SystemConfig、revision 与唯一 `ResourceChange v1`。任一子步失败必须整单回滚；parser/process/namespace IPC 只能在物理提交后执行。
+
+- 默认 `website_id=0` 是 ORM 持久身份：编辑必须更新原行，保存后模型 ID 仍为严格整数 `0`。
+- start-page 审计 operation 受 `SystemConfigVersion.operation` 32 字符上限约束；前台继承使用稳定码 `website_front_start_page_inherit`，不得在落库时截断。
+- 删除时 `after=null`，完整 before/previous namespace/URL 保留；`0/default` 在 Controller 与 Model 双层禁删。
+- Store / SalesChannel、完整快照、缓存失效与并发补种约束见 `doc/README.md`、`doc/default-website-and-request-detection.md` 和 `doc/store-saleschannel-scope.md`。
+
 ## GName 购买结果兼容
 
 `Weline\Websites\Adapter\GnameRegistrar` 已对 `code = -1` 且提示“已被注册”的歧义结果做二次确认：

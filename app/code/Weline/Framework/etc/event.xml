@@ -15,6 +15,11 @@
     <event name="Weline_Maintenance::maintenance">
         <observer name="Weline_Framework_Api::maintenance_response" instance="Weline\Framework\Api\Observer\Maintenance" disabled="false" shared="true" sort="-100"/>
     </event>
+
+    <!-- 完整 Storefront Scope 冻结后、任何 FPC 查询前执行共享原子限流。 -->
+    <event name="Weline_Framework::App::storefront_scope_ready_gate">
+        <observer name="Weline_Framework_Http::scope_rate_limit" instance="Weline\Framework\Http\Observer\ScopeRateLimitObserver" disabled="false" shared="true" sort="-40"/>
+    </event>
     
     <!-- URL 解析后检查全页缓存（此时可以生成正确的缓存键） -->
     <event name="Weline_Framework::App::url_parsed_after">
@@ -74,6 +79,19 @@
     <!-- 日志运行模式解析：默认来自配置 log.runtime，观察者可改为 wls（如 WLS 进程内由 Weline_Server 设置） -->
     <event name="Weline_Framework_Log::resolve_runtime">
         <observer name="Weline_Framework_Log::resolve_runtime_default" instance="Weline\Framework\Log\Observer\ResolveRuntimeDefaultObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="cache_namespace"
+                  instance="Weline\Framework\Event\ResourceChange\Observer\CacheNamespaceObserver"
+                  delivery="sync"
+                  failure="critical"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
     </event>
 
 </config>

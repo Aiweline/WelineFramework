@@ -285,7 +285,10 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     <!-- SweetAlert2 CSS -->
     <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
     <!-- SweetAlert2 JS -->
-    <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+    <script>
+(function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
+</script>
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
     // 卡片选择初始化 - 使用直接绑定方式
     (function() {
@@ -500,7 +503,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             formData.append('color_file', params.colorFile);
             formData.append('color_value', params.colorValue);
             
-            fetch(url, {
+            WelineThemeBinQuery.request(url, {
                 method: 'POST',
                 body: formData
             })
@@ -640,7 +643,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             formData.append('color_value', params.colorValue);
             formData.append('variables', JSON.stringify(variables));
             
-            fetch(url, {
+            WelineThemeBinQuery.request(url, {
                 method: 'POST',
                 body: formData
             })

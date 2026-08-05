@@ -1,47 +1,29 @@
-# Team Workflow
+# Team workflow
 
-本流程按当前团队结构编排，不创建 Technical Director 专属技能。
+The current agent remains the delivery owner. Roles are routing aids, not mandatory ceremony.
 
-## 角色职责
+## Responsibilities
 
-- Technical Director：全局架构把关、风险裁决、最终二级验收。
-- 技术主管：接收任务、拆分任务、分派执行、跟踪进度、执行一级验收。
-- Specialist Engineers：按技能边界完成实现、验证、文档和证据输出；测试产物只在用户明确要求时处理。
-- QA测试主管：制定验证策略和门禁，组织质量验收。
-- QA / Test Specialists：执行用户明确要求的测试工作，或执行 HTTP、Browser 冒烟、WLS、现有命令等非测试产物验证。
-- 文档知识库工程师：维护 README、架构、API、技能索引和变更记录。
+- Technical lead: decompose cross-domain work, manage dependencies, integrate evidence.
+- Specialist: implement only the assigned domain result and report real validation.
+- QA/testing: choose or execute risk-matched checks; focused tests are allowed when proportionate to the requested change.
+- Documentation: update the current owning contract and routing surfaces.
 
-## 标准执行流
+## Flow
 
-1. Technical Director 下达任务与验收目标。
-2. 技术主管先读 `AI-ENTRY.md`、`dev/ai/global-constraints.md`、图谱和模块文档，完成任务拆分。
-3. 技术主管按职责派发到框架、业务、前端、运行时、安全、测试、CI、文档角色。
-4. Specialist Engineers 在各自边界内实现并输出证据。
-5. QA测试主管定义门禁并组织 HTTP、Browser 冒烟、WLS、现有命令等验证；单测、E2E 或测试用例工作只在用户明确要求时组织。
-6. 技术主管执行一级验收，确认实现与证据一致。
-7. Technical Director 执行最终二级验收。
+1. Establish goal, scope, authorization, and acceptance surface.
+2. Read the global constraints, owning docs, targeted source, and only the needed skills.
+3. Delegate independent bounded work when parallelism adds value.
+4. Implement and validate at the changed surface.
+5. Integrate evidence, update owning documentation, and deliver remaining risk honestly.
 
-## 问题上报
+## Escalation
 
-- 任一工程智能体发现问题、风险、阻塞、验证失败或跨角色影响时，必须通知 `@Weline-技术主管`。
-- 上报必须包含发现问题、发现智能体、影响范围、证据、建议责任智能体、是否阻塞当前任务和建议下一步。
-- 跨角色归属不清时，不直接扩大范围处理，先由 `@Weline-技术主管` 裁决。
+Escalate only when a finding changes scope, security, data, architecture, external authorization, or acceptance. Include:
 
-## 交付要求
+- finding and evidence;
+- affected scope;
+- whether it blocks the task;
+- recommended owner and next decision.
 
-- 每个实施角色必须提交可核对的变更与验证证据。
-- 每个验证/测试角色必须提交可复现的命令、结果和剩余风险；不得默认新增或更新测试用例。
-- 每个文档角色必须在相关模块目录中更新 README / API / 架构文档。
-- WLS 测试必须使用独立实例；自动验证后停止实例。若交付需要用户人工验收，保留实例并交接 URL/实例名/端口/状态/停止命令，用户确认后再停止。
-
-## 边界约束
-
-- 技术主管不代替专项工程师实现底层业务代码。
-- QA 不替代开发角色决定架构方案。
-- 文档角色不在仓库根目录写详细修复报告。
-- CI 角色不绕过验证门禁直接放行。
-
-## 智能体文件
-
-- 本地智能体名录：`dev/ai/agent/README.md`
-- 智能体技能绑定必须指向 `dev/ai/skills/*/SKILL.md`。
+Do not require role-name notifications or collaboration boilerplate in every skill/final report; the active runtime's collaboration tools and owner remain authoritative.

@@ -1,8 +1,9 @@
 ---
-name: deploy-release-system
+name: CI发布工程师-部署发布系统
 description: >-
-  Weline_Deploy：随机 Webhook 路径（~wh~）、ModuleRouter、webhook_secret、
-  deploy:webhook:setup、deploy:release、WLS+Nginx。
+  Implement or operate Weline_Deploy's random ~wh~ webhook route, ModuleRouter integration,
+  webhook_secret, deploy:webhook:setup, deploy:release, and WLS/Nginx handoff. Use only for
+  Weline_Deploy setup or release-system work; do not trigger for generic deployment advice or CI signoff.
 ---
 
 # Weline_Deploy 部署发布系统
@@ -76,10 +77,10 @@ location / {
 
 | 文件 | 用途 |
 |------|------|
-| `doc/webhook-secret.md` | 密码与路径轮换 |
-| `doc/backend-config.md` | 后台与 Nginx |
-| `Controller/Router.php` | ModuleRouter 匹配 |
-| `Service/DeployWebhookRouteService.php` | 路径生成与缓存 |
+| `app/code/Weline/Deploy/doc/webhook-secret.md` | 密码与路径轮换 |
+| `app/code/Weline/Deploy/doc/backend-config.md` | 后台与 Nginx |
+| `app/code/Weline/Deploy/Controller/Router.php` | ModuleRouter 匹配 |
+| `app/code/Weline/Deploy/Service/DeployWebhookRouteService.php` | 路径生成与缓存 |
 | `框架核心工程师-路由事件与扩展` | 通用 Router 技能 |
 
 ## 排错

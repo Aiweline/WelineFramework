@@ -58,6 +58,12 @@ final class HostGatewayPackageManagerTest extends TestCase
             $staged['slot_dir'] . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR
                 . $this->binaryName('wls-gateway-broker'),
         );
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::assertFileExists(
+                $staged['slot_dir'] . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR
+                    . 'wls-bounded-command.exe',
+            );
+        }
         self::assertFileExists($this->paths->launcherFile());
 
         $manager->activate($staged['slot']);
@@ -65,16 +71,12 @@ final class HostGatewayPackageManagerTest extends TestCase
         if (\PHP_OS_FAMILY !== 'Windows') {
             $parent = \stat($this->paths->trustDir());
             self::assertIsArray($parent);
-            foreach ([
-                $this->paths->activeSlotFile(),
-                $this->paths->previousSlotFile(),
-            ] as $stateFile) {
-                $state = \stat($stateFile);
-                self::assertIsArray($state);
-                self::assertSame($parent['uid'], $state['uid']);
-                self::assertSame($parent['gid'], $state['gid']);
-            }
+            $state = \stat($this->paths->activeSlotFile());
+            self::assertIsArray($state);
+            self::assertSame($parent['uid'], $state['uid']);
+            self::assertSame($parent['gid'], $state['gid']);
         }
+        self::assertFileDoesNotExist($this->paths->previousSlotFile());
         $installed = $manager->installedManifest($staged['slot']);
         self::assertFalse($installed['release_ready']);
         self::assertTrue($installed['test_mode']);
@@ -123,6 +125,137 @@ final class HostGatewayPackageManagerTest extends TestCase
                 self::assertStringContainsString('missing or is a link', $exception->getMessage());
             }
         }
+    }
+
+    public function testManifestComponentAndDirectoryLimitsFailBeforeFileTraversal(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $package = $this->createPackage('component-limit');
+        $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $manifest = \json_decode((string)\file_get_contents($manifestFile), true);
+        self::assertIsArray($manifest);
+        $definition = $manifest['components']['LICENSES.txt'];
+        for ($index = 0; $index <= HostGatewayPackageManager::MAX_PACKAGE_COMPONENTS; ++$index) {
+            $manifest['components']['extra-' . $index] = $definition;
+        }
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        ));
+        try {
+            $manager->verifyPackage($package, 'default');
+            self::fail('An oversized signed component map must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('component limit', $exception->getMessage());
+        }
+
+        $package = $this->createPackage('directory-limit');
+        $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $manifest = \json_decode((string)\file_get_contents($manifestFile), true);
+        self::assertIsArray($manifest);
+        $definition = $manifest['components']['LICENSES.txt'];
+        $paths = \intdiv(HostGatewayPackageManager::MAX_PACKAGE_DIRECTORIES, 3) + 1;
+        for ($index = 0; $index < $paths; ++$index) {
+            $manifest['components'][
+                'd' . $index . '/s' . $index . '/t' . $index . '/file'
+            ] = $definition;
+        }
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        ));
+        try {
+            $manager->verifyPackage($package, 'default');
+            self::fail('An oversized signed directory topology must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('directory limit', $exception->getMessage());
+        }
+
+        $package = $this->createPackage('path-depth-limit');
+        $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $manifest = \json_decode((string)\file_get_contents($manifestFile), true);
+        self::assertIsArray($manifest);
+        $manifest['components'][
+            \implode('/', \array_fill(
+                0,
+                HostGatewayPackageManager::MAX_PACKAGE_PATH_DEPTH + 1,
+                'd',
+            ))
+        ] = $manifest['components']['LICENSES.txt'];
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        ));
+        try {
+            $manager->verifyPackage($package, 'default');
+            self::fail('An oversized signed path depth must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('depth limit', $exception->getMessage());
+        }
+    }
+
+    public function testManifestRejectsFileAndDirectoryPrefixCollisions(): void
+    {
+        $package = $this->createPackage('prefix-collision');
+        $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $manifest = \json_decode((string)\file_get_contents($manifestFile), true);
+        self::assertIsArray($manifest);
+        $manifest['components']['LICENSES.txt/inventory']
+            = $manifest['components']['LICENSES.txt'];
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        ));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('collides with a declared directory');
+        (new HostGatewayPackageManager($this->paths))->verifyPackage(
+            $package,
+            'default',
+        );
+    }
+
+    public function testManifestCannotShadowInstalledReleaseMetadata(): void
+    {
+        $package = $this->createPackage('reserved-release-namespace');
+        $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $manifest = \json_decode((string)\file_get_contents($manifestFile), true);
+        self::assertIsArray($manifest);
+        $manifest['components']['release/manifest.json']
+            = $manifest['components']['LICENSES.txt'];
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        ));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('reserved installed release namespace');
+        (new HostGatewayPackageManager($this->paths))->verifyPackage(
+            $package,
+            'default',
+        );
+    }
+
+    public function testUpgradeRollbackRejectsAForgedSignedIntent(): void
+    {
+        $manager = new HostGatewayPackageManager($this->paths);
+        $initial = $manager->stage($this->createPackage('intent-initial'), 'default');
+        $manager->activate($initial['slot']);
+        $candidate = $manager->stage($this->createPackage('intent-candidate'), 'default');
+        $manager->beginUpgradeActivation($candidate);
+        $intentFile = $this->paths->upgradeIntentFile();
+        $intent = (string)\file_get_contents($intentFile);
+        self::assertMatchesRegularExpression('/signature=[a-f0-9]{64}\n\z/D', $intent);
+        $lastSignatureOffset = \strlen($intent) - 2;
+        $intent[$lastSignatureOffset] = $intent[$lastSignatureOffset] === 'f' ? 'e' : 'f';
+        self::assertNotFalse(\file_put_contents($intentFile, $intent));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('authentication failed');
+        $manager->rollbackUpgradeActivation(
+            $candidate['slot'],
+            $initial['slot'],
+        );
     }
 
     public function testPlatformServiceDefinitionUsesStableLauncherAndSystemScopeContract(): void
@@ -179,51 +312,41 @@ final class HostGatewayPackageManagerTest extends TestCase
         );
     }
 
-    public function testProjectEndpointAccessContractIsReadOnlyAndInherited(): void
+    public function testProjectEndpointAccessContractFailsClosedUntilNativeHelperExists(): void
     {
         $source = (string)\file_get_contents(
             \dirname(__DIR__, 5)
                 . '/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php'
         );
         self::assertStringContainsString(
-            "'u:' . \$account . ':--x'",
-            $source,
-        );
-        self::assertStringContainsString(
-            "'u:' . \$account . ':r--,g::---,m::r--,o::---'",
-            $source,
-        );
-        self::assertStringContainsString(
-            "'u::rwx,u:' . \$account . ':r-x,g::---,m::r-x,o::---'",
-            $source,
-        );
-        self::assertStringContainsString(
-            "\$account . ':(X)'",
-            $source,
-        );
-        self::assertStringContainsString(
-            "\$account . ':(OI)(CI)(RX)'",
-            $source,
-        );
-        self::assertStringContainsString(
-            'file_inherit,directory_inherit',
+            'requires the native handle-relative ACL helper',
             $source,
         );
         self::assertStringNotContainsString(
-            "project endpoint ACL authorization', ['chmod', '0777'",
+            'project endpoint ACL authorization',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            'Windows project ACL target verification',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            'project endpoint ACL revocation',
             $source,
         );
         $enroll = (string)\file_get_contents(
             \dirname(__DIR__, 5) . '/Console/Server/Gateway/Enroll.php'
         );
-        self::assertStringContainsString(
+        self::assertStringNotContainsString(
             '->authorizeProjectRuntimeRead(',
             $enroll,
         );
-        self::assertStringContainsString(
+        self::assertStringNotContainsString(
             "\$payload['endpoint_access_prepared']",
             $enroll,
         );
+        self::assertStringContainsString("'broker_auth_snap'", $enroll);
+        self::assertStringContainsString('validateCredentialReceipt(', $enroll);
     }
 
     public function testExplicitHostInstallKeepsTestPackageNonReadyAndHighPortOnly(): void
@@ -654,8 +777,17 @@ final class HostGatewayPackageManagerTest extends TestCase
             '->secureInstalledRuntimeSlot($slotDirectory);',
             $packages,
         );
+        self::assertStringContainsString('package-install.lock', $packages);
+        self::assertStringNotContainsString(
+            "stateDir() . DIRECTORY_SEPARATOR . 'install.lock'",
+            $packages,
+        );
         self::assertStringContainsString(
             'public function secureInstalledRuntimeSlot(string $slotDirectory): void',
+            $platform,
+        );
+        self::assertStringContainsString(
+            'initial installation cannot deadlock on its own ordering',
             $platform,
         );
         self::assertStringContainsString(
@@ -671,6 +803,12 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringNotContainsString("'control', self::SERVICE_NAME, '6'", $platform);
         self::assertStringContainsString('$this->waitForWindowsServiceState(1);', $platform);
         self::assertStringContainsString('$this->waitForWindowsServiceState(4);', $platform);
+        self::assertStringContainsString("'unrestricted'", $platform);
+        self::assertStringContainsString("'qsidtype'", $platform);
+        self::assertStringContainsString('Set-WlsExactAcl', $platform);
+        self::assertStringContainsString('AreAccessRulesProtected', $platform);
+        self::assertStringContainsString("'/setowner'", $platform);
+        self::assertStringContainsString("['/bin/chmod', '-RN'", $platform);
         self::assertStringContainsString('WLS_CONTROL_TREE_RELOAD', $posix);
         self::assertStringContainsString('signal_number == SIGHUP', $posix);
         self::assertStringContainsString(
@@ -681,14 +819,219 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString('broker controller restart attempt', $posixBroker);
         self::assertStringContainsString('broker controller restart ready', $posixBroker);
         self::assertStringContainsString('broker controller restart exhausted', $posixBroker);
+        self::assertStringContainsString('pthread_join(thread, NULL)', $posixBroker);
+        self::assertStringContainsString('PR_SET_NO_NEW_PRIVS', $posixBroker);
+        self::assertStringContainsString('CAP_NET_BIND_SERVICE', $posixBroker);
+        self::assertStringContainsString('broker-fencing-token', $posixBroker);
+        self::assertStringContainsString('\"action_protocol\":2', $posixBroker);
+        self::assertStringContainsString('SECURITY_RESERVE', $posixBroker);
+        self::assertStringContainsString('AUTH_PREPARE', $posixBroker);
+        self::assertStringContainsString('ATOMIC_REPLACE', $posixBroker);
+        self::assertStringContainsString('PROCESS_ATTEST', $posixBroker);
+        self::assertStringContainsString('WLS-UPGRADE-STATE/2', $posix);
         self::assertStringContainsString('SERVICE_ACCEPT_PARAMCHANGE', $windows);
         self::assertStringContainsString('SERVICE_CONTROL_PARAMCHANGE', $windows);
+        self::assertStringContainsString('wls_classify_broker_exit', $windows);
+        self::assertStringContainsString('wls_publish_broker_stop_event', $windows);
+        self::assertStringContainsString('wls_unpublish_broker_stop_event', $windows);
+        self::assertStringContainsString('wls_service_reload_generation', $windows);
+        self::assertStringContainsString('reload_failed', $windows);
+        self::assertStringNotContainsString('wls_service_reload_requested', $windows);
+        self::assertStringContainsString(
+            'int platform_signal = wls_take_shutdown_signal();',
+            $posix,
+        );
+        self::assertStringContainsString(
+            'exit_code == WLS_CONTROL_TREE_RELOAD',
+            $posix,
+        );
+        $windowsControl = \substr(
+            $windows,
+            (int)\strpos($windows, 'static DWORD WINAPI wls_service_control('),
+            (int)\strpos($windows, 'static HANDLE wls_create_supervision_job(void)')
+                - (int)\strpos($windows, 'static DWORD WINAPI wls_service_control('),
+        );
+        self::assertTrue(
+            \strpos($windowsControl, 'InterlockedExchange(&wls_service_stop_requested, 1);')
+                < \strpos($windowsControl, 'wls_report_service(SERVICE_STOP_PENDING'),
+            'Windows stop ownership must be visible before STOP_PENDING can race Broker exit.',
+        );
         self::assertStringContainsString('IsProcessInJob', $windows);
         self::assertStringContainsString('bin/nginx.exe', $windows);
         self::assertStringContainsString('--adopted-nginx-pid', $windows);
         self::assertStringContainsString('adopted_nginx_pid', $broker);
+        self::assertStringContainsString('\"action_protocol\":2', $broker);
+        self::assertStringContainsString('WLS-NGINX-PROCESS/2', $broker);
+        self::assertStringContainsString('WLS-BROKER-LAUNCH/2', $broker);
+        self::assertStringContainsString('SECURITY_RESERVE', $broker);
+        self::assertStringContainsString('AUTH_PREPARE', $broker);
+        self::assertStringContainsString('ATOMIC_REPLACE', $broker);
+        self::assertStringContainsString('PROCESS_ATTEST', $broker);
+        self::assertStringContainsString('WLS-UPGRADE-STATE/2', $windows);
         self::assertStringContainsString('expected_a', $broker);
         self::assertStringContainsString('expected_b', $broker);
+        self::assertStringContainsString('CreateRestrictedToken', $broker);
+        self::assertStringContainsString('before_time.ChangeTime', $broker);
+        self::assertStringContainsString('FILE_SHARE_READ,', $broker);
+    }
+
+    public function testNativeWorkflowExecutesIsolatedPlatformRecoveryContracts(): void
+    {
+        $server = \dirname(__DIR__, 5);
+        $repository = \dirname($server, 4);
+        $native = $server . '/Service/Edge/Gateway/Native';
+        $cmake = (string)\file_get_contents($native . '/CMakeLists.txt');
+        $testBroker = (string)\file_get_contents(
+            $native . '/windows/wls_gateway_test_broker.c',
+        );
+        $windowsBroker = (string)\file_get_contents(
+            $native . '/windows/wls_gateway_broker.c',
+        );
+        $boundedCommand = (string)\file_get_contents(
+            $native . '/windows/wls_bounded_command.c',
+        );
+        $fixture = (string)\file_get_contents(
+            $server . '/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php',
+        );
+        $workflow = (string)\file_get_contents(
+            $repository . '/.github/workflows/wls-gateway-native.yml',
+        );
+        $launcherTest = (string)\file_get_contents(
+            $server . '/Test/Integration/Service/Edge/Gateway/NativeGatewayLauncherTest.php',
+        );
+
+        self::assertStringContainsString('option(WLS_BUILD_TEST_HELPERS', $cmake);
+        self::assertStringContainsString('WLS_NATIVE_TEST_HOOKS=1', $cmake);
+        self::assertStringContainsString('wls-gateway-test-broker', $cmake);
+        self::assertStringContainsString('wls-bounded-command', $cmake);
+        self::assertStringNotContainsString(
+            'install(TARGETS wls-gateway-test-broker',
+            $cmake,
+        );
+        self::assertStringContainsString('state\\\\test-starts.log', $testBroker);
+        self::assertStringContainsString('state\\\\test-hold', $testBroker);
+        self::assertStringContainsString('if (!marker_existed', $testBroker);
+        self::assertStringContainsString('OpenEventW(SYNCHRONIZE', $testBroker);
+        self::assertStringContainsString('WAIT_OBJECT_0 ? 5 : 4', $testBroker);
+        self::assertStringContainsString('#if defined(WLS_NATIVE_TEST_HOOKS)', $windowsBroker);
+        self::assertStringContainsString('wls_allowed_private_reader', $windowsBroker);
+        self::assertStringContainsString('GetAclInformation', $windowsBroker);
+        self::assertStringContainsString('total != (uint64_t)before_size.EndOfFile.QuadPart', $windowsBroker);
+        self::assertStringContainsString('--snapshot-private-test', $windowsBroker);
+        self::assertStringContainsString('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE', $boundedCommand);
+        self::assertStringContainsString('CREATE_SUSPENDED', $boundedCommand);
+        self::assertStringContainsString('PROC_THREAD_ATTRIBUTE_JOB_LIST', $boundedCommand);
+        self::assertStringContainsString('IsProcessInJob', $boundedCommand);
+        self::assertStringContainsString('TerminateJobObject', $boundedCommand);
+        self::assertStringContainsString('PROC_THREAD_ATTRIBUTE_HANDLE_LIST', $boundedCommand);
+        self::assertStringContainsString('wls-bounded-command-result/1', $boundedCommand);
+        self::assertStringContainsString(
+            'return wls_snapshot_command(argc, argv, 1);',
+            $windowsBroker,
+        );
+        self::assertStringContainsString(
+            "const WLS_WINDOWS_TEST_SERVICE = 'weline-wls-gateway-v2';",
+            $fixture,
+        );
+        self::assertStringContainsString('Refusing to replace an existing', $fixture);
+        self::assertStringContainsString('wlsMkdirExclusive(', $fixture);
+        self::assertStringContainsString('wlsWriteExclusive(', $fixture);
+        self::assertStringContainsString("'sidtype'", $fixture);
+        self::assertStringContainsString("'failureflag'", $fixture);
+        self::assertStringContainsString('wlsWaitStarts(', $fixture);
+        self::assertStringContainsString(
+            'wlsWrite($fixture[\'hold\'], "hold\\n");',
+            $fixture,
+        );
+        self::assertStringContainsString('wlsWaitServiceDeleted(', $fixture);
+        self::assertStringContainsString('Explicit SCM stop incorrectly triggered recovery', $fixture);
+        self::assertStringContainsString('Broad-readable private key was accepted', $fixture);
+        self::assertStringContainsString(
+            'Unrelated readable SID on a private key was accepted',
+            $fixture,
+        );
+        self::assertStringContainsString('Source reparse point was followed', $fixture);
+        self::assertStringContainsString('Destination reparse point was followed', $fixture);
+        self::assertStringContainsString('WLS_BUILD_TEST_HELPERS=ON', $workflow);
+        self::assertStringContainsString('NativeGatewayBrokerTest.php', $workflow);
+        self::assertStringContainsString('--bootstrap vendor/autoload.php', $workflow);
+        self::assertStringNotContainsString('--bootstrap app/bootstrap_phpunit.php', $workflow);
+        self::assertStringContainsString('if: always()', $workflow);
+        self::assertStringContainsString('Windows path security integration', $workflow);
+        self::assertStringContainsString('Windows bounded-command tree integration', $workflow);
+        self::assertStringContainsString(
+            'WLS_RUN_NATIVE_GATEWAY_WINDOWS_BOUNDED_COMMAND_INTEGRATION: "1"',
+            $workflow,
+        );
+        self::assertStringContainsString(
+            'WLS_RUN_NATIVE_GATEWAY_WINDOWS_PATH_INTEGRATION: "1"',
+            $workflow,
+        );
+        self::assertStringContainsString('Windows SCM recovery integration', $workflow);
+        self::assertStringContainsString(
+            'WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION: "1"',
+            $workflow,
+        );
+        self::assertStringContainsString('WLS_RUN_NATIVE_GATEWAY_SYSTEMD_INTEGRATION', $workflow);
+        self::assertStringContainsString('WLS_RUN_NATIVE_GATEWAY_LAUNCHD_INTEGRATION', $workflow);
+        self::assertStringContainsString(
+            'WLS_RUN_NATIVE_GATEWAY_SYSTEM_LAUNCHD_INTEGRATION',
+            $workflow,
+        );
+        self::assertStringContainsString(
+            'testMacOsSystemLaunchDaemonRestartsUnexpectedCleanBrokerExit',
+            $launcherTest,
+        );
+        self::assertStringContainsString(
+            "\$marker = \$systemRoot . '/system-launchd-clean-exit-starts';",
+            $launcherTest,
+        );
+        self::assertStringContainsString(
+            "\$marker = \$systemRoot . '/systemd-clean-exit-starts';",
+            $launcherTest,
+        );
+        self::assertStringContainsString('private function stopProcess(', $launcherTest);
+    }
+
+    public function testWindowsServiceFixtureGeneratesEphemeralSigningPair(): void
+    {
+        $fixture = \dirname(__DIR__, 5)
+            . '/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php';
+        $keyFile = $this->root . DIRECTORY_SEPARATOR . 'windows-scm-key.json';
+        self::assertTrue(\mkdir($this->root, 0700, true));
+        $generated = $this->runCommand([
+            PHP_BINARY,
+            $fixture,
+            'keygen',
+            '--output=' . $keyFile,
+        ]);
+        self::assertSame(0, $generated['code'], $generated['output']);
+        self::assertFileExists($keyFile);
+        $key = \json_decode((string)\file_get_contents($keyFile), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($key);
+        self::assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/D', $key['public_key_hex']);
+        $secret = \base64_decode((string)$key['secret_key_base64'], true);
+        self::assertIsString($secret);
+        self::assertSame(SODIUM_CRYPTO_SIGN_SECRETKEYBYTES, \strlen($secret));
+        self::assertSame(
+            $key['public_key_hex'],
+            \bin2hex(\sodium_crypto_sign_publickey_from_secretkey($secret)),
+        );
+        \sodium_memzero($secret);
+        \sodium_memzero($key['secret_key_base64']);
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertSame(0600, \fileperms($keyFile) & 0777);
+        }
+        $digest = \hash_file('sha256', $keyFile);
+        self::assertIsString($digest);
+        $second = $this->runCommand([
+            PHP_BINARY,
+            $fixture,
+            'keygen',
+            '--output=' . $keyFile,
+        ]);
+        self::assertNotSame(0, $second['code'], $second['output']);
+        self::assertSame($digest, \hash_file('sha256', $keyFile));
     }
 
     public function testWindowsServiceQueryStateParserUsesStrictScNumericState(): void
@@ -756,6 +1099,9 @@ final class HostGatewayPackageManagerTest extends TestCase
                 0644,
             ],
         ];
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $files['bin/wls-bounded-command.exe'] = ["fixture\r\n", 0755];
+        }
         $components = [];
         foreach ($files as $relative => [$contents, $mode]) {
             $file = $package . DIRECTORY_SEPARATOR
@@ -808,6 +1154,86 @@ final class HostGatewayPackageManagerTest extends TestCase
     private function binaryName(string $name): string
     {
         return $name . (\PHP_OS_FAMILY === 'Windows' ? '.exe' : '');
+    }
+
+    /**
+     * @param list<string> $command
+     * @return array{code:int,output:string}
+     */
+    private function runCommand(array $command, float $timeoutSeconds = 10.0): array
+    {
+        $process = \proc_open(
+            $command,
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            null,
+            ['bypass_shell' => true],
+        );
+        if (!\is_resource($process)) {
+            return ['code' => 127, 'output' => 'Unable to start command.'];
+        }
+        foreach ($pipes as $pipe) {
+            \stream_set_blocking($pipe, false);
+        }
+        $deadline = \hrtime(true) + (int)\round($timeoutSeconds * 1_000_000_000);
+        $output = '';
+        $exitCode = -1;
+        for (;;) {
+            $status = \proc_get_status($process);
+            foreach ($pipes as $pipe) {
+                $chunk = \stream_get_contents($pipe);
+                if (\is_string($chunk)) {
+                    $output .= $chunk;
+                }
+            }
+            if (!(bool)($status['running'] ?? false)) {
+                $exitCode = (int)($status['exitcode'] ?? -1);
+                break;
+            }
+            if (\hrtime(true) >= $deadline) {
+                @\proc_terminate($process);
+                $terminateDeadline = \hrtime(true) + 1_000_000_000;
+                do {
+                    $status = \proc_get_status($process);
+                    if (!(bool)($status['running'] ?? false)) {
+                        break;
+                    }
+                    \usleep(25_000);
+                } while (\hrtime(true) < $terminateDeadline);
+                if ((bool)($status['running'] ?? false)) {
+                    @\proc_terminate($process, 9);
+                    $killDeadline = \hrtime(true) + 1_000_000_000;
+                    do {
+                        $status = \proc_get_status($process);
+                        if (!(bool)($status['running'] ?? false)) {
+                            break;
+                        }
+                        \usleep(25_000);
+                    } while (\hrtime(true) < $killDeadline);
+                }
+                foreach ($pipes as $pipe) {
+                    @\fclose($pipe);
+                }
+                if (!(bool)($status['running'] ?? false)) {
+                    @\proc_close($process);
+                }
+                return ['code' => 124, 'output' => \trim($output . "\nCommand timed out.")];
+            }
+            \usleep(25_000);
+        }
+        foreach ($pipes as $pipe) {
+            $chunk = \stream_get_contents($pipe);
+            if (\is_string($chunk)) {
+                $output .= $chunk;
+            }
+            @\fclose($pipe);
+        }
+        $closed = \proc_close($process);
+        return [
+            'code' => $exitCode >= 0 ? $exitCode : $closed,
+            'output' => \trim($output),
+        ];
     }
 
     private function normalizedArch(): string

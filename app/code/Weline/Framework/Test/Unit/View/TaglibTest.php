@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\View;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class TaglibTest extends TestCore
 {
@@ -38,7 +38,11 @@ class TaglibTest extends TestCore
         //        $content = "@if{type==='progress-select-entity'=>'active'}";
         $content = '@if{country.is_active.r!==1 and a==1 =>1|0}';
         $parse_str = $this->taglib->tagReplace($template, $content);
-        self::assertTrue($parse_str === "<?php if((\$country['is_active']['r']??'')  !==  1   and   \$a  ==  1  ):echo 1; else: echo 0; endif;?>", '解析变量');
+        self::assertSame(
+            "<?php if((\$country['is_active']['r']??'') !== 1 and \$a == 1  ):echo 1; else: echo 0; endif;?>",
+            $parse_str,
+            '解析变量'
+        );
     }
 
     /**
@@ -78,10 +82,10 @@ class TaglibTest extends TestCore
         $template = new Template();
         $content = '<else />';
         $parse_str = $this->taglib->tagReplace($template, $content);
-        $result1 = $parse_str === "<?php else:?>";
+        $result1 = $parse_str === "<?php else: ?>";
         $content = '<else/>';
         $parse_str = $this->taglib->tagReplace($template, $content);
-        $result2 = $parse_str === "<?php else:?>";
+        $result2 = $parse_str === "<?php else: ?>";
         self::assertTrue($result1 && $result2, '解析变量');
     }
 
@@ -91,11 +95,11 @@ class TaglibTest extends TestCore
         // 测试嵌套属性的默认值
         $content = "1111{{setting.url | 'http://www.amayum.com'}}2222";
         $parse_str = $this->taglib->tagReplace($template, $content);
-        $result1 = $parse_str === "1111<?=(\$setting['url']?? 'http://www.amayum.com')  ;?>2222";
+        $result1 = $parse_str === "1111<?php echo (((\$setting ?? \$this->getData('setting') ?? [])['url'] ?? null) ?? 'http://www.amayum.com'); ?>2222";
         // 测试简单变量的默认值
         $content = "1111{{target_button_text | '添加'}}2222";
         $parse_str = $this->taglib->tagReplace($template, $content);
-        $result2 = $parse_str === "1111<?=\$target_button_text?? '添加' ;?>2222";
+        $result2 = $parse_str === "1111<?php echo ((\$target_button_text ?? \$this->getData('target_button_text')) ?? '添加'); ?>2222";
         $content = "1111@if{setting.url =>'hhh'| 'http://www.amayum.com'}2222";
         $parse_str = $this->taglib->tagReplace($template, $content);
         $result3 = $parse_str === "1111<?php if((\$setting['url']??'')  ):echo 'hhh'; else: echo  'http://www.amayum.com'; endif;?>2222";
@@ -132,7 +136,7 @@ class TaglibTest extends TestCore
         $content = '<lang args="<?= $args ?>">hello</lang>';
         $parse_str = $this->taglib->tagReplace($template, $content);
         self::assertTrue(str_contains($parse_str, 'renderRuntimeTag'), 'dynamic args should be runtime');
-        self::assertTrue(str_contains($parse_str, '\'args\' => (\$args)'), 'php attribute should be parsed');
+        self::assertTrue(str_contains($parse_str, '\'args\' => ($args)'), 'php attribute should be parsed');
     }
 
     /**

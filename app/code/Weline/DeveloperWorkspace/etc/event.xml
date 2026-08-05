@@ -5,6 +5,10 @@
     <event name="Weline_Framework_Module::module_upgrade">
         <observer name="Weline_DeveloperWorkspace::module_upgrade_documents" instance="Weline\DeveloperWorkspace\Observer\ModuleUpgradeObserver" disabled="false" shared="true" sort="10"/>
     </event>
+
+    <event name="Weline_Framework_Setup::before_schema_diff_commit">
+        <observer name="Weline_DeveloperWorkspace::before_schema_diff_commit_dedupe" instance="Weline\DeveloperWorkspace\Observer\BeforeSchemaDiffCommitObserver" disabled="false" shared="true" sort="10"/>
+    </event>
     
     <!-- 开发工具面板：监听 Framework 统一遥测事件 -->
     <event name="Weline_Framework::telemetry::request_collected">
@@ -14,6 +18,20 @@
     <event name="Weline_Framework::App::run_after">
         <observer name="Weline_DeveloperWorkspace::dev_tool_panel_compat" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true" sort="0"/>
     </event>
-</config>
 
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="async_event_probe_receipt"
+                  instance="Weline\DeveloperWorkspace\Observer\AsyncEventProbeObserver"
+                  delivery="async"
+                  retry="none"
+                  coalesce="none"
+                  timeout="30"
+                  disabled="false"
+                  shared="true"
+                  sort="1000"/>
+    </event>
+</config>
 

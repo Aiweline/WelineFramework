@@ -24,6 +24,7 @@ final class GatewayJoinBackendProvider extends AbstractServiceProvider
         private readonly bool $inheritedListener = false,
         private readonly bool $runtimeEnabled = false,
         private readonly int $instanceCount = 1,
+        private readonly string $hostLeaseId = '',
     ) {
     }
 
@@ -79,8 +80,15 @@ final class GatewayJoinBackendProvider extends AbstractServiceProvider
 
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
-        if ($this->port < 20000 || $this->port > 29999) {
-            throw new \RuntimeException('Gateway join backend port must be inside 20000-29999.');
+        if ($this->port < 1 || $this->port > 65535) {
+            throw new \RuntimeException(
+                'Gateway join backend port must be between 1 and 65535.'
+            );
+        }
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $this->hostLeaseId) !== 1) {
+            throw new \RuntimeException(
+                'Gateway join backend requires its exact host port lease identity.'
+            );
         }
         $projectUuid = \strtolower(\trim((string)$context->getConfig(
             'wls.gateway.project_uuid',
@@ -128,12 +136,17 @@ final class GatewayJoinBackendProvider extends AbstractServiceProvider
             '--gateway-project-uuid=' . $projectUuid,
             '--gateway-instance-generation=' . $instanceGeneration,
             '--gateway-instance-launch-id=' . $instanceLaunchId,
+            '--gateway-host-lease-id=' . $this->hostLeaseId,
             '--gateway-join-backend',
             '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver,
         ];
         if ($this->inheritedListener) {
             $arguments[] = '--listen-fd=3';
         }
+        $arguments = \array_merge(
+            $arguments,
+            WorkerRuntimeArgumentBuilder::gatewayBackendCapability($context),
+        );
         $arguments = \array_merge(
             $arguments,
             WorkerRuntimeArgumentBuilder::sharedState($context),

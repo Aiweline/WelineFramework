@@ -56,8 +56,8 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 9,
             'payload' => [],
             'state' => 'running',
-            'queuedAt' => \microtime(true),
-            'startedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
+            'startedAt' => (\hrtime(true) / 1_000_000_000),
         ]);
 
         $this->invokePrivate($orchestrator, 'handleCommand', [[
@@ -145,8 +145,8 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 5,
             'payload' => ['reload_type' => ControlMessage::RELOAD_TYPE_CODE],
             'state' => 'running',
-            'queuedAt' => \microtime(true),
-            'startedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
+            'startedAt' => (\hrtime(true) / 1_000_000_000),
         ]);
         $this->writePrivate($orchestrator, 'pendingControlOperations', [[
             'id' => 'ctrl_op_2',
@@ -154,7 +154,7 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 6,
             'payload' => ['action' => ControlMessage::ACTION_CACHE_CLEAR],
             'state' => 'queued',
-            'queuedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
             'startedAt' => null,
         ]]);
 
@@ -227,8 +227,8 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 5,
             'payload' => ['action' => ControlMessage::ACTION_CACHE_CLEAR],
             'state' => 'running',
-            'queuedAt' => \microtime(true),
-            'startedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
+            'startedAt' => (\hrtime(true) / 1_000_000_000),
         ]);
         $this->writePrivate($orchestrator, 'pendingControlOperations', [[
             'id' => 'ctrl_op_waiting',
@@ -236,7 +236,7 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 6,
             'payload' => ['action' => ControlMessage::ACTION_SECURITY_UNBLOCK],
             'state' => 'queued',
-            'queuedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
             'startedAt' => null,
         ]]);
 
@@ -279,7 +279,7 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 7,
             'payload' => ['action' => ControlMessage::ACTION_RELOAD],
             'state' => 'queued',
-            'queuedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
             'startedAt' => null,
         ]]);
 
@@ -330,8 +330,8 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 20,
             'payload' => [],
             'state' => 'running',
-            'queuedAt' => \microtime(true),
-            'startedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
+            'startedAt' => (\hrtime(true) / 1_000_000_000),
         ]);
 
         $this->invokePrivate($orchestrator, 'handleCommand', [[
@@ -593,8 +593,8 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
             'clientId' => 42,
             'payload' => [],
             'state' => 'running',
-            'queuedAt' => \microtime(true),
-            'startedAt' => \microtime(true),
+            'queuedAt' => (\hrtime(true) / 1_000_000_000),
+            'startedAt' => (\hrtime(true) / 1_000_000_000),
         ]);
 
         $this->invokePrivate($orchestrator, 'handleCommand', [[

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_B2B::commerce:partner:control-center" name="b2b_control_center"
+          title="B2B 管理" action="" parent="Weline_Backend::commerce:partner:group"
+          icon="mdi mdi-domain" order="30">
+        <menu source="Weline_B2B::commerce:partner:groups" name="b2b_groups" title="客户组"
+              action="b2b/backend/controlcenter/groups" icon="mdi mdi-account-group-outline" order="10"/>
+        <menu source="Weline_B2B::commerce:partner:price-lists" name="b2b_price_lists" title="价目表"
+              action="b2b/backend/controlcenter/pricelists" icon="mdi mdi-tag-multiple-outline" order="20"/>
+        <menu source="Weline_B2B::commerce:partner:quotes" name="b2b_quotes" title="报价令牌"
+              action="b2b/backend/controlcenter/quotes" icon="mdi mdi-file-document-outline" order="30"/>
+        <menu source="Weline_B2B::commerce:partner:snapshots" name="b2b_snapshots" title="订单价格快照"
+              action="b2b/backend/controlcenter/snapshots" icon="mdi mdi-camera-outline" order="40"/>
+        <menu source="Weline_B2B::commerce:partner:migration" name="b2b_migration" title="迁移状态"
+              action="b2b/backend/controlcenter/migration" icon="mdi mdi-database-eye-outline" order="50"/>
+    </menu>
+</menus>

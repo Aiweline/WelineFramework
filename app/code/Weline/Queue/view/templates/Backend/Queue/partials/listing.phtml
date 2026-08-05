@@ -140,19 +140,13 @@ $queueShort = static function (mixed $value, int $length = 50) use ($queueEsc): 
                 </td>
                 <td>
                     <div class="weline-queue-actions">
-                        <block class='Weline\Component\Block\OffCanvas'
-                               action='queue/backend/queue/show'
-                               vars='queue'
-                               action-params='{id:queue.queue_id}'
-                               id='queue-show'
-                               target-button-text=''
-                               target-button-class='btn btn-outline-info weline-queue-action-btn'
-                               title='查看队列详情'
-                               target-tag='button'
-                               icon='mdi mdi-eye'
-                               flush='1'
-                               save='0'
-                        />
+                        <button type="button"
+                                class="btn btn-outline-info weline-queue-action-btn weline-queue-show-btn"
+                                data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>"
+                                title="@lang{查看队列详情}"
+                                aria-label="@lang{查看队列详情}">
+                            <i class="mdi mdi-eye" aria-hidden="true"></i>
+                        </button>
                         <if condition="queue.status == 'running'">
                             <button type="button" class="btn btn-outline-warning weline-queue-action-btn weline-queue-stop-btn"
                                     data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>" title="@lang{暂停}">
@@ -178,24 +172,13 @@ $queueShort = static function (mixed $value, int $length = 50) use ($queueEsc): 
                             </button>
                         </if>
                         <if condition="queue.status == 'pending'">
-                            <block class='Weline\Component\Block\OffCanvas'
-                                   template='Weline_Component::off-canvas.phtml'
-                                   cache='0'
-                                   id='off_canvas_queue_edit'
-                                   action='*/backend/queue/form'
-                                   vars='queue'
-                                   action-params='{id:queue.queue_id}'
-                                   title='编辑队列'
-                                   close-button-show='1'
-                                   close-button-text='关闭'
-                                   direction='right'
-                                   class-names='w-75'
-                                   target-button-text=''
-                                   target-button-class='btn btn-outline-primary weline-queue-action-btn'
-                                   target-tag='button'
-                                   icon='mdi mdi-pencil'
-                                   save='0'
-                            />
+                            <button type="button"
+                                    class="btn btn-outline-primary weline-queue-action-btn weline-queue-edit-btn"
+                                    data-queue-id="<?= $queueEsc($queue['queue_id'] ?? '') ?>"
+                                    title="@lang{编辑队列}"
+                                    aria-label="@lang{编辑队列}">
+                                <i class="mdi mdi-pencil" aria-hidden="true"></i>
+                            </button>
                         </if>
                         <if condition="queue.status != 'running'">
                             <button type="button" class="btn btn-outline-danger weline-queue-action-btn weline-queue-delete-btn"
@@ -207,7 +190,7 @@ $queueShort = static function (mixed $value, int $length = 50) use ($queueEsc): 
                 </td>
             </tr>
         </foreach>
-        <empty name="queues">
+        <?php if (empty($queues)): ?>
             <tr>
                 <td colspan="7" class="text-center py-5">
                     <div class="weline-queue-empty">
@@ -216,7 +199,7 @@ $queueShort = static function (mixed $value, int $length = 50) use ($queueEsc): 
                     </div>
                 </td>
             </tr>
-        </empty>
+        <?php endif; ?>
         </tbody>
     </table>
 </div>

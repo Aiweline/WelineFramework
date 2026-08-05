@@ -97,14 +97,17 @@
 
 SQLite 的 `SQLITE_BUSY/SQLITE_LOCKED` 使用 `RetryBudget` 的单一、不可延长 deadline。PDO 建立后的连接引导、查询准备与执行都遵守该规则；每次退避只能取得剩余预算，禁止每次 attempt 重新获得完整超时。
 
+- 普通 `run()` 保持 deferred transaction，不让只读根事务占用 writer reservation。明确会先读后写且必须在读快照前串行化的路径使用 `runWrite()`；SQLite 将它映射为受同一 busy deadline 约束的 `BEGIN IMMEDIATE`，MySQL/PostgreSQL 保持普通物理 begin。活动 deferred 事务不能中途升级为 write-intent。
 - 动态请求默认预算为 `50ms`，配置 `db.retry.sqlite.request_budget_ms` 后仍强制限制在 `1–150ms`。
 - CLI/setup 默认沿用动态预算；只有显式配置 `db.retry.sqlite.cli_budget_ms` 才可扩大，硬上限为 `30000ms`，仍然只有一个 deadline。
 - deadline 是终止重试的唯一正常条件；32 次仅作为时钟/调度器异常的保险上限。退避基数为 `2ms`，按指数增长并加入不超过 10% 的抖动，实际等待永远不超过剩余预算。默认 `50ms` 下通常在第 6 次尝试前耗尽；显式 CLI 大预算可以实际获得更长但仍有界的等待。
 - Connector 在 PDO 打开后、任何可访问数据库文件的引导 SQL 之前立即设置 `PRAGMA busy_timeout = 0`。`case_sensitive_like`、`foreign_keys`、`pre_sql` 中的 journal/schema 引导以及 `sqlite_version()` 校验共享一个连接 deadline；不允许每个 PRAGMA 重置预算。
 - 原生 SQLite busy handler 会同步阻塞 PHP/WLS 线程，因此旧 `busy_timeout` 连接字段不再设置 native wait；`pre_sql` 中的 `PRAGMA busy_timeout=N` 保留原位置但强制收口为 `0`。需要等待时必须配置框架 retry budget，不能与 native timeout 叠加。
 - WLS 只有在 Scheduler 已激活、当前存在 Fiber 且输出缓冲允许安全让出时才等待；否则立即抛出 `DatabaseRetryTimeoutException`，`reason=cooperative_wait_unavailable`，不得退化成原生 `sleep/usleep`。
-- 只有 SQLite busy/locked 可重试。其他 PDO 异常保持原类型、错误码和调用栈；busy 表示当前 statement 尚未提交，因此不会重放已完成的写操作，也不改变现有事务边界。
+- 只有 SQLite busy/locked 可重试。其他 PDO 异常保持原类型、错误码和调用栈；busy 表示当前 statement 或 write-intent begin 尚未提交，因此不会重放已完成的写操作，也不改变现有事务边界。
 - 结构化异常提供 `driver/reason/sql_state/driver_code/attempts/budget_ms/elapsed_ms/cooperative_wait_available`，同时保留原 PDO `errorInfo`；日志和遥测不得依赖解析异常字符串。
+
+`setup:upgrade` 默认在主命令进程内同步完成 classmap、PSR-4 与反射优化缓存，之后才允许命令插件进入升级后处理。只有显式传入 `--background-optimize` 才启动后台子进程；`--sync` 与旧 `--skip-background-optimize` 均保持同步。这样 SQLite 不会在 ModuleManager 重建模块注册表时被优化子进程并发引导数据库，MySQL/PostgreSQL 也获得一致、可审计的完成边界。
 
 示例配置：
 
@@ -128,6 +131,10 @@ FPM/WLS 共用 `RequestPipeline` 应用阶段。WLS 复用进程级 Pipeline 对
 
 FPC/early response 必须发生在普通 `run_before`、Session 和 Router 前；只有维护模式等强制规则可注册 `pre_route_gate` 并早于 URL/FPC。FPM/WLS 使用同一个 request-scoped early-response key，旧 `wls.fpc.cached_response` 仅保留一版兼容桥。
 
+FPC `full_uri` 的 authority 必须来自请求入口已校验并规范化的 `HTTP_HOST`，保留非默认端口；parser 派生的 hostname 不能覆盖它。lookup、build lock、publish、stale、formatted 与 warmup receipt 必须在同一请求内使用完全相同的 `scheme://host[:port]`，否则专用端口会永久 MISS。
+
+商城 FPC 还必须在 Store/Channel 解析后冻结唯一 `StorefrontCacheKeyContext`。fresh、stale、schema-neutral stale、lock、formatted 和 receipt 共同绑定 `website/store/channel/store_mode/context_version + locale/currency + config/catalog/price/theme generation`；任一事实不可得时停用该请求 FPC。登录 Session（含非标准端口 Cookie）、Authorization、Session 存储异常及带 Cookie/private/no-store/no-cache/不安全 Vary 的响应全部硬旁路，不能用 private full-page cache 规避该约束。
+
 1. Master 发布 READY 前，至少 `min_ready` Worker 完成必要引导。
 2. 首页共享 FPC 只有一个 owner 生成并原子发布。
 3. 每个 Worker 至少执行一次进程内首页热路径，不能只依赖共享缓存。
@@ -135,6 +142,10 @@ FPC/early response 必须发生在普通 `run_before`、Session 和 Router 前�
 5. 预热失败不得隐藏；健康状态记录 owner、耗时、阶段、失败原因和下次 deadline。
 
 首页 warmup 的 owner pool 不得包含每槽不同的 generation。owner 在 Process FPC 发布成功处捕获不可变 receipt；Follower、READY gate 与 keep-hot 必须使用同一 `full_uri + variant + unified cache key + identity digest` 证明，禁止发布后从可变 Context 重算。
+
+### 内部首页 prime 权威判定
+
+匿名首页 READY prime 的唯一权威判定是 `InternalHomepagePrime::isCurrentRequest()`；它必须同时满足 WLS server-only warmup/dynamic/prime 标记、FPC prime purpose/header 与 GET，任何消费者都不得按单个 Header、路径或 User-Agent 猜测。判定成立时，Framework 必须抑制默认 Cookie 与持久 Session 分配，模块响应装饰器也必须把它视为匿名共享 FPC 构建请求，不得注入页面 bootstrap、`Set-Cookie` 或 `private/no-store`。仅出现部分内部标记时按普通请求处理，并只记录不含 Cookie、Token 或 Session 值的安全诊断。
 
 ### WLS 路由级翻译缓存预算
 

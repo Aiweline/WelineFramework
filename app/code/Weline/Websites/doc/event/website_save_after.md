@@ -6,14 +6,16 @@
 
 ## 触发时机
 
-网站保存后触发，可用于更新缓存、通知等相关操作。
+`add`、`edit`、`quickSave` 在 Website 核心、域名、货币、语言和两个
+start-page SystemConfig 已写入、但外层主库事务尚未提交时触发。SEO/Geo
+表单扩展必须在这个事件中完成同库写入；之后 Controller 才读取 after 快照并生成
+`Weline_Framework::resource_changed`。
 
 ## 事件目的
 
-允许其他模块在网站保存后执行相关操作，例如：
-- 清理相关缓存
-- 更新关联数据
-- 发送通知
+允许其他模块把必须与 Website 一起成功或一起回滚的同库关联数据接入保存流程。
+缓存清理、WLS 广播、网络请求和通知等外部副作用不得在此事件中执行，应走
+ResourceChange 的 sync/async 消费或 afterCommit 调度。
 
 ## 事件数据结构
 
@@ -38,13 +40,15 @@
 public function execute(\Weline\Framework\Event\Event $event): void
 {
     $data = $event->getData();
-    $websiteId = $data['website_id'] ?? 0;
-    
-    if (!$websiteId) {
+    if (!array_key_exists('website_id', $data) || $data['website_id'] === null) {
         return;
     }
+    $websiteId = (int)$data['website_id'];
+    if ($websiteId < 0) {
+        throw new \InvalidArgumentException(__('website_id 不能为负数'));
+    }
     
-    // 执行相关操作，例如清理缓存
+    // 仅保存必须与 Website 一起提交的同库关联数据
     // ...
 }
 ```
@@ -63,10 +67,12 @@ public function execute(\Weline\Framework\Event\Event $event): void
 </event>
 ```
 
-## 注意事项
+## 错误与事务语义
 
-- 不建议在观察者中执行耗时操作，建议使用队列异步处理
-- 确保观察者逻辑不会影响主流程性能
+- Observer 默认是 `failure=critical`。任何异常会标记外层事务 rollback-only 并上抛，Controller 必须返回失败，不得记录 warning 后继续。
+- 需要失败隔离的非核心观察者可显式配置 `failure="isolated"`；其写入会在 savepoint 中回滚。
+- 耗时或外部操作应订阅 `Weline_Framework::resource_changed` 并使用 `delivery="async"`，不得延长 Website 主事务。
+- `website_id=0` 是有效的 `default` 站点；只有字段缺失或 `null` 才表示没有站点上下文。
 
 ## Extension payload convention
 

@@ -8,8 +8,9 @@
             <module name="Weline_Frontend"/>
             <module name="Weline_I18n"/>
             <module name="Weline_Hook"/>
+            <module name="Weline_Inventory"/>
+            <module name="Weline_Queue"/>
             <module name="Weline_Theme"/>
         </sequence>
     </module>
 </config>
-

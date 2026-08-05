@@ -42,15 +42,21 @@ class CollectTranslations implements ObserverInterface
             return;
         }
 
-        /** @var Dictionary $dictionary */
-        $dictionary = ObjectManager::getInstance(Dictionary::class);
-        $created = 0;
-
+        $validatedTranslations = [];
         foreach ($translations as $translation) {
             if (!isset($translation['word']) || !isset($translation['translate'])) {
                 continue;
             }
 
+            $translation['word'] = Dictionary::assertWord($translation['word']);
+            $validatedTranslations[] = $translation;
+        }
+
+        /** @var Dictionary $dictionary */
+        $dictionary = ObjectManager::getInstance(Dictionary::class);
+        $created = 0;
+
+        foreach ($validatedTranslations as $translation) {
             $translationKey = $translation['word'];
             $value = $translation['translate'];
             
@@ -93,4 +99,3 @@ class CollectTranslations implements ObserverInterface
         }
     }
 }
-

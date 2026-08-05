@@ -31,6 +31,8 @@
   </dict>
   <key>ThrottleInterval</key>
   <integer>5</integer>
+  <key>AbandonProcessGroup</key>
+  <false/>
   <key>ProcessType</key>
   <string>Interactive</string>
   <key>SoftResourceLimits</key>

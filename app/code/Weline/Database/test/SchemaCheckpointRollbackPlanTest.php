@@ -8,7 +8,7 @@ use Weline\Database\Model\Migration;
 use Weline\Database\Service\SchemaRollbackService;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 final class SchemaCheckpointRollbackPlanTest extends TestCore
 {

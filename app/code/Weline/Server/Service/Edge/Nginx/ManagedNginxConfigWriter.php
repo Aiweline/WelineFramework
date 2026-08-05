@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Nginx;
 
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxConfigPublication;
 use Weline\Server\Service\SslCertificateService;
 
@@ -15,6 +16,8 @@ use Weline\Server\Service\SslCertificateService;
  */
 final class ManagedNginxConfigWriter
 {
+    private const MAX_CONFIG_BYTES = 16 * 1024 * 1024;
+
     private readonly ManagedNginxPaths $paths;
     private readonly NginxConfigPublication $publication;
 
@@ -409,7 +412,9 @@ NGINX;
     public function refreshCandidate(): array
     {
         $active = $this->paths->confFile();
-        $contents = \is_file($active) ? \file_get_contents($active) : false;
+        $contents = \is_file($active)
+            ? GatewayProjectStateFilesystem::read($active, self::MAX_CONFIG_BYTES)
+            : false;
         if (!\is_string($contents) || $contents === '') {
             throw new \RuntimeException('Managed nginx.conf is unavailable for a verified reload.');
         }

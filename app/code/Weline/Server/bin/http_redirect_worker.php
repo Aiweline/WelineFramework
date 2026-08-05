@@ -41,7 +41,8 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--master-lease-file=')) {
         $masterLeaseFile = (string)\substr($arg, 20);
     } elseif (\str_starts_with($arg, '--master-token=')) {
-        $masterToken = (string)\substr($arg, 15);
+        \fwrite(\STDERR, "HTTP Redirect Worker --master-token is forbidden.\n");
+        exit(1);
     }
 }
 

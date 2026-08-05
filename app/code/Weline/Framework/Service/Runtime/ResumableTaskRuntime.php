@@ -9,6 +9,7 @@ use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\Resumable\ResumableTaskEventStreamInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskRuntimeInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskRuntimeUnavailableException;
+use Weline\Framework\Runtime\Resumable\ResumableSystemTaskRuntimeInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskStatus;
 use Weline\Framework\Runtime\Resumable\TaskCheckpoint;
 use Weline\Framework\Runtime\Resumable\TaskEvent;
@@ -27,7 +28,7 @@ use Weline\Framework\Runtime\Resumable\TaskSnapshot;
  * immediately launches an isolated CLI Runner; it never invokes a handler in
  * the request Fiber and it has no Queue dependency.
  */
-final class ResumableTaskRuntime implements ResumableTaskRuntimeInterface, ResumableTaskEventStreamInterface
+final class ResumableTaskRuntime implements ResumableTaskRuntimeInterface, ResumableSystemTaskRuntimeInterface, ResumableTaskEventStreamInterface
 {
     public function __construct(
         private readonly ResumableTaskStore $store,
@@ -43,6 +44,9 @@ final class ResumableTaskRuntime implements ResumableTaskRuntimeInterface, Resum
         TaskPolicy $policy,
         string $businessKey,
     ): TaskHandle {
+        if (!$policy->requiresClientLease()) {
+            throw new \InvalidArgumentException('Browser-started resumable tasks must use client lease liveness.');
+        }
         $typeCode = trim($typeCode);
         $businessKey = trim($businessKey);
         if ($businessKey === '' || strlen($businessKey) > 191) {
@@ -94,13 +98,26 @@ final class ResumableTaskRuntime implements ResumableTaskRuntimeInterface, Resum
 
         try {
             $this->runnerLauncher->launch($taskId);
-        } catch (ResumableTaskRuntimeUnavailableException $exception) {
-            // The task remains recoverable and discoverable through its
-            // deterministic business key, but callers receive no unsafe
-            // connection-bound fallback.
-            throw $exception;
-        } catch (\Throwable $throwable) {
-            throw new ResumableTaskRuntimeUnavailableException('Resumable task Runner launcher is unavailable.', previous: $throwable);
+        } catch (ResumableTaskRuntimeUnavailableException|\Throwable $throwable) {
+            // The durable row + client lease already exist. Returning the handle
+            // lets the browser observe watchdog recovery instead of collapsing a
+            // recoverable launch miss into a hard RUNTIME_UNAVAILABLE.
+            $current = $this->store->findTask($taskId) ?? $row;
+            if (in_array((string)($current['status'] ?? ''), ['starting', 'recovering', 'running'], true)) {
+                return new TaskHandle(
+                    taskId: $taskId,
+                    leaseId: (string)$lease['lease_id'],
+                    status: $this->statusFromRow($current),
+                    leaseExpiresAt: $this->timestamp((string)$lease['expires_at']),
+                );
+            }
+            if ($throwable instanceof ResumableTaskRuntimeUnavailableException) {
+                throw $throwable;
+            }
+            throw new ResumableTaskRuntimeUnavailableException(
+                'Resumable task Runner launcher is unavailable.',
+                previous: $throwable,
+            );
         }
 
         $current = $this->store->findTask($taskId) ?? $row;
@@ -110,6 +127,64 @@ final class ResumableTaskRuntime implements ResumableTaskRuntimeInterface, Resum
             status: $this->statusFromRow($current),
             leaseExpiresAt: $this->timestamp((string)$lease['expires_at']),
         );
+    }
+
+    public function startSystem(
+        string $typeCode,
+        array $input,
+        TaskOwner $owner,
+        TaskPolicy $policy,
+        string $businessKey,
+    ): TaskSnapshot {
+        if ($policy->requiresClientLease()) {
+            throw new \InvalidArgumentException('System-started resumable tasks must use system liveness.');
+        }
+        if ($owner->area !== 'system') {
+            throw new \InvalidArgumentException('System-started resumable tasks require a system owner.');
+        }
+
+        $typeCode = trim($typeCode);
+        $businessKey = trim($businessKey);
+        if ($businessKey === '' || strlen($businessKey) > 191) {
+            throw new \InvalidArgumentException('Resumable task business key is invalid.');
+        }
+        $definition = $this->handlers->definition($typeCode);
+        $ownerRow = $this->ownerRow($owner);
+        $existing = $this->store->findTaskByBusinessKey($typeCode, $businessKey, $ownerRow);
+        if ($existing !== null) {
+            $existingPolicy = ResumableTaskPolicyHydrator::fromArray((array)($existing['policy'] ?? []));
+            if ($existingPolicy->requiresClientLease()) {
+                throw new \InvalidArgumentException('Existing resumable task uses client lease liveness.');
+            }
+            return $this->snapshot($existing);
+        }
+
+        try {
+            $normalizedInput = CheckpointCodec::normalize($input);
+        } catch (\Throwable $throwable) {
+            throw new \InvalidArgumentException('Resumable task input must be JSON-safe checkpoint data.', previous: $throwable);
+        }
+        $taskId = $this->identifier('task');
+        $row = $this->store->createTask([
+            'task_id' => $taskId,
+            'type_code' => $definition->typeCode,
+            'module' => $definition->module,
+            'business_key' => $businessKey,
+            'input' => $normalizedInput,
+            ...$ownerRow,
+            'policy' => $policy->toArray(),
+            'max_attempts' => $policy->maxRecoveries + 1,
+        ]);
+
+        try {
+            $this->runnerLauncher->launch($taskId);
+        } catch (ResumableTaskRuntimeUnavailableException $exception) {
+            throw $exception;
+        } catch (\Throwable $throwable) {
+            throw new ResumableTaskRuntimeUnavailableException('Resumable task Runner launcher is unavailable.', previous: $throwable);
+        }
+
+        return $this->snapshot($this->store->findTask($taskId) ?? $row);
     }
 
     public function status(string $taskId, TaskOwner $owner): TaskSnapshot

@@ -154,4 +154,30 @@ final class PixelRetentionServiceTest extends TestCase
         self::assertStringContainsString('队列日', $detail);
         self::assertStringContainsString('path-exploration', $detail, 'F04a 卡片仍在');
     }
+
+    public function testBuildForWebsiteSurfacesInvalidWebsiteId(): void
+    {
+        $result = $this->service->buildForWebsite(
+            -5,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static fn(): array => []
+        );
+
+        self::assertSame('invalid website_id', $result['error']);
+    }
+
+    public function testBuildForWebsiteSwallowsQueryErrorsWithoutThrowing(): void
+    {
+        $result = $this->service->buildForWebsite(
+            4,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static function (): array {
+                throw new \RuntimeException('flat column missing');
+            }
+        );
+
+        self::assertSame('flat column missing', $result['error']);
+    }
 }

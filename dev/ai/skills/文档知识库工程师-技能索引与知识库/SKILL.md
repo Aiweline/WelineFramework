@@ -1,92 +1,24 @@
 ---
 name: 文档知识库工程师-技能索引与知识库
-description: Documentation engineer skill for skill indexing, routing references, migration catalogs, and maintainable repository knowledge structure.
-version: 1.1.2
+description: Maintain Weline skill indexes, canonical/discovery mappings, migration catalogs, and AI-facing knowledge structure. Use when skills are added, renamed, consolidated, deprecated, or their discovery paths change; do not load for ordinary code documentation.
 ---
 
-# Role
+# Skill index and knowledge structure
 
-This skill owns skill catalogs, routing indexes, migration catalogs, and repository knowledge structure for AI-facing documentation. It keeps discoverability clean after refactors and ensures future agents can route work without loading unnecessary material.
+## Ownership
 
-# When To Use
+- `dev/ai/skills/*/SKILL.md` is canonical skill content.
+- `dev/ai/skills/_index.md` routes task signals without copying bodies.
+- `.codex/skills` and the repository plugin expose thin adapters; migration/history belongs outside active discovery.
 
-- Use for skill indexes, routing references, migration reports, knowledge catalogs, and AI-facing repository guidance.
-- Use for keywords such as skill index, routing map, knowledge base, migration report, and AI docs structure.
-- Use when a skill system, AI workflow, or repository knowledge layout is being reorganized.
+## Workflow
 
-# Source Material
+1. Inventory canonical names, frontmatter triggers, active discovery entries, aliases, and references.
+2. Choose one canonical owner for each capability and merge/deprecate synonyms.
+3. Keep exact-passphrase aliases only where the user-facing phrase is the trigger.
+4. Update the routing index and synchronization allowlists together.
+5. Run `php dev/ai/scripts/sync-codex-plugin-skills.php`, then its `--check` mode and `php dev/ai/scripts/check-ai-guidance.php`.
+6. Record structural migration facts without making reports a runtime dependency.
 
-- `AI-ENTRY.md`
-- `AI-README.md`
-- `CLAUDE.md`
-- `dev/ai/skills/_index.md`
-- `dev/ai/skills/weline-framework-skill-router/SKILL.md`
-- `dev/ai/skills/documentation-standards/SKILL.md`
-
-# Responsibilities
-
-- Keep skill indexes and routing references current after structural changes.
-- Preserve repository reading order and discovery guidance for future agents.
-- Record migration mappings and missing-source status when skills are reorganized.
-- Keep AI-facing knowledge concise, navigable, and self-consistent.
-- Promote repeated, corrected engineering mistakes into the narrowest matching skill instead of leaving them buried in rollout summaries.
-
-# Workflow
-
-1. Read the current AI entry documents and routing indexes before restructuring knowledge files.
-2. Identify outdated paths, renamed skills, and role-based routing needs.
-3. Rewrite indexes and mapping documents to match the new structure.
-4. Preserve mandatory reading order and critical repository guardrails in the knowledge surface.
-5. When mining rollout history, only promote stable "wrong first, corrected later" patterns that changed implementation or validation behavior.
-6. Write the new lesson into the narrowest owning skill and avoid duplicating the same rule across many indexes unless it is truly cross-role.
-7. Record migration scope, source usage, and missing-source status in a dedicated report.
-8. Validate that each referenced path exists and matches the intended role.
-9. Report the new navigation model and any remaining follow-up needs.
-
-# Weline Rules
-
-- Read `AI-ENTRY.md` first.
-- Prefer diagrams and module docs before reading source code.
-- Keep AI-facing routing material concise and discoverable.
-- Do not require legacy source files at runtime for the new skill system.
-- Do not turn one-off debugging trivia into a global rule; only keep corrections that are reusable, framework-shaped, and already validated.
-
-# Inputs Required
-
-- The old and new skill structures.
-- Required role model and routing expectations.
-- Any mandatory source list or migration constraints.
-- The target directory and naming scheme.
-
-# Expected Output
-
-- Updated knowledge-base files, indexes, and migration mappings.
-- A self-consistent route from entry docs to the new skill system.
-- A report that records whether any required source material was missing.
-
-# Validation
-
-- Check that all referenced skill paths exist.
-- Check that role names, folder names, and index labels align.
-- Check that the new knowledge files preserve critical repository rules.
-- Check that migration reporting accurately reflects source availability.
-
-# Constraints
-
-- Do not leave stale routing references to the old structure without explanation.
-- Do not depend on runtime loading of legacy skill files.
-- Do not omit migration notes when the structure changed materially.
-- Do not bloat the index with redundant narrative when a routing table is enough.
-
-# Shared Collaboration Contract
-
-This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
-
-Before and during work:
-
-- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
-- Keep work inside this specialist's ownership boundary.
-- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
-- Do not silently expand scope to fix another agent's area.
-- Include collaboration status in the final report.
+Promote a historical lesson only when confirmed/reusable and route it to the narrowest owner via `文档知识库工程师-会话复盘与规则沉淀`.
 

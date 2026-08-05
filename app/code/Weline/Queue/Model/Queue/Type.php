@@ -54,7 +54,7 @@ public function getTypeId(): int
     }
     public function setEnable(bool $enable): static
     {
-        return $this->setData(self::schema_fields_enable, $enable);
+        return $this->setData(self::schema_fields_enable, $enable ? 1 : 0);
     }
     public function getTip(): string
     {

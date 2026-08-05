@@ -1,0 +1,744 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
+
+use PHPUnit\Framework\TestCase;
+use Weline\Server\Service\Edge\Gateway\GatewayClient;
+use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
+
+final class ProjectServingManifestStoreTest extends TestCase
+{
+    private string $root = '';
+    private string $snapshotDigest = '';
+
+    protected function setUp(): void
+    {
+        $base = \PHP_OS_FAMILY === 'Darwin' ? '/tmp' : \sys_get_temp_dir();
+        $this->root = $base . DIRECTORY_SEPARATOR . 'wls-serving-manifest-'
+            . \bin2hex(\random_bytes(8));
+        self::assertTrue(\mkdir(
+            $this->root . DIRECTORY_SEPARATOR
+                . 'app/etc/ssl/.wls-generations/snapshots',
+            0700,
+            true,
+        ));
+        self::assertTrue(\mkdir(
+            $this->root . DIRECTORY_SEPARATOR . 'var/server',
+            0755,
+            true,
+        ));
+        $canonical = \realpath($this->root);
+        self::assertIsString($canonical);
+        $this->root = $canonical;
+        $this->snapshotDigest = $this->createSnapshot(
+            'certificate-bytes',
+            'private-key-bytes',
+            'chain-bytes',
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        $this->removeTree($this->root);
+    }
+
+    public function testWholeProjectPublicationIsAtomicIdempotentAndFenceBound(): void
+    {
+        $registration = $this->registration('primary', [
+            $this->route('example.test'),
+            $this->route('www.example.test'),
+        ]);
+        $store = new ProjectServingManifestStore($this->root);
+
+        $first = $store->publishFromRegistration($registration);
+        $same = $store->publishFromRegistration($registration);
+
+        self::assertSame(1, $first['generation']);
+        self::assertSame($first['digest'], $same['digest']);
+        self::assertSame(2, $first['route_count']);
+        self::assertTrue($first['converged']);
+        self::assertFileExists($first['path']);
+        self::assertSame(
+            $first['digest'],
+            $store->currentForFence($this->fence('primary'))['digest'],
+        );
+    }
+
+    public function testInstancePointersAndGenerationFloorsAreIsolated(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $first = $store->publishFromRegistration($this->registration(
+            'primary',
+            [$this->route('primary.example.test')],
+        ));
+        $second = $store->publishFromRegistration($this->registration(
+            'secondary',
+            [$this->route('secondary.example.test')],
+        ));
+
+        self::assertSame(1, $first['generation']);
+        self::assertSame(1, $second['generation']);
+        self::assertNotSame($first['digest'], $second['digest']);
+        self::assertNotSame(
+            $store->currentPointerPath('primary'),
+            $store->currentPointerPath('secondary'),
+        );
+        self::assertSame(
+            $first['digest'],
+            $store->currentForFence($this->fence('primary'))['digest'],
+        );
+    }
+
+    public function testPartialGatewaySubsetCannotClaimConvergence(): void
+    {
+        $first = $this->route('one.example.test');
+        $second = $this->route('two.example.test');
+        $registration = $this->registration('primary', [$first, $second]);
+        $store = new ProjectServingManifestStore($this->root);
+
+        $partial = $store->publishFromRegistration(
+            $registration,
+            [(string)$first['route_id']],
+            [(string)$first['route_id'] => 7],
+            false,
+        );
+
+        self::assertFalse($partial['converged']);
+        self::assertSame(1, $partial['route_count']);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot mark a partial route subset converged');
+        $store->publishFromRegistration(
+            $registration,
+            [(string)$first['route_id']],
+            [(string)$first['route_id'] => 7],
+            true,
+        );
+    }
+
+    public function testSelectedRouteGenerationsRejectUnboundExtraFence(): void
+    {
+        $first = $this->route('one-generation.example.test');
+        $second = $this->route('two-generation.example.test');
+        $registration = $this->registration('primary', [$first, $second]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'route generations do not exactly cover the selected route set',
+        );
+        (new ProjectServingManifestStore($this->root))->publishFromRegistration(
+            $registration,
+            [(string)$first['route_id']],
+            [
+                (string)$first['route_id'] => 7,
+                (string)$second['route_id'] => 9,
+            ],
+            false,
+        );
+    }
+
+    public function testRedirectTargetMustRemainInsideTheServingSubset(): void
+    {
+        $root = $this->route('redirect.example.test', true);
+        $target = $this->route('www.redirect.example.test');
+        $registration = $this->registration('primary', [$root, $target]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('target is outside the exact serving subset');
+        (new ProjectServingManifestStore($this->root))->publishFromRegistration(
+            $registration,
+            [(string)$root['route_id']],
+            [(string)$root['route_id'] => 9],
+            false,
+        );
+    }
+
+    public function testMaterialMutationCannotReplaceTheLastGoodGeneration(): void
+    {
+        $route = $this->route('stable.example.test');
+        $registration = $this->registration('primary', [$route]);
+        $store = new ProjectServingManifestStore($this->root);
+        $active = $store->publishFromRegistration($registration);
+        $pointerPath = $store->currentPointerPath('primary');
+        $pointerBefore = \json_decode((string)\file_get_contents($pointerPath), true);
+        $certPath = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshots/' . $this->snapshotDigest
+            . '/fullchain.pem';
+        self::assertNotFalse(\file_put_contents($certPath, 'mutated-certificate'));
+
+        try {
+            $store->publishFromRegistration($registration);
+            self::fail('Mutated material must be rejected.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('snapshot manifest integrity', $exception->getMessage());
+        }
+        $pointerAfter = \json_decode((string)\file_get_contents($pointerPath), true);
+        self::assertIsArray($pointerBefore);
+        self::assertIsArray($pointerAfter);
+        self::assertSame(
+            $active['digest'],
+            $pointerBefore['digest'] ?? null,
+        );
+        self::assertSame(
+            $pointerBefore['digest'] ?? null,
+            $pointerAfter['digest'] ?? null,
+        );
+    }
+
+    public function testRenewalPublishesANewClosureWithoutInvalidatingOldManifest(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $old = $store->publishFromRegistration($this->registration(
+            'primary',
+            [$this->route('renew.example.test')],
+        ));
+        $nextDigest = $this->createSnapshot(
+            'renewed-certificate-bytes',
+            'renewed-private-key-bytes',
+            'renewed-chain-bytes',
+        );
+        $nextRegistration = $this->registration('primary', [
+            $this->route('renew.example.test', false, $nextDigest, 4),
+        ]);
+
+        $next = $store->publishFromRegistration($nextRegistration);
+
+        self::assertSame(2, $next['generation']);
+        self::assertNotSame($old['digest'], $next['digest']);
+        self::assertSame(
+            $old['digest'],
+            $store->readBound(
+                (string)$old['path'],
+                (int)$old['generation'],
+                (string)$old['digest'],
+            )['digest'],
+        );
+        self::assertDirectoryExists(
+            $this->root . DIRECTORY_SEPARATOR
+                . 'app/etc/ssl/.wls-generations/snapshots/' . $this->snapshotDigest,
+        );
+    }
+
+    public function testRecentTwoLkgManifestsProtectTheirCertificateSnapshots(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $digests = [$this->snapshotDigest];
+        for ($generation = 1; $generation <= 4; $generation++) {
+            if ($generation > 1) {
+                $digests[] = $this->createSnapshot(
+                    'lkg-certificate-' . $generation,
+                    'lkg-private-key-' . $generation,
+                    'lkg-chain-' . $generation,
+                );
+            }
+            $store->publishFromRegistration($this->registration('primary', [
+                $this->route(
+                    'lkg.example.test',
+                    false,
+                    $digests[$generation - 1],
+                    $generation,
+                ),
+            ]));
+        }
+
+        $references = $store->referencedCertificateSnapshotDigests();
+        self::assertArrayNotHasKey($digests[0], $references);
+        self::assertArrayHasKey($digests[1], $references);
+        self::assertArrayHasKey($digests[2], $references);
+        self::assertArrayHasKey($digests[3], $references);
+    }
+
+    public function testServingManifestStoreRejectsFilesystemProjectRoot(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('project root is unavailable');
+        new ProjectServingManifestStore($this->filesystemRoot());
+    }
+
+    public function testServingManifestStoreRecognizesExtendedWindowsFilesystemRoots(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $method = new \ReflectionMethod($store, 'isFilesystemRoot');
+        foreach ([
+            'C:\\',
+            '\\\\server\\',
+            '\\\\server\\share\\',
+            '\\\\?\\C:\\',
+            '\\\\?\\UNC\\server\\share\\',
+            '\\\\?\\UNC\\server\\',
+            '\\\\.\\C:\\',
+        ] as $path) {
+            self::assertTrue($method->invoke($store, $path), $path);
+        }
+        self::assertFalse($method->invoke(
+            $store,
+            '\\\\?\\UNC\\server\\share\\project',
+        ));
+    }
+
+    public function testMutableCertificateSourcePathIsRejected(): void
+    {
+        $sourceDirectory = $this->root . DIRECTORY_SEPARATOR . 'app/etc/ssl/source';
+        self::assertTrue(\mkdir($sourceDirectory, 0700));
+        self::assertNotFalse(\file_put_contents(
+            $sourceDirectory . DIRECTORY_SEPARATOR . 'fullchain.pem',
+            'mutable-certificate',
+        ));
+        self::assertNotFalse(\file_put_contents(
+            $sourceDirectory . DIRECTORY_SEPARATOR . 'privkey.pem',
+            'mutable-private-key',
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod(
+                $sourceDirectory . DIRECTORY_SEPARATOR . 'fullchain.pem',
+                0600,
+            ));
+            self::assertTrue(\chmod(
+                $sourceDirectory . DIRECTORY_SEPARATOR . 'privkey.pem',
+                0600,
+            ));
+        }
+        $route = $this->route('mutable.example.test');
+        $route['certificate']['cert']['relative_path'] = 'source/fullchain.pem';
+        $route['certificate']['key']['relative_path'] = 'source/privkey.pem';
+        $route['certificate']['source_digest'] = \hash(
+            'sha256',
+            \hash('sha256', 'mutable-certificate') . ':'
+                . \hash('sha256', 'mutable-private-key') . ':',
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot bind mutable certificate source paths');
+        (new ProjectServingManifestStore($this->root))->publishFromRegistration(
+            $this->registration('primary', [$route]),
+        );
+    }
+
+    public function testIdempotentPayloadDoesNotReuseCurrentBehindGenerationFloor(): void
+    {
+        $registration = $this->registration('primary', [
+            $this->route('floor.example.test'),
+        ]);
+        $store = new ProjectServingManifestStore($this->root);
+        $first = $store->publishFromRegistration($registration);
+        $stateRoot = \dirname($store->currentPointerPath('primary'));
+        $floor = $stateRoot . DIRECTORY_SEPARATOR . 'generation-'
+            . \substr(\hash('sha256', 'primary'), 0, 32);
+        self::assertNotFalse(\file_put_contents($floor, "2\n"));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($floor, 0600));
+        }
+
+        $next = $store->publishFromRegistration($registration);
+
+        self::assertSame(1, $first['generation']);
+        self::assertSame(3, $next['generation']);
+        self::assertNotSame($first['digest'], $next['digest']);
+        self::assertSame(3, $store->current('primary')['generation']);
+        self::assertSame(
+            $first['digest'],
+            $store->readBound(
+                (string)$first['path'],
+                (int)$first['generation'],
+                (string)$first['digest'],
+            )['digest'],
+        );
+    }
+
+    public function testManifestStoreFailsClosedAtItsGenerationCountQuota(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $manifestRoot = \dirname($store->currentPointerPath('primary'))
+            . DIRECTORY_SEPARATOR . 'manifests';
+        self::assertTrue(\mkdir($manifestRoot, 0700, true));
+        for ($generation = 1; $generation <= 128; $generation++) {
+            $path = $manifestRoot . DIRECTORY_SEPARATOR . $generation . '-'
+                . \hash('sha256', 'quota-' . $generation) . '.json';
+            self::assertNotFalse(\file_put_contents($path, '{}'));
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(\chmod($path, 0600));
+            }
+        }
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('no capacity for another generation');
+        $store->publishFromRegistration($this->registration('primary', [
+            $this->route('quota.example.test'),
+        ]));
+    }
+
+    public function testManifestStoreReclaimsExpiredUnreferencedGenerationAtQuota(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $manifestRoot = \dirname($store->currentPointerPath('primary'))
+            . DIRECTORY_SEPARATOR . 'manifests';
+        self::assertTrue(\mkdir($manifestRoot, 0700, true));
+        $expired = \time() - 604_801;
+        for ($generation = 1; $generation <= 128; $generation++) {
+            $path = $manifestRoot . DIRECTORY_SEPARATOR . $generation . '-'
+                . \hash('sha256', 'expired-quota-' . $generation) . '.json';
+            self::assertNotFalse(\file_put_contents($path, '{}'));
+            self::assertTrue(\touch($path, $expired));
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(\chmod($path, 0600));
+            }
+        }
+
+        $published = $store->publishFromRegistration($this->registration('primary', [
+            $this->route('reclaimed-quota.example.test'),
+        ]));
+
+        self::assertSame(1, $published['generation']);
+        self::assertSame(1, $published['route_count']);
+        self::assertFileExists($published['path']);
+    }
+
+    public function testCurrentPointerRejectsRetiredLaunchAndProjectGenerationRollback(): void
+    {
+        $registration = $this->registration('primary', [
+            $this->route('monotonic.example.test'),
+        ]);
+        $store = new ProjectServingManifestStore($this->root);
+        $first = $store->publishFromRegistration($registration);
+
+        $rejected = [
+            [[...$registration, 'instance_generation' => 10], 'stale instance generation'],
+            [[...$registration, 'master_pid' => 12346], 'another Master launch'],
+            [[...$registration, 'master_epoch' => 23], 'another Master launch'],
+            [[...$registration, 'launch_id' => \str_repeat('f', 32)], 'another Master launch'],
+            [[...$registration, 'project_generation' => 4], 'stale project generation'],
+            [[...$registration, 'request_digest' => \str_repeat('d', 64)],
+                'conflicting desired-state digests'],
+            [[...$registration, 'non_certificate_desired_digest' => \str_repeat('e', 64)],
+                'conflicting desired-state digests'],
+        ];
+        foreach ($rejected as [$candidate, $message]) {
+            try {
+                $store->publishFromRegistration($candidate);
+                self::fail('A non-monotonic serving manifest publication was accepted.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString($message, $exception->getMessage());
+            }
+            self::assertSame($first['digest'], $store->current('primary')['digest']);
+        }
+
+        $nextLaunch = [
+            ...$registration,
+            'instance_generation' => 12,
+            'master_pid' => 12346,
+            'master_epoch' => 23,
+            'launch_id' => \str_repeat('f', 32),
+        ];
+        $next = $store->publishFromRegistration($nextLaunch);
+        self::assertSame(2, $next['generation']);
+        self::assertSame(12, $next['payload']['instance_generation']);
+        self::assertSame(\str_repeat('f', 32), $next['payload']['launch_id']);
+
+        try {
+            $store->publishFromRegistration($registration);
+            self::fail('The retired launch reacquired current serving authority.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('stale instance generation', $exception->getMessage());
+        }
+        self::assertSame($next['digest'], $store->current('primary')['digest']);
+    }
+
+    public function testAuthorityFenceRejectsRetiredLaunchAndRepairsMissingPointer(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $firstRegistration = $this->registration('primary', [
+            $this->route('authority.example.test'),
+        ]);
+        $store->publishFromRegistration($firstRegistration);
+        $nextRegistration = [
+            ...$firstRegistration,
+            'instance_generation' => 12,
+            'master_pid' => 12346,
+            'master_epoch' => 23,
+            'launch_id' => \str_repeat('f', 32),
+        ];
+        $next = $store->publishFromRegistration($nextRegistration);
+        $pointer = $store->currentPointerPath('primary');
+        self::assertTrue(\unlink($pointer));
+
+        try {
+            $store->publishFromRegistration($firstRegistration);
+            self::fail('A retired launch must not reacquire a deleted current pointer.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'stale instance generation',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileDoesNotExist($pointer);
+
+        $recovered = $store->publishFromRegistration($nextRegistration);
+        self::assertSame($next['generation'], $recovered['generation']);
+        self::assertSame($next['digest'], $recovered['digest']);
+        self::assertSame($next['digest'], $store->current('primary')['digest']);
+    }
+
+    public function testApexTlsRemainsPublishedAsFixedUnavailableUntilWwwIsReady(): void
+    {
+        $apex = $this->route('pending-target.example.test', true);
+        $target = $this->route('www.pending-target.example.test');
+        $target['certificate']['generation'] = 0;
+        $target['certificate']['pending'] = true;
+
+        $manifest = (new ProjectServingManifestStore($this->root))
+            ->publishFromRegistration($this->registration('primary', [$apex, $target]));
+
+        self::assertSame(1, $manifest['route_count']);
+        self::assertFalse($manifest['converged']);
+        $route = $manifest['payload']['routes'][0] ?? null;
+        self::assertIsArray($route);
+        self::assertSame('pending-target.example.test', $route['domain'] ?? null);
+        self::assertTrue($route['policy']['force_root_to_www'] ?? false);
+        self::assertFalse($route['policy']['root_to_www_target_ready'] ?? true);
+    }
+
+    public function testRuntimeObservationStaticContractBindsMonotonicToCurrentBoot(): void
+    {
+        $publisher = $this->source('Service/Edge/Gateway/GatewayRuntimeEndpointPublisher.php');
+        $projection = $this->source('Service/Edge/Gateway/GatewayRuntimeServingProjection.php');
+
+        self::assertStringContainsString("['runtime_observed_host_boot_id']", $publisher);
+        self::assertStringContainsString('GatewayHostBootIdentity::current()', $publisher);
+        self::assertStringContainsString("['host_boot_id']", $publisher);
+        self::assertStringNotContainsString("\$observed !== ''", $publisher);
+        self::assertStringContainsString("['runtime_observed_host_boot_id']", $projection);
+        self::assertStringContainsString('GatewayHostBootIdentity::current()', $projection);
+        self::assertStringContainsString(
+            '!\\hash_equals($currentBootId, $observedBootId)',
+            $projection,
+        );
+    }
+
+    public function testCertificateCoordinatorStaticContractUsesLeaseAndTargetedReload(): void
+    {
+        $source = $this->source('Service/Edge/CertificateMaterialUpdateCoordinator.php');
+
+        self::assertStringNotContainsString('Processer::processExists', $source);
+        self::assertStringContainsString('validateRunningLease(', $source);
+        self::assertStringContainsString("['authorized']", $source);
+        self::assertStringContainsString(
+            'reloadSslCert($domains, $instanceName)',
+            $source,
+        );
+        self::assertStringNotContainsString('->reloadSslCert($domains);', $source);
+        self::assertStringContainsString('if ($explicitLegacy)', $source);
+        self::assertStringContainsString('continue;', \substr(
+            $source,
+            (int)\strpos($source, 'if ($explicitLegacy)'),
+            512,
+        ));
+    }
+
+    public function testFallbackManifestStaticContractPersistsGatewayRenewalIntent(): void
+    {
+        $source = $this->source('Service/Edge/Gateway/GatewayRegistrationBuilder.php');
+        $start = \strpos($source, 'private function buildServingManifestLocked');
+        $end = \strpos($source, 'private function buildLocked', (int)$start);
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+        $method = \substr($source, $start, $end - $start);
+
+        self::assertStringContainsString("['requested_mode']", $method);
+        self::assertStringContainsString('GatewayStartupDecision::MODE_AUTO', $method);
+        self::assertStringContainsString('GatewayStartupDecision::MODE_GATEWAY', $method);
+        self::assertStringContainsString('enqueueFromRegistration($registration)', $method);
+        self::assertStringNotContainsString('GatewayStartupDecision::MODE_WLS', $method);
+    }
+
+    public function testTlsWorkerStaticContractRejectsUnparsedH2AndInvalidAuthorityPorts(): void
+    {
+        $source = $this->source('bin/worker_ssl.php');
+
+        self::assertStringNotContainsString("'serving_manifest_misdirected'", $source);
+        self::assertStringContainsString(
+            'wlsServingManifestFramingErrorResponse($frame)',
+            $source,
+        );
+        self::assertStringContainsString('$portNumber < 1 || $portNumber > 65535', $source);
+        self::assertStringContainsString(
+            'wlsServingManifestRedirectTargetUnavailableResponse()',
+            $source,
+        );
+        self::assertStringNotContainsString(
+            'SNI 解析失败或为空时，用当前监听主机再选证',
+            $source,
+        );
+        self::assertStringContainsString(
+            'Empty or unknown SNI must not receive a default tenant',
+            $source,
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function registration(string $instanceId, array $routes): array
+    {
+        return [
+            'project_uuid' => '123e4567-e89b-42d3-a456-426614174000',
+            'project_root' => $this->root,
+            'instance_id' => $instanceId,
+            'instance_generation' => 11,
+            'master_pid' => 12345,
+            'master_epoch' => 22,
+            'launch_id' => \str_repeat('a', 32),
+            'project_generation' => 5,
+            'request_digest' => \str_repeat('b', 64),
+            'non_certificate_desired_digest' => \str_repeat('c', 64),
+            'routes' => $routes,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function route(
+        string $domain,
+        bool $redirect = false,
+        ?string $snapshotDigest = null,
+        int $certificateGeneration = 3,
+    ): array
+    {
+        $snapshotDigest ??= $this->snapshotDigest;
+        $cert = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshots/' . $snapshotDigest
+            . '/fullchain.pem';
+        $key = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshots/' . $snapshotDigest
+            . '/privkey.pem';
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174000';
+        self::assertFileExists($cert);
+        self::assertFileExists($key);
+        return [
+            'route_id' => \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32),
+            'domain' => $domain,
+            'certificate' => [
+                'cert' => [
+                    'root_alias' => 'project_ssl',
+                    'relative_path' => '.wls-generations/snapshots/'
+                        . $snapshotDigest . '/fullchain.pem',
+                ],
+                'key' => [
+                    'root_alias' => 'project_ssl',
+                    'relative_path' => '.wls-generations/snapshots/'
+                        . $snapshotDigest . '/privkey.pem',
+                ],
+                'source_digest' => $snapshotDigest,
+                'leaf_fingerprint_sha256' => \str_repeat('d', 64),
+                'generation' => $certificateGeneration,
+                'pending' => false,
+            ],
+            'force_https' => true,
+            'force_root_to_www' => $redirect,
+            'root_to_www_target' => $redirect ? 'www.' . $domain : '',
+        ];
+    }
+
+    private function createSnapshot(string $certificate, string $privateKey, string $chain): string
+    {
+        $certHash = \hash('sha256', $certificate);
+        $keyHash = \hash('sha256', $privateKey);
+        $chainHash = $chain === '' ? '' : \hash('sha256', $chain);
+        $digest = \hash('sha256', $certHash . ':' . $keyHash . ':');
+        $directory = $this->root . DIRECTORY_SEPARATOR
+            . 'app/etc/ssl/.wls-generations/snapshots/' . $digest;
+        self::assertTrue(\mkdir($directory, 0700));
+        self::assertNotFalse(\file_put_contents(
+            $directory . DIRECTORY_SEPARATOR . 'fullchain.pem',
+            $certificate,
+        ));
+        self::assertNotFalse(\file_put_contents(
+            $directory . DIRECTORY_SEPARATOR . 'privkey.pem',
+            $privateKey,
+        ));
+        if ($chain !== '') {
+            self::assertNotFalse(\file_put_contents(
+                $directory . DIRECTORY_SEPARATOR . 'chain.pem',
+                $chain,
+            ));
+        }
+        $payload = [
+            'schema_version' => 1,
+            'source_digest' => $digest,
+            'leaf_fingerprint_sha256' => \str_repeat('d', 64),
+            'cert_sha256' => $certHash,
+            'key_sha256' => $keyHash,
+            'chain_sha256' => $chainHash,
+            'created_at' => '2026-08-04T00:00:00+00:00',
+        ];
+        $envelope = [
+            'payload' => $payload,
+            'sha256' => \hash('sha256', GatewayClient::canonicalJson($payload)),
+        ];
+        self::assertNotFalse(\file_put_contents(
+            $directory . DIRECTORY_SEPARATOR . 'snapshot.json',
+            (string)\json_encode(
+                $envelope,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
+            ),
+        ));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            foreach (['fullchain.pem', 'privkey.pem', 'chain.pem', 'snapshot.json'] as $file) {
+                if (\is_file($directory . DIRECTORY_SEPARATOR . $file)) {
+                    self::assertTrue(\chmod($directory . DIRECTORY_SEPARATOR . $file, 0600));
+                }
+            }
+            self::assertTrue(\chmod($directory, 0700));
+        }
+        return $digest;
+    }
+
+    /** @return array<string,mixed> */
+    private function fence(string $instanceId): array
+    {
+        return [
+            'instance_id' => $instanceId,
+            'instance_generation' => 11,
+            'master_pid' => 12345,
+            'master_epoch' => 22,
+            'launch_id' => \str_repeat('a', 32),
+        ];
+    }
+
+    private function filesystemRoot(): string
+    {
+        $normalized = \str_replace('\\', '/', $this->root);
+        if (\preg_match('/\A([A-Za-z]:)\//D', $normalized, $match) === 1) {
+            return $match[1] . DIRECTORY_SEPARATOR;
+        }
+        if (\preg_match('#\A//([^/]+)/([^/]+)(?:/|\z)#D', $normalized, $match) === 1) {
+            return DIRECTORY_SEPARATOR . DIRECTORY_SEPARATOR
+                . $match[1] . DIRECTORY_SEPARATOR . $match[2]
+                . DIRECTORY_SEPARATOR;
+        }
+        return DIRECTORY_SEPARATOR;
+    }
+
+    private function source(string $relative): string
+    {
+        $path = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . 'app/code/Weline/Server/' . \str_replace('/', DIRECTORY_SEPARATOR, $relative);
+        $source = \file_get_contents($path);
+        self::assertIsString($source, 'Missing static contract source: ' . $path);
+        return $source;
+    }
+
+    private function removeTree(string $path): void
+    {
+        if ($path === '' || !\file_exists($path)) {
+            return;
+        }
+        if (\is_link($path) || \is_file($path)) {
+            @\unlink($path);
+            return;
+        }
+        foreach ((array)@\scandir($path) as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                $this->removeTree($path . DIRECTORY_SEPARATOR . $entry);
+            }
+        }
+        @\rmdir($path);
+    }
+}

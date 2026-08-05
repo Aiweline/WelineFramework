@@ -27,7 +27,13 @@ $visual = ObjectManager::getInstance(PlatformVisual::class);
 
 $fieldName = static function (string $path, bool $isArray = false) use ($fieldPrefix): string {
     if ($fieldPrefix === '') {
-        return $path . ($isArray ? '[]' : '');
+        $parts = array_values(array_filter(explode('.', $path), static fn(string $part): bool => $part !== ''));
+        $name = (string)array_shift($parts);
+        foreach ($parts as $part) {
+            $name .= '[' . $part . ']';
+        }
+
+        return $name . ($isArray ? '[]' : '');
     }
 
     $name = $fieldPrefix;
@@ -59,7 +65,18 @@ $crawlOptions = [
     SeoWebsiteAccount::CRAWL_NEVER => __('从不'),
 ];
 ?>
-<div id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" class="seo-website-account-widget seo-website-account-widget--<?= htmlspecialchars($mode, ENT_QUOTES, 'UTF-8') ?>">
+<script src="@static(Weline_Seo::js/seo-admin.js)" defer></script>
+<div
+    id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
+    class="seo-website-account-widget seo-website-account-widget--<?= htmlspecialchars($mode, ENT_QUOTES, 'UTF-8') ?>"
+    data-seo-website-account-widget
+    data-website-id="<?= $websiteId ?>"
+    data-saving="<?= htmlspecialchars(__('保存中'), ENT_QUOTES, 'UTF-8') ?>"
+    data-save-success="<?= htmlspecialchars(__('启用状态已保存'), ENT_QUOTES, 'UTF-8') ?>"
+    data-save-failed="<?= htmlspecialchars(__('请检查输入后重试'), ENT_QUOTES, 'UTF-8') ?>"
+    data-request-failed="<?= htmlspecialchars(__('请求失败'), ENT_QUOTES, 'UTF-8') ?>"
+    data-api-unavailable="<?= htmlspecialchars(__('Weline API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
+    data-resource-unavailable="<?= htmlspecialchars(__('Weline API 资源不可用'), ENT_QUOTES, 'UTF-8') ?>">
     <style>
         #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> {
             --seo-widget-border: #d8dee8;
@@ -262,7 +279,7 @@ $crawlOptions = [
     </style>
 
     <?php if ($mode === 'standalone'): ?>
-    <form class="seo-widget-form" method="post" action="<?= htmlspecialchars($actionUrl, ENT_QUOTES, 'UTF-8') ?>">
+    <w:form class="seo-widget-form" method="post" action="@var($actionUrl)">
         <input type="hidden" name="website_id" value="<?= $websiteId ?>">
     <?php endif; ?>
 
@@ -422,116 +439,7 @@ $crawlOptions = [
     </div>
 
     <?php if ($mode === 'standalone'): ?>
-    </form>
+    </w:form>
     <?php endif; ?>
 
-    <script>
-    (function(){
-        const root = document.getElementById(<?= json_encode($widgetId) ?>);
-        if (!root) {
-            return;
-        }
-
-        function showMessage(type, text) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: type === 'success' ? 'success' : 'error',
-                    title: type === 'success' ? <?= json_encode((string)__('保存成功')) ?> : <?= json_encode((string)__('保存失败')) ?>,
-                    text: text || '',
-                    toast: true,
-                    position: 'top-end',
-                    timer: type === 'success' ? 2400 : 4200,
-                    showConfirmButton: false,
-                    timerProgressBar: true
-                });
-                return;
-            }
-
-            const message = root.querySelector('[data-role="seo-message"]');
-            if (!message) {
-                return;
-            }
-            message.className = 'seo-message ' + (type === 'success' ? 'is-success' : 'is-error');
-            message.textContent = text || '';
-        }
-
-        function syncCard(card) {
-            const checkbox = card.querySelector('[data-account-checkbox]');
-            if (!checkbox) {
-                return;
-            }
-            card.classList.toggle('is-selected', checkbox.checked);
-        }
-
-        root.querySelectorAll('[data-account-card]').forEach(function(card){
-            const checkbox = card.querySelector('[data-account-checkbox]');
-            if (checkbox) {
-                checkbox.addEventListener('change', function(){ syncCard(card); });
-                syncCard(card);
-            }
-            card.addEventListener('click', function(event){
-                if (event.target.closest('input, select, textarea, button, a, label')) {
-                    return;
-                }
-                if (!checkbox) {
-                    return;
-                }
-                checkbox.checked = !checkbox.checked;
-                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-        });
-
-        const form = root.querySelector('.seo-widget-form');
-        if (!form) {
-            return;
-        }
-
-        form.addEventListener('submit', function(event){
-            event.preventDefault();
-            const submit = root.querySelector('[data-role="seo-submit"]');
-            const originalHtml = submit ? submit.innerHTML : '';
-            if (submit) {
-                submit.disabled = true;
-                submit.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' + <?= json_encode((string)__('保存中')) ?>;
-            }
-
-            const request = window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function'
-                ? window.Weline.Api.request(form.action, { method: 'POST', body: new FormData(form) })
-                : fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin' }).then(function(response){ return response.json(); });
-
-            request.then(function(response){
-                const data = response && response.data !== undefined ? response.data : response;
-                if (data && data.success) {
-                    showMessage('success', data.message || <?= json_encode((string)__('启用状态已保存')) ?>);
-                    if (window.parent) {
-                        window.parent.document.dispatchEvent(new CustomEvent('websiteBindingSaved', {
-                            detail: { success: true, message: data.message || '' }
-                        }));
-                    }
-                    setTimeout(function(){
-                        if (window.opener && !window.opener.closed) {
-                            window.opener.location.reload();
-                            window.close();
-                        } else if (!window.parent || window.parent === window) {
-                            location.reload();
-                        }
-                    }, 900);
-                    return;
-                }
-
-                showMessage('error', (data && data.message) || <?= json_encode((string)__('请检查输入后重试')) ?>);
-                if (submit) {
-                    submit.disabled = false;
-                    submit.innerHTML = originalHtml;
-                }
-            }).catch(function(error){
-                showMessage('error', (error && error.message) ? error.message : <?= json_encode((string)__('请求失败')) ?>);
-                if (submit) {
-                    submit.disabled = false;
-                    submit.innerHTML = originalHtml;
-                }
-            });
-        });
-    })();
-    </script>
 </div>

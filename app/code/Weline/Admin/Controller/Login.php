@@ -18,6 +18,7 @@ use Weline\Admin\Service\BackendVerificationCodeGate;
 use Weline\Backend\Api\Auth\BackendInteractiveAuthInterface;
 use Weline\Backend\Api\Auth\BackendLoginAccount;
 use Weline\Backend\Api\Menu\MenuReaderInterface;
+use Weline\Captcha\Api\CaptchaManagerInterface;
 use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
@@ -26,10 +27,12 @@ use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Session\Session;
+use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\Strategy\WlsStrategy;
 use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\System\Text;
 use Weline\Framework\View\Asset\MediaUrl;
 
@@ -50,13 +53,15 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     private ?MenuReaderInterface $menuService = null;
     private ?BackendLoginReturnUrlService $returnUrlService = null;
     private BackendVerificationCodeGate $backendVerificationCodeGate;
+    private ?CaptchaManagerInterface $captchaManager;
 
     public function __construct(
         BackendInteractiveAuthInterface $adminUser,
         MessageManager        $messageManager,
         Data                  $helper,
         mixed                 $backendVerificationCodeGateOrMenuService = null,
-        ?BackendVerificationCodeGate $legacyBackendVerificationCodeGate = null
+        ?BackendVerificationCodeGate $legacyBackendVerificationCodeGate = null,
+        ?CaptchaManagerInterface $captchaManager = null,
     ) {
         $this->adminUser = $adminUser;
         $this->helper = $helper;
@@ -72,6 +77,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         } else {
             $this->backendVerificationCodeGate = ObjectManager::getInstance(BackendVerificationCodeGate::class);
         }
+        $this->captchaManager = $captchaManager;
     }
 
     public function index()
@@ -203,6 +209,11 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             w_auth_log('login_post_already_logged_in', 'POST 时已登录，直接重定向后台', ['user_id' => $this->session->getUserId(), 'session' => $this->getSessionDataForLog()]);
             $this->redirectReferer(null, $returnUrl);
             $this->redirect($this->getBackendUrlSameOrigin('admin'));
+        }
+        if (!$this->verifyLoginCaptcha()) {
+            $this->messageManager->addError(__('人机验证失败或已过期，请重试'));
+            $this->redirect($this->getLoginUrlWithReturnUrl($returnUrl));
+            return;
         }
         # 验证 form 表单
         // if (empty($this->request->getParam('form_key')) || ($this->session->get('form_key') !== $this->request->getParam('form_key'))) {
@@ -336,7 +347,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                     $token,
                     $token_expire_time,
                 );
-                Cookie::set('w_ut', $token, $rememberTtl, ['path' => '/']);
+                Cookie::set(SessionCookieNameResolver::resolveFor('w_ut'), $token, $rememberTtl, ['path' => '/']);
                 $this->session->set('remember_expire_time', $token_expire_time);
             } else {
                 $this->session->delete('remember_expire_time');
@@ -362,6 +373,69 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         w_auth_log('login_post_redirect', '登录成功，即将 302 重定向', ['user_id' => $adminUsernameUser->getId(), 'target_path' => $targetPath, 'session' => $this->getSessionDataForLog()]);
         // 跳转后台入口（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
         $this->redirect($this->getBackendUrlSameOrigin($targetPath));
+    }
+
+    private function verifyLoginCaptcha(): bool
+    {
+        if (
+            !$this->captchaManager instanceof CaptchaManagerInterface
+            && !RegistryModulePresence::isActivePresent('Weline_Captcha')
+        ) {
+            return true;
+        }
+
+        try {
+            $this->captchaManager ??= ObjectManager::getInstance(CaptchaManagerInterface::class);
+            $submission = $this->request->getParams();
+            if (!\is_array($submission)) {
+                $submission = [];
+            }
+            // Full Admin login still uses attempt-gated BackendVerificationCodeGate
+            // (field: code). Unified CaptchaManager must only run when a challenge
+            // was actually rendered into the form; otherwise missing tokens look
+            // like "人机验证失败" while the page shows no captcha UI.
+            if (!$this->submissionHasUnifiedCaptchaChallenge($submission)) {
+                return true;
+            }
+
+            return $this->captchaManager->verifySubmission(
+                $submission,
+                'admin.login',
+                $this->requestHostname(),
+                $this->request->clientIP(),
+            );
+        } catch (\Throwable $throwable) {
+            \w_log_error(
+                'Backend login captcha verification failed: ' . $throwable->getMessage(),
+                ['intent' => 'admin.login'],
+                'captcha'
+            );
+            return false;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $submission
+     */
+    private function submissionHasUnifiedCaptchaChallenge(array $submission): bool
+    {
+        $provider = \strtolower(\trim((string)($submission['captcha_provider'] ?? '')));
+        $token = \trim((string)($submission['captcha_token'] ?? ''));
+        $response = \trim((string)($submission['captcha_response'] ?? ''));
+
+        return $provider !== '' || $token !== '' || $response !== '';
+    }
+
+    private function requestHostname(): string
+    {
+        $host = \trim((string)(
+            $this->request->getServer('HTTP_HOST')
+            ?: $this->request->getServer('SERVER_NAME')
+            ?: ''
+        ));
+        $hostname = $host === '' ? '' : \parse_url('http://' . \ltrim($host, '/'), PHP_URL_HOST);
+
+        return \is_string($hostname) ? \strtolower(\rtrim($hostname, '.')) : '';
     }
 
     /**
@@ -623,8 +697,9 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if ($userId) {
             $this->adminUser->invalidateRememberTokenForUser((int)$userId);
         }
-        Cookie::set('w_ut', '', -1, ['path' => '/']);
-        Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
+        $rememberCookieName = SessionCookieNameResolver::resolveFor('w_ut');
+        Cookie::set($rememberCookieName, '', -1, ['path' => '/']);
+        Cookie::set($rememberCookieName, '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         Cookie::set('w_sandbox', '', -1, ['path' => '/']);
         Cookie::set('w_sandbox', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         $this->session->delete('remember_expire_time');
@@ -658,44 +733,48 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         ) {
             $this->request->getResponse()->noRouter(DEV ? 403 : 404);
         }
-        # --1 设置验证码图片的大小
-        $image = imagecreatetruecolor(100, 30);
+        $imageWidth = 196;
+        $imageHeight = 64;
+        $image = imagecreatetruecolor($imageWidth, $imageHeight);
         # --2 设置验证码颜色 imagecolorallocate(int im, int red, int green, int blue);
-        $bgcolor = imagecolorallocate($image, 255, 255, 255); //#ffffff
+        $bgcolor = imagecolorallocate($image, 248, 250, 252);
         # --3 区域填充 int imagefill(int im, int x, int y, int col) (x,y) 所在的区域着色,col 表示欲涂上的颜色
         imagefill($image, 0, 0, $bgcolor);
         # --4 设置变量
         $captcha_code = '';
-        # --5 生成随机数字
+        # --5 生成随机字符，排除易混淆字符
+        $alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
         for ($i = 0; $i < 6; $i++) {
-            # --5-1 设置字体大小
-            $fontsize = 6;
             # --5-2 设置字体颜色，随机颜色
-            $fontcolor = imagecolorallocate($image, rand(0, 120), rand(0, 120), rand(0, 120));      //0-120深颜色
+            $fontcolor = imagecolorallocate($image, random_int(20, 95), random_int(35, 115), random_int(55, 135));
             # --5-3 设置数字
-            $fontcontent = rand(0, 9);
+            $fontcontent = $alphabet[random_int(0, strlen($alphabet) - 1)];
             # --5-4 .=连续定义变量
             $captcha_code .= $fontcontent;
             # --5-5 设置坐标
-            $x = intval(($i * 100 / 6) + rand(5, 10));
-            $y = rand(5, 10);
-            imagestring($image, $fontsize, $x, $y, (string)$fontcontent, $fontcolor);
+            $x = 8 + ($i * 31) + random_int(-3, 3);
+            $y = 20 + random_int(-7, 7);
+            imagechar($image, 5, $x, $y, $fontcontent, $fontcolor);
         }
         $this->session->set(self::SESSION_KEY_BACKEND_VERIFICATION_CODE, $captcha_code);
 
         # --6 增加干扰元素，设置雪花点
-        for ($i = 0; $i < 200; $i++) {
+        for ($i = 0; $i < 520; $i++) {
             # --6-1 设置点的颜色，50-200颜色比数字浅，不干扰阅读
-            $pointcolor = imagecolorallocate($image, rand(50, 200), rand(50, 200), rand(50, 200));
+            $pointcolor = imagecolorallocate($image, random_int(165, 225), random_int(175, 230), random_int(185, 235));
             # --6-2 imagesetpixel — 画一个单一像素
-            imagesetpixel($image, rand(1, 99), rand(1, 29), $pointcolor);
+            imagesetpixel($image, random_int(1, $imageWidth - 2), random_int(1, $imageHeight - 2), $pointcolor);
         }
         # --7 增加干扰元素，设置横线
-        for ($i = 0; $i < 4; $i++) {
+        for ($i = 0; $i < 7; $i++) {
             # --7-1 设置线的颜色
-            $linecolor = imagecolorallocate($image, rand(80, 220), rand(80, 220), rand(80, 220));
+            $linecolor = imagecolorallocate($image, random_int(125, 195), random_int(140, 205), random_int(155, 215));
             # --7-2 设置线，两点一线
-            imageline($image, rand(1, 99), rand(1, 29), rand(1, 99), rand(1, 29), $linecolor);
+            imageline($image, random_int(0, $imageWidth), random_int(0, $imageHeight), random_int(0, $imageWidth), random_int(0, $imageHeight), $linecolor);
+        }
+        for ($i = 0; $i < 4; $i++) {
+            $arcColor = imagecolorallocate($image, random_int(145, 205), random_int(155, 215), random_int(170, 225));
+            imagearc($image, random_int(0, $imageWidth), random_int(0, $imageHeight), random_int(50, 130), random_int(24, 70), random_int(0, 180), random_int(200, 360), $arcColor);
         }
 
         # --8 通过 Response 输出并发送，兼容 FPM/WLS，由 Runtime 统一处理

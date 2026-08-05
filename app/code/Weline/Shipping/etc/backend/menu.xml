@@ -3,23 +3,34 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- 地址管理分组 - 归入业务运营 > 配送管理 -->
-    <menu source="Weline_Shipping::address_manager" name="address_manager" title="地址管理" action="" 
-         parent="Weline_Backend::shipping_group"
-         icon="mdi mdi-map-marker-multiple-outline" order="10">
-        
-        <menu source="Weline_Shipping::shipping_address_list" name="shipping_address_list" title="发货地址" 
-             action="shipping/backend/shippingaddress"
-             icon="mdi mdi-truck-outline" order="10"/>
-        
-        <menu source="Weline_Shipping::delivery_address_list" name="delivery_address_list" title="运送地址" 
-             action="shipping/backend/deliveryaddress"
-             icon="mdi mdi-truck-delivery-outline" order="20"/>
-    </menu>
-    
-    <!-- 配送系统：Manager 聚合页（地区管理|配送区域|快递公司|费用模板|免邮规则|配送服务|物流跟踪） -->
-    <menu source="Weline_Shipping::shipping_system" name="shipping_system" title="配送系统" 
-         action="shipping/backend/manager"
-         parent="Weline_Backend::shipping_group"
-         icon="mdi mdi-truck-delivery-outline" order="20"/>
+    <menu source="Weline_Shipping::shipping_system" name="shipping_system" title="配送总览"
+          action="shipping/backend/manager/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-view-dashboard-outline" order="10"/>
+    <menu source="Weline_Shipping::shipping_address" name="shipping_address" title="发货地址"
+          action="shipping/backend/shippingaddress/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-truck-outline" order="20"/>
+    <menu source="Weline_Shipping::delivery_address" name="delivery_address" title="运送地址"
+          action="shipping/backend/deliveryaddress/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-truck-delivery-outline" order="30"/>
+    <menu source="Weline_Shipping::region" name="shipping_region" title="地区管理"
+          action="shipping/backend/region/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-map-marker-outline" order="40"/>
+    <menu source="Weline_Shipping::zone" name="shipping_zone" title="配送区域"
+          action="shipping/backend/zone/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-map-outline" order="50"/>
+    <menu source="Weline_Shipping::carrier" name="shipping_carrier" title="快递公司"
+          action="shipping/backend/carrier/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-truck-fast-outline" order="60"/>
+    <menu source="Weline_Shipping::rate_template" name="shipping_rate_template" title="费用模板"
+          action="shipping/backend/ratetemplate/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-calculator-variant-outline" order="70"/>
+    <menu source="Weline_Shipping::free_shipping_rule" name="shipping_free_rule" title="免邮规则"
+          action="shipping/backend/freeshippingrule/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-gift-outline" order="80"/>
+    <menu source="Weline_Shipping::shipping_service" name="shipping_service" title="配送服务"
+          action="shipping/backend/shippingservice/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-truck-check-outline" order="90"/>
+    <menu source="Weline_Shipping::tracking" name="shipping_tracking" title="物流跟踪"
+          action="shipping/backend/tracking/index" parent="Weline_Backend::shipping_group"
+          icon="mdi mdi-map-search-outline" order="100"/>
 </menus>

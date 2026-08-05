@@ -168,6 +168,218 @@ class SeoWebsiteDirectory
     }
 
     /**
+     * Public base URL for sitemap/robots display and generation.
+     *
+     * Real configured website URLs stay authoritative. The system default website
+     * keeps `http://localhost` / `127.0.0.1` as a DB placeholder; when that
+     * placeholder is present, prefer the live request origin so admins see the
+     * current project entry such as `https://p{hash}.weline.test:{port}`.
+     *
+     * @param array<string, mixed> $website
+     */
+    public function effectivePublicBaseUrl(array $website): string
+    {
+        $configured = rtrim(trim((string)($website['url'] ?? '')), '/');
+        $requestBaseUrl = $this->currentBaseUrl();
+        $websiteId = (int)($website['website_id'] ?? $website['id'] ?? -1);
+        $code = trim((string)($website['code'] ?? ''));
+        $isDefaultWebsite = $websiteId === 0 || $code === 'default';
+        $needsLiveOrigin = $configured === ''
+            || ($isDefaultWebsite && $this->isLoopbackBaseUrl($configured));
+
+        if ($needsLiveOrigin && $requestBaseUrl !== '') {
+            return $requestBaseUrl;
+        }
+
+        return $configured;
+    }
+
+    /**
+     * Every public origin that should expose a sitemap for this website.
+     *
+     * Includes the canonical `Website.url` (via {@see effectivePublicBaseUrl()})
+     * plus every active `WebsiteDomain` binding. Deduped by scheme+host+port+path.
+     * Canonical generation / same-origin checks still use the primary origin only;
+     * this list is for admin display and robots Sitemap declarations.
+     *
+     * @param array<string, mixed> $website
+     * @return list<array{
+     *   base_url:string,
+     *   domain:string,
+     *   sub_path:string,
+     *   is_primary:bool,
+     *   is_canonical:bool,
+     *   source:string,
+     *   sitemap_url:string
+     * }>
+     */
+    public function listPublicOrigins(array $website): array
+    {
+        $canonicalBase = rtrim($this->effectivePublicBaseUrl($website), '/');
+        $origins = [];
+        $seen = [];
+
+        $append = static function (
+            string $baseUrl,
+            string $domain,
+            string $subPath,
+            bool $isPrimary,
+            bool $isCanonical,
+            string $source,
+        ) use (&$origins, &$seen): void {
+            $baseUrl = rtrim(trim($baseUrl), '/');
+            if ($baseUrl === '' || !preg_match('#^https?://#i', $baseUrl)) {
+                return;
+            }
+            $parts = parse_url($baseUrl);
+            if (
+                !is_array($parts)
+                || trim((string)($parts['host'] ?? '')) === ''
+                || isset($parts['user'])
+                || isset($parts['pass'])
+                || isset($parts['query'])
+                || isset($parts['fragment'])
+            ) {
+                return;
+            }
+            $host = strtolower((string)$parts['host']);
+            $port = isset($parts['port']) ? (string)$parts['port'] : '';
+            $path = '/' . trim((string)($parts['path'] ?? ''), '/');
+            if ($path === '/') {
+                $path = '';
+            }
+            $identity = strtolower((string)($parts['scheme'] ?? 'https')) . '|' . $host . '|' . $port . '|' . $path;
+            if (isset($seen[$identity])) {
+                if ($isPrimary && !$origins[$seen[$identity]]['is_primary']) {
+                    $origins[$seen[$identity]]['is_primary'] = true;
+                }
+                if ($isCanonical) {
+                    $origins[$seen[$identity]]['is_canonical'] = true;
+                    $origins[$seen[$identity]]['source'] = 'website_url';
+                }
+                return;
+            }
+            $seen[$identity] = count($origins);
+            $origins[] = [
+                'base_url' => $baseUrl,
+                'domain' => $domain !== '' ? $domain : $host,
+                'sub_path' => $path,
+                'is_primary' => $isPrimary,
+                'is_canonical' => $isCanonical,
+                'source' => $source,
+                'sitemap_url' => $baseUrl . '/sitemap.xml',
+            ];
+        };
+
+        if ($canonicalBase !== '') {
+            $canonicalHost = strtolower((string)(parse_url($canonicalBase, PHP_URL_HOST) ?: ''));
+            $append($canonicalBase, $canonicalHost, '', true, true, 'website_url');
+        }
+
+        $websiteId = (int)($website['website_id'] ?? $website['id'] ?? -1);
+        if ($websiteId >= 0) {
+            try {
+                $rows = w_query('websites', 'getWebsiteDomains', ['website_id' => $websiteId]);
+            } catch (\Throwable) {
+                $rows = [];
+            }
+            foreach ($this->unwrapRows($rows) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $baseUrl = rtrim(trim((string)($row['base_url'] ?? '')), '/');
+                $domain = strtolower(trim((string)($row['domain'] ?? '')));
+                $subPath = trim((string)($row['sub_path'] ?? ''));
+                $isPrimary = !empty($row['is_primary']);
+                if ($baseUrl === '' && $domain !== '') {
+                    $scheme = !empty($row['https_enabled']) ? 'https' : 'http';
+                    $baseUrl = $scheme . '://' . $domain . ($subPath !== '' ? '/' . ltrim($subPath, '/') : '');
+                }
+                $append($baseUrl, $domain, $subPath, $isPrimary, false, 'website_domain');
+            }
+        }
+
+        usort($origins, static function (array $left, array $right): int {
+            if (($left['is_canonical'] ?? false) !== ($right['is_canonical'] ?? false)) {
+                return ($left['is_canonical'] ?? false) ? -1 : 1;
+            }
+            if (($left['is_primary'] ?? false) !== ($right['is_primary'] ?? false)) {
+                return ($left['is_primary'] ?? false) ? -1 : 1;
+            }
+            return strcmp((string)($left['domain'] ?? ''), (string)($right['domain'] ?? ''));
+        });
+
+        return $origins;
+    }
+
+    /**
+     * Replace a loopback origin with the live public base while keeping path.
+     * Non-loopback URLs are returned unchanged.
+     */
+    public function rewriteLoopbackPublicUrl(string $url, string $publicBaseUrl): string
+    {
+        $url = trim($url);
+        $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
+        if ($url === '' || $publicBaseUrl === '' || !$this->isLoopbackBaseUrl($url)) {
+            return $url;
+        }
+        if ($this->isLoopbackBaseUrl($publicBaseUrl)) {
+            return $url;
+        }
+
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return $url;
+        }
+        $path = (string)($parts['path'] ?? '');
+        if ($path === '') {
+            $path = '/';
+        }
+
+        return $publicBaseUrl . ($path === '/' ? '' : $path);
+    }
+
+    /**
+     * Rewrite loopback <loc> origins inside sitemap XML to the live public base.
+     * Used when serving files that were generated under the localhost placeholder.
+     */
+    public function rewriteLoopbackOriginsInXml(string $xml, string $publicBaseUrl): string
+    {
+        $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
+        if ($xml === '' || $publicBaseUrl === '' || $this->isLoopbackBaseUrl($publicBaseUrl)) {
+            return $xml;
+        }
+
+        $rewritten = preg_replace_callback(
+            '#(<loc>)([^<]*)(</loc>)#i',
+            function (array $matches) use ($publicBaseUrl): string {
+                $loc = html_entity_decode(trim($matches[2]), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                $next = $this->rewriteLoopbackPublicUrl($loc, $publicBaseUrl);
+                return $matches[1]
+                    . htmlspecialchars($next, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                    . $matches[3];
+            },
+            $xml,
+        );
+
+        return is_string($rewritten) ? $rewritten : $xml;
+    }
+
+    public function isLoopbackBaseUrl(string $url): bool
+    {
+        $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+        if ($host === '') {
+            return false;
+        }
+
+        return $host === 'localhost'
+            || $host === '127.0.0.1'
+            || $host === '::1'
+            || $host === '[::1]'
+            || str_ends_with($host, '.localhost');
+    }
+
+    /**
      * @param array<string, mixed> $row
      * @return array<string, mixed>
      */
@@ -263,12 +475,19 @@ class SeoWebsiteDirectory
 
     private function currentRequestBaseUrl(): string
     {
+        $fromRequestHost = $this->originFromRequestHost();
+
         $websiteUrl = (string)($_SERVER['WELINE_WEBSITE_URL'] ?? w_env('website_url', ''));
         if ($websiteUrl !== '' && preg_match('/^https?:\/\//i', $websiteUrl)) {
             $parts = parse_url($websiteUrl);
             if (is_array($parts) && !empty($parts['host'])) {
                 $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-                return (string)($parts['scheme'] ?? 'https') . '://' . (string)$parts['host'] . $port;
+                $fromWebsiteUrl = (string)($parts['scheme'] ?? 'https') . '://' . (string)$parts['host'] . $port;
+                // DB/default placeholder `http://localhost` must not hide the live
+                // project host (e.g. https://p0cc9fac7.weline.test:9513).
+                if (!$this->isLoopbackBaseUrl($fromWebsiteUrl) || $fromRequestHost === '' || $this->isLoopbackBaseUrl($fromRequestHost)) {
+                    return $fromWebsiteUrl;
+                }
             }
         }
 
@@ -277,10 +496,18 @@ class SeoWebsiteDirectory
             $parts = parse_url($fullUrl);
             if (is_array($parts) && !empty($parts['host'])) {
                 $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-                return (string)($parts['scheme'] ?? 'https') . '://' . (string)$parts['host'] . $port;
+                $fromFullUrl = (string)($parts['scheme'] ?? 'https') . '://' . (string)$parts['host'] . $port;
+                if (!$this->isLoopbackBaseUrl($fromFullUrl) || $fromRequestHost === '' || $this->isLoopbackBaseUrl($fromRequestHost)) {
+                    return $fromFullUrl;
+                }
             }
         }
 
+        return $fromRequestHost;
+    }
+
+    private function originFromRequestHost(): string
+    {
         $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? w_env('request.scheme', ''));
         if ($scheme === '') {
             $https = (string)($_SERVER['HTTPS'] ?? w_env('server.https', ''));

@@ -10,6 +10,7 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
 use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Model\Cache\NamespaceVersion;
 use Weline\Framework\Setup\Model\Migration;
 use Weline\Framework\Setup\Model\MigrationBackup;
 use Weline\Framework\Setup\Model\ModuleBackup;
@@ -23,6 +24,7 @@ use Weline\Framework\Setup\Model\ModuleTable;
 class FrameworkDbBootstrapStage extends AbstractStage
 {
     private const BOOTSTRAP_MODELS = [
+        NamespaceVersion::class,
         Migration::class,
         MigrationBackup::class,
         ModuleTable::class,
@@ -76,6 +78,8 @@ class FrameworkDbBootstrapStage extends AbstractStage
                 $this->ensureMigrationsSchemaDdlColumns($connector, $tableName);
             } elseif ($modelClass === MigrationBackup::class) {
                 $this->ensureBackupsTableStructure($connector, $tableName);
+            } elseif ($modelClass === ModuleTable::class) {
+                $this->ensureModuleTablePolicyColumns($connector, $tableName);
             }
         }
 
@@ -153,19 +157,30 @@ class FrameworkDbBootstrapStage extends AbstractStage
     /**
      * 若 weline_database_backups 缺少 backup_id 或 migration_id，则重建表。
      * 使用 getTableColumns 校验实际列，避免 hasField 与表名格式不一致导致的误判。
+     * 探测异常必须硬失败，禁止当成空列集后 DROP（避免瞬时错误删光迁移备份）。
      */
     private function ensureBackupsTableStructure(ConnectorInterface $connector, string $backupsTable): void
     {
         $requiredCols = ['backup_id', 'migration_id'];
         try {
             $cols = $connector->getTableColumns($backupsTable);
-        } catch (\Throwable) {
-            $cols = [];
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '无法探测备份表 %{1} 结构，已中止升级以避免误删备份数据：%{2}',
+                [$backupsTable, $e->getMessage()]
+            ), 0, $e);
         }
         $colNames = array_column($cols, 'name');
         $colSet = array_flip(array_map('strtolower', $colNames));
         $missing = array_filter($requiredCols, fn (string $c) => !isset($colSet[strtolower($c)]));
         if ($missing !== []) {
+            $rowCount = $this->countBackupTableRows($connector, $backupsTable);
+            if ($rowCount > 0) {
+                throw new Exception(__(
+                    '备份表 %{1} 缺少列 %{2} 且已有 %{3} 行数据，拒绝自动 DROP 重建；请先转存备份后再升级',
+                    [$backupsTable, implode(', ', $missing), (string)$rowCount]
+                ));
+            }
             $connector->dropTableIfExists($backupsTable);
             $this->createTableFromModel($connector, MigrationBackup::class);
             return;
@@ -204,5 +219,107 @@ class FrameworkDbBootstrapStage extends AbstractStage
                 $connector->query($sql)->fetch();
             }
         }
+    }
+
+    /**
+     * weline_module_table 不参与 SchemaDiff；旧库可能缺 table_policy 默认值，导致登记 INSERT 失败。
+     */
+    private function ensureModuleTablePolicyColumns(ConnectorInterface $connector, string $tableName): void
+    {
+        $schema = $this->schemaParser->parse(ModuleTable::class);
+        if ($schema === null) {
+            return;
+        }
+        $needCols = [
+            ModuleTable::schema_fields_TABLE_POLICY,
+            ModuleTable::schema_fields_OWNER_MODULE_NAME,
+            ModuleTable::schema_fields_SUCCESSOR_MODULE_NAME,
+            ModuleTable::schema_fields_DEPRECATED_AT,
+        ];
+        $byName = [];
+        foreach ($schema->columns as $col) {
+            $byName[$col->name] = $col;
+            if (!in_array($col->name, $needCols, true)) {
+                continue;
+            }
+            if ($connector->hasField($tableName, $col->name)) {
+                continue;
+            }
+            $sql = $connector->buildAlterAddColumnSql($tableName, [
+                'name' => $col->name,
+                'type' => $col->type,
+                'length' => $col->length,
+                'nullable' => $col->nullable,
+                'primaryKey' => $col->primaryKey,
+                'autoIncrement' => $col->autoIncrement,
+                'default' => $col->default,
+                'comment' => $col->comment,
+                'unique' => $col->unique,
+            ]);
+            if ($sql !== '') {
+                $connector->query($sql)->fetch();
+            }
+        }
+
+        $policyCol = $byName[ModuleTable::schema_fields_TABLE_POLICY] ?? null;
+        if ($policyCol === null || !$connector->hasField($tableName, $policyCol->name)) {
+            return;
+        }
+        $existing = null;
+        foreach ($connector->getTableColumns($tableName) as $row) {
+            $name = (string)($row['name'] ?? $row['Field'] ?? '');
+            if (strcasecmp($name, $policyCol->name) === 0) {
+                $existing = $row;
+                break;
+            }
+        }
+        $observedDefault = trim((string)($existing['default'] ?? $existing['Default'] ?? ''));
+        $expectedDefault = (string)($policyCol->default ?? ModuleTable::POLICY_OWNED);
+        if ($observedDefault !== '' && (
+            $observedDefault === $expectedDefault
+            || str_contains($observedDefault, "'" . $expectedDefault . "'")
+        )) {
+            return;
+        }
+
+        // 禁止走 buildAlterModifyColumnSql 多语句包：PDO 对无结果集 fetch 会崩。
+        $quotedTable = $connector->quoteTable($tableName);
+        $quotedCol = $connector->quoteIdentifier($policyCol->name);
+        $literal = "'" . str_replace("'", "''", $expectedDefault) . "'";
+        $connector->query(
+            "UPDATE {$quotedTable} SET {$quotedCol} = {$literal} WHERE {$quotedCol} IS NULL OR {$quotedCol} = ''"
+        )->fetch();
+        $connector->query(
+            "ALTER TABLE {$quotedTable} ALTER COLUMN {$quotedCol} SET DEFAULT {$literal}"
+        )->fetch();
+        $connector->query(
+            "ALTER TABLE {$quotedTable} ALTER COLUMN {$quotedCol} SET NOT NULL"
+        )->fetch();
+    }
+
+    private function countBackupTableRows(ConnectorInterface $connector, string $backupsTable): int
+    {
+        try {
+            if (!$connector->tableExist($backupsTable)) {
+                return 0;
+            }
+            $quoted = $connector->quoteTable($backupsTable);
+            $result = $connector->query("SELECT COUNT(*) AS c FROM {$quoted}")->fetch();
+            if (is_array($result)) {
+                if (isset($result['c'])) {
+                    return (int)$result['c'];
+                }
+                if (isset($result[0]['c'])) {
+                    return (int)$result[0]['c'];
+                }
+            }
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '无法统计备份表 %{1} 行数，已中止自动重建：%{2}',
+                [$backupsTable, $e->getMessage()]
+            ), 0, $e);
+        }
+
+        return 0;
     }
 }

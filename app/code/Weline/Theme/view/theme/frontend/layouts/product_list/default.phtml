@@ -102,7 +102,7 @@ $this->assign('meta', $meta);
             <main class="product-list-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-list-main" data-layout="product-list" data-columns="<?= (int)$gridColumns ?>">
                 <?php if ($isSearchLayout): ?>
                     <div class="product-list-layout__container product-list-layout__container--search">
-                        <section class="product-list-layout__search-content">
+                        <section class="product-list-layout__search-content" weline-code="theme.product_list.section_1">
                             <if condition="meta.content">
                                 {{meta.content}}
                             <elseif condition="meta.contentTemplate"/>
@@ -241,7 +241,7 @@ $this->assign('meta', $meta);
                     multiple="true"
                     position="content"
                     wrapper="section"
-                    class="product-list-layout__recommendations">
+                    class="product-list-layout__recommendations" weline-code="theme.product_list.list_recommendations">
                 <w:hook>Weline_Theme::frontend::layouts::product-list::recommendations-before</w:hook>
                 <div class="product-list-layout__recommendations-container">
                     <div class="product-list-layout__placeholder" data-placeholder="list-recommendations">

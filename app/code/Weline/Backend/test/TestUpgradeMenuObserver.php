@@ -16,7 +16,7 @@ use Weline\Backend\Model\Menu;
 use Weline\Framework\Manager\ObjectManager;
 use function PHPUnit\Framework\assertTrue;
 
-class TestUpgradeMenuObserver extends \Weline\Framework\UnitTest\TestCore
+class TestUpgradeMenuObserver extends \Weline\Framework\Test\TestCore
 {
     private Menu $menu;
 

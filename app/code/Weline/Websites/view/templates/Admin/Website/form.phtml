@@ -18,6 +18,20 @@ $domain_options = $domain_options ?? [];
 $sub_path = $sub_path ?? '';
 $start_page_route_options = $start_page_route_options ?? [];
 $selected_start_page_path = (string)($selected_start_page_path ?? '');
+$store_channel_directory = $store_channel_directory ?? [];
+if (!is_array($store_channel_directory)) {
+    $store_channel_directory = [];
+}
+$hasWebsite = array_key_exists('website_id', $website);
+$storeModeLabels = [
+    'normal' => __('正式'),
+    'dev' => __('开发'),
+    'test' => __('测试'),
+];
+$storeLifecycleLabels = [
+    'active' => __('活动'),
+    'tombstone' => __('墓碑'),
+];
 $websiteDefaultLanguage = (string)($website['default_language'] ?? '');
 if ($websiteDefaultLanguage !== '' && !in_array($websiteDefaultLanguage, $selected_languages, true)) {
     $selected_languages[] = $websiteDefaultLanguage;
@@ -72,8 +86,9 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
     font-size: 1rem;
     width: 100%;
 }
-.website-form-accordion .accordion-header .accordion-button:focus {
-    outline: none;
+.website-form-accordion .accordion-header .accordion-button:focus-visible {
+    outline: 3px solid var(--backend-color-primary, #556ee6);
+    outline-offset: 3px;
     box-shadow: none;
 }
 .website-form-accordion .accordion-header .accordion-button::after {
@@ -118,20 +133,95 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
 #timezone-search {
     margin-bottom: 0.5rem;
 }
+.weline-website-directory-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+}
+.weline-website-directory-empty {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 1rem;
+    border: 1px dashed var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 0.375rem);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+.weline-website-directory-list,
+.weline-website-channel-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.weline-website-directory-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    gap: 0.75rem;
+}
+.weline-website-directory-store {
+    padding: 0.85rem;
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 0.375rem);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+.weline-website-directory-store-header,
+.weline-website-directory-store-title,
+.weline-website-directory-badges,
+.weline-website-channel-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+.weline-website-directory-store-header {
+    justify-content: space-between;
+    align-items: flex-start;
+}
+.weline-website-directory-badges {
+    justify-content: flex-end;
+}
+.weline-website-directory-code,
+.weline-website-directory-id {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 0.76rem;
+}
+.weline-website-channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.75rem;
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-website-channel-list li {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.82rem;
+}
+.weline-website-channel-name {
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 500;
+}
 </style>
 
 <div class="card" id="WebsitePage">
     <div class="card-body">
-        <h4 class="card-title"><?= isset($website['website_id']) ? '编辑网站' : '添加网站' ?></h4>
+        <h4 class="card-title"><?= $hasWebsite ? __('编辑网站') : __('添加网站') ?></h4>
 
         <?php
-        $formAction = '*/admin/website/' . (isset($website['website_id']) ? 'edit' : 'add');
+        $formAction = '*/admin/website/' . ($hasWebsite ? 'edit' : 'add');
         $formParams = [];
-        if (isset($website['website_id'])) {
+        if ($hasWebsite) {
             $formParams['id'] = $website['website_id'];
         }
         ?>
-        <form action="<?= $this->getUrl($formAction, $formParams) ?>"
+        <w:form action="@var($this->getUrl($formAction, $formParams))"
               method="post" class="needs-validation" novalidate>
             <!-- 手风琴折叠面板 -->
             <div class="website-form-accordion" id="websiteFormAccordion">
@@ -146,7 +236,7 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                     </div>
                     <div id="collapseBasic" class="accordion-collapse collapse show" aria-labelledby="headingBasic" data-bs-parent="#websiteFormAccordion">
                         <div class="accordion-body">
-                            <?php if (isset($website['website_id'])): ?>
+                            <?php if ($hasWebsite): ?>
                                 <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
                             <?php endif; ?>
 
@@ -212,6 +302,106 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                                     <div class="form-text-hint"><lang>可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。</lang></div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Store / SalesChannel 只读目录 -->
+                <div class="accordion-item">
+                    <div class="accordion-header" id="headingStoreChannelDirectory">
+                        <button class="accordion-button collapsed" type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapseStoreChannelDirectory"
+                                aria-expanded="false"
+                                aria-controls="collapseStoreChannelDirectory">
+                            <i class="mdi mdi-sitemap" aria-hidden="true"></i>
+                            <span><lang>Store / SalesChannel 只读目录</lang></span>
+                            <i class="mdi mdi-chevron-down ms-auto" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div id="collapseStoreChannelDirectory"
+                         class="accordion-collapse collapse"
+                         aria-labelledby="headingStoreChannelDirectory"
+                         data-bs-parent="#websiteFormAccordion">
+                        <div class="accordion-body">
+                            <div class="alert alert-info weline-website-directory-notice" role="note">
+                                <i class="mdi mdi-information-outline" aria-hidden="true"></i>
+                                <span><lang>此处仅展示目录。Store 模式、生命周期与 SalesChannel 不会随 Website 表单保存而修改。</lang></span>
+                            </div>
+
+                            <?php if (!$hasWebsite): ?>
+                                <div class="weline-website-directory-empty" role="status">
+                                    <i class="mdi mdi-sitemap-outline" aria-hidden="true"></i>
+                                    <span><lang>保存 Website 后，系统会在升级与站点保存流程中建立默认 Store 和 SalesChannel。</lang></span>
+                                </div>
+                            <?php elseif ($store_channel_directory === []): ?>
+                                <div class="weline-website-directory-empty" role="status">
+                                    <i class="mdi mdi-database-alert-outline" aria-hidden="true"></i>
+                                    <span><lang>当前 Website 暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。</lang></span>
+                                </div>
+                            <?php else: ?>
+                                <ul class="weline-website-directory-list"
+                                    aria-label="<?= htmlspecialchars((string)__('Store 与 SalesChannel 只读目录'), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?php foreach ($store_channel_directory as $store): ?>
+                                        <?php
+                                        $storeMode = (string)($store['store_mode'] ?? '');
+                                        $storeLifecycle = (string)($store['lifecycle_status'] ?? '');
+                                        $channels = $store['channels'] ?? [];
+                                        if (!is_array($channels)) {
+                                            $channels = [];
+                                        }
+                                        ?>
+                                        <li class="weline-website-directory-store">
+                                            <div class="weline-website-directory-store-header">
+                                                <div class="weline-website-directory-store-title">
+                                                    <strong><?= htmlspecialchars((string)($store['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                                                    <span class="weline-website-directory-code"><?= htmlspecialchars((string)($store['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <span class="weline-website-directory-id">#<?= (int)($store['store_id'] ?? 0) ?></span>
+                                                </div>
+                                                <div class="weline-website-directory-badges">
+                                                    <?php if (!empty($store['is_default'])): ?>
+                                                        <span class="badge bg-primary-subtle text-primary"><lang>默认</lang></span>
+                                                    <?php endif; ?>
+                                                    <span class="badge bg-info-subtle text-info">
+                                                        <?= htmlspecialchars((string)($storeModeLabels[$storeMode] ?? $storeMode), ENT_QUOTES, 'UTF-8') ?>
+                                                    </span>
+                                                    <span class="badge <?= !empty($store['enabled']) ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                                                        <?= !empty($store['enabled']) ? __('启用') : __('停用') ?>
+                                                    </span>
+                                                    <span class="badge <?= $storeLifecycle === 'active' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning' ?>">
+                                                        <?= htmlspecialchars((string)($storeLifecycleLabels[$storeLifecycle] ?? $storeLifecycle), ENT_QUOTES, 'UTF-8') ?>
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <?php if ($channels === []): ?>
+                                                <div class="weline-website-directory-empty mt-3" role="status">
+                                                    <i class="mdi mdi-source-branch-remove" aria-hidden="true"></i>
+                                                    <span><lang>此 Store 暂无 SalesChannel</lang></span>
+                                                </div>
+                                            <?php else: ?>
+                                                <ul class="weline-website-channel-list"
+                                                    aria-label="<?= htmlspecialchars((string)__('SalesChannel 列表'), ENT_QUOTES, 'UTF-8') ?>">
+                                                    <?php foreach ($channels as $channel): ?>
+                                                        <li>
+                                                            <i class="mdi mdi-source-branch" aria-hidden="true"></i>
+                                                            <span class="weline-website-channel-name"><?= htmlspecialchars((string)($channel['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                                            <span class="weline-website-directory-code"><?= htmlspecialchars((string)($channel['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                                            <span class="weline-website-directory-id">#<?= (int)($channel['channel_id'] ?? 0) ?></span>
+                                                            <?php if (!empty($channel['is_default'])): ?>
+                                                                <span class="badge bg-primary-subtle text-primary"><lang>默认</lang></span>
+                                                            <?php endif; ?>
+                                                            <span class="badge <?= !empty($channel['effective_enabled']) ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                                                                <?= !empty($channel['effective_enabled']) ? __('有效') : __('不可用') ?>
+                                                            </span>
+                                                        </li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            <?php endif; ?>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -376,7 +566,7 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
                 <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
                 <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-secondary ms-2"><lang>返回</lang></a>
             </div>
-        </form>
+        </w:form>
     </div>
 </div>
 

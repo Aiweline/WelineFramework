@@ -32,4 +32,8 @@
     
     <menu source="Weline_DeveloperWorkspace::panel_config" name="panel_config" title="面板配置" action="dev/backend/panel-config"
          parent="Weline_Backend::debug_tools" icon="mdi mdi-view-dashboard-outline" order="30"/>
+
+    <menu source="Weline_DeveloperWorkspace::dev-sandbox-manager" name="async_event_probe" title="异步资源变更验收台"
+          action="dev/tool/admin/sandbox" parent="Weline_Backend::debug_tools"
+          icon="mdi mdi-transit-connection-variant" order="40"/>
 </menus>

@@ -17,23 +17,27 @@ final readonly class MetaConfigSearch
         public ?int $metaId = null,
         public ?string $metaIdentify = null,
     ) {
-        if (trim($this->namespace) === '' || trim($this->scope) === '') {
-            throw new \InvalidArgumentException('Meta config search requires namespace and an exact scope.');
+        MetaConfigIdentity::assertNamespace($this->namespace);
+        MetaConfigIdentity::assertScope($this->scope);
+        if ($this->configKey !== null) {
+            MetaConfigIdentity::assertConfigKey($this->configKey);
         }
+        MetaConfigIdentity::assertConfigKeyPrefix($this->configKeyPrefix);
+        MetaConfigIdentity::assertLocale($this->locale);
+        MetaConfigIdentity::assertIdentifyId($this->identifyId);
+        MetaConfigIdentity::assertMetaIdentify($this->metaIdentify);
         if ($this->configKey !== null && $this->configKeyPrefix !== null) {
             throw new \InvalidArgumentException('Meta config search cannot combine configKey and configKeyPrefix.');
         }
         if (!$this->hasOwnerIdentity()) {
             throw new \InvalidArgumentException('Meta config search requires identifyId, metaId, or metaIdentify.');
         }
-        if ($this->locale !== null && trim($this->locale) === '') {
-            throw new \InvalidArgumentException('Meta config locale must be NULL or a non-empty locale code.');
-        }
         if ($this->allLocales && $this->locale !== null) {
             throw new \InvalidArgumentException('allLocales cannot be combined with an exact locale.');
         }
-        if ($this->metaId !== null && $this->metaId < 1) {
-            throw new \InvalidArgumentException('Meta config metaId must be a positive integer when provided.');
+        if ($this->metaId !== null
+            && ($this->metaId < 1 || $this->metaId > MetaConfigIdentity::META_ID_MAX)) {
+            throw new \InvalidArgumentException('Meta config metaId must fit a positive signed 32-bit integer.');
         }
     }
 

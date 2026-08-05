@@ -7,10 +7,15 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeContext;
+use Weline\SystemConfig\Service\ConfigCacheInvalidationService;
+use Weline\SystemConfig\Service\ScopeConfigCacheInvalidator;
+use Weline\SystemConfig\Service\SystemConfigLockService;
+use Weline\SystemConfig\Service\SystemConfigResourceChangePublisher;
 
 #[Table(comment: 'System config table')]
 #[Index(name: 'idx_system_config_identity', columns: ['module', 'area', 'key', 'scope', 'locale'], type: 'UNIQUE')]
@@ -167,6 +172,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
                         continue;
                     }
                     if (array_key_exists(self::schema_fields_IS_ACTIVE, $row) && (int)$row[self::schema_fields_IS_ACTIVE] === 0) {
+                        continue;
+                    }
+                    if (SystemConfigLockService::isRowSuppressed($row)) {
                         continue;
                     }
                     $rowsByKey[$rowKey] = $this->normalizeRow($row, $fallbackScope, $fallbackLocale);
@@ -330,6 +338,60 @@ class SystemConfig extends \Weline\Framework\Database\Model
     }
 
     /**
+     * TASK-P1C-001：typed Scope 解析 + source DTO。
+     */
+    public function resolveTypedConfig(
+        string $key,
+        string $module,
+        string $area,
+        \Weline\Framework\Runtime\ScopeIdentity $identity,
+        ?string $locale = null,
+        mixed $default = null,
+    ): \Weline\SystemConfig\Api\Scope\ConfigScopeValue {
+        $hasDefault = \func_num_args() >= 6;
+        $locale = $this->normalizeLocale($locale);
+        /** @var \Weline\SystemConfig\Service\SystemConfigScopeResolver $resolver */
+        $resolver = ObjectManager::getInstance(\Weline\SystemConfig\Service\SystemConfigScopeResolver::class);
+        $records = [];
+        foreach ($resolver->chainFromIdentity($identity) as $storageScope) {
+            foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
+                $row = $this->loadExactConfigRow($key, $module, $area, $storageScope, $fallbackLocale);
+                if ($row === null) {
+                    continue;
+                }
+                if (\array_key_exists(self::schema_fields_IS_ACTIVE, $row) && (int)$row[self::schema_fields_IS_ACTIVE] === 0) {
+                    continue;
+                }
+                if (SystemConfigLockService::isRowSuppressed($row)) {
+                    continue;
+                }
+                $locKey = $fallbackLocale === self::LOCALE_DEFAULT ? '' : $fallbackLocale;
+                $recordKey = \Weline\SystemConfig\Service\SystemConfigScopeResolver::recordKey($storageScope, $locKey);
+                if (isset($records[$recordKey])) {
+                    continue;
+                }
+                $records[$recordKey] = [
+                    \Weline\SystemConfig\Service\SystemConfigScopeResolver::KEY_VALUE => $this->unserializeValue(
+                        $row[self::schema_fields_VALUE] ?? null,
+                        (string)($row[self::schema_fields_VALUE_TYPE] ?? self::VALUE_TYPE_STRING),
+                    ),
+                    \Weline\SystemConfig\Service\SystemConfigScopeResolver::KEY_VERSION => (int)($row[self::schema_fields_VERSION] ?? 0),
+                    \Weline\SystemConfig\Service\SystemConfigScopeResolver::KEY_SENSITIVE => (int)($row[self::schema_fields_IS_SENSITIVE] ?? 0) === 1,
+                    \Weline\SystemConfig\Service\SystemConfigScopeResolver::KEY_METADATA => $this->decodeJson((string)($row[self::schema_fields_METADATA] ?? '')),
+                ];
+            }
+        }
+
+        return $resolver->resolveForIdentity(
+            $records,
+            $identity,
+            $locale === self::LOCALE_DEFAULT ? '' : $locale,
+            $default,
+            $hasDefault,
+        );
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public function getScopedConfigRow(
@@ -346,6 +408,26 @@ class SystemConfig extends \Weline\Framework\Database\Model
             $this->normalizeScope($scope),
             $this->normalizeLocale($locale)
         );
+    }
+
+    /**
+     * 列出某 key 在所有 scope/locale 下的精确行（含 suppressed；供 lock 预览）。
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listRowsForKey(string $module, string $area, string $key): array
+    {
+        $rows = $this->clear()
+            ->reset()
+            ->where([
+                [self::schema_fields_KEY, $key],
+                [self::schema_fields_MODULE, $module],
+                [self::schema_fields_AREA, $area],
+            ])
+            ->select()
+            ->fetchArray();
+
+        return \is_array($rows) ? \array_values(\array_filter($rows, 'is_array')) : [];
     }
 
     /**
@@ -406,9 +488,33 @@ class SystemConfig extends \Weline\Framework\Database\Model
         ?string $locale = null,
         array $options = []
     ): array {
-        $scope = $this->normalizeScope($scope);
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        if (!$transactions->isActive($this->getConnection())) {
+            return $transactions->run(
+                $this->getConnection(),
+                fn(): array => $this->saveScopeConfig($module, $area, $values, $scope, $locale, $options),
+            );
+        }
+        if (isset($options['scope_identity']) && $options['scope_identity'] instanceof \Weline\Framework\Runtime\ScopeIdentity) {
+            /** @var \Weline\Framework\Runtime\ScopeIdentity $identity */
+            $identity = $options['scope_identity'];
+            $scope = ObjectManager::getInstance(\Weline\SystemConfig\Service\SystemConfigScopeResolver::class)
+                ->toStorageScope($identity);
+        } else {
+            ObjectManager::getInstance(\Weline\SystemConfig\Service\SystemConfigScopeResolver::class)
+                ->assertWritableRawScope($scope);
+            $scope = $this->normalizeScope($scope);
+        }
         $locale = $this->normalizeLocale($locale);
         $inheritKeys = array_values(array_filter(array_map('strval', (array)($options['inherit_keys'] ?? []))));
+        ObjectManager::getInstance(\Weline\SystemConfig\Service\SecurityPolicyConfigGuard::class)->assertMutation(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $values,
+            $inheritKeys,
+        );
         $baseVersions = is_array($options['base_versions'] ?? null) ? $options['base_versions'] : [];
         $actorId = (string)($options['actor_id'] ?? RequestContext::get('system_config.actor_id', ''));
         $actorName = (string)($options['actor_name'] ?? RequestContext::get('system_config.actor_name', ''));
@@ -458,6 +564,20 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 $isSensitive = array_key_exists($key, $sensitiveKeys)
                     ? 1
                     : (int)($sensitiveValues[$key] ?? ($options['is_sensitive'] ?? ($oldRow[self::schema_fields_IS_SENSITIVE] ?? 0)));
+                $existingMeta = is_array($oldRow)
+                    ? $this->decodeJson((string)($oldRow[self::schema_fields_METADATA] ?? ''))
+                    : [];
+                if (!is_array($existingMeta)) {
+                    $existingMeta = [];
+                }
+                $fieldMeta = $options['field_metadata'][$key] ?? null;
+                if (is_array($fieldMeta)) {
+                    // 显式传入：整表替换（调用方负责 merge）
+                    $nextMeta = $fieldMeta;
+                } else {
+                    // 普通保存：保留旧 metadata（避免冲掉 suppress / lock 标记）
+                    $nextMeta = $existingMeta;
+                }
                 $row = [
                     self::schema_fields_KEY => $key,
                     self::schema_fields_MODULE => $module,
@@ -469,7 +589,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
                     self::schema_fields_IS_SENSITIVE => $isSensitive,
                     self::schema_fields_IS_ACTIVE => 1,
                     self::schema_fields_VERSION => $newVersion,
-                    self::schema_fields_METADATA => $this->encodeJson(is_array($options['field_metadata'][$key] ?? null) ? $options['field_metadata'][$key] : []),
+                    self::schema_fields_METADATA => $this->encodeJson($nextMeta),
                     self::schema_fields_UPDATED_AT => $now,
                     self::schema_fields_UPDATED_BY => $actorName !== '' ? $actorName : $actorId,
                 ];
@@ -499,7 +619,22 @@ class SystemConfig extends \Weline\Framework\Database\Model
             throw new Exception((string)__('保存配置失败，已回滚本次批次。%{1}', $e->getMessage()));
         }
 
-        $this->invalidateConfigCachesForModule($module, $area, $scope, $locale, array_keys($values));
+        $this->invalidateConfigCachesForModule(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            array_keys($values),
+            (bool)($options['defer_namespace_invalidation'] ?? false),
+        );
+        ObjectManager::getInstance(SystemConfigResourceChangePublisher::class)->publish(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $changes,
+            'system_config.save',
+        );
 
         return [
             'success' => true,
@@ -519,6 +654,13 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     public function rollbackScopeConfigVersion(int $versionId, array $options = []): array
     {
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        if (!$transactions->isActive($this->getConnection())) {
+            return $transactions->run(
+                $this->getConnection(),
+                fn(): array => $this->rollbackScopeConfigVersion($versionId, $options),
+            );
+        }
         /** @var SystemConfigVersion $version */
         $version = ObjectManager::getInstance(SystemConfigVersion::class);
         $rows = $version->clear()->reset()
@@ -617,6 +759,14 @@ class SystemConfig extends \Weline\Framework\Database\Model
 
         $rollbackMark = $this->markVersionRolledBack($versionId);
         $this->invalidateConfigCachesForModule($module, $area, $scope, $locale, array_column($rollbackChanges, 'key'));
+        ObjectManager::getInstance(SystemConfigResourceChangePublisher::class)->publish(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $rollbackChanges,
+            'system_config.rollback',
+        );
 
         return [
             'success' => true,
@@ -767,6 +917,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 $row = $this->loadSingleConfigRowIfAvailable($key, $module, $area, $fallbackScope, $fallbackLocale);
                 if ($row !== null) {
                     if (array_key_exists(self::schema_fields_IS_ACTIVE, $row) && (int)$row[self::schema_fields_IS_ACTIVE] === 0) {
+                        continue;
+                    }
+                    if (SystemConfigLockService::isRowSuppressed($row)) {
                         continue;
                     }
                     return $this->normalizeRow($row, $fallbackScope, $fallbackLocale);
@@ -1243,26 +1396,26 @@ class SystemConfig extends \Weline\Framework\Database\Model
     /**
      * @param list<string> $keys
      */
-    private function invalidateConfigCachesForModule(string $module, string $area, string $scope, string $locale, array $keys = []): void
+    private function invalidateConfigCachesForModule(
+        string $module,
+        string $area,
+        string $scope,
+        string $locale,
+        array $keys = [],
+        bool $deferNamespace = false,
+    ): void
     {
-        unset(self::$configs[$area][$module]);
-
-        foreach ($keys as $key) {
-            $key = (string)$key;
-            RequestContext::remove($this->buildRequestCacheKey('raw', $module, $area, $key, $scope, $locale));
-            RequestContext::remove($this->buildRequestCacheKey('resolved', $module, $area, $key, $scope, $locale));
-            foreach ($this->getFallbackScopes($scope) as $fallbackScope) {
-                foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
-                    $this->_cache?->delete($this->buildSingleCacheKey($key, $module, $area, $fallbackScope, $fallbackLocale));
-                }
-            }
-        }
-
-        RequestContext::remove($this->buildRequestCacheKey('module_rows', $module, $area, null, $scope, $locale));
-        RequestContext::remove($this->buildRequestCacheKey('module_map', $module, $area, null, $scope, $locale));
-
-        $this->_cache?->delete($this->buildModuleRowsCacheKey($module, $area, $scope, $locale));
-        $this->_cache?->delete($this->buildModuleMapCacheKey($module, $area, $scope, $locale));
+        ObjectManager::getInstance(ConfigCacheInvalidationService::class)->schedule(
+            $this->getConnection(),
+            $module,
+            $area,
+            $scope,
+            $locale,
+            array_values(array_map('strval', $keys)),
+            $this->getFallbackScopes($scope),
+            $this->getFallbackLocales($locale),
+            $deferNamespace,
+        );
     }
 
     private function buildSingleCacheKey(
@@ -1272,7 +1425,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
         string $scope = self::SCOPE_GLOBAL,
         string $locale = self::LOCALE_DEFAULT
     ): string {
-        return 'system_config_cache_' . sha1(implode('|', [$area, $module, $key, $scope, $locale]));
+        $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
+
+        return 'system_config_cache_' . sha1(implode('|', [$area, $module, $key, $scope, $locale, $vector]));
     }
 
     private function buildModuleRowsCacheKey(
@@ -1281,7 +1436,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
         string $scope = self::SCOPE_GLOBAL,
         string $locale = self::LOCALE_DEFAULT
     ): string {
-        return 'system_config_rows_' . sha1(implode('|', [$area, $module, $scope, $locale]));
+        $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
+
+        return 'system_config_rows_' . sha1(implode('|', [$area, $module, $scope, $locale, $vector]));
     }
 
     private function buildModuleMapCacheKey(
@@ -1290,7 +1447,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
         string $scope = self::SCOPE_GLOBAL,
         string $locale = self::LOCALE_DEFAULT
     ): string {
-        return 'system_config_map_' . sha1(implode('|', [$area, $module, $scope, $locale]));
+        $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
+
+        return 'system_config_map_' . sha1(implode('|', [$area, $module, $scope, $locale, $vector]));
     }
 
     private function buildRequestCacheKey(
@@ -1301,6 +1460,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
         string $scope = self::SCOPE_GLOBAL,
         string $locale = self::LOCALE_DEFAULT
     ): string {
+        $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
+
         return implode(':', array_filter([
             'system_config',
             $type,
@@ -1309,6 +1470,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
             $key,
             $scope,
             $locale,
+            $vector,
         ], static fn(?string $value): bool => $value !== null && $value !== ''));
     }
 

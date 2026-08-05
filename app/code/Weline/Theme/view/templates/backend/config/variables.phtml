@@ -174,7 +174,7 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             const form = document.getElementById('variables-form');
             const formData = new FormData(form);
             
-            fetch('<?= $saveUrl ?>', {
+            WelineThemeBinQuery.request('<?= $saveUrl ?>', {
                 method: 'POST',
                 body: formData
             })
@@ -244,7 +244,7 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             formData.append('scope', '<?= htmlspecialchars($scope) ?>');
             formData.append('palette', paletteName);
             
-            fetch('<?= $applyPaletteUrl ?>', {
+            WelineThemeBinQuery.request('<?= $applyPaletteUrl ?>', {
                 method: 'POST',
                 body: formData
             })

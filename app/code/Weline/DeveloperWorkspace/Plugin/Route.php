@@ -8,6 +8,7 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core;
 use Weline\Framework\Ui\FormKey;
+use Weline\Framework\View\Form\FormRenderer;
 
 class Route extends Core
 {
@@ -23,18 +24,25 @@ class Route extends Core
             $url = $request->getUrlBuilder()->getUrl('/dev/tool/sandbox/close');
             $formKey = ObjectManager::getInstance(FormKey::class)->getKey($url);
 
-            $safeUrl = \htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
             $safeTitle = \htmlspecialchars((string)$title, ENT_QUOTES, 'UTF-8');
             $safeSandboxTitle = \htmlspecialchars((string)$sandboxTitle, ENT_QUOTES, 'UTF-8');
             $safeSandboxKeyLabel = \htmlspecialchars((string)$sandboxKeyLabel, ENT_QUOTES, 'UTF-8');
             $safeFormKey = \htmlspecialchars($formKey, ENT_QUOTES, 'UTF-8');
+            $formOpen = FormRenderer::open([
+                'action' => $url,
+                'method' => 'post',
+                'id' => 'sandbox-form',
+                'intent' => 'developer.sandbox.close',
+                'csrf' => 'off',
+            ]);
+            $formClose = FormRenderer::close();
 
             $html = <<<HTML
 <div class="position-fixed" style="top: 50%; transform: translateY(-50%); right: 0;">
   <div class="card">
     <div class="card-body">
       <h5 class="card-title">$safeTitle</h5>
-      <form action="$safeUrl" method="post" id="sandbox-form">
+      $formOpen
         <input type="hidden" name="form_key" value="$safeFormKey">
         <input type="hidden" name="close" value="on">
         <label class="form-label small mb-1" for="sandbox-key">$safeSandboxKeyLabel</label>
@@ -53,7 +61,7 @@ class Route extends Core
             }
           });
         </script>
-      </form>
+      $formClose
     </div>
   </div>
 </div>

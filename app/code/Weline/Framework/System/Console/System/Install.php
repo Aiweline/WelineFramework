@@ -15,6 +15,42 @@ use Weline\Framework\System\Runner;
 
 class Install extends \Weline\Framework\Console\CommandAbstract
 {
+    private const DATABASE_OPTION_KEYS = [
+        'type' => true,
+        'path' => true,
+        'hostname' => true,
+        'hostport' => true,
+        'database' => true,
+        'username' => true,
+        'password' => true,
+        'prefix' => true,
+        'charset' => true,
+        'collate' => true,
+        'persistent' => true,
+        'pool_size' => true,
+        'timeout' => true,
+    ];
+
+    private const POSTGRESQL_DEFAULTS = [
+        'type' => 'pgsql',
+        'hostname' => '127.0.0.1',
+        'hostport' => '5432',
+        'database' => 'weline',
+        'username' => 'weline',
+        'password' => 'weline',
+        'prefix' => 'w_',
+        'charset' => 'utf8',
+        'collate' => 'utf8_general_ci',
+    ];
+
+    private const SQLITE_SANDBOX_DEFAULTS = [
+        'type' => 'sqlite',
+        'path' => APP_PATH . 'etc/sandbox_db.sqlite',
+        'prefix' => 'w_',
+        'charset' => 'utf8mb4',
+        'collate' => 'utf8mb4_general_ci',
+    ];
+
     /**
      * @var Runner
      */
@@ -95,33 +131,23 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         array_shift($args);
         $db_keys = DataInterface::db_keys;
         if (!isset($args_config['db'])) {
-            $this->printer->error('数据库配置为空！示例：bin/w system:install --db-type=mysql', '系统');
-            foreach ($db_keys as $key => $item) {
-                $this->printer->warning('--db-' . $key . '=' . ($item ? $item : 'null'), '数据库');
-            }
-                $db_config['type'] ?? $db_config['type'] = 'sqlite';
-                $db_config['path'] ?? $db_config['path'] = APP_PATH . 'etc/db.sqlite';
-                $db_config['hostport'] ?? $db_config['hostport'] = '';
-                $db_config['prefix'] ?? $db_config['prefix'] = 'w_';
-                $db_config['charset'] ?? $db_config['charset'] = 'utf8mb4';
-                $db_config['collate'] ?? $db_config['collate'] = 'utf8mb4_general_ci';
-            $this->printer->error(__('数据库配置为空！已使用默认Sqlite数据库！'), __('系统'));
+            $this->printer->note(
+                __('未显式配置主数据库，使用默认 PostgreSQL 开发连接（127.0.0.1:5432 / weline）。'),
+                __('系统')
+            );
         }
         if (!isset($args_config['sandbox_db'])) {
-            $this->printer->error(__('沙盒数据库配置为空！示例：bin/w system:install --sandbox_db-type=mysql'), __('系统'));
-            foreach ($db_keys as $key => $item) {
-                $this->printer->warning('--sandbox_db-' . $key . '=' . ($item ? $item : 'null'), __('沙盒数据库'));
-            }
+            $this->printer->note(__('沙盒数据库未配置，使用隔离开发专用 SQLite。'), __('系统'));
         }
-        $db_config = $args_config['db'] ?? [];
-        $db_config = array_intersect_key($db_config, $db_keys);
-            $db_config['type'] ?? $db_config['type'] = 'sqlite';
-            $db_config['path'] ?? $db_config['path'] = APP_PATH . 'etc/db.sqlite';
-            $db_config['hostname'] ?? $db_config['hostname'] = '127.0.0.1';
-            $db_config['hostport'] ?? $db_config['hostport'] = '3306';
-            $db_config['prefix'] ?? $db_config['prefix'] = 'w_';
-            $db_config['charset'] ?? $db_config['charset'] = 'utf8mb4';
-            $db_config['collate'] ?? $db_config['collate'] = 'utf8mb4_general_ci';
+        $db_config = array_intersect_key($args_config['db'] ?? [], self::DATABASE_OPTION_KEYS);
+        $dbType = strtolower(trim((string)($db_config['type'] ?? self::POSTGRESQL_DEFAULTS['type'])));
+        $db_config = array_replace(
+            $dbType === 'sqlite'
+                ? array_replace(self::SQLITE_SANDBOX_DEFAULTS, ['path' => APP_PATH . 'etc/db.sqlite'])
+                : self::POSTGRESQL_DEFAULTS,
+            $db_config,
+            ['type' => $dbType],
+        );
         if (strtolower($db_config['type']) !== 'sqlite') {
             foreach ($db_keys as $db_key => $v) {
                 if (!isset($db_config[$db_key])) {
@@ -133,15 +159,19 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         foreach ($db_config as $key => $item) {
             echo $this->printer->colorize(str_pad($key, 8, ' ', STR_PAD_LEFT), $this->printer::WARNING) . '=>' . $this->printer->colorize($item, $this->printer::NOTE) . "\r\n";
         }
-        $sandbox_db_config = $args_config['sandbox_db'] ?? [];
-        $sandbox_db_config = array_intersect_key($sandbox_db_config, $db_keys);
-            $sandbox_db_config['type'] ?? $sandbox_db_config['type'] = 'sqlite';
-            $sandbox_db_config['path'] ?? $sandbox_db_config['path'] = APP_PATH . 'etc/db.sqlite';
-            $sandbox_db_config['hostport'] ?? $sandbox_db_config['hostport'] = '3306';
-            $sandbox_db_config['hostname'] ?? $sandbox_db_config['hostname'] = '127.0.0.1';
-            $sandbox_db_config['prefix'] ?? $sandbox_db_config['prefix'] = 'w_';
-            $sandbox_db_config['charset'] ?? $sandbox_db_config['charset'] = 'utf8mb4';
-            $sandbox_db_config['collate'] ?? $sandbox_db_config['collate'] = 'utf8mb4_general_ci';
+        $sandbox_db_config = array_intersect_key($args_config['sandbox_db'] ?? [], self::DATABASE_OPTION_KEYS);
+        $sandboxType = strtolower(trim((string)($sandbox_db_config['type'] ?? self::SQLITE_SANDBOX_DEFAULTS['type'])));
+        $sandbox_db_config = array_replace(
+            $sandboxType === 'sqlite'
+                ? self::SQLITE_SANDBOX_DEFAULTS
+                : array_replace(self::POSTGRESQL_DEFAULTS, [
+                    'database' => 'sandbox_weline',
+                    'username' => 'sandbox_weline',
+                    'password' => 'sandbox_weline',
+                ]),
+            $sandbox_db_config,
+            ['type' => $sandboxType],
+        );
         if (strtolower($sandbox_db_config['type']) !== 'sqlite') {
             foreach ($db_keys as $db_key => $v) {
                 if (!isset($sandbox_db_config[$db_key])) {
@@ -207,34 +237,36 @@ class Install extends \Weline\Framework\Console\CommandAbstract
         if ($isWindows) {
             // Windows PowerShell 格式 - 使用反引号或单行
             $examples = [
-                '使用默认 SQLite 数据库安装（开发环境）' => 'php bin/w system:install --db-type=sqlite',
-                '使用 PgSql/MySQL 数据库安装（生产环境推荐）' => 
+                '使用默认 PostgreSQL 开发连接安装' => 'php bin/w system:install',
+                '显式使用 SQLite 安装（仅隔离开发）' => 'php bin/w system:install --db-type=sqlite',
+                '使用自定义 PostgreSQL 数据库安装' =>
                     'php bin/w system:install `' . "\n" .
                     '  --db-type=pgsql `' . "\n" .
                     '  --db-hostname=127.0.0.1 `' . "\n" .
-                    '  --db-hostport=3306 `' . "\n" .
+                    '  --db-hostport=5432 `' . "\n" .
                     '  --db-database=weline `' . "\n" .
-                    '  --db-username=root `' . "\n" .
+                    '  --db-username=weline `' . "\n" .
                     '  --db-password=your_password `' . "\n" .
                     '  --db-prefix=w_ `' . "\n" .
-                    '  --db-charset=utf8mb4 `' . "\n" .
-                    '  --db-collate=utf8mb4_general_ci',
+                    '  --db-charset=utf8 `' . "\n" .
+                    '  --db-collate=utf8_general_ci',
             ];
         } else {
             // Unix/Linux/Mac 格式 - 使用反斜杠
             $examples = [
-                '使用默认 SQLite 数据库安装（开发环境）' => 'php bin/w system:install --db-type=sqlite',
-                '使用 PgSql/MySQL 数据库安装（生产环境推荐）' => 
+                '使用默认 PostgreSQL 开发连接安装' => 'php bin/w system:install',
+                '显式使用 SQLite 安装（仅隔离开发）' => 'php bin/w system:install --db-type=sqlite',
+                '使用自定义 PostgreSQL 数据库安装' =>
                     'php bin/w system:install \\' . "\n" .
                     '  --db-type=pgsql \\' . "\n" .
                     '  --db-hostname=127.0.0.1 \\' . "\n" .
-                    '  --db-hostport=3306 \\' . "\n" .
+                    '  --db-hostport=5432 \\' . "\n" .
                     '  --db-database=weline \\' . "\n" .
-                    '  --db-username=root \\' . "\n" .
+                    '  --db-username=weline \\' . "\n" .
                     '  --db-password=your_password \\' . "\n" .
                     '  --db-prefix=w_ \\' . "\n" .
-                    '  --db-charset=utf8mb4 \\' . "\n" .
-                    '  --db-collate=utf8mb4_general_ci',
+                    '  --db-charset=utf8 \\' . "\n" .
+                    '  --db-collate=utf8_general_ci',
             ];
         }
         
@@ -243,25 +275,26 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             'system:install',
             $this->tip(),
             [
-                '--db-type' => '数据库类型（pgsql/mysql/sqlite，默认：sqlite）',
+                '--db-type' => '数据库类型（pgsql/mysql/sqlite，默认：pgsql；sqlite 仅隔离开发）',
                 '--db-hostname' => '数据库主机地址（默认：127.0.0.1）',
-                '--db-hostport' => '数据库端口（默认：3306）',
-                '--db-database' => '数据库名称（PgSql/MySQL必填）',
-                '--db-username' => '数据库用户名（PgSql/MySQL必填）',
-                '--db-password' => '数据库密码（PgSql/MySQL必填）',
+                '--db-hostport' => '数据库端口（PostgreSQL 默认：5432）',
+                '--db-database' => '数据库名称（默认：weline）',
+                '--db-username' => '数据库用户名（默认：weline）',
+                '--db-password' => '数据库密码（默认开发值：weline）',
                 '--db-prefix' => '表前缀（默认：w_）',
-                '--db-charset' => '字符集（默认：utf8mb4）',
-                '--db-collate' => '排序规则（默认：utf8mb4_general_ci）',
+                '--db-charset' => '字符集（PostgreSQL 默认：utf8）',
+                '--db-collate' => '排序规则（PostgreSQL 默认：utf8_general_ci）',
                 '--sandbox_db-*' => '沙盒数据库配置（可选，参数同上）',
                 '-h, --help' => '显示帮助信息',
             ],
             [
                 '注意事项：',
-                '  1. 生产环境强烈推荐使用 PgSql/MySQL 数据库',
-                '  2. 安装前请确保数据库已创建',
-                '  3. 安装完成后会生成随机的后台入口密钥',
-                '  4. 安装成功后使用 php bin/w server:start 启动服务',
-                $isWindows ? '  5. Windows PowerShell 使用反引号 (`) 连接多行命令' : '  5. Unix/Linux 使用反斜杠 (\\) 连接多行命令',
+                '  1. PostgreSQL 是默认开发与生产数据库',
+                '  2. SQLite 仅用于显式沙盒或隔离开发，不作为正式验收数据库',
+                '  3. 安装前请确保数据库已创建',
+                '  4. 安装完成后会生成随机的后台入口密钥',
+                '  5. 安装成功后使用 php bin/w server:start 启动服务',
+                $isWindows ? '  6. Windows PowerShell 使用反引号 (`) 连接多行命令' : '  6. Unix/Linux 使用反斜杠 (\\) 连接多行命令',
             ],
             $examples
         );

@@ -129,4 +129,32 @@ final class PixelEcommercePurchaseRevenueServiceTest extends TestCase
         self::assertStringContainsString('购成与收入', $detail);
         self::assertStringContainsString('purchase_revenue', $detail);
     }
+
+    public function testBuildForWebsiteSurfacesInvalidWebsiteId(): void
+    {
+        $result = $this->service->buildForWebsite(
+            -3,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static fn(): array => [['event' => 'purchase', 'value' => 9]]
+        );
+
+        self::assertSame('invalid website_id', $result['error']);
+        self::assertSame(0.0, (float)($result['purchase_revenue'] ?? 0));
+    }
+
+    public function testBuildForWebsiteSwallowsQueryErrorsWithoutThrowing(): void
+    {
+        $result = $this->service->buildForWebsite(
+            1,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static function (): array {
+                throw new \RuntimeException('flat column missing');
+            }
+        );
+
+        self::assertSame('flat column missing', $result['error']);
+        self::assertSame(0.0, (float)($result['purchase_revenue'] ?? 0));
+    }
 }

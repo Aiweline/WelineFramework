@@ -10,7 +10,7 @@ $backendBase = $this->getBackendUrl('shipping/backend/zone');
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row">
+<div class="row" data-testid="shipping-zone-management">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('配送区域') ?></h4>
@@ -26,6 +26,17 @@ $embed = $this->getData('embed') ?? false;
                     </div>
                 </div>
 <?php endif; ?>
+
+                <div class="row mb-3"><div class="col-12"><div class="card" data-testid="shipping-zone-create-form">
+                    <div class="card-header"><h5 class="card-title mb-0"><?= __('新增配送区域') ?></h5></div>
+                    <div class="card-body"><w:form method="post" action="@backend-url('shipping/backend/zone/save')"><div class="row g-3">
+                        <div class="col-md-3"><label class="form-label"><?= __('区域名称') ?></label><input class="form-control" name="zone_name" maxlength="255" required></div>
+                        <div class="col-md-3"><label class="form-label"><?= __('区域代码') ?></label><input class="form-control" name="zone_code" maxlength="50" required></div>
+                        <div class="col-md-3"><label class="form-label"><?= __('描述') ?></label><input class="form-control" name="description"></div>
+                        <div class="col-md-1"><label class="form-label"><?= __('排序') ?></label><input class="form-control" type="number" min="0" name="sort_order" value="0"></div>
+                        <div class="col-md-2 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-zone-submit"><?= __('创建') ?></button></div>
+                    </div></w:form></div>
+                </div></div></div>
 
                 <div class="row">
                     <div class="col-12">
@@ -52,10 +63,10 @@ $embed = $this->getData('embed') ?? false;
                                             <?php /** @var Zone $zone */ ?>
                                             <?php foreach ($zones as $zone): ?>
                                                 <tr>
-                                                    <td><?= htmlspecialchars($zone->getData(Zone::fields_ZONE_NAME)) ?></td>
-                                                    <td><?= htmlspecialchars($zone->getData(Zone::fields_ZONE_CODE)) ?></td>
+                                                    <td><?= htmlspecialchars($zone->getData(Zone::schema_fields_ZONE_NAME)) ?></td>
+                                                    <td><?= htmlspecialchars($zone->getData(Zone::schema_fields_ZONE_CODE)) ?></td>
                                                     <td>
-                                                        <?php if ($zone->getData(Zone::fields_IS_ACTIVE)): ?>
+                                                        <?php if ($zone->getData(Zone::schema_fields_IS_ACTIVE)): ?>
                                                             <span class="badge bg-success"><?= __('启用') ?></span>
                                                         <?php else: ?>
                                                             <span class="badge bg-secondary"><?= __('禁用') ?></span>

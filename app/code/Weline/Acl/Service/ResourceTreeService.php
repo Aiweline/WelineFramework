@@ -113,15 +113,33 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             ->fetchArray();
         
         $roleSelectedSources = $this->getRoleSelectedSources($roleId);
+        $knownIds = [];
+        foreach ($allRows as $row) {
+            $sid = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+            if ($sid !== '') {
+                $knownIds[$sid] = true;
+            }
+        }
+        
+        // D-12: menu dimension = menus + mounted pc/api only; query/task/operation live in tag tree.
+        $menuTypes = [Acl::type_MENUS, Acl::type_PC, Acl::type_API, 'pc', 'api', 'menus'];
         
         // 按 parent_source 分组（使用轻量 AclNode）
         $byParent = ['' => []];
         foreach ($allRows as $row) {
+            $type = (string)($row[Acl::schema_fields_TYPE] ?? '');
+            if (!\in_array($type, $menuTypes, true)) {
+                continue;
+            }
             $sid = (string) ($row[Acl::schema_fields_SOURCE_ID] ?? '');
             $row['role_id'] = isset($roleSelectedSources[$sid]) ? true : null;
             $node = new AclNode($row);
             
             $parent = $node->getParentSource();
+            // Remount broken parents to root (D-12).
+            if ($parent !== '' && !isset($knownIds[$parent])) {
+                $parent = '';
+            }
             $byParent[$parent][] = $node;
         }
         foreach ($byParent as $p => $list) {

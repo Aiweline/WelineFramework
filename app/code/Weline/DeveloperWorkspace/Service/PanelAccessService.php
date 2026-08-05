@@ -97,11 +97,16 @@ class PanelAccessService
 
     public function authenticate(Request $request): bool
     {
+        return $this->authenticateToken($this->extractSubmittedToken($request));
+    }
+
+    public function authenticateToken(string $token): bool
+    {
         if (!$this->hasProductionPanelConfig()) {
             return false;
         }
 
-        return $this->verifyToken($this->extractSubmittedToken($request));
+        return $this->verifyToken($token);
     }
 
     public function issueSession(Response $response): Response

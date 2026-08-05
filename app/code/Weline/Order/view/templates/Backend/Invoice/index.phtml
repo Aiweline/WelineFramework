@@ -1,0 +1,40 @@
+<?php
+$candidates = is_array($candidates ?? null) ? $candidates : [];
+$invoices = is_array($invoices ?? null) ? $invoices : [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+?>
+<div class="row" data-testid="order-invoice-management" weline-code="order.backend.invoice.section_1">
+  <div class="col-12">
+    <div class="page-title-box"><h4 class="page-title"><i class="mdi mdi-file-document-plus me-2"></i><?= __('订单发票管理') ?></h4></div>
+    <div><template>Weline_Component::message.phtml</template></div>
+    <div class="alert alert-info"><?= __('只处理 Payment 已生成的确定性 invoice effect；页面不能绕过支付事实手工创建发票。每张已支付订单最多生成一张最小发票。') ?></div>
+    <div class="card mb-3"><div class="card-body">
+      <h5><?= __('开票 effect') ?></h5>
+      <div class="table-responsive"><table class="table table-striped align-middle"><thead><tr><th><?= __('订单') ?></th><th><?= __('Outbox') ?></th><th><?= __('Effect Key') ?></th><th><?= __('状态') ?></th><th><?= __('操作') ?></th></tr></thead><tbody>
+      <?php if ($candidates === []): ?><tr><td colspan="5" class="text-center text-muted"><?= __('暂无开票 effect') ?></td></tr>
+      <?php else: foreach ($candidates as $row): ?>
+        <tr data-testid="invoice-candidate" data-outbox-code="<?= $escape($row['outbox_code'] ?? '') ?>">
+          <td><a href="<?= $this->getBackendUrl('weline_order/backend/order/view?id=' . (int)($row['order_id'] ?? 0)) ?>"><?= $escape($row['order_number'] ?? '') ?></a></td>
+          <td><code><?= $escape($row['outbox_code'] ?? '') ?></code></td>
+          <td><code><?= $escape($row['effect_key'] ?? '') ?></code></td>
+          <td><?= $escape($row['status'] ?? '') ?></td>
+          <td>
+            <w:form method="post" action="@var($this->getBackendUrl('weline_order/backend/invoice/execute'))" data-testid="invoice-command-form">
+              <input type="hidden" name="outbox_code" value="<?= $escape($row['outbox_code'] ?? '') ?>">
+              <input type="hidden" name="expected_grant_version" value="<?= (int)($row['expected_grant_version'] ?? 0) ?>">
+              <button class="btn btn-primary btn-sm" type="submit" data-testid="invoice-submit"><?= ($row['status'] ?? '') === 'done' ? __('验证幂等结果') : __('处理开票') ?></button>
+            </w:form>
+          </td>
+        </tr>
+      <?php endforeach; endif; ?>
+      </tbody></table></div>
+    </div></div>
+    <div class="card"><div class="card-body">
+      <h5><?= __('已生成发票') ?></h5>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th><?= __('订单') ?></th><th><?= __('发票号') ?></th><th><?= __('金额（minor）') ?></th><th><?= __('税额（minor）') ?></th><th><?= __('状态') ?></th><th><?= __('Effect Key') ?></th></tr></thead><tbody>
+      <?php if ($invoices === []): ?><tr><td colspan="6" class="text-center text-muted"><?= __('暂无发票') ?></td></tr>
+      <?php else: foreach ($invoices as $row): ?><tr data-testid="invoice-record-row"><td><?= $escape($row['order_number'] ?? '') ?></td><td><code><?= $escape($row['invoice_number'] ?? '') ?></code></td><td><?= (int)($row['amount_minor'] ?? 0) ?></td><td><?= (int)($row['tax_amount_minor'] ?? 0) ?></td><td><?= $escape($row['status'] ?? '') ?></td><td><code><?= $escape($row['effect_key'] ?? '') ?></code></td></tr><?php endforeach; endif; ?>
+      </tbody></table></div>
+    </div></div>
+  </div>
+</div>

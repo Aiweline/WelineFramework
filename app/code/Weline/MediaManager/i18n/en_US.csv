@@ -8,6 +8,18 @@
 文件删除前触发，可用于验证或阻止删除。,"Triggered before file deletion, can be used to validate or prevent deletion."
 存储源切换,"Storage source switch"
 用户切换存储源时触发。,"Triggered when the user switches the storage source."
+媒体管理查询器不支持的操作：%{1},媒体管理查询器不支持的操作：%{1}
+媒体管理器,媒体管理器
+"提供后台文件连接器、AI 作图配置/生成及结果保存。","提供后台文件连接器、AI 作图配置/生成及结果保存。"
+"读取 AI 作图模型可用状态。","读取 AI 作图模型可用状态。"
+"保存当前后台用户拥有的 AI 作图结果。","保存当前后台用户拥有的 AI 作图结果。"
+"媒体文件连接器（open/mkdir/rename/rm/upload 等）。","媒体文件连接器（open/mkdir/rename/rm/upload 等）。"
+"后台 AI 作图（服务端收集事件，禁止浏览器 EventSource）。","后台 AI 作图（服务端收集事件，禁止浏览器 EventSource）。"
+"润色 AI 作图提示词。","润色 AI 作图提示词。"
+媒体资产查询器不支持的操作：%{1},媒体资产查询器不支持的操作：%{1}
+媒体资产只读接口,媒体资产只读接口
+为可信模块读取经过路径约束的媒体图片。,为可信模块读取经过路径约束的媒体图片。
+按媒体哈希读取图片字节。,按媒体哈希读取图片字节。
 "媒体管理 AI 作图适配器","媒体管理 AI 作图适配器"
 为后台文件管理器提供文生图、图生图、多轮修图与批量生成的场景约束与模型绑定。,为后台文件管理器提供文生图、图生图、多轮修图与批量生成的场景约束与模型绑定。
 图生图/修图需要有效的参考图,图生图/修图需要有效的参考图
@@ -20,6 +32,10 @@
 图片保存成功,"Image saved successfully"
 保存成功,保存成功
 保存失败：%{1},保存失败：%{1}
+"AI 作图","AI Draw"
+"媒体管理 AI 作图（文生图/图生图/批量）","媒体管理 AI 作图（文生图/图生图/批量）"
+"AI 作图保存","AI 作图保存"
+"保存 AI 作图结果到媒体库","保存 AI 作图结果到媒体库"
 允许的文件类型：,"Allowed file types:"
 允许的文件大小：,"Allowed file size:"
 媒体选择器初始化失败，请刷新页面后重试。,媒体选择器初始化失败，请刷新页面后重试。
@@ -32,7 +48,6 @@ Rename,Rename
 Download,Download
 Delete,Delete
 Refresh,Refresh
-"AI 作图","AI Draw"
 Select,Select
 "Drop files here to upload","Drop files here to upload"
 Loading...,Loading...
@@ -57,6 +72,8 @@ OK,OK
 当前目录暂无图片，请先上传或切换到包含图片的文件夹,"No images in this folder. Upload images or switch to a folder that contains images."
 没有匹配的图片,"No matching images"
 提示词,Prompt
+"AI 润色","AI Polish"
+清空,Clear
 批量提示词（每行一条）,"Batch prompts (one per line)"
 或同提示词生成数量,"Or repeat count for same prompt"
 尺寸,Size
@@ -118,6 +135,9 @@ OK,OK
 选择模式,"Selection Mode"
 选择文件,"Select Files"
 请等待当前目录加载完成后再上传,"Please wait for the current folder to load before uploading"
+正在润色…,Polishing…
+润色完成,"Polish completed"
+润色失败,"Polish failed"
 正在保存…,Saving…
 保存失败,"Save failed"
 会话已失效，请重新生成后再保存,"Session expired. Please generate again before saving."
@@ -145,6 +165,11 @@ OK,OK
 生成结果已过期，请重新生成,生成结果已过期，请重新生成
 源文件与生成记录不匹配,源文件与生成记录不匹配
 缺少目标目录,缺少目标目录
+请先输入提示词,"Please enter a prompt first"
+"你是图像生成提示词润色助手。请把用户的简短描述改写成更适合文生图的提示词：保留原意，补充主体、构图、风格、光线与画质关键词；不要解释、不要前后缀说明，只输出润色后的提示词本身。\n\n用户描述：\n%{1}","你是图像生成提示词润色助手。请把用户的简短描述改写成更适合文生图的提示词：保留原意，补充主体、构图、风格、光线与画质关键词；不要解释、不要前后缀说明，只输出润色后的提示词本身。\n\n用户描述：\n%{1}"
+"润色需要可用的文本模型：请在「AI - 场景适配器」为 %{1} 绑定 text2text 模型，或在「AI - 默认模型」配置全局默认文本模型。","Prompt polishing needs an available text model: bind a text2text model for %{1} in AI - Scenario Adapters, or configure the global default text model in AI - Default Models."
+润色失败：模型未返回内容,"Polish failed: the model returned no content"
+润色失败：%{1},"Polish failed: %{1}"
 上一轮生成结果已过期,上一轮生成结果已过期
 参考文件必须是图片,参考文件必须是图片
 图片生成未返回有效结果,图片生成未返回有效结果
@@ -156,6 +181,7 @@ OK,OK
 "Mock 图片生成失败","Mock 图片生成失败"
 会话无权访问,会话无权访问
 "会话 ID 无效","会话 ID 无效"
+上传文件超过大小限制。,上传文件超过大小限制。
 媒体根目录无效,媒体根目录无效
 无效路径,无效路径
 参考文件不存在,参考文件不存在
@@ -168,4 +194,10 @@ OK,OK
 源文件不存在,源文件不存在
 "不允许覆盖 SVG 矢量文件","不允许覆盖 SVG 矢量文件"
 覆盖原图失败,覆盖原图失败
+图生图必须选择参考图,图生图必须选择参考图
+继续修图缺少上一轮生成结果,继续修图缺少上一轮生成结果
+任务检查点与已冻结输入不匹配,任务检查点与已冻结输入不匹配
+文生图模型未就绪,文生图模型未就绪
+"AI 生成在结果确认前中断，无法安全重试。","AI 生成在结果确认前中断，无法安全重试。"
+"AI 请求在确认结果前中断，无法安全重试。","AI 请求在确认结果前中断，无法安全重试。"
 本地存储,"Local Storage"

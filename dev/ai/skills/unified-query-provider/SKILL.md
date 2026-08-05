@@ -1,20 +1,15 @@
 ---
 name: unified-query-provider
-description: w_query 与跨模块 QueryProvider 契约；跨模块读数据、帮助发现、introspect、query:help CLI。
-version: 1.0.0
+description: Implement and consume Weline w_query and cross-module QueryProvider contracts, including provider discovery, introspection, and query:help. Use for stable cross-module read APIs; use ordinary module ORM for same-module persistence and weline-api for browser transport.
 ---
 
 # w_query 与 QueryProvider
 
-## 何时使用
+## 边界
 
-- 关键词：`w_query`、`QueryProvider`、`query:help`、`introspect`、跨模块读数据
-- 任何模块需要读取另一模块数据，或 AI/开发需要发现 provider 支持的 operations
-
-## 跨模块禁令（强制）
-
-- 禁止跨模块 `use`/注入/`ObjectManager::getInstance`/`new` 引用对方 Service/Model/Helper
-- 跨模块读数据**必须**使用 `w_query()` 或浏览器 `Weline.Api.*`
+- 新增稳定的跨模块读取契约时使用 QueryProvider / `w_query()`；已有发布接口时遵循其 owning contract。
+- 禁止为读取数据而跨模块 `use`、注入、`ObjectManager::getInstance` 或 `new` 对方 Service/Model/Helper。
+- 浏览器传输仍使用 `Weline.Api.resource()`、`graph()` 或 `stream()`；不要把 `w_query()` 当成新的传输协议。
 - 调用前先查帮助：`php bin/w query:help <provider|WeShop_Product>` 或 `w_query('模块名')`
 
 ## PHP 帮助
@@ -54,12 +49,11 @@ await Weline.Query.help('cart');
 
 ## 协作边界
 
-- 读数据：QueryProvider + `w_query`
-- 写/副作用：Event、Hook、Queue、已发布 Interface
+- 已有读取契约：遵循 owning published interface；新增可发现的跨模块读取：QueryProvider + `w_query`
+- 写入和副作用：owning Interface、Event、Hook、Queue 或其他已发布命令边界
 - 不要用 Event 代替查询 API
 
 ## 参考
 
-- `dev/ai/global-constraints.md` 第 4.1 节
 - `app/code/Weline/Event/doc/w_query.md`
 - `app/code/Weline/Framework/Service/Query/Provider/QueryProviderInterface.php`

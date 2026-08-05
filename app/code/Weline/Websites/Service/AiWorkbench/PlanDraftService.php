@@ -137,22 +137,33 @@ class PlanDraftService
             return null;
         }
 
+        $plan = $this->sanitizePlanForStorage($plan);
+        $sourceMessage = $this->truncateUtf8(\trim($sourceMessage), 2000);
+
         $version = clone $this->versionModel;
         $version->clearData()->clearQuery();
         $version->setData(AiSitePlanVersion::schema_fields_DRAFT_ID, $draft->getId());
         $version->setData(AiSitePlanVersion::schema_fields_VERSION_NO, $this->resolveNextVersionNo($draft->getId()));
         $version->setData(AiSitePlanVersion::schema_fields_SOURCE_TYPE, \trim($sourceType) !== '' ? \trim($sourceType) : 'generate');
-        $version->setData(AiSitePlanVersion::schema_fields_SOURCE_MESSAGE, \trim($sourceMessage));
+        $version->setData(AiSitePlanVersion::schema_fields_SOURCE_MESSAGE, $sourceMessage);
         $version->setPlanArray($plan);
-        $version->save();
+        $saveRet = $version->save();
+        $versionId = $version->getId();
+        if ($versionId <= 0 && \is_numeric($saveRet) && (int)$saveRet > 0) {
+            $versionId = (int)$saveRet;
+            $version->setData(AiSitePlanVersion::schema_fields_ID, $versionId);
+        }
+        if ($versionId <= 0) {
+            throw new \RuntimeException((string)__('Failed to persist plan version'));
+        }
 
         $payload = $draft->getPayloadArray();
         $payload['current_plan'] = $plan;
-        $payload['current_plan_version_id'] = $version->getId();
+        $payload['current_plan_version_id'] = $versionId;
         $payload['current_plan_version_no'] = $version->getVersionNo();
         $payload['plan_versions_count'] = $version->getVersionNo();
         $draft->setPayloadArray($payload);
-        $draft->setData(AiSitePlanDraft::schema_fields_CURRENT_VERSION_ID, $version->getId());
+        $draft->setData(AiSitePlanDraft::schema_fields_CURRENT_VERSION_ID, $versionId);
         if ($draft->getBuildMode() !== $this->normalizeBuildMode((string)($plan['build_mode'] ?? ''))) {
             $draft->setData(AiSitePlanDraft::schema_fields_BUILD_MODE, $this->normalizeBuildMode((string)($plan['build_mode'] ?? '')));
         }
@@ -169,6 +180,22 @@ class PlanDraftService
         }
 
         $resolvedVersionId = $versionId > 0 ? $versionId : $draft->getCurrentVersionId();
+        // SSE 可能已把方案推到前端，但 version 落库失败/中断：用 payload.current_plan 补建版本后再确认
+        if ($resolvedVersionId <= 0) {
+            $payload = $draft->getPayloadArray();
+            $plan = \is_array($payload['current_plan'] ?? null) ? $payload['current_plan'] : [];
+            if ($plan !== []) {
+                $version = $this->appendPlanVersion(
+                    $draftId,
+                    $adminUserId,
+                    $plan,
+                    'confirm_recover',
+                    (string)($payload['pending_plan_message'] ?? $payload['description'] ?? '')
+                );
+                $resolvedVersionId = $version?->getId() ?? 0;
+                $draft = $this->loadById($draftId, $adminUserId) ?? $draft;
+            }
+        }
         if ($resolvedVersionId <= 0) {
             return false;
         }
@@ -536,5 +563,41 @@ class PlanDraftService
             AiSitePlanDraft::DOMAIN_SOURCE_LOCAL_POOL => $domainSource,
             default => AiSitePlanDraft::DOMAIN_SOURCE_NONE,
         };
+    }
+
+    /**
+     * Keep version JSON storage-friendly: polished multi-line briefs can make INSERT fail silently.
+     *
+     * @param array<string, mixed> $plan
+     * @return array<string, mixed>
+     */
+    private function sanitizePlanForStorage(array $plan): array
+    {
+        foreach (['brief_description', 'updated_from_message', 'site_positioning', 'references_summary', 'domain_strategy', 'site_tagline'] as $key) {
+            if (isset($plan[$key]) && \is_string($plan[$key])) {
+                $plan[$key] = $this->truncateUtf8($plan[$key], 500);
+            }
+        }
+        if (isset($plan['plan_markdown']) && \is_string($plan['plan_markdown'])) {
+            $plan['plan_markdown'] = $this->truncateUtf8($plan['plan_markdown'], 8000);
+        }
+        if (isset($plan['site_title']) && \is_string($plan['site_title'])) {
+            $plan['site_title'] = $this->truncateUtf8($plan['site_title'], 120);
+        }
+
+        return $plan;
+    }
+
+    private function truncateUtf8(string $text, int $maxChars): string
+    {
+        $text = \trim($text);
+        if ($text === '' || $maxChars <= 0) {
+            return '';
+        }
+        if (\mb_strlen($text) <= $maxChars) {
+            return $text;
+        }
+
+        return \rtrim((string)\mb_substr($text, 0, $maxChars)) . '…';
     }
 }

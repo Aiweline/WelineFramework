@@ -22,6 +22,308 @@
 (function (window, document) {
     'use strict';
 
+    window.WelineSmartDropdown = (function () {
+        const VERSION = '2.1.0';
+        const HOVER_BRIDGE_ATTR = 'data-weline-dropdown-hover-bridge';
+
+        function numberOr(value, fallback) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
+
+        function viewportRect() {
+            const viewport = window.visualViewport;
+            const left = viewport ? viewport.offsetLeft : 0;
+            const top = viewport ? viewport.offsetTop : 0;
+            const width = viewport
+                ? viewport.width
+                : (document.documentElement.clientWidth || window.innerWidth || 0);
+            const height = viewport
+                ? viewport.height
+                : (document.documentElement.clientHeight || window.innerHeight || 0);
+
+            return {
+                left,
+                top,
+                right: left + width,
+                bottom: top + height,
+                width,
+                height
+            };
+        }
+
+        function resolveScrollContainer(panel, value) {
+            if (!value) {
+                return null;
+            }
+            if (typeof value === 'string') {
+                return panel.querySelector(value);
+            }
+            return value;
+        }
+
+        function shouldHoverBridge(anchor, panel, config) {
+            if (config.hoverBridge === false) {
+                return false;
+            }
+            if (config.hoverBridge === true) {
+                return true;
+            }
+            // 默认：面板仍在锚点子树内（place / portal:false）时桥接 gap，保住 CSS :hover。
+            return !!(anchor && panel && typeof anchor.contains === 'function' && anchor.contains(panel));
+        }
+
+        function clearHoverBridge(anchor) {
+            if (!anchor || !anchor.querySelectorAll) {
+                return;
+            }
+            const bridges = anchor.querySelectorAll('[' + HOVER_BRIDGE_ATTR + ']');
+            for (let i = 0; i < bridges.length; i++) {
+                bridges[i].remove();
+            }
+        }
+
+        function ensureHoverBridge(anchor, panel, placement, gap) {
+            if (!anchor) {
+                return;
+            }
+            const size = Math.max(0, Math.ceil(numberOr(gap, 0)));
+            if (size <= 0) {
+                clearHoverBridge(anchor);
+                return;
+            }
+
+            const anchorStyle = window.getComputedStyle(anchor);
+            if (anchorStyle.position === 'static') {
+                anchor.style.position = 'relative';
+            }
+
+            let bridge = null;
+            const existing = anchor.querySelectorAll(':scope > [' + HOVER_BRIDGE_ATTR + ']');
+            if (existing.length) {
+                bridge = existing[0];
+                for (let i = 1; i < existing.length; i++) {
+                    existing[i].remove();
+                }
+            } else {
+                bridge = document.createElement('div');
+                bridge.setAttribute(HOVER_BRIDGE_ATTR, '');
+                bridge.setAttribute('aria-hidden', 'true');
+                if (panel && panel.parentNode === anchor) {
+                    anchor.insertBefore(bridge, panel);
+                } else {
+                    anchor.appendChild(bridge);
+                }
+            }
+
+            let leftPx = 0;
+            let rightPx = 0;
+            if (panel && typeof panel.getBoundingClientRect === 'function') {
+                const anchorRect = anchor.getBoundingClientRect();
+                const panelRect = panel.getBoundingClientRect();
+                const unionLeft = Math.min(anchorRect.left, panelRect.left);
+                const unionRight = Math.max(anchorRect.right, panelRect.right);
+                leftPx = Math.round(unionLeft - anchorRect.left);
+                rightPx = Math.round(anchorRect.right - unionRight);
+            }
+
+            bridge.style.position = 'absolute';
+            bridge.style.left = leftPx + 'px';
+            bridge.style.right = rightPx + 'px';
+            bridge.style.width = 'auto';
+            bridge.style.height = size + 'px';
+            bridge.style.pointerEvents = 'auto';
+            bridge.style.background = 'transparent';
+            bridge.style.zIndex = '1';
+            if (placement === 'top') {
+                bridge.style.top = 'auto';
+                bridge.style.bottom = '100%';
+            } else {
+                bridge.style.bottom = 'auto';
+                bridge.style.top = '100%';
+            }
+        }
+
+        function compute(anchorRect, panelRect, panel, config = {}) {
+            const viewport = viewportRect();
+            const margin = Math.max(0, numberOr(config.margin, 8));
+            const gap = Math.max(0, numberOr(config.gap, 4));
+            const availableWidth = Math.max(0, viewport.width - margin * 2);
+            const configuredMinWidth = Math.max(0, numberOr(config.minWidth, 0));
+            const configuredMaxWidth = Math.max(
+                0,
+                numberOr(config.maxWidth, availableWidth)
+            );
+            const naturalWidth = Math.max(
+                anchorRect.width || 0,
+                panelRect.width || 0,
+                panel.scrollWidth || 0,
+                configuredMinWidth
+            );
+            const width = Math.min(
+                naturalWidth,
+                availableWidth,
+                configuredMaxWidth || availableWidth
+            );
+            const naturalHeight = Math.max(panel.scrollHeight || 0, panelRect.height || 0);
+            const preferredHeight = Math.max(
+                0,
+                numberOr(config.preferredHeight, naturalHeight)
+            );
+            const heightTarget = Math.min(
+                naturalHeight || preferredHeight,
+                preferredHeight || naturalHeight
+            );
+            const belowSpace = Math.max(
+                0,
+                viewport.bottom - margin - anchorRect.bottom - gap
+            );
+            const aboveSpace = Math.max(
+                0,
+                anchorRect.top - viewport.top - margin - gap
+            );
+            const openUp = belowSpace < heightTarget && aboveSpace > belowSpace;
+            const availableHeight = openUp ? aboveSpace : belowSpace;
+            const maxHeight = Math.max(
+                0,
+                Math.floor(Math.min(heightTarget || availableHeight, availableHeight))
+            );
+            const renderedHeight = Math.min(naturalHeight || maxHeight, maxHeight);
+            const align = config.align === 'end' || config.align === 'center'
+                ? config.align
+                : 'start';
+            let left = anchorRect.left;
+            if (align === 'end') {
+                left = anchorRect.right - width;
+            } else if (align === 'center') {
+                left = anchorRect.left + (anchorRect.width - width) / 2;
+            }
+            left = Math.min(
+                Math.max(left, viewport.left + margin),
+                Math.max(viewport.left + margin, viewport.right - margin - width)
+            );
+            let top = openUp
+                ? anchorRect.top - gap - renderedHeight
+                : anchorRect.bottom + gap;
+            top = Math.min(
+                Math.max(top, viewport.top + margin),
+                Math.max(viewport.top + margin, viewport.bottom - margin - renderedHeight)
+            );
+
+            return {
+                left,
+                top,
+                width,
+                maxHeight,
+                placement: openUp ? 'top' : 'bottom',
+                gap,
+                viewport
+            };
+        }
+
+        function place(anchor, panel, config = {}) {
+            if (!anchor || !panel) {
+                return null;
+            }
+            if (typeof panel.__welineSmartDropdownOriginalStyle === 'undefined') {
+                panel.__welineSmartDropdownOriginalStyle = panel.getAttribute('style');
+            }
+
+            panel.style.boxSizing = 'border-box';
+            panel.style.position = 'fixed';
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+            panel.style.margin = '0';
+            panel.style.width = '';
+            panel.style.minWidth = '';
+            panel.style.maxWidth = '';
+            panel.style.maxHeight = '';
+
+            const anchorRect = anchor.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            const next = compute(anchorRect, panelRect, panel, config);
+            panel.style.left = Math.round(next.left) + 'px';
+            panel.style.top = Math.round(next.top) + 'px';
+            panel.style.width = Math.round(next.width) + 'px';
+            panel.style.minWidth = Math.round(next.width) + 'px';
+            panel.style.maxWidth = Math.round(next.width) + 'px';
+            panel.style.maxHeight = Math.round(next.maxHeight) + 'px';
+            panel.style.zIndex = String(numberOr(config.zIndex, 4200));
+            panel.setAttribute('data-weline-dropdown-placement', next.placement);
+
+            const scrollContainer = resolveScrollContainer(panel, config.scrollContainer);
+            if (scrollContainer) {
+                const chromeHeight = Math.max(
+                    0,
+                    (panel.scrollHeight || 0) - (scrollContainer.scrollHeight || 0)
+                );
+                scrollContainer.style.maxHeight = Math.max(
+                    0,
+                    next.maxHeight - chromeHeight
+                ) + 'px';
+                panel.style.overflowY = config.overflowY || 'hidden';
+            } else if (config.overflowY) {
+                panel.style.overflowY = config.overflowY;
+            }
+
+            if (shouldHoverBridge(anchor, panel, config)) {
+                ensureHoverBridge(anchor, panel, next.placement, next.gap);
+            } else {
+                clearHoverBridge(anchor);
+            }
+
+            return next;
+        }
+
+        function mount(anchor, panel, config = {}) {
+            if (!anchor || !panel) {
+                return null;
+            }
+            if (!panel.__welineSmartDropdownOriginalParent) {
+                panel.__welineSmartDropdownOriginalParent = panel.parentNode || null;
+                panel.__welineSmartDropdownOriginalNext = panel.nextSibling || null;
+            }
+            if (typeof panel.__welineSmartDropdownOriginalStyle === 'undefined') {
+                panel.__welineSmartDropdownOriginalStyle = panel.getAttribute('style');
+            }
+            if (config.portal !== false && panel.parentNode !== document.body) {
+                document.body.appendChild(panel);
+            }
+            panel.hidden = false;
+            panel.style.display = config.display || 'block';
+            return place(anchor, panel, config);
+        }
+
+        function unmount(panel) {
+            if (!panel) {
+                return;
+            }
+            const parent = panel.__welineSmartDropdownOriginalParent;
+            const next = panel.__welineSmartDropdownOriginalNext;
+            if (parent) {
+                if (next && next.parentNode === parent) {
+                    parent.insertBefore(panel, next);
+                } else {
+                    parent.appendChild(panel);
+                }
+            }
+            const originalStyle = panel.__welineSmartDropdownOriginalStyle;
+            if (originalStyle === null || typeof originalStyle === 'undefined') {
+                panel.removeAttribute('style');
+            } else {
+                panel.setAttribute('style', originalStyle);
+            }
+            panel.hidden = true;
+            panel.removeAttribute('data-weline-dropdown-placement');
+            clearHoverBridge(parent);
+            if (panel.parentNode && panel.parentNode !== parent) {
+                clearHoverBridge(panel.parentNode);
+            }
+        }
+
+        return { version: VERSION, compute, place, mount, unmount };
+    })();
+
     // 防止重复初始化
     if (window.Weline && window.Weline.__initialized) {
         return;
@@ -383,26 +685,125 @@
         constructor() {
             this.loadedModules = new Map();
             this.loadingModules = new Map();
+            this.loadingScripts = new Map();
+            this.scriptFailureCounts = new Map();
         }
 
-        loadScript(url) {
-            return new Promise((resolve, reject) => {
-                const existingScript = document.querySelector(`script[src="${url}"]`);
+        recordScriptFailure(url) {
+            const failureCount = (this.scriptFailureCounts.get(url) || 0) + 1;
+            this.scriptFailureCounts.set(url, failureCount);
+        }
+
+        getScriptRequestUrl(url) {
+            const failureCount = this.scriptFailureCounts.get(url) || 0;
+            if (failureCount === 0) {
+                return url;
+            }
+            const retryUrl = new URL(url, window.location.href);
+            retryUrl.searchParams.set('_weline_retry', String(failureCount));
+            return retryUrl.toString();
+        }
+
+        findScript(url) {
+            const absoluteUrl = new URL(url, window.location.href).toString();
+            return Array.from(document.scripts).find((script) => (
+                script.dataset.welineModuleSource === url ||
+                script.getAttribute('src') === url ||
+                script.src === absoluteUrl
+            )) || null;
+        }
+
+        markScriptFailed(url, script) {
+            if (!script || script.dataset.welineModuleFailureRecorded !== 'true') {
+                this.recordScriptFailure(url);
+                if (script) {
+                    script.dataset.welineModuleFailureRecorded = 'true';
+                }
+            }
+            if (script) {
+                script.dataset.welineModuleState = 'failed';
+                script.remove();
+            }
+        }
+
+        releaseScript(url) {
+            const entry = this.loadingScripts.get(url);
+            if (!entry) {
+                return;
+            }
+            entry.consumers -= 1;
+            if (entry.consumers <= 0) {
+                this.loadingScripts.delete(url);
+            }
+        }
+
+        loadScript(url, forceFresh = false) {
+            const inFlight = this.loadingScripts.get(url);
+            if (inFlight) {
+                inFlight.consumers += 1;
+                return inFlight.promise;
+            }
+
+            const entry = { consumers: 1, promise: null };
+            entry.promise = new Promise((resolve, reject) => {
+                const existingScript = this.findScript(url);
                 if (existingScript) {
-                    resolve();
-                    return;
+                    const state = existingScript.dataset.welineModuleState || '';
+                    if (state === 'failed') {
+                        this.markScriptFailed(url, existingScript);
+                    } else if (state === 'loading') {
+                        existingScript.addEventListener('load', () => resolve(existingScript), { once: true });
+                        existingScript.addEventListener('error', () => reject(
+                            new Error(`[Weline] 脚本加载失败: ${url}`)
+                        ), { once: true });
+                        return;
+                    } else if (forceFresh) {
+                        this.markScriptFailed(url, existingScript);
+                    } else {
+                        // Loader-created scripts are marked "loaded". Unknown
+                        // scripts came from server-rendered markup and are
+                        // reused only when the expected global is already ready.
+                        resolve(existingScript);
+                        return;
+                    }
                 }
 
                 const script = document.createElement('script');
-                script.src = url;
+                script.src = this.getScriptRequestUrl(url);
                 script.async = true;
                 script.crossOrigin = 'anonymous';
+                script.dataset.welineModuleState = 'loading';
+                script.dataset.welineModuleSource = url;
 
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error(`[Weline] 脚本加载失败: ${url}`));
+                script.onload = () => {
+                    script.dataset.welineModuleState = 'loaded';
+                    resolve(script);
+                };
+                script.onerror = () => {
+                    this.markScriptFailed(url, script);
+                    reject(new Error(`[Weline] 脚本加载失败: ${url}`));
+                };
 
                 document.head.appendChild(script);
             });
+            this.loadingScripts.set(url, entry);
+            return entry.promise;
+        }
+
+        isGlobalModuleReady(globalVarName) {
+            const globalModule = globalVarName ? window[globalVarName] : null;
+            const isLoaderProxy = !!(
+                globalVarName &&
+                globalModule &&
+                typeof moduleDeclarer !== 'undefined' &&
+                moduleDeclarer.isProxyGlobal(globalVarName, globalModule)
+            );
+            return !!(
+                globalVarName &&
+                globalModule &&
+                !isLoaderProxy &&
+                globalModule.__full !== false
+            );
         }
 
         async loadWithFallback(paths, globalVarName = null) {
@@ -412,19 +813,33 @@
 
             let lastError = null;
             for (const path of paths) {
+                let scriptAcquired = false;
                 try {
-                    await this.loadScript(path);
+                    const forceFresh = !!(globalVarName && !this.isGlobalModuleReady(globalVarName));
+                    const scriptPromise = this.loadScript(path, forceFresh);
+                    scriptAcquired = true;
+                    const loadedScript = await scriptPromise;
                     if (globalVarName) {
                         await new Promise(resolve => setTimeout(resolve, 50));
-                        if (window[globalVarName]) {
+                        if (this.isGlobalModuleReady(globalVarName)) {
+                            this.scriptFailureCounts.delete(path);
                             return;
                         }
+                        this.markScriptFailed(path, loadedScript);
+                        lastError = new Error(
+                            `[Weline] 脚本已加载但未提供可用模块 ${globalVarName}: ${path}`
+                        );
                     } else {
+                        this.scriptFailureCounts.delete(path);
                         return;
                     }
                 } catch (error) {
                     lastError = error;
                     continue;
+                } finally {
+                    if (scriptAcquired) {
+                        this.releaseScript(path);
+                    }
                 }
             }
             throw lastError || new Error('[Weline] 所有路径加载失败');
@@ -483,7 +898,7 @@
                     }
 
                     // 检查是否已加载（fallback 带 __full:false，需继续加载完整模块）
-                    if (globalVarName && window[globalVarName] && window[globalVarName].__full !== false) {
+                    if (this.isGlobalModuleReady(globalVarName)) {
                         const module = window[globalVarName];
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);
@@ -496,7 +911,7 @@
                     // 验证加载结果
                     if (globalVarName) {
                         await new Promise(resolve => setTimeout(resolve, 100));
-                        if (window[globalVarName]) {
+                        if (this.isGlobalModuleReady(globalVarName)) {
                             const module = window[globalVarName];
                             this.loadedModules.set(moduleName, module);
                             this.loadingModules.delete(moduleName);
@@ -793,6 +1208,7 @@
         constructor() {
             this.declaredModules = new Map();
             this.proxies = new Map();
+            this.proxyGlobals = new Map();
         }
 
         /**
@@ -863,6 +1279,10 @@
                         if (typeof windowObj[prop] !== 'undefined') {
                             return windowObj[prop];
                         }
+                    }
+
+                    if (prop === '__full') {
+                        return false;
                     }
 
                     if (loadingPromise) {
@@ -949,7 +1369,12 @@
             });
 
             this.proxies.set(globalVarName, proxy);
+            this.proxyGlobals.set(globalVarName, proxy);
             return proxy;
+        }
+
+        isProxyGlobal(globalVarName, value) {
+            return this.proxyGlobals.get(globalVarName) === value;
         }
 
         async setupProxies() {

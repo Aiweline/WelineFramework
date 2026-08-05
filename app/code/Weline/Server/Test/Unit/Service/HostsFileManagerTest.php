@@ -93,4 +93,41 @@ HOSTS;
         self::assertStringContainsString('shop-a.weline.test', $command);
         self::assertStringNotContainsString('osascript', $command);
     }
+
+    public function testAppleScriptDoubleQuotedPathEscapesQuotesAndBackslashes(): void
+    {
+        $method = new ReflectionMethod(HostsFileManager::class, 'escapeAppleScriptDoubleQuotedPath');
+        $method->setAccessible(true);
+
+        self::assertSame(
+            '/tmp/plain-hosts',
+            $method->invoke(null, '/tmp/plain-hosts')
+        );
+        self::assertSame(
+            '/tmp/has\\"quote',
+            $method->invoke(null, '/tmp/has"quote')
+        );
+        self::assertSame(
+            '/tmp/has\\\\slash',
+            $method->invoke(null, '/tmp/has\\slash')
+        );
+    }
+
+    public function testMacOsOsascriptBodyDoesNotNestShellEscapesInsideAppleScript(): void
+    {
+        $method = new ReflectionMethod(HostsFileManager::class, 'escapeAppleScriptDoubleQuotedPath');
+        $method->setAccessible(true);
+        $payload = '/private/var/folders/x/wls-hosts-abc';
+        $hosts = '/etc/hosts';
+        $body = 'do shell script "/bin/cat '
+            . $method->invoke(null, $payload)
+            . ' > '
+            . $method->invoke(null, $hosts)
+            . '" with administrator privileges';
+
+        self::assertStringNotContainsString("'\\''", $body);
+        self::assertStringContainsString('/bin/cat /private/var/folders/x/wls-hosts-abc > /etc/hosts', $body);
+        self::assertStringStartsWith('do shell script "', $body);
+        self::assertStringEndsWith('" with administrator privileges', $body);
+    }
 }

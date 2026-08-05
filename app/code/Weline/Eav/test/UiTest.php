@@ -16,7 +16,7 @@ use Weline\Eav\Model\EavAttribute\Type;
 use Weline\FileManager\Ui\EavModel\Select\File;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\Template;
 
 class UiTest extends TestCore

@@ -25,17 +25,19 @@ use Weline\Framework\Database\Compiler\Dialect\PgsqlDialect;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
+use Weline\Framework\Database\Connection\Api\Sql\CreatesTableFromSchemaTrait;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionLease;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\LinkException;
-use Weline\Framework\Database\Helper\Standar;
 use Weline\Framework\Manager\ObjectManager;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    use CreatesTableFromSchemaTrait;
+
     private PgsqlTableNameStrategy $tableStrategy;
 
     public function __construct(
@@ -648,22 +650,27 @@ SQL);
 
     public function hasIndex(string $table, string $idx_name): bool
     {
-        [$schema, $physicalTable] = $this->parseSchemaTable($this->formatTableName($table));
-        $rawIndex = str_replace(['`', '"'], '', $idx_name);
-        $standardIndex = Standar::getIndexName("{$schema}.{$physicalTable}", $rawIndex);
+        $formattedTable = $this->formatTableName($table);
+        [$schema, $physicalTable] = $this->parseSchemaTable($formattedTable);
+        $candidates = PgsqlIndexName::candidates($formattedTable, $idx_name);
+        $candidatePlaceholders = [];
+        $params = [':schema' => $schema, ':table' => $physicalTable];
+        foreach ($candidates as $position => $candidate) {
+            $placeholder = ':candidate_' . $position;
+            $candidatePlaceholders[] = $placeholder;
+            $params[$placeholder] = $candidate;
+        }
         $statement = $this->getWrappedConnection()->prepare(
             'SELECT EXISTS ('
-            . 'SELECT 1 FROM pg_indexes '
-            . 'WHERE schemaname = :schema AND tablename = :table '
-            . 'AND indexname IN (:raw, :standard)'
+            . 'SELECT 1 FROM pg_catalog.pg_index ix '
+            . 'JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid '
+            . 'JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace '
+            . 'JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid '
+            . 'WHERE n.nspname = :schema AND t.relname = :table '
+            . 'AND i.relname IN (' . implode(', ', $candidatePlaceholders) . ')'
             . ')'
         );
-        $statement->execute([
-            ':schema' => $schema,
-            ':table' => $physicalTable,
-            ':raw' => $rawIndex,
-            ':standard' => $standardIndex,
-        ]);
+        $statement->execute($params);
         return (bool)$statement->fetchColumn();
     }
 
@@ -746,11 +753,18 @@ SQL);
         $usingExpr = $this->pgsqlModifyColumnUsingExpr($c, $type, $col, $existingCol);
         $parts = ["ALTER COLUMN {$c} TYPE {$type} USING {$usingExpr}"];
         $setNotNull = empty($col['nullable']);
-        $prefix = '';
+        // PostgreSQL refuses TYPE changes while an incompatible column DEFAULT remains.
+        // Drop it first, then re-apply the declared default after the type cast.
+        $prefix = "ALTER TABLE {$t} ALTER COLUMN {$c} DROP DEFAULT;\n";
         if ($setNotNull) {
-            $fillCol = $existingCol ?? $col;
+            // Prefer declared default for NULL fill; empty-string on existingCol is "no default".
+            $fillCol = $col;
+            $declaredDefault = $col['default'] ?? null;
+            if ($declaredDefault === null || $declaredDefault === '') {
+                $fillCol = $existingCol ?? $col;
+            }
             $fillVal = $this->pgsqlDefaultForNullFill($fillCol);
-            $prefix = "UPDATE {$t} SET {$c} = {$fillVal} WHERE {$c} IS NULL;\n";
+            $prefix .= "UPDATE {$t} SET {$c} = {$fillVal} WHERE {$c} IS NULL;\n";
         }
         $parts[] = $setNotNull ? "ALTER COLUMN {$c} SET NOT NULL" : "ALTER COLUMN {$c} DROP NOT NULL";
         if (!empty($col['autoIncrement'])) {
@@ -761,7 +775,8 @@ SQL);
             $seqRef = $d->quoteIdentifier($schema) . '.' . $d->quoteIdentifier($seqName);
             $parts[] = "ALTER COLUMN {$c} SET DEFAULT nextval('" . str_replace("'", "''", $seqRef) . "'::regclass)";
             $createSeq = 'CREATE SEQUENCE IF NOT EXISTS ' . $seqRef;
-            return $prefix . $createSeq . ";\nALTER TABLE {$t} " . implode(', ', $parts) . ';';
+            return $prefix . $createSeq . ";\nALTER TABLE {$t} " . implode(', ', $parts) . ';'
+                . "\n" . $this->pgsqlColumnCommentSql($table, $col);
         }
         if (isset($col['default']) && $col['default'] !== null) {
             $defVal = $col['default'];
@@ -769,10 +784,19 @@ SQL);
                 ? 'CURRENT_TIMESTAMP'
                 : (is_string($defVal) ? "'" . str_replace("'", "''", $defVal) . "'" : (string) $defVal);
             $parts[] = "ALTER COLUMN {$c} SET DEFAULT {$def}";
-        } else {
-            $parts[] = "ALTER COLUMN {$c} DROP DEFAULT";
         }
-        return $prefix . "ALTER TABLE {$t} " . implode(', ', $parts) . ';';
+        return $prefix . "ALTER TABLE {$t} " . implode(', ', $parts) . ';'
+            . "\n" . $this->pgsqlColumnCommentSql($table, $col);
+    }
+
+    private function pgsqlColumnCommentSql(string $table, array $col): string
+    {
+        $dialect = $this->getDialect();
+        $target = $dialect->quoteTable($table) . '.'
+            . $dialect->quoteIdentifier((string)($col['name'] ?? ''));
+        $comment = (string)($col['comment'] ?? '');
+        $literal = $comment === '' ? 'NULL' : "'" . str_replace("'", "''", $comment) . "'";
+        return "COMMENT ON COLUMN {$target} IS {$literal};";
     }
 
     /** 用于 MODIFY 时填充 NULL 的默认值（按类型）。UPDATE 只能用字面量，不能用 nextval 等表达式。 */
@@ -783,7 +807,7 @@ SQL);
         if ($isSerial || in_array($baseType, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true)) {
             return '0';
         }
-        if (isset($col['default']) && $col['default'] !== null) {
+        if (array_key_exists('default', $col) && $col['default'] !== null && $col['default'] !== '') {
             $d = $col['default'];
             if (is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP') {
                 return 'CURRENT_TIMESTAMP';
@@ -861,31 +885,114 @@ SQL);
     /** @inheritDoc */
     public function buildAddIndexSql(string $table, array $idx): string
     {
+        $formattedTable = $this->formatTableName($table);
+        $requestedName = (string)($idx['name'] ?? '');
+        // Existing historical raw names are normalized by SchemaDiffStage and
+        // therefore never enter ADD.  Every new index is published under the
+        // table-owned canonical name so an unrelated raw name cannot hijack
+        // the operation between ADD and DROP ordering.
+        return $this->pgsqlBuildCreateIndexSql(
+            $table,
+            $idx,
+            PgsqlIndexName::canonicalPhysical($formattedTable, $requestedName),
+        );
+    }
+
+    /**
+     * Build rollback DDL for a DROP whose payload came from a proven
+     * target-owned physical row.  Do not canonicalize that physical name a
+     * second time or rollback would publish a double-prefixed index.
+     */
+    public function buildRestorePhysicalIndexSql(string $table, array $idx): string
+    {
+        return $this->pgsqlBuildCreateIndexSql(
+            $table,
+            $idx,
+            PgsqlIndexName::rawPhysical((string)($idx['name'] ?? '')),
+        );
+    }
+
+    private function pgsqlBuildCreateIndexSql(string $table, array $idx, string $physicalName): string
+    {
         $d = $this->getDialect();
         $t = $d->quoteTable($table);
-        $name = $d->quoteIdentifier($idx['name'] ?? '');
+        $requestedName = (string)($idx['name'] ?? '');
+        $name = $d->quoteIdentifier($physicalName);
         $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $idx['columns'] ?? []);
         $colList = implode(',', $cols);
         $type = strtoupper($idx['type'] ?? 'INDEX');
+        if ($type === 'FULLTEXT') {
+            if (count($cols) !== 1) {
+                throw new \RuntimeException(__(
+                    'PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列',
+                    [$t, $requestedName],
+                ));
+            }
+            return "CREATE INDEX {$name} ON {$t} USING GIN (to_tsvector('english', {$cols[0]}))";
+        }
         $usingPart = (!empty($idx['method']) && strtoupper($idx['method']) !== 'BTREE') ? ' USING ' . $idx['method'] : '';
         if ($type === 'UNIQUE') {
-            return "CREATE UNIQUE INDEX IF NOT EXISTS {$name} ON {$t}{$usingPart} ({$colList})";
+            return "CREATE UNIQUE INDEX {$name} ON {$t}{$usingPart} ({$colList})";
         }
-        return "CREATE INDEX IF NOT EXISTS {$name} ON {$t}{$usingPart} ({$colList})";
+        return "CREATE INDEX {$name} ON {$t}{$usingPart} ({$colList})";
     }
 
     /**
      * @inheritDoc
-     * PostgreSQL: UNIQUE 约束的索引必须用 DROP CONSTRAINT，不能 DROP INDEX。
-     * 优先 DROP CONSTRAINT（约束删除后索引自动删除）；若非约束则需 DROP INDEX。
-     * 先尝试 DROP CONSTRAINT，再 DROP INDEX（对约束型索引后者为 no-op）。
+     * PostgreSQL 的索引名是 schema 级命名空间。删除前必须由 pg_index
+     * 证明候选索引属于目标表；约束背书的索引只删除目标表上的对应约束。
      */
     public function buildDropIndexSql(string $table, string $indexName): string
     {
-        $d = $this->getDialect();
-        $t = $d->quoteTable($table);
-        $n = $d->quoteIdentifier($indexName);
-        return "ALTER TABLE {$t} DROP CONSTRAINT IF EXISTS {$n} CASCADE;\nDROP INDEX IF EXISTS {$n}";
+        $formattedTable = $this->formatTableName($table);
+        [$schema, $physicalTable] = $this->parseSchemaTable($formattedTable);
+        $candidates = PgsqlIndexName::candidates($formattedTable, $indexName);
+        $candidatePlaceholders = [];
+        $params = [':schema' => $schema, ':table' => $physicalTable];
+        foreach ($candidates as $position => $candidate) {
+            $placeholder = ':candidate_' . $position;
+            $candidatePlaceholders[] = $placeholder;
+            $params[$placeholder] = $candidate;
+        }
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT i.relname AS index_name, c.conname AS constraint_name '
+            . 'FROM pg_catalog.pg_index ix '
+            . 'JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid '
+            . 'JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace '
+            . 'JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid '
+            . 'LEFT JOIN pg_catalog.pg_constraint c ON c.conindid = i.oid AND c.conrelid = t.oid '
+            . 'WHERE n.nspname = :schema AND t.relname = :table '
+            . 'AND i.relname IN (' . implode(', ', $candidatePlaceholders) . ')'
+        );
+        $statement->execute($params);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $rawPhysical = PgsqlIndexName::rawPhysical($indexName);
+        usort($rows, static function (array $left, array $right) use ($rawPhysical): int {
+            return ((string)($right['index_name'] ?? '') === $rawPhysical ? 1 : 0)
+                <=> ((string)($left['index_name'] ?? '') === $rawPhysical ? 1 : 0);
+        });
+        $target = $rows[0] ?? null;
+        if (!is_array($target)) {
+            // ADD INDEX records rollback before the physical index exists.
+            // The canonical name includes the target table identity, so this
+            // future rollback cannot resolve to another table's raw index.
+            $dialect = $this->getDialect();
+            $canonical = PgsqlIndexName::canonicalPhysical($formattedTable, $indexName);
+            return 'DROP INDEX IF EXISTS ' . $dialect->quoteIdentifier($schema)
+                . '.' . $dialect->quoteIdentifier($canonical);
+        }
+
+        $dialect = $this->getDialect();
+        $targetTable = $dialect->quoteTable($schema . '.' . $physicalTable);
+        $constraintName = trim((string)($target['constraint_name'] ?? ''));
+        if ($constraintName !== '') {
+            return 'ALTER TABLE ' . $targetTable
+                . ' DROP CONSTRAINT ' . $dialect->quoteIdentifier($constraintName) . ' CASCADE';
+        }
+
+        $physicalIndex = trim((string)($target['index_name'] ?? ''));
+        return 'DROP INDEX ' . $dialect->quoteIdentifier($schema)
+            . '.' . $dialect->quoteIdentifier($physicalIndex);
     }
 
     /** @inheritDoc */
@@ -926,7 +1033,11 @@ SQL);
             return "CASE WHEN {$quotedCol} IS NULL OR TRIM({$quotedCol}::text) = '' THEN '1970-01-01'::date ELSE ({$quotedCol}::text)::date END";
         }
         if ($pgUpper === 'TIMESTAMP' || $pgUpper === 'TIMESTAMPTZ') {
-            return "CASE WHEN {$quotedCol} IS NULL OR TRIM({$quotedCol}::text) = '' OR (TRIM({$quotedCol}::text) !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}') THEN '1970-01-01 00:00:00'::timestamp ELSE ({$quotedCol} AT TIME ZONE 'UTC') END";
+            // Cast via text → timestamp. Do NOT use `AT TIME ZONE` here: when the
+            // source column is text/unknown, PostgreSQL resolves it as
+            // timezone(unknown, text) and raises "function does not exist".
+            $castType = $pgUpper === 'TIMESTAMPTZ' ? 'timestamptz' : 'timestamp';
+            return "CASE WHEN {$quotedCol} IS NULL OR TRIM({$quotedCol}::text) = '' OR (TRIM({$quotedCol}::text) !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}') THEN '1970-01-01 00:00:00'::timestamp ELSE ({$quotedCol}::text)::{$castType} END";
         }
         return "{$quotedCol}::{$pgType}";
     }
@@ -961,7 +1072,8 @@ SQL);
             'timestamp' => 'TIMESTAMP',
             'json' => 'JSONB',
             'decimal', 'numeric' => 'DECIMAL' . $lenPart,
-            'float', 'double' => 'DOUBLE PRECISION',
+            'float' => 'REAL',
+            'double' => 'DOUBLE PRECISION',
             'bool', 'boolean' => 'BOOLEAN',
             default => strtoupper($type) . $lenPart,
         };
@@ -1019,7 +1131,7 @@ SQL);
         }
         $pdo = $this->getWrappedConnection()->getPdo();
         try {
-            $sqlWithIdentity = "SELECT column_name, data_type, character_maximum_length, numeric_precision, is_nullable, column_default, is_identity
+            $sqlWithIdentity = "SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, is_nullable, column_default, is_identity
                 FROM information_schema.columns
                 WHERE table_schema = :schema AND table_name = :tbl
                 ORDER BY ordinal_position";
@@ -1028,7 +1140,7 @@ SQL);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (\Throwable) {
             try {
-                $sqlLegacy = "SELECT column_name, data_type, character_maximum_length, numeric_precision, is_nullable, column_default
+                $sqlLegacy = "SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, is_nullable, column_default
                     FROM information_schema.columns
                     WHERE table_schema = :schema AND table_name = :tbl
                     ORDER BY ordinal_position";
@@ -1087,12 +1199,18 @@ SQL);
             $dataType = $row['data_type'] ?? '';
             $charLen = $row['character_maximum_length'] ?? null;
             $numPrec = $row['numeric_precision'] ?? null;
+            $numScale = $row['numeric_scale'] ?? null;
             $pgType = strtolower($dataType);
             // 整型的 numeric_precision（如 32）是内部精度，不是 MySQL 风格 display width；与 #[Col] 声明的 length=null 对齐，避免误判列不等导致 SchemaDiff 异常
-            if (in_array($pgType, ['integer', 'bigint', 'smallint'], true)) {
-                $length = $charLen !== null ? (int) $charLen : null;
+            if ($charLen !== null) {
+                $length = (int)$charLen;
+            } elseif (in_array($pgType, ['numeric', 'decimal'], true) && $numPrec !== null) {
+                $length = (int)$numPrec . ',' . (int)($numScale ?? 0);
             } else {
-                $length = $charLen !== null ? (int) $charLen : ($numPrec !== null ? (int) $numPrec : null);
+                // numeric_precision on integer/real/double is a storage fact,
+                // not a portable display length.  Only NUMERIC/DECIMAL retain
+                // declaration precision and scale.
+                $length = null;
             }
             $nullable = strtoupper($row['is_nullable'] ?? 'YES') !== 'NO';
             $default = $row['column_default'] ?? null;
@@ -1105,12 +1223,22 @@ SQL);
             $baseType = $pgType;
             if ($pgType === 'character varying') {
                 $baseType = 'varchar';
+            } elseif ($pgType === 'character') {
+                $baseType = 'char';
             } elseif ($pgType === 'integer') {
                 $baseType = 'int';
             } elseif (in_array($pgType, ['bigint', 'smallint'], true)) {
                 $baseType = $pgType;
             } elseif ($pgType === 'double precision') {
                 $baseType = 'double';
+            } elseif ($pgType === 'real') {
+                $baseType = 'float';
+            } elseif ($pgType === 'numeric') {
+                $baseType = 'decimal';
+            } elseif (in_array($pgType, ['json', 'jsonb'], true)) {
+                $baseType = 'json';
+            } elseif ($pgType === 'bytea') {
+                $baseType = 'blob';
             } elseif ($pgType === 'timestamp without time zone' || $pgType === 'timestamp with time zone') {
                 $baseType = 'datetime';
             } elseif ($pgType === 'text') {
@@ -1135,37 +1263,95 @@ SQL);
     /** @inheritDoc */
     public function getTableIndexes(string $table): array
     {
-        // 先将逻辑表名转换为物理表名（添加前缀和 schema）
         $formattedTable = $this->formatTableName($table);
         [$schema, $tableName] = $this->parseSchemaTable($formattedTable);
         if ($tableName === '') {
             return [];
         }
         $pdo = $this->getWrappedConnection()->getPdo();
-        try {
-            $sql = "SELECT i.relname AS index_name, a.attname AS column_name, k.ord AS seq, ix.indisunique
-                FROM pg_index ix
-                JOIN pg_class t ON t.oid = ix.indrelid
-                JOIN pg_namespace n ON n.oid = t.relnamespace
-                JOIN pg_class i ON i.oid = ix.indexrelid
+        $sql = "SELECT i.relname AS index_name,
+                    a.attname AS column_name,
+                    k.attnum,
+                    k.ord AS seq,
+                    ix.indisunique,
+                    ix.indisvalid,
+                    ix.indisready,
+                    ix.indnatts,
+                    ix.indnkeyatts,
+                    am.amname AS index_method,
+                    pg_get_expr(ix.indexprs, ix.indrelid) AS index_expression,
+                    pg_get_expr(ix.indpred, ix.indrelid) AS index_predicate,
+                    pg_get_indexdef(i.oid, k.ord::integer, true) AS index_key_definition
+                FROM pg_catalog.pg_index ix
+                JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
+                JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
+                JOIN pg_catalog.pg_am am ON am.oid = i.relam
                 JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
-                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum AND a.attnum > 0 AND NOT a.attisdropped
-                WHERE n.nspname = :schema AND t.relname = :tbl AND t.relkind = 'r' AND NOT ix.indisprimary
+                LEFT JOIN pg_catalog.pg_attribute a
+                    ON a.attrelid = t.oid
+                    AND a.attnum = k.attnum
+                    AND a.attnum > 0
+                    AND NOT a.attisdropped
+                WHERE n.nspname = :schema
+                    AND t.relname = :tbl
+                    AND t.relkind IN ('r', 'p')
+                    AND NOT ix.indisprimary
                 ORDER BY i.relname, k.ord";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (\Throwable) {
-            return [];
-        }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $byName = [];
         foreach ($rows as $row) {
-            $keyName = $row['index_name'] ?? '';
-            $column = $row['column_name'] ?? '';
+            $keyName = (string)($row['index_name'] ?? '');
+            $column = (string)($row['column_name'] ?? '');
             $seq = (int) ($row['seq'] ?? 0);
-            $unique = (bool) ($row['indisunique'] ?? false);
+            $unique = $this->pgsqlBoolean($row['indisunique'] ?? false);
+            $valid = $this->pgsqlBoolean($row['indisvalid'] ?? false);
+            $ready = $this->pgsqlBoolean($row['indisready'] ?? false);
+            $expression = trim((string)($row['index_expression'] ?? ''));
+            $predicate = trim((string)($row['index_predicate'] ?? ''));
+            $hasIncludedColumns = (int)($row['indnatts'] ?? 0) !== (int)($row['indnkeyatts'] ?? 0);
+            $method = strtoupper((string)($row['index_method'] ?? 'BTREE'));
+            $type = $unique ? 'UNIQUE' : 'DEFAULT';
+            if ($expression !== '') {
+                $column = $this->pgsqlFrameworkFulltextColumn(
+                    (string)($row['index_key_definition'] ?? ''),
+                ) ?? '';
+                if ($method !== 'GIN' || $predicate !== '' || $hasIncludedColumns || $column === '') {
+                    throw new \RuntimeException(__(
+                        'PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列',
+                        [$formattedTable, $keyName],
+                    ));
+                }
+                $type = 'FULLTEXT';
+            } elseif ($predicate !== '' || $hasIncludedColumns
+                || (int)($row['attnum'] ?? 0) <= 0 || $column === '') {
+                throw new \RuntimeException(__(
+                    'PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列',
+                    [$formattedTable, $keyName],
+                ));
+            }
+            if (!$valid || !$ready) {
+                throw new \RuntimeException(__(
+                    'PostgreSQL 表 %{1} 的索引 %{2} 尚未处于可验证状态',
+                    [$formattedTable, $keyName],
+                ));
+            }
             if (!isset($byName[$keyName])) {
-                $byName[$keyName] = ['columns' => [], 'unique' => $unique];
+                $byName[$keyName] = [
+                    'columns' => [],
+                    'unique' => $unique,
+                    'method' => $method,
+                    'type' => $type,
+                ];
+            } elseif ($byName[$keyName]['unique'] !== $unique
+                || $byName[$keyName]['method'] !== $method
+                || $byName[$keyName]['type'] !== $type) {
+                throw new \RuntimeException(__(
+                    'PostgreSQL 表 %{1} 的索引 %{2} 使用声明式 Schema 尚不支持的表达式、谓词或 INCLUDE 列',
+                    [$formattedTable, $keyName],
+                ));
             }
             $byName[$keyName]['columns'][$seq] = $column;
         }
@@ -1176,9 +1362,47 @@ SQL);
                 'name' => $name,
                 'columns' => array_values($data['columns']),
                 'unique' => $data['unique'],
+                'method' => $data['method'],
+                'type' => $data['type'],
             ];
         }
         return $list;
+    }
+
+    private function pgsqlBoolean(mixed $value): bool
+    {
+        return $value === true
+            || $value === 1
+            || $value === '1'
+            || $value === 't'
+            || $value === 'true';
+    }
+
+    private function pgsqlFrameworkFulltextColumn(string $keyDefinition): ?string
+    {
+        $keyDefinition = trim($keyDefinition);
+        if (preg_match(
+            '~^to_tsvector\(\'english\'::regconfig,\s*(?:\(("(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)\)::text|("(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)::text|("(?:[^"]|"")*"|[a-z_][a-z0-9_$]*))\)$~D',
+            $keyDefinition,
+            $matches,
+        ) !== 1) {
+            return null;
+        }
+
+        $identifier = '';
+        foreach ([1, 2, 3] as $position) {
+            if (($matches[$position] ?? '') !== '') {
+                $identifier = $matches[$position];
+                break;
+            }
+        }
+        if ($identifier === '') {
+            return null;
+        }
+        if (str_starts_with($identifier, '"') && str_ends_with($identifier, '"')) {
+            return str_replace('""', '"', substr($identifier, 1, -1));
+        }
+        return $identifier;
     }
 
     /** @inheritDoc */

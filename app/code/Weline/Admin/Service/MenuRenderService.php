@@ -139,14 +139,19 @@ class MenuRenderService
     public function getMenuTree(): array
     {
         $user = $this->getCurrentUser();
-        if (!$user || !$user->getId()) {
+        if (!$user || !$user->getId() || !$user->getRoleId()) {
             return [];
         }
 
         if ($this->menuReader === null) {
             $this->menuReader = ObjectManager::getInstance(MenuReaderInterface::class);
         }
-        return $this->menuReader->getMenuTreeByUserId($user->getId());
+        // The authenticated session already owns the authoritative role for this
+        // request. Reloading the user by its numeric id can cross identity
+        // boundaries when a long-running WLS worker and an isolated clone have
+        // different user-id histories. Horizontal navigation already follows
+        // this role-scoped path; keep the vertical sidebar consistent with it.
+        return $this->menuReader->getMenuTreeByRoleId($user->getRoleId());
     }
 
     /**
@@ -750,7 +755,7 @@ class MenuRenderService
             $menuIcon = htmlspecialchars($aclData['icon'] ?? 'mdi mdi-circle');
             $sourceId = htmlspecialchars($recentMenu['source_id'] ?? '');
             
-            $html .= '<li class="frequent-menu-item" data-source="' . $sourceId . '">';
+            $html .= '<li class="frequent-menu-item" data-menu-source-ref="' . $sourceId . '">';
             $html .= '<a href="' . htmlspecialchars($menuUrl) . '" class="waves-effect">';
             $html .= '<i class="' . $menuIcon . '"></i>';
             $html .= '<span>' . htmlspecialchars($menuName) . '</span>';
@@ -795,7 +800,7 @@ class MenuRenderService
             $accessCount = intval($frequentMenu['access_count'] ?? 0);
             $formattedCount = $this->formatAccessCount($accessCount);
             
-            $html .= '<li class="frequent-menu-item" data-source="' . $sourceId . '">';
+            $html .= '<li class="frequent-menu-item" data-menu-source-ref="' . $sourceId . '">';
             $html .= '<a href="' . htmlspecialchars($menuUrl) . '" class="waves-effect d-flex align-items-center justify-content-between">';
             $html .= '<span class="d-flex align-items-center">';
             $html .= '<i class="' . $menuIcon . '"></i>';
@@ -854,7 +859,7 @@ class MenuRenderService
                 
                 $html .= '<li class="' . $liClassFrequent . '">';
                 $html .= '<a href="' . htmlspecialchars($menuUrl) . '" ';
-                $html .= 'data-source="' . $sourceId . '" ';
+                $html .= 'data-menu-source-ref="' . $sourceId . '" ';
                 $html .= 'class="' . $aClassFrequent . '">';
                 $html .= '<i class="' . $menuIcon . ' me-2"></i>';
                 $html .= '<span>' . htmlspecialchars($menuName) . '</span>';
@@ -891,7 +896,7 @@ class MenuRenderService
                 
                 $html .= '<li class="' . $liClassFreq . '">';
                 $html .= '<a href="' . htmlspecialchars($menuUrl) . '" ';
-                $html .= 'data-source="' . $sourceId . '" ';
+                $html .= 'data-menu-source-ref="' . $sourceId . '" ';
                 $html .= 'class="' . $aClassFreq . '">';
                 $html .= '<span class="d-flex align-items-center flex-grow-1">';
                 $html .= '<i class="' . $menuIcon . ' me-2"></i>';

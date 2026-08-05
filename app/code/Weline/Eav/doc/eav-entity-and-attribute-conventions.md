@@ -61,6 +61,8 @@ EAV 核心表由 `SchemaRegistry` 统一编排，入口在：
 - `app/code/Weline/Eav/Model/EavEntity.php`
 - `app/code/Weline/Eav/Schema/SchemaRegistry.php`
 
+当同一核心表同时被 Framework `SchemaParser` 扫描 Model attribute 时，Model 与 `Schema/*` 必须使用完全相同的稳定索引名、列和唯一性。`eav_entity` 的唯一事实为 `idx_code UNIQUE(code)` 与 `idx_name(name)`；`code` 列本身不再额外声明匿名 `UNIQUE`，避免冷建表同时产生自动 `code` 索引和命名 `idx_code` 索引。如果只在 `EavEntitySchema` 中声明命名索引，SchemaDiff 会把 Registry 创建的索引视为多余并删除，Registry 又在后段重建，导致每轮 setup 振荡。
+
 属性本身的前台语义也来自元数据字段，而不是页面自己猜：
 
 - `frontend_is_visible`

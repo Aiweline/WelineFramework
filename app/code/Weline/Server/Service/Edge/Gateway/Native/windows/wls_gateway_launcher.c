@@ -1,6 +1,9 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
+#include <sddl.h>
+#include <winternl.h>
 #include <sodium.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +18,14 @@
 #define WLS_PATH_CHARS 32768U
 #define WLS_MAX_MANIFEST (4U * 1024U * 1024U)
 #define WLS_CONTROL_TREE_RELOAD 254U
+#define WLS_UPGRADE_ACTIVATION_SECONDS 300LL
+#define WLS_UPGRADE_OBSERVATION_MILLISECONDS 300000ULL
+#define WLS_UPGRADE_TOTAL_SECONDS 900LL
+#define WLS_ROLLBACK_HEALTH_MILLISECONDS 15000ULL
+#define WLS_SLOT_RETENTION_SECONDS 86400LL
+#define WLS_SLOT_RETENTION_MILLISECONDS 86400000ULL
+#define WLS_UPGRADE_MAX_ATTEMPTS 3U
+#define WLS_PACKAGE_LOCK_TIMEOUT_MILLISECONDS 30000ULL
 
 struct wls_upgrade {
     int present;
@@ -23,16 +34,136 @@ struct wls_upgrade {
     long long prepared_at;
     long long deadline;
     char runtime_generation[65];
+    char nonce[33];
+    char intent_sha256[65];
 };
+
+struct wls_upgrade_state {
+    int present;
+    char intent_sha256[65];
+    char nonce[33];
+    wchar_t from;
+    wchar_t to;
+    char runtime_generation[65];
+    char boot_id[65];
+    char phase[24];
+    unsigned int attempts;
+    unsigned long long observation_started;
+    unsigned long long observation_deadline;
+    long long total_deadline;
+};
+
+struct wls_system_timeofday_information {
+    LARGE_INTEGER boot_time;
+    LARGE_INTEGER current_time;
+    LARGE_INTEGER time_zone_bias;
+    ULONG time_zone_id;
+    ULONG reserved;
+    ULONGLONG boot_time_bias;
+    ULONGLONG sleep_time_bias;
+};
+
+typedef NTSTATUS (NTAPI *wls_nt_query_system_information_fn)(
+    SYSTEM_INFORMATION_CLASS,
+    PVOID,
+    ULONG,
+    PULONG
+);
 
 static SERVICE_STATUS_HANDLE wls_status_handle = NULL;
 static SERVICE_STATUS wls_service_status;
-static HANDLE wls_broker_process = NULL;
 static HANDLE wls_broker_stop_event = NULL;
+static SRWLOCK wls_broker_stop_event_lock = SRWLOCK_INIT;
 static volatile LONG wls_service_stop_requested = 0;
-static volatile LONG wls_service_reload_requested = 0;
+static volatile LONG wls_service_reload_generation = 0;
+static volatile LONG wls_service_reload_consumed = 0;
+static volatile LONG wls_service_ready_reported = 0;
+static DWORD wls_service_checkpoint = 0U;
 static const wchar_t *wls_service_home = NULL;
 static const wchar_t *wls_service_run = NULL;
+
+static int wls_checked_add_long_long(
+    long long value,
+    long long increment,
+    long long *result
+) {
+    if (result == NULL || value < 0 || increment < 0
+        || value > LLONG_MAX - increment) {
+        return 1;
+    }
+    *result = value + increment;
+    return 0;
+}
+
+static int wls_checked_add_unsigned_long_long(
+    unsigned long long value,
+    unsigned long long increment,
+    unsigned long long *result
+) {
+    if (result == NULL || value > ULLONG_MAX - increment) return 1;
+    *result = value + increment;
+    return 0;
+}
+
+static void wls_report_service(
+    DWORD state,
+    DWORD win32_exit,
+    DWORD service_specific_exit
+);
+
+static int wls_reload_pending(void)
+{
+    return InterlockedCompareExchange(&wls_service_reload_generation, 0, 0)
+        != InterlockedCompareExchange(&wls_service_reload_consumed, 0, 0);
+}
+
+static void wls_signal_broker_stop_event(void)
+{
+    AcquireSRWLockShared(&wls_broker_stop_event_lock);
+    if (wls_broker_stop_event != NULL) {
+        SetEvent(wls_broker_stop_event);
+    }
+    ReleaseSRWLockShared(&wls_broker_stop_event_lock);
+}
+
+static void wls_publish_broker_stop_event(HANDLE stop_event)
+{
+    AcquireSRWLockExclusive(&wls_broker_stop_event_lock);
+    wls_broker_stop_event = stop_event;
+    if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) != 0
+        || wls_reload_pending()) {
+        SetEvent(stop_event);
+    }
+    ReleaseSRWLockExclusive(&wls_broker_stop_event_lock);
+}
+
+static void wls_unpublish_broker_stop_event(HANDLE stop_event)
+{
+    AcquireSRWLockExclusive(&wls_broker_stop_event_lock);
+    if (wls_broker_stop_event == stop_event) {
+        wls_broker_stop_event = NULL;
+    }
+    ReleaseSRWLockExclusive(&wls_broker_stop_event_lock);
+}
+
+static DWORD wls_classify_broker_exit(
+    DWORD broker_exit,
+    LONG stop_requested,
+    int automatic_launch_allowed,
+    int reload_authorized
+) {
+    if (stop_requested != 0 || automatic_launch_allowed == 0) {
+        return 0U;
+    }
+    if (reload_authorized != 0) {
+        return WLS_CONTROL_TREE_RELOAD;
+    }
+    /* 254 is launcher-private and cannot be asserted by the Broker itself. */
+    if (broker_exit == 0U || broker_exit == WLS_CONTROL_TREE_RELOAD) {
+        return 1U;
+    }
+    return broker_exit;
+}
 
 static int wls_join(
     wchar_t *output,
@@ -80,7 +211,8 @@ static int wls_read_file(
     FILE_ATTRIBUTE_TAG_INFO attributes;
     LARGE_INTEGER size;
     unsigned char *buffer;
-    DWORD amount;
+    DWORD amount = 0U;
+    DWORD used = 0U;
     if (contents == NULL || length == NULL) return 1;
     *contents = NULL;
     *length = 0U;
@@ -114,17 +246,43 @@ static int wls_read_file(
         HEAP_ZERO_MEMORY,
         (size_t)size.QuadPart + 1U
     );
-    if (buffer == NULL
-        || !ReadFile(file, buffer, (DWORD)size.QuadPart, &amount, NULL)
-        || amount != (DWORD)size.QuadPart) {
-        if (buffer != NULL) HeapFree(GetProcessHeap(), 0U, buffer);
+    if (buffer == NULL) {
         CloseHandle(file);
         return 1;
     }
+    while (used < (DWORD)size.QuadPart) {
+        if (!ReadFile(
+                file,
+                buffer + used,
+                (DWORD)size.QuadPart - used,
+                &amount,
+                NULL
+            )
+            || amount == 0U) {
+            HeapFree(GetProcessHeap(), 0U, buffer);
+            CloseHandle(file);
+            return 1;
+        }
+        used += amount;
+    }
     CloseHandle(file);
-    buffer[amount] = '\0';
+    buffer[used] = '\0';
     *contents = buffer;
-    *length = amount;
+    *length = used;
+    return 0;
+}
+
+static int wls_write_all(HANDLE file, const unsigned char *contents, DWORD length)
+{
+    DWORD offset = 0U;
+    while (offset < length) {
+        DWORD written = 0U;
+        if (!WriteFile(file, contents + offset, length - offset, &written, NULL)
+            || written == 0U) {
+            return 1;
+        }
+        offset += written;
+    }
     return 0;
 }
 
@@ -133,7 +291,6 @@ static int wls_atomic_text(const wchar_t *path, const char *contents)
     wchar_t temporary[WLS_PATH_CHARS];
     HANDLE file = INVALID_HANDLE_VALUE;
     DWORD length;
-    DWORD written;
     int result = 1;
     if (contents == NULL || strlen(contents) > MAXDWORD
         || _snwprintf_s(
@@ -158,8 +315,7 @@ static int wls_atomic_text(const wchar_t *path, const char *contents)
         NULL
     );
     if (file == INVALID_HANDLE_VALUE
-        || !WriteFile(file, contents, length, &written, NULL)
-        || written != length
+        || wls_write_all(file, (const unsigned char *)contents, length) != 0
         || !FlushFileBuffers(file)) {
         goto cleanup;
     }
@@ -176,6 +332,250 @@ static int wls_atomic_text(const wchar_t *path, const char *contents)
 cleanup:
     if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
     if (result != 0) DeleteFileW(temporary);
+    return result;
+}
+
+static int wls_delete_optional(const wchar_t *path)
+{
+    DWORD error;
+    if (DeleteFileW(path)) return 0;
+    error = GetLastError();
+    return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND
+        ? 0
+        : 1;
+}
+
+static int wls_delete_optional_durable(const wchar_t *path)
+{
+    wchar_t pending[WLS_PATH_CHARS];
+    HANDLE target = INVALID_HANDLE_VALUE;
+    FILE_ATTRIBUTE_TAG_INFO attributes;
+    BY_HANDLE_FILE_INFORMATION information;
+    DWORD error;
+    if (path == NULL || _snwprintf_s(
+            pending,
+            WLS_PATH_CHARS,
+            _TRUNCATE,
+            L"%ls.delete-pending",
+            path
+        ) < 0) {
+        return 1;
+    }
+    if (!DeleteFileW(pending)) {
+        error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) return 1;
+    }
+    target = CreateFileW(
+        path,
+        FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+        NULL
+    );
+    if (target == INVALID_HANDLE_VALUE) {
+        error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? 0 : 1;
+    }
+    if (!GetFileInformationByHandleEx(
+            target,
+            FileAttributeTagInfo,
+            &attributes,
+            sizeof(attributes)
+        )
+        || !GetFileInformationByHandle(target, &information)
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+        || information.nNumberOfLinks != 1U) {
+        CloseHandle(target);
+        return 1;
+    }
+    CloseHandle(target);
+    if (!MoveFileExW(
+            path,
+            pending,
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+        )) {
+        return 1;
+    }
+    return DeleteFileW(pending) ? 0 : 1;
+}
+
+static int wls_read_slot_pointer(const wchar_t *path, wchar_t *slot)
+{
+    unsigned char *contents = NULL;
+    size_t length = 0U;
+    int result = 1;
+    if (path != NULL && slot != NULL
+        && wls_read_file(path, 4U, &contents, &length) == 0
+        && (length == 1U || (length == 2U && contents[1] == '\n'))
+        && (contents[0] == 'A' || contents[0] == 'B')) {
+        *slot = (wchar_t)contents[0];
+        result = 0;
+    }
+    if (contents != NULL) HeapFree(GetProcessHeap(), 0U, contents);
+    return result;
+}
+
+/* 0=acquired, 2=busy, 1=invalid/error. */
+static int wls_package_lock_acquire(
+    const wchar_t *home,
+    HANDLE *lock_handle,
+    int wait_for_lock
+)
+{
+    wchar_t trust_path[WLS_PATH_CHARS];
+    wchar_t path[WLS_PATH_CHARS];
+    HANDLE trust_handle = INVALID_HANDLE_VALUE;
+    HANDLE handle;
+    FILE_ATTRIBUTE_TAG_INFO trust_attributes;
+    FILE_ATTRIBUTE_TAG_INFO attributes;
+    BY_HANDLE_FILE_INFORMATION information;
+    OVERLAPPED overlapped;
+    unsigned long long started;
+    unsigned long long deadline;
+    unsigned long long now;
+    DWORD error;
+    if (home == NULL || lock_handle == NULL
+        || wls_join(trust_path, WLS_PATH_CHARS, home, L"trust") != 0
+        || wls_join(
+            path,
+            WLS_PATH_CHARS,
+            home,
+            L"trust\\package-install.lock"
+        ) != 0) {
+        return 1;
+    }
+    trust_handle = CreateFileW(
+        trust_path,
+        FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+        NULL
+    );
+    if (trust_handle == INVALID_HANDLE_VALUE
+        || !GetFileInformationByHandleEx(
+            trust_handle,
+            FileAttributeTagInfo,
+            &trust_attributes,
+            sizeof(trust_attributes)
+        )
+        || (trust_attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        || (trust_attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+        if (trust_handle != INVALID_HANDLE_VALUE) CloseHandle(trust_handle);
+        return 1;
+    }
+    handle = CreateFileW(
+        path,
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_OPEN_REPARSE_POINT,
+        NULL
+    );
+    if (handle == INVALID_HANDLE_VALUE
+        || !GetFileInformationByHandleEx(
+            handle,
+            FileAttributeTagInfo,
+            &attributes,
+            sizeof(attributes)
+        )
+        || !GetFileInformationByHandle(handle, &information)
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+        || information.nNumberOfLinks != 1U
+        || !FlushFileBuffers(handle)) {
+        if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
+        CloseHandle(trust_handle);
+        return 1;
+    }
+    started = (unsigned long long)GetTickCount64();
+    if (wls_checked_add_unsigned_long_long(
+            started,
+            WLS_PACKAGE_LOCK_TIMEOUT_MILLISECONDS,
+            &deadline
+    ) != 0) {
+        CloseHandle(handle);
+        CloseHandle(trust_handle);
+        return 1;
+    }
+    ZeroMemory(&overlapped, sizeof(overlapped));
+    for (;;) {
+        if (LockFileEx(
+                handle,
+                LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+                0U,
+                MAXDWORD,
+                MAXDWORD,
+                &overlapped
+            )) {
+            break;
+        }
+        error = GetLastError();
+        if (error != ERROR_LOCK_VIOLATION && error != ERROR_IO_PENDING) {
+            CloseHandle(handle);
+            CloseHandle(trust_handle);
+            return 1;
+        }
+        if (!wait_for_lock) {
+            CloseHandle(handle);
+            CloseHandle(trust_handle);
+            SetLastError(ERROR_LOCK_VIOLATION);
+            return 2;
+        }
+        now = (unsigned long long)GetTickCount64();
+        if (now >= deadline) {
+            CloseHandle(handle);
+            CloseHandle(trust_handle);
+            SetLastError(ERROR_LOCK_VIOLATION);
+            return 2;
+        }
+        Sleep(10U);
+    }
+    if (!GetFileInformationByHandleEx(
+            handle,
+            FileAttributeTagInfo,
+            &attributes,
+            sizeof(attributes)
+        )
+        || !GetFileInformationByHandle(handle, &information)
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        || (attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+        || information.nNumberOfLinks != 1U) {
+        (void)UnlockFileEx(handle, 0U, MAXDWORD, MAXDWORD, &overlapped);
+        CloseHandle(handle);
+        CloseHandle(trust_handle);
+        return 1;
+    }
+    if (!CloseHandle(trust_handle)) {
+        (void)UnlockFileEx(handle, 0U, MAXDWORD, MAXDWORD, &overlapped);
+        CloseHandle(handle);
+        return 1;
+    }
+    *lock_handle = handle;
+    return 0;
+}
+
+static int wls_package_lock_release(HANDLE lock_handle)
+{
+    OVERLAPPED overlapped;
+    int result = 0;
+    if (lock_handle == NULL || lock_handle == INVALID_HANDLE_VALUE) return 1;
+    ZeroMemory(&overlapped, sizeof(overlapped));
+    if (!UnlockFileEx(
+            lock_handle,
+            0U,
+            MAXDWORD,
+            MAXDWORD,
+            &overlapped
+        )) {
+        result = 1;
+    }
+    if (!CloseHandle(lock_handle)) result = 1;
     return result;
 }
 
@@ -350,15 +750,17 @@ static int wls_file_digest(const wchar_t *path, char digest[65])
             &attributes,
             sizeof(attributes)
         )
-        || (attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        || (attributes.FileAttributes
+            & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) != 0
         || crypto_hash_sha256_init(&state) != 0) {
         if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
         return 1;
     }
-    while (ReadFile(file, buffer, sizeof(buffer), &amount, NULL) && amount > 0U) {
+    for (;;) {
+        if (!ReadFile(file, buffer, sizeof(buffer), &amount, NULL)) goto cleanup;
+        if (amount == 0U) break;
         if (crypto_hash_sha256_update(&state, buffer, amount) != 0) goto cleanup;
     }
-    if (GetLastError() != ERROR_SUCCESS && amount != 0U) goto cleanup;
     if (crypto_hash_sha256_final(&state, binary) != 0) goto cleanup;
     sodium_bin2hex(digest, 65U, binary, sizeof(binary));
     result = 0;
@@ -407,7 +809,7 @@ static int wls_active_slot(const wchar_t *home, wchar_t slot[2])
     int result = 1;
     if (wls_join(path, WLS_PATH_CHARS, home, L"trust\\active-slot") == 0
         && wls_read_file(path, 4U, &contents, &length) == 0
-        && length >= 1U
+        && (length == 1U || (length == 2U && contents[1] == '\n'))
         && (contents[0] == 'A' || contents[0] == 'B')) {
         slot[0] = (wchar_t)contents[0];
         slot[1] = L'\0';
@@ -471,10 +873,12 @@ static int wls_upgrade_intent(
     unsigned char key[crypto_auth_hmacsha256_KEYBYTES];
     unsigned char expected[crypto_auth_hmacsha256_BYTES];
     unsigned char actual[crypto_auth_hmacsha256_BYTES];
+    unsigned char intent_digest[crypto_hash_sha256_BYTES];
     size_t decoded = 0U;
     int consumed = 0;
     int fields;
     int result = -1;
+    long long expected_activation_deadline = 0;
     ZeroMemory(upgrade, sizeof(*upgrade));
     if (wls_join(intent_path, WLS_PATH_CHARS, home, L"trust\\upgrade.intent") != 0
         || wls_join(token_path, WLS_PATH_CHARS, home, L"trust\\admin.token") != 0
@@ -520,8 +924,13 @@ static int wls_upgrade_intent(
     );
     signature_line = strstr((char *)intent, "signature=");
     if (fields != 8 || consumed != (int)intent_length || from[0] == to[0]
-        || upgrade->prepared_at < 1
-        || upgrade->deadline != upgrade->prepared_at + 300
+        || wls_checked_add_long_long(
+            upgrade->prepared_at,
+            WLS_UPGRADE_ACTIVATION_SECONDS,
+            &expected_activation_deadline
+        ) != 0
+        || upgrade->deadline != expected_activation_deadline
+        || upgrade->prepared_at > LLONG_MAX - WLS_UPGRADE_TOTAL_SECONDS
         || !wls_is_hex(host, 32U) || host_length != 32U
         || sodium_memcmp(host, host_text, 32U) != 0
         || !wls_is_hex(upgrade->runtime_generation, 64U)
@@ -557,14 +966,29 @@ static int wls_upgrade_intent(
         || sodium_memcmp(expected, actual, sizeof(expected)) != 0) {
         goto cleanup;
     }
+    if (crypto_hash_sha256(
+            intent_digest,
+            intent,
+            (unsigned long long)intent_length
+        ) != 0
+        || sodium_bin2hex(
+            upgrade->intent_sha256,
+            sizeof(upgrade->intent_sha256),
+            intent_digest,
+            sizeof(intent_digest)
+        ) == NULL) {
+        goto cleanup;
+    }
     upgrade->present = 1;
     upgrade->from = (wchar_t)from[0];
     upgrade->to = (wchar_t)to[0];
+    memcpy(upgrade->nonce, nonce, sizeof(upgrade->nonce));
     result = 1;
 cleanup:
     sodium_memzero(key, sizeof(key));
     sodium_memzero(expected, sizeof(expected));
     sodium_memzero(actual, sizeof(actual));
+    sodium_memzero(intent_digest, sizeof(intent_digest));
     if (token != NULL) {
         sodium_memzero(token, token_length);
         HeapFree(GetProcessHeap(), 0U, token);
@@ -576,30 +1000,370 @@ cleanup:
 
 static int wls_upgrade_healthy(
     const wchar_t *home,
-    const struct wls_upgrade *upgrade
+    const struct wls_upgrade *upgrade,
+    const struct wls_upgrade_state *state,
+    const char *boot_id
 ) {
     wchar_t path[WLS_PATH_CHARS];
     unsigned char *contents = NULL;
     size_t length = 0U;
+    char digest[65];
+    char nonce[33];
+    char from[2];
     char to[2];
     char runtime[65];
+    char marker_boot[65];
+    unsigned long long observation_deadline = 0ULL;
+    unsigned long long healthy_at = 0ULL;
+    unsigned long long monotonic_now = (unsigned long long)GetTickCount64();
     int consumed = 0;
     int result = 0;
     if (wls_join(path, WLS_PATH_CHARS, home, L"trust\\upgrade-healthy") == 0
         && wls_read_file(path, 512U, &contents, &length) == 0
         && sscanf(
             (const char *)contents,
-            "WLS-UPGRADE-HEALTHY/1\nto=%1[AB]\nruntime_generation=%64[0-9a-f]\n%n",
+            "WLS-UPGRADE-HEALTHY/2\n"
+            "intent_sha256=%64[0-9a-f]\n"
+            "intent_nonce=%32[0-9a-f]\n"
+            "from=%1[AB]\n"
+            "to=%1[AB]\n"
+            "runtime_generation=%64[0-9a-f]\n"
+            "boot_id=%64[0-9A-Za-z-]\n"
+            "observation_deadline_monotonic_ms=%llu\n"
+            "healthy_monotonic_ms=%llu\n%n",
+            digest,
+            nonce,
+            from,
             to,
             runtime,
+            marker_boot,
+            &observation_deadline,
+            &healthy_at,
             &consumed
-        ) == 2
+        ) == 8
         && consumed == (int)length
+        && state != NULL
+        && strcmp(state->phase, "OBSERVING") == 0
+        && strcmp(digest, upgrade->intent_sha256) == 0
+        && strcmp(nonce, upgrade->nonce) == 0
+        && (wchar_t)from[0] == upgrade->from
         && (wchar_t)to[0] == upgrade->to
-        && strcmp(runtime, upgrade->runtime_generation) == 0) {
+        && strcmp(runtime, upgrade->runtime_generation) == 0
+        && strcmp(marker_boot, boot_id) == 0
+        && observation_deadline == state->observation_deadline
+        && observation_deadline > 0ULL
+        && healthy_at >= observation_deadline
+        && healthy_at <= monotonic_now) {
         result = 1;
     }
     if (contents != NULL) HeapFree(GetProcessHeap(), 0U, contents);
+    return result;
+}
+
+static int wls_upgrade_observation_deadline(
+    const wchar_t *home,
+    const struct wls_upgrade *upgrade,
+    const struct wls_upgrade_state *state,
+    const char *boot_id,
+    unsigned long long *started_out,
+    unsigned long long *deadline
+) {
+    wchar_t path[WLS_PATH_CHARS];
+    unsigned char *contents = NULL;
+    size_t length = 0U;
+    char digest[65];
+    char nonce[33];
+    char from[2];
+    char to[2];
+    char runtime[65];
+    char marker_boot[65];
+    unsigned long long started = 0ULL;
+    unsigned long long parsed_deadline = 0ULL;
+    unsigned long long expected_deadline = 0ULL;
+    unsigned long long monotonic_now = (unsigned long long)GetTickCount64();
+    int consumed = 0;
+    int result = 0;
+    if (deadline == NULL || started_out == NULL
+        || wls_join(path, WLS_PATH_CHARS, home, L"trust\\upgrade-observing") != 0
+        || wls_read_file(path, 512U, &contents, &length) != 0) {
+        return 0;
+    }
+    if (sscanf(
+        (const char *)contents,
+        "WLS-UPGRADE-OBSERVING/2\n"
+        "intent_sha256=%64[0-9a-f]\n"
+        "intent_nonce=%32[0-9a-f]\n"
+        "from=%1[AB]\n"
+        "to=%1[AB]\n"
+        "runtime_generation=%64[0-9a-f]\n"
+        "boot_id=%64[0-9A-Za-z-]\n"
+        "started_monotonic_ms=%llu\n"
+        "deadline_monotonic_ms=%llu\n%n",
+        digest,
+        nonce,
+        from,
+        to,
+        runtime,
+        marker_boot,
+        &started,
+        &parsed_deadline,
+        &consumed
+    ) == 8
+        && consumed == (int)length
+        && state != NULL
+        && (strcmp(state->phase, "PREPARED") == 0
+            || strcmp(state->phase, "OBSERVING") == 0)
+        && strcmp(digest, upgrade->intent_sha256) == 0
+        && strcmp(nonce, upgrade->nonce) == 0
+        && (wchar_t)from[0] == upgrade->from
+        && (wchar_t)to[0] == upgrade->to
+        && strcmp(runtime, upgrade->runtime_generation) == 0
+        && strcmp(marker_boot, boot_id) == 0
+        && started > 0ULL
+        && wls_checked_add_unsigned_long_long(
+            started,
+            WLS_UPGRADE_OBSERVATION_MILLISECONDS,
+            &expected_deadline
+        ) == 0
+        && parsed_deadline == expected_deadline
+        && started <= monotonic_now) {
+        *started_out = started;
+        *deadline = parsed_deadline;
+        result = 1;
+    }
+    HeapFree(GetProcessHeap(), 0U, contents);
+    return result;
+}
+
+static int wls_boot_id(char output[65])
+{
+    static const char prefix[] = "wls-gateway-host-boot/1|";
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    wls_nt_query_system_information_fn query;
+    struct wls_system_timeofday_information information;
+    char platform_token[65];
+    char canonical[sizeof(prefix) + sizeof(platform_token)];
+    unsigned char digest[crypto_hash_sha256_BYTES];
+    NTSTATUS status;
+    int length;
+    if (ntdll == NULL) return 1;
+    query = (wls_nt_query_system_information_fn)GetProcAddress(
+        ntdll,
+        "NtQuerySystemInformation"
+    );
+    if (query == NULL) return 1;
+    ZeroMemory(&information, sizeof(information));
+    status = query(
+        (SYSTEM_INFORMATION_CLASS)3,
+        &information,
+        (ULONG)sizeof(information),
+        NULL
+    );
+    if (status < 0) return 1;
+    length = _snprintf_s(
+        platform_token,
+        sizeof(platform_token),
+        _TRUNCATE,
+        "windows-%016llx",
+        (unsigned long long)information.boot_time.QuadPart
+    );
+    if (length <= 0) return 1;
+    length = _snprintf_s(
+        canonical,
+        sizeof(canonical),
+        _TRUNCATE,
+        "%s%s",
+        prefix,
+        platform_token
+    );
+    if (length <= 0
+        || crypto_hash_sha256(
+            digest,
+            (const unsigned char *)canonical,
+            (unsigned long long)length
+        ) != 0
+        || sodium_bin2hex(output, 65U, digest, sizeof(digest)) == NULL
+        || strlen(output) != 64U) {
+        sodium_memzero(digest, sizeof(digest));
+        sodium_memzero(canonical, sizeof(canonical));
+        return 1;
+    }
+    sodium_memzero(digest, sizeof(digest));
+    sodium_memzero(canonical, sizeof(canonical));
+    return 0;
+}
+
+static int wls_upgrade_state_read(
+    const wchar_t *home,
+    const struct wls_upgrade *upgrade,
+    struct wls_upgrade_state *state
+) {
+    wchar_t path[WLS_PATH_CHARS];
+    unsigned char *contents = NULL;
+    size_t length = 0U;
+    char from[2];
+    char to[2];
+    int consumed = 0;
+    int fields;
+    long long expected_total_deadline = 0;
+    ZeroMemory(state, sizeof(*state));
+    if (wls_join(path, WLS_PATH_CHARS, home, L"trust\\upgrade-state") != 0) return -1;
+    if (wls_read_file(path, 1024U, &contents, &length) != 0) {
+        DWORD error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? 0 : -1;
+    }
+    fields = sscanf(
+        (const char *)contents,
+        "WLS-UPGRADE-STATE/2\n"
+        "intent_sha256=%64[0-9a-f]\n"
+        "intent_nonce=%32[0-9a-f]\n"
+        "from=%1[AB]\n"
+        "to=%1[AB]\n"
+        "runtime_generation=%64[0-9a-f]\n"
+        "boot_id=%64[0-9A-Za-z-]\n"
+        "phase=%23[A-Z_]\n"
+        "attempts=%u\n"
+        "observation_started_monotonic_ms=%llu\n"
+        "observation_deadline_monotonic_ms=%llu\n"
+        "total_deadline=%lld\n%n",
+        state->intent_sha256,
+        state->nonce,
+        from,
+        to,
+        state->runtime_generation,
+        state->boot_id,
+        state->phase,
+        &state->attempts,
+        &state->observation_started,
+        &state->observation_deadline,
+        &state->total_deadline,
+        &consumed
+    );
+    HeapFree(GetProcessHeap(), 0U, contents);
+    if (fields != 11 || consumed != (int)length
+        || strcmp(state->intent_sha256, upgrade->intent_sha256) != 0
+        || strcmp(state->nonce, upgrade->nonce) != 0
+        || (wchar_t)from[0] != upgrade->from || (wchar_t)to[0] != upgrade->to
+        || strcmp(state->runtime_generation, upgrade->runtime_generation) != 0
+        || state->attempts > WLS_UPGRADE_MAX_ATTEMPTS
+        || wls_checked_add_long_long(
+            upgrade->prepared_at,
+            WLS_UPGRADE_TOTAL_SECONDS,
+            &expected_total_deadline
+        ) != 0
+        || state->total_deadline != expected_total_deadline
+        || (strcmp(state->phase, "PREPARED") != 0
+            && strcmp(state->phase, "OBSERVING") != 0
+            && strcmp(state->phase, "HEALTHY") != 0
+            && strcmp(state->phase, "ROLLBACK_PENDING") != 0
+            && strcmp(state->phase, "ROLLED_BACK") != 0
+            && strcmp(state->phase, "COMMITTED") != 0)) return -1;
+    state->from = (wchar_t)from[0];
+    state->to = (wchar_t)to[0];
+    state->present = 1;
+    return 1;
+}
+
+static int wls_upgrade_state_write(
+    const wchar_t *home,
+    const struct wls_upgrade *upgrade,
+    const char *boot_id,
+    const char *phase,
+    unsigned int attempts,
+    unsigned long long observation_started,
+    unsigned long long observation_deadline
+) {
+    wchar_t path[WLS_PATH_CHARS];
+    char payload[640];
+    int length;
+    long long total_deadline = 0;
+    unsigned long long expected_observation_deadline = 0ULL;
+    if (attempts > WLS_UPGRADE_MAX_ATTEMPTS
+        || phase == NULL
+        || wls_checked_add_long_long(
+            upgrade->prepared_at,
+            WLS_UPGRADE_TOTAL_SECONDS,
+            &total_deadline
+        ) != 0
+        || wls_join(path, WLS_PATH_CHARS, home, L"trust\\upgrade-state") != 0) return 1;
+    if (strcmp(phase, "OBSERVING") == 0
+        || strcmp(phase, "HEALTHY") == 0
+        || strcmp(phase, "COMMITTED") == 0) {
+        if (observation_started == 0ULL
+            || wls_checked_add_unsigned_long_long(
+                observation_started,
+                WLS_UPGRADE_OBSERVATION_MILLISECONDS,
+                &expected_observation_deadline
+            ) != 0
+            || observation_deadline != expected_observation_deadline) {
+            return 1;
+        }
+    } else if (observation_started != 0ULL || observation_deadline != 0ULL) {
+        return 1;
+    }
+    length = _snprintf_s(
+        payload,
+        sizeof(payload),
+        _TRUNCATE,
+        "WLS-UPGRADE-STATE/2\n"
+        "intent_sha256=%s\nintent_nonce=%s\n"
+        "from=%c\nto=%c\nruntime_generation=%s\n"
+        "boot_id=%s\nphase=%s\nattempts=%u\n"
+        "observation_started_monotonic_ms=%llu\n"
+        "observation_deadline_monotonic_ms=%llu\n"
+        "total_deadline=%lld\n",
+        upgrade->intent_sha256, upgrade->nonce,
+        (char)upgrade->from, (char)upgrade->to,
+        upgrade->runtime_generation, boot_id, phase, attempts,
+        observation_started, observation_deadline,
+        total_deadline
+    );
+    return length > 0 ? wls_atomic_text(path, payload) : 1;
+}
+
+static int wls_upgrade_rollback_healthy(
+    const wchar_t *home,
+    const struct wls_upgrade *upgrade,
+    const char *boot_id
+) {
+    wchar_t path[WLS_PATH_CHARS];
+    unsigned char *contents = NULL;
+    size_t length = 0U;
+    char digest[65], nonce[33], from[2], to[2], runtime[65], marker_boot[65];
+    unsigned long long started = 0ULL, healthy = 0ULL;
+    unsigned long long expected_healthy = 0ULL;
+    unsigned long long monotonic_now = (unsigned long long)GetTickCount64();
+    int consumed = 0;
+    int result = 0;
+    if (wls_join(path, WLS_PATH_CHARS, home,
+            L"trust\\upgrade-rollback-healthy") != 0
+        || wls_read_file(path, 768U, &contents, &length) != 0) return 0;
+    if (sscanf(
+        (const char *)contents,
+        "WLS-UPGRADE-ROLLBACK-HEALTHY/2\n"
+        "intent_sha256=%64[0-9a-f]\nintent_nonce=%32[0-9a-f]\n"
+        "from=%1[AB]\nto=%1[AB]\n"
+        "active_runtime_generation=%64[0-9a-f]\n"
+        "boot_id=%64[0-9A-Za-z-]\n"
+        "started_monotonic_ms=%llu\nhealthy_monotonic_ms=%llu\n%n",
+        digest, nonce, from, to, runtime, marker_boot,
+        &started, &healthy, &consumed
+    ) == 8 && consumed == (int)length
+        && strcmp(digest, upgrade->intent_sha256) == 0
+        && strcmp(nonce, upgrade->nonce) == 0
+        && (wchar_t)from[0] == upgrade->from
+        && (wchar_t)to[0] == upgrade->to
+        && wls_is_hex(runtime, 64U)
+        && strcmp(marker_boot, boot_id) == 0
+        && started > 0ULL
+        && wls_checked_add_unsigned_long_long(
+            started,
+            WLS_ROLLBACK_HEALTH_MILLISECONDS,
+            &expected_healthy
+        ) == 0
+        && healthy >= expected_healthy
+        && healthy <= monotonic_now) result = 1;
+    HeapFree(GetProcessHeap(), 0U, contents);
     return result;
 }
 
@@ -613,7 +1377,10 @@ static int wls_upgrade_rollback_requested(
     char from[2];
     char to[2];
     long long at = 0;
-    char nonce[33];
+    char intent_digest[65];
+    char intent_nonce[33];
+    char request_nonce[33];
+    DWORD attributes;
     int consumed = 0;
     int result = 0;
     if (wls_join(
@@ -621,152 +1388,347 @@ static int wls_upgrade_rollback_requested(
         WLS_PATH_CHARS,
         home,
         L"state\\upgrade-rollback.request"
-    ) == 0
-        && wls_read_file(path, 512U, &contents, &length) == 0
-        && sscanf(
+    ) != 0) {
+        return -1;
+    }
+    attributes = GetFileAttributesW(path);
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        DWORD error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? 0 : -1;
+    }
+    if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        || (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        return -1;
+    }
+    if (wls_read_file(path, 512U, &contents, &length) != 0) {
+        return -1;
+    }
+    if (sscanf(
             (const char *)contents,
-            "WLS-UPGRADE-ROLLBACK/1\nfrom=%1[AB]\nto=%1[AB]\nat=%lld\nnonce=%32[0-9a-f]\n%n",
+            "WLS-UPGRADE-ROLLBACK/2\n"
+            "intent_sha256=%64[0-9a-f]\n"
+            "intent_nonce=%32[0-9a-f]\n"
+            "from=%1[AB]\nto=%1[AB]\nat=%lld\n"
+            "request_nonce=%32[0-9a-f]\n%n",
+            intent_digest,
+            intent_nonce,
             from,
             to,
             &at,
-            nonce,
+            request_nonce,
             &consumed
-        ) == 4
+        ) == 6
         && consumed == (int)length
+        && strcmp(intent_digest, upgrade->intent_sha256) == 0
+        && strcmp(intent_nonce, upgrade->nonce) == 0
         && (wchar_t)from[0] == upgrade->to
         && (wchar_t)to[0] == upgrade->from
-        && at > 0 && wls_is_hex(nonce, 32U)) {
+        && at > 0 && wls_is_hex(request_nonce, 32U)) {
         result = 1;
     }
     if (contents != NULL) HeapFree(GetProcessHeap(), 0U, contents);
-    return result;
+    return result == 1 ? 1 : -1;
 }
 
-static int wls_reconcile_upgrade(
+static int wls_reconcile_upgrade_locked(
     const wchar_t *home,
     wchar_t active[2],
     int count_candidate_failure
 )
 {
     struct wls_upgrade upgrade;
-    wchar_t attempts_path[WLS_PATH_CHARS];
+    struct wls_upgrade_state transaction;
     wchar_t active_path[WLS_PATH_CHARS];
     wchar_t previous_path[WLS_PATH_CHARS];
     wchar_t intent_path[WLS_PATH_CHARS];
     wchar_t healthy_path[WLS_PATH_CHARS];
+    wchar_t observing_path[WLS_PATH_CHARS];
     wchar_t rollback_path[WLS_PATH_CHARS];
+    wchar_t rollback_healthy_path[WLS_PATH_CHARS];
     wchar_t retention_path[WLS_PATH_CHARS];
     wchar_t rolled_back_path[WLS_PATH_CHARS];
-    unsigned char *attempts_text = NULL;
-    size_t attempts_length = 0U;
-    char attempt_slot[2];
-    long long first_at = 0;
-    unsigned int attempts = 0U;
+    wchar_t state_path[WLS_PATH_CHARS];
+    char boot_id[65];
     long long now = (long long)time(NULL);
-    char record[192];
+    unsigned long long monotonic_now = (unsigned long long)GetTickCount64();
+    char record[640];
+    long long retained_at;
+    unsigned long long retained_since_monotonic;
+    int record_length;
     int rollback_requested;
-    int state = wls_upgrade_intent(home, &upgrade);
-    if (state < 0) return 1;
-    if (state == 0 || !upgrade.present || active[0] == upgrade.from) return 0;
-    if (active[0] != upgrade.to
-        || wls_join(attempts_path, WLS_PATH_CHARS, home, L"trust\\upgrade-attempts") != 0
+    int observation_present;
+    unsigned long long observation_started = 0ULL;
+    unsigned long long observation_deadline = 0ULL;
+    int intent_status;
+    int state_status;
+    unsigned int attempts;
+    int must_rollback = 0;
+    int rollback_transitioned = 0;
+    unsigned long long expected_observation_deadline = 0ULL;
+    if (wls_active_slot(home, active) != 0) return 1;
+    intent_status = wls_upgrade_intent(home, &upgrade);
+    if (intent_status < 0) return 1;
+    if (intent_status == 0 || !upgrade.present) return 0;
+    if (now < 0 || wls_boot_id(boot_id) != 0
         || wls_join(active_path, WLS_PATH_CHARS, home, L"trust\\active-slot") != 0
         || wls_join(previous_path, WLS_PATH_CHARS, home, L"trust\\previous-slot") != 0
         || wls_join(intent_path, WLS_PATH_CHARS, home, L"trust\\upgrade.intent") != 0
         || wls_join(healthy_path, WLS_PATH_CHARS, home, L"trust\\upgrade-healthy") != 0
+        || wls_join(observing_path, WLS_PATH_CHARS, home, L"trust\\upgrade-observing") != 0
         || wls_join(retention_path, WLS_PATH_CHARS, home, L"trust\\slot-retention") != 0
         || wls_join(rolled_back_path, WLS_PATH_CHARS, home, L"trust\\upgrade-rolled-back") != 0
-        || wls_join(rollback_path, WLS_PATH_CHARS, home, L"state\\upgrade-rollback.request") != 0) {
+        || wls_join(state_path, WLS_PATH_CHARS, home, L"trust\\upgrade-state") != 0
+        || wls_join(rollback_path, WLS_PATH_CHARS, home, L"state\\upgrade-rollback.request") != 0
+        || wls_join(rollback_healthy_path, WLS_PATH_CHARS, home,
+            L"trust\\upgrade-rollback-healthy") != 0) {
         return 1;
     }
-    if (wls_upgrade_healthy(home, &upgrade)) {
-        if (_snprintf_s(
-            record,
-            sizeof(record),
-            _TRUNCATE,
-            "WLS-SLOT-RETENTION/1\nslot=%c\nretain_until=%lld\n",
-            (char)upgrade.from,
-            now + 86400
-        ) < 0 || wls_atomic_text(retention_path, record) != 0) {
+    state_status = wls_upgrade_state_read(home, &upgrade, &transaction);
+    if (state_status < 0) return 1;
+    if (state_status > 0 && strcmp(transaction.boot_id, boot_id) == 0) {
+        if (strcmp(transaction.phase, "OBSERVING") == 0
+            || strcmp(transaction.phase, "HEALTHY") == 0
+            || strcmp(transaction.phase, "COMMITTED") == 0) {
+            if (transaction.observation_started == 0ULL
+                || wls_checked_add_unsigned_long_long(
+                    transaction.observation_started,
+                    WLS_UPGRADE_OBSERVATION_MILLISECONDS,
+                    &expected_observation_deadline
+                ) != 0
+                || transaction.observation_started > monotonic_now
+                || transaction.observation_deadline
+                    != expected_observation_deadline
+                || ((strcmp(transaction.phase, "HEALTHY") == 0
+                        || strcmp(transaction.phase, "COMMITTED") == 0)
+                    && transaction.observation_deadline > monotonic_now)) {
+                return 1;
+            }
+        } else if (transaction.observation_started != 0ULL
+            || transaction.observation_deadline != 0ULL) {
             return 1;
         }
-        DeleteFileW(intent_path);
-        DeleteFileW(healthy_path);
-        DeleteFileW(attempts_path);
-        DeleteFileW(rollback_path);
-        return 0;
     }
     rollback_requested = wls_upgrade_rollback_requested(home, &upgrade);
-    if (!count_candidate_failure
-        && now <= upgrade.deadline
-        && !rollback_requested) {
-        return 0;
-    }
-    if (count_candidate_failure
-        && wls_read_file(attempts_path, 256U, &attempts_text, &attempts_length) == 0) {
-        int consumed = 0;
-        if (sscanf(
-            (const char *)attempts_text,
-            "WLS-UPGRADE-ATTEMPTS/1\nslot=%1[AB]\nfirst_at=%lld\nattempts=%u\n%n",
-            attempt_slot,
-            &first_at,
-            &attempts,
-            &consumed
-        ) != 3
-            || consumed != (int)attempts_length
-            || (wchar_t)attempt_slot[0] != upgrade.to
-            || first_at < upgrade.prepared_at
-            || now - first_at > 300) {
-            attempts = 0U;
-            first_at = now;
+    if (rollback_requested < 0) return 1;
+    if (state_status > 0 && strcmp(transaction.boot_id, boot_id) != 0
+        && strcmp(transaction.phase, "COMMITTED") != 0
+        && strcmp(transaction.phase, "ROLLED_BACK") != 0) {
+        attempts = transaction.attempts + 1U;
+        if (active[0] == upgrade.from
+            || strcmp(transaction.phase, "ROLLBACK_PENDING") == 0) {
+            if (wls_upgrade_state_write(
+                    home, &upgrade, boot_id, "ROLLBACK_PENDING",
+                    attempts > WLS_UPGRADE_MAX_ATTEMPTS
+                        ? WLS_UPGRADE_MAX_ATTEMPTS : attempts,
+                    0ULL, 0ULL
+                ) != 0) return 1;
+            rollback_transitioned = 1;
+        } else if (attempts >= WLS_UPGRADE_MAX_ATTEMPTS
+            || now >= transaction.total_deadline) {
+            must_rollback = 1;
+        } else {
+            if (wls_upgrade_state_write(
+                    home, &upgrade, boot_id, "PREPARED", attempts, 0ULL, 0ULL
+                ) != 0) return 1;
+            (void)wls_delete_optional(observing_path);
+            (void)wls_delete_optional(healthy_path);
         }
-        HeapFree(GetProcessHeap(), 0U, attempts_text);
-    } else if (count_candidate_failure) {
-        first_at = now;
+        state_status = wls_upgrade_state_read(home, &upgrade, &transaction);
+        if (state_status < 1) return 1;
     }
-    if (count_candidate_failure) {
-        attempts++;
-    }
-    if (now > upgrade.deadline
-        || rollback_requested
-        || (count_candidate_failure && attempts >= 3U)) {
-        char active_text[3] = {(char)upgrade.from, '\n', '\0'};
-        char previous_text[3] = {(char)upgrade.to, '\n', '\0'};
-        if (wls_atomic_text(active_path, active_text) != 0
-            || wls_atomic_text(previous_path, previous_text) != 0
-            || _snprintf_s(
-                record,
-                sizeof(record),
-                _TRUNCATE,
-                "WLS-UPGRADE-ROLLED-BACK/1\nslot=%c\nat=%lld\n",
-                (char)upgrade.to,
-                now
-            ) < 0
-            || wls_atomic_text(rolled_back_path, record) != 0) {
+    if (active[0] == upgrade.from) {
+        if (state_status == 0) {
+            /* The shared package lock makes this a completed/incomplete
+             * transaction, never a concurrently active preactivation writer. */
+            if (wls_upgrade_state_write(
+                    home, &upgrade, boot_id, "ROLLBACK_PENDING", 0U, 0ULL, 0ULL
+                ) != 0) return 1;
+            rollback_transitioned = 1;
+            state_status = wls_upgrade_state_read(home, &upgrade, &transaction);
+            if (state_status < 1) return 1;
+        } else if (strcmp(transaction.phase, "ROLLED_BACK") != 0
+            && strcmp(transaction.phase, "ROLLBACK_PENDING") != 0) {
+            if (wls_upgrade_state_write(
+                    home, &upgrade, boot_id, "ROLLBACK_PENDING",
+                    transaction.attempts, 0ULL, 0ULL
+                ) != 0) return 1;
+            rollback_transitioned = 1;
+            state_status = wls_upgrade_state_read(home, &upgrade, &transaction);
+            if (state_status < 1) return 1;
+        }
+        if (strcmp(transaction.phase, "ROLLBACK_PENDING") == 0
+            || strcmp(transaction.phase, "ROLLED_BACK") == 0) {
+            char previous_text[3] = {(char)upgrade.to, '\n', '\0'};
+            wchar_t verified_previous = L'\0';
+            if (wls_atomic_text(previous_path, previous_text) != 0
+                || wls_read_slot_pointer(
+                    previous_path,
+                    &verified_previous
+                ) != 0
+                || verified_previous != upgrade.to) {
+                return 1;
+            }
+        }
+        if (strcmp(transaction.phase, "ROLLBACK_PENDING") == 0) {
+            if (!wls_upgrade_rollback_healthy(home, &upgrade, boot_id)) {
+                return rollback_transitioned ? 3 : 0;
+            }
+            if (_snprintf_s(
+                    record, sizeof(record), _TRUNCATE,
+                    "WLS-UPGRADE-ROLLED-BACK/3\n"
+                    "intent_sha256=%s\nintent_nonce=%s\n"
+                    "from=%c\nto=%c\nruntime_generation=%s\nat=%lld\n",
+                    upgrade.intent_sha256, upgrade.nonce,
+                    (char)upgrade.from, (char)upgrade.to,
+                    upgrade.runtime_generation, now
+                ) < 0
+                || wls_atomic_text(rolled_back_path, record) != 0
+                || wls_upgrade_state_write(
+                    home, &upgrade, boot_id, "ROLLED_BACK",
+                    transaction.attempts, 0ULL, 0ULL
+                ) != 0) return 1;
+        }
+        if (wls_delete_optional_durable(rollback_path) != 0
+            || wls_delete_optional_durable(healthy_path) != 0
+            || wls_delete_optional_durable(observing_path) != 0
+            || wls_delete_optional_durable(rollback_healthy_path) != 0
+            || wls_delete_optional_durable(intent_path) != 0
+            || wls_delete_optional_durable(state_path) != 0) {
             return 1;
         }
+        return 0;
+    }
+    if (active[0] != upgrade.to) return 1;
+    if (state_status == 0) {
+        if (wls_upgrade_state_write(
+                home, &upgrade, boot_id, "PREPARED", 0U, 0ULL, 0ULL
+            ) != 0) return 1;
+        state_status = wls_upgrade_state_read(home, &upgrade, &transaction);
+        if (state_status < 1) return 1;
+    }
+    if (strcmp(transaction.phase, "COMMITTED") == 0) {
+        if (wls_delete_optional_durable(rollback_path) != 0
+            || wls_delete_optional_durable(healthy_path) != 0
+            || wls_delete_optional_durable(observing_path) != 0
+            || wls_delete_optional_durable(intent_path) != 0
+            || wls_delete_optional_durable(state_path) != 0) {
+            return 1;
+        }
+        return 0;
+    }
+    if (strcmp(transaction.phase, "ROLLBACK_PENDING") == 0) must_rollback = 1;
+    observation_present = wls_upgrade_observation_deadline(
+        home, &upgrade, &transaction, boot_id,
+        &observation_started, &observation_deadline
+    );
+    if (observation_present && strcmp(transaction.phase, "PREPARED") == 0) {
+        if (wls_upgrade_state_write(
+                home, &upgrade, boot_id, "OBSERVING", transaction.attempts,
+                observation_started, observation_deadline
+            ) != 0) return 1;
+        state_status = wls_upgrade_state_read(home, &upgrade, &transaction);
+        if (state_status < 1) return 1;
+    }
+    if (!rollback_requested
+        && (strcmp(transaction.phase, "HEALTHY") == 0
+            || wls_upgrade_healthy(home, &upgrade, &transaction, boot_id))) {
+        if (strcmp(transaction.phase, "HEALTHY") != 0
+            && wls_upgrade_state_write(
+                home, &upgrade, boot_id, "HEALTHY", transaction.attempts,
+                transaction.observation_started, transaction.observation_deadline
+            ) != 0) return 1;
+        retained_at = (long long)time(NULL);
+        retained_since_monotonic = (unsigned long long)GetTickCount64();
+        if (retained_at < 0
+            || retained_at > LLONG_MAX - WLS_SLOT_RETENTION_SECONDS
+            || retained_since_monotonic
+                > ULLONG_MAX - WLS_SLOT_RETENTION_MILLISECONDS) {
+            return 1;
+        }
+        record_length = _snprintf_s(
+            record, sizeof(record), _TRUNCATE,
+            "WLS-SLOT-RETENTION/3\n"
+            "intent_sha256=%s\nintent_nonce=%s\n"
+            "slot=%c\nboot_id=%s\n"
+            "retained_at=%lld\nretain_until=%lld\n"
+            "retained_since_monotonic_ms=%llu\n"
+            "retain_until_monotonic_ms=%llu\n",
+            upgrade.intent_sha256, upgrade.nonce,
+            (char)upgrade.from,
+            boot_id,
+            retained_at,
+            retained_at + WLS_SLOT_RETENTION_SECONDS,
+            retained_since_monotonic,
+            retained_since_monotonic + WLS_SLOT_RETENTION_MILLISECONDS
+        );
+        if (record_length <= 0
+            || record_length >= (int)sizeof(record)
+            || wls_atomic_text(retention_path, record) != 0
+            || wls_upgrade_state_write(
+                home, &upgrade, boot_id, "COMMITTED", transaction.attempts,
+                transaction.observation_started, transaction.observation_deadline
+            ) != 0) {
+            return 1;
+        }
+        if (wls_delete_optional_durable(rollback_path) != 0
+            || wls_delete_optional_durable(healthy_path) != 0
+            || wls_delete_optional_durable(observing_path) != 0
+            || wls_delete_optional_durable(intent_path) != 0
+            || wls_delete_optional_durable(state_path) != 0) {
+            return 1;
+        }
+        return 0;
+    }
+    if (count_candidate_failure) {
+        attempts = transaction.attempts + 1U;
+        if (attempts >= WLS_UPGRADE_MAX_ATTEMPTS) must_rollback = 1;
+        else if (!must_rollback) {
+            if (wls_upgrade_state_write(
+                    home, &upgrade, boot_id, "PREPARED", attempts, 0ULL, 0ULL
+                ) != 0) return 1;
+            (void)wls_delete_optional(observing_path);
+            (void)wls_delete_optional(healthy_path);
+            return 0;
+        }
+    }
+    if (rollback_requested || now >= transaction.total_deadline) must_rollback = 1;
+    if (must_rollback) {
+        char active_text[3] = {(char)upgrade.from, '\n', '\0'};
+        char previous_text[3] = {(char)upgrade.to, '\n', '\0'};
+        attempts = transaction.attempts + (count_candidate_failure ? 1U : 0U);
+        if (attempts > WLS_UPGRADE_MAX_ATTEMPTS) attempts = WLS_UPGRADE_MAX_ATTEMPTS;
+        if (wls_upgrade_state_write(
+                home, &upgrade, boot_id, "ROLLBACK_PENDING", attempts, 0ULL, 0ULL
+            ) != 0
+            || wls_atomic_text(active_path, active_text) != 0
+            || wls_atomic_text(previous_path, previous_text) != 0) return 1;
         active[0] = upgrade.from;
-        DeleteFileW(intent_path);
-        DeleteFileW(healthy_path);
-        DeleteFileW(attempts_path);
-        DeleteFileW(rollback_path);
+        (void)wls_delete_optional(healthy_path);
+        (void)wls_delete_optional(observing_path);
+        (void)wls_delete_optional(rollback_healthy_path);
         return 0;
     }
-    if (!count_candidate_failure) {
-        return 0;
-    }
-    if (_snprintf_s(
-        record,
-        sizeof(record),
-        _TRUNCATE,
-        "WLS-UPGRADE-ATTEMPTS/1\nslot=%c\nfirst_at=%lld\nattempts=%u\n",
-        (char)upgrade.to,
-        first_at,
-        attempts
-    ) < 0) {
-        return 1;
-    }
-    return wls_atomic_text(attempts_path, record);
+    return 0;
+}
+
+static int wls_reconcile_upgrade(
+    const wchar_t *home,
+    wchar_t active[2],
+    int count_candidate_failure,
+    int wait_for_lock
+)
+{
+    HANDLE lock_handle = INVALID_HANDLE_VALUE;
+    int result;
+    int lock_status = wls_package_lock_acquire(home, &lock_handle, wait_for_lock);
+    if (lock_status != 0) return lock_status;
+    result = wls_reconcile_upgrade_locked(
+        home,
+        active,
+        count_candidate_failure
+    );
+    if (wls_package_lock_release(lock_handle) != 0) return 1;
+    return result;
 }
 
 /*
@@ -776,33 +1738,26 @@ static int wls_reconcile_upgrade(
  */
 static int wls_monitor_upgrade(const wchar_t *home, wchar_t active[2])
 {
-    struct wls_upgrade upgrade;
-    int state = wls_upgrade_intent(home, &upgrade);
-    long long now = (long long)time(NULL);
     wchar_t before;
-    if (state < 0) return -1;
-    if (state == 0 || !upgrade.present || active[0] == upgrade.from) return 0;
-    if (active[0] != upgrade.to) return -1;
-    if (!wls_upgrade_healthy(home, &upgrade)
-        && now <= upgrade.deadline
-        && !wls_upgrade_rollback_requested(home, &upgrade)) {
-        return 0;
-    }
+    int result;
     before = active[0];
-    if (wls_reconcile_upgrade(home, active, 0) != 0) return -1;
-    return active[0] == before ? 0 : 1;
+    result = wls_reconcile_upgrade(home, active, 0, 0);
+    if (result == 2) return 0;
+    if (result == 1) return -1;
+    return result == 3 || active[0] != before ? 1 : 0;
 }
 
 static HANDLE wls_open_verified_job_nginx(
     const wchar_t *home,
     HANDLE job,
     DWORD expected_pid,
+    const wchar_t *active_slot,
+    const char *expected_runtime_generation,
     DWORD *verified_pid
 ) {
     wchar_t pid_path[WLS_PATH_CHARS];
     wchar_t actual[WLS_PATH_CHARS];
-    wchar_t expected_a[WLS_PATH_CHARS];
-    wchar_t expected_b[WLS_PATH_CHARS];
+    wchar_t expected[WLS_PATH_CHARS];
     wchar_t slot_path[WLS_PATH_CHARS];
     wchar_t release_manifest_path[WLS_PATH_CHARS];
     wchar_t release_signature_path[WLS_PATH_CHARS];
@@ -815,12 +1770,16 @@ static HANDLE wls_open_verified_job_nginx(
     size_t installed_manifest_length = 0U;
     char runtime_generation[65];
     char *end = NULL;
-    unsigned long parsed;
+    unsigned long long parsed;
     DWORD actual_length = WLS_PATH_CHARS;
     BOOL belongs = FALSE;
     HANDLE process = NULL;
-    const wchar_t *slot_name = NULL;
     if (verified_pid == NULL
+        || active_slot == NULL
+        || (active_slot[0] != L'A' && active_slot[0] != L'B')
+        || active_slot[1] != L'\0'
+        || expected_runtime_generation == NULL
+        || strlen(expected_runtime_generation) != 64U
         || wls_join(pid_path, WLS_PATH_CHARS, home, L"runtime\\run\\nginx.pid") != 0
         || wls_read_file(pid_path, 64U, &pid_text, &pid_length) != 0) {
         return NULL;
@@ -830,15 +1789,13 @@ static HANDLE wls_open_verified_job_nginx(
         pid_length--;
     }
     ((char *)pid_text)[pid_length] = '\0';
-    parsed = strtoul((const char *)pid_text, &end, 10);
+    parsed = _strtoui64((const char *)pid_text, &end, 10);
     HeapFree(GetProcessHeap(), 0U, pid_text);
     if (pid_length == 0U || end == NULL || *end != '\0'
-        || parsed == 0UL || parsed > MAXDWORD
+        || parsed == 0ULL || parsed > MAXDWORD
         || (expected_pid > 0U && expected_pid != (DWORD)parsed)
-        || _snwprintf_s(expected_a, WLS_PATH_CHARS, _TRUNCATE,
-            L"%ls\\slots\\A\\bin\\nginx.exe", home) < 0
-        || _snwprintf_s(expected_b, WLS_PATH_CHARS, _TRUNCATE,
-            L"%ls\\slots\\B\\bin\\nginx.exe", home) < 0) {
+        || _snwprintf_s(expected, WLS_PATH_CHARS, _TRUNCATE,
+            L"%ls\\slots\\%ls\\bin\\nginx.exe", home, active_slot) < 0) {
         return NULL;
     }
     process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)parsed);
@@ -849,11 +1806,9 @@ static HANDLE wls_open_verified_job_nginx(
         if (process != NULL) CloseHandle(process);
         return NULL;
     }
-    if (_wcsicmp(actual, expected_a) == 0) slot_name = L"A";
-    if (_wcsicmp(actual, expected_b) == 0) slot_name = L"B";
-    if (slot_name == NULL
+    if (_wcsicmp(actual, expected) != 0
         || _snwprintf_s(slot_path, WLS_PATH_CHARS, _TRUNCATE,
-            L"%ls\\slots\\%ls", home, slot_name) < 0
+            L"%ls\\slots\\%ls", home, active_slot) < 0
         || wls_join(release_manifest_path, WLS_PATH_CHARS,
             slot_path, L"release\\manifest.json") != 0
         || wls_join(release_signature_path, WLS_PATH_CHARS,
@@ -866,7 +1821,8 @@ static HANDLE wls_open_verified_job_nginx(
         || wls_read_file(installed_manifest_path, WLS_MAX_MANIFEST,
             &installed_manifest, &installed_manifest_length) != 0
         || wls_manifest_hex_value(installed_manifest,
-            "runtime_generation", runtime_generation) != 0) {
+            "runtime_generation", runtime_generation) != 0
+        || strcmp(runtime_generation, expected_runtime_generation) != 0) {
         if (release_manifest != NULL) HeapFree(GetProcessHeap(), 0U, release_manifest);
         if (installed_manifest != NULL) HeapFree(GetProcessHeap(), 0U, installed_manifest);
         CloseHandle(process);
@@ -876,6 +1832,20 @@ static HANDLE wls_open_verified_job_nginx(
     HeapFree(GetProcessHeap(), 0U, installed_manifest);
     *verified_pid = (DWORD)parsed;
     return process;
+}
+
+static int wls_force_terminate_process(HANDLE process, DWORD exit_code)
+{
+    DWORD state;
+    if (process == NULL) return 1;
+    state = WaitForSingleObject(process, 0U);
+    if (state == WAIT_OBJECT_0) return 0;
+    if (state != WAIT_TIMEOUT
+        || !TerminateProcess(process, exit_code)
+        || WaitForSingleObject(process, 5000U) != WAIT_OBJECT_0) {
+        return 1;
+    }
+    return 0;
 }
 
 static int wls_launch(
@@ -896,26 +1866,45 @@ static int wls_launch(
     wchar_t controller[WLS_PATH_CHARS];
     wchar_t fencing[WLS_PATH_CHARS];
     wchar_t stop_event_name[96];
+    wchar_t ready_event_name[128];
+    wchar_t ready_nonce_wide[33];
     wchar_t command[WLS_PATH_CHARS * 4U];
     unsigned char *release_manifest = NULL;
     size_t release_manifest_length = 0U;
     unsigned char *installed_manifest = NULL;
     size_t installed_manifest_length = 0U;
     char runtime_generation[65];
+    unsigned char ready_nonce[16];
+    char ready_nonce_hex[33];
     wchar_t runtime_generation_wide[65];
     STARTUPINFOW startup;
     PROCESS_INFORMATION process;
+    SECURITY_ATTRIBUTES event_security_attributes;
+    PSECURITY_DESCRIPTOR event_security_descriptor = NULL;
     HANDLE stop_event = NULL;
+    HANDLE ready_event = NULL;
     HANDLE verified_nginx = NULL;
     DWORD broker_exit = 1U;
     DWORD verified_nginx_pid = 0U;
-    ULONGLONG stop_started = 0U;
+    LONG handled_reload_generation = 0;
+    ULONGLONG shutdown_started = 0U;
+    ULONGLONG startup_started = 0U;
+    int reload_authorized = 0;
+    int reload_request_observed = 0;
+    int reload_failed = 0;
+    int automatic_launch_allowed;
+    int reconcile_result;
+    wchar_t launched_slot;
+    size_t ready_nonce_index;
     if (preserved_nginx_pid == NULL || job == NULL) return 1;
     *preserved_nginx_pid = 0U;
+    if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) != 0) return 0;
     if (wls_admin_stopped(home) != 0) return 0;
-    if (wls_active_slot(home, active) != 0
-        || wls_reconcile_upgrade(home, active, 0) != 0
-        || _snwprintf_s(
+    if (wls_active_slot(home, active) != 0) return 1;
+    reconcile_result = wls_reconcile_upgrade(home, active, 0, 1);
+    if (reconcile_result == 1 || reconcile_result == 2) return 1;
+    launched_slot = active[0];
+    if (_snwprintf_s(
             slot,
             WLS_PATH_CHARS,
             _TRUNCATE,
@@ -978,13 +1967,38 @@ static int wls_launch(
         || wls_join(broker, WLS_PATH_CHARS, slot, L"bin\\wls-gateway-broker.exe") != 0
         || wls_join(php, WLS_PATH_CHARS, slot, L"bin\\php.exe") != 0
         || wls_join(controller, WLS_PATH_CHARS, slot, L"app\\controller.php") != 0
-        || wls_join(fencing, WLS_PATH_CHARS, run_directory, L"fencing-token") != 0
-        || _snwprintf_s(
+        || wls_join(fencing, WLS_PATH_CHARS, home, L"trust\\broker-fencing-token") != 0) {
+        if (release_manifest != NULL) HeapFree(GetProcessHeap(), 0U, release_manifest);
+        if (installed_manifest != NULL) HeapFree(GetProcessHeap(), 0U, installed_manifest);
+        return 1;
+    }
+    randombytes_buf(ready_nonce, sizeof(ready_nonce));
+    (void)sodium_bin2hex(
+        ready_nonce_hex,
+        sizeof(ready_nonce_hex),
+        ready_nonce,
+        sizeof(ready_nonce)
+    );
+    sodium_memzero(ready_nonce, sizeof(ready_nonce));
+    for (ready_nonce_index = 0U; ready_nonce_index < 33U; ready_nonce_index++) {
+        ready_nonce_wide[ready_nonce_index]
+            = (wchar_t)(unsigned char)ready_nonce_hex[ready_nonce_index];
+    }
+    sodium_memzero(ready_nonce_hex, sizeof(ready_nonce_hex));
+    if (_snwprintf_s(
             stop_event_name,
             sizeof(stop_event_name) / sizeof(stop_event_name[0]),
             _TRUNCATE,
             L"Local\\WelineWlsGatewayV2Stop-%lu",
             (unsigned long)GetCurrentProcessId()
+        ) < 0
+        || _snwprintf_s(
+            ready_event_name,
+            sizeof(ready_event_name) / sizeof(ready_event_name[0]),
+            _TRUNCATE,
+            L"Local\\WelineWlsGatewayV2Ready-%lu-%ls",
+            (unsigned long)GetCurrentProcessId(),
+            ready_nonce_wide
         ) < 0
         || wcschr(home, L'"') != NULL || wcschr(run_directory, L'"') != NULL
         || _snwprintf_s(
@@ -996,7 +2010,8 @@ static int wls_launch(
             L"--project-pipe \"\\\\.\\pipe\\weline-wls-gateway-v2-project\" "
             L"--fencing-file \"%ls\" --php \"%ls\" --controller \"%ls\" "
             L"--home \"%ls\" --active-slot \"%ls\" --runtime-generation \"%ls\" "
-            L"--stop-event \"%ls\" --adopted-nginx-pid \"%lu\"",
+            L"--stop-event \"%ls\" --ready-event \"%ls\" "
+            L"--adopted-nginx-pid \"%lu\"",
             broker,
             fencing,
             php,
@@ -1005,6 +2020,7 @@ static int wls_launch(
             active,
             runtime_generation_wide,
             stop_event_name,
+            ready_event_name,
             (unsigned long)adopted_nginx_pid
         ) < 0) {
         if (release_manifest != NULL) HeapFree(GetProcessHeap(), 0U, release_manifest);
@@ -1015,19 +2031,59 @@ static int wls_launch(
     HeapFree(GetProcessHeap(), 0U, installed_manifest);
     ZeroMemory(&startup, sizeof(startup));
     ZeroMemory(&process, sizeof(process));
+    ZeroMemory(&event_security_attributes, sizeof(event_security_attributes));
     startup.cb = sizeof(startup);
-    stop_event = CreateEventW(NULL, TRUE, FALSE, stop_event_name);
-    if (stop_event == NULL) return 1;
+    event_security_attributes.nLength = sizeof(event_security_attributes);
+    event_security_attributes.bInheritHandle = FALSE;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:P(A;;GA;;;SY)(A;;GA;;;BA)",
+            SDDL_REVISION_1,
+            &event_security_descriptor,
+            NULL
+        )) {
+        return 1;
+    }
+    event_security_attributes.lpSecurityDescriptor = event_security_descriptor;
+    stop_event = CreateEventW(
+        &event_security_attributes,
+        TRUE,
+        FALSE,
+        stop_event_name
+    );
+    if (stop_event != NULL && GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(stop_event);
+        stop_event = NULL;
+    }
+    ready_event = CreateEventW(
+        &event_security_attributes,
+        TRUE,
+        FALSE,
+        ready_event_name
+    );
+    if (ready_event != NULL && GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(ready_event);
+        ready_event = NULL;
+    }
+    LocalFree(event_security_descriptor);
+    event_security_descriptor = NULL;
+    if (stop_event == NULL || ready_event == NULL) {
+        if (stop_event != NULL) CloseHandle(stop_event);
+        if (ready_event != NULL) CloseHandle(ready_event);
+        return 1;
+    }
     if (adopted_nginx_pid > 0U) {
         verified_nginx = wls_open_verified_job_nginx(
             home,
             job,
             adopted_nginx_pid,
+            active,
+            runtime_generation,
             &verified_nginx_pid
         );
         if (verified_nginx == NULL || verified_nginx_pid != adopted_nginx_pid) {
             if (verified_nginx != NULL) CloseHandle(verified_nginx);
             CloseHandle(stop_event);
+            CloseHandle(ready_event);
             return 1;
         }
         CloseHandle(verified_nginx);
@@ -1046,92 +2102,190 @@ static int wls_launch(
         &process
     )) {
         CloseHandle(stop_event);
+        CloseHandle(ready_event);
         return 1;
     }
     if (!AssignProcessToJobObject(job, process.hProcess)
         || ResumeThread(process.hThread) == (DWORD)-1) {
-        TerminateProcess(process.hProcess, 1U);
-        WaitForSingleObject(process.hProcess, 5000U);
+        (void)wls_force_terminate_process(process.hProcess, 1U);
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
         CloseHandle(stop_event);
+        CloseHandle(ready_event);
         return 1;
     }
     CloseHandle(process.hThread);
-    wls_broker_process = process.hProcess;
-    wls_broker_stop_event = stop_event;
+    wls_publish_broker_stop_event(stop_event);
+    startup_started = GetTickCount64();
     for (;;) {
         DWORD wait_result = WaitForSingleObject(process.hProcess, 200U);
         int upgrade_state;
         if (wait_result == WAIT_OBJECT_0) {
             wchar_t before = active[0];
-            GetExitCodeProcess(process.hProcess, &broker_exit);
+            LONG reload_generation = InterlockedCompareExchange(
+                &wls_service_reload_generation,
+                0,
+                0
+            );
+            if (!GetExitCodeProcess(process.hProcess, &broker_exit)) {
+                broker_exit = 1U;
+                reload_failed = 1;
+            }
             if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0
-                && InterlockedCompareExchange(&wls_service_reload_requested, 0, 0) == 0
                 && wls_admin_stopped(home) == 0) {
-                if (wls_reconcile_upgrade(home, active, 1) != 0) {
+                if (reload_generation != InterlockedCompareExchange(
+                    &wls_service_reload_consumed,
+                    0,
+                    0
+                )) {
+                    reload_authorized = 1;
+                    reload_request_observed = 1;
+                    handled_reload_generation = reload_generation;
+                }
+                reconcile_result = wls_reconcile_upgrade(home, active, 1, 1);
+                if (reconcile_result == 1 || reconcile_result == 2) {
                     broker_exit = 1U;
-                } else if (active[0] != before) {
-                    broker_exit = WLS_CONTROL_TREE_RELOAD;
+                    reload_authorized = 0;
+                    reload_failed = 1;
+                } else if (reconcile_result == 3 || active[0] != before) {
+                    reload_authorized = 1;
                 }
             }
             break;
         }
         if (wait_result != WAIT_TIMEOUT) {
-            TerminateProcess(process.hProcess, 1U);
-            WaitForSingleObject(process.hProcess, 5000U);
+            (void)wls_force_terminate_process(process.hProcess, 1U);
             broker_exit = 1U;
+            reload_failed = 1;
             break;
         }
-        if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) != 0) {
-            if (stop_started == 0U) stop_started = GetTickCount64();
-            if ((GetTickCount64() - stop_started) >= 15000U) {
-                TerminateProcess(process.hProcess, 1U);
-                WaitForSingleObject(process.hProcess, 5000U);
+        if (InterlockedCompareExchange(&wls_service_ready_reported, 0, 0) == 0) {
+            int broker_ready = WaitForSingleObject(ready_event, 0U)
+                == WAIT_OBJECT_0;
+            // A v1 Broker cannot prove publication/config identity and must
+            // never make SCM report RUNNING merely because a pipe and an
+            // Nginx PID exist. The bounded timeout below forces a clean v2
+            // rebootstrap instead of adopting unbound compatibility state.
+            if (broker_ready) {
+                InterlockedExchange(&wls_service_ready_reported, 1);
+                wls_report_service(SERVICE_RUNNING, NO_ERROR, 0U);
+            } else if (GetTickCount64() - startup_started >= 60000ULL) {
+                (void)wls_force_terminate_process(process.hProcess, 1U);
+                broker_exit = 1U;
+                reload_failed = 1;
+                break;
+            } else {
+                wls_report_service(SERVICE_START_PENDING, NO_ERROR, 0U);
+            }
+        }
+        if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) != 0
+            || wls_reload_pending()) {
+            if (wls_reload_pending()) {
+                reload_authorized = 1;
+                reload_request_observed = 1;
+                handled_reload_generation = InterlockedCompareExchange(
+                    &wls_service_reload_generation,
+                    0,
+                    0
+                );
+            }
+            if (shutdown_started == 0U) shutdown_started = GetTickCount64();
+            if ((GetTickCount64() - shutdown_started) >= 15000U) {
+                if (wls_force_terminate_process(process.hProcess, 1U) != 0) {
+                    reload_authorized = 0;
+                    reload_failed = 1;
+                }
                 broker_exit = 1U;
                 break;
             }
         }
         upgrade_state = wls_monitor_upgrade(home, active);
         if (upgrade_state < 0) {
-            TerminateProcess(process.hProcess, 1U);
-            WaitForSingleObject(process.hProcess, 5000U);
+            (void)wls_force_terminate_process(process.hProcess, 1U);
             broker_exit = 1U;
+            reload_authorized = 0;
+            reload_failed = 1;
             break;
         }
         if (upgrade_state > 0) {
             /* Keep the service PID and shared Job while rebuilding the old slot. */
+            reload_authorized = 1;
             SetEvent(stop_event);
-            if (WaitForSingleObject(process.hProcess, 5000U) != WAIT_OBJECT_0) {
-                TerminateProcess(process.hProcess, WLS_CONTROL_TREE_RELOAD);
-                WaitForSingleObject(process.hProcess, 5000U);
+            if (WaitForSingleObject(process.hProcess, 15000U) != WAIT_OBJECT_0
+                && wls_force_terminate_process(process.hProcess, 1U) != 0) {
+                reload_authorized = 0;
+                reload_failed = 1;
             }
-            broker_exit = WLS_CONTROL_TREE_RELOAD;
             break;
         }
     }
-    if ((broker_exit == WLS_CONTROL_TREE_RELOAD
-            || InterlockedCompareExchange(&wls_service_reload_requested, 0, 0) != 0)
+    if (WaitForSingleObject(process.hProcess, 0U) != WAIT_OBJECT_0) {
+        broker_exit = 1U;
+        reload_authorized = 0;
+        reload_failed = 1;
+    }
+    automatic_launch_allowed = wls_admin_stopped(home) == 0;
+    if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0
+        && automatic_launch_allowed
+        && !reload_failed
+        && wls_reload_pending()) {
+        reload_authorized = 1;
+        reload_request_observed = 1;
+        handled_reload_generation = InterlockedCompareExchange(
+            &wls_service_reload_generation,
+            0,
+            0
+        );
+    }
+    if (reload_authorized
+        && !reload_failed
         && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0
-        && wls_admin_stopped(home) == 0) {
-        verified_nginx = wls_open_verified_job_nginx(
+        && automatic_launch_allowed) {
+        if (active[0] != launched_slot) {
+            /* A binary slot transition must rebuild the whole data plane. The
+             * old slot's Nginx cannot be adopted under the new manifest. */
+            *preserved_nginx_pid = 0U;
+        } else {
+            verified_nginx = wls_open_verified_job_nginx(
             home,
             job,
             0U,
+            active,
+            runtime_generation,
             &verified_nginx_pid
-        );
-        if (verified_nginx == NULL) {
-            broker_exit = 1U;
-        } else {
-            CloseHandle(verified_nginx);
-            *preserved_nginx_pid = verified_nginx_pid;
-            broker_exit = WLS_CONTROL_TREE_RELOAD;
+            );
+            if (verified_nginx == NULL) {
+                broker_exit = 1U;
+                reload_authorized = 0;
+            } else {
+                CloseHandle(verified_nginx);
+                *preserved_nginx_pid = verified_nginx_pid;
+            }
         }
     }
-    wls_broker_stop_event = NULL;
+    automatic_launch_allowed = wls_admin_stopped(home) == 0;
+    if (!automatic_launch_allowed) {
+        reload_authorized = 0;
+    }
+    if (reload_failed) {
+        reload_authorized = 0;
+    }
+    broker_exit = wls_classify_broker_exit(
+        broker_exit,
+        InterlockedCompareExchange(&wls_service_stop_requested, 0, 0),
+        automatic_launch_allowed,
+        reload_authorized
+    );
+    if (broker_exit == WLS_CONTROL_TREE_RELOAD && reload_request_observed) {
+        InterlockedExchange(
+            &wls_service_reload_consumed,
+            handled_reload_generation
+        );
+    }
+    wls_unpublish_broker_stop_event(stop_event);
     CloseHandle(process.hProcess);
-    wls_broker_process = NULL;
     CloseHandle(stop_event);
+    CloseHandle(ready_event);
     return broker_exit == 0U
         ? 0
         : (broker_exit <= 255U ? (int)broker_exit : 1);
@@ -1150,7 +2304,10 @@ static void wls_report_service(
         : 0U;
     wls_service_status.dwWin32ExitCode = win32_exit;
     wls_service_status.dwServiceSpecificExitCode = service_specific_exit;
-    wls_service_status.dwCheckPoint = 0U;
+    wls_service_status.dwCheckPoint =
+        state == SERVICE_START_PENDING || state == SERVICE_STOP_PENDING
+            ? ++wls_service_checkpoint
+            : 0U;
     wls_service_status.dwWaitHint =
         state == SERVICE_START_PENDING || state == SERVICE_STOP_PENDING ? 30000U : 0U;
     if (wls_status_handle != NULL) {
@@ -1168,13 +2325,14 @@ static DWORD WINAPI wls_service_control(
     (void)event_data;
     (void)context;
     if (control == SERVICE_CONTROL_STOP || control == SERVICE_CONTROL_SHUTDOWN) {
-        wls_report_service(SERVICE_STOP_PENDING, NO_ERROR, 0U);
+        /* Publish stop ownership before Broker exit can be classified. */
         InterlockedExchange(&wls_service_stop_requested, 1);
-        if (wls_broker_stop_event != NULL) SetEvent(wls_broker_stop_event);
+        wls_report_service(SERVICE_STOP_PENDING, NO_ERROR, 0U);
+        wls_signal_broker_stop_event();
     } else if (control == SERVICE_CONTROL_PARAMCHANGE
         && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0) {
-        InterlockedExchange(&wls_service_reload_requested, 1);
-        if (wls_broker_stop_event != NULL) SetEvent(wls_broker_stop_event);
+        InterlockedIncrement(&wls_service_reload_generation);
+        wls_signal_broker_stop_event();
     }
     return NO_ERROR;
 }
@@ -1205,7 +2363,6 @@ static int wls_run_supervisor(const wchar_t *home, const wchar_t *run_directory)
     if (job == NULL) return 1;
     do {
         DWORD preserved_nginx_pid = 0U;
-        InterlockedExchange(&wls_service_reload_requested, 0);
         result = wls_launch(
             home,
             run_directory,
@@ -1217,6 +2374,9 @@ static int wls_run_supervisor(const wchar_t *home, const wchar_t *run_directory)
     } while (result == (int)WLS_CONTROL_TREE_RELOAD
         && InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) == 0);
     CloseHandle(job);
+    if (InterlockedCompareExchange(&wls_service_stop_requested, 0, 0) != 0) {
+        return 0;
+    }
     return result == (int)WLS_CONTROL_TREE_RELOAD ? 1 : result;
 }
 
@@ -1231,8 +2391,9 @@ static VOID WINAPI wls_service_main(DWORD argc, LPWSTR *argv)
         NULL
     );
     if (wls_status_handle == NULL) return;
+    InterlockedExchange(&wls_service_ready_reported, 0);
+    wls_service_checkpoint = 0U;
     wls_report_service(SERVICE_START_PENDING, NO_ERROR, 0U);
-    wls_report_service(SERVICE_RUNNING, NO_ERROR, 0U);
     result = wls_run_supervisor(wls_service_home, wls_service_run);
     wls_report_service(
         SERVICE_STOPPED,
@@ -1277,7 +2438,18 @@ int wmain(int argc, wchar_t **argv)
     int index;
     if (sodium_init() < 0 || wls_public_key(public_key) != 0) return 1;
     sodium_memzero(public_key, sizeof(public_key));
-    if (argc == 2 && wcscmp(argv[1], L"--self-test") == 0) return 0;
+    if (argc == 2 && wcscmp(argv[1], L"--self-test") == 0) {
+        if (wls_classify_broker_exit(0U, 0, 1, 0) != 1U
+            || wls_classify_broker_exit(WLS_CONTROL_TREE_RELOAD, 0, 1, 0) != 1U
+            || wls_classify_broker_exit(7U, 0, 1, 0) != 7U
+            || wls_classify_broker_exit(7U, 1, 1, 0) != 0U
+            || wls_classify_broker_exit(7U, 0, 0, 0) != 0U
+            || wls_classify_broker_exit(7U, 0, 1, 1)
+                != WLS_CONTROL_TREE_RELOAD) {
+            return 1;
+        }
+        return 0;
+    }
     for (index = 1; index < argc; index++) {
         if (wcscmp(argv[index], L"--service") == 0) service_mode = 1;
     }

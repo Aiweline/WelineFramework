@@ -75,6 +75,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
+<script>
+(function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
+</script>
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
@@ -169,13 +172,13 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         formData.append('scope', scope);
         formData.append('component_name', componentName);
         
-        window.Weline.Api.request(getUrl, { method: 'POST', body: formData })
+        WelineThemeBinQuery.request(getUrl, { method: 'POST', body: formData })
         .then(function(response) {
-            var data = response.data;
+            var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
             if (response.ok && data && data.code === 200 && data.data && data.data.component) {
                 var componentJson = encodeURIComponent(JSON.stringify(data.data.component));
                 var loadUrl = modalUrl + '?component=' + componentJson + '&component_name=' + encodeURIComponent(componentName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId;
-                return window.Weline.Api.request(loadUrl, { method: 'GET' }).then(function(r2) {
+                return WelineThemeBinQuery.request(loadUrl, { method: 'GET' }).then(function(r2) {
                     var html = (r2.data && typeof r2.data === 'string') ? r2.data : (r2.data ? String(r2.data) : '');
                     var modalContent = modal.querySelector('.modal-content');
                     if (modalContent && html) {

@@ -36,6 +36,17 @@ return [
 6. Setup/Migration 只操作本模块 schema；跨模块协作使用 Event、Hook、Query 或 Queue。
 7. Framework 不得引用任何具体模块；共享缓存、Session、日志、Runtime 和 BinQuery 鉴权都由 Provider 注入。
 
+## 请求 Authority 契约
+
+`Weline\Framework\Runtime\RequestAuthority` 是页面证明、Scope Token、QueryBin、SSE 与可恢复任务恢复绑定时唯一的公网 authority 事实源：
+
+- 标准 `HTTP_HOST` 是主事实，必须经过严格 hostname/IPv4/bracketed-IPv6 与 `1..65535` 端口规范化；非默认端口不得丢失。
+- 冻结的 `WELINE_FULL_REQUEST_URI` 只用于一致性校验，或在 `HTTP_HOST` 确实缺失时提供兼容 fallback。任一非空来源非法，或两者规范化后不一致，均返回空 authority 并由调用方 fail closed。
+- `App` 构造完整请求 URI 时只能沿用入口 `HTTP_HOST`，不得从 parser-derived `input.host`、`SERVER_NAME`、监听器 `SERVER_PORT`、`X-Forwarded-Host` 或 `localhost` 猜测公网 authority。
+- 签发与回验必须在同一请求内复用该规范值。前后台页面装饰器以受控 503 拒绝，QueryBin/SSE 以 `protocol_error` 拒绝，权限恢复路径统一拒绝且不泄漏内部来源。
+
+该类不持有进程级可变状态；WLS 的请求/Fiber 隔离仍由 `Context`/`RequestContext` 保证。
+
 ## 服务生命周期
 
 `ContainerInterface` 支持四种显式范围：
@@ -91,7 +102,7 @@ Setup Provider 也必须自述所属模块。例如 EAV schema Provider 通过
 
 QueryProvider 是跨模块读契约，不是运行期扫描插件。`framework:compile` 会在控制面
 实例化 Provider 一次，合并旧 descriptor 和 BinQuery Attribute，然后生成
-`generated/framework/query_providers.php` format v2：
+`generated/framework/query_providers.php` format v3：
 
 - `providers`：真正执行 operation 时使用的类定义；
 - `descriptors`：以 provider name 为 key 的最终不可变 descriptor；
@@ -102,7 +113,9 @@ Provider 必须保持 `getProviderName()` 与 descriptor 中的 `provider` 一�
 在本 Provider 内唯一。descriptor 只能包含有限浮点数、标量和数组，禁止 Closure、
 资源和服务对象；违反约束必须让编译失败，不能生成延迟 Provider。
 
-PROD/WLS 只从 format v2 读 descriptor 和 area 索引，不得读 Provider PHP、反射
+format v3 同时把后台 operation 的 `backend_acl` 冻结进 operation descriptor；旧 format
+不能被当作有效注册表，以免滚动发布期间绕过新编译契约或把全部后台请求错误拒绝。
+PROD/WLS 只从 format v3 读 descriptor 和 area 索引，不得读 Provider PHP、反射
 Attribute 或线性遍历 operation。DEV 可在索引缺失/过期时使用动态迁移桥；
 该桥不是生产 fallback。Provider、descriptor、Attribute 或 i18n 文案改变后都必须
 重新执行 `php bin/w framework:compile`。

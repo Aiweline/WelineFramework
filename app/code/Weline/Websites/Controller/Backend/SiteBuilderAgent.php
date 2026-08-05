@@ -22,6 +22,7 @@ use Weline\Websites\Service\AiWorkbench\ArtifactService;
 use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService;
 use Weline\Websites\Service\AiWorkbench\EventStreamService;
 use Weline\Websites\Service\AiWorkbench\MessageService;
+use Weline\Websites\Service\AiWorkbench\PlanDraftService;
 use Weline\Websites\Service\AiWorkbench\ProviderRegistry;
 use Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService;
 use Weline\Websites\Service\AiWorkbench\SessionService;
@@ -65,6 +66,7 @@ class SiteBuilderAgent extends BackendController
         $this->assign('create_session_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/create-session'));
         $this->assign('plan_generate_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/generate'));
         $this->assign('plan_revise_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/revise'));
+        $this->assign('plan_polish_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/polish-description'));
         $this->assign('plan_stream_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/stream'));
         $this->assign('plan_confirm_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/confirm'));
         $this->assign('plan_local_pool_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/local-pool'));
@@ -146,8 +148,15 @@ class SiteBuilderAgent extends BackendController
         $this->assign('preview_full_url', (string)($scope['preview_full_url'] ?? $session->getPreviewUrl()));
         $this->assign('visual_preview_url', (string)($scope['visual_preview_url'] ?? ''));
         $this->assign('visual_edit_url', (string)($scope['visual_edit_url'] ?? ''));
-        $this->assign('provider_native_url', (string)($providerConfig['native_entry_url'] ?? ''));
-        $this->assign('provider_handoff_label', (string)($providerConfig['handoff_label'] ?? ''));
+        $providerNativeUrl = \trim((string)($providerConfig['native_entry_url'] ?? ''));
+        // Website / PageBuilder 两线分开：工作区内不再展示跳到 PageBuilder 的 handoff 按钮。
+        if ($providerNativeUrl !== '' && \str_contains($providerNativeUrl, '/pagebuilder/')) {
+            $providerNativeUrl = '';
+        }
+        $this->assign('provider_native_url', $providerNativeUrl);
+        $this->assign('provider_handoff_label', $providerNativeUrl !== ''
+            ? (string)($providerConfig['handoff_label'] ?? '')
+            : '');
         $this->assign('snapshot_artifact', $this->getArtifactService()->getOne($session->getId(), $adminId, 'workspace', 'scope_snapshot'));
         $this->assign('handoff_artifact', $this->getArtifactService()->getOne($session->getId(), $adminId, 'handoff', $session->getProviderCode()));
         $this->assign('recent_sessions', $this->getRecentSessionCards($adminId, $session->getPublicId()));
@@ -237,6 +246,13 @@ class SiteBuilderAgent extends BackendController
         $providerCode = \trim((string)$this->getRequestBodyValue('provider_code', 'websites_default'));
         if ($providerCode === '') {
             $providerCode = 'websites_default';
+        }
+        if ($providerCode === 'pagebuilder') {
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'PAGEBUILDER_ENTRY_SEPARATED',
+                'message' => (string)__('PageBuilder AI 建站请从「页面构建 → AI 建站 V2 工作台」进入。Website AI 建站与 PageBuilder 已彻底分开，只共用 AI 调用，不再互相跳转。'),
+            ]);
         }
 
         $provider = $this->getProviderRegistry()->getProvider($providerCode);
@@ -361,13 +377,20 @@ class SiteBuilderAgent extends BackendController
             $this->syncSessionArtifacts($fresh, $adminId);
         }
 
+        $nativeEntryUrl = \trim((string)($providerConfig['native_entry_url'] ?? ''));
+        $websitesWorkspaceUrl = $this->getWorkspaceUrl($session->getPublicId());
+        // Website AI 建站与 PageBuilder AI 建站彻底分开：创建会话后只进入 Websites 自己的工作区，
+        // 禁止再跳到 pagebuilder/backend/ai-site-*。
+        $workspaceUrl = $websitesWorkspaceUrl;
+
         return $this->fetchJson([
             'success' => true,
             'public_id' => $session->getPublicId(),
-            'workspace_url' => $this->getWorkspaceUrl($session->getPublicId()),
+            'workspace_url' => $workspaceUrl,
+            'websites_workspace_url' => $websitesWorkspaceUrl,
             'provider_code' => $providerCode,
             'provider_name' => (string)($providerConfig['name'] ?? $providerCode),
-            'native_entry_url' => (string)($providerConfig['native_entry_url'] ?? ''),
+            'native_entry_url' => $nativeEntryUrl,
         ]);
     }
 
@@ -722,7 +745,7 @@ class SiteBuilderAgent extends BackendController
             return;
         }
 
-        $description = \trim((string)$this->request->getGet('description', ''));
+        $description = $this->resolveRecommendDescriptionFromGet($adminId);
         $preferredDomain = \strtolower(\trim((string)$this->request->getGet('domain', '')));
         $accountId = (int)$this->request->getGet('account_id', 0);
 
@@ -2796,6 +2819,38 @@ class SiteBuilderAgent extends BackendController
         }
 
         return $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/index', $params);
+    }
+
+    /**
+     * 解析推荐域名用的需求文案。
+     * GET query 不能含换行（WLS 会 400），前端只传压缩种子；若带 draft_public_id 则优先用草稿全文。
+     */
+    private function resolveRecommendDescriptionFromGet(int $adminId): string
+    {
+        $fromGet = \trim((string)$this->request->getGet('description', ''));
+        $fromGet = \trim((string)(\preg_replace('/\s+/u', ' ', $fromGet) ?? $fromGet));
+
+        $draftPublicId = \trim((string)$this->request->getGet('draft_public_id', ''));
+        if ($draftPublicId === '' || $adminId <= 0) {
+            return $fromGet;
+        }
+
+        try {
+            /** @var PlanDraftService $draftService */
+            $draftService = ObjectManager::getInstance(PlanDraftService::class);
+            $draft = $draftService->loadByPublicId($draftPublicId, $adminId);
+            if ($draft === null) {
+                return $fromGet;
+            }
+            $payload = $draft->getPayloadArray();
+            $fromDraft = \trim((string)($payload['description'] ?? $payload['initial_description'] ?? ''));
+            if ($fromDraft !== '') {
+                return $fromDraft;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $fromGet;
     }
 
     /**

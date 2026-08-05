@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Extends\Module\Weline_Framework\Query;
 
+use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Service\AiService;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
@@ -11,14 +12,20 @@ use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\DefaultModelManager;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Php\FiberTaskRunner;
+use Weline\Framework\Service\Query\AdminControllerBridge;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 
 require_once __DIR__ . '/AiProviderAccountQueryProvider.php';
+require_once __DIR__ . '/AiStyleSkillQuerySupport.php';
 
 class AiQueryProvider implements QueryProviderInterface
 {
+    private const DEFAULT_CONCURRENCY_CAP = 8;
+
     private ?AiProviderAccountQueryProvider $providerAccountQueryProvider = null;
+    private ?AiStyleSkillQuerySupport $styleSkillQuerySupport = null;
 
     public function __construct(
         private readonly AiService $aiService,
@@ -34,9 +41,33 @@ class AiQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
+            // 服务端执行型操作：仅供 PHP 侧 w_query 调用链使用，
+            // 不在 getDescriptor() 声明，因此不会暴露给前端查询网关。
+            'generate', 'generateText' => $this->generate($params),
+            'generateImage' => $this->generateImage($params),
+            'generateStream' => $this->generateStream($params),
+            'generateStreamBatch' => $this->generateStreamBatch($params),
+            'inspectScenarioReadiness' => $this->inspectScenarioReadiness($params),
+            'analyzeImage' => $this->analyzeImage($params),
+            'getAgentsForScenario' => $this->aiService->getAgentsForScenario(
+                $this->requireNonEmptyString($params, 'scenario_code')
+            ),
+            'executeAgent' => $this->executeAgent($params),
             'resolveModel' => $this->resolveModel($params),
+            'adminRequest' => $this->adminRequest($params),
             'listModels' => $this->listModels($params),
             'getAdapterModelBindings' => $this->getAdapterModelBindings($params),
+            'styleCatalog',
+            'styleSave',
+            'styleDelete',
+            'styleCloneBuiltin',
+            'styleBindAdapter',
+            'styleUnbindAdapter',
+            'skillCatalog',
+            'skillSave',
+            'skillImportUrl',
+            'skillBindAdapter',
+            'skillUnbindAdapter' => $this->styleSkillQuerySupport()->execute($operation, $params),
             'providerListAccounts' => $this->providerAccountQueryProvider()->execute('listAccounts', $params),
             'providerGetAccount' => $this->providerAccountQueryProvider()->execute('getAccount', $params),
             'providerSaveAccount' => $this->providerAccountQueryProvider()->execute('saveAccount', $params),
@@ -66,6 +97,208 @@ class AiQueryProvider implements QueryProviderInterface
                 (string)__('Ai 查询器不支持的操作：%{1}', $operation)
             ),
         };
+    }
+
+    private function generate(array $params): string
+    {
+        try {
+            return $this->aiService->generate(
+                $this->requireNonEmptyString($params, 'prompt'),
+                $this->optionalString($params, 'model_code'),
+                $this->optionalString($params, 'scenario_code'),
+                $this->optionalString($params, 'locale'),
+                $this->optionalArray($params, 'params'),
+                $this->optionalInt($params, 'user_id'),
+                (bool)($params['is_backend'] ?? false)
+            );
+        } catch (AiBillingException $billingException) {
+            throw $billingException;
+        }
+    }
+
+    private function generateImage(array $params): array
+    {
+        try {
+            return $this->aiService->generateImage(
+                $this->requireNonEmptyString($params, 'prompt'),
+                $this->optionalString($params, 'model_code'),
+                $this->optionalString($params, 'scenario_code'),
+                $this->optionalArray($params, 'params')
+            );
+        } catch (AiBillingException $billingException) {
+            return [
+                'success' => false,
+                'code' => $billingException->getBillingCode(),
+                'message' => $billingException->getMessage(),
+            ];
+        } catch (\Throwable $throwable) {
+            $billingCode = AiBillingException::classifyMessageToCode($throwable->getMessage());
+            if ($billingCode !== '') {
+                return [
+                    'success' => false,
+                    'code' => $billingCode,
+                    'message' => $throwable->getMessage(),
+                ];
+            }
+
+            throw $throwable;
+        }
+    }
+
+    private function generateStream(array $params): array
+    {
+        $this->aiService->generateStream(
+            $this->requireNonEmptyString($params, 'prompt'),
+            $this->requireCallable($params, 'on_chunk'),
+            $this->optionalString($params, 'model_code'),
+            $this->optionalString($params, 'scenario_code'),
+            $this->optionalString($params, 'locale'),
+            $this->optionalArray($params, 'params')
+        );
+
+        return ['status' => 'fulfilled'];
+    }
+
+    /**
+     * @param array{
+     *     tasks?: array<string|int, array{prompt:string, on_chunk:callable, model_code?:?string, scenario_code?:?string, locale?:?string, params?:array}>,
+     *     concurrency?: int,
+     *     on_event?: callable
+     * } $params
+     * @return array<string|int, array{status:string, error?:\Throwable}>
+     */
+    private function generateStreamBatch(array $params): array
+    {
+        $tasksSpec = $params['tasks'] ?? [];
+        if (!is_array($tasksSpec) || $tasksSpec === []) {
+            return [];
+        }
+
+        $aiService = $this->aiService;
+        $tasks = [];
+        foreach ($tasksSpec as $key => $spec) {
+            if (!is_array($spec)) {
+                throw new \InvalidArgumentException(
+                    (string)__('generateStreamBatch task[%{1}] 必须是数组', (string)$key)
+                );
+            }
+
+            $prompt = $this->requireNonEmptyString($spec, 'prompt', "task[{$key}].prompt");
+            $callback = $this->requireCallable($spec, 'on_chunk', "task[{$key}].on_chunk");
+            $modelCode = $this->optionalString($spec, 'model_code');
+            $scenarioCode = $this->optionalString($spec, 'scenario_code');
+            $locale = $this->optionalString($spec, 'locale');
+            $callParams = $this->optionalArray($spec, 'params');
+
+            $tasks[$key] = static function () use (
+                $aiService,
+                $prompt,
+                $callback,
+                $modelCode,
+                $scenarioCode,
+                $locale,
+                $callParams
+            ): bool {
+                $aiService->generateStream(
+                    $prompt,
+                    $callback,
+                    $modelCode,
+                    $scenarioCode,
+                    $locale,
+                    $callParams
+                );
+                return true;
+            };
+        }
+
+        $concurrency = $this->resolveBatchConcurrency($params['concurrency'] ?? null, count($tasks));
+        $onEvent = isset($params['on_event']) && is_callable($params['on_event']) ? $params['on_event'] : null;
+        $runner = new FiberTaskRunner(defaultConcurrency: $concurrency);
+        $events = [];
+
+        foreach ($runner->runEvents($tasks) as $key => $event) {
+            $entry = ['status' => $event['status'] ?? 'rejected'];
+            if (($event['status'] ?? '') === 'rejected') {
+                $entry['error'] = ($event['error'] ?? null) instanceof \Throwable
+                    ? $event['error']
+                    : new \RuntimeException('AI batch task failed without exception payload');
+            }
+            $events[$key] = $entry;
+
+            if ($onEvent !== null) {
+                try {
+                    $onEvent($key, $event);
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        return $events;
+    }
+
+    private function resolveBatchConcurrency(mixed $requested, int $taskCount): int
+    {
+        if ($requested !== null && $requested !== '') {
+            $value = (int)$requested;
+            if ($value > 0) {
+                return max(1, min($value, $taskCount));
+            }
+        }
+
+        return max(1, min(self::DEFAULT_CONCURRENCY_CAP, $taskCount));
+    }
+
+    /**
+     * @return array{ready: bool, code: string}
+     */
+    private function inspectScenarioReadiness(array $params): array
+    {
+        $requiredCapabilities = [];
+        foreach ($this->optionalArray($params, 'required_capabilities') as $capability) {
+            if (\is_scalar($capability) && \trim((string)$capability) !== '') {
+                $requiredCapabilities[] = (string)$capability;
+            }
+        }
+
+        return $this->aiService->inspectScenarioReadiness(
+            $this->requireNonEmptyString($params, 'scenario_code'),
+            $this->optionalString($params, 'primary_modality')
+                ?? $this->optionalString($params, 'modality')
+                ?? AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+            $requiredCapabilities
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function analyzeImage(array $params): array
+    {
+        $imageBytes = $params['image_bytes'] ?? '';
+        if (!\is_string($imageBytes) || $imageBytes === '') {
+            throw new \InvalidArgumentException((string)__('参数 %{1} 必须为非空字符串', 'image_bytes'));
+        }
+
+        return $this->aiService->analyzeImage(
+            $this->requireNonEmptyString($params, 'scenario_code'),
+            $imageBytes,
+            (string)($params['mime_type'] ?? 'image/png'),
+            $this->requireNonEmptyString($params, 'instruction'),
+            $this->optionalArray($params, 'context')
+        );
+    }
+
+    private function executeAgent(array $params): mixed
+    {
+        $onEvent = $params['on_event'] ?? null;
+
+        return $this->aiService->executeAgent(
+            $this->requireNonEmptyString($params, 'agent_code'),
+            $this->requireNonEmptyString($params, 'prompt'),
+            $this->optionalString($params, 'model_code'),
+            $this->optionalArray($params, 'params'),
+            \is_callable($onEvent) ? $onEvent : null
+        );
     }
 
     private function resolveModel(array $params): ?array
@@ -100,7 +333,23 @@ class AiQueryProvider implements QueryProviderInterface
             'name' => __('AI 模型查询'),
             'description' => __('后台 AI 模型、供应商账户与默认配置管理入口'),
             'module' => 'Weline_Ai',
-            'operations' => array_merge([
+            'operations' => $this->applyBackendAcl(array_merge([
+                [
+                    'name' => 'adminRequest',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 1,
+                    'auth' => 'backend',
+                    'params' => [
+                        'url' => ['type' => 'string', 'required' => true],
+                        'method' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                        'headers' => ['type' => 'array', 'required' => false],
+                        'body' => ['type' => 'string', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'AI legacy controller bridge request',
+                ],
                 [
                     'name' => 'listModels',
                     'frontend' => true,
@@ -179,7 +428,166 @@ class AiQueryProvider implements QueryProviderInterface
                 ['name' => 'modelTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test an AI model connection'],
                 ['name' => 'modelBulkTestConnection', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 5, 'auth' => 'backend', 'params' => ['model_ids' => ['type' => 'array', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model connections in batch'],
                 ['name' => 'modelTestSelfConfig', 'frontend' => true, 'mode' => 'write', 'graph' => false, 'cost' => 3, 'auth' => 'backend', 'params' => ['model_code' => ['type' => 'string', 'required' => true]], 'returns' => ['type' => 'array'], 'summary' => 'Test AI model self configuration'],
-            ], $this->getProviderAccountOperationDescriptors()),
+            ], $this->styleSkillQuerySupport()->getOperationDescriptors(), $this->getProviderAccountOperationDescriptors())),
+        ];
+    }
+
+
+    private function adminRequest(array $params): mixed
+    {
+        $url = trim((string)($params['url'] ?? ''));
+        $method = strtoupper(trim((string)($params['method'] ?? 'POST'))) ?: 'POST';
+        $headers = is_array($params['headers'] ?? null) ? $params['headers'] : [];
+        $body = array_key_exists('body', $params) && $params['body'] !== null ? (string)$params['body'] : '';
+        if ($url === '') {
+            return ['success' => false, 'message' => (string)__('缺少 URL')];
+        }
+        $parts = parse_url($url);
+        $path = strtolower((string)($parts['path'] ?? ''));
+        $marker = '/ai/backend/';
+        $pos = strpos($path, $marker);
+        if ($pos === false) {
+            return ['success' => false, 'message' => (string)__('不允许的 Ai admin 路径')];
+        }
+        $path = substr($path, $pos);
+        if (!preg_match('#^/ai/backend/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#', $path, $m)) {
+            return ['success' => false, 'message' => (string)__('无法解析 Ai admin 路径')];
+        }
+        $controllerSeg = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $m[1])));
+        $rawAction = (string)($m[2] ?? 'index');
+        // Keep hyphenated segments for Studly candidates: post-clone-builtin → CloneBuiltin
+        $actionToken = $rawAction;
+        if (preg_match('/^(post|get)[-_](.+)$/i', $actionToken, $am)) {
+            $actionToken = $am[2];
+        }
+        $actionStudly = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $actionToken)));
+        $actionFlat = strtolower(str_replace(['-', '_'], '', $actionToken));
+        $class = 'Weline\\Ai\\Controller\\Backend\\' . $controllerSeg;
+        if (!class_exists($class)) {
+            return ['success' => false, 'message' => (string)__('控制器不存在：%{1}', $controllerSeg)];
+        }
+        $queryParams = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $queryParams);
+        }
+        $bodyParams = [];
+        if ($body !== '') {
+            $ct = '';
+            foreach ($headers as $name => $value) {
+                if (strtolower((string)$name) === 'content-type') {
+                    $ct = strtolower((string)$value);
+                    break;
+                }
+            }
+            if (str_contains($ct, 'application/json') || str_starts_with(ltrim($body), '{')) {
+                $decoded = json_decode($body, true);
+                $bodyParams = is_array($decoded) ? $decoded : [];
+            } else {
+                parse_str($body, $bodyParams);
+                if (!is_array($bodyParams)) {
+                    $bodyParams = [];
+                }
+            }
+        }
+
+        $candidates = [
+            $actionFlat,
+            $actionStudly,
+            lcfirst($actionStudly),
+            'post' . $actionStudly,
+            'get' . $actionStudly,
+        ];
+        if ($method === 'GET') {
+            array_unshift($candidates, 'get' . $actionStudly);
+        } else {
+            array_unshift($candidates, 'post' . $actionStudly);
+        }
+
+        return AdminControllerBridge::invoke(
+            $class,
+            $candidates,
+            $queryParams,
+            $bodyParams,
+            $method,
+            $body
+        );
+    }
+
+
+    private function applyBackendAcl(array $operations): array
+    {
+        return array_map(
+            fn(array $operation): array => array_replace($operation, [
+                'backend_acl' => $this->backendAclFor((string)($operation['name'] ?? '')),
+            ]),
+            $operations
+        );
+    }
+
+    private function backendAclFor(string $operation): array
+    {
+        if ($operation === 'adminRequest') {
+            // adminRequest 会透传到 /ai/backend/* 控制器。
+            // 必须提供明确 source_id，确保 binquery 已编译的 query_provider 索引中包含该 operation，
+            // 否则 Frontend worker 会直接被 capability denied。
+            return [
+                'kind' => 'source',
+                'source_id' => 'Weline_Ai::ai_manager',
+            ];
+        }
+
+        if ($operation === 'modelBulkToggleStatus') {
+            return [
+                'kind' => 'param_map',
+                'param' => 'status',
+                'map' => [
+                    '1' => 'Weline_Ai::ai_model_bulk_activate',
+                    '0' => 'Weline_Ai::ai_model_bulk_deactivate',
+                ],
+            ];
+        }
+
+        try {
+            return [
+                'kind' => 'source',
+                'source_id' => $this->styleSkillQuerySupport()->backendAclSourceId($operation),
+            ];
+        } catch (\LogicException) {
+            // Not a style/skill op — fall through.
+        }
+
+        $sourceId = match ($operation) {
+            'listModels' => 'Weline_Ai::ai_model_list',
+            'providerSaveModel' => 'Weline_Ai::ai_model_save',
+            'modelDelete' => 'Weline_Ai::ai_model_delete',
+            'modelBulkDelete' => 'Weline_Ai::ai_model_bulk_delete',
+            'modelToggleStatus' => 'Weline_Ai::ai_model_toggle',
+            'modelTestConnection' => 'Weline_Ai::ai_model_test',
+            'modelBulkTestConnection' => 'Weline_Ai::ai_model_batch_test',
+            'modelTestSelfConfig' => 'Weline_Ai::ai_model_test_self_config',
+            'adapterToggleStatus' => 'Weline_Ai::ai_adapter_toggle',
+            'adapterDelete' => 'Weline_Ai::ai_adapter_delete',
+            'adapterBulkDelete' => 'Weline_Ai::ai_adapter_batch_delete',
+            'adapterBulkToggle' => 'Weline_Ai::ai_adapter_batch_toggle',
+            'defaultSet' => 'Weline_Ai::ai_default_model_set',
+            'defaultBatchSet' => 'Weline_Ai::ai_default_model_batch_set',
+            'defaultClearCache' => 'Weline_Ai::ai_default_model_clear_cache',
+            'defaultInitialize' => 'Weline_Ai::ai_default_model_initialize',
+            'defaultProtected' => 'Weline_Ai::ai_default_model_get_protected',
+            'providerListAccounts',
+            'providerGetAccount',
+            'providerRemoteModelsForSelect',
+            'providerGetUsageList' => 'Weline_Ai::ai_provider_list',
+            'providerSaveAccount',
+            'providerTestConnection',
+            'providerToggleActive',
+            'providerDeleteAccount' => 'Weline_Ai::ai_provider_account',
+            default => throw new \LogicException('Backend ACL is not mapped for AI query operation: ' . $operation),
+        };
+
+        return [
+            'kind' => 'source',
+            'source_id' => $sourceId,
         ];
     }
 
@@ -568,6 +976,11 @@ class AiQueryProvider implements QueryProviderInterface
         return $this->providerAccountQueryProvider;
     }
 
+    private function styleSkillQuerySupport(): AiStyleSkillQuerySupport
+    {
+        return $this->styleSkillQuerySupport ??= new AiStyleSkillQuerySupport();
+    }
+
     private function requireNonEmptyString(array $params, string $key, ?string $alias = null): string
     {
         $label = $alias ?? $key;
@@ -593,6 +1006,36 @@ class AiQueryProvider implements QueryProviderInterface
         }
 
         return $value;
+    }
+
+    private function requireCallable(array $params, string $key, ?string $alias = null): callable
+    {
+        $label = $alias ?? $key;
+        $value = $params[$key] ?? null;
+        if (!is_callable($value)) {
+            throw new \InvalidArgumentException((string)__('参数 %{1} 必须是 callable', $label));
+        }
+
+        return $value;
+    }
+
+    private function optionalArray(array $params, string $key): array
+    {
+        $value = $params[$key] ?? null;
+        return is_array($value) ? $value : [];
+    }
+
+    private function optionalInt(array $params, string $key): ?int
+    {
+        if (!array_key_exists($key, $params) || $params[$key] === null) {
+            return null;
+        }
+        $value = $params[$key];
+        if ($value === '' || (!is_int($value) && !is_numeric($value))) {
+            return null;
+        }
+
+        return (int)$value;
     }
 
 }

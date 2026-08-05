@@ -18,6 +18,7 @@ use Weline\Framework\Manager\Message;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\I18n\Api\Localization\CountryRepositoryInterface;
 use Weline\Shipping\Service\RegionService;
+use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
 #[Acl('Weline_Shipping::region', '地区管理', 'mdi-map-marker', '地区管理', 'Weline_Backend::shipping_group')]
 class Region extends BackendController
@@ -25,6 +26,7 @@ class Region extends BackendController
     public function __construct(
         private readonly RegionService $regionService,
         private readonly RuntimeProviderResolver $runtimeProviders,
+        private readonly ShippingConfigurationAdminService $adminService,
     ) {
     }
 
@@ -64,6 +66,19 @@ class Region extends BackendController
     {
         Message::warning(__('地区编辑功能暂未开放，请通过数据库或后续版本管理。'));
         $this->redirect('*/index');
+    }
+
+    #[Acl('Weline_Shipping::region_save', '保存地区', 'mdi-content-save', '创建地区')]
+    public function save()
+    {
+        try {
+            if (!$this->request->isPost()) throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            $this->adminService->createRegion((array)$this->request->getPost());
+            $this->getMessageManager()->addSuccess(__('地区创建成功。'));
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
+        }
+        return $this->redirect('shipping/backend/region/index');
     }
 
     /**
@@ -112,4 +127,3 @@ class Region extends BackendController
         return $rows;
     }
 }
-

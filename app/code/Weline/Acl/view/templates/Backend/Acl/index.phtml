@@ -5,19 +5,76 @@
  */
 
 $acls = $this->getData('acls') ?: [];
-$totalCount = count($acls);
-
-$moduleStats = [];
-$typeStats = [];
-foreach ($acls as $acl) {
-    $module = $acl->getModule() ?: 'Unknown';
-    $type = $acl->getType() ?: 'other';
-    $moduleStats[$module] = ($moduleStats[$module] ?? 0) + 1;
-    $typeStats[$type] = ($typeStats[$type] ?? 0) + 1;
+$filterTypes = $this->getData('filter_types') ?: [
+    \Weline\Acl\Model\Acl::type_MENUS,
+    \Weline\Acl\Model\Acl::type_PC,
+    \Weline\Acl\Model\Acl::type_API,
+    \Weline\Acl\Model\Acl::type_QUERY,
+    \Weline\Acl\Model\Acl::type_TASK,
+    \Weline\Acl\Model\Acl::type_OPERATION,
+];
+$typeStats = $this->getData('type_stats');
+if (!\is_array($typeStats)) {
+    $typeStats = [];
+    foreach ($acls as $acl) {
+        $type = $acl->getType() ?: 'other';
+        $typeStats[$type] = ($typeStats[$type] ?? 0) + 1;
+    }
 }
-$moduleCount = count($moduleStats);
-$typeCount = count($typeStats);
+foreach ($filterTypes as $filterType) {
+    if (!isset($typeStats[$filterType])) {
+        $typeStats[$filterType] = 0;
+    }
+}
+$totalCount = (int)($this->getData('stat_total') ?? \count($acls));
+$moduleCount = (int)($this->getData('stat_module_count') ?? 0);
+$typeCount = (int)($this->getData('stat_type_count') ?? \count(\array_filter($typeStats)));
+$currentType = (string)($this->getData('current_type') ?: '');
+$currentModule = (string)($this->getData('current_module') ?: '');
+$currentTagsValue = (string)($this->getData('current_tags_value') ?: '');
+$currentSearch = (string)($this->request->getGet('search') ?: '');
+$listDimension = (string)($this->getData('list_dimension') ?: 'module');
+$isTagDimension = $listDimension === 'tag';
+$listBaseRoute = (string)($this->getData('list_base_route') ?: ($isTagDimension ? '*/backend/acl/by-tag' : '*/backend/acl'));
+$listBaseUrl = $this->getBackendUrl($listBaseRoute);
+$moduleListUrl = $this->getBackendUrl('*/backend/acl');
+$tagListUrl = $this->getBackendUrl('*/backend/acl/by-tag');
+
+$buildFilterQuery = static function (array $overrides = []) use (
+    $currentSearch,
+    $currentType,
+    $currentModule,
+    $currentTagsValue,
+    $isTagDimension
+): string {
+    $params = [
+        'search' => $currentSearch,
+        'type' => $currentType,
+    ];
+    if ($isTagDimension) {
+        $params['tags'] = $currentTagsValue;
+    } else {
+        $params['module'] = $currentModule;
+    }
+    foreach ($overrides as $key => $value) {
+        $params[$key] = $value;
+    }
+    $query = [];
+    foreach ($params as $key => $value) {
+        $value = \trim((string)$value);
+        if ($value === '') {
+            continue;
+        }
+        $query[$key] = $value;
+    }
+    return $query === [] ? '' : ('?' . \http_build_query($query));
+};
+
+$hasActiveFilters = $currentType !== '' || $currentSearch !== ''
+    || ($isTagDimension ? $currentTagsValue !== '' : $currentModule !== '');
 ?>
+
+
 
 <style>
 .weline-acl-list-page {
@@ -91,11 +148,23 @@ $typeCount = count($typeStats);
     gap: var(--backend-spacing-md, 16px);
     transition: all 0.2s ease;
     box-shadow: var(--acl-card-shadow);
+    text-decoration: none;
+    color: inherit;
 }
 
-.weline-acl-stat-card:hover {
+.weline-acl-stat-card.is-active {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.16);
+}
+
+.weline-acl-stat-card.is-muted {
+    opacity: 0.72;
+}
+
+a.weline-acl-stat-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    color: inherit;
 }
 
 .weline-acl-stat-icon {
@@ -228,6 +297,14 @@ $typeCount = count($typeStats);
     display: flex;
     gap: var(--backend-spacing-sm, 8px);
     flex-wrap: wrap;
+    align-items: center;
+}
+
+.weline-acl-filters .weline-module-select,
+.weline-acl-filters .weline-acl-module-filter,
+.weline-acl-filters .weline-acl-tag-select,
+.weline-acl-filters .weline-acl-tag-filter {
+    min-width: 240px;
 }
 
 .weline-acl-filter-select {
@@ -278,34 +355,56 @@ $typeCount = count($typeStats);
 
 .weline-acl-table-body {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .weline-acl-table {
     width: 100%;
-    border-collapse: collapse;
+    min-width: 1180px;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: auto;
 }
 
 .weline-acl-table th {
-    padding: 14px 16px;
+    padding: 12px 14px;
     text-align: left;
     font-weight: 600;
-    font-size: 0.85rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--backend-color-text-secondary, #64748b);
+    background: var(--backend-color-bg-secondary, #f8fafc);
+    border-bottom: 1px solid var(--backend-color-border-default, #e2e8f0);
     white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
 
+.weline-acl-table th:nth-child(1) { min-width: 260px; }
+.weline-acl-table th:nth-child(2) { min-width: 160px; }
+.weline-acl-table th:nth-child(3) { min-width: 108px; }
+.weline-acl-table th:nth-child(4) { min-width: 96px; }
+.weline-acl-table th:nth-child(5) { min-width: 88px; }
+.weline-acl-table th:nth-child(6) { min-width: 140px; }
+.weline-acl-table th:nth-child(7) { min-width: 148px; }
+.weline-acl-table th:nth-child(8) { min-width: 148px; }
+
 .weline-acl-table td {
-    padding: 14px 16px;
-    font-size: 0.9rem;
-    color: var(--backend-color-text-primary, #212529);
-    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    padding: 14px;
+    font-size: 0.875rem;
+    color: var(--backend-color-text-primary, #1e293b);
+    border-bottom: 1px solid var(--backend-color-border-light, #f1f5f9);
     vertical-align: middle;
 }
 
+.weline-acl-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
 .weline-acl-table tbody tr:hover td {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
+    background: rgba(85, 110, 230, 0.04);
 }
 
 .weline-acl-table tbody tr:last-child td {
@@ -313,100 +412,228 @@ $typeCount = count($typeStats);
 }
 
 .weline-acl-source-id {
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.8rem;
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    padding: 4px 8px;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    color: var(--backend-color-text-secondary, #6c757d);
-    word-break: break-all;
-    max-width: 200px;
-    display: inline-block;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0;
+    max-width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    word-break: break-word;
+}
+
+.weline-acl-source-id .sid-module {
+    color: #64748b;
+    font-weight: 500;
+}
+
+.weline-acl-source-id .sid-sep {
+    color: #94a3b8;
+    padding: 0 1px;
+}
+
+.weline-acl-source-id .sid-code {
+    color: #0f172a;
+    font-weight: 600;
 }
 
 .weline-acl-source-name {
-    font-weight: 500;
-    color: var(--backend-color-text-primary, #212529);
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--backend-color-text-primary, #0f172a);
+    line-height: 1.35;
+}
+
+.weline-acl-source-doc {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #64748b;
 }
 
 .weline-acl-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: var(--backend-border-radius-pill, 50rem);
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 999px;
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: 600;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.weline-acl-badge i {
+    font-size: 0.85rem;
+    line-height: 1;
 }
 
 .weline-acl-badge.type-menus {
-    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
-    color: var(--backend-color-primary, #556ee6);
+    background: rgba(85, 110, 230, 0.12);
+    color: #4458d6;
 }
 
 .weline-acl-badge.type-pc {
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
+    background: rgba(52, 195, 143, 0.12);
+    color: #1f9d6c;
+}
+
+.weline-acl-badge.type-api {
+    background: rgba(15, 157, 168, 0.12);
+    color: #0b7f88;
+}
+
+.weline-acl-badge.type-query {
+    background: rgba(201, 138, 26, 0.14);
+    color: #a87312;
+}
+
+.weline-acl-badge.type-task {
+    background: rgba(122, 92, 214, 0.12);
+    color: #6a4fc4;
+}
+
+.weline-acl-badge.type-operation {
+    background: rgba(244, 106, 106, 0.12);
+    color: #d94f4f;
 }
 
 .weline-acl-badge.type-other {
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-secondary, #6c757d);
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.weline-acl-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.weline-acl-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(201, 138, 26, 0.12);
+    color: #a87312;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+a.weline-acl-tag-chip:hover {
+    background: rgba(201, 138, 26, 0.22);
+    color: #8a5f0f;
 }
 
 .weline-acl-method {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    font-size: 0.75rem;
-    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3.2rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
+    border: 1px solid transparent;
 }
 
 .weline-acl-method.get {
-    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
-    color: var(--backend-color-info, #50a5f1);
+    background: rgba(80, 165, 241, 0.12);
+    border-color: rgba(80, 165, 241, 0.28);
+    color: #2d86c9;
 }
 
 .weline-acl-method.post {
-    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
-    color: var(--backend-color-success, #34c38f);
+    background: rgba(52, 195, 143, 0.12);
+    border-color: rgba(52, 195, 143, 0.28);
+    color: #1f9d6c;
 }
 
 .weline-acl-method.delete {
-    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
-    color: var(--backend-color-danger, #f46a6a);
+    background: rgba(244, 106, 106, 0.12);
+    border-color: rgba(244, 106, 106, 0.28);
+    color: #d94f4f;
 }
 
-.weline-acl-method.put {
-    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
-    color: var(--backend-color-warning, #f1b44c);
+.weline-acl-method.put,
+.weline-acl-method.patch {
+    background: rgba(241, 180, 76, 0.14);
+    border-color: rgba(241, 180, 76, 0.3);
+    color: #b8841f;
 }
 
 .weline-acl-method.all {
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-secondary, #6c757d);
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #475569;
 }
 
 .weline-acl-module {
-    font-size: 0.8rem;
-    color: var(--backend-color-text-tertiary, #adb5bd);
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+a.weline-acl-module:hover {
+    border-color: #556ee6;
+    color: #4458d6;
+    background: rgba(85, 110, 230, 0.06);
 }
 
 .weline-acl-route {
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.8rem;
-    color: var(--backend-color-text-secondary, #6c757d);
-    max-width: 200px;
+    display: block;
+    max-width: 220px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    color: #475569;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .weline-acl-time {
-    font-size: 0.8rem;
-    color: var(--backend-color-text-tertiary, #adb5bd);
+    display: block;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: #475569;
     white-space: nowrap;
+}
+
+.weline-acl-time .time-date {
+    display: block;
+    font-weight: 600;
+    color: #334155;
+}
+
+.weline-acl-time .time-clock {
+    display: block;
+    margin-top: 2px;
+    color: #64748b;
+}
+
+.weline-acl-empty-cell {
+    color: #94a3b8;
+    font-size: 0.85rem;
 }
 
 .weline-acl-pagination {
@@ -449,7 +676,11 @@ $typeCount = count($typeStats);
     <div class='col-12'>
         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
             <h4 class='mb-sm-0'>
-                <lang>权限管理</lang>
+                <?php if ($isTagDimension): ?>
+                    <lang>标签资源</lang>
+                <?php else: ?>
+                    <lang>模块资源</lang>
+                <?php endif; ?>
             </h4>
 
             <div class='page-title-right'>
@@ -459,8 +690,17 @@ $typeCount = count($typeStats);
                             <lang>系统配置</lang>
                         </span>
                     </li>
+                    <li class='breadcrumb-item'>
+                        <span>
+                            <lang>权限管理</lang>
+                        </span>
+                    </li>
                     <li class='breadcrumb-item active'>
-                        <lang>权限管理</lang>
+                        <?php if ($isTagDimension): ?>
+                            <lang>标签资源</lang>
+                        <?php else: ?>
+                            <lang>模块资源</lang>
+                        <?php endif; ?>
                     </li>
                 </ol>
             </div>
@@ -470,31 +710,47 @@ $typeCount = count($typeStats);
 </div>
 <!-- end page title -->
 
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
-
-<div class="weline-acl-list-page">
+<div class="weline-acl-list-page"
+     data-testid="acl-resource-<?= $isTagDimension ? 'tag' : 'module' ?>-management">
     <!-- 顶部信息卡片 -->
     <div class="weline-acl-list-header">
-        <h2><i class="mdi mdi-shield-lock-outline"></i> <lang>ACL 权限管理</lang></h2>
-        <p class="weline-acl-list-header-subtitle"><lang>管理系统中所有的访问控制权限，包括菜单、接口等资源</lang></p>
+        <h2>
+            <?php if ($isTagDimension): ?>
+                <i class="mdi mdi-tag-search-outline"></i> <lang>标签维度资源</lang>
+            <?php else: ?>
+                <i class="mdi mdi-puzzle-outline"></i> <lang>模块维度资源</lang>
+            <?php endif; ?>
+        </h2>
+        <p class="weline-acl-list-header-subtitle">
+            <?php if ($isTagDimension): ?>
+                <lang>按标签浏览与搜索 ACL 资源；可切换到模块维度继续筛选</lang>
+            <?php else: ?>
+                <lang>按模块浏览与搜索 ACL 资源；可切换到标签维度继续筛选</lang>
+            <?php endif; ?>
+        </p>
         <div class="weline-acl-list-header-actions">
+            <?php if ($isTagDimension): ?>
+            <a href="<?php echo htmlspecialchars($moduleListUrl); ?>" class="weline-acl-list-header-btn">
+                <i class="mdi mdi-puzzle-outline"></i> <lang>模块维度</lang>
+            </a>
+            <?php else: ?>
+            <a href="<?php echo htmlspecialchars($tagListUrl); ?>" class="weline-acl-list-header-btn">
+                <i class="mdi mdi-tag-search-outline"></i> <lang>标签维度</lang>
+            </a>
+            <?php endif; ?>
             <a href="@backend-url('*/backend/acl/role')" class="weline-acl-list-header-btn">
                 <i class="mdi mdi-account-group"></i> <lang>角色管理</lang>
             </a>
-            <a href="@backend-url('*/backend/security-log')" class="weline-acl-list-header-btn">
-                <i class="mdi mdi-history"></i> <lang>安全日志</lang>
-            </a>
-            <a href="@backend-url('*/backend/ip-whitelist')" class="weline-acl-list-header-btn">
-                <i class="mdi mdi-ip-network"></i> <lang>IP白名单</lang>
+            <a href="@backend-url('*/backend/acl/tag')" class="weline-acl-list-header-btn">
+                <i class="mdi mdi-tag-multiple-outline"></i> <lang>标签元数据</lang>
             </a>
         </div>
     </div>
 
     <!-- 统计卡片 -->
     <div class="weline-acl-stats-row">
-        <div class="weline-acl-stat-card">
+        <a class="weline-acl-stat-card<?php echo !$hasActiveFilters ? ' is-active' : ''; ?>"
+           href="<?php echo htmlspecialchars($listBaseUrl); ?>">
             <div class="weline-acl-stat-icon primary">
                 <i class="mdi mdi-key-variant"></i>
             </div>
@@ -502,7 +758,7 @@ $typeCount = count($typeStats);
                 <div class="weline-acl-stat-value"><?php echo $totalCount; ?></div>
                 <div class="weline-acl-stat-label"><lang>权限总数</lang></div>
             </div>
-        </div>
+        </a>
         <div class="weline-acl-stat-card">
             <div class="weline-acl-stat-icon success">
                 <i class="mdi mdi-package-variant"></i>
@@ -514,22 +770,44 @@ $typeCount = count($typeStats);
         </div>
         <div class="weline-acl-stat-card">
             <div class="weline-acl-stat-icon info">
-                <i class="mdi mdi-menu"></i>
+                <i class="mdi mdi-shape"></i>
             </div>
             <div class="weline-acl-stat-content">
-                <div class="weline-acl-stat-value"><?php echo $typeStats['menus'] ?? 0; ?></div>
-                <div class="weline-acl-stat-label"><lang>菜单权限</lang></div>
+                <div class="weline-acl-stat-value"><?php echo $typeCount; ?></div>
+                <div class="weline-acl-stat-label"><lang>资源类型数</lang></div>
             </div>
         </div>
-        <div class="weline-acl-stat-card">
+    </div>
+
+    <!-- 分类型统计 -->
+    <div class="weline-acl-stats-row" style="margin-top: calc(var(--backend-spacing-md, 16px) * -0.5);">
+        <?php
+        $typeIcons = [
+            'menus' => 'menu',
+            'pc' => 'api',
+            'api' => 'cloud-outline',
+            'query' => 'database-search',
+            'task' => 'timeline-clock',
+            'operation' => 'wrench',
+        ];
+        foreach ($filterTypes as $statType):
+            $statCount = (int)($typeStats[$statType] ?? 0);
+            $label = \Weline\Acl\Service\Resource\AclResourcePresentation::typeLabel((string)$statType);
+            $isActive = $currentType === (string)$statType;
+            $typeQuery = $buildFilterQuery(['type' => $isActive ? '' : (string)$statType]);
+        ?>
+        <a class="weline-acl-stat-card<?php echo $isActive ? ' is-active' : ''; ?><?php echo $statCount === 0 ? ' is-muted' : ''; ?>"
+           href="<?php echo htmlspecialchars($listBaseUrl . $typeQuery); ?>"
+           title="<?php echo htmlspecialchars($label); ?>">
             <div class="weline-acl-stat-icon warning">
-                <i class="mdi mdi-api"></i>
+                <i class="mdi mdi-<?php echo htmlspecialchars($typeIcons[$statType] ?? 'key'); ?>"></i>
             </div>
             <div class="weline-acl-stat-content">
-                <div class="weline-acl-stat-value"><?php echo $typeStats['pc'] ?? 0; ?></div>
-                <div class="weline-acl-stat-label"><lang>接口权限</lang></div>
+                <div class="weline-acl-stat-value"><?php echo $statCount; ?></div>
+                <div class="weline-acl-stat-label"><?php echo htmlspecialchars($label); ?></div>
             </div>
-        </div>
+        </a>
+        <?php endforeach; ?>
     </div>
 
     <!-- 工具栏 -->
@@ -619,10 +897,10 @@ $typeCount = count($typeStats);
             <table class="weline-acl-table" id="acl-table">
                 <thead>
                     <tr>
-                        <th><lang>ID</lang></th>
                         <th><lang>资源标识</lang></th>
                         <th><lang>资源名称</lang></th>
                         <th><lang>类型</lang></th>
+                        <th><lang>标签</lang></th>
                         <th><lang>请求方法</lang></th>
                         <th><lang>路由</lang></th>
                         <th><lang>所属模块</lang></th>
@@ -636,46 +914,88 @@ $typeCount = count($typeStats);
                     $method = strtolower($acl->getMethod() ?: 'all');
                     $typeClass = 'type-' . $type;
                     $methodClass = $method;
-                    $typeLabel = match($type) {
-                        'menus' => __('菜单'),
-                        'pc' => __('接口'),
-                        default => __('其他')
-                    };
+                    $typeLabel = \Weline\Acl\Service\Resource\AclResourcePresentation::typeLabel($type);
+                    $sourceId = (string)$acl->getSourceId();
+                    $sourceParts = explode('::', $sourceId, 2);
+                    $sourceModule = $sourceParts[0] ?? $sourceId;
+                    $sourceCode = $sourceParts[1] ?? '';
+                    $route = trim((string)($acl->getRoute() ?: ''));
+                    $moduleName = trim((string)($acl->getModule() ?: ''));
+                    $updatedAt = (string)($acl->getUpdateTime() ?: $acl->getCreateTime() ?: '');
+                    $tags = \Weline\Acl\Service\Resource\AclResourcePresentation::tagsFromSourceId(
+                        $sourceId,
+                        (string)$acl->getData(\Weline\Acl\Model\Acl::schema_fields_RESOURCE_METADATA)
+                    );
                     ?>
-                    <tr data-type="<?php echo htmlspecialchars($type); ?>" data-module="<?php echo htmlspecialchars($acl->getModule() ?: ''); ?>">
-                        <td><?php echo $acl->getId(); ?></td>
+                    <tr data-type="<?php echo htmlspecialchars($type); ?>" data-module="<?php echo htmlspecialchars($moduleName); ?>">
                         <td>
-                            <span class="weline-acl-source-id" title="<?php echo htmlspecialchars($acl->getSourceId()); ?>">
-                                <?php echo htmlspecialchars($acl->getSourceId()); ?>
-                            </span>
+                            <code class="weline-acl-source-id" title="<?php echo htmlspecialchars($sourceId); ?>">
+                                <span class="sid-module"><?php echo htmlspecialchars($sourceModule); ?></span><?php if ($sourceCode !== ''): ?><span class="sid-sep">::</span><span class="sid-code"><?php echo htmlspecialchars($sourceCode); ?></span><?php endif; ?>
+                            </code>
                         </td>
                         <td>
-                            <span class="weline-acl-source-name"><?php echo htmlspecialchars($acl->getSourceName() ?: '-'); ?></span>
+                            <span class="weline-acl-source-name"><?php echo htmlspecialchars($acl->getSourceName() ?: '—'); ?></span>
                             <?php if ($acl->getDocument()): ?>
-                            <br><small style="color: var(--backend-color-text-tertiary);"><?php echo htmlspecialchars($acl->getDocument()); ?></small>
+                            <span class="weline-acl-source-doc"><?php echo htmlspecialchars((string)$acl->getDocument()); ?></span>
                             <?php endif; ?>
                         </td>
                         <td>
-                            <span class="weline-acl-badge <?php echo $typeClass; ?>">
-                                <i class="mdi mdi-<?php echo $type === 'menus' ? 'menu' : ($type === 'pc' ? 'api' : 'key'); ?>"></i>
-                                <?php echo $typeLabel; ?>
+                            <span class="weline-acl-badge <?php echo htmlspecialchars($typeClass); ?>">
+                                <i class="mdi mdi-<?php echo htmlspecialchars(\Weline\Acl\Service\Resource\AclResourcePresentation::typeIcon($type)); ?>"></i>
+                                <?php echo htmlspecialchars($typeLabel); ?>
                             </span>
                         </td>
                         <td>
-                            <span class="weline-acl-method <?php echo $methodClass; ?>">
+                            <?php if ($tags === []): ?>
+                                <span class="weline-acl-empty-cell">—</span>
+                            <?php else: ?>
+                                <div class="weline-acl-tag-list">
+                                    <?php foreach ($tags as $tag):
+                                        $tagJump = $tagListUrl . '?' . \http_build_query(['tags' => $tag]);
+                                    ?>
+                                        <a class="weline-acl-tag-chip" href="<?php echo htmlspecialchars($tagJump); ?>" title="<?php echo htmlspecialchars(__('在标签维度查看')); ?>">
+                                            <?php echo htmlspecialchars($tag); ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <span class="weline-acl-method <?php echo htmlspecialchars($methodClass); ?>">
                                 <?php echo strtoupper($acl->getMethod() ?: 'ALL'); ?>
                             </span>
                         </td>
                         <td>
-                            <span class="weline-acl-route" title="<?php echo htmlspecialchars($acl->getRoute() ?: ''); ?>">
-                                <?php echo htmlspecialchars($acl->getRoute() ?: '-'); ?>
-                            </span>
+                            <?php if ($route === ''): ?>
+                                <span class="weline-acl-empty-cell">—</span>
+                            <?php else: ?>
+                                <span class="weline-acl-route" title="<?php echo htmlspecialchars($route); ?>"><?php echo htmlspecialchars($route); ?></span>
+                            <?php endif; ?>
                         </td>
                         <td>
-                            <span class="weline-acl-module"><?php echo htmlspecialchars($acl->getModule() ?: '-'); ?></span>
+                            <?php if ($moduleName === ''): ?>
+                                <span class="weline-acl-empty-cell">—</span>
+                            <?php else:
+                                $moduleJump = $moduleListUrl . '?' . \http_build_query(['module' => $moduleName]);
+                            ?>
+                                <a class="weline-acl-module" href="<?php echo htmlspecialchars($moduleJump); ?>" title="<?php echo htmlspecialchars(__('在模块维度查看') . ': ' . $moduleName); ?>"><?php echo htmlspecialchars($moduleName); ?></a>
+                            <?php endif; ?>
                         </td>
                         <td>
-                            <span class="weline-acl-time"><?php echo $acl->getUpdateTime() ?: $acl->getCreateTime() ?: '-'; ?></span>
+                            <?php if ($updatedAt === ''): ?>
+                                <span class="weline-acl-empty-cell">—</span>
+                            <?php else:
+                                $timeTs = strtotime($updatedAt);
+                                $timeDate = $timeTs ? date('Y-m-d', $timeTs) : $updatedAt;
+                                $timeClock = $timeTs ? date('H:i:s', $timeTs) : '';
+                            ?>
+                                <span class="weline-acl-time" title="<?php echo htmlspecialchars($updatedAt); ?>">
+                                    <span class="time-date"><?php echo htmlspecialchars($timeDate); ?></span>
+                                    <?php if ($timeClock !== ''): ?>
+                                    <span class="time-clock"><?php echo htmlspecialchars($timeClock); ?></span>
+                                    <?php endif; ?>
+                                </span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -695,43 +1015,7 @@ $typeCount = count($typeStats);
 <script>
 (function() {
     'use strict';
-    
-    window.filterByType = function(type) {
-        filterTable();
-    };
-    
-    window.filterByModule = function(module) {
-        filterTable();
-    };
-
-    document.querySelectorAll('[data-acl-filter]').forEach(function(select) {
-        select.addEventListener('change', filterTable);
-    });
-    
-    function filterTable() {
-        var typeFilter = document.getElementById('acl-filter-type').value.toLowerCase();
-        var moduleFilter = document.getElementById('acl-filter-module').value;
-        var rows = document.querySelectorAll('#acl-table tbody tr');
-        var visibleCount = 0;
-        
-        rows.forEach(function(row) {
-            var rowType = (row.getAttribute('data-type') || '').toLowerCase();
-            var rowModule = row.getAttribute('data-module') || '';
-            
-            var typeMatch = !typeFilter || rowType === typeFilter;
-            var moduleMatch = !moduleFilter || rowModule === moduleFilter;
-            
-            if (typeMatch && moduleMatch) {
-                row.style.display = '';
-                visibleCount++;
-            } else {
-                row.style.display = 'none';
-            }
-        });
-        
-        document.getElementById('visible-count').textContent = visibleCount;
-    }
-    
+    // 类型/模块筛选走服务端 ?type=&module=；快捷键聚焦搜索框
     document.addEventListener('keydown', function(e) {
         if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
             e.preventDefault();

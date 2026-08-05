@@ -95,22 +95,35 @@ class Domain extends Model
     public function getCredentialsArray(): array
     {
         $credentials = $this->getData(self::schema_fields_CREDENTIALS);
-        if (is_string($credentials)) {
-            $decoded = json_decode($credentials, true);
-            return is_array($decoded) ? $decoded : [];
+        if (\is_string($credentials)) {
+            try {
+                if (\Weline\Framework\Http\Security\SecretRefCipher::isRef($credentials)) {
+                    return \Weline\Framework\Http\Security\SecretRefCipher::revealJson($credentials);
+                }
+            } catch (\Throwable) {
+                return [];
+            }
+            $decoded = \json_decode($credentials, true);
+
+            return \is_array($decoded) ? $decoded : [];
         }
-        return is_array($credentials) ? $credentials : [];
+
+        return \is_array($credentials) ? $credentials : [];
     }
 
     /**
-     * 设置凭据数组
-     * 
+     * 设置凭据数组（TASK-P1D-002：落库密封为 secret_ref）
+     *
      * @param array $credentials
      * @return self
      */
     public function setCredentialsArray(array $credentials): self
     {
-        $this->setData(self::schema_fields_CREDENTIALS, json_encode($credentials, JSON_UNESCAPED_UNICODE));
+        $this->setData(
+            self::schema_fields_CREDENTIALS,
+            \Weline\Framework\Http\Security\SecretRefCipher::sealJson($credentials)
+        );
+
         return $this;
     }
 

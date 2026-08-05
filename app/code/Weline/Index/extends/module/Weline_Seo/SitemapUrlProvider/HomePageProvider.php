@@ -6,11 +6,13 @@ namespace Weline\Index\Extends\Module\Weline_Seo\SitemapUrlProvider;
 
 use Weline\Seo\Api\Sitemap\AbstractSitemapUrlProvider;
 use Weline\Seo\Api\Sitemap\WebsiteDirectoryInterface;
+use Weline\Seo\Service\Sitemap\FrontendHomeOwnershipService;
 
 class HomePageProvider extends AbstractSitemapUrlProvider
 {
     public function __construct(
-        private readonly WebsiteDirectoryInterface $websiteDirectory
+        private readonly WebsiteDirectoryInterface $websiteDirectory,
+        private readonly FrontendHomeOwnershipService $frontendHomeOwnership,
     ) {
         parent::__construct();
     }
@@ -45,11 +47,16 @@ class HomePageProvider extends AbstractSitemapUrlProvider
             return [];
         }
 
+        // Keep website in getWebsiteIds() so an empty snapshot can disable stale
+        // Weline_Index homepage rows after another provider claims `/`.
+        if ($this->frontendHomeOwnership->isOwnedByOtherProvider($websiteId, $this->getModule())) {
+            return [];
+        }
+
         return [
             [
                 'url_key' => 'home-1',
-                'loc' => '/',
-                'lastmod' => date('Y-m-d'),
+                'loc' => rtrim($website->url, '/') . '/',
                 'changefreq' => 'daily',
                 'priority' => '1.0',
                 'metadata' => [

@@ -6,7 +6,6 @@ namespace Weline\CacheManager\Taglib;
 
 use Weline\CacheManager\Service\CacheAdminService;
 use Weline\Framework\Http\Request;
-use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\TaglibInterface;
 
@@ -78,24 +77,7 @@ class CacheClear implements TaglibInterface
         } catch (\Throwable) {
         }
 
-        $clearUrl = '';
-        $clearAllUrl = '';
-        try {
-            /** @var Url $url */
-            $url = ObjectManager::getInstance(Url::class);
-            $clearUrl = $url->getBackendUrlPath('admin/system/cache/clear');
-            $clearAllUrl = $url->getBackendUrlPath('admin/system/cache/clearAll');
-        } catch (\Throwable) {
-        }
-        if ($clearUrl === '') {
-            return '<!-- cache:clear hidden: no backend url -->';
-        }
-
         $config = [
-            'urls' => [
-                'clear' => $clearUrl,
-                'clear_all' => $clearAllUrl,
-            ],
             'can_clear_all' => $canClearAll,
             'strings' => [
                 'select_empty' => (string)__('请先选择要清理的缓存'),
@@ -104,6 +86,7 @@ class CacheClear implements TaglibInterface
                 'clear_partial' => (string)__('部分缓存清理失败，请查看提示后重试'),
                 'clear_all_done' => (string)__('已清理所有非持久缓存池'),
                 'request_failed' => (string)__('请求失败'),
+                'api_unavailable' => (string)__('bin-query 接口不可用，请刷新页面后重试'),
                 'confirm_clear_selected' => (string)__('确定要清理所选缓存池吗？'),
                 'confirm_clear_selected_force' => (string)__('所选缓存里包含持久缓存，将以强制模式清理。是否继续？'),
                 'confirm_clear_all' => (string)__('确定要清理全部非持久缓存吗？这会保留系统关键持久缓存。'),
@@ -257,7 +240,6 @@ HTML;
 
     var config = {};
     try { config = JSON.parse((root.querySelector('[data-role="config"]') || {}).textContent || '{}'); } catch (e) {}
-    var urls = config.urls || {};
     var strings = config.strings || {};
     var modal = root.querySelector('[data-role="modal"]');
     if (!modal) { return; }
@@ -269,29 +251,54 @@ HTML;
     }
     function confirmAction(message) {
         if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            return window.BackendConfirm.show(message, { okText: text('confirm_continue', 'OK'), cancelText: text('confirm_cancel', 'Cancel') });
-        }
-        return Promise.resolve(true);
-    }
-    function postJson(url, data) {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.post === 'function') {
-            return window.Weline.Api.post(url, data || {});
-        }
-        return fetch(url, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify(data || {})
-        }).then(function (response) {
-            return response.text().then(function (content) {
-                var payload = {};
-                try { payload = content ? JSON.parse(content) : {}; } catch (e) { throw new Error(text('request_failed', 'Request failed')); }
-                if (!response.ok || (typeof payload.code !== 'undefined' && Number(payload.code) >= 400)) {
-                    throw new Error(payload.msg || payload.message || text('request_failed', 'Request failed'));
-                }
-                return payload;
+            return window.BackendConfirm.show(message, {
+                confirmText: text('confirm_continue', 'OK'),
+                cancelText: text('confirm_cancel', 'Cancel'),
+                type: 'warning'
             });
-        });
+        }
+        console.warn('[Weline CacheClear] BackendConfirm is unavailable; action cancelled.');
+        return Promise.resolve(false);
+    }
+    function loadApi() {
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api');
+        }
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+            return Promise.resolve(window.Weline.Api);
+        }
+        return Promise.reject(new Error(text('api_unavailable', 'bin-query unavailable')));
+    }
+    function unwrapPayload(payload) {
+        var body = payload;
+        if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'data')
+            && payload.data && typeof payload.data === 'object'
+            && (Object.prototype.hasOwnProperty.call(payload.data, 'success')
+                || Object.prototype.hasOwnProperty.call(payload.data, 'code')
+                || Object.prototype.hasOwnProperty.call(payload.data, 'msg')
+                || Object.prototype.hasOwnProperty.call(payload.data, 'message'))
+        ) {
+            body = payload.data;
+        }
+        if (!body || typeof body !== 'object') {
+            return { success: true, data: body };
+        }
+        if (body.success === false || (typeof body.code !== 'undefined' && Number(body.code) >= 400)) {
+            throw new Error(body.message || body.msg || text('request_failed', 'Request failed'));
+        }
+        return body;
+    }
+    function callCache(operation, params) {
+        return loadApi().then(function (api) {
+            if (!api || typeof api.resource !== 'function') {
+                throw new Error(text('api_unavailable', 'bin-query unavailable'));
+            }
+            var resource = api.resource('cache_manager');
+            if (!resource || typeof resource[operation] !== 'function') {
+                throw new Error(text('api_unavailable', 'bin-query unavailable'));
+            }
+            return resource[operation](params || {});
+        }).then(unwrapPayload);
     }
 
     var openButton = root.querySelector('[data-role="open"]');
@@ -382,7 +389,7 @@ HTML;
                     var identity = opt.querySelector('input[type="checkbox"]').value;
                     var force = opt.getAttribute('data-permanent') === '1';
                     chain = chain.then(function () {
-                        return postJson(urls.clear, { identity: identity, force: force ? 1 : 0 }).catch(function (error) {
+                        return callCache('clearPool', { identity: identity, force: force }).catch(function (error) {
                             failed.push(identity + ': ' + (error && error.message ? error.message : ''));
                         });
                     });
@@ -405,9 +412,9 @@ HTML;
             confirmAction(text('confirm_clear_all', '')).then(function (ok) {
                 if (!ok) { return; }
                 setBusy(clearAllButton, true);
-                postJson(urls.clear_all, { force: 0 }).then(function (payload) {
+                callCache('clearAll', { force: false }).then(function (payload) {
                     setBusy(clearAllButton, false);
-                    notify('success', (payload && payload.msg) || text('clear_all_done', 'Cleared'));
+                    notify('success', (payload && (payload.msg || payload.message)) || text('clear_all_done', 'Cleared'));
                     closeModal();
                 }).catch(function (error) {
                     setBusy(clearAllButton, false);

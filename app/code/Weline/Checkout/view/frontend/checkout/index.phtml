@@ -4,15 +4,15 @@ $copy = [
     'loading' => (string)__('正在加载结账信息...'),
     'load_failed' => (string)__('结账信息加载失败，请稍后重试。'),
     'empty_cart' => (string)__('购物车为空，请先加入商品。'),
-    'submit' => (string)__('提交订单并支付'),
+    'submit' => (string)__('提交订单'),
     'submitting' => (string)__('正在提交订单...'),
-    'payment_redirect' => (string)__('订单已创建，正在前往支付页面。'),
-    'payment_pending' => (string)__('订单已创建，支付正在处理中。'),
+    'payment_redirect' => (string)__('订单已创建，正在打开结果页面。'),
+    'payment_pending' => (string)__('订单已创建。'),
     'required' => (string)__('请补全收货信息并选择配送和支付方式。'),
     'api_missing' => (string)__('Weline.Api 尚未就绪，请刷新页面后重试。'),
 ];
 ?>
-<section class="weline-checkout" data-weline-checkout>
+<section class="weline-checkout" data-weline-checkout data-testid="checkout-form-page" weline-code="checkout.checkout.index.section_1">
     <header class="weline-checkout__header">
         <div>
             <p class="weline-checkout__eyebrow"><?= __('安全结账') ?></p>
@@ -64,20 +64,34 @@ $copy = [
                 </div>
             </section>
 
-            <section class="weline-checkout__panel">
+            <section class="weline-checkout__panel" weline-code="checkout.checkout.index.section_3">
                 <h2><?= __('配送方式') ?></h2>
-                <div class="weline-checkout__options" data-shipping-methods></div>
+                <w:hook>Weline_Checkout::frontend::layouts::checkout::shipping-methods-before</w:hook>
+                <div class="weline-checkout__options" data-shipping-methods>
+                    <p class="weline-checkout__empty"><?= __('正在加载配送方式...') ?></p>
+                </div>
+                <w:hook>Weline_Checkout::frontend::layouts::checkout::shipping-methods-after</w:hook>
             </section>
 
-            <section class="weline-checkout__panel">
+            <section class="weline-checkout__panel" weline-code="checkout.checkout.index.section_4">
                 <h2><?= __('支付方式') ?></h2>
-                <div class="weline-checkout__options" data-payment-methods></div>
+                <w:hook>Weline_Checkout::frontend::layouts::checkout::payment-methods-before</w:hook>
+                <div class="weline-checkout__options" data-payment-methods>
+                    <p class="weline-checkout__empty"><?= __('正在加载支付方式...') ?></p>
+                </div>
+                <w:hook>Weline_Checkout::frontend::layouts::checkout::payment-methods-after</w:hook>
             </section>
         </div>
 
         <aside class="weline-checkout__summary">
+            <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-before</w:hook>
             <h2><?= __('订单摘要') ?></h2>
-            <div class="weline-checkout__items" data-cart-items></div>
+            <w:hook>Weline_Checkout::frontend::layouts::checkout::review-before</w:hook>
+            <div class="weline-checkout__items" data-cart-items data-checkout-items-hook>
+                <?= $this->fetch('Weline_Checkout::frontend/checkout/partials/items.phtml') ?>
+                <w:hook>Weline_Checkout::frontend::partials::checkout::cart-items</w:hook>
+            </div>
+            <w:hook>Weline_Checkout::frontend::layouts::checkout::review-after</w:hook>
             <dl class="weline-checkout__totals">
                 <div>
                     <dt><?= __('商品小计') ?></dt>
@@ -405,72 +419,14 @@ $copy = [
         return method ? Number(method.amount || method.fee || 0) : 0;
     }
 
-    function renderItems(items) {
-        if (!itemsBox) {
+    /**
+     * P2E-003：只注入服务端 HTML，禁止 createElement 拼商品/选项 DOM。
+     */
+    function applyServerHtml(node, html) {
+        if (!node || typeof html !== 'string') {
             return;
         }
-        itemsBox.innerHTML = '';
-        if (!items.length) {
-            const empty = document.createElement('p');
-            empty.textContent = copy.empty_cart;
-            itemsBox.appendChild(empty);
-            return;
-        }
-        items.forEach(function (item) {
-            const row = document.createElement('div');
-            row.className = 'weline-checkout__item';
-            const info = document.createElement('div');
-            const title = document.createElement('strong');
-            title.textContent = text(item.name || item.product_name);
-            const meta = document.createElement('small');
-            meta.textContent = 'x' + Number(item.qty || item.quantity || 1);
-            info.appendChild(title);
-            info.appendChild(meta);
-            const total = document.createElement('span');
-            total.textContent = money(item.row_total || (Number(item.price || 0) * Number(item.qty || item.quantity || 1)));
-            row.appendChild(info);
-            row.appendChild(total);
-            itemsBox.appendChild(row);
-        });
-    }
-
-    function renderMethods(container, methods, name) {
-        if (!container) {
-            return;
-        }
-        container.innerHTML = '';
-        if (!methods.length) {
-            const empty = document.createElement('p');
-            empty.textContent = name === 'shipping_method'
-                ? '<?= __('暂无可用配送方式。') ?>'
-                : '<?= __('暂无可用支付方式。') ?>';
-            container.appendChild(empty);
-            return;
-        }
-        methods.forEach(function (method, index) {
-            const label = document.createElement('label');
-            label.className = 'weline-checkout__option';
-            const input = document.createElement('input');
-            input.type = 'radio';
-            input.name = name;
-            input.value = text(method.code);
-            input.checked = index === 0;
-            const body = document.createElement('span');
-            const title = document.createElement('strong');
-            title.textContent = text(method.label || method.title || method.code);
-            const meta = document.createElement('small');
-            meta.textContent = text(method.description || method.eta_label || method.source || '');
-            body.appendChild(title);
-            if (meta.textContent) {
-                body.appendChild(meta);
-            }
-            const price = document.createElement('span');
-            price.textContent = name === 'shipping_method' ? money(method.amount || method.fee || 0) : '';
-            label.appendChild(input);
-            label.appendChild(body);
-            label.appendChild(price);
-            container.appendChild(label);
-        });
+        node.innerHTML = html;
     }
 
     function renderTotals() {
@@ -496,9 +452,9 @@ $copy = [
         if (emailInput) {
             emailInput.required = Boolean(checkoutState.identity.is_guest_checkout);
         }
-        renderItems(Array.isArray(data.items) ? data.items : []);
-        renderMethods(shippingBox, checkoutState.shippingMethods, 'shipping_method');
-        renderMethods(paymentBox, checkoutState.paymentMethods, 'payment_method');
+        applyServerHtml(itemsBox, data.items_html);
+        applyServerHtml(shippingBox, data.shipping_methods_html);
+        applyServerHtml(paymentBox, data.payment_methods_html);
         renderTotals();
         if (submitButton) {
             submitButton.disabled = Boolean(checkoutState.cart.is_empty) || !checkoutState.shippingMethods.length || !checkoutState.paymentMethods.length;
@@ -568,20 +524,41 @@ $copy = [
             try {
                 const api = await getApi();
                 const address = formAddress();
-                const result = await api.placeOrder({
-                    shipping_address: address,
-                    shipping_method: shippingMethod,
-                    payment_method: paymentMethod,
-                    guest_email: address.email,
-                    checkout_mode: text(checkoutState.identity && checkoutState.identity.checkout_mode) || 'guest',
+                const frozen = await api.freezeQuote({
+                    address: address,
+                    service_code: shippingMethod,
                 });
-                const redirect = text(result && result.redirect);
-                if (redirect) {
-                    setMessage(result.requires_action ? copy.payment_redirect : copy.payment_pending, 'success');
-                    window.location.href = redirect;
-                    return;
+                if (!frozen || frozen.success === false) {
+                    throw new Error(text(frozen && frozen.message) || copy.load_failed);
+                }
+                const quoteToken = text(frozen.quote_token || frozen.data && frozen.data.quote_token);
+                if (!quoteToken) {
+                    throw new Error(copy.load_failed);
+                }
+                const idempotencyKey = 'checkout_ui_' + (
+                    window.crypto && typeof window.crypto.randomUUID === 'function'
+                        ? window.crypto.randomUUID()
+                        : Date.now().toString(36) + Math.random().toString(36).slice(2)
+                );
+                const result = await api.submitV2({
+                    quote_token: quoteToken,
+                    idempotency_key: idempotencyKey,
+                });
+                if (!result || result.success === false) {
+                    throw new Error(text(result && result.message) || copy.load_failed);
+                }
+                const data = result.data && typeof result.data === 'object' ? result.data : result;
+                const groupUuid = text(result.checkout_group_uuid || data.checkout_group_uuid);
+                const orderUuids = Array.isArray(result.order_uuids)
+                    ? result.order_uuids
+                    : (Array.isArray(data.order_uuids) ? data.order_uuids : []);
+                const orderUuid = text(orderUuids[0]);
+                if (!groupUuid || !orderUuid) {
+                    throw new Error(copy.load_failed);
                 }
                 setMessage(copy.payment_pending, 'success');
+                window.location.href = '/checkout/success-page?order_uuid=' + encodeURIComponent(orderUuid)
+                    + '&checkout_group_uuid=' + encodeURIComponent(groupUuid);
             } catch (error) {
                 setMessage(error.message || copy.load_failed, 'error');
                 if (submitButton) {

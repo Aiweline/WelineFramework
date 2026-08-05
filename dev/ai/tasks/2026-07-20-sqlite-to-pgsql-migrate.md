@@ -14,4 +14,7 @@
 - 验证：
   - `db:query current_database()` → `weline`
   - `weline_payment_intent=185`、`weline_order=10` 与 sqlite 一致
-- 说明：因 `DEBUG=1` 会走 sandbox，故 sandbox 同步为 pgsql，避免继续落到 sqlite
+- 历史说明：本次迁移当时同时把 sandbox 切到 pgsql。自 2026-07-29
+  数据库默认合同修正后，`DEBUG=1` 不再隐式选择 sandbox；普通开发与
+  生产运行时均使用主库 `db.default=pgsql`，只有显式 Sandbox 才使用
+  `sandbox_db`（其默认可为 SQLite）。

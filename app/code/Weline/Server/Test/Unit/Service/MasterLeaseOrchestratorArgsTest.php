@@ -9,6 +9,9 @@ use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\IPC\ChildControl\ChildMasterGuard;
 use Weline\Server\Service\MasterLeaseManager;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
+use Weline\Server\Service\MasterChildCredentialStore;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServiceOrchestrator;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
@@ -82,7 +85,7 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         $instance = 'master-lease-fence-ut-' . \bin2hex(\random_bytes(4));
         $ownerToken = \str_repeat('e', 64);
         $foreignToken = \str_repeat('f', 64);
-        $manager = new MasterLeaseManager();
+        $manager = $this->testLeaseManager();
         $path = $manager->writeRunning($instance, 32101, 19201, 8, $foreignToken);
         $orchestrator = new ServiceOrchestrator();
         $context = new ServiceContext(
@@ -118,7 +121,7 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         try {
             $this->writePrivate($orchestrator, 'context', $context);
             $this->writePrivate($orchestrator, 'running', true);
-            $this->invokePrivate($orchestrator, 'touchMasterLeaseIfDue', [\microtime(true)]);
+            $this->invokePrivate($orchestrator, 'touchMasterLeaseIfDue', [(\hrtime(true) / 1_000_000_000)]);
 
             self::assertSame(
                 'master_lease_ownership_lost',
@@ -132,18 +135,29 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
             self::assertSame($foreignToken, $lease['master_token'] ?? null);
         } finally {
             @\unlink($path);
+            @\unlink(MasterLeaseManager::lockPathForInstance($instance));
             @\rmdir(\dirname($path));
         }
     }
 
-    public function testProtectedLeaseCredentialIsSharedAndInvalidStatesFailClosed(): void
+    public function testProtectedLeaseCredentialIsSubjectBoundAndInvalidStatesFailClosed(): void
     {
         $instance = 'gateway-lease-ut-' . \bin2hex(\random_bytes(4));
         $token = \hash('sha256', 'gateway-agent-unit-credential');
         $masterPid = (int)\getmypid();
         $epoch = 7;
-        $manager = new MasterLeaseManager();
+        $runtimeIdentity = $this->testRuntimeIdentity();
+        $manager = new MasterLeaseManager($runtimeIdentity);
+        $store = new MasterChildCredentialStore($manager, $runtimeIdentity);
         $path = $manager->writeRunning($instance, $masterPid, 19091, $epoch, $token);
+        $store->authorizeServices($path, $instance, $masterPid, $epoch, $token, [[
+            'role' => ControlMessage::ROLE_GATEWAY_AGENT,
+            'slot_id' => ControlMessage::ROLE_GATEWAY_AGENT . '#1',
+            'launch_id' => 'launch-ut',
+            'lease_id' => 'lease-ut',
+            'generation' => 1,
+            'pid' => $masterPid,
+        ]]);
 
         try {
             $resolved = $manager->resolveProtectedCredential(
@@ -154,20 +168,32 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                 'launch-ut',
                 'lease-ut',
                 1,
+                ControlMessage::ROLE_GATEWAY_AGENT,
+                ControlMessage::ROLE_GATEWAY_AGENT . '#1',
             );
-            self::assertTrue(\hash_equals($token, $resolved));
+            self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/D', $resolved);
+            self::assertFalse(\hash_equals($token, $resolved));
+            $arguments = [
+                'child.php',
+                '--master-pid=' . $masterPid,
+                '--epoch=' . $epoch,
+                '--launch-id=launch-ut',
+                '--master-lease-file=' . $path,
+                '--lease-id=lease-ut',
+                '--slot-id=' . ControlMessage::ROLE_GATEWAY_AGENT . '#1',
+                '--slot-generation=1',
+            ];
             self::assertSame(
-                $token,
-                $manager->resolveProtectedCredentialFromArguments([
-                    'child.php',
-                    '--master-pid=' . $masterPid,
-                    '--epoch=' . $epoch,
-                    '--launch-id=launch-ut',
-                    '--master-lease-file=' . $path,
-                    '--lease-id=lease-ut',
-                    '--slot-generation=1',
-                ], $instance),
+                $resolved,
+                $manager->resolveProtectedCredentialFromArguments($arguments, $instance),
             );
+            $runtimeCredential = $manager->resolveProtectedRuntimeCredentialFromArguments(
+                $arguments,
+                $instance,
+            );
+            self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/D', $runtimeCredential);
+            self::assertFalse(\hash_equals($token, $runtimeCredential));
+            self::assertFalse(\hash_equals($resolved, $runtimeCredential));
 
             if (PHP_OS_FAMILY !== 'Windows') {
                 self::assertTrue(@\chmod($path, 0660));
@@ -175,7 +201,7 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     $manager->readProtected($path),
                     'A group-writable Master lease must not expose the Agent credential.',
                 );
-                self::assertTrue(@\chmod($path, 0640));
+                self::assertTrue(@\chmod($path, 0600));
             }
 
             $guard = new ChildMasterGuard(
@@ -200,6 +226,8 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     'launch-ut',
                     'lease-ut',
                     1,
+                    ControlMessage::ROLE_GATEWAY_AGENT,
+                    ControlMessage::ROLE_GATEWAY_AGENT . '#1',
                 ),
             );
             $this->assertCredentialRejected(
@@ -211,6 +239,8 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     'launch-ut',
                     'lease-ut',
                     1,
+                    ControlMessage::ROLE_GATEWAY_AGENT,
+                    ControlMessage::ROLE_GATEWAY_AGENT . '#1',
                 ),
             );
             $this->assertCredentialRejected(
@@ -222,12 +252,14 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     '',
                     'lease-ut',
                     1,
+                    ControlMessage::ROLE_GATEWAY_AGENT,
+                    ControlMessage::ROLE_GATEWAY_AGENT . '#1',
                 ),
             );
 
             $lease = $manager->readProtected($path);
             self::assertIsArray($lease);
-            $lease['updated_at'] = \microtime(true) - MasterLeaseManager::HEARTBEAT_STALE_SEC - 1.0;
+            $lease['updated_monotonic'] = 1.0;
             $this->writeLeasePayload($path, $lease);
             $this->assertCredentialRejected(
                 static fn (): string => $manager->resolveProtectedCredential(
@@ -238,6 +270,8 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     'launch-ut',
                     'lease-ut',
                     1,
+                    ControlMessage::ROLE_GATEWAY_AGENT,
+                    ControlMessage::ROLE_GATEWAY_AGENT . '#1',
                 ),
             );
             self::assertTrue($guard->shouldExit(true));
@@ -256,6 +290,8 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     'launch-ut',
                     'lease-ut',
                     1,
+                    ControlMessage::ROLE_GATEWAY_AGENT,
+                    ControlMessage::ROLE_GATEWAY_AGENT . '#1',
                 ),
             );
 
@@ -269,6 +305,8 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     'launch-ut',
                     'lease-ut',
                     1,
+                    ControlMessage::ROLE_GATEWAY_AGENT,
+                    ControlMessage::ROLE_GATEWAY_AGENT . '#1',
                 ),
             );
 
@@ -282,10 +320,15 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     'launch-ut',
                     'lease-ut',
                     1,
+                    ControlMessage::ROLE_GATEWAY_AGENT,
+                    ControlMessage::ROLE_GATEWAY_AGENT . '#1',
                 ),
             );
         } finally {
             @\unlink($path);
+            @\unlink(MasterLeaseManager::lockPathForInstance($instance));
+            @\unlink(MasterChildCredentialStore::pathForInstance($instance));
+            @\unlink(MasterChildCredentialStore::lockPathForInstance($instance));
             @\rmdir(\dirname($path));
         }
     }
@@ -296,8 +339,18 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         $token = \hash('sha256', 'master-epoch-cas-unit-credential');
         $masterPid = (int)\getmypid();
         $controlPort = 19092;
-        $manager = new MasterLeaseManager();
+        $runtimeIdentity = $this->testRuntimeIdentity();
+        $manager = new MasterLeaseManager($runtimeIdentity);
+        $store = new MasterChildCredentialStore($manager, $runtimeIdentity);
         $path = $manager->writeRunning($instance, $masterPid, $controlPort, 3, $token);
+        $store->authorizeServices($path, $instance, $masterPid, 3, $token, [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'slot_id' => ControlMessage::ROLE_WORKER . '#1',
+            'launch_id' => 'launch-old',
+            'lease_id' => 'lease-old',
+            'generation' => 1,
+            'pid' => $masterPid,
+        ]]);
 
         try {
             $manager->advanceRunningEpoch(
@@ -318,20 +371,31 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
                     'launch-old',
                     'lease-old',
                     1,
+                    ControlMessage::ROLE_WORKER,
+                    ControlMessage::ROLE_WORKER . '#1',
                 ),
             );
-            self::assertSame(
-                $token,
-                $manager->resolveProtectedCredential(
-                    $path,
-                    $instance,
-                    $masterPid,
-                    4,
-                    'launch-new',
-                    'lease-new',
-                    1,
-                ),
+            $store->authorizeServices($path, $instance, $masterPid, 4, $token, [[
+                'role' => ControlMessage::ROLE_WORKER,
+                'slot_id' => ControlMessage::ROLE_WORKER . '#1',
+                'launch_id' => 'launch-new',
+                'lease_id' => 'lease-new',
+                'generation' => 2,
+                'pid' => $masterPid,
+            ]]);
+            $newCredential = $manager->resolveProtectedCredential(
+                $path,
+                $instance,
+                $masterPid,
+                4,
+                'launch-new',
+                'lease-new',
+                2,
+                ControlMessage::ROLE_WORKER,
+                ControlMessage::ROLE_WORKER . '#1',
             );
+            self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/D', $newCredential);
+            self::assertFalse(\hash_equals($token, $newCredential));
 
             foreach ([
                 [$masterPid + 1, $controlPort, 4, 5, $token],
@@ -358,7 +422,9 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
             self::assertSame(4, $lease['master_epoch'] ?? null);
         } finally {
             @\unlink($path);
-            @\rmdir(\dirname($path));
+            @\unlink(MasterLeaseManager::lockPathForInstance($instance));
+            @\unlink(MasterChildCredentialStore::pathForInstance($instance));
+            @\unlink(MasterChildCredentialStore::lockPathForInstance($instance));
             @\rmdir(\dirname($path));
         }
     }
@@ -398,12 +464,29 @@ final class MasterLeaseOrchestratorArgsTest extends TestCase
         $contents = \is_array($payload)
             ? (string)\json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)
             : $payload;
-        if (@\file_put_contents($path, $contents, LOCK_EX) === false) {
-            throw new \RuntimeException('Unable to write unit lease payload.');
-        }
-        if (PHP_OS_FAMILY !== 'Windows') {
-            @\chmod($path, 0640);
-        }
+        GatewayProjectStateFilesystem::atomicWrite($path, $contents, 0600);
+    }
+
+    private function testLeaseManager(): MasterLeaseManager
+    {
+        return new MasterLeaseManager($this->testRuntimeIdentity());
+    }
+
+    private function testRuntimeIdentity(): MasterLeaseRuntimeIdentity
+    {
+        $namespace = 'pid:[4026532444]';
+        return new MasterLeaseRuntimeIdentity(
+            bootIdentityResolver: static fn (): string => \str_repeat('6', 64),
+            monotonicClock: static fn (): float => \hrtime(true) / 1_000_000_000,
+            processInfoResolver: static fn (int $pid): array => [
+                'exists' => $pid > 0,
+                'name' => $pid > 0 ? 'php' : '',
+                'command' => $pid > 0 ? 'php bin/w --name=unit-master-' . $pid : '',
+                'start_time' => $pid > 0 ? 'unit-birth-' . $pid : '',
+            ],
+            managedProcessVerifier: static fn (int $pid, string $instance): bool => $pid > 0,
+            pidNamespaceResolver: static fn (int $pid): ?string => $pid > 0 ? $namespace : null,
+        );
     }
 
 

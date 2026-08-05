@@ -6,6 +6,9 @@ on:
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/env/gateway/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/WindowsBoundedCommandBootstrapResolver.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPortLeaseAllocator.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
@@ -23,12 +26,17 @@ on:
       - "app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php"
       - "app/code/Weline/Server/Test/bootstrap_pgsql.php"
       - "dev/tools/wls-gateway-package.php"
+      - "composer.json"
+      - "composer.lock"
       - ".github/workflows/wls-gateway-package.yml"
   pull_request:
     paths:
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/env/gateway/**"
       - "app/code/Weline/Server/Service/Edge/Gateway/HostGatewayPackageManager.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php"
+      - "app/code/Weline/Server/Service/Edge/Gateway/WindowsBoundedCommandBootstrapResolver.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPlatformServiceInstaller.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPortLeaseAllocator.php"
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
@@ -46,6 +54,8 @@ on:
       - "app/code/Weline/Server/Test/Unit/Session/SessionServerSharedConsumerConsensusTest.php"
       - "app/code/Weline/Server/Test/bootstrap_pgsql.php"
       - "dev/tools/wls-gateway-package.php"
+      - "composer.json"
+      - "composer.lock"
       - ".github/workflows/wls-gateway-package.yml"
   workflow_dispatch:
     inputs:
@@ -102,6 +112,7 @@ jobs:
   package-contract:
     name: Package contract and release-gate tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -117,8 +128,10 @@ jobs:
           --health-timeout=5s
           --health-retries=12
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
           extensions: sodium, openssl, intl, pdo_pgsql
@@ -155,11 +168,18 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
     needs: package-contract
     runs-on: ${{ inputs.target_runner }}
+    timeout-minutes: 45
     env:
       COMPONENT_BASE_URL: ${{ vars.WLS_GATEWAY_COMPONENT_BASE_URL }}
+      WLS_RELEASE_VERSION: ${{ inputs.version }}
+      WLS_TARGET_PLATFORM: ${{ inputs.target_platform }}
+      WLS_TARGET_ARCH: ${{ inputs.target_arch }}
+      WLS_PROVENANCE_SHA256: ${{ inputs.provenance_sha256 }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
           extensions: sodium, openssl
@@ -174,8 +194,15 @@ jobs:
           if ($componentUri.Scheme -ne "https") {
             throw "The release component store must use HTTPS."
           }
-          if ('${{ inputs.provenance_sha256 }}' -notmatch '^[a-f0-9]{64}$') {
+          if ($env:WLS_RELEASE_VERSION -cnotmatch '\A[0-9A-Za-z][0-9A-Za-z._+-]{0,63}\z') {
+            throw "The WLS Gateway release version is invalid."
+          }
+          if ($env:WLS_PROVENANCE_SHA256 -cnotmatch '\A[a-f0-9]{64}\z') {
             throw "An approved lowercase provenance SHA-256 is required."
+          }
+          if ($env:WLS_TARGET_PLATFORM -notin @('Linux', 'Darwin', 'Windows') -or
+              $env:WLS_TARGET_ARCH -notin @('x86_64', 'arm64')) {
+            throw "The requested package target is invalid."
           }
           $targetCheck = @'
             $expectedPlatform = $argv[1];
@@ -190,7 +217,7 @@ jobs:
                 exit(1);
             }
           '@
-          & php -r $targetCheck '${{ inputs.target_platform }}' '${{ inputs.target_arch }}'
+          & php -r $targetCheck $env:WLS_TARGET_PLATFORM $env:WLS_TARGET_ARCH
           if ($LASTEXITCODE -ne 0) {
             throw "Runner target does not match the requested package."
           }
@@ -200,9 +227,10 @@ jobs:
           $componentDir = Join-Path $env:RUNNER_TEMP "wls-gateway-components"
           $binDir = Join-Path $componentDir "bin"
           New-Item -ItemType Directory -Path $binDir | Out-Null
-          $suffix = if ('${{ inputs.target_platform }}' -eq 'Windows') { '.exe' } else { '' }
-          $target = '${{ inputs.target_platform }}-${{ inputs.target_arch }}'
-          $base = "$($env:COMPONENT_BASE_URL.TrimEnd('/'))/${{ inputs.version }}/$target"
+          $suffix = if ($env:WLS_TARGET_PLATFORM -eq 'Windows') { '.exe' } else { '' }
+          $target = "$($env:WLS_TARGET_PLATFORM)-$($env:WLS_TARGET_ARCH)"
+          $versionSegment = [Uri]::EscapeDataString($env:WLS_RELEASE_VERSION)
+          $base = "$($env:COMPONENT_BASE_URL.TrimEnd('/'))/$versionSegment/$target"
           $curl = if ($IsWindows) {
             (Get-Command curl.exe -ErrorAction Stop).Source
           } else {
@@ -210,12 +238,17 @@ jobs:
           }
           function Receive-TrustedFile([string]$uri, [string]$destination) {
             & $curl --fail --location --proto '=https' --proto-redir '=https' `
-              --tlsv1.2 $uri --output $destination
+              --tlsv1.2 --connect-timeout 15 --max-time 300 --max-filesize 536870912 `
+              --retry 3 --retry-all-errors $uri --output $destination
             if ($LASTEXITCODE -ne 0) {
               throw "Unable to download an approved WLS Gateway component."
             }
           }
-          foreach ($component in @('php', 'nginx', 'wls-gateway-broker', 'wls-gateway-launcher')) {
+          $components = @('php', 'nginx', 'wls-gateway-broker', 'wls-gateway-launcher')
+          if ($env:WLS_TARGET_PLATFORM -eq 'Windows') {
+            $components += 'wls-bounded-command'
+          }
+          foreach ($component in $components) {
             $destination = Join-Path $binDir "$component$suffix"
             Receive-TrustedFile "$base/bin/$component$suffix" $destination
           }
@@ -223,10 +256,10 @@ jobs:
           Receive-TrustedFile "$base/provenance.json" $provenance
           Receive-TrustedFile "$base/LICENSES.txt" (Join-Path $componentDir "LICENSES.txt")
           $actual = (Get-FileHash -Algorithm SHA256 -Path $provenance).Hash.ToLowerInvariant()
-          if ($actual -ne '${{ inputs.provenance_sha256 }}') {
+          if ($actual -cne $env:WLS_PROVENANCE_SHA256) {
             throw "Approved provenance digest does not match the downloaded file."
           }
-          if ('${{ inputs.target_platform }}' -ne 'Windows') {
+          if ($env:WLS_TARGET_PLATFORM -ne 'Windows') {
             foreach ($componentFile in Get-ChildItem -LiteralPath $binDir -File) {
               & chmod 0755 $componentFile.FullName
               if ($LASTEXITCODE -ne 0) {
@@ -239,14 +272,14 @@ jobs:
         run: |
           $componentDir = Join-Path $env:RUNNER_TEMP "wls-gateway-components"
           $packageDir = Join-Path $env:RUNNER_TEMP "wls-gateway-package"
-          $suffix = if ('${{ inputs.target_platform }}' -eq 'Windows') { '.exe' } else { '' }
+          $suffix = if ($env:WLS_TARGET_PLATFORM -eq 'Windows') { '.exe' } else { '' }
           $arguments = @(
             'dev/tools/wls-gateway-package.php',
             "--output=$packageDir",
             '--profile=production',
-            '--version=${{ inputs.version }}',
-            '--platform=${{ inputs.target_platform }}',
-            '--arch=${{ inputs.target_arch }}',
+            "--version=$env:WLS_RELEASE_VERSION",
+            "--platform=$env:WLS_TARGET_PLATFORM",
+            "--arch=$env:WLS_TARGET_ARCH",
             '--controller=app/code/Weline/Server/bin/wls_gateway_controller.php',
             "--php=$(Join-Path $componentDir "bin/php$suffix")",
             "--nginx=$(Join-Path $componentDir "bin/nginx$suffix")",
@@ -255,6 +288,9 @@ jobs:
             "--licenses=$(Join-Path $componentDir 'LICENSES.txt')",
             "--provenance=$(Join-Path $componentDir 'provenance.json')"
           )
+          if ($env:WLS_TARGET_PLATFORM -eq 'Windows') {
+            $arguments += "--wls-bounded-command=$(Join-Path $componentDir 'bin/wls-bounded-command.exe')"
+          }
           & php @arguments
           if ($LASTEXITCODE -ne 0) {
             throw "WLS Gateway package assembly failed."
@@ -263,91 +299,232 @@ jobs:
           if ($manifest.release_ready -ne $false -or $manifest.package_profile -ne 'production') {
             throw "Assembly must produce a non-ready production candidate."
           }
+      - name: Stage the protected signer implementation bundle
+        shell: pwsh
+        run: |
+          $signerRoot = Join-Path $env:RUNNER_TEMP "wls-gateway-signer"
+          $files = @(
+            'app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php',
+            'app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php',
+            'app/code/Weline/Server/Service/Edge/Gateway/GatewayProjectStateFilesystem.php',
+            'app/code/Weline/Server/env/gateway/trusted-release-keys.json',
+            'dev/tools/wls-gateway-package.php'
+          )
+          foreach ($relative in $files) {
+            $destination = Join-Path $signerRoot $relative
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $relative -Destination $destination -ErrorAction Stop
+          }
       - name: Upload unsigned candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wls-gateway-candidate-${{ inputs.version }}-${{ inputs.target_platform }}-${{ inputs.target_arch }}
+          name: wls-gateway-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/wls-gateway-package
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload protected signer implementation bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wls-gateway-signer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-gateway-signer
+          if-no-files-found: error
+          retention-days: 1
+
+  audit-production:
+    name: Audit immutable candidate without release secrets
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
+    needs: assemble-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
+      options: --cap-drop=ALL --security-opt=no-new-privileges
+    env:
+      AUDITOR_IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_AUDITOR_IMAGE }}
+      EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
+      EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_platform == 'Linux' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX || inputs.target_platform == 'Darwin' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN || vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wls-gateway-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-gateway-package
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wls-gateway-signer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-gateway-signer
+      - name: Verify immutable auditor image and signer bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$AUDITOR_IMAGE_REFERENCE" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
+            echo "WLS_GATEWAY_AUDITOR_IMAGE must be an immutable digest reference." >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_SIGNER_BUNDLE_SHA256" =~ ^[a-f0-9]{64}$ ]] ||
+             [[ ! "$EXPECTED_AUDIT_ENVIRONMENT_SHA256" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "Protected signer/auditor allowlist digests are required." >&2
+            exit 1
+          fi
+          signer_root="$RUNNER_TEMP/wls-gateway-signer"
+          records="$RUNNER_TEMP/wls-gateway-signer.records"
+          : > "$records"
+          for relative in \
+            app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php \
+            app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php \
+            app/code/Weline/Server/Service/Edge/Gateway/GatewayProjectStateFilesystem.php \
+            app/code/Weline/Server/env/gateway/trusted-release-keys.json \
+            dev/tools/wls-gateway-package.php
+          do
+            file="$signer_root/$relative"
+            if [[ ! -f "$file" || -L "$file" ]]; then
+              echo "Signer bundle file is missing, linked, or special: $relative" >&2
+              exit 1
+            fi
+            size="$(wc -c < "$file" | tr -d '[:space:]')"
+            digest="$(sha256sum "$file" | awk '{print $1}')"
+            printf '%s\t%s\t%s\n' "$relative" "$size" "$digest" >> "$records"
+          done
+          actual="$(sha256sum "$records" | awk '{print $1}')"
+          if [[ "$actual" != "$EXPECTED_SIGNER_BUNDLE_SHA256" ]]; then
+            echo "Signer implementation bundle does not match the protected digest." >&2
+            exit 1
+          fi
+      - name: Audit candidate and bind the complete component set
+        shell: bash
+        run: |
+          set -euo pipefail
+          php "$RUNNER_TEMP/wls-gateway-signer/dev/tools/wls-gateway-package.php" \
+            --mode=audit \
+            "--package=$RUNNER_TEMP/wls-gateway-package" \
+            "--receipt-output=$RUNNER_TEMP/wls-gateway-dependency-audit.json" \
+            "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256"
+      - name: Upload candidate-bound dependency audit receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wls-gateway-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-gateway-dependency-audit.json
           if-no-files-found: error
           retention-days: 1
 
   sign-production:
     name: Sign approved package without executing components
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.assemble_release }}
-    needs: assemble-production
+    needs:
+      - assemble-production
+      - audit-production
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: wls-gateway-release
+    container:
+      image: ${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}
+      options: --cap-drop=ALL --security-opt=no-new-privileges
     env:
       RELEASE_KEY_ID: ${{ vars.WLS_GATEWAY_RELEASE_KEY_ID }}
+      WLS_TARGET_PLATFORM: ${{ inputs.target_platform }}
+      SIGNER_IMAGE_REFERENCE: ${{ vars.WLS_GATEWAY_SIGNER_IMAGE }}
+      EXPECTED_SIGNER_BUNDLE_SHA256: ${{ vars.WLS_GATEWAY_SIGNER_BUNDLE_SHA256 }}
+      EXPECTED_AUDIT_ENVIRONMENT_SHA256: ${{ inputs.target_platform == 'Linux' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_LINUX || inputs.target_platform == 'Darwin' && vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_DARWIN || vars.WLS_GATEWAY_AUDIT_ENVIRONMENT_SHA256_WINDOWS }}
+      PROTECTED_REF: ${{ github.ref_protected }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          php-version: "8.4"
-          extensions: sodium
-          coverage: none
-      - name: Install cross-format dependency auditor
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes llvm
-      - uses: actions/download-artifact@v4
-        with:
-          name: wls-gateway-candidate-${{ inputs.version }}-${{ inputs.target_platform }}-${{ inputs.target_arch }}
+          name: wls-gateway-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/wls-gateway-package
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wls-gateway-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-gateway-audit
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wls-gateway-signer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-gateway-signer
+      - name: Verify immutable signing image and implementation bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$SIGNER_IMAGE_REFERENCE" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]; then
+            echo "WLS_GATEWAY_SIGNER_IMAGE must be an immutable digest reference." >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_SIGNER_BUNDLE_SHA256" =~ ^[a-f0-9]{64}$ ]] ||
+             [[ ! "$EXPECTED_AUDIT_ENVIRONMENT_SHA256" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "Protected signer/auditor allowlist digests are required." >&2
+            exit 1
+          fi
+          signer_root="$RUNNER_TEMP/wls-gateway-signer"
+          records="$RUNNER_TEMP/wls-gateway-signer.records"
+          : > "$records"
+          for relative in \
+            app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedCommandRunner.php \
+            app/code/Weline/Server/Service/Edge/Gateway/GatewayBoundedTreeWalker.php \
+            app/code/Weline/Server/Service/Edge/Gateway/GatewayProjectStateFilesystem.php \
+            app/code/Weline/Server/env/gateway/trusted-release-keys.json \
+            dev/tools/wls-gateway-package.php
+          do
+            file="$signer_root/$relative"
+            if [[ ! -f "$file" || -L "$file" ]]; then
+              echo "Signer bundle file is missing, linked, or special: $relative" >&2
+              exit 1
+            fi
+            size="$(wc -c < "$file" | tr -d '[:space:]')"
+            digest="$(sha256sum "$file" | awk '{print $1}')"
+            printf '%s\t%s\t%s\n' "$relative" "$size" "$digest" >> "$records"
+          done
+          actual="$(sha256sum "$records" | awk '{print $1}')"
+          if [[ "$actual" != "$EXPECTED_SIGNER_BUNDLE_SHA256" ]]; then
+            echo "Signer implementation bundle does not match the protected digest." >&2
+            exit 1
+          fi
       - name: Sign verified hashes in an isolated job
-        shell: pwsh
+        shell: bash
         env:
-          RELEASE_SECRET_KEY_BASE64: ${{ secrets.WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 }}
+          WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64: ${{ secrets.WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 }}
         run: |
-          if ('${{ github.ref_protected }}' -ne 'true') {
-            throw "Production signing is allowed only from a protected ref."
-          }
-          if ([string]::IsNullOrWhiteSpace($env:RELEASE_KEY_ID)) {
-            throw "WLS_GATEWAY_RELEASE_KEY_ID is required."
-          }
-          if ([string]::IsNullOrWhiteSpace($env:RELEASE_SECRET_KEY_BASE64)) {
-            throw "WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 is required."
-          }
-          $keyFile = Join-Path $env:RUNNER_TEMP "wls-gateway-release.key"
-          [IO.File]::WriteAllText(
-            $keyFile,
-            $env:RELEASE_SECRET_KEY_BASE64,
-            [Text.UTF8Encoding]::new($false)
-          )
-          & chmod 0600 $keyFile
-          $packageDir = Join-Path $env:RUNNER_TEMP "wls-gateway-package"
-          $arguments = @(
-            'dev/tools/wls-gateway-package.php',
-            '--mode=sign',
-            "--package=$packageDir",
-            "--signing-key-id=$env:RELEASE_KEY_ID",
-            "--signing-key-file=$keyFile",
-            '--trusted-keys=app/code/Weline/Server/env/gateway/trusted-release-keys.json'
-          )
-          & php @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "WLS Gateway package signing failed."
-          }
-          $manifest = Get-Content -Raw (Join-Path $packageDir 'manifest.json') | ConvertFrom-Json
-          if ($manifest.release_ready -ne $true -or $manifest.package_profile -ne 'production') {
-            throw "The isolated signing gate did not produce a release-ready package."
-          }
-      - name: Remove release secret
-        if: ${{ always() }}
-        shell: pwsh
-        run: |
-          $keyFile = Join-Path $env:RUNNER_TEMP "wls-gateway-release.key"
-          if (Test-Path -LiteralPath $keyFile -PathType Leaf) {
-            $length = [Math]::Max(1, (Get-Item -LiteralPath $keyFile).Length)
-            $bytes = [byte[]]::new($length)
-            [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-            [IO.File]::WriteAllBytes($keyFile, $bytes)
-            Remove-Item -LiteralPath $keyFile -Force
-          }
+          set -euo pipefail
+          trap 'unset WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64' EXIT
+          if [[ "$PROTECTED_REF" != "true" ]]; then
+            echo "Production signing is allowed only from a protected ref." >&2
+            exit 1
+          fi
+          if [[ -z "$RELEASE_KEY_ID" || -z "$WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64" ]]; then
+            echo "The protected release key id and secret are required." >&2
+            exit 1
+          fi
+          signer_root="$RUNNER_TEMP/wls-gateway-signer"
+          package="$RUNNER_TEMP/wls-gateway-package"
+          set -- \
+            --mode=sign \
+            "--package=$package" \
+            "--audit-receipt=$RUNNER_TEMP/wls-gateway-audit/wls-gateway-dependency-audit.json" \
+            "--expected-audit-environment-sha256=$EXPECTED_AUDIT_ENVIRONMENT_SHA256" \
+            "--signing-key-id=$RELEASE_KEY_ID" \
+            --signing-key-environment=WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64 \
+            "--trusted-keys=$signer_root/app/code/Weline/Server/env/gateway/trusted-release-keys.json"
+          if [[ "$WLS_TARGET_PLATFORM" == "Windows" ]]; then
+            set -- "$@" "--bootstrap-output=$RUNNER_TEMP/wls-windows-bounded-command-bootstrap"
+          fi
+          php "$signer_root/dev/tools/wls-gateway-package.php" "$@"
+          unset WLS_GATEWAY_RELEASE_SECRET_KEY_BASE64
+          php -r '
+            $manifest = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+            if (($manifest["release_ready"] ?? false) !== true
+                || ($manifest["package_profile"] ?? "") !== "production") {
+                fwrite(STDERR, "The isolated signing gate did not produce a release-ready package.\n");
+                exit(1);
+            }
+          ' "$package/manifest.json"
       - name: Upload signed package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wls-gateway-${{ inputs.version }}-${{ inputs.target_platform }}-${{ inputs.target_arch }}
+          name: wls-gateway-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/wls-gateway-package
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload signed Windows pure-WLS bootstrap helper
+        if: ${{ inputs.target_platform == 'Windows' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wls-windows-bounded-command-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wls-windows-bounded-command-bootstrap
           if-no-files-found: error
           retention-days: 30

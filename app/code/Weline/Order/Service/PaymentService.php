@@ -61,18 +61,18 @@ class PaymentService
         
         // 验证支付数据
         if (empty($paymentData['amount'])) {
-            throw new \Exception(__('支付金额不能为空'));
+            throw new \Exception(\__('支付金额不能为空'));
         }
         
         if (empty($paymentData['payment_method'])) {
-            throw new \Exception(__('支付方式不能为空'));
+            throw new \Exception(\__('支付方式不能为空'));
         }
         
         $amount = (float)$paymentData['amount'];
         $grandTotal = (float)$order->getData(Order::schema_fields_GRAND_TOTAL);
         
         if ($amount > $grandTotal) {
-            throw new \Exception(__('支付金额不能超过订单总额'));
+            throw new \Exception(\__('支付金额不能超过订单总额'));
         }
         
         // 创建支付记录
@@ -95,7 +95,7 @@ class PaymentService
             // 使用状态机转换订单状态
             $stateMachine = $this->objectManager->getInstance(OrderStateMachine::class);
             try {
-                $stateMachine->transition($orderId, Order::STATUS_PAID, __('订单已支付'));
+                $stateMachine->transition($orderId, Order::STATUS_PAID, \__('订单已支付'));
             } catch (\Exception $e) {
                 // 如果状态转换失败，不影响支付记录
             }
@@ -127,16 +127,16 @@ class PaymentService
         $payment = $this->getPaymentModel()->reset()->load($paymentId);
         
         if (!$payment->getId()) {
-            throw new \Exception(__('支付记录不存在'));
+            throw new \Exception(\__('支付记录不存在'));
         }
         
         if ($payment->getData(OrderPayment::schema_fields_STATUS) !== OrderPayment::STATUS_PAID) {
-            throw new \Exception(__('只有已支付的记录才能退款'));
+            throw new \Exception(\__('只有已支付的记录才能退款'));
         }
         
         $paidAmount = (float)$payment->getData(OrderPayment::schema_fields_AMOUNT);
         if ($amount > $paidAmount) {
-            throw new \Exception(__('退款金额不能超过支付金额'));
+            throw new \Exception(\__('退款金额不能超过支付金额'));
         }
         
         // 更新支付状态

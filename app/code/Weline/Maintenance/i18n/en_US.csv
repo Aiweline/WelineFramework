@@ -12,6 +12,11 @@
 备份删除成功,"Backup deleted successfully"
 备份删除失败,"Failed to delete backup"
 删除失败：%{1},"Deletion failed: %{1}"
+备份管理,"Backup Management"
+查看备份列表,查看备份列表
+创建备份,"Create Backup"
+下载备份,下载备份
+删除备份,删除备份
 网站维护,"Site Maintenance"
 系统升级维护中,"System Upgrade in Progress"
 网站正在维护中...,"The site is currently under maintenance..."
@@ -24,8 +29,6 @@
 需要帮助吗？,"Need help?"
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If this page remains visible for an extended time or you have questions about the site, please contact:"
 返回首页,"Back to Home"
-备份管理,"Backup Management"
-创建备份,"Create Backup"
 备份ID,"Backup ID"
 备份类型,"Backup Type"
 备份名称,"Backup name"

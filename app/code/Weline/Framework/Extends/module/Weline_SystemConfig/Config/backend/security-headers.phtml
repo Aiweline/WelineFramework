@@ -1,0 +1,39 @@
+<?php
+/**
+ * @meta.title {default="安全响应头",description="按 Scope 收紧 CSP 与 CORS；激活前必须登记同 Scope 的 verified LKG。"}
+ * @meta.description {default="Scope 配置只能比 Env Global 基线更严格。LKG 缺失、不匹配或持久化不可用时保存失败。"}
+ * @config.area {backend}
+ * @config.sort {5}
+ * @config.acl {Weline_SystemConfig::config_center}
+ */
+?>
+
+<w:config:group code="framework_security_headers" label="安全响应头" description="CSP/CORS Scope 覆盖只可收紧；保存前须通过 registerSecurityPolicyLkg 登记相同候选摘要。" sort="10">
+    <w:config:field
+        key="security.headers.csp"
+        label="Content-Security-Policy"
+        description="留空继承；非空值必须是 Env Global CSP 的严格子集。后台至少含 script-src/style-src 的 'unsafe-inline'，并以 img-src 'self' data: 允许主题内嵌图标。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website,store,channel"
+        validation="max:8000" />
+    <w:config:field
+        key="security.headers.csp_report_only"
+        label="CSP Report-Only"
+        description="观察策略；仍不得弱于基线 CSP。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website,store,channel"
+        validation="max:8000" />
+    <w:config:field
+        key="security.headers.cors_origins"
+        label="CORS Origin 白名单"
+        description="空格分隔；Scope 只能缩小 Env Global 白名单。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website,store,channel"
+        validation="max:4000" />
+</w:config:group>

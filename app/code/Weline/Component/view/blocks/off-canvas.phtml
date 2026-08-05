@@ -1,7 +1,7 @@
 <{{target_tag}} class='{{target_button_class}}' type='button' data-bs-toggle='offcanvas'
 data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
 <?php if (!empty($icon)): ?>
-    <i class='<?= $icon ?>'></i>
+    <i class='<?= $icon ?>' aria-hidden='true'></i>
 <?php endif; ?>
 <lang>{{target_button_text|''}}</lang>
 </{{target_tag}}>
@@ -11,7 +11,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
     <div class='offcanvas-header'>
         <h5 id='{{id}}Label'>
             <?php if (!empty($icon)): ?>
-                <i class='<?= $icon ?>'></i>
+                <i class='<?= $icon ?>' aria-hidden='true'></i>
             <?php endif; ?>
             <lang>{{title|''}}</lang>
         </h5>

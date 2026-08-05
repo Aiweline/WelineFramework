@@ -12,6 +12,9 @@ Group=root
 ExecStart="{{LAUNCHER}}" --service --home="{{HOME}}" --run="{{RUN_DIR}}" --profile="{{PROFILE}}"
 Restart=on-failure
 RestartSec=5
+KillMode=control-group
+TimeoutStopSec=30
+SendSIGKILL=yes
 LimitNOFILE=65536
 RuntimeDirectory=weline-gateway
 RuntimeDirectoryMode=0751

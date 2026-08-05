@@ -38,6 +38,8 @@ class ServiceInstance
         public string $moduleCode = '',
         public int $rootPid = 0,
         public int $launcherPid = 0,
+        /** Host-boot-bound age/deadline clock; never rendered as wall time. */
+        public float $startedMonotonic = 0,
     ) {}
 
     /**
@@ -92,10 +94,31 @@ class ServiceInstance
      */
     public function getUptime(): float
     {
-        if ($this->startedAt <= 0) {
+        $monotonic = $this->getStartedMonotonic();
+        if ($monotonic > 0.0) {
+            return \max(0.0, (\hrtime(true) / 1_000_000_000) - $monotonic);
+        }
+        if ($this->startedAt <= 0.0) {
             return 0;
         }
-        return \microtime(true) - $this->startedAt;
+        return \max(0.0, \microtime(true) - $this->startedAt);
+    }
+
+    public function getStartedMonotonic(): float
+    {
+        if (\is_finite($this->startedMonotonic) && $this->startedMonotonic > 0.0) {
+            return $this->startedMonotonic;
+        }
+        // Compatibility for in-memory callers created while startedAt briefly
+        // carried hrtime seconds. Unix wall seconds are already above 1e9.
+        if (\is_finite($this->startedAt)
+            && $this->startedAt > 0.0
+            && $this->startedAt < 1_000_000_000.0
+        ) {
+            return $this->startedAt;
+        }
+
+        return 0.0;
     }
 
     /**
@@ -202,6 +225,7 @@ class ServiceInstance
             'state'             => $this->state,
             'restarts'          => $this->restarts,
             'started_at'        => $this->startedAt,
+            'started_monotonic' => $this->startedMonotonic,
             'uptime'            => $this->getUptime(),
             'last_health_check' => $this->lastHealthCheck,
             'ipc_client_id'     => $this->ipcClientId,

@@ -48,6 +48,17 @@
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
 
+## Setup 迁移游标契约
+
+- 每次非 hot `setup:upgrade` 会显式传递同一个 `operation_id` 给 Schema Diff/checkpoint 与 Setup Observer 脚本迁移；字段上限为 64 字符，一次命令不得分裂为多个 ID。
+- `MigrationService::upgradeMigration()` 的 ID 参数保持可选；只有 Setup Observer 显式传入时才关联本轮命令，独立 migration/rollback 不会隐式继承进程上下文。
+- script 记录先以 `running` 落盘时即写入 ID，后续成功或失败状态变化不得替换该 ID。无 diff/无 pending 的 Run2 不创建空 ID 占位记录。
+- `module_version.current_version` 与 `last_migration` 是两个独立游标：完整 `setup:upgrade` 即使没有待执行脚本，也仍可把较旧的 runtime version 对齐到当前代码版本。
+- 没有待执行迁移时，Observer 向 VersionService 传递“本轮无新迁移”，不得用空字符串覆盖既有 `last_migration`；runtime version 已相同时直接保持原记录。
+- 只有 `MigrationService::upgradeMigration()` 明确返回成功后，Observer 才把该迁移文件名作为新的 `last_migration`；一批迁移全部成功后提交最后一条成功文件名。
+- 任一迁移返回失败或抛异常时，模块 reconciliation 不执行，runtime version 与 `last_migration` 都不得伪装成成功状态；数据库版本高于 runtime version 的漂移阻断保持不变。
+- `upgrade_migrations` 位于 ModuleSetup 之前：模块仍带 `installing`、`upgrading` 或 `pending_setup_upgrade` 时只执行文件迁移并校验数据库游标不得高于目标代码版本，不得用旧 `setup_version` 提交游标；ModuleSetup 成功清除 pending 标志后，由 `upgrade_after` 跳过二次迁移并以已完成的 `setup_version` 原子 reconcile。
+
 ## 本模块文档资产
 
 - `app/code/Weline/Database/doc/开发/plan.md`

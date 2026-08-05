@@ -1,18 +1,7 @@
 ---
 name: SEO面板诊断
-description: SEO diagnostics through the unified Weline Panel SEO tab and console report protocol.
-version: 1.3.0
+description: Diagnose head metadata, canonical/hreflang, JSON-LD, headings, and search-platform compatibility through the unified Weline Panel SEO tab and its console report protocol. Use for SEO-panel behavior or machine-readable SEO reports; do not use for general marketing copy or content strategy.
 ---
-
-# Role
-
-本技能负责通过全局 `weline` 面板进入 `SEO` tab，检查页面 head/meta/canonical/hreflang/JSON-LD/H 标签/多搜索平台适配，并生成 AI 可读 SEO 报告。
-
-# When To Use
-
-- 用户提到 SEO 面板、`SEO` tab、SEO inspector、SEO 解析器、head/meta/canonical/hreflang/JSON-LD/H 标签/多平台搜索引擎检查。
-- 用户需要让 AI 不看截图，直接从浏览器控制台导出 SEO 诊断报告。
-- 需要验证 SEO inspector 是否按需加载、报告是否能作为上线/推广判断依据。
 
 # Core Rules
 

@@ -26,13 +26,15 @@
 入口/配置文件：
 - `app/code/Weline/Marketing/etc/module.xml`
 - `app/code/Weline/Marketing/etc/backend/menu.xml`
+- `app/code/Weline/Marketing/composer.json`
 
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：2
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：4
 - `Interface`：模块发布的接口契约。跨模块依赖优先使用这里的稳定契约。 文件数：2
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：34
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：3
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：4
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：2
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：3

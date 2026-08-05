@@ -10,7 +10,9 @@ use Weline\Database\Service\BackupService;
 use Weline\Database\Model\Migration;
 use Weline\Database\Model\MigrationBackup;
 use Weline\Database\Interface\MigrationInterface;
+use Weline\Database\Service\VersionService;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Output\Cli\Printing;
 
 /**
  * 数据库迁移服务测试
@@ -54,6 +56,13 @@ class MigrationServiceTest extends TestCore
                 ->dropTableIfExists($rollbackTable);
         }
         putenv('WELINE_TEST_ROLLBACK_TABLE');
+        $dataMigrationTable = trim((string)getenv('WELINE_TEST_DATA_MIGRATION_TABLE'));
+        if ($dataMigrationTable !== '') {
+            ObjectManager::getInstance(ConnectionFactory::class)
+                ->getConnector()
+                ->dropTableIfExists($dataMigrationTable);
+        }
+        putenv('WELINE_TEST_DATA_MIGRATION_TABLE');
         parent::tearDown();
     }
     
@@ -380,6 +389,239 @@ PHP
         );
     }
 
+    public function testDataMigrationKeepsRunningRecordVisibleWhileUsingColumnBackup(): void
+    {
+        $table = 'migration_data_' . substr(hash('sha256', uniqid('', true)), 0, 10);
+        putenv('WELINE_TEST_DATA_MIGRATION_TABLE=' . $table);
+        $connector = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
+        $physical = $connector->formatTableName($table);
+        $connector->query(
+            "CREATE TABLE {$physical} (id INTEGER NOT NULL PRIMARY KEY, tracked_value VARCHAR(255) NULL)"
+        )->fetch();
+        $connector->getQuery()->clearQuery()->table($table)
+            ->insert(['id' => 1, 'tracked_value' => 'before'])
+            ->fetch();
+
+        $migrationPath = BP . 'app/code/Weline/Test/Setup/Db/Migration/';
+        if (!is_dir($migrationPath)) {
+            mkdir($migrationPath, 0755, true);
+        }
+        $migrationFile = $migrationPath . 'data_backup_fixture_20260730-v1.2.0.php';
+        file_put_contents($migrationFile, <<<'PHP'
+<?php
+namespace Weline\Test\Setup\Db\Migration;
+
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Migration\AbstractMigration;
+
+final class DataBackupFixture20260730V120 extends AbstractMigration
+{
+    public function __construct(private ConnectionFactory $connectionFactory)
+    {
+    }
+
+    public function install(): bool
+    {
+        $this->connectionFactory->getConnector()->getQuery()->clearQuery()
+            ->table((string)getenv('WELINE_TEST_DATA_MIGRATION_TABLE'))
+            ->where('id', 1)
+            ->update(['tracked_value' => 'after'])
+            ->fetch();
+        return true;
+    }
+
+    public function uninstall(): bool
+    {
+        return true;
+    }
+
+    public function getDescription(): string
+    {
+        return 'Data migration transaction visibility fixture';
+    }
+
+    public function getVersion(): string
+    {
+        return '1.2.0';
+    }
+
+    public function getDate(): string
+    {
+        return '2026-07-30';
+    }
+
+    public function getType(): string
+    {
+        return 'data_migration';
+    }
+
+    public function requiresBackup(): bool
+    {
+        return true;
+    }
+
+    public function getBackupStrategy(): array
+    {
+        return [
+            'strategy' => 'column',
+            'tables' => [(string)getenv('WELINE_TEST_DATA_MIGRATION_TABLE')],
+            'columns' => ['tracked_value'],
+        ];
+    }
+}
+PHP
+        );
+
+        self::assertTrue($this->migrationService->upgradeMigration('Weline_Test', $migrationFile));
+
+        $rows = $connector->getQuery()->clearQuery()->table($table)
+            ->fields(['tracked_value'])
+            ->where('id', 1)
+            ->limit(1)
+            ->select()
+            ->fetch();
+        self::assertSame('after', $rows[0]['tracked_value'] ?? null);
+
+        $records = (clone $this->migrationModel)->reset()
+            ->where(Migration::schema_fields_MODULE, 'Weline_Test')
+            ->where(Migration::schema_fields_FILE, basename($migrationFile))
+            ->where(Migration::schema_fields_STATUS, Migration::STATUS_INSTALLED)
+            ->select()
+            ->fetch()
+            ->getItems();
+        self::assertCount(1, $records);
+        self::assertNotEmpty(
+            ObjectManager::getInstance(BackupService::class)
+                ->getBackupsByMigrationId((int)$records[0]->getId())
+        );
+    }
+
+    public function testFailingDataMigrationRollsBackDataAndPreservesFailedAuditWithOriginalError(): void
+    {
+        $table = 'migration_data_' . substr(hash('sha256', uniqid('', true)), 0, 10);
+        putenv('WELINE_TEST_DATA_MIGRATION_TABLE=' . $table);
+        $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+        $connector = $connectionFactory->getConnector();
+        $physical = $connector->formatTableName($table);
+        $connector->query(
+            "CREATE TABLE {$physical} (id INTEGER NOT NULL PRIMARY KEY, tracked_value VARCHAR(255) NULL)"
+        )->fetch();
+        $connector->getQuery()->clearQuery()->table($table)
+            ->insert(['id' => 1, 'tracked_value' => 'before'])
+            ->fetch();
+
+        $migrationPath = BP . 'app/code/Weline/Test/Setup/Db/Migration/';
+        if (!is_dir($migrationPath)) {
+            mkdir($migrationPath, 0755, true);
+        }
+        $migrationFile = $migrationPath . 'data_backup_failure_fixture_20260730-v1.2.1.php';
+        file_put_contents($migrationFile, <<<'PHP'
+<?php
+namespace Weline\Test\Setup\Db\Migration;
+
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Migration\AbstractMigration;
+
+final class DataBackupFailureFixture20260730V121 extends AbstractMigration
+{
+    public function __construct(private ConnectionFactory $connectionFactory)
+    {
+    }
+
+    public function install(): bool
+    {
+        $this->connectionFactory->getConnector()->getQuery()->clearQuery()
+            ->table((string)getenv('WELINE_TEST_DATA_MIGRATION_TABLE'))
+            ->where('id', 1)
+            ->update(['tracked_value' => 'after'])
+            ->fetch();
+        throw new \RuntimeException('fixture_original_failure');
+    }
+
+    public function uninstall(): bool
+    {
+        return true;
+    }
+
+    public function getDescription(): string
+    {
+        return 'Failing data migration audit fixture';
+    }
+
+    public function getVersion(): string
+    {
+        return '1.2.1';
+    }
+
+    public function getDate(): string
+    {
+        return '2026-07-30';
+    }
+
+    public function getType(): string
+    {
+        return 'data_migration';
+    }
+
+    public function requiresBackup(): bool
+    {
+        return true;
+    }
+
+    public function getBackupStrategy(): array
+    {
+        return [
+            'strategy' => 'column',
+            'tables' => [(string)getenv('WELINE_TEST_DATA_MIGRATION_TABLE')],
+            'columns' => ['tracked_value'],
+        ];
+    }
+}
+PHP
+        );
+
+        $errors = [];
+        $printing = $this->createMock(Printing::class);
+        $printing->method('error')->willReturnCallback(
+            static function (mixed $message) use (&$errors): void {
+                $errors[] = (string)$message;
+            }
+        );
+        $service = new MigrationService(
+            $connectionFactory,
+            $this->migrationModel,
+            ObjectManager::getInstance(BackupService::class),
+            ObjectManager::getInstance(VersionService::class),
+            $printing,
+        );
+
+        self::assertFalse($service->upgradeMigration('Weline_Test', $migrationFile));
+
+        $rows = $connector->getQuery()->clearQuery()->table($table)
+            ->fields(['tracked_value'])
+            ->where('id', 1)
+            ->limit(1)
+            ->select()
+            ->fetch();
+        self::assertSame('before', $rows[0]['tracked_value'] ?? null);
+
+        $records = (clone $this->migrationModel)->reset()
+            ->where(Migration::schema_fields_MODULE, 'Weline_Test')
+            ->where(Migration::schema_fields_FILE, basename($migrationFile))
+            ->select()
+            ->fetch()
+            ->getItems();
+        self::assertCount(1, $records);
+        self::assertSame(
+            Migration::STATUS_FAILED,
+            $records[0]->getData(Migration::schema_fields_STATUS),
+        );
+
+        $errorText = implode("\n", $errors);
+        self::assertStringContainsString('fixture_original_failure', $errorText);
+        self::assertStringNotContainsString('迁移记录不存在', $errorText);
+    }
+
     public function testLegacyScriptWithoutRollbackBackupContractIsBlockedByPreflight(): void
     {
         $migration = $this->createMock(MigrationInterface::class);
@@ -482,6 +724,8 @@ PHP
         foreach ([
             $migrationPath . 'create_table__test_20250101-v1.0.0.php',
             $migrationPath . 'rollback_backup_fixture_20260713-v1.1.0.php',
+            $migrationPath . 'data_backup_fixture_20260730-v1.2.0.php',
+            $migrationPath . 'data_backup_failure_fixture_20260730-v1.2.1.php',
         ] as $migrationFile) {
             if (is_file($migrationFile)) {
                 unlink($migrationFile);

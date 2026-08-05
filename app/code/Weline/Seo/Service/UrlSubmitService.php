@@ -63,8 +63,8 @@ class UrlSubmitService
             }
 
             $url = trim((string)($target['url'] ?? $target['loc'] ?? ''));
-            $websiteId = (int)($target['website_id'] ?? 0);
-            if ($url === '' || $websiteId <= 0) {
+            $websiteId = $this->providedWebsiteId($target);
+            if ($url === '' || $websiteId === null) {
                 $stats['unresolved_targets']++;
                 continue;
             }
@@ -90,7 +90,8 @@ class UrlSubmitService
             return $this->stats(['errors' => 1, 'error' => __('缺少 URL 提交 scope')]);
         }
 
-        if ((int)($extra['website_id'] ?? $extra['site_id'] ?? 0) <= 0 && empty($extra['targets'])) {
+        $providedWebsiteId = $this->providedWebsiteId($extra);
+        if ($providedWebsiteId === null && empty($extra['targets'])) {
             $matchedTargets = $this->expandUrlsToMatchedTargets($urls);
             if ($matchedTargets !== []) {
                 return $this->enqueueTargets($matchedTargets, $scope, $extra);
@@ -98,8 +99,9 @@ class UrlSubmitService
         }
 
         $website = $this->resolveWebsite($urls, $extra);
-        $websiteId = (int)($website['website_id'] ?? 0);
-        if ($websiteId <= 0) {
+        $hasWebsiteIdentity = array_key_exists('website_id', $website) || array_key_exists('id', $website);
+        $websiteId = (int)($website['website_id'] ?? $website['id'] ?? -1);
+        if (!$hasWebsiteIdentity || $websiteId < 0) {
             return $this->stats([
                 'skipped_unbound' => count($urls),
                 'unresolved_targets' => count($urls),
@@ -187,8 +189,11 @@ class UrlSubmitService
             }
 
             foreach ($this->websiteDirectory->matchWebsitesByUrl($url) as $website) {
-                $websiteId = (int)($website['website_id'] ?? 0);
-                if ($websiteId <= 0) {
+                if (!array_key_exists('website_id', $website) && !array_key_exists('id', $website)) {
+                    continue;
+                }
+                $websiteId = (int)($website['website_id'] ?? $website['id']);
+                if ($websiteId < 0) {
                     continue;
                 }
                 $targets[] = [
@@ -224,8 +229,9 @@ class UrlSubmitService
             $target[$key] = (int)($target[$key] ?? 0) + (int)($source[$key] ?? 0);
         }
 
-        if (!empty($source['website_id'])) {
-            $target['website_ids'][] = (int)$source['website_id'];
+        $websiteId = $source['website_id'] ?? null;
+        if (array_key_exists('website_id', $source) && is_int($websiteId) && $websiteId >= 0) {
+            $target['website_ids'][] = $websiteId;
             $target['website_ids'] = array_values(array_unique($target['website_ids']));
         }
         if (!empty($source['platform_reason'])) {
@@ -244,8 +250,8 @@ class UrlSubmitService
      */
     private function resolveWebsite(array $urls, array $extra): array
     {
-        $websiteId = (int)($extra['website_id'] ?? $extra['site_id'] ?? 0);
-        if ($websiteId > 0) {
+        $websiteId = $this->providedWebsiteId($extra);
+        if ($websiteId !== null) {
             return $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
         }
 
@@ -260,6 +266,33 @@ class UrlSubmitService
         }
 
         return $this->websiteDirectory->currentWebsite();
+    }
+
+    /**
+     * Missing and null mean unresolved context; explicit 0 is the system default website.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function providedWebsiteId(array $data): ?int
+    {
+        $key = array_key_exists('website_id', $data)
+            ? 'website_id'
+            : (array_key_exists('site_id', $data) ? 'site_id' : null);
+        if ($key === null || $data[$key] === null || $data[$key] === '') {
+            return null;
+        }
+        $value = $data[$key];
+        if (is_int($value)) {
+            $websiteId = $value;
+        } elseif (is_string($value) && preg_match('/^\d+$/D', $value) === 1) {
+            $websiteId = (int)$value;
+        } else {
+            throw new \InvalidArgumentException(__('website_id 必须是非负整数'));
+        }
+        if ($websiteId < 0) {
+            throw new \InvalidArgumentException(__('website_id 不能为负数'));
+        }
+        return $websiteId;
     }
 
     /**
@@ -543,7 +576,7 @@ class UrlSubmitService
             'skipped_no_push_capability' => 0,
             'local_urls' => 0,
             'errors' => 0,
-            'website_id' => 0,
+            'website_id' => null,
             'website_ids' => [],
             'target_count' => 0,
             'unresolved_targets' => 0,

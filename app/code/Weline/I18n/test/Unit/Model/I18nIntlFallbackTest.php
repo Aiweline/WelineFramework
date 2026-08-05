@@ -6,7 +6,7 @@ namespace Weline\I18n\Test\Unit\Model;
 
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Model\I18n;
 

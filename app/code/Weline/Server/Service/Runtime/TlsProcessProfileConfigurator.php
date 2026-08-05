@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Runtime;
 
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+
 /**
  * Configures OpenSSL before WLS child PHP processes are spawned.
  *
@@ -223,7 +225,11 @@ CONF;
                 }
             }
         }
-        if (@\file_get_contents($path) !== $content) {
+        if (GatewayProjectStateFilesystem::read(
+            $path,
+            4096,
+            'WLS OpenSSL performance config',
+        ) !== $content) {
             throw new \RuntimeException('WLS OpenSSL performance config integrity check failed.');
         }
 

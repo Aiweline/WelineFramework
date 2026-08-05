@@ -74,6 +74,42 @@ final class AclAccessMetadataTest extends TestCase
         self::assertFalse($service->isRouteAllowedByEntries($entries, 'api/rest/v1/products', 'POST', true));
     }
 
+    public function testQueryBearingMenuRouteProtectsTheUnderlyingPath(): void
+    {
+        $service = new class(
+            $this->createMock(Role::class),
+            $this->createMock(RoleAccess::class),
+            $this->createMock(Acl::class)
+        ) extends AclService {
+            public function isRouteProtected(string $routePath): bool
+            {
+                return true;
+            }
+        };
+
+        $entries = [[
+            Acl::schema_fields_ROUTE => 'customer_asset/backend/controlcenter/exceptions?website_id=0',
+            Acl::schema_fields_METHOD => 'GET',
+            Acl::schema_fields_ACCESS_MODE => Acl::ACCESS_MODE_READ,
+        ]];
+
+        self::assertTrue($service->isRouteAllowedByEntries(
+            $entries,
+            'customer_asset/backend/controlcenter/exceptions',
+            'GET',
+        ));
+        self::assertTrue($service->isRouteAllowedByEntries(
+            $entries,
+            'customer_asset/backend/controlcenter/exceptions?website_id=12',
+            'GET',
+        ));
+        self::assertFalse($service->isRouteAllowedByEntries(
+            $entries,
+            'customer_asset/backend/controlcenter/migration',
+            'GET',
+        ));
+    }
+
     public function testRouteAllowedByEntriesMatchesGeneratedAliasesForSameControllerAction(): void
     {
         $this->routeRegistryFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-acl-route-alias-' . bin2hex(random_bytes(4)) . '.php';

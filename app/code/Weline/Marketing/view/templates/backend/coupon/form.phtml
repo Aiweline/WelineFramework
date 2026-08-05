@@ -1,0 +1,77 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$rules = $rules ?? [];
+?>
+<div class="row" data-testid="marketing-coupon-form">
+    <div class="col-12">
+        <div class="page-title-box d-flex align-items-center justify-content-between">
+            <h4 class="page-title"><?= __('新建优惠券') ?></h4>
+            <a class="btn btn-light" href="<?= $this->getBackendUrl('marketing/backend/coupon/index') ?>">
+                <?= __('返回列表') ?>
+            </a>
+        </div>
+        <template>Weline_Component::message.phtml</template>
+        <div class="card">
+            <div class="card-body">
+                <w:form method="post" action="@var($this->getBackendUrl('marketing/backend/coupon/save'))">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="marketing-coupon-rule"><?= __('营销规则') ?></label>
+                            <select id="marketing-coupon-rule" data-testid="marketing-coupon-rule" class="form-select" name="rule_id" required>
+                                <option value=""><?= __('请选择') ?></option>
+                                <?php foreach ($rules as $rule): ?>
+                                    <option value="<?= (int)$rule->getId() ?>">
+                                        <?= htmlspecialchars((string)$rule->getData('name'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="marketing-coupon-code"><?= __('优惠券代码') ?></label>
+                            <input id="marketing-coupon-code" data-testid="marketing-coupon-code" class="form-control" type="text" name="code" required maxlength="100">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="marketing-coupon-type"><?= __('优惠类型') ?></label>
+                            <select id="marketing-coupon-type" data-testid="marketing-coupon-type" class="form-select" name="type" required>
+                                <option value="percentage"><?= __('百分比折扣') ?></option>
+                                <option value="fixed_amount"><?= __('固定金额') ?></option>
+                                <option value="free_shipping"><?= __('免运费') ?></option>
+                                <option value="gift"><?= __('赠品') ?></option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="marketing-coupon-value"><?= __('折扣值') ?></label>
+                            <input id="marketing-coupon-value" data-testid="marketing-coupon-value" class="form-control" type="number" name="discount_value" min="0" step="0.0001" value="10">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="marketing-coupon-status"><?= __('状态') ?></label>
+                            <select id="marketing-coupon-status" class="form-select" name="status">
+                                <option value="active"><?= __('启用') ?></option>
+                                <option value="inactive"><?= __('禁用') ?></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="marketing-coupon-minimum"><?= __('最低订单金额') ?></label>
+                            <input id="marketing-coupon-minimum" class="form-control" type="number" name="min_amount" min="0" step="0.0001" value="0">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="marketing-coupon-limit"><?= __('总使用次数') ?></label>
+                            <input id="marketing-coupon-limit" class="form-control" type="number" name="usage_limit" min="0" value="100">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="marketing-coupon-customer-limit"><?= __('每客户次数') ?></label>
+                            <input id="marketing-coupon-customer-limit" class="form-control" type="number" name="customer_limit" min="1" value="1">
+                        </div>
+                    </div>
+                    <button data-testid="marketing-coupon-submit" class="btn btn-primary" type="submit">
+                        <?= __('保存优惠券') ?>
+                    </button>
+                </w:form>
+            </div>
+        </div>
+    </div>
+</div>

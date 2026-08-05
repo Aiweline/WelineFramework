@@ -363,7 +363,7 @@ use Weline\Framework\Event\EventsManager;
                         submitBtn.html('<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>');
                         
                         // 提交表单
-                        $.ajax({
+                        WelineThemeBinQuery.request((function(cfg){return cfg.url;})({
                             url: form.attr('action'),
                             method: 'POST',
                             data: form.serialize(),

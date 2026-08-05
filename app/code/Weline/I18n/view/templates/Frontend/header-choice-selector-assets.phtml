@@ -12,6 +12,11 @@
     border-radius: 2px;
     color: inherit;
     cursor: pointer;
+    overflow: visible;
+}
+.weline-choice-switcher.weline-choice-open {
+    z-index: 10060;
+    isolation: isolate;
 }
 .weline-choice-switcher:hover {
     border-color: currentColor;
@@ -52,10 +57,12 @@
     position: absolute;
     top: 100%;
     right: 0;
-    z-index: 1000;
-    min-width: 320px;
+    z-index: 10050;
+    box-sizing: border-box;
+    min-width: min(320px, calc(100vw - 16px));
     max-width: min(420px, calc(100vw - 16px));
-    margin-top: 0.25rem;
+    /* 视觉间距交给 WelineSmartDropdown.gap；禁止 margin 空隙打断 :hover */
+    margin-top: 0;
     padding: 0.5rem;
     border: 1px solid #d5d9d9;
     border-radius: 4px;
@@ -63,21 +70,41 @@
     color: #111;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
     cursor: default;
+    overflow: hidden;
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
     transform: translateY(-8px);
     transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+}
+/* JS 定位前的 CSS fallback：透明桥接带，保证鼠标能从触发器移入面板 */
+.weline-choice-switcher::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 8px;
+    pointer-events: auto;
+    background: transparent;
 }
 .weline-choice-switcher.weline-choice-open .weline-choice-panel,
 .weline-choice-switcher:hover .weline-choice-panel {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
     transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+    .weline-choice-switcher .weline-choice-panel {
+        transition: none;
+    }
 }
 .weline-choice-search {
     padding: 0.25rem 0.25rem 0.5rem;
 }
 .weline-choice-search input {
+    box-sizing: border-box;
     width: 100%;
     min-height: 36px;
     padding: 0.45rem 0.65rem;
@@ -206,22 +233,54 @@
                 return String(value || '').trim().toLocaleLowerCase();
             }
 
+            function isDevDebug() {
+                try {
+                    var host = String(window.location && window.location.hostname || '');
+                    return !!(window.DEV
+                        || window.WELINE_ENV === 'DEV'
+                        || window.__WELINE_DEBUG__
+                        || host === 'localhost'
+                        || host === '127.0.0.1'
+                        || /\.weline\.test$/i.test(host));
+                } catch (e) {
+                    return !!(window.DEV || window.WELINE_ENV === 'DEV');
+                }
+            }
+
+            function devLog() {
+                if (!isDevDebug() || typeof console === 'undefined' || typeof console.log !== 'function') {
+                    return;
+                }
+                var args = Array.prototype.slice.call(arguments);
+                args.unshift('[WelineChoice]');
+                console.log.apply(console, args);
+            }
+
             function init(root) {
                 if (!root || root.dataset.welineChoiceReady === '1') {
                     return;
                 }
                 root.dataset.welineChoiceReady = '1';
 
+                var switcherKind = root.getAttribute('data-weline-choice-switcher') || 'unknown';
                 var panel = root.querySelector('[data-weline-choice-panel]');
                 var input = root.querySelector('[data-choice-search]');
+                var items = root.querySelector('[data-choice-items]');
                 var more = root.querySelector('[data-choice-more]');
                 var empty = root.querySelector('[data-choice-empty]');
+                var positionFrame = 0;
                 var pageSize = parseInt(root.getAttribute('data-choice-page-size') || '50', 10);
                 if (!pageSize || pageSize < 1) {
                     pageSize = 50;
                 }
 
                 var visibleLimit = pageSize;
+                devLog('init', {
+                    kind: switcherKind,
+                    options: root.querySelectorAll('[data-choice-option]').length,
+                    path: window.location.pathname || '/',
+                    cookie: (document.cookie.match(/(?:^|;\s*)WELINE_USER_LANG=([^;]*)/) || [])[1] || ''
+                });
 
                 function getOptions() {
                     return Array.prototype.slice.call(root.querySelectorAll('[data-choice-option]'));
@@ -261,22 +320,70 @@
                     if (more) {
                         more.hidden = matched <= shown;
                     }
+                    schedulePanelPosition();
+                }
+
+                function positionPanel() {
+                    positionFrame = 0;
+                    if (!panel
+                        || !window.WelineSmartDropdown
+                        || typeof window.WelineSmartDropdown.place !== 'function') {
+                        return;
+                    }
+                    var placement = window.WelineSmartDropdown.place(root, panel, {
+                        portal: false,
+                        align: 'end',
+                        minWidth: 320,
+                        maxWidth: 420,
+                        preferredHeight: panel.scrollHeight || 320,
+                        margin: 8,
+                        gap: 4,
+                        // 面板留在 root 内：基座默认 hoverBridge，桥接 gap 保住 :hover
+                        hoverBridge: true,
+                        zIndex: 10050,
+                        scrollContainer: items,
+                        overflowY: 'hidden'
+                    });
+                    if (placement) {
+                        panel.setAttribute('data-choice-placement', placement.placement);
+                    }
+                }
+
+                function schedulePanelPosition() {
+                    if (!panel || (!root.classList.contains('weline-choice-open') && !root.matches(':hover'))) {
+                        return;
+                    }
+                    if (positionFrame) {
+                        window.cancelAnimationFrame(positionFrame);
+                    }
+                    positionFrame = window.requestAnimationFrame(positionPanel);
                 }
 
                 function openPanel() {
                     root.classList.add('weline-choice-open');
                     root.setAttribute('aria-expanded', 'true');
+                    schedulePanelPosition();
+                    devLog('open-panel', { kind: switcherKind });
                 }
 
                 function closePanel() {
                     root.classList.remove('weline-choice-open');
                     root.setAttribute('aria-expanded', 'false');
+                    if (positionFrame) {
+                        window.cancelAnimationFrame(positionFrame);
+                        positionFrame = 0;
+                    }
                 }
 
                 root.addEventListener('click', function (event) {
                     if (panel && panel.contains(event.target)) {
                         return;
                     }
+                    devLog('root-click → open', {
+                        kind: switcherKind,
+                        target: event.target && (event.target.tagName || ''),
+                        className: event.target && event.target.className
+                    });
                     openPanel();
                     if (input) {
                         setTimeout(function () {
@@ -287,9 +394,85 @@
 
                 if (panel) {
                     panel.addEventListener('click', function (event) {
-                        if (!event.target.closest('[data-choice-option]')) {
+                        var option = event.target.closest('[data-choice-option]');
+                        if (!option) {
                             event.stopPropagation();
+                            devLog('panel-click (no option)', {
+                                kind: switcherKind,
+                                target: event.target && (event.target.tagName || '')
+                            });
+                            return;
                         }
+                        // Language options: prefer framework path href; rebuild if still "#".
+                        if (root.getAttribute('data-weline-choice-switcher') === 'language') {
+                            var lang = option.getAttribute('data-lang') || '';
+                            var href = option.getAttribute('href') || '';
+                            var hrefSource = 'attribute';
+                            if (lang && (!href || href === '#' || href.indexOf('?lang=') !== -1 || href.indexOf('locale=') !== -1)) {
+                                if (window.WelineI18n && typeof window.WelineI18n.buildLanguageUrl === 'function') {
+                                    href = window.WelineI18n.buildLanguageUrl(
+                                        lang,
+                                        window.location.pathname || '/',
+                                        window.location.search || ''
+                                    ) || href;
+                                    hrefSource = 'buildLanguageUrl';
+                                }
+                            }
+                            devLog('language-option-click', {
+                                lang: lang,
+                                href: href,
+                                hrefSource: hrefSource,
+                                currentPath: window.location.pathname || '/',
+                                hasWriteLanguagePreference: !!(window.WelineI18n
+                                    && typeof window.WelineI18n.writeLanguagePreference === 'function')
+                            });
+                            if (href && href !== '#') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                // 服务端读 WELINE_USER_LANG cookie；仅写 localStorage 时，
+                                // 切回默认语言（无前缀路径）会因旧 cookie 仍生效而“点不开”。
+                                if (window.WelineI18n && typeof window.WelineI18n.writeLanguagePreference === 'function') {
+                                    window.WelineI18n.writeLanguagePreference(lang);
+                                    devLog('wrote language preference via WelineI18n', lang);
+                                } else {
+                                    try {
+                                        if (window.localStorage) {
+                                            localStorage.setItem('weline_user_lang', lang);
+                                            localStorage.removeItem('api_doc_locale');
+                                            localStorage.removeItem('WELINE_USER_LANG');
+                                        }
+                                    } catch (e) {}
+                                    try {
+                                        var expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+                                        document.cookie = 'WELINE_USER_LANG=' + encodeURIComponent(lang)
+                                            + ';expires=' + expires + ';path=/;SameSite=Lax';
+                                        devLog('wrote language preference via document.cookie fallback', lang);
+                                    } catch (e2) {}
+                                }
+                                try {
+                                    var target = new URL(href, window.location.origin);
+                                    var samePath = target.pathname === (window.location.pathname || '/')
+                                        && target.search === (window.location.search || '');
+                                    if (samePath) {
+                                        devLog('navigate → reload (same path)', href);
+                                        window.location.reload();
+                                        return;
+                                    }
+                                } catch (e3) {}
+                                devLog('navigate → assign', href);
+                                window.location.assign(href);
+                            } else {
+                                devLog('language-option-click aborted: empty href', { lang: lang, href: href });
+                            }
+                            return;
+                        }
+
+                        devLog('option-click', {
+                            kind: switcherKind,
+                            href: option.getAttribute('href') || '',
+                            lang: option.getAttribute('data-lang') || '',
+                            currency: option.getAttribute('data-currency') || ''
+                        });
                     });
                 }
                 if (input) {
@@ -325,17 +508,32 @@
                         closePanel();
                     }
                 });
+                root.addEventListener('mouseenter', schedulePanelPosition);
+                window.addEventListener('resize', schedulePanelPosition, { passive: true });
+                window.addEventListener('scroll', schedulePanelPosition, { passive: true, capture: true });
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener('resize', schedulePanelPosition, { passive: true });
+                    window.visualViewport.addEventListener('scroll', schedulePanelPosition, { passive: true });
+                }
                 document.addEventListener('click', function (event) {
                     if (!root.contains(event.target)) {
                         closePanel();
                     }
                 });
 
+                root.setAttribute('aria-expanded', 'false');
                 render(true);
             }
 
             function initAll() {
                 document.querySelectorAll('[data-weline-choice-switcher]').forEach(init);
+                if (isDevDebug()) {
+                    devLog('initAll done', {
+                        count: document.querySelectorAll('[data-weline-choice-switcher]').length,
+                        DEV: !!window.DEV,
+                        WELINE_ENV: window.WELINE_ENV || ''
+                    });
+                }
             }
 
             return {

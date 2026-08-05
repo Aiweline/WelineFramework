@@ -147,6 +147,25 @@ final class CurlStreamPumpTest extends TestCase
         self::assertNotSame('', $info['error']);
     }
 
+    public function testExplicitCooperativeDeadlineStopsAStalledTransfer(): void
+    {
+        $port = $this->startFixtureServer(['late'], delayMs: 0, initialDelayMs: 1_500);
+
+        $pump = new CurlStreamPump();
+        $startedAt = \microtime(true);
+        $hid = $pump->register($this->makeHandle($port, timeout: 5), timeoutSeconds: 0.2);
+
+        while ($pump->awaitChunk($hid) !== null) {
+        }
+        $elapsed = \microtime(true) - $startedAt;
+        $info = $pump->finalize($hid);
+
+        self::assertFalse($info['ok']);
+        self::assertSame(\CURLE_OPERATION_TIMEDOUT, $info['errno']);
+        self::assertStringContainsString('timed out', $info['error']);
+        self::assertLessThan(1.0, $elapsed, 'Pump deadline must not wait for libcurl or the remote peer.');
+    }
+
     public function testRegisteringSameHandleTwiceThrows(): void
     {
         $pump = new CurlStreamPump();
@@ -176,12 +195,12 @@ final class CurlStreamPumpTest extends TestCase
     /**
      * @param list<string> $chunks
      */
-    private function startFixtureServer(array $chunks, int $delayMs): int
+    private function startFixtureServer(array $chunks, int $delayMs, int $initialDelayMs = 0): int
     {
         $port = $this->findFreePort();
         $scriptPath = $this->writeFixtureScript();
 
-        $cmd = [PHP_BINARY, $scriptPath, (string)$port, (string)$delayMs];
+        $cmd = [PHP_BINARY, $scriptPath, (string)$port, (string)$delayMs, (string)$initialDelayMs];
         foreach ($chunks as $chunk) {
             $cmd[] = $chunk;
         }
@@ -235,7 +254,8 @@ final class CurlStreamPumpTest extends TestCase
 <?php
 $port = (int)($argv[1] ?? 0);
 $delayMs = (int)($argv[2] ?? 0);
-$chunks = array_slice($argv, 3);
+$initialDelayMs = (int)($argv[3] ?? 0);
+$chunks = array_slice($argv, 4);
 if ($port <= 0 || $chunks === []) {
     fwrite(STDERR, "bad args\n");
     exit(2);
@@ -259,6 +279,10 @@ while (($line = fgets($conn)) !== false) {
     if ($line === "\r\n" || $line === "\n") {
         break;
     }
+}
+
+if ($initialDelayMs > 0) {
+    usleep($initialDelayMs * 1000);
 }
 
 $body = implode('', $chunks);

@@ -13,6 +13,8 @@ namespace Weline\Backend\Service;
 
 use Weline\Acl\Api\Authorization\AccessMode;
 use Weline\Acl\Api\Resource\MenuRegistryInterface;
+use Weline\Acl\Service\Resource\SourceIdRenameMap;
+use Weline\Acl\Service\Resource\SourceIdRenameMigrator;
 use Weline\Backend\Config\MenuXmlReader;
 use Weline\Backend\Model\Menu;
 use Weline\Framework\App\Env;
@@ -118,6 +120,12 @@ class MenuCollector
             return [$modules_xml_menus, [], $modules_info, count($file_menus), []];
         }
 
+        // Role grants must be rewritten before the menu diff can remove retired
+        // source ids. `menu:collect` does not run the route-collection observers,
+        // so doing this only in the ACL route catalog loses existing role grants.
+        ObjectManager::getInstance(SourceIdRenameMigrator::class)
+            ->migrate(SourceIdRenameMap::ROLE_ACCESS);
+
         // 流式遍历 DB，不构建完整 db_menus，直接产出 diff 与 seen_db_sources，避免大表内存溢出
         [$diff, $seen_db_sources] = $this->streamDbAndComputeDiff($file_menus, $file_sources, $modulesFilter, $disabledModules);
         $this->validateMenuParentChain($file_menus, $seen_db_sources);
@@ -200,6 +208,7 @@ class MenuCollector
                 unset($menu['parent'], $menu['action']);
 
                 $menu = $this->replaceModuleAction($menu, $modules_info);
+                $menu['route'] = strtolower(trim((string)($menu['route'] ?? ''), '/'));
                 $menu['is_enable'] = in_array($module, $disabledModules, true) ? 0 : 1;
 
                 $source = $menu['source'] ?? '';

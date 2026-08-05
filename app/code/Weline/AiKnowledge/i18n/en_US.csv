@@ -7,3 +7,4 @@
 all|docs|api|code|config,all|docs|api|code|config
 模块过滤,"Module filter"
 结果数量,"Number of results"
+"""AiKnowledge 查询器不支持的操作：%{1}""","AiKnowledge 查询器不支持的操作：%{1}"

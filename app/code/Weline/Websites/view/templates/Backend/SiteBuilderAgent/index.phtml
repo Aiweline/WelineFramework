@@ -637,6 +637,35 @@ body[data-topbar="dark"] .site-workbench-page {
 }
 </style>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_websites) return;
+  g.__bqAdmin_websites=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['websites']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('websites').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
 (function () {
     'use strict';
@@ -1198,14 +1227,12 @@ body[data-topbar="dark"] .site-workbench-page {
             fd.append('fake_mode', '1');
         }
 
-        return fetch(checkDomainUrl, {
+        return bqAdmin['websites'](checkDomainUrl, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: fd,
             credentials: 'same-origin'
-        }).then(function (response) {
-            return response.json();
-        }).then(function (data) {
+        }).then(function(response){ return response; }).then(function (data) {
             var available = !!(data && data.success && data.available);
             manualCheckCache = {
                 domain: normalizedDomain,
@@ -1242,7 +1269,55 @@ body[data-topbar="dark"] .site-workbench-page {
         }, 450);
     }
 
-    function requestAiDomainRecommendation() {
+    
+    function bqCollectSse(url, handlers){
+        handlers=handlers||{};
+        var u=String(url||'');
+        u += (u.indexOf('?')>=0?'&':'?')+'collect=1&_ts='+Date.now();
+        var closed=false;
+        var api={close:function(){closed=true;}};
+        var bridge=window.bqAdmin&&window.bqAdmin['websites'];
+        if(!bridge){ if(handlers.error) handlers.error({data:JSON.stringify({message:'bin-query bridge missing'})}); return api; }
+        bridge(u,{method:'GET',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}}).then(function(r){
+            if(!r){throw new Error('SSE collect empty response');}
+            var parseBody=function(t){
+                var payload=null;
+                try{payload=t?JSON.parse(t):null;}catch(_){payload=null;}
+                if(r.ok===false){
+                    var msg=(payload&&payload.message)?String(payload.message):(t&&String(t).length<200?String(t).trim():('HTTP '+r.status));
+                    throw new Error(msg||('HTTP '+r.status));
+                }
+                if(!payload){throw new Error((t&&String(t).length<200?String(t).trim():'')||'SSE collect returned non-JSON');}
+                return payload;
+            };
+            if(r&&typeof r.text==='function'){
+                return r.text().then(parseBody);
+            }
+            return parseBody(typeof r==='string'?r:JSON.stringify(r));
+        }).then(function(payload){
+            if(closed) return;
+            var events=(payload&&payload.events)||[];
+            events.forEach(function(ev){
+                if(closed) return;
+                var name=String(ev&&ev.event||'message');
+                var data=ev&&ev.data;
+                var fake={data: typeof data==='string'?data:JSON.stringify(data==null?{}:data)};
+                if(typeof handlers[name]==='function'){ handlers[name](fake); }
+                if(name==='error'&&typeof handlers.error==='function'){ handlers.error(fake); }
+            });
+            if(typeof handlers._done==='function'){ handlers._done(payload); }
+        }).catch(function(err){
+            if(closed) return;
+            if(typeof handlers.error==='function'){
+                var msg=(err&&err.message)||'SSE collect failed';
+                if(/^Bad Request$/i.test(String(msg).trim())){msg='请求参数含非法字符或过长，请缩短需求描述后重试。';}
+                handlers.error({data:JSON.stringify({message:msg})});
+            }
+        });
+        return api;
+    }
+
+function requestAiDomainRecommendation() {
         var formState = readFormState();
         var useSimulatedDomain = !!(simulateDomainToggle && simulateDomainToggle.checked);
 
@@ -1289,7 +1364,17 @@ body[data-topbar="dark"] .site-workbench-page {
         var checkedAggregate = [];
         var recommended = false;
         var sseUrl = new URL(recommendDomainSseUrl || recommendDomainUrl, window.location.origin);
-        sseUrl.searchParams.set('description', formState.description);
+        var recommendSeed = String(formState.description || '');
+        var nameMatch = recommendSeed.match(/\*\*项目名称\*\*\s*[:：]\s*([^\n*]+)/)
+            || recommendSeed.match(/\*\*Project name\*\*\s*[:：]\s*([^\n*]+)/i);
+        if (nameMatch && nameMatch[1]) {
+            recommendSeed = nameMatch[1];
+        }
+        recommendSeed = recommendSeed.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim();
+        if (recommendSeed.length > 400) {
+            recommendSeed = recommendSeed.slice(0, 400);
+        }
+        sseUrl.searchParams.set('description', recommendSeed);
         sseUrl.searchParams.set('domain', formState.domain);
         sseUrl.searchParams.set('account_id', formState.accountId > 0 ? String(formState.accountId) : '0');
         if (fakeMode) {
@@ -1297,7 +1382,7 @@ body[data-topbar="dark"] .site-workbench-page {
         }
 
         try {
-            recommendDomainEventSource = new EventSource(sseUrl.toString(), { withCredentials: true });
+            recommendDomainEventSource = (function(u){ var L={}; var api={close:function(){if(api._h)api._h.close();}, addEventListener:function(n,f){L[n]=f;}, onopen:null, onerror:null}; setTimeout(function(){ if(api.onopen) try{api.onopen();}catch(e){} api._h=bqCollectSse(u, Object.assign({}, L, {error:function(ev){ if(L.error) L.error(ev); if(api.onerror) api.onerror(ev);} })); },0); return api; })(sseUrl.toString());
         } catch (e) {
             lastRecommendedDomain = '';
             setRecommendationState('error', messages.networkError);
@@ -1398,15 +1483,15 @@ body[data-topbar="dark"] .site-workbench-page {
             fd.append('fake_mode', '1');
         }
 
-        fetch(createSessionUrl, {
+        bqAdmin['websites'](createSessionUrl, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: fd,
             credentials: 'same-origin'
-        }).then(function (response) {
-            return response.json();
-        }).then(function (data) {
-            if (data && data.success && data.workspace_url) {
+        }).then(function(response){ return response; }).then(function (data) {
+            if (data && data.success && data.workspace_url
+                && String(data.workspace_url).indexOf('/pagebuilder/') === -1
+            ) {
                 window.location.href = data.workspace_url;
                 return;
             }
@@ -1467,22 +1552,23 @@ body[data-topbar="dark"] .site-workbench-page {
             fd.append('fake_mode', '1');
         }
 
-        return fetch(createSessionUrl, {
+        return bqAdmin['websites'](createSessionUrl, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: fd,
             credentials: 'same-origin'
-        }).then(function (response) {
-            return response.json();
-        }).then(function (data) {
+        }).then(function(response){ return response; }).then(function (data) {
             if (!data || !data.success) {
                 throw new Error((data && data.message) ? data.message : messages.createWorkspaceFailed);
             }
             var nextUrl = '';
-            if (data.workspace_url && String(data.workspace_url).trim() !== '') {
-                nextUrl = String(data.workspace_url).trim();
-            } else if (data.native_entry_url && String(data.native_entry_url).trim() !== '') {
-                nextUrl = String(data.native_entry_url).trim();
+            var workspaceUrl = data.workspace_url ? String(data.workspace_url).trim() : '';
+            var nativeEntryUrl = data.native_entry_url ? String(data.native_entry_url).trim() : '';
+            // Website AI 建站只留在 Websites 工作区；禁止跳到 PageBuilder（两线已彻底分开）。
+            if (workspaceUrl !== '' && workspaceUrl.indexOf('/pagebuilder/') === -1) {
+                nextUrl = workspaceUrl;
+            } else if (nativeEntryUrl !== '' && nativeEntryUrl.indexOf('/pagebuilder/') === -1) {
+                nextUrl = nativeEntryUrl;
             }
             if (!nextUrl) {
                 throw new Error(messages.nextStepFailed);
@@ -1537,14 +1623,12 @@ body[data-topbar="dark"] .site-workbench-page {
         confirmAction(messages.deleteSessionConfirm, function () {
             var fd = new FormData();
             fd.append('public_id', publicId);
-            fetch(deleteSessionUrl, {
+            bqAdmin['websites'](deleteSessionUrl, {
                 method: 'POST',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 body: fd,
                 credentials: 'same-origin'
-            }).then(function (response) {
-                return response.json();
-            }).then(function (data) {
+            }).then(function(response){ return response; }).then(function (data) {
                 if (data && data.success) {
                     removeRecentSessionCard(publicId);
                     toast('success', data.message || messages.deleteSessionSuccess);
@@ -1734,7 +1818,7 @@ body[data-topbar="dark"] .site-workbench-page {
                 running = true;
                 setStatus(messages.connecting);
                 appendLine(messages.connecting, 'info');
-                eventSource = new EventSource(currentUrl);
+                eventSource = (function(u){ var L={}; var api={close:function(){if(api._h)api._h.close();}, addEventListener:function(n,f){L[n]=f;}, onopen:null, onerror:null}; setTimeout(function(){ if(api.onopen) try{api.onopen();}catch(e){} api._h=bqCollectSse(u, Object.assign({}, L, {error:function(ev){ if(L.error) L.error(ev); if(api.onerror) api.onerror(ev);} })); },0); return api; })(currentUrl);
 
                 eventSource.onopen = function () {
                     setStatus(messages.connected);

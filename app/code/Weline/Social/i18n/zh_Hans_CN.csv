@@ -124,7 +124,18 @@
 授权被拒绝。,授权被拒绝。
 授权完成。,授权完成。
 授权失败。,授权失败。
+"融媒体 OAuth 回调","融媒体 OAuth 回调"
+"mdi mdi-shield-key-outline","mdi mdi-shield-key-outline"
+处理社媒平台一键授权回调,处理社媒平台一键授权回调
+处理融媒体授权回调,处理融媒体授权回调
+"mdi mdi-login-variant","mdi mdi-login-variant"
+"接收平台 OAuth 回调并保存账户凭据","接收平台 OAuth 回调并保存账户凭据"
 融媒体管理,融媒体管理
+"mdi mdi-share-variant-outline","mdi mdi-share-variant-outline"
+"管理社媒平台账户、AI 创意和多平台发布","管理社媒平台账户、AI 创意和多平台发布"
+查看融媒体管理,查看融媒体管理
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+查看融媒体管理页面,查看融媒体管理页面
 社媒账户,社媒账户
 "Fake 验证通过","Fake 验证通过"
 "Fake 验证失败","Fake 验证失败"
@@ -198,28 +209,7 @@
 一键授权,一键授权
 查看官方凭据指南,查看官方凭据指南
 "应用 App/Client 请先点「打开系统配置」定位到「融媒体平台应用」。也可下方人工粘贴 Token。","应用 App/Client 请先点「打开系统配置」定位到「融媒体平台应用」。也可下方人工粘贴 Token。"
-官方凭据指南（简版）,官方凭据指南（简版）
-"点「打开系统配置」跳转统一配置中心并定位「融媒体平台应用」，填写该平台 App/Client。","点「打开系统配置」跳转统一配置中心并定位「融媒体平台应用」，填写该平台 App/Client。"
-立即打开,立即打开
-顶部选好范围类型、站点范围、二级范围。,顶部选好范围类型、站点范围、二级范围。
-"支持 OAuth 的平台点「一键授权」；WhatsApp/微信等按字段人工粘贴 Token。","支持 OAuth 的平台点「一键授权」；WhatsApp/微信等按字段人工粘贴 Token。"
-保存账户后点「检测」；通过后再启用发布，并确认已加入「范围社媒」。,保存账户后点「检测」；通过后再启用发布，并确认已加入「范围社媒」。
 详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md,详细说明见模块文档：doc/用户/官方凭据与一键授权指南.md
-官方凭据指南,官方凭据指南
-通用步骤,通用步骤
-需要 App/Client 的平台先点「打开系统配置」。,需要 App/Client 的平台先点「打开系统配置」。
-支持 OAuth 的平台点「一键授权」；其余按字段人工填写。,支持 OAuth 的平台点「一键授权」；其余按字段人工填写。
-保存账户后点「检测」；通过后再启用发布。,保存账户后点「检测」；通过后再启用发布。
-系统配置（融媒体平台应用）,系统配置（融媒体平台应用）
-字段,字段
-立即打开系统配置,立即打开系统配置
-该平台无需系统配置应用，直接在下方账户表单填写凭据。,该平台无需系统配置应用，直接在下方账户表单填写凭据。
-开发者后台准备,开发者后台准备
-本页连接步骤,本页连接步骤
-账户凭据字段,账户凭据字段
-发布能力,发布能力
-官方文档,官方文档
-平台,平台
 该平台不支持一键授权，请人工填写官方凭据。,该平台不支持一键授权，请人工填写官方凭据。
 保存账户,保存账户
 清空表单,清空表单
@@ -277,6 +267,21 @@
 "请填写草稿 ID。","请填写草稿 ID。"
 正在生成授权地址...,正在生成授权地址...
 "未配置平台应用凭据，请先点「打开系统配置」填写 App/Client。","未配置平台应用凭据，请先点「打开系统配置」填写 App/Client。"
+官方凭据指南,官方凭据指南
+通用步骤,通用步骤
+顶部选好范围类型、站点范围、二级范围。,顶部选好范围类型、站点范围、二级范围。
+"需要 App/Client 的平台先点「打开系统配置」。","需要 App/Client 的平台先点「打开系统配置」。"
+"支持 OAuth 的平台点「一键授权」；其余按字段人工填写。","支持 OAuth 的平台点「一键授权」；其余按字段人工填写。"
+保存账户后点「检测」；通过后再启用发布。,保存账户后点「检测」；通过后再启用发布。
+系统配置（融媒体平台应用）,系统配置（融媒体平台应用）
+字段,字段
+立即打开系统配置,立即打开系统配置
+该平台无需系统配置应用，直接在下方账户表单填写凭据。,该平台无需系统配置应用，直接在下方账户表单填写凭据。
+开发者后台准备,开发者后台准备
+本页连接步骤,本页连接步骤
+账户凭据字段,账户凭据字段
+发布能力,发布能力
+官方文档,官方文档
 必填,必填
 可选,可选
 请选择授权方式,请选择授权方式
@@ -321,3 +326,108 @@
 平台未提供配置检测器。,平台未提供配置检测器。
 "公开主页 URL 格式不正确。","公开主页 URL 格式不正确。"
 "公开主页 URL 只允许 http 或 https。","公开主页 URL 只允许 http 或 https。"
+"在对应平台开发者后台创建应用，并把 OAuth 回调设为：%{1}","在对应平台开发者后台创建应用，并把 OAuth 回调设为：%{1}"
+"回调 URL 需包含你的后台域名与端口，例如 https://your-admin.example.com/jRax.../weline_social/backend/oauth/callback","回调 URL 需包含你的后台域名与端口，例如 https://your-admin.example.com/jRax.../weline_social/backend/oauth/callback"
+一键授权（OAuth）,一键授权（OAuth）
+Meta（Facebook）,Meta（Facebook）
+"Meta 开发者后台启用 Facebook Login，申请 pages_manage_posts、pages_read_engagement 等 Page 权限","Meta 开发者后台启用 Facebook Login，申请 pages_manage_posts、pages_read_engagement 等 Page 权限"
+"点「打开系统配置」填写 App ID/Secret","点「打开系统配置」填写 App ID/Secret"
+"回到本页点「一键授权」，用 Page 管理员账号登录并授权","回到本页点「一键授权」，用 Page 管理员账号登录并授权"
+"授权成功后自动写入 Page Access Token 与 Page ID；也可人工粘贴","授权成功后自动写入 Page Access Token 与 Page ID；也可人工粘贴"
+"保存 → 检测 → 启用发布","保存 → 检测 → 启用发布"
+"支持文本、链接、图片 URL 发布","支持文本、链接、图片 URL 发布"
+"一键授权（Meta OAuth）","一键授权（Meta OAuth）"
+Meta（Instagram）,Meta（Instagram）
+"Instagram 业务账号需关联 Facebook Page，并开通 Content Publishing","Instagram 业务账号需关联 Facebook Page，并开通 Content Publishing"
+"配置 Facebook/Instagram 应用凭据","配置 Facebook/Instagram 应用凭据"
+"一键授权后自动写入 Access Token 与 Instagram Business User ID","一键授权后自动写入 Access Token 与 Instagram Business User ID"
+"发布需图片 URL；保存后检测并启用发布","发布需图片 URL；保存后检测并启用发布"
+"支持图片 URL 发布","支持图片 URL 发布"
+"一键授权（Google OAuth）","一键授权（Google OAuth）"
+Google（YouTube）,Google（YouTube）
+"Google Cloud Console 启用 YouTube Data API v3","Google Cloud Console 启用 YouTube Data API v3"
+"填写 Client ID/Secret 后一键授权","填写 Client ID/Secret 后一键授权"
+"授权后写入 Access Token；可选填 Channel ID","授权后写入 Access Token；可选填 Channel ID"
+第一期仅连通检测；视频上传发布二期支持,第一期仅连通检测；视频上传发布二期支持
+第一期：连通检测；视频上传二期,第一期：连通检测；视频上传二期
+"一键授权（TikTok Login Kit）","一键授权（TikTok Login Kit）"
+TikTok,TikTok
+"TikTok 开发者平台启用 Login Kit 与 Content Posting API","TikTok 开发者平台启用 Login Kit 与 Content Posting API"
+"配置 Client Key/Secret → 一键授权","配置 Client Key/Secret → 一键授权"
+"保存 Open ID / Refresh Token（自动或人工）","保存 Open ID / Refresh Token（自动或人工）"
+第一期连通检测；视频上传二期,第一期连通检测；视频上传二期
+"人工凭据（Cloud API）","人工凭据（Cloud API）"
+"WhatsApp Cloud API","WhatsApp Cloud API"
+"Meta Business 创建 WhatsApp Business 应用与 Cloud API 号码","Meta Business 创建 WhatsApp Business 应用与 Cloud API 号码"
+"在 Meta 开发者后台获取 Phone Number ID 与永久 Access Token","在 Meta 开发者后台获取 Phone Number ID 与永久 Access Token"
+"系统配置可填默认 WABA ID","系统配置可填默认 WABA ID"
+"账户表单填写 Phone Number ID、Cloud API Access Token、默认收件人 E.164","账户表单填写 Phone Number ID、Cloud API Access Token、默认收件人 E.164"
+"支持 Cloud API 文本消息","支持 Cloud API 文本消息"
+人工凭据（服务号）,人工凭据（服务号）
+微信公众号,微信公众号
+"微信公众平台注册认证服务号，获取 AppID/AppSecret","微信公众平台注册认证服务号，获取 AppID/AppSecret"
+"客服消息需目标用户 OpenID","客服消息需目标用户 OpenID"
+"系统配置填默认 AppID/AppSecret（可选）","系统配置填默认 AppID/AppSecret（可选）"
+"账户填 AppID、AppSecret、OpenID；Access Token 可留空自动获取","账户填 AppID、AppSecret、OpenID；Access Token 可留空自动获取"
+"客服文本消息；需有效 OpenID","客服文本消息；需有效 OpenID"
+"一键授权（OAuth 2.0 PKCE）","一键授权（OAuth 2.0 PKCE）"
+"X / Twitter","X / Twitter"
+"X Developer Portal 创建 App，启用 OAuth 2.0 与 tweet.write","X Developer Portal 创建 App，启用 OAuth 2.0 与 tweet.write"
+"填写 Client ID/Secret → 一键授权","填写 Client ID/Secret → 一键授权"
+"授权后写入 Access Token / Refresh Token","授权后写入 Access Token / Refresh Token"
+支持推文文本发布,支持推文文本发布
+LinkedIn,LinkedIn
+"LinkedIn Developer 创建 App，申请 w_member_social 等权限","LinkedIn Developer 创建 App，申请 w_member_social 等权限"
+"一键授权后还需填写 Author URN（urn:li:person:xxx）","一键授权后还需填写 Author URN（urn:li:person:xxx）"
+"支持 UGC 文本帖","支持 UGC 文本帖"
+Pinterest,Pinterest
+"Pinterest Developer 创建 App 并申请 pins:write","Pinterest Developer 创建 App 并申请 pins:write"
+"一键授权后填写 Board ID","一键授权后填写 Board ID"
+"Pin 发布需图片 URL","Pin 发布需图片 URL"
+Snapchat,Snapchat
+"Snap Kit / Marketing API 创建 OAuth 应用","Snap Kit / Marketing API 创建 OAuth 应用"
+"一键授权；可选填 Ad Account ID","一键授权；可选填 Ad Account ID"
+"Bot Token（人工）","Bot Token（人工）"
+"通过 @BotFather 创建 Bot 并获取 Token","通过 @BotFather 创建 Bot 并获取 Token"
+"获取目标 Chat ID（群组/频道/用户）","获取目标 Chat ID（群组/频道/用户）"
+"无需系统配置；直接在账户表单填 Bot Token 与 Chat ID","无需系统配置；直接在账户表单填 Bot Token 与 Chat ID"
+"保存 → 检测","保存 → 检测"
+"Adapter 待实发；凭据可先保存用于展示或联调","Adapter 待实发；凭据可先保存用于展示或联调"
+"Webhook URL","Webhook URL"
+"Discord 频道设置 → 集成 → Webhook → 复制 Webhook URL","Discord 频道设置 → 集成 → Webhook → 复制 Webhook URL"
+"账户表单粘贴 Webhook URL → 保存 → 检测","账户表单粘贴 Webhook URL → 保存 → 检测"
+"Adapter 待实发","Adapter 待实发"
+"Application Password","Application Password"
+"WordPress 用户 → 个人资料 → Application Passwords 生成密码","WordPress 用户 → 个人资料 → Application Passwords 生成密码"
+"填 Site URL、Username、Application Password","填 Site URL、Username、Application Password"
+"Channel Access Token","Channel Access Token"
+"LINE Developers 创建 Messaging API Channel，签发 Channel Access Token","LINE Developers 创建 Messaging API Channel，签发 Channel Access Token"
+"账户表单填 Channel Access Token","账户表单填 Channel Access Token"
+"App Password（AT Protocol）","App Password（AT Protocol）"
+"Bluesky 设置 → App Passwords 生成专用密码","Bluesky 设置 → App Passwords 生成专用密码"
+"填 Handle（如 user.bsky.social）与 App Password","填 Handle（如 user.bsky.social）与 App Password"
+"OAuth Client（人工）","OAuth Client（人工）"
+"Tumblr 开发者注册 App，获取 Client ID/Secret","Tumblr 开发者注册 App，获取 Client ID/Secret"
+"填 Client ID、Client Secret、Blog Identifier","填 Client ID、Client Secret、Blog Identifier"
+"Admin API Key","Admin API Key"
+"Ghost Admin → Integrations → 创建 Custom Integration，复制 Admin API URL 与 Key","Ghost Admin → Integrations → 创建 Custom Integration，复制 Admin API URL 与 Key"
+"填 Admin API URL 与 Admin API Key","填 Admin API URL 与 Admin API Key"
+"实例 OAuth Client（人工）","实例 OAuth Client（人工）"
+"在目标 Mastodon 实例注册 OAuth 应用（Development → 新建应用）","在目标 Mastodon 实例注册 OAuth 应用（Development → 新建应用）"
+"填 Instance URL、Client ID、Client Secret；Token 流程待一键授权接入","填 Instance URL、Client ID、Client Secret；Token 流程待一键授权接入"
+"JWT Token","JWT Token"
+"Lemmy 实例登录后从 API 获取 JWT（或使用 bot 账号）","Lemmy 实例登录后从 API 获取 JWT（或使用 bot 账号）"
+"填 Instance URL 与 Access Token","填 Instance URL 与 Access Token"
+"API Token","API Token"
+"Misskey 设置 → API → 生成 Access Token","Misskey 设置 → API → 生成 Access Token"
+"API Key","API Key"
+"Discourse Admin → API → 创建 API Key 并指定 API Username","Discourse Admin → API → 创建 API Key 并指定 API Username"
+"填 Base URL、API Key、API Username","填 Base URL、API Key、API Username"
+"Bot Token","Bot Token"
+"Viber Admin Panel 创建 Public Account / Bot，获取 Token","Viber Admin Panel 创建 Public Account / Bot，获取 Token"
+"填 Bot Token 与 Receiver ID","填 Bot Token 与 Receiver ID"
+"本地 Fake Token","本地 Fake Token"
+"仅用于本地 smoke；不访问外部平台","仅用于本地 smoke；不访问外部平台"
+"填任意 Fake Token，或运行 fake 浏览器验证自动创建","填任意 Fake Token，或运行 fake 浏览器验证自动创建"
+"本地 fake 发布验证","本地 fake 发布验证"
+"""Weline Social 查询器不支持的操作：%{1}""","Weline Social 查询器不支持的操作：%{1}"

@@ -13,7 +13,7 @@
 - **事件名称**：`Weline_Cdn::send_warmup`
 - **事件类型**：CDN操作事件
 - **触发时机**：在提交CDN预热URL时
-- **触发位置**：`app/code/Weline/Cdn/Cron/Warmup.php` 第 61 行
+- **触发位置**：`app/code/Weline/Cdn/Cron/Warmup.php`
 - **配置文件**：`app/code/Weline/Cdn/etc/event.xml`
 
 #### 功能说明
@@ -33,7 +33,15 @@
 $event = new Event('Weline_Cdn::send_warmup', [
     'module' => 'Weline_Cdn',
     'provider' => 'scanner',
-    'urls' => $urls,
+    'site_id' => 0,
+    'urls' => [
+        'https://example.com/inherit-top-level-site',
+        [
+            'url' => 'https://example.com/exact-domain',
+            'site_id' => 0,
+            'domain_id' => 1,
+        ],
+    ],
     'dedupe' => true
 ]);
 $this->eventsManager->dispatch('Weline_Cdn::send_warmup', $event);
@@ -75,20 +83,38 @@ $this->eventsManager->dispatch('Weline_Cdn::send_warmup', $event);
 [
     'module' => string,      // 模块名
     'provider' => string,    // 提供者名称
-    'urls' => array,         // URL列表
+    'urls' => array,         // 字符串 URL 或 URL item 列表
     'dedupe' => bool,        // 是否去重
-    'site_id' => int,        // 网站ID（可选）
-    'domain_id' => int,      // 域名ID（可选）
+    'site_id' => int,        // 顶层默认站点（可选，0 合法）
 ]
 ```
+
+URL item 的完整形式是：
+
+```php
+[
+    'url' => 'https://example.com/page',
+    'site_id' => 0,   // 可选；覆盖顶层默认站点
+    'domain_id' => 1, // 可选；只在 item 内读取
+]
+```
+
+#### 站点与域名解析规则
+
+- `site_id=0` 是系统默认站点，必须保留。显式站点值必须是非负整数或全数字字符串。
+- 顶层 `site_id` 缺失时才尝试当前运行时站点；显式 `null` 不会被改写为其他站点。
+- 字符串 URL 继承顶层站点；数组 item 中的 `site_id` 覆盖它。任何有效 URL 缺少最终站点上下文时，返回失败。
+- `domain_id` 只从 URL item 读取；顶层同名字段不生效。显式 ID 必须是正整数、已启用且属于该站点。
+- 未给 `domain_id` 时，只在该站点的启用域名中按 URL host 选择最精确匹配；不会跨站 fallback。
+- 去重键包含 `url + module + site_id`，同一 URL 在不同站点不会互相覆盖。
 
 #### 相关文件
 
 - **事件配置**：`app/code/Weline/Cdn/etc/event.xml`
 - **事件定义**：`app/code/Weline/Cdn/event.php`
-- **触发位置**：`app/code/Weline/Cdn/Cron/Warmup.php`（第 61 行）
+- **触发位置**：`app/code/Weline/Cdn/Cron/Warmup.php`
 
 ## 更新日志
 
+- **2026-07-22**：明确 URL item 字段层级、ID 0、缺失/null 和精确站点域名解析
 - **2024-12-19**：初始版本，添加 `Weline_Cdn::send_warmup` 事件文档
-

@@ -217,6 +217,9 @@ class PageSeoContextResolver
             );
         }
 
+        // TASK-P1D-004-SEO：dev/test 强制 noindex，配置与显式 robots 均不可关闭
+        $context = (new \Weline\Seo\Service\StoreModeSeoHardGate())->applyToPageContext($context);
+
         return $context;
     }
 

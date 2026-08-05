@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace Weline\Framework\Controller\Api;
 
 use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendQueryGateway;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
@@ -34,6 +36,7 @@ class Stream extends FrontendRestController
             $this->assertSameOrigin();
             $ticket = (string)$this->request->getGet('ticket', '');
             $streamTicket = $this->sessionService->consumeStreamTicket($ticket);
+            $events = $this->gateway->executeStream($streamTicket);
             $isRuntimeTaskStream = $this->isRuntimeTaskChannel((string)$streamTicket['channel']);
 
             $sse->start();
@@ -44,7 +47,7 @@ class Stream extends FrontendRestController
                 ]);
             }
 
-            foreach ($this->gateway->executeStream($streamTicket) as $event) {
+            foreach ($events as $event) {
                 // Long-lived providers may yield this private transport marker
                 // while polling. It becomes a throttled SSE comment, never a
                 // business event or Last-Event-ID cursor.
@@ -70,7 +73,12 @@ class Stream extends FrontendRestController
             // A runtime provider may intentionally rotate a subscription after
             // replay/polling. Its terminal state must therefore come only from
             // a persisted event, never from the HTTP stream ending.
-            if (!$isRuntimeTaskStream) {
+            if ($isRuntimeTaskStream) {
+                // Tell the StreamHandle to fetch a fresh ticket. Native
+                // EventSource would otherwise auto-retry the consumed ticket
+                // URL and leave the UI cursor stuck until the task finishes.
+                $sse->sendControlEvent('runtime_rotate', ['ok' => true]);
+            } else {
                 // Keep the legacy "done" terminal name for non-runtime stream users,
                 // but deliberately do not advance Last-Event-ID.
                 $sse->sendControlEvent('done', ['ok' => true]);
@@ -85,24 +93,24 @@ class Stream extends FrontendRestController
 
     private function assertSameOrigin(): void
     {
+        $currentOrigin = $this->currentOrigin();
         $origin = (string)$this->request->getServer('HTTP_ORIGIN');
         if ($origin === '') {
             return;
         }
 
-        if (\rtrim($origin, '/') !== $this->currentOrigin()) {
+        if (\rtrim($origin, '/') !== $currentOrigin) {
             throw new FrontendQueryException('auth_error', 'Worker stream origin mismatch.', 401);
         }
     }
 
     private function currentOrigin(): string
     {
-        $scheme = (string)$this->request->getServer('REQUEST_SCHEME');
-        if ($scheme === '') {
-            $https = (string)$this->request->getServer('HTTPS');
-            $scheme = ($https !== '' && \strtolower($https) !== 'off') ? 'https' : 'http';
+        $scheme = \strtolower(\trim(WelineEnv::getRequestScheme()));
+        $host = RequestAuthority::current();
+        if (!\in_array($scheme, ['http', 'https'], true) || $host === '') {
+            throw new FrontendQueryException('protocol_error', 'Worker stream request authority is invalid.', 400);
         }
-        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
 
         return $scheme . '://' . $host;
     }
@@ -139,12 +147,25 @@ class Stream extends FrontendRestController
     private function sendFailure(SseWriter $sse, int $status, string $code, string $message): void
     {
         $sse->start();
-        $sse->sendControlEvent('failed', [
+        // Transport/auth failures must not reuse the business `failed` terminal.
+        // Runtime observers treat `failed` as task death; a bad stream ticket or
+        // origin check should only rotate the SSE window and resume the same task.
+        $event = $this->isTransportFailure($status, $code) ? 'transport_error' : 'failed';
+        $sse->sendControlEvent($event, [
             'code' => $code,
             'http_status' => $status,
             'message' => $message,
         ]);
         $sse->close();
+    }
+
+    private function isTransportFailure(int $status, string $code): bool
+    {
+        $normalized = \strtolower(\trim($code));
+
+        return $status === 401
+            || $normalized === 'auth_error'
+            || $normalized === 'worker_store_unavailable';
     }
 
     private function normalizeEventName(string $event): string

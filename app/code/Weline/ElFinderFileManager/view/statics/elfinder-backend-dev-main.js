@@ -6,15 +6,6 @@
  **/
 (function(){
 	"use strict";
-	function notifyLoadError(message) {
-		var text = String(message || 'elFinder failed to load.');
-		if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-			window.BackendToast.error(text);
-			return;
-		}
-		console.error(text);
-	}
-
 	var // jQuery and jQueryUI version
 		jqver = '3.7.1',
 		uiver = '1.13.2',
@@ -103,7 +94,7 @@
 						);
 					});
 				} else {
-					notifyLoadError('"elFinderConfig" object is wrong.');
+					alert('"elFinderConfig" object is wrong.');
 				}
 			});
 		},
@@ -119,7 +110,7 @@
 				],
 				start,
 				function(error) {
-					notifyLoadError(error && error.message ? error.message : error);
+					alert(error.message);
 				}
 			);
 		},
@@ -149,7 +140,7 @@
 			// Documentation for client options:
 			// https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
 			defaultOpts : {
-				url : 'https://127.0.0.1:9981/f7LYPUzS4UD9UL1kqkf0hzzPxyxmvT8c/USD/zh_Hans_CN/elfinder/backend/connector' // connector URL (REQUIRED)
+				url : 'https://127.0.0.1:9617/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/elfinder/backend/connector' // connector URL (REQUIRED)
 				,commandsOptions : {
 					edit : {
 						extraOptions : {

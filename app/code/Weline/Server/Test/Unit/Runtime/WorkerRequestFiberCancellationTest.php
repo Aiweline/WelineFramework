@@ -20,11 +20,13 @@ final class WorkerRequestFiberCancellationTest extends TestCase
     {
         Runtime::setMode('wls');
         WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
+        WorkerResponseMemoryGuard::clearIncompleteRequestFiberCancelStreak();
     }
 
     protected function tearDown(): void
     {
         WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
+        WorkerResponseMemoryGuard::clearIncompleteRequestFiberCancelStreak();
         RequestContext::cleanup();
         Context::leave();
         Runtime::resetModeCache();
@@ -55,9 +57,10 @@ final class WorkerRequestFiberCancellationTest extends TestCase
         self::assertSame(1, $finallyCalls);
         self::assertSame('main', Context::current()->get('meta.id'));
         self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+        self::assertSame(0, WorkerResponseMemoryGuard::incompleteRequestFiberCancelStreak());
     }
 
-    public function testCancellationThatSuspendsAgainRequestsWorkerQuarantine(): void
+    public function testCancellationThatSuspendsOnceCompletesOnRetryThrow(): void
     {
         $fiber = new \Fiber(static function (): void {
             Context::enter(new Context(['meta' => ['id' => 'request']]));
@@ -74,17 +77,37 @@ final class WorkerRequestFiberCancellationTest extends TestCase
         self::assertNull($fiber->start());
         $snapshot = WlsFiberContext::captureForFiber($fiber);
 
-        self::assertFalse(wlsUnwindRequestFiberForCancellation($fiber, $snapshot, 'unit_test_incomplete'));
+        self::assertTrue(wlsUnwindRequestFiberForCancellation($fiber, $snapshot, 'unit_test_retry'));
+        self::assertTrue($fiber->isTerminated());
+        self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+        self::assertSame(0, WorkerResponseMemoryGuard::incompleteRequestFiberCancelStreak());
+    }
+
+    public function testStubbornIncompleteCancelDefersQuarantineUntilStreakThreshold(): void
+    {
+        $threshold = WorkerResponseMemoryGuard::INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK;
+        $fiber = $this->createStubbornCancelFiber();
+        self::assertNull($fiber->start());
+        $snapshot = WlsFiberContext::captureForFiber($fiber);
+
+        for ($i = 1; $i < $threshold; $i++) {
+            self::assertFalse(
+                wlsUnwindRequestFiberForCancellation($fiber, $snapshot, 'unit_test_incomplete_' . $i)
+            );
+            self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+            self::assertSame($i, WorkerResponseMemoryGuard::incompleteRequestFiberCancelStreak());
+            self::assertFalse($fiber->isTerminated());
+            self::assertTrue($fiber->isSuspended());
+        }
+
+        self::assertFalse(
+            wlsUnwindRequestFiberForCancellation($fiber, $snapshot, 'unit_test_incomplete_final')
+        );
         self::assertSame(
             'request_fiber_cancel_incomplete',
             WorkerResponseMemoryGuard::consumeDrainAfterResponseReason(),
         );
-
-        try {
-            $fiber->throw(new RequestExitException());
-        } catch (RequestExitException) {
-        }
-        self::assertTrue($fiber->isTerminated());
+        self::assertSame($threshold, WorkerResponseMemoryGuard::incompleteRequestFiberCancelStreak());
     }
 
     public function testRequestEnterAndLeaveNeverCleanMainContextFallback(): void
@@ -129,5 +152,24 @@ final class WorkerRequestFiberCancellationTest extends TestCase
         self::assertTrue($fiber->isTerminated());
         self::assertSame('preserved', RequestContext::get('main-sentinel'));
         self::assertSame('main', Context::current()->get('meta.id'));
+    }
+
+    private function createStubbornCancelFiber(): \Fiber
+    {
+        return new \Fiber(static function (): void {
+            Context::enter(new Context(['meta' => ['id' => 'request']]));
+            try {
+                while (true) {
+                    try {
+                        \Fiber::suspend();
+                    } catch (RequestExitException) {
+                        // Ignore cancel and re-suspend so multi-throw cannot finish.
+                    }
+                }
+            } finally {
+                RequestContext::cleanup();
+                Context::leave();
+            }
+        });
     }
 }

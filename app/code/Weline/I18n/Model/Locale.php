@@ -41,7 +41,7 @@ class Locale extends Model
     public const schema_fields_IS_ACTIVE = 'is_active';
     #[Col('smallint', 1, nullable: false, default: 0, comment: '是否安装')]
     public const schema_fields_IS_INSTALL = 'is_install';
-    #[Col('text', comment: '国旗')]
+    #[Col('mediumtext', comment: '国旗 SVG')]
     public const schema_fields_FLAG = 'flag';
 /**
      * 从locale代码中提取简码、ISO2和ISO3

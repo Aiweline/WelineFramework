@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Runtime;
 
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
@@ -30,6 +32,7 @@ final class TlsSessionResumptionLiveVerifier
     private const INSTANCE_CONFIG_READ_ATTEMPTS = 5;
     private const INSTANCE_CONFIG_RETRY_MICROSECONDS = 50_000;
     private const MAX_INSTANCE_CONFIG_BYTES = 1_048_576;
+    private const MAX_CERTIFICATE_BYTES = 1_048_576;
     private const CALLBACK_TELEMETRY_SCHEMA_VERSION = 1;
     private const CALLBACK_FAULT_PROBE_PAIRS = 16;
     private const CALLBACK_LATENCY_BUCKET_UPPER_BOUNDS_US = [
@@ -817,11 +820,12 @@ final class TlsSessionResumptionLiveVerifier
 
     private function certificateFingerprint(string $path): string
     {
-        $certificate = @\openssl_x509_read('file://' . $path);
-        if ($certificate === false) {
-            $pem = @\file_get_contents($path);
-            $certificate = \is_string($pem) ? @\openssl_x509_read($pem) : false;
-        }
+        $pem = GatewayProjectStateFilesystem::read(
+            $path,
+            self::MAX_CERTIFICATE_BYTES,
+            'Active WLS TLS certificate',
+        );
+        $certificate = @\openssl_x509_read($pem);
         if ($certificate === false) {
             throw new \RuntimeException('Unable to parse the active TLS certificate.');
         }

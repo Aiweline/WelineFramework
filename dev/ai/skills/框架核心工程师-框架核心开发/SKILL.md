@@ -1,95 +1,30 @@
 ---
 name: 框架核心工程师-框架核心开发
-description: Framework core engineer skill for low-level WelineFramework implementation and architectural guardrail compliance.
-version: 1.1.1
+description: Implement or review WelineFramework-owned internals, shared abstractions, base classes, dependency/runtime behavior, and platform contracts. Use when the changed code or contract belongs to framework core even if the first symptom appears in one module; use business-module skills when that module owns the behavior.
 ---
 
-# Role
+# Framework core development
 
-This skill implements framework-level changes in WelineFramework core areas. It is responsible for stable low-level development patterns, framework conventions, and changes that must preserve architectural guardrails across modules.
+## Boundary
 
-# When To Use
+- Confirm the owner from shared core paths and contracts, not merely from the number of affected modules.
+- If one module owns the behavior and no shared contract is defective, keep the change module-local.
+- Preserve existing public contracts unless the task explicitly changes them; identify downstream compatibility before editing.
+- Do not patch a downstream symptom when a shared command, importer, controller, or runtime owner is defective.
 
-- Use for framework internals, shared abstractions, base classes, repository-wide conventions, and low-level platform code.
-- Use for keywords such as framework core, base controller, core service, framework API, low-level refactor, shared behavior, and cross-module convention.
-- Use when a change affects many modules through common framework behavior.
+## Workflow
 
-# Source Material
+1. Locate the minimal shared entry points with targeted project-intelligence/source evidence and current tests.
+2. Trace callers and affected runtime paths; distinguish contract, implementation, and migration impact.
+3. Implement the smallest root-cause change.
+4. Add focused regression coverage when the shared risk warrants durable proof.
+5. Validate through the actual setup, command, HTTP, Browser, WLS, or focused test surface.
+6. Update architecture/API documentation only when the shared design or interface changed.
 
-- `AI-ENTRY.md`
-- `AI-README.md`
-- `CLAUDE.md`
-- `dev/ai/skills/weline-framework-core/SKILL.md`
-- `dev/ai/skills/code-generation-standards/SKILL.md`
-- `dev/ai/skills/php84-performance/SKILL.md`
-- `dev/ai/skills/community-module/SKILLS-CONSOLIDATED.md`
+## Core-specific guardrails
 
-# Responsibilities
-
-- Implement framework-core behavior without breaking established module contracts.
-- Follow Weline patterns for controllers, models, services, env configuration, and validation flows.
-- Preserve repository-wide guardrails before optimizing or extending internals.
-- Keep changes isolated, testable, and compatible with current framework expectations.
-
-# Workflow
-
-1. Read `AI-ENTRY.md`, the diagrams, the module docs, and `CLAUDE.md` before touching source code.
-2. Confirm whether the request is truly framework-level instead of module-level.
-3. Apply framework-level thinking by default for every code change: reject module-specific compatibility patches as the first move and trace the owning shared entry point first.
-4. Locate the minimal framework entry points that own the behavior.
-5. Implement the smallest safe change that fixes the root cause or introduces the required capability.
-6. Update documentation when the change affects shared contracts; add or update tests only when the user explicitly asks.
-7. Validate with the most direct command path, such as setup, HTTP, Browser, WLS, or existing commands.
-8. Report affected boundaries, migration impact, and residual risk.
-
-# Weline Rules
-
-- Prefer diagrams and module docs before reading source code.
-- Do not edit `generated/` directly.
-- Do not use `routes.xml`.
-- Keep module boundaries intact.
-- Prefer small, isolated, testable changes.
-- Update architecture docs if the design changes.
-- Do not introduce global variables or process-wide mutable global state in framework code; `$_SERVER` is only allowed in Fiber/WLS request context assembly, and all other code must use `WelineEnv`, `w_env*`, request objects, or explicit `Context`; context assembly may temporarily bridge entry context into explicit Context, request, session, or service objects.
-- Treat framework-level consideration as a standing Codex rule, even when the user only reports one page, one module, or one error.
-- When a systemic command, importer, or shared controller path fails, start from the framework owner implementation rather than patching one symptom path inside a downstream module.
-
-# Inputs Required
-
-- The requested framework behavior or defect description.
-- Affected shared classes, modules, or runtime paths.
-- Existing framework contract assumptions and compatibility concerns.
-- Required validation path for the affected feature.
-
-# Expected Output
-
-- A framework-level implementation that follows repository conventions.
-- Focused validation evidence for the changed behavior.
-- Notes about compatibility, affected modules, and documentation updates.
-
-# Validation
-
-- Run targeted setup, HTTP, Browser, WLS, or existing commands that cover the changed framework path; run test commands only when the user explicitly asked for test work.
-- Check that module-facing contracts still behave as expected.
-- Confirm that no generated artifacts were edited directly.
-- Confirm that documentation was updated when architecture or interfaces changed.
-
-# Constraints
-
-- Do not drift into business-module feature ownership.
-- Do not invent framework APIs without checking existing patterns first.
-- Do not bypass root-cause fixes with temporary string-based patches unless explicitly required.
-- Do not introduce repository-wide conventions casually.
-
-# Shared Collaboration Contract
-
-This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
-
-Before and during work:
-
-- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
-- Keep work inside this specialist's ownership boundary.
-- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
-- Do not silently expand scope to fix another agent's area.
-- Include collaboration status in the final report.
+- Do not introduce process-global mutable request state.
+- Outside runtime context assembly, use `WelineEnv`, `w_env*`, request objects, or explicit Context instead of `$_SERVER`.
+- A temporary `$_SERVER` bridge is limited to Fiber/WLS request-context assembly and must materialize explicit context objects.
+- Report affected module contracts, migration needs, decisive evidence, and residual risk.
 

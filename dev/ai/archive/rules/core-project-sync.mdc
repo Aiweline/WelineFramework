@@ -1,0 +1,25 @@
+---
+description: ARCHIVED — 旧自动跨仓同步规则
+alwaysApply: true
+---
+
+# 核心项目同步（强制写死）
+
+权威全文见 `dev/ai/global-constraints.md` §15。冲突时以该文件为准。
+
+## 仓路径（macOS）
+
+| 角色 | 路径 |
+|------|------|
+| 框架核心仓（本仓） | `/Users/weline/Project/Official/框架` |
+| SaaS 发布仓 | `/Users/weline/Project/QiPai` |
+
+Windows 对照见 §15.1。相对路径：`app/code/Weline/...` ↔ 对侧同名。
+
+## 硬约束
+
+1. 发布仓修改 `app/code/Weline/**` 后，必须回写本仓同相对路径并完成相互对齐；本仓领先能力也须合入发布仓，不得被旧稿抹掉。
+2. **对齐 = 差异相互合并**，不是整文件覆盖。必须先双边 `diff`，再按领先方向合入或手工合并。
+3. **禁止**用落后侧覆盖领先侧；**禁止** `rsync` / 整目录拷贝整个 `Weline/`。
+4. `GuoLaiRen/*` 等业务目录默认不进本仓，除非用户明确要求。
+5. 交付必须列出：已对齐文件、合入方向、跳过原因；本仓不可写则报阻塞，不得谎称已同步。

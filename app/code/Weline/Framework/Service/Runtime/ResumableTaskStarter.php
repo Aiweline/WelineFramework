@@ -19,11 +19,15 @@ final class ResumableTaskStarter implements ResumableTaskStarterInterface
     public function __construct(
         private readonly ResumableTaskHandlerRegistry $handlers,
         private readonly ResumableTaskRuntime $runtime,
+        private readonly ResumableTaskAccessPolicy $accessPolicy,
     ) {
     }
 
     public function startForOwner(string $typeCode, array $input, TaskOwner $owner): TaskHandle
     {
+        // Authorization precedes handler instantiation and prepareStart(),
+        // because those steps may load catalogs or freeze expensive AI input.
+        $this->accessPolicy->assertAllowed($owner, \trim($typeCode), 'start');
         $handler = $this->handlers->handler(trim($typeCode));
         if (!$handler instanceof ResumableTaskStartHandlerInterface) {
             throw new ResumableTaskStoreException(

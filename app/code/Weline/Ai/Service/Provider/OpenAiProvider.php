@@ -100,6 +100,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         $messages = $this->buildMessages($prompt, $params);
         $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
+        $lowSpeedTime = ProviderTimeoutPolicy::resolveRequestLowSpeedTime($params, $timeout);
         $this->applyExecutionTimeLimit($timeout);
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
@@ -123,6 +124,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         if ($responseFormat !== null) {
             $requestData['response_format'] = $responseFormat;
         }
+        $this->applyThinkingControls($requestData, $params);
 
         // 优先使用base_url，如果没有则使用api_url，最后使用默认值
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
@@ -144,16 +146,30 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             $apiKey,
             $requestData,
             $proxyInfo,
-            $timeout
+            $timeout,
+            $lowSpeedTime
         );
 
         // 提取 tool_calls（智能体模式）
         $toolCalls = $this->extractToolCalls($response);
-        $finishReason = $response['choices'][0]['finish_reason'] ?? '';
+        $finishReason = (string)($response['choices'][0]['finish_reason'] ?? '');
 
         $message = $response['choices'][0]['message'] ?? [];
+        $content = (string)($message['content'] ?? '');
+        $reasoningContent = (string)($message['reasoning_content'] ?? '');
+        $content = $this->resolveStructuredReasoningJsonFallback(
+            $params,
+            $content,
+            $reasoningContent,
+        );
+        $content = $this->resolveEmptyContentFromReasoningFallback(
+            $params,
+            $content,
+            $reasoningContent,
+            $finishReason,
+        );
         $result = [
-            'content' => $message['content'] ?? '',
+            'content' => $content,
             'usage' => [
                 'prompt_tokens' => $response['usage']['prompt_tokens'] ?? 0,
                 'completion_tokens' => $response['usage']['completion_tokens'] ?? 0,
@@ -164,8 +180,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         ];
 
         // 捕获推理/思考链内容（DeepSeek reasoning_content 等）
-        if (!empty($message['reasoning_content'])) {
-            $result['reasoning_content'] = $message['reasoning_content'];
+        if ($reasoningContent !== '') {
+            $result['reasoning_content'] = $reasoningContent;
         }
 
         // 如果有 tool_calls，附加到结果中
@@ -218,6 +234,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         $requestData = $this->buildImageGenerationRequest($model, $prompt, $params, $config);
         $timeout = ProviderTimeoutPolicy::resolveImageGenerationTimeout($params, $config);
+        $lowSpeedTime = ProviderTimeoutPolicy::resolveRequestLowSpeedTime($params, $timeout);
         $this->applyExecutionTimeLimit($timeout);
         $requestUrl = $this->resolveImageGenerationUrl($config);
         $response = $this->callApiWithRetry(
@@ -225,7 +242,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             $apiKey,
             $requestData,
             $proxyInfo,
-            $timeout
+            $timeout,
+            $lowSpeedTime
         );
 
         return ImageGenerationResponseNormalizer::fromOpenAiImageResponse(
@@ -315,6 +333,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         if ($responseFormat !== null) {
             $requestData['response_format'] = $responseFormat;
         }
+        $this->applyThinkingControls($requestData, $params);
 
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
         if (!str_ends_with($apiUrl, '/chat/completions')) {
@@ -464,12 +483,12 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             }
         };
 
-        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk);
+        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk, $timeout);
         $httpCode = $curlResult['http_code'];
         $error = $curlResult['error'];
 
         if ($error) {
-            if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
+            if (stripos($error, 'timeout') !== false || stripos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
             throw new Exception("流式API调用失败: {$error}");
@@ -494,6 +513,18 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 'arguments' => $args,
             ];
         }
+
+        $fullContent = $this->resolveStructuredReasoningJsonFallback(
+            $params,
+            $fullContent,
+            $fullReasoning,
+        );
+        $fullContent = $this->resolveEmptyContentFromReasoningFallback(
+            $params,
+            $fullContent,
+            $fullReasoning,
+            (string)$finishReason,
+        );
 
         // 构建结果（与 generate() 返回格式一致）
         $result = [
@@ -587,6 +618,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         if ($responseFormat !== null) {
             $requestData['response_format'] = $responseFormat;
         }
+        $this->applyThinkingControls($requestData, $params);
 
         $totalTokens = [
             'prompt_tokens' => 0,
@@ -614,23 +646,50 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         // 推理/思考内容回调
         $reasoningCallback = $params['reasoning_callback'] ?? null;
         $fullReasoning = '';
+        $deferStructuredContent = !empty($params['structured_reasoning_json_fallback']);
 
         $this->callStreamApi(
             $apiUrl,
             $apiKey,
             $requestData,
-            function($chunk) use ($callback, &$fullContent) {
+            function($chunk) use ($callback, &$fullContent, $deferStructuredContent) {
                 $fullContent .= $chunk;
-                $callback($chunk);
+                if (!$deferStructuredContent || $chunk === '') {
+                    $callback($chunk);
+                }
             },
             $proxyInfo,
             $timeout,
-            $reasoningCallback ? function($chunk) use ($reasoningCallback, &$fullReasoning) {
+            function($chunk) use ($reasoningCallback, &$fullReasoning) {
                 $fullReasoning .= $chunk;
-                $reasoningCallback($chunk);
-            } : null,
-            $streamLowSpeedTime
+                if (\is_callable($reasoningCallback)) {
+                    $reasoningCallback($chunk);
+                }
+            },
+            $streamLowSpeedTime,
+            (bool)($params['emit_empty_heartbeat'] ?? false)
         );
+
+        $fallbackContent = $this->resolveStructuredReasoningJsonFallback(
+            $params,
+            $fullContent,
+            $fullReasoning,
+        );
+        $fallbackContent = $this->resolveEmptyContentFromReasoningFallback(
+            $params,
+            $fallbackContent,
+            $fullReasoning,
+            '',
+        );
+        if ($deferStructuredContent) {
+            $fullContent = $fallbackContent;
+            if ($fullContent !== '') {
+                $callback($fullContent);
+            }
+        } elseif ($fullContent === '' && $fallbackContent !== '') {
+            $fullContent = $fallbackContent;
+            $callback($fallbackContent);
+        }
 
         // 如果流式调用没有返回任何内容，抛出明确错误
         if (empty(trim($fullContent)) && empty(trim($fullReasoning))) {
@@ -652,6 +711,268 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         return $result;
+    }
+
+    /**
+     * Some OpenAI-compatible reasoning models occasionally place the final
+     * structured payload in reasoning_content while returning blank or invalid
+     * content. Only explicitly opted-in JSON transports may recover a payload,
+     * and callers may require exact top-level schema keys. The caller still owns
+     * all schema and business-contract validation.
+     *
+     * @param array<string,mixed> $params
+     */
+    private function resolveStructuredReasoningJsonFallback(
+        array $params,
+        string $content,
+        string $reasoningContent,
+    ): string {
+        if (empty($params['structured_reasoning_json_fallback'])) {
+            return $content;
+        }
+
+        $requiredKeys = [];
+        if (\is_array($params['structured_reasoning_json_required_keys'] ?? null)) {
+            foreach ($params['structured_reasoning_json_required_keys'] as $key) {
+                $key = \trim((string)$key);
+                if ($key !== '') {
+                    $requiredKeys[$key] = true;
+                }
+            }
+        }
+        $requiredKeys = \array_keys($requiredKeys);
+
+        if (\trim($content) !== '') {
+            if ($requiredKeys === [] || $this->jsonTextContainsRequiredKeys($content, $requiredKeys)) {
+                return $content;
+            }
+        }
+        if (\trim($reasoningContent) === '') {
+            return $content;
+        }
+
+        $candidates = $this->topLevelJsonCandidates($reasoningContent);
+        for ($index = \count($candidates) - 1; $index >= 0; $index--) {
+            $candidate = \trim($candidates[$index]);
+            if ($candidate === '') {
+                continue;
+            }
+            $decoded = \json_decode($candidate, true);
+            if (
+                \json_last_error() === JSON_ERROR_NONE
+                && \is_array($decoded)
+                && $this->jsonPayloadContainsRequiredKeys($decoded, $requiredKeys)
+            ) {
+                return $candidate;
+            }
+        }
+
+        return $content;
+    }
+
+    /**
+     * DeepSeek V4 thinking mode shares max_tokens with the final answer. When the
+     * chain-of-thought exhausts the budget, content is blank while reasoning still
+     * embeds a recoverable deliverable (e.g. site-brief markdown headings).
+     *
+     * @param array<string,mixed> $params
+     */
+    private function resolveEmptyContentFromReasoningFallback(
+        array $params,
+        string $content,
+        string $reasoningContent,
+        string $finishReason = '',
+    ): string {
+        if (\trim($content) !== '') {
+            return $content;
+        }
+        $reasoningContent = \trim($reasoningContent);
+        if ($reasoningContent === '') {
+            return $content;
+        }
+
+        $markers = [];
+        if (\is_array($params['reasoning_text_fallback_markers'] ?? null)) {
+            foreach ($params['reasoning_text_fallback_markers'] as $marker) {
+                $marker = \trim((string)$marker);
+                if ($marker !== '') {
+                    $markers[] = $marker;
+                }
+            }
+        }
+        if ($markers === []) {
+            // Safe default: only recover known site-brief polish deliverables.
+            $markers = ['# Role & System Prompt'];
+        }
+
+        $allow = !empty($params['reasoning_text_fallback']);
+        foreach ($markers as $marker) {
+            $pos = \strpos($reasoningContent, $marker);
+            if ($pos === false) {
+                continue;
+            }
+            $recovered = \trim(\substr($reasoningContent, $pos));
+            if ($recovered !== '') {
+                return $recovered;
+            }
+        }
+
+        if ($allow) {
+            return $reasoningContent;
+        }
+
+        if (\in_array(\strtolower(\trim($finishReason)), ['length', 'max_tokens'], true)) {
+            Env::log(
+                'ai_activity.log',
+                '[generate] empty_content finish_reason=' . $finishReason
+                . ' reasoning_len=' . \mb_strlen($reasoningContent),
+                'WARNING',
+                true,
+                true,
+                0
+            );
+        }
+
+        return $content;
+    }
+
+    /**
+     * Pass DeepSeek/OpenAI-compatible thinking controls through to the chat body.
+     * thinking_mode=false / thinking.type=disabled avoids CoT consuming max_tokens.
+     *
+     * @param array<string,mixed> $requestData
+     * @param array<string,mixed> $params
+     */
+    private function applyThinkingControls(array &$requestData, array $params): void
+    {
+        if (\array_key_exists('thinking', $params)) {
+            $thinking = $params['thinking'];
+            if (\is_array($thinking)) {
+                $type = \strtolower(\trim((string)($thinking['type'] ?? '')));
+                if (\in_array($type, ['enabled', 'disabled'], true)) {
+                    $requestData['thinking'] = ['type' => $type];
+                }
+            } elseif (\is_string($thinking) || \is_bool($thinking) || \is_int($thinking)) {
+                $enabled = \in_array($thinking, [true, 1, '1', 'true', 'TRUE', 'enabled'], true);
+                $disabled = \in_array($thinking, [false, 0, '0', 'false', 'FALSE', 'disabled'], true);
+                if ($enabled || $disabled) {
+                    $requestData['thinking'] = ['type' => $enabled ? 'enabled' : 'disabled'];
+                }
+            }
+        } elseif (\array_key_exists('thinking_mode', $params)) {
+            $mode = $params['thinking_mode'];
+            $enabled = \in_array($mode, [true, 1, '1', 'true', 'TRUE', 'enabled'], true);
+            $disabled = \in_array($mode, [false, 0, '0', 'false', 'FALSE', 'disabled'], true);
+            if ($enabled || $disabled) {
+                $requestData['thinking'] = ['type' => $enabled ? 'enabled' : 'disabled'];
+            }
+        }
+
+        if (!\array_key_exists('reasoning_effort', $params)) {
+            return;
+        }
+        $effort = \strtolower(\trim((string)$params['reasoning_effort']));
+        if (\in_array($effort, ['none', 'low', 'medium', 'high', 'xhigh', 'max'], true)) {
+            $requestData['reasoning_effort'] = $effort;
+        }
+    }
+
+    /**
+     * @param list<string> $requiredKeys
+     */
+    private function jsonTextContainsRequiredKeys(string $text, array $requiredKeys): bool
+    {
+        foreach ($this->topLevelJsonCandidates($text) as $candidate) {
+            $decoded = \json_decode($candidate, true);
+            if (
+                \json_last_error() === JSON_ERROR_NONE
+                && \is_array($decoded)
+                && $this->jsonPayloadContainsRequiredKeys($decoded, $requiredKeys)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<mixed> $payload
+     * @param list<string> $requiredKeys
+     */
+    private function jsonPayloadContainsRequiredKeys(array $payload, array $requiredKeys): bool
+    {
+        foreach ($requiredKeys as $key) {
+            if (!\array_key_exists($key, $payload)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return list<string> */
+    private function topLevelJsonCandidates(string $text): array
+    {
+        $candidates = [];
+        $length = \strlen($text);
+        for ($start = 0; $start < $length; $start++) {
+            $opening = $text[$start];
+            if ($opening !== '{' && $opening !== '[') {
+                continue;
+            }
+
+            $stack = [$opening];
+            $inString = false;
+            $escaped = false;
+            for ($cursor = $start + 1; $cursor < $length; $cursor++) {
+                $character = $text[$cursor];
+                if ($inString) {
+                    if ($escaped) {
+                        $escaped = false;
+                        continue;
+                    }
+                    if ($character === '\\') {
+                        $escaped = true;
+                        continue;
+                    }
+                    if ($character === '"') {
+                        $inString = false;
+                    }
+                    continue;
+                }
+
+                if ($character === '"') {
+                    $inString = true;
+                    continue;
+                }
+                if ($character === '{' || $character === '[') {
+                    $stack[] = $character;
+                    continue;
+                }
+                if ($character !== '}' && $character !== ']') {
+                    continue;
+                }
+
+                $expectedOpening = $character === '}' ? '{' : '[';
+                if (\array_pop($stack) !== $expectedOpening) {
+                    break;
+                }
+                if ($stack !== []) {
+                    continue;
+                }
+
+                $candidate = \substr($text, $start, $cursor - $start + 1);
+                $decoded = \json_decode($candidate, true);
+                if (\json_last_error() === JSON_ERROR_NONE && \is_array($decoded)) {
+                    $candidates[] = $candidate;
+                }
+                $start = $cursor;
+                break;
+            }
+        }
+
+        return $candidates;
     }
 
     /**
@@ -945,11 +1266,20 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      * @param array $data
      * @param array $proxyInfo
      * @param int $timeout
+     * @param int $lowSpeedTime
      * @param int $retryCount
      * @return array
      * @throws Exception
      */
-    private function callApiWithRetry(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout, int $retryCount = 0): array
+    private function callApiWithRetry(
+        string $url,
+        string $apiKey,
+        array $data,
+        array $proxyInfo,
+        int $timeout,
+        int $lowSpeedTime,
+        int $retryCount = 0
+    ): array
     {
         // SSE 模式下不做 PHP 层面的超时检测
         $isSseMode = SseContext::isSseEnabled();
@@ -960,7 +1290,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
         try {
-            $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
+            $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime);
             
             // 在执行前检查剩余时间，如果时间不足，提前抛出错误
             if ($timeLimit !== null && $timeLimit > 0) {
@@ -975,7 +1305,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             // 清除之前的错误
             error_clear_last();
             
-            $curlResult = $this->executeJsonCurl($ch);
+            $curlResult = $this->executeJsonCurl($ch, $timeout);
             $response = (string)$curlResult['body'];
             
             // 检查 PHP 超时（SSE 模式下跳过）
@@ -1000,7 +1330,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
             if ($error !== '') {
                 // 检查是否是超时错误
-                if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
+                if (stripos($error, 'timeout') !== false || stripos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
                 throw new Exception("API请求失败: {$error}");
@@ -1011,7 +1341,15 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
                 // 服务器错误，重试
                 $this->delayBeforeRetry($retryCount);
-                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
+                return $this->callApiWithRetry(
+                    $url,
+                    $apiKey,
+                    $data,
+                    $proxyInfo,
+                    $timeout,
+                    $lowSpeedTime,
+                    $retryCount + 1
+                );
             }
 
             if ($httpCode !== 200) {
@@ -1047,7 +1385,15 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             
             if ($retryCount < self::MAX_RETRIES) {
                 $this->delayBeforeRetry($retryCount);
-                return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
+                return $this->callApiWithRetry(
+                    $url,
+                    $apiKey,
+                    $data,
+                    $proxyInfo,
+                    $timeout,
+                    $lowSpeedTime,
+                    $retryCount + 1
+                );
             }
             throw new Exception("API调用失败（已重试{$retryCount}次，URL: {$url}）: " . $e->getMessage());
         }
@@ -1067,11 +1413,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     /**
      * @return array{body:string,http_code:int,error:string}
      */
-    private function executeJsonCurl(\CurlHandle $ch): array
+    private function executeJsonCurl(\CurlHandle $ch, int $timeout): array
     {
         $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
         if ($pump !== null) {
-            $handleId = $pump->register($ch);
+            $handleId = $pump->register($ch, $timeout > 0 ? (float)$timeout : null);
             $body = '';
             $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
 
@@ -1125,7 +1471,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         array $proxyInfo,
         int $timeout,
         ?callable $reasoningCallback = null,
-        ?int $lowSpeedTime = null
+        ?int $lowSpeedTime = null,
+        bool $emitEmptyHeartbeat = false
     ): void
     {
         // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
@@ -1137,6 +1484,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
         $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime);
+        if ($emitEmptyHeartbeat) {
+            $this->configureEmptyStreamHeartbeat($ch, $callback);
+        }
         
         // 在执行前检查剩余时间，如果时间不足，提前抛出错误
         if ($timeLimit !== null && $timeLimit > 0) {
@@ -1206,7 +1556,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             
         };
 
-        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk);
+        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk, $timeout);
         
         // 获取 HTTP 状态码
         $httpCode = $curlResult['http_code'];
@@ -1226,7 +1576,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         if ($error) {
             // curl 超时错误始终需要检测（非 PHP 层面超时）
-            if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
+            if (stripos($error, 'timeout') !== false || stripos($error, 'timed out') !== false) {
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
             throw new Exception("流式API调用失败: {$error}");
@@ -1298,11 +1648,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      * @param callable(string):void $consumeChunk
      * @return array{http_code:int,error:string}
      */
-    private function executeStreamCurl(\CurlHandle $ch, callable $consumeChunk): array
+    private function executeStreamCurl(\CurlHandle $ch, callable $consumeChunk, int $timeout): array
     {
         $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
         if ($pump !== null) {
-            $handleId = $pump->register($ch);
+            $handleId = $pump->register($ch, $timeout > 0 ? (float)$timeout : null);
             $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
 
             try {
@@ -1351,10 +1701,45 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     }
 
     /**
+     * Keep the outer PageBuilder SSE response active while an upstream model has
+     * not produced its first token yet. The empty callback is transport-only and
+     * never counts as model content.
+     */
+    private function configureEmptyStreamHeartbeat(\CurlHandle $ch, callable $callback): void
+    {
+        $lastHeartbeatAt = \microtime(true);
+        $progress = static function (
+            mixed $curl,
+            float $downloadTotal,
+            float $downloadNow,
+            float $uploadTotal,
+            float $uploadNow
+        ) use ($callback, &$lastHeartbeatAt): int {
+            $now = \microtime(true);
+            if (($now - $lastHeartbeatAt) >= 5.0) {
+                $callback('');
+                $lastHeartbeatAt = $now;
+            }
+
+            return 0;
+        };
+
+        \curl_setopt($ch, \CURLOPT_NOPROGRESS, false);
+        if (\defined('CURLOPT_XFERINFOFUNCTION')) {
+            \curl_setopt($ch, \CURLOPT_XFERINFOFUNCTION, $progress);
+            return;
+        }
+
+        \curl_setopt($ch, \CURLOPT_PROGRESSFUNCTION, $progress);
+    }
+
+    /**
      * @param string $url
      * @param string $apiKey
      * @param array $data
      * @param array $proxyInfo
+     * @param int $timeout
+     * @param int|null $lowSpeedTime
      * @return \CurlHandle|false
      */
     private function initCurl(
@@ -1545,4 +1930,3 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         return $message;
     }
 }
-

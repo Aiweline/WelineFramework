@@ -14,6 +14,20 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 再投影为既有 `id/customer_id/name/email/username` 五字段数组。该可选 Provider 缺失或查询异常时列表
 仍为空，配送核心能力保持可用；Shipping 不得引用 Frontend User Model、Token 或内部 Service。
 
+## Checkout Quote（P2E-002）
+
+- 公开契约：`ShippingQuoteServiceInterface::listOptions()` / `quote()`；
+  所有金额使用 integer minor unit
+- `ScopedShippingQuoteService` 只读取激活的 ShippingService、Zone、
+  RateTemplate 与 FreeShippingRule 数据；缺服务、地区、模板或币种时
+  fail closed
+- `activeConfigVersion()` 是上述有效配置的确定性 hash，不接受浏览器
+  充当配置事实源；Checkout 冻结与提交都校验版本漂移
+- 全虚拟组返回 `amount_minor=0` / `free_reason=virtual_only`；需要配送的
+  CheckoutGroup 只调用一次 Quote
+- 浏览器可通过 `shippingInfo.listQuoteOptions` / `quote` 做展示性报价，
+  但下单事实必须由 `checkout.freezeQuote` 从可信 Cart 重新生成
+
 ## 文档导航
 
 - **[使用指南](使用指南.md)** - 详细的功能使用说明和操作指南
@@ -189,35 +203,23 @@ php bin/w module:upgrade --module Weline_Shipping
 ### 3. 使用前端API
 
 ```javascript
-// 获取可用配送服务
-fetch('/shipping/frontend/shippingservice/getAvailableServices', {
-    method: 'POST',
-    body: JSON.stringify({
-        country_code: 'CN',
-        province: '北京',
-        city: '北京市',
-        district: '朝阳区'
-    })
+const ShippingApi = await Weline.Api.resource('shippingInfo');
+
+const location = await ShippingApi.getByLocation({
+    country_code: 'CN',
+    province: '北京',
+    city: '北京市',
+    district: '朝阳区'
 });
 
-// 计算配送费用
-fetch('/shipping/frontend/shippingservice/calculateFee', {
-    method: 'POST',
-    body: JSON.stringify({
-        service_id: 1,
-        order_amount: 150.00,
-        weight: 2.5
-    })
+const options = await ShippingApi.listQuoteOptions({
+    address: {country_code: 'CN', province: '北京', city: '北京市'},
+    lines: [{qty_minor: 1, unit_price_minor: 15000, requires_shipping: true}],
+    currency: 'CNY'
 });
 
-// 查询物流跟踪
-fetch('/shipping/frontend/tracking/query', {
-    method: 'POST',
-    body: JSON.stringify({
-        tracking_number: '1234567890',
-        carrier_id: 1
-    })
-});
+// 下单不得复用这里的浏览器 lines；必须调用 checkout.freezeQuote，
+// 由服务端从当前 Cart 重新冻结并报价。
 ```
 
 详细使用说明请参考 [使用指南](使用指南.md)。
@@ -247,9 +249,9 @@ fetch('/shipping/frontend/tracking/query', {
 
 ## 版本
 
-**当前版本**：1.0.0
+**当前版本**：2.2.0
 
-**更新日期**：2024-01-14
+**更新日期**：2026-07-27
 
 ## 技术支持
 

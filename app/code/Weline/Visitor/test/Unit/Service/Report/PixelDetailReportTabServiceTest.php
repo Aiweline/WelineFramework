@@ -384,6 +384,29 @@ final class PixelDetailReportTabServiceTest extends TestCase
         self::assertStringContainsString('row provider', $tab['error']);
     }
 
+    public function testEmptyRowProviderYieldsEmptyRowsWithoutError(): void
+    {
+        $now = new DateTimeImmutable('2026-07-25 12:00:00', new DateTimeZone('UTC'));
+        $from = new DateTimeImmutable('2026-07-20 00:00:00', new DateTimeZone('UTC'));
+        $to = new DateTimeImmutable('2026-07-25 00:00:00', new DateTimeZone('UTC'));
+
+        // 模拟 hasPixelAttributionColumns=false → fetchHotReportEventRows 静默返回 []
+        $service = new PixelDetailReportTabService();
+        $tab = $service->buildTab(
+            'pixel_channels',
+            $from,
+            $to,
+            1,
+            static fn(array $ctx): array => [],
+            50,
+            $now
+        );
+
+        self::assertSame('pixel_channels', $tab['code']);
+        self::assertSame([], $tab['rows']);
+        self::assertSame('', $tab['error']);
+    }
+
     public function testDrilldownExtrasMapsDimensionToListFilter(): void
     {
         self::assertSame(

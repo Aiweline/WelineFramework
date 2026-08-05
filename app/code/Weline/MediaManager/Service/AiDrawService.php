@@ -25,7 +25,10 @@ class AiDrawService
     /**
      * @param array<string,mixed> $input
      */
-    public function streamGenerate(SseWriter $sse, int $adminId, array $input): void
+    /**
+     * @param SseWriter|CollectingSseWriter $sse
+     */
+    public function streamGenerate(object $sse, int $adminId, array $input): void
     {
         $this->sessionStore->purgeExpired();
         $sessionId = \trim((string)($input['session_id'] ?? ''));
@@ -308,6 +311,101 @@ class AiDrawService
     }
 
     /**
+     * Rewrite a short user prompt into a richer image-generation prompt.
+     *
+     * @return array{success:bool,message:string,data?:array{prompt:string}}
+     */
+    public function polishPrompt(string $prompt): array
+    {
+        $prompt = \trim($prompt);
+        if ($prompt === '') {
+            return [
+                'success' => false,
+                'message' => (string)__('请先输入提示词'),
+            ];
+        }
+        if (\mb_strlen($prompt, 'UTF-8') > 4000) {
+            $prompt = (string)\mb_substr($prompt, 0, 4000, 'UTF-8');
+        }
+
+        if ($this->isMockEnabled()) {
+            $mock = \trim($prompt . '，主体清晰，构图完整，柔和光线，高质量细节，适合文生图');
+            return [
+                'success' => true,
+                'message' => (string)__('润色完成'),
+                'data' => ['prompt' => $mock],
+            ];
+        }
+
+        $instruction = (string)__(
+            "你是图像生成提示词润色助手。请把用户的简短描述改写成更适合文生图的提示词：保留原意，补充主体、构图、风格、光线与画质关键词；不要解释、不要前后缀说明，只输出润色后的提示词本身。\n\n用户描述：\n%{1}",
+            [$prompt]
+        );
+
+        try {
+            $textModelCode = $this->resolvePolishModelCode();
+            if ($textModelCode === '') {
+                return [
+                    'success' => false,
+                    'message' => (string)__(
+                        '润色需要可用的文本模型：请在「AI - 场景适配器」为 %{1} 绑定 text2text 模型，或在「AI - 默认模型」配置全局默认文本模型。',
+                        [self::SCENARIO_CODE]
+                    ),
+                ];
+            }
+
+            /** @var \Weline\Ai\Api\AiRuntimeInterface $aiRuntime */
+            $aiRuntime = ObjectManager::getInstance(\Weline\Ai\Api\AiRuntimeInterface::class);
+            $polished = \trim($aiRuntime->generate(
+                $instruction,
+                $textModelCode,
+                null,
+                null,
+                ['disable_conversation_history' => true, 'disable_conversation_persist' => true],
+                null,
+                true
+            ));
+            $polished = \preg_replace('/^["“]|["”]$/u', '', $polished) ?? $polished;
+            $polished = \trim((string)$polished);
+            if ($polished === '') {
+                return [
+                    'success' => false,
+                    'message' => (string)__('润色失败：模型未返回内容'),
+                ];
+            }
+
+            return [
+                'success' => true,
+                'message' => (string)__('润色完成'),
+                'data' => ['prompt' => $polished],
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => (string)__('润色失败：%{1}', [$this->toPlainMessage($throwable->getMessage())]),
+            ];
+        }
+    }
+
+    private function resolvePolishModelCode(): string
+    {
+        $model = $this->resolveAiService()->resolveModel(null, self::SCENARIO_CODE, 'text2text');
+
+        return \is_array($model) ? \trim((string)($model['model_code'] ?? '')) : '';
+    }
+
+    /**
+     * AI 层的错误消息可能带有配置引导 HTML，弹层/Toast 只展示纯文本。
+     */
+    private function toPlainMessage(string $message): string
+    {
+        $message = (string)\preg_replace('#<div class="ai-config-links".*?</div>#is', '', $message);
+        $message = \strip_tags($message);
+
+        return \trim((string)\preg_replace('/\s+/u', ' ', $message));
+    }
+
+    /**
      * @param array<string,mixed> $input
      * @return array<string,mixed>
      */
@@ -383,11 +481,15 @@ class AiDrawService
     /**
      * 长耗时文生图期间维持 SSE 心跳，避免 WLS/浏览器因长时间无字节而静默断连。
      *
+     * @param SseWriter|CollectingSseWriter $sse
      * @param array<string,mixed> $params
      * @return array{bytes:string,mime_type:string}
      */
-    private function generateImageBytesWithSseKeepalive(SseWriter $sse, string $prompt, array $params, int $adminId): array
+    private function generateImageBytesWithSseKeepalive(object $sse, string $prompt, array $params, int $adminId): array
     {
+        if (!($sse instanceof SseWriter) && !($sse instanceof CollectingSseWriter)) {
+            throw new \InvalidArgumentException('SSE writer must be SseWriter or CollectingSseWriter.');
+        }
         if ($this->isMockEnabled()) {
             return $this->mockImageBytes((string)($params['output_format'] ?? 'png'));
         }

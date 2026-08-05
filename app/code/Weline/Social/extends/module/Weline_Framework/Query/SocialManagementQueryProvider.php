@@ -72,7 +72,21 @@ class SocialManagementQueryProvider implements QueryProviderInterface
             'name' => __('融媒体管理查询'),
             'description' => __('提供 Weline_Social 平台、账户、AI 创意和发布批次操作。'),
             'module' => 'Weline_Social',
-            'operations' => [
+            'operations' => \array_map(
+                static function (array $operation): array {
+                    $sourceId = ($operation['name'] ?? '') === 'completeAuthorization'
+                        ? 'Weline_Social::social_oauth_callback'
+                        : (($operation['mode'] ?? '') === 'read'
+                            ? 'Weline_Social::social_index'
+                            : 'Weline_Social::social');
+                    return $operation + [
+                        'backend_acl' => [
+                            'kind' => 'source',
+                            'source_id' => $sourceId,
+                        ],
+                    ];
+                },
+                [
                 ['name' => 'listPlatforms', 'description' => __('列出平台注册表。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['force_reload' => ['type' => 'bool']]],
                 ['name' => 'getPlatform', 'description' => __('获取单个平台定义。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'graph' => true, 'params' => ['platform_code' => ['type' => 'string', 'required' => true, 'max_length' => 64]]],
                 ['name' => 'listAccounts', 'description' => __('列出已连接账户。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => []],
@@ -95,7 +109,8 @@ class SocialManagementQueryProvider implements QueryProviderInterface
                 ['name' => 'generateCreative', 'description' => __('生成融媒体创意。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['title' => ['type' => 'string', 'max_length' => 190], 'prompt' => ['type' => 'string', 'max_length' => 4000], 'platforms' => ['type' => 'list', 'max_items' => 100], 'fake_mode' => ['type' => 'bool'], 'use_ai' => ['type' => 'bool'], 'assets' => ['type' => 'list', 'max_items' => 50]]],
                 ['name' => 'createPublishBatch', 'description' => __('创建一键多平台发布批次。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'write', 'params' => ['draft_id' => ['type' => 'int', 'required' => true, 'min' => 1], 'account_ids' => ['type' => 'list', 'max_items' => 100], 'scope_type' => ['type' => 'string', 'max_length' => 32], 'scope_id' => ['type' => 'int', 'min' => 0], 'child_scope_type' => ['type' => 'string', 'max_length' => 32], 'child_scope_id' => ['type' => 'int', 'min' => 0], 'website_id' => ['type' => 'int', 'min' => 0], 'website_ids' => ['type' => 'list', 'max_items' => 500], 'all_sites' => ['type' => 'bool'], 'content_kind' => ['type' => 'string', 'max_length' => 32], 'title' => ['type' => 'string', 'max_length' => 190], 'scheduled_at' => ['type' => 'string', 'max_length' => 32], 'fake_mode' => ['type' => 'bool']]],
                 ['name' => 'getPublishBatchStatus', 'description' => __('获取发布批次状态。'), 'frontend' => true, 'backend' => true, 'external' => true, 'mode' => 'read', 'params' => ['batch_id' => ['type' => 'int', 'required' => true, 'min' => 1]]],
-            ],
+                ],
+            ),
         ];
     }
 

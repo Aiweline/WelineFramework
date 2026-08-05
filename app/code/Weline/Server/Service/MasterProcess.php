@@ -28,6 +28,10 @@ use Weline\Server\Log\LogConfig;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Protocol\Http3\NativeTransportLibrary;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Edge\EdgeAdapterInterface;
+use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectEndpointReader;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
 use Weline\Server\Service\Control\IpcControlGateway;
@@ -399,6 +403,13 @@ class MasterProcess
             $this->log(__('Master 启动阶段：bootstrapping 实例信息已写入'));
             $this->logger->flush(true);
 
+            // A native TLS Worker may start only after the schema-2 Master
+            // lease and endpoint generation are both durable. Resolve one
+            // immutable serving generation now and carry the exact fence in
+            // the deferred child-start context; no Worker reads a mutable
+            // endpoint, pointer, legacy ssl map or certificate directory.
+            $this->context = $this->attachNativeServingManifest($this->context);
+
             // 打印当前 Master 自愈（子进程复活）HA 模式，便于部署方快速判断行为
             $selfHealMode = $this->resolveSelfHealModeForLog();
             $this->log(__('Master 自愈模式：%{1}', [$selfHealMode]));
@@ -427,6 +438,14 @@ class MasterProcess
                 }
             } catch (\Throwable $shutdownError) {
                 WlsLogger::warning_('[Master] 关闭子进程过程中出现错误: ' . $shutdownError->getMessage());
+            }
+
+            try {
+                $this->orchestrator?->releaseMasterOwnedEdgeLeases();
+            } catch (\Throwable $leaseError) {
+                WlsLogger::warning_(
+                    '[Master] 最终边缘端口租约释放失败: ' . $leaseError->getMessage()
+                );
             }
             
             // 清理 IPC 控制服务器
@@ -654,8 +673,33 @@ class MasterProcess
             $this->masterLeaseFile = $path;
             WlsLogger::info_('[Master] Master lease 已写入: ' . $path);
         } catch (\Throwable $throwable) {
-            WlsLogger::warning_('[Master] Master lease 写入失败: ' . $throwable->getMessage());
+            WlsLogger::error_('[Master] Master lease 写入失败，拒绝启动: ' . $throwable->getMessage());
+            throw $throwable;
         }
+    }
+
+    private function attachNativeServingManifest(?ServiceContext $context): ?ServiceContext
+    {
+        if ($context === null) {
+            return $context;
+        }
+        $context = ServingManifestRuntimeFence::publishForContext($context);
+        if (!$context->sslEnabled
+            || \strtolower(\trim((string)$context->getConfig(
+                'wls.edge.adapter',
+                '',
+            ))) !== EdgeAdapterInterface::NAME_WLS
+        ) {
+            return $context;
+        }
+        $fence = ServingManifestRuntimeFence::fromContext($context);
+        $this->log(
+            '[Master] Native TLS serving manifest bound: generation='
+            . $fence['generation']
+            . ' digest=' . $fence['digest'],
+        );
+
+        return $context;
     }
 
     private function markMasterLeaseStopping(): void
@@ -682,20 +726,55 @@ class MasterProcess
         return \bin2hex(\random_bytes(32));
     }
 
+    private static function monotonicSeconds(): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException('WLS Master monotonic clock is invalid.');
+        }
+
+        return $now;
+    }
+
     private function resolveNextMasterEpoch(): int
     {
         $data = null;
         $file = $this->getInstanceFile();
-        if (\is_file($file)) {
-            $raw = @\file_get_contents($file);
-            $decoded = \is_string($raw) && $raw !== '' ? \json_decode($raw, true) : null;
+        $raw = GatewayProjectStateFilesystem::readOptional(
+            $file,
+            2_097_152,
+            'WLS Master endpoint',
+        );
+        if ($raw !== null) {
+            $decoded = \json_decode($raw, true);
             $data = \is_array($decoded) ? $decoded : null;
+            if ($data === null) {
+                throw new \RuntimeException('WLS Master endpoint JSON is invalid.');
+            }
         }
 
-        $lastEpoch = \max(
-            (int)($data['epoch'] ?? 0),
-            (int)($data['master_epoch'] ?? 0)
+        // `epoch` is a historical endpoint field and is never Master
+        // ownership evidence in WLS 2.0. Only the exact master_epoch or a
+        // protected same-boot schema-2 lease may advance this generation.
+        $lastEpoch = (int)($data['master_epoch'] ?? 0);
+
+        $leaseManager = new MasterLeaseManager();
+        $validation = $leaseManager->validateRunningLease(
+            MasterLeaseManager::pathForInstance($this->instanceName),
+            expectedInstance: $this->instanceName,
+            requireManagedName: true,
         );
+        if (($validation['same_boot'] ?? false) === true
+            && \is_array($validation['lease'] ?? null)
+        ) {
+            $lastEpoch = \max(
+                $lastEpoch,
+                (int)($validation['lease']['master_epoch'] ?? 0),
+            );
+        }
+        if ($lastEpoch >= PHP_INT_MAX) {
+            throw new \RuntimeException('WLS Master epoch is exhausted.');
+        }
 
         return \max(1, $lastEpoch + 1);
     }
@@ -1433,11 +1512,16 @@ class MasterProcess
     public static function getMasterEndpoint(string $instanceName = 'default'): ?array
     {
         $file = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
-        if (!\is_file($file)) {
+        try {
+            $content = GatewayProjectStateFilesystem::readOptional(
+                $file,
+                2_097_152,
+                'WLS Master endpoint',
+            );
+        } catch (\Throwable) {
             return null;
         }
-        $content = @\file_get_contents($file);
-        if (!$content) {
+        if ($content === null) {
             return null;
         }
         $data = \json_decode($content, true);
@@ -1564,9 +1648,9 @@ class MasterProcess
         \stream_set_blocking($conn, true);
         
         $response = '';
-        $deadline = \microtime(true) + 5;
+        $deadline = self::monotonicSeconds() + 5.0;
         
-        while (\microtime(true) < $deadline) {
+        while (self::monotonicSeconds() < $deadline) {
             $read = [$conn];
             $write = $except = null;
             $ready = @\stream_select($read, $write, $except, 1);
@@ -1641,14 +1725,12 @@ class MasterProcess
      */
     public static function sendSslCertReloadCommand(string $instanceName = 'default', array $domains = []): bool
     {
-        try {
-            /** @var IpcControlGateway $gateway */
-            $gateway = ObjectManager::getInstance(IpcControlGateway::class);
-            $result = $gateway->reloadSslCert($instanceName, $domains);
-            return (bool)($result['success'] ?? false);
-        } catch (\Throwable) {
-            return false;
-        }
+        unset($domains);
+        WlsLogger::warning_(
+            '[Master] Legacy sendSslCertReloadCommand is disabled for instance=' . $instanceName
+            . '; publish an immutable manifest and use reloadSslCertAndWait().',
+        );
+        return false;
     }
 
     /**
@@ -1836,25 +1918,33 @@ class MasterProcess
      * 释放启动锁
      * 
      * 在所有子进程启动完成后调用，允许其他进程检测服务器状态或重新启动。
-     * 优先使用回调（可正确关闭文件句柄），否则直接删除锁文件。
+     * 只能通过持有者回调关闭 flock 句柄；不得按路径删除持久锁 inode。
      */
     private function releaseStartupLock(): void
     {
-        $this->triggerDeferredSslRetryAfterStartup();
-
         // 优先使用回调（Start.php 传入的 releaseStartLock 方法可正确关闭句柄）
         if ($this->onStartedCallback !== null) {
             ($this->onStartedCallback)();
             $this->log(__('启动锁已释放（回调）'));
-            return;
+        } else {
+            // A background master-only child never owns the parent's flock
+            // handle. Deleting the pathname would create a second lock inode
+            // and permit a concurrent launch while the parent still owns the
+            // original inode. The parent observes READY and releases its own
+            // descriptor; a standalone Master has no launch lock to release.
+            $this->log(__('启动锁由启动器持有，Master 无需释放'));
         }
 
-        // 后备方案：直接删除锁文件
-        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $this->instanceName . '.lock';
-        
-        if (\is_file($lockFile)) {
-            @\unlink($lockFile);
-            $this->log(__('启动锁已释放'));
+        // Certificate reconciliation is auxiliary work after READY. It must
+        // never retain the startup lock or escape into the Master main loop if
+        // ObjectManager, DNS inspection or child creation fails.
+        try {
+            $this->triggerDeferredSslRetryAfterStartup();
+        } catch (\Throwable $throwable) {
+            $this->log(__(
+                'SSL 启动后补偿任务未能启动：%{1}；WLS 保持 READY，后续由证书待确认队列/Agent 重试。',
+                [\substr($throwable->getMessage(), 0, 512)],
+            ));
         }
     }
 
@@ -1937,11 +2027,22 @@ class MasterProcess
         $gateway = \is_array($this->config['gateway'] ?? null)
             ? $this->config['gateway']
             : [];
+        $requested = \strtolower(\trim((string)(
+            $gateway['requested_mode'] ?? $gateway['mode'] ?? ''
+        )));
+        $mode = \strtolower(\trim((string)($gateway['mode'] ?? '')));
+        $validGatewayIntent = ($requested
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+                && $mode
+                    === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY)
+            || ($requested
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO
+                && \in_array($mode, [
+                    \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY,
+                    \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS,
+                ], true));
         return ($gateway['certificate_pending'] ?? false) === true
-            && \hash_equals(
-                \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY,
-                \strtolower(\trim((string)($gateway['mode'] ?? ''))),
-            )
+            && $validGatewayIntent
             && \hash_equals(
                 \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL,
                 \trim((string)($gateway['protocol'] ?? '')),
@@ -1989,20 +2090,9 @@ class MasterProcess
             return null;
         }
 
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
-        if (!\is_dir($instanceDir)) {
-            return null;
-        }
-
-        $files = @\glob($instanceDir . '*.json') ?: [];
-        foreach ($files as $instanceFile) {
-            $instanceName = (string)\pathinfo($instanceFile, \PATHINFO_FILENAME);
+        $endpoints = (new GatewayProjectEndpointReader())->all();
+        foreach ($endpoints as $instanceName => $data) {
             if ($instanceName === '' || $instanceName === $this->instanceName) {
-                continue;
-            }
-
-            $data = @\json_decode((string)@\file_get_contents($instanceFile), true);
-            if (!\is_array($data)) {
                 continue;
             }
 
