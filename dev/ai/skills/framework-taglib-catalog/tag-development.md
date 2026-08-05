@@ -28,6 +28,7 @@ Taglib 适合扩展模板声明语义。优先判断：
 5. `document()` 写清用途与最小示例；用户可见文案走 `__()` / `<lang>`
 6. 禁止在标签属性协议里鼓励模板写 `<?= ?>`；动态值走 AttributeCodeCompiler / 框架约定
 7. 跨模块读数据用 `w_query` / 已发布 Interface，不要在标签里 `use` 对方 Model/Service
+8. **浮层/下拉交互自洽**：选择器类标签的定位、开合、hover 保活必须闭包在标签输出的 HTML/CSS/JS 内。共用定位能力调用 `Weline\Framework\View\Taglib\Support\FloatingDropdownEmitter::script()`，使用 `window.WelineTaglibFloatingDropdown`；**禁止**依赖或向 Theme.js 的 `window.WelineSmartDropdown` 写入标签专属逻辑，**禁止**在各 Taglib 内再复制一份 SmartDropdown 内联块。
 
 ### 最小骨架
 

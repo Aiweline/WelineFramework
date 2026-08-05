@@ -107,6 +107,8 @@ ID 与 data-only metadata。Taglib Model/Controller 不得引用 ModuleManager M
 
 例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:language:switcher .../>`。禁止手写裸 select 拼领域选项。
 
+浮层定位与 hover 保活用 `FloatingDropdownEmitter` / `WelineTaglibFloatingDropdown` 在标签输出内自洽，禁止往 Theme.js 塞标签交互。
+
 新增标签后必须在同一任务内更新上述目录与映射表（见 `tag-development.md`）。
 
 ## 快速示例
