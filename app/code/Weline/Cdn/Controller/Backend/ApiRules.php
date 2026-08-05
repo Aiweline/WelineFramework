@@ -25,7 +25,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_api_rules_manager', 'API规则管理', 'mdi-code-tags', 'API规则管理', '')]
+#[AclAttribute('Weline_Cdn::cdn_api_rules_manager', 'API规则管理', 'mdi-code-tags', 'API规则管理', 'Weline_Cdn::cdn_manager')]
 class ApiRules extends BackendController
 {
     /**

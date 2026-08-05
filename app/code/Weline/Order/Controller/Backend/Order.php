@@ -11,10 +11,16 @@ declare(strict_types=1);
 
 namespace Weline\Order\Controller\Backend;
 
+use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
+use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Order\Model\Order as OrderModel;
+use Weline\Order\Service\OrderObjectAccessService;
+use Weline\Order\Service\OrderObjectScopeService;
 use Weline\Order\Service\OrderService;
 use Weline\Order\Service\OrderStateMachine;
 
@@ -73,9 +79,36 @@ class Order extends BackendController
             $filters['keyword'] = $keyword;
         }
         
-        $orders = $this->orderService->getOrderList($filters);
-        $total = count($orders);
+        $loadFilters = $filters;
+        unset($loadFilters['page'], $loadFilters['page_size']);
+        $candidates = $this->orderService->getOrderList($loadFilters);
+        $orders = [];
+        $actionGrantVersions = [];
+        $scopeService = ObjectManager::getInstance(OrderObjectScopeService::class);
+        $guard = $this->objectAuthorizationGuard();
+        foreach ($candidates as $candidate) {
+            if (!$candidate instanceof OrderModel) {
+                continue;
+            }
+            try {
+                $scope = $scopeService->fromOrder($candidate);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!$guard->isAllowed(ObjectAction::LIST, $scope)) {
+                continue;
+            }
+            $orders[] = $candidate;
+            foreach ([ObjectAction::UPDATE, ObjectAction::REFUND, ObjectAction::FULFILL] as $action) {
+                $result = $guard->check($action, $scope);
+                if ($result->allowed) {
+                    $actionGrantVersions[(int)$candidate->getId()][$action] = $result->matchedGrantVersion;
+                }
+            }
+        }
+        $total = \count($orders);
         $totalPages = (int)ceil($total / $pageSize);
+        $orders = \array_slice($orders, ($page - 1) * $pageSize, $pageSize);
         
         $this->assign('orders', $orders);
         $this->assign('total', $total);
@@ -83,6 +116,7 @@ class Order extends BackendController
         $this->assign('page_size', $pageSize);
         $this->assign('total_pages', $totalPages);
         $this->assign('filters', $filters);
+        $this->assign('order_action_grant_versions', $actionGrantVersions);
         
         return $this->fetch();
     }
@@ -95,14 +129,16 @@ class Order extends BackendController
     {
         $orderId = (int)$this->request->getParam('id');
         
-        if (!$orderId) {
-            $this->getMessageManager()->addError(__('订单ID不能为空'));
-            $this->redirect('*/index');
-            return;
+        try {
+            $record = $this->requireOrder($orderId, ObjectAction::VIEW);
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
         }
         
         try {
-            $order = $this->orderService->getOrder($orderId);
+            $order = $record['order'];
             $items = $this->orderService->getOrderItems($orderId);
             
             // 获取支付记录
@@ -143,6 +179,11 @@ class Order extends BackendController
             $this->assign('history', $history);
             $this->assign('available_transitions', $availableTransitions);
             $this->assign('current_status', $currentStatus);
+            $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, $record['scope']);
+            $this->assign(
+                'expected_grant_version',
+                $updateGrant->allowed ? $updateGrant->matchedGrantVersion : 0,
+            );
             
             return $this->fetch();
             
@@ -160,18 +201,25 @@ class Order extends BackendController
     {
         $orderId = (int)$this->request->getParam('id');
         
-        if (!$orderId) {
-            $this->getMessageManager()->addError(__('订单ID不能为空'));
-            $this->redirect('*/index');
-            return;
+        try {
+            $record = $this->requireOrder($orderId, ObjectAction::VIEW);
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
         }
         
         try {
-            $order = $this->orderService->getOrder($orderId);
+            $order = $record['order'];
             $items = $this->orderService->getOrderItems($orderId);
             
             $this->assign('order', $order);
             $this->assign('items', $items);
+            $updateGrant = $this->objectAuthorizationGuard()->check(ObjectAction::UPDATE, $record['scope']);
+            $this->assign(
+                'expected_grant_version',
+                $updateGrant->allowed ? $updateGrant->matchedGrantVersion : 0,
+            );
             
             return $this->fetch();
             
@@ -192,19 +240,34 @@ class Order extends BackendController
         
         try {
             if ($orderId) {
-                // 更新订单
+                $record = $this->requireOrder($orderId, ObjectAction::UPDATE);
+                $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                    ObjectAction::UPDATE,
+                    $record['scope'],
+                    $this->expectedGrantVersion(),
+                );
                 $this->orderService->updateOrder($orderId, $data);
-                $message = __('订单更新成功');
+                $message = \__('订单更新成功');
             } else {
-                // 创建订单
+                $scope = ObjectManager::getInstance(OrderObjectScopeService::class)
+                    ->fromExplicitCreate($data);
+                $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                    ObjectAction::CREATE,
+                    $scope,
+                    $this->expectedGrantVersion(),
+                );
                 $order = $this->orderService->createOrder($data);
                 $orderId = $order->getId();
-                $message = __('订单创建成功');
+                $message = \__('订单创建成功');
             }
             
             $this->getMessageManager()->addSuccess($message);
             $this->redirect('*/view?id=' . $orderId);
             
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+            $this->getMessageManager()->addError($exception->getMessage());
+            $this->redirect('*/edit' . ($orderId ? '?id=' . $orderId : ''));
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
             $this->redirect('*/edit' . ($orderId ? '?id=' . $orderId : ''));
@@ -220,15 +283,18 @@ class Order extends BackendController
         $orderId = (int)$this->request->getParam('id');
         $reason = trim((string)$this->request->getPost('reason', ''));
         
-        if (!$orderId) {
-            $this->getMessageManager()->addError(__('订单ID不能为空'));
-            $this->redirect('*/index');
-            return;
-        }
-        
         try {
+            $record = $this->requireOrder($orderId, ObjectAction::UPDATE);
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::UPDATE,
+                $record['scope'],
+                $this->expectedGrantVersion(),
+            );
             $this->orderService->cancelOrder($orderId, $reason);
-            $this->getMessageManager()->addSuccess(__('订单取消成功'));
+            $this->getMessageManager()->addSuccess(\__('订单取消成功'));
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+            $this->getMessageManager()->addError($exception->getMessage());
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
         }
@@ -247,20 +313,60 @@ class Order extends BackendController
         $comment = trim((string)$this->request->getPost('comment', ''));
         $notifyCustomer = (bool)$this->request->getPost('notify_customer', false);
         
-        if (!$orderId || !$newStatus) {
-            $this->getMessageManager()->addError(__('参数错误'));
+        if (!$newStatus) {
+            $this->getMessageManager()->addError(\__('参数错误'));
             $this->redirect('*/index');
             return;
         }
         
         try {
+            $record = $this->requireOrder($orderId, ObjectAction::UPDATE);
+            $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                ObjectAction::UPDATE,
+                $record['scope'],
+                $this->expectedGrantVersion(),
+            );
             $this->stateMachine->transition($orderId, $newStatus, $comment, $notifyCustomer);
-            $this->getMessageManager()->addSuccess(__('订单状态更新成功'));
+            $this->getMessageManager()->addSuccess(\__('订单状态更新成功'));
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+            $this->getMessageManager()->addError($exception->getMessage());
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
         }
         
         $this->redirect('*/view?id=' . $orderId);
     }
-}
 
+    /**
+     * @return array{order:OrderModel,scope:ScopeIdentity}
+     */
+    private function requireOrder(int $orderId, string $action): array
+    {
+        $record = ObjectManager::getInstance(OrderObjectAccessService::class)->find($orderId);
+        if ($record === null) {
+            $this->objectAuthorizationGuard()->denyForQuery($action, ScopeIdentity::global());
+        }
+        $this->objectAuthorizationGuard()->requireForQuery($action, $record['scope']);
+
+        return $record;
+    }
+
+    private function objectAuthorizationGuard(): BackendObjectAuthorizationGuardInterface
+    {
+        return ObjectManager::getInstance(BackendObjectAuthorizationGuardInterface::class);
+    }
+
+    private function expectedGrantVersion(): int
+    {
+        $value = $this->request->getParam('expected_grant_version', 0);
+        if (\is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (\is_string($value) && \preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
+            return (int)$value;
+        }
+
+        return 0;
+    }
+}

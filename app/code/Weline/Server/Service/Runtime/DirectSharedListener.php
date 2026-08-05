@@ -16,12 +16,74 @@ final class DirectSharedListener
 {
     public const INHERITED_FD = 3;
 
+    /** @var resource|null Startup-owned listener awaiting Master adoption. */
+    private static mixed $startupListener = null;
+
+    private static string $startupHost = '';
+
+    private static int $startupPort = 0;
+
+    private static string $startupLeaseId = '';
+
     /** @var resource|null */
     private mixed $listener = null;
 
     private string $host = '';
 
     private int $port = 0;
+
+    /**
+     * Install a listener that was bound before the Master started. The actual
+     * socket endpoint is checked here, before any child can receive FD 3.
+     * Ownership transfers to the first matching acquire() call.
+     *
+     * @param resource $listener
+     */
+    public static function installStartupListener(
+        mixed $listener,
+        string $host,
+        int $port,
+        string $leaseId,
+    ): void {
+        if (!\is_resource($listener)) {
+            throw new \InvalidArgumentException('Inherited startup listener must be a stream resource.');
+        }
+        $host = self::normalizeLiteralHost($host);
+        if ($port < 1 || $port > 65535
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $leaseId) !== 1
+        ) {
+            throw new \InvalidArgumentException('Inherited startup listener identity is invalid.');
+        }
+        self::assertStreamEndpoint($listener, $host, $port);
+        if (!@\stream_set_blocking($listener, false)) {
+            throw new \RuntimeException('Unable to configure the inherited startup listener as non-blocking.');
+        }
+        if (\is_resource(self::$startupListener)) {
+            if (\get_resource_id(self::$startupListener) === \get_resource_id($listener)
+                && self::$startupHost === $host
+                && self::$startupPort === $port
+                && \hash_equals(self::$startupLeaseId, $leaseId)
+            ) {
+                return;
+            }
+            throw new \RuntimeException('A different inherited startup listener is already installed.');
+        }
+        self::$startupListener = $listener;
+        self::$startupHost = $host;
+        self::$startupPort = $port;
+        self::$startupLeaseId = $leaseId;
+    }
+
+    public static function discardStartupListener(): void
+    {
+        if (\is_resource(self::$startupListener)) {
+            @\fclose(self::$startupListener);
+        }
+        self::$startupListener = null;
+        self::$startupHost = '';
+        self::$startupPort = 0;
+        self::$startupLeaseId = '';
+    }
 
     public function acquire(string $host, int $port): mixed
     {
@@ -36,6 +98,23 @@ final class DirectSharedListener
                 );
             }
 
+            return $this->listener;
+        }
+
+        if (\is_resource(self::$startupListener)) {
+            if (self::$startupHost !== $host || self::$startupPort !== $port) {
+                throw new \RuntimeException(
+                    'Inherited startup listener endpoint does not match the requested Master listener.'
+                );
+            }
+            self::assertStreamEndpoint(self::$startupListener, $host, $port);
+            $this->listener = self::$startupListener;
+            $this->host = self::$startupHost;
+            $this->port = self::$startupPort;
+            self::$startupListener = null;
+            self::$startupHost = '';
+            self::$startupPort = 0;
+            self::$startupLeaseId = '';
             return $this->listener;
         }
 
@@ -66,10 +145,11 @@ final class DirectSharedListener
             throw new \RuntimeException('Unable to configure the direct shared listener as non-blocking.');
         }
 
-        $bound = @\stream_socket_get_name($listener, false);
-        if (!\is_string($bound) || $bound === '') {
+        try {
+            self::assertStreamEndpoint($listener, $host, $port);
+        } catch (\Throwable $throwable) {
             @\fclose($listener);
-            throw new \RuntimeException('Direct shared listener bind succeeded but its endpoint could not be verified.');
+            throw $throwable;
         }
 
         $this->listener = $listener;
@@ -115,6 +195,11 @@ final class DirectSharedListener
 
     private function normalizeHost(string $host): string
     {
+        return self::normalizeLiteralHost($host);
+    }
+
+    private static function normalizeLiteralHost(string $host): string
+    {
         $host = \trim($host, " \t\n\r\0\x0B[]");
         if ($host === '' || $host === '*') {
             return '0.0.0.0';
@@ -122,12 +207,42 @@ final class DirectSharedListener
         if (\strcasecmp($host, 'localhost') === 0) {
             return '127.0.0.1';
         }
-        if (!\filter_var($host, \FILTER_VALIDATE_IP)) {
+        $packed = @\inet_pton($host);
+        $normalized = \is_string($packed) ? @\inet_ntop($packed) : false;
+        if (!\is_string($normalized) || $normalized === '') {
             throw new \InvalidArgumentException(
                 'Direct shared listener requires a resolved IPv4/IPv6 bind address; received "' . $host . '".'
             );
         }
+        return \strtolower($normalized);
+    }
 
-        return $host;
+    /** @param resource $listener */
+    private static function assertStreamEndpoint(mixed $listener, string $host, int $port): void
+    {
+        $bound = @\stream_socket_get_name($listener, false);
+        if (!\is_string($bound) || $bound === '') {
+            throw new \RuntimeException('Direct shared listener endpoint could not be read.');
+        }
+        $separator = \strrpos($bound, ':');
+        if ($separator === false) {
+            throw new \RuntimeException('Direct shared listener endpoint is malformed.');
+        }
+        $actualHost = self::normalizeLiteralHost(\substr($bound, 0, $separator));
+        $actualPort = (int)\substr($bound, $separator + 1);
+        if ($actualHost !== $host || $actualPort !== $port) {
+            throw new \RuntimeException(
+                "Direct shared listener endpoint mismatch: expected {$host}:{$port}, got {$actualHost}:{$actualPort}."
+            );
+        }
+        if (\function_exists('socket_import_stream')) {
+            $socket = @\socket_import_stream($listener);
+            if ($socket === false
+                || (\defined('SO_ACCEPTCONN')
+                    && @\socket_get_option($socket, \SOL_SOCKET, \SO_ACCEPTCONN) !== 1)
+            ) {
+                throw new \RuntimeException('Inherited startup socket is not a listening TCP socket.');
+            }
+        }
     }
 }

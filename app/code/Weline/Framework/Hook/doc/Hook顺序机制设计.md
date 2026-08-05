@@ -154,3 +154,10 @@ Hook文件必须使用目录层级结构格式：
 2. 优先级数字越大越优先，排序顺序数字越小越优先
 3. 模块位置优先级：app > composer > framework > system
 4. 如果多个Hook的优先级和排序顺序相同，将按模块位置和模块名排序
+
+## 结构化结果（P2C-001）
+
+- `Weline\Framework\Hook\HookRenderResult`：`html` / `handled_empty` / `use_fallback` / `file_count`
+- `Template::getHookResult($name, $forceRefresh=false, $preferFallbackOnEmpty=false)`
+- `Template::markHookHandledEmpty($name)` 或输出标记 `<!--weline:hook:handled_empty-->`
+- Taglib：仅当 `<w:hook>…<else/>…</w:hook>` 且有实现文件时，运行时 `shouldUseFallback()` 才替换为 else；**不**因 `debug_hooks` 启用 fallback

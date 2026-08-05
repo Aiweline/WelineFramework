@@ -12,15 +12,18 @@ final class WebsiteCatalog implements WebsiteCatalogInterface
 {
     public function __construct(
         private readonly Website $website,
-        private readonly DefaultWebsiteService $defaultWebsiteService,
     ) {
     }
 
     public function defaultWebsiteId(): int
     {
-        $row = $this->defaultWebsiteService->ensureDefaultWebsite(false);
-        if ((string)($row[Website::schema_fields_CODE] ?? '') === Website::CODE_DEFAULT) {
-            return max(Website::ID_DEFAULT, (int)($row[Website::schema_fields_ID] ?? Website::ID_DEFAULT));
+        $row = (clone $this->website)->clearQuery()->clearData()
+            ->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)
+            ->find()
+            ->fetchArray();
+        if (\is_array($row)
+            && (string)($row[Website::schema_fields_CODE] ?? '') === Website::CODE_DEFAULT) {
+            return \max(Website::ID_DEFAULT, (int)($row[Website::schema_fields_ID] ?? Website::ID_DEFAULT));
         }
 
         return Website::ID_DEFAULT;
@@ -28,7 +31,6 @@ final class WebsiteCatalog implements WebsiteCatalogInterface
 
     public function all(): array
     {
-        $this->defaultWebsiteService->ensureDefaultWebsite(false);
         $rows = $this->website->clearQuery()->clearData()
             ->order(Website::schema_fields_ID, 'ASC')
             ->select()

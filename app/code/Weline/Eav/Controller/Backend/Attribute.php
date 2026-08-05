@@ -48,6 +48,15 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         $this->runtimeProviders = $runtimeProviders;
     }
 
+    public function __init()
+    {
+        parent::__init();
+        // OffCanvas / iframe / embed 外部嵌入时用空白布局，避免嵌套后台顶栏侧栏
+        if ($this->request->isIframe() || $this->request->getParam('embed') === '1') {
+            $this->layoutType = 'default.blank';
+        }
+    }
+
     public function index()
     {
         if ($entity_code = $this->request->getGet('entity_code')) {
@@ -64,7 +73,16 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
         }
         $this->eavAttribute->loadLocalDescription()
             ->joinModel(EavEntity::class, 'entity', 'main_table.eav_entity_id=entity.eav_entity_id', 'left', 'entity.name as entity_name')
-            ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.eav_entity_id and entity_local.local_code=\'' . Cookie::getLangLocal() . '\'', 'left', 'entity_local.name as entity_local_name');
+            ->joinModel(
+                EavEntity\LocalDescription::class,
+                'entity_local',
+                'main_table.' . EavAttribute::schema_fields_eav_entity_id
+                . '=entity_local.' . EavEntity\LocalDescription::schema_fields_ID
+                . ' and entity_local.' . EavEntity\LocalDescription::schema_fields_local_code
+                . '=\'' . Cookie::getLangLocal() . '\'',
+                'left',
+                'entity_local.' . EavEntity\LocalDescription::schema_fields_name . ' as entity_local_name'
+            );
         $this->eavAttribute->joinModel(Type::class, 'type');
         if ($search = $this->request->getGet('search')) {
             $this->eavAttribute->where('concat(main_table.name,main_table.code,type.name,type.code,local.name,entity.name,entity.code,entity_local.name)', "%$search%", 'like');

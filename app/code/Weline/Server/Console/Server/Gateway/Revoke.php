@@ -33,11 +33,29 @@ final class Revoke extends AbstractGatewayCommand
                     (array)($error['details'] ?? []),
                 );
             }
-            (new GatewayCredentialStore())->remove();
             $payload = (array)($response['payload'] ?? []);
-            $payload['credential_removed'] = true;
+            $cleanupErrors = [];
+            try {
+                (new GatewayCredentialStore())->remove();
+                $payload['credential_removed'] = true;
+            } catch (\Throwable $throwable) {
+                $cleanupErrors['credential'] = $throwable->getMessage();
+                $payload['credential_removed'] = false;
+            }
+            if ($cleanupErrors !== []) {
+                return $this->failure(
+                    __('网关安全撤销已提交，但项目凭据清理不完整；修复权限后请重新执行 revoke。'),
+                    $json,
+                    'revoke_cleanup_incomplete',
+                    [
+                        'revocation_committed' => true,
+                        'cleanup_errors' => $cleanupErrors,
+                        ...$payload,
+                    ],
+                );
+            }
             if (!$json) {
-                $this->printer->success(__('当前项目路由和宿主授权已撤销；共享网关保持运行。'));
+                $this->printer->success(__('当前项目路由和凭据已撤销；共享网关保持运行。'));
             }
             $this->output($payload, $json);
             return 0;
@@ -48,7 +66,7 @@ final class Revoke extends AbstractGatewayCommand
 
     public function tip(): string
     {
-        return __('撤销当前项目的网关路由与证书目录授权');
+        return __('撤销当前项目的网关路由与宿主凭据');
     }
 
     public function help(): array|string

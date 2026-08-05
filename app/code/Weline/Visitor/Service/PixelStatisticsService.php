@@ -879,11 +879,89 @@ class PixelStatisticsService
     }
 
     /**
+     * WebsiteSelect taglib 选项（value / label / meta）。
+     *
+     * @return list<array{value: string, label: string, meta: string}>
+     */
+    public static function buildWebsiteSelectOptions(): array
+    {
+        $rows = [];
+        try {
+            $queried = \w_query('websites', 'getWebsiteList', [], 'backend');
+            if (\is_array($queried)) {
+                $rows = $queried;
+            }
+        } catch (\Throwable) {
+            $rows = [];
+        }
+
+        $options = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $id = (int)($row['website_id'] ?? $row['id'] ?? -1);
+            if ($id < 0 || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $name = \trim((string)($row['name'] ?? ''));
+            $code = \trim((string)($row['code'] ?? ''));
+            $options[] = [
+                'value' => (string)$id,
+                'label' => $name !== '' ? $name : (string)__('站点 %{1}', [$id]),
+                'meta' => $code,
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param list<array{value?: string, label?: string, meta?: string}> $options
+     */
+    public static function resolveWebsiteSelectDisplay(array $options, string $selectedValue): string
+    {
+        $selectedValue = \trim($selectedValue);
+        if ($selectedValue === '') {
+            return '';
+        }
+        foreach ($options as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            if ((string)($option['value'] ?? '') !== $selectedValue) {
+                continue;
+            }
+            $label = \trim((string)($option['label'] ?? ''));
+
+            return $label !== '' ? $label : ('#' . $selectedValue);
+        }
+
+        return '#' . $selectedValue;
+    }
+
+    /**
      * @return array<int, array{id: int, label: string}>
      */
     private static function getWebsiteFilterOptions(): array
     {
         $options = [];
+        foreach (self::buildWebsiteSelectOptions() as $option) {
+            $id = (int)($option['value'] ?? -1);
+            if ($id < 0) {
+                continue;
+            }
+            $options[] = [
+                'id' => $id,
+                'label' => (string)($option['label'] ?? __('站点 %{1}', [$id])),
+            ];
+        }
+        if ($options !== []) {
+            return $options;
+        }
+
         foreach (Pixel::getAllWebsiteIds() as $websiteId) {
             $id = (int)$websiteId;
             $options[] = [
@@ -2011,7 +2089,17 @@ class PixelStatisticsService
     {
         $model = w_obj(Pixel::class);
         $table = (string)$model->getTable();
-        $prefix = (string)$model->getConnection()->getConfigProvider()->getPrefix();
+        $configProvider = $model->getConnection()->getConfigProvider();
+        if ($configProvider->getDbType() === 'sqlite' && str_contains($table, '.')) {
+            // This service intentionally uses the raw PDO handle for aggregate
+            // queries, so the SQLite connector SQL normalizer is not involved.
+            // A model can still expose the cross-driver logical name
+            // database.table; SQLite has one physical file and must address the
+            // final table segment only.
+            $parts = preg_split('/\s*\.\s*/', str_replace(['`', '"', '[', ']'], '', $table)) ?: [];
+            $table = (string)end($parts);
+        }
+        $prefix = (string)$configProvider->getPrefix();
         if ($prefix !== '' && !str_contains($table, '"') && !str_contains($table, '`') && !str_starts_with($table, $prefix)) {
             return $prefix . $table;
         }
@@ -2226,4 +2314,3 @@ class PixelStatisticsService
         ];
     }
 }
-

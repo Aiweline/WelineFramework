@@ -448,19 +448,20 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
             e.preventDefault();
             const formData = new FormData(this);
             
-            var opts = { method: 'POST', body: formData };
-            window.Weline.Api.request(saveUrl, opts)
-            .then(function(res) {
-                var data = (res && res.data) !== undefined ? res.data : res;
-                if (data && data.success) {
-                    notify('success', data.message || text.saveSuccess);
+            var params = {};
+            formData.forEach(function(v,k){ params[k]=v; });
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('seo_admin').saveEmbedSubject(params); })
+            .then(function(data) {
+                if (data && data.success !== false) {
+                    notify('success', (data && data.message) || text.saveSuccess);
                     location.reload();
                 } else {
-                    notify('error', (data && (data.message || data.msg)) || text.saveFailed);
+                    notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError({response:{data:data}}, text.saveFailed)) || text.saveFailed);
                 }
             })
-            .catch(error => {
-                notify('error', requestFailedMessage(error));
+            .catch(function(error) {
+                notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, text.requestFailed)) || requestFailedMessage(error));
             });
         });
         
@@ -486,10 +487,9 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
             const formData = new FormData();
             formData.append('subject_id', subjectId);
             
-            var opts = { method: 'POST', body: formData };
-            window.Weline.Api.request(refreshUrl, opts)
-            .then(function(res) {
-                var data = (res && res.data) !== undefined ? res.data : res;
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('seo_admin').refreshEmbedSuggestion({ subject_id: subjectId }); })
+            .then(function(data) {
                 loading.style.display = 'none';
                 
                 if (data.success && data.data && data.data.suggestion) {

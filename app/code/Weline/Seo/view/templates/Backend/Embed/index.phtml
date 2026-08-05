@@ -16,6 +16,7 @@
 
 $subjects = $this->getData('subjects') ?: [];
 $title = $this->getData('title') ?: __('SEO主体管理');
+$module = $this->getData('module') ?: '';
 $scope = $this->getData('scope') ?: '';
 $search = $this->getData('search') ?: '';
 $status = $this->getData('status');
@@ -168,7 +169,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
         }
     </style>
 </head>
-<body>
+<body data-testid="seo-subject-management">
     <div class="embed-container">
         <!-- 页面标题 -->
         <div class="page-header">
@@ -178,7 +179,7 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                 <span class="badge bg-secondary ms-2"><?= count($subjects) ?></span>
             </h4>
             <button type="button" class="btn btn-primary action-btn" data-bs-toggle="modal" data-bs-target="#addSubjectModal">
-                <i class="mdi mdi-plus me-1"></i>
+                <i class="mdi mdi-plus me-1" aria-hidden="true"></i>
                 <lang>添加主体</lang>
             </button>
         </div>
@@ -395,18 +396,20 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
         document.getElementById('addSubjectForm').addEventListener('submit', function(e) {
             e.preventDefault();
             var formData = new FormData(this);
-            window.Weline.Api.request(saveUrl, { method: 'POST', body: formData })
-            .then(function(response) {
-                var data = response.data;
-                if (response.ok && data && data.success) {
-                    notify('success', data.message || text.saveSuccess);
+            var params = {};
+            formData.forEach(function(v,k){ params[k]=v; });
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('seo_admin').saveEmbedSubject(params); })
+            .then(function(data) {
+                if (data && data.success !== false) {
+                    notify('success', (data && data.message) || text.saveSuccess);
                     location.reload();
                 } else {
-                    notify('error', (data && (data.message || data.msg)) || text.saveFailed);
+                    notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError({response:{data:data}}, text.saveFailed)) || text.saveFailed);
                 }
             })
             .catch(function(error) {
-                notify('error', requestFailedMessage(error));
+                notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, text.requestFailed)) || requestFailedMessage(error));
             });
         });
         
@@ -417,20 +420,18 @@ $jsString = static function (mixed $value) use ($jsJsonFlags): string {
                 var self = this;
                 var doDelete = function(confirmed) {
                     if (!confirmed) return;
-                    var fd = new FormData();
-                    fd.append('subject_id', subjectId);
-                    window.Weline.Api.request(deleteUrl, { method: 'POST', body: fd })
-                    .then(function(response) {
-                        var data = response.data;
-                        if (response.ok && data && data.success) {
+                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                    .then(function(api){ return api.resource('seo_admin').deleteEmbedSubject({ subject_id: subjectId }); })
+                    .then(function(data) {
+                        if (data && data.success !== false) {
                             var card = self.closest('.subject-card');
                             if (card) card.remove();
                         } else {
-                            notify('error', (data && (data.message || data.msg)) || text.deleteFailed);
+                            notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError({response:{data:data}}, text.deleteFailed)) || text.deleteFailed);
                         }
                     })
                     .catch(function(error) {
-                        notify('error', requestFailedMessage(error));
+                        notify('error', (window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, text.requestFailed)) || requestFailedMessage(error));
                     });
                 };
                 var confirm = getBackendTool('BackendConfirm');

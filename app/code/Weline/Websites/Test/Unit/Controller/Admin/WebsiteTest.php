@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Test\Unit\Controller\Admin;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Websites\Controller\Admin\Website;
 use Weline\Websites\Model\Website as WebsiteModel;
 
@@ -47,7 +49,15 @@ class WebsiteTest extends TestCore
         $request->setMethod('GET');
         $request->setData('router/class/method', 'add');
 
-        $result = $this->controller->add();
+        $bufferLevel = ob_get_level();
+        ob_start();
+        try {
+            $result = $this->controller->add();
+        } finally {
+            while (ob_get_level() > $bufferLevel) {
+                ob_end_clean();
+            }
+        }
 
         $this->assertIsString($result);
     }
@@ -88,13 +98,17 @@ class WebsiteTest extends TestCore
         $this->assertStringNotContainsString('/component/offcanvas/error', $sourceCode);
     }
 
-    public function testAddValidatesNewWebsiteId(): void
+    public function testAddRejectsNonPositivePersistedWebsiteId(): void
     {
-        $reflection = new \ReflectionClass(Website::class);
-        $sourceCode = file_get_contents($reflection->getFileName());
+        $addCode = $this->getMethodSource(Website::class, 'add');
 
-        $this->assertStringContainsString('getId()', $sourceCode);
-        $this->assertStringContainsString('empty($websiteId)', $sourceCode);
+        $this->assertStringContainsString('$websiteId = (int)$this->website->getId()', $addCode);
+        $this->assertStringContainsString(
+            '$websiteId <= \Weline\Websites\Model\Website::ID_DEFAULT',
+            $addCode,
+        );
+        $this->assertStringContainsString('网站保存失败，未能获取网站ID', $addCode);
+        $this->assertStringNotContainsString('empty($websiteId)', $addCode);
     }
 
     public function testAddDoesNotCheckWebsiteIdExists(): void
@@ -157,7 +171,7 @@ class WebsiteTest extends TestCore
         $this->assertMatchesRegularExpression('/name.*LIKE.*OR.*code.*LIKE.*OR.*url.*LIKE/s', $sql);
     }
 
-    public function testAjaxSearchResetsToFirstPage(): void
+    public function testSearchUsesNormalGetAndResetsToFirstPage(): void
     {
         $templatePath = BP . 'app/code/Weline/Websites/view/templates/Admin/Website/index.phtml';
         $this->assertFileExists($templatePath);
@@ -166,6 +180,12 @@ class WebsiteTest extends TestCore
 
         $this->assertStringContainsString("params.append('page', '1')", $templateContent);
         $this->assertStringContainsString("params.append('pageSize', pageSize)", $templateContent);
+        $this->assertStringContainsString('method="get"', $templateContent);
+        $this->assertStringContainsString('window.location.assign', $templateContent);
+        $this->assertStringNotContainsString('fetch(ajaxUrl', $templateContent);
+        $this->assertStringNotContainsString('X-Requested-With', $templateContent);
+        $this->assertStringNotContainsString('XMLHttpRequest', $templateContent);
+        $this->assertStringNotContainsString('$.ajax', $templateContent);
     }
 
     private function getMethodSource(string $className, string $methodName): string
@@ -186,12 +206,24 @@ class WebsiteTest extends TestCore
 
     private function prepareBackendRequest(): void
     {
-        self::initRequest('/admin/website/add');
+        $backendKey = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        self::assertNotSame('', $backendKey);
+        $requestPath = '/' . $backendKey . '/websites/admin/website/add';
+        self::initRequest($requestPath);
+        WelineEnv::set('request.uri', $requestPath, 'WebsiteTest backend request');
+        WelineEnv::set('origin_request_uri', $requestPath, 'WebsiteTest backend request');
+        WelineEnv::set('full_request_uri', 'http://localhost' . $requestPath, 'WebsiteTest backend request');
+        WelineEnv::set('area', 'backend', 'WebsiteTest backend request');
+        WelineEnv::set('is_backend', true, 'WebsiteTest backend request');
         /** @var Request $request */
         $request = ObjectManager::getInstance(Request::class);
+        $request->getServerBag()->reset()->initFromGlobals(true);
         $request->setBackend();
         $request->setServer('WELINE_AREA', 'backend');
-        $request->setServer('REQUEST_URI', '/admin/website/add');
+        $request->setServer('WELINE_IS_BACKEND', '1');
+        $request->setServer('REQUEST_URI', $requestPath);
+        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $requestPath);
+        $request->setServer('WELINE_FULL_REQUEST_URI', 'http://localhost' . $requestPath);
         $request->setMethod('GET');
         $request->setData('router/module', 'Weline_Websites');
         $request->setData('router/module_path', BP . 'app/code/Weline/Websites/');

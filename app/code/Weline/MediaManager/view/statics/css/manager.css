@@ -499,7 +499,8 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.45);
-    z-index: 10001;
+    /* 必须高于 AI 作图/保存弹层（10050），否则模态内的确认框会被遮住 */
+    z-index: 10120;
     display: none;
     align-items: center;
     justify-content: center;
@@ -1292,6 +1293,49 @@
     margin: 10px 0 6px;
     color: var(--backend-color-text-secondary, #adb5bd);
     font-weight: 500;
+}
+
+.mmf-ai-prompt-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 10px 0 6px;
+}
+
+.mmf-ai-prompt-head .mmf-ai-field-label {
+    margin: 0;
+}
+
+.mmf-ai-prompt-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.mmf-ai-prompt-action {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    line-height: 1.3;
+    min-height: 0;
+}
+
+.mmf-ai-prompt-error {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border-left: 3px solid var(--backend-color-danger, #f46a6a);
+    background: rgba(244, 106, 106, 0.12);
+    color: var(--backend-color-danger, #f46a6a);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.mmf-ai-prompt-action.is-loading {
+    opacity: 0.7;
+    pointer-events: none;
 }
 
 .mmf-ai-prompt,

@@ -8,6 +8,7 @@ use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
+use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
 use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 /**
@@ -101,11 +102,10 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         ];
 
         if ($pureWlsSsl) {
-            if ($context->sslCert === '' || $context->sslKey === '') {
-                throw new \RuntimeException('Pure WLS maintenance HTTPS requires certificate and private-key paths.');
-            }
-            $arguments[] = '--ssl-cert=' . $context->sslCert;
-            $arguments[] = '--ssl-key=' . $context->sslKey;
+            $arguments = \array_merge(
+                $arguments,
+                ServingManifestRuntimeFence::workerArguments($context),
+            );
             $arguments = \array_merge(
                 $arguments,
                 WorkerRuntimeArgumentBuilder::protocolPolicy($context, false),
@@ -136,7 +136,10 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
                 'wls.gateway.launch_id',
                 '',
             )));
-            if (\preg_match('/^[a-f0-9-]{36}$/D', $projectUuid) !== 1
+            if (\preg_match(
+                '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D',
+                $projectUuid,
+            ) !== 1
                 || $instanceGeneration < 1
                 || \preg_match('/^[a-f0-9]{32}$/D', $instanceLaunchId) !== 1
             ) {
@@ -147,6 +150,10 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             $arguments[] = '--gateway-project-uuid=' . $projectUuid;
             $arguments[] = '--gateway-instance-generation=' . $instanceGeneration;
             $arguments[] = '--gateway-instance-launch-id=' . $instanceLaunchId;
+            $arguments = \array_merge(
+                $arguments,
+                WorkerRuntimeArgumentBuilder::gatewayBackendCapability($context),
+            );
         }
 
         $arguments = \array_merge($arguments, WorkerRuntimeArgumentBuilder::sharedState($context));

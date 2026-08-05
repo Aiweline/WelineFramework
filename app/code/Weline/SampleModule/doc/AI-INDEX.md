@@ -23,8 +23,11 @@
 
 ## 代码面清单
 
+入口/配置文件：
+- `app/code/Weline/SampleModule/composer.json`
+
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：1
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：2
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：1
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 

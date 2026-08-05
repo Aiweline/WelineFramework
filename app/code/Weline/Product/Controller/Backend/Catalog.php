@@ -1,0 +1,258 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Product\Controller\Backend;
+
+use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Controller\BackendController;
+use Weline\Product\Service\ProductAdminMutationService;
+use Weline\Product\Service\ProductAdminViewService;
+use Weline\Product\Service\ProductSiteContentAdminService;
+
+final class Catalog extends BackendController
+{
+    private const TITLES = [
+        'products' => '商品',
+        'offers' => '销售报价',
+        'sku-registry' => 'SKU 注册表',
+        'categories' => '商品分类',
+        'media' => '商品媒体',
+        'site-content' => '站点文案',
+        'store-copy' => '网站迁移与复制',
+        'shards' => '商品分片',
+    ];
+
+    private const ROUTES = [
+        'products' => 'products',
+        'offers' => 'offers',
+        'sku-registry' => 'skuRegistry',
+        'categories' => 'categories',
+        'media' => 'media',
+        'site-content' => 'siteContent',
+    ];
+
+    public function __construct(
+        private readonly ProductAdminViewService $adminView,
+        private readonly ProductAdminMutationService $mutations,
+        private readonly ProductSiteContentAdminService $siteContent,
+    ) {
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:products', '商品管理', 'mdi-package-variant', '查看商品目录')]
+    public function products(): string
+    {
+        return $this->renderSection('products');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:offers', '销售报价', 'mdi-tag-multiple-outline', '查看销售报价')]
+    public function offers(): string
+    {
+        return $this->renderSection('offers');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:sku-registry', 'SKU 注册表', 'mdi-barcode', '查看 SKU 全局身份')]
+    public function skuRegistry(): string
+    {
+        return $this->renderSection('sku-registry');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:categories', '商品分类', 'mdi-file-tree-outline', '查看商品分类')]
+    public function categories(): string
+    {
+        return $this->renderSection('categories');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:media', '商品媒体', 'mdi-image-multiple-outline', '查看商品媒体')]
+    public function media(): string
+    {
+        return $this->renderSection('media');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:site-content', '站点文案', 'mdi-translate', '管理商品站点与 Store View 文案')]
+    public function siteContent(): string
+    {
+        return $this->renderSection('site-content');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:store-copy', '网站迁移与复制', 'mdi-content-copy', '查看网站迁移与复制任务')]
+    public function storeCopy(): string
+    {
+        return $this->renderSection('store-copy');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:shards', '商品分片', 'mdi-database-cog-outline', '查看商品分片状态')]
+    public function shards(): string
+    {
+        return $this->renderSection('shards');
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:sku-registry', '注册 SKU', 'mdi-barcode-scan', '注册 SKU 全局身份')]
+    public function postRegisterSku(): string
+    {
+        return $this->handleMutation(
+            'sku-registry',
+            function (int $websiteId): void {
+                $this->mutations->registerSku(
+                    $this->postString('sku', 128),
+                    $this->postString('request_hash', 128),
+                );
+            },
+            'SKU 已注册',
+        );
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:products', '创建商品', 'mdi-package-variant-plus', '创建商品')]
+    public function postCreateProduct(): string
+    {
+        return $this->handleMutation(
+            'products',
+            fn (int $websiteId) => $this->mutations->createProduct(
+                $websiteId,
+                $this->postString('sku', 128),
+            ),
+            '商品已创建',
+        );
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:offers', '创建销售报价', 'mdi-tag-plus-outline', '创建销售报价')]
+    public function postCreateOffer(): string
+    {
+        return $this->handleMutation(
+            'offers',
+            fn (int $websiteId) => $this->mutations->createOffer(
+                $websiteId,
+                $this->postString('sku', 128),
+            ),
+            '销售报价已创建',
+        );
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:categories', '创建商品分类', 'mdi-file-tree-outline', '创建商品分类')]
+    public function postCreateCategory(): string
+    {
+        return $this->handleMutation(
+            'categories',
+            fn (int $websiteId) => $this->mutations->createCategory(
+                $websiteId,
+                $this->postString('path', 255),
+                $this->postNonNegativeInt('parent_id', 0),
+            ),
+            '商品分类已创建',
+        );
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:media', '创建商品媒体', 'mdi-image-plus-outline', '创建商品媒体')]
+    public function postCreateMedia(): string
+    {
+        return $this->handleMutation(
+            'media',
+            fn (int $websiteId) => $this->mutations->createMedia(
+                $websiteId,
+                $this->postString('sku', 128),
+                $this->postString('path', 255),
+                $this->postString('blob_key', 255),
+                $this->postNonNegativeInt('position', 0),
+            ),
+            '商品媒体已创建',
+        );
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:site-content', '保存站点文案', 'mdi-content-save-outline', '保存商品站点与 Store View 文案')]
+    public function postSaveSiteContent(): string
+    {
+        $websiteId = 0;
+        $storeId = 0;
+        $entityId = 0;
+        try {
+            $websiteId = $this->postNonNegativeInt('website_id', 0);
+            $storeId = $this->postNonNegativeInt('store_id', 0);
+            $entityId = $this->postNonNegativeInt('entity_id', 0);
+            $this->siteContent->save(
+                $websiteId,
+                $storeId,
+                $entityId,
+                $this->postString('attribute_code', 64),
+                $this->postString('locale', 32),
+                $this->postString('value_text', 65535),
+                (string)$this->request->getPost('is_required', '') === '1',
+            );
+            $this->getMessageManager()->addSuccess(__('站点文案已保存'));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('操作失败：%{1}', [$exception->getMessage()]));
+        }
+
+        return (string)$this->redirect(
+            '*/backend/catalog/siteContent?website_id=' . $websiteId
+            . '&store_id=' . $storeId
+            . '&entity_id=' . $entityId,
+        );
+    }
+
+    private function renderSection(string $section): string
+    {
+        $websiteId = max(0, (int)$this->request->getGet('website_id', 0));
+        $storeId = max(0, (int)$this->request->getGet('store_id', 0));
+        $entityId = max(0, (int)$this->request->getGet('entity_id', 0));
+        $rows = [];
+        $columns = [];
+        $error = '';
+        try {
+            $result = $section === 'site-content'
+                ? $this->siteContent->load($websiteId, $storeId, $entityId)
+                : $this->adminView->load($section, $websiteId);
+            $rows = $result['rows'];
+            $columns = $result['columns'];
+        } catch (\Throwable) {
+            $this->request->getResponse()->setCode(503);
+            $error = (string)__('数据读取失败，请检查商品模块状态与数据库连接');
+        }
+
+        $this->assign('title', __(self::TITLES[$section]));
+        $this->assign('section', $section);
+        $this->assign('website_id', $websiteId);
+        $this->assign('store_id', $storeId);
+        $this->assign('entity_id', $entityId);
+        $this->assign('rows', $rows);
+        $this->assign('columns', $columns);
+        $this->assign('error', $error);
+
+        return (string)$this->fetch('index');
+    }
+
+    private function handleMutation(string $section, callable $mutation, string $success): string
+    {
+        $websiteId = 0;
+        try {
+            $websiteId = $this->postNonNegativeInt('website_id', 0);
+            $mutation($websiteId);
+            $this->getMessageManager()->addSuccess(__($success));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('操作失败：%{1}', [$exception->getMessage()]));
+        }
+
+        return (string)$this->redirect(
+            '*/backend/catalog/' . self::ROUTES[$section] . '?website_id=' . $websiteId,
+        );
+    }
+
+    private function postString(string $key, int $maxLength): string
+    {
+        $value = trim((string)$this->request->getPost($key, ''));
+        if ($value === '' || strlen($value) > $maxLength) {
+            throw new \InvalidArgumentException(__('%{1} 不能为空且最多 %{2} 字符', [$key, $maxLength]));
+        }
+
+        return $value;
+    }
+
+    private function postNonNegativeInt(string $key, int $default): int
+    {
+        $raw = trim((string)$this->request->getPost($key, (string)$default));
+        if ($raw === '' || !ctype_digit($raw)) {
+            throw new \InvalidArgumentException(__('%{1} 必须是非负整数', [$key]));
+        }
+
+        return (int)$raw;
+    }
+}

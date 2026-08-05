@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Meta\Service\Repository;
 
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Meta\Api\Data\MetaConfigIdentity;
 use Weline\Meta\Api\Data\MetaConfigRecord;
 use Weline\Meta\Api\Data\MetaConfigSearch;
@@ -16,9 +17,11 @@ use Weline\Meta\Model\MetaConfig;
 final class MetaConfigRepository implements MetaConfigRepositoryInterface
 {
     private const DEFAULT_LOCALE = 'zh_Hans_CN';
+    private const MAX_TRANSACTION_ATTEMPTS = 8;
 
     public function __construct(
         private readonly MetaConfig $configs,
+        private readonly WriteIntentTransactionCoordinatorInterface $transactions,
     ) {
     }
 
@@ -51,6 +54,29 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
             ->order(MetaConfig::schema_fields_ID, 'ASC')
             ->select()
             ->fetchArray();
+
+        $rows = array_values(array_filter(
+            is_array($rows) ? $rows : [],
+            fn(mixed $row): bool => $this->searchRowMatches($row, $search),
+        ));
+        usort($rows, function (mixed $left, mixed $right): int {
+            $key = strcmp(
+                (string)$this->rowValue($left, MetaConfig::schema_fields_CONFIG_KEY, ''),
+                (string)$this->rowValue($right, MetaConfig::schema_fields_CONFIG_KEY, ''),
+            );
+            if ($key !== 0) {
+                return $key;
+            }
+            $locale = strcmp(
+                (string)$this->rowValue($left, MetaConfig::schema_fields_LOCALE, ''),
+                (string)$this->rowValue($right, MetaConfig::schema_fields_LOCALE, ''),
+            );
+            if ($locale !== 0) {
+                return $locale;
+            }
+            return (int)$this->rowValue($left, MetaConfig::schema_fields_ID, 0)
+                <=> (int)$this->rowValue($right, MetaConfig::schema_fields_ID, 0);
+        });
 
         return array_values(array_map(fn(mixed $row): MetaConfigRecord => $this->hydrate($row), $rows));
     }
@@ -147,58 +173,110 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
         );
 
         $rows = $query
-            ->group(MetaConfig::schema_fields_SCOPE)
             ->order(MetaConfig::schema_fields_SCOPE, 'ASC')
-            ->select(MetaConfig::schema_fields_SCOPE)
+            ->order(MetaConfig::schema_fields_ID, 'ASC')
+            ->select()
             ->fetchArray();
 
         $scopes = [];
-        foreach ($rows as $row) {
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!$this->scopeRowMatches($row, $search)) {
+                continue;
+            }
             $scope = trim((string)$this->rowValue($row, MetaConfig::schema_fields_SCOPE, ''));
             if ($scope !== '') {
                 $scopes[$scope] = true;
             }
         }
 
-        return array_keys($scopes);
+        $scopes = array_keys($scopes);
+        sort($scopes, SORT_STRING);
+        return $scopes;
+    }
+
+    private function searchRowMatches(mixed $row, MetaConfigSearch $search): bool
+    {
+        if ($this->nullableString($this->rowValue($row, MetaConfig::schema_fields_NAMESPACE)) !== trim($search->namespace)
+            || $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_SCOPE)) !== trim($search->scope)
+            || !$this->requestedOwnerMatches(
+                $row,
+                $search->identifyId,
+                $search->metaId,
+                $search->metaIdentify,
+            )) {
+            return false;
+        }
+
+        $configKey = $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_CONFIG_KEY));
+        if ($search->configKey !== null && $configKey !== trim($search->configKey)) {
+            return false;
+        }
+        if ($search->configKeyPrefix !== null && ($configKey === null || !str_starts_with($configKey, $search->configKeyPrefix))) {
+            return false;
+        }
+        if (!$search->allLocales
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_LOCALE)) !== $search->locale) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function scopeRowMatches(mixed $row, MetaConfigScopeSearch $search): bool
+    {
+        if ($this->nullableString($this->rowValue($row, MetaConfig::schema_fields_NAMESPACE)) !== trim($search->namespace)) {
+            return false;
+        }
+
+        return $this->requestedOwnerMatches(
+            $row,
+            $search->identifyId,
+            $search->metaId,
+            $search->metaIdentify,
+        );
     }
 
     public function upsert(MetaConfigWrite $config): MetaConfigRecord
     {
-        $identity = $config->identity;
-        $data = [
-            MetaConfig::schema_fields_NAMESPACE => trim($identity->namespace),
-            MetaConfig::schema_fields_CONFIG_KEY => trim($identity->configKey),
-            MetaConfig::schema_fields_CONFIG_VALUE => $config->value,
-            MetaConfig::schema_fields_SCOPE => trim($identity->scope),
-            MetaConfig::schema_fields_LOCALE => $identity->locale,
-        ];
-        if ($identity->identifyId !== null && trim($identity->identifyId) !== '') {
-            $data[MetaConfig::schema_fields_IDENTIFY_ID] = trim($identity->identifyId);
-        }
-        if ($identity->metaId !== null) {
-            $data[MetaConfig::schema_fields_META_ID] = $identity->metaId;
-        }
-        if ($identity->metaIdentify !== null && trim($identity->metaIdentify) !== '') {
-            $data[MetaConfig::schema_fields_META_IDENTIFY] = trim($identity->metaIdentify);
-        }
-
-        $this->runAtomically(function () use ($identity, $data): void {
-            $current = $this->findExact($identity);
-            if ($current !== null) {
-                $this->configs->newQuery()
-                    ->where(MetaConfig::schema_fields_ID, $current->id)
-                    ->update($data, MetaConfig::schema_fields_ID)
-                    ->fetch();
-                return;
+        $requestedIdentity = $this->canonicalIdentity($config->identity);
+        $effectiveIdentity = $this->runAtomically(function () use ($requestedIdentity, $config): MetaConfigIdentity {
+            [$identity, $configId] = $this->resolveEffectiveIdentity($requestedIdentity);
+            $data = $this->writeData($identity, $config->value);
+            if ($configId !== null) {
+                $this->updateExact($configId, $identity, $data);
+                return $identity;
             }
 
-            $this->configs->newQuery()->insert($data)->fetch();
+            // Use the framework's cross-database atomic no-op upsert instead of
+            // a duplicate-key exception.  MySQL REPEATABLE READ can retain the
+            // pre-conflict snapshot, and some adapter paths poison the outer
+            // transaction before a savepoint handler can recover it.
+            $this->insertIdentityNoOp($data);
+
+            // A locking/current read sees the winning row on MySQL and also
+            // verifies all seven raw fields before any value update.  A
+            // theoretical SHA-256 collision therefore fails without mutating the
+            // other identity.
+            $exact = $this->findExact($identity, true);
+            if ($exact === null) {
+                throw new \RuntimeException(__('MetaConfig 原子建件后无法读取完全相同的身份。'));
+            }
+            [$insertedIdentity, $insertedId] = $this->resolveEffectiveIdentity($requestedIdentity, true);
+            if ($insertedId === null || $insertedId !== $exact->id) {
+                throw new \RuntimeException(__('MetaConfig 原子建件后的可选 owner 身份不再唯一。'));
+            }
+            $this->updateExact(
+                $insertedId,
+                $insertedIdentity,
+                $this->writeData($insertedIdentity, $config->value),
+            );
+
+            return $insertedIdentity;
         });
 
         MetaData::clearCache();
 
-        $record = $this->findExact($identity);
+        $record = $this->findExact($effectiveIdentity);
         if ($record === null) {
             throw new \RuntimeException('Meta config upsert completed without a readable exact-locale record.');
         }
@@ -208,16 +286,17 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
 
     public function delete(MetaConfigIdentity $identity): bool
     {
-        $deleted = $this->runAtomically(function () use ($identity): bool {
-            $current = $this->findExact($identity);
-            if ($current === null) {
+        $requestedIdentity = $this->canonicalIdentity($identity);
+        $deleted = $this->runAtomically(function () use ($requestedIdentity): bool {
+            [$effectiveIdentity, $configId] = $this->resolveEffectiveIdentity($requestedIdentity, true);
+            if ($configId === null) {
                 return false;
             }
 
-            $this->configs->newQuery()
-                ->where(MetaConfig::schema_fields_ID, $current->id)
-                ->delete()
-                ->fetch();
+            $query = $this->configs->newQuery()
+                ->where(MetaConfig::schema_fields_ID, $configId);
+            $this->applyExactIdentity($query, $effectiveIdentity);
+            $query->delete()->fetch();
             return true;
         });
 
@@ -227,19 +306,296 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
         return $deleted;
     }
 
-    private function findExact(MetaConfigIdentity $identity): ?MetaConfigRecord
+    /**
+     * Preserve the historical optional-owner contract while converging storage
+     * on one complete seven-field identity.
+     *
+     * @return array{0: MetaConfigIdentity, 1: ?int}
+     */
+    private function resolveEffectiveIdentity(MetaConfigIdentity $requested, bool $lockingRead = false): array
     {
-        $records = $this->search(new MetaConfigSearch(
-            namespace: $identity->namespace,
-            scope: $identity->scope,
-            configKey: $identity->configKey,
-            locale: $identity->locale,
-            identifyId: $identity->identifyId,
-            metaId: $identity->metaId,
-            metaIdentify: $identity->metaIdentify,
-        ));
+        if (!$this->hasUnspecifiedOwner($requested)) {
+            $exact = $this->findExact($requested, $lockingRead);
+            if ($exact !== null) {
+                return [$this->identityFromRecord($exact), $exact->id];
+            }
+        }
 
-        return $records[0] ?? null;
+        $query = $this->configs->newQuery()
+            ->where(MetaConfig::schema_fields_NAMESPACE, $requested->namespace)
+            ->where(MetaConfig::schema_fields_CONFIG_KEY, $requested->configKey)
+            ->where(MetaConfig::schema_fields_SCOPE, $requested->scope);
+        $this->applyExactLocale($query, $requested->locale);
+        $this->applyOwnerIdentity(
+            $query,
+            $requested->identifyId,
+            $requested->metaId,
+            $requested->metaIdentify,
+        );
+        if ($lockingRead && $this->supportsForUpdate()) {
+            $query->additional('FOR UPDATE');
+        }
+        $rows = $query
+            ->order(MetaConfig::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        $matches = [];
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if ($this->candidateMatchesRequestedIdentity($row, $requested)) {
+                $matches[] = $row;
+            }
+        }
+        if (count($matches) > 1) {
+            throw new \RuntimeException(__('MetaConfig 可选 owner 身份存在歧义，config_id=%{1}', [
+                implode(',', array_map(
+                    fn(mixed $row): int => (int)$this->rowValue($row, MetaConfig::schema_fields_ID, 0),
+                    $matches,
+                )),
+            ]));
+        }
+        if (isset($matches[0])) {
+            $identity = $this->identityFromRow($matches[0]);
+            return [
+                $identity,
+                (int)$this->rowValue($matches[0], MetaConfig::schema_fields_ID, 0),
+            ];
+        }
+
+        // No compatible historical row exists. Only now do omitted owner fields
+        // become SQL NULL in the newly inserted complete storage identity.
+        return [$requested, null];
+    }
+
+    private function hasUnspecifiedOwner(MetaConfigIdentity $identity): bool
+    {
+        return $identity->identifyId === null
+            || $identity->metaId === null
+            || $identity->metaIdentify === null;
+    }
+
+    private function findExact(MetaConfigIdentity $identity, bool $lockingRead = false): ?MetaConfigRecord
+    {
+        $fingerprintQuery = $this->configs->newQuery()
+            ->where(MetaConfig::schema_fields_IDENTITY_FINGERPRINT, $identity->fingerprint())
+            ->order(MetaConfig::schema_fields_ID, 'ASC');
+        if ($lockingRead && $this->supportsForUpdate()) {
+            $fingerprintQuery->additional('FOR UPDATE');
+        }
+        $fingerprintRows = $fingerprintQuery
+            ->select()
+            ->fetchArray();
+        foreach (is_array($fingerprintRows) ? $fingerprintRows : [] as $row) {
+            if (!$this->identityMatchesExactly($row, $identity)) {
+                throw new \RuntimeException(__('MetaConfig 身份指纹碰撞，config_id=%{1}', [
+                    (int)$this->rowValue($row, MetaConfig::schema_fields_ID, 0),
+                ]));
+            }
+            return $this->hydrate($row);
+        }
+
+        // Phase 1 migration fallback: only rows not yet backfilled may be found by
+        // the seven raw identity fields. Database collation can over-match, so PHP
+        // performs the authoritative byte-for-byte comparison below.
+        $legacyQuery = $this->configs->newQuery()
+            ->where(MetaConfig::schema_fields_IDENTITY_FINGERPRINT, null, 'IS NULL');
+        $this->applyExactIdentity($legacyQuery, $identity);
+        if ($lockingRead && $this->supportsForUpdate()) {
+            $legacyQuery->additional('FOR UPDATE');
+        }
+        $legacyRows = $legacyQuery
+            ->order(MetaConfig::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        $matches = [];
+        foreach (is_array($legacyRows) ? $legacyRows : [] as $row) {
+            if ($this->identityMatchesExactly($row, $identity)) {
+                $matches[] = $row;
+            }
+        }
+        if (count($matches) > 1) {
+            throw new \RuntimeException(__('MetaConfig 迁移窗口发现重复身份，config_id=%{1}', [
+                implode(',', array_map(
+                    fn(mixed $row): int => (int)$this->rowValue($row, MetaConfig::schema_fields_ID, 0),
+                    $matches,
+                )),
+            ]));
+        }
+
+        return isset($matches[0]) ? $this->hydrate($matches[0]) : null;
+    }
+
+    /** @return array<string, mixed> */
+    private function writeData(MetaConfigIdentity $identity, string $value): array
+    {
+        return [
+            MetaConfig::schema_fields_NAMESPACE => $identity->namespace,
+            MetaConfig::schema_fields_CONFIG_KEY => $identity->configKey,
+            MetaConfig::schema_fields_CONFIG_VALUE => $value,
+            MetaConfig::schema_fields_SCOPE => $identity->scope,
+            MetaConfig::schema_fields_LOCALE => $identity->locale,
+            MetaConfig::schema_fields_IDENTIFY_ID => $identity->identifyId,
+            MetaConfig::schema_fields_META_ID => $identity->metaId,
+            MetaConfig::schema_fields_META_IDENTIFY => $identity->metaIdentify,
+            MetaConfig::schema_fields_IDENTITY_FINGERPRINT => $identity->fingerprint(),
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    private function updateExact(
+        int $configId,
+        MetaConfigIdentity $identity,
+        array $data,
+    ): void {
+        $query = $this->configs->newQuery()
+            ->where(MetaConfig::schema_fields_ID, $configId);
+        $this->applyExactIdentity($query, $identity);
+        $query->update($data, MetaConfig::schema_fields_ID)->fetch();
+    }
+
+    /** @param array<string, mixed> $data */
+    private function insertIdentityNoOp(array $data): void
+    {
+        $connector = $this->configs->getConnection()->getConnector();
+        $table = $connector->quoteTable($this->configs->getTable());
+        $columns = [];
+        $placeholders = [];
+        $params = [];
+        foreach ($data as $field => $value) {
+            $columns[] = $connector->quoteIdentifier($field);
+            $placeholder = ':meta_config_insert_' . count($placeholders);
+            $placeholders[] = $placeholder;
+            $params[$placeholder] = $value;
+        }
+        $fingerprint = $connector->quoteIdentifier(MetaConfig::schema_fields_IDENTITY_FINGERPRINT);
+        $sql = 'INSERT INTO ' . $table
+            . ' (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ') ';
+        $sql .= match ($this->databaseType()) {
+            // MySQL invokes this clause for every UNIQUE conflict, not only the
+            // fingerprint key.  Assign the stored value to itself so a legacy
+            // or unexpected UNIQUE can never rewrite another row's identity.
+            // The exact locking read below then distinguishes the intended
+            // fingerprint conflict from any other uniqueness violation.
+            'mysql', 'mariadb' => 'ON DUPLICATE KEY UPDATE ' . $fingerprint . '=' . $fingerprint,
+            'pgsql', 'postgres', 'postgresql' => 'ON CONFLICT (' . $fingerprint . ') DO UPDATE SET '
+                . $fingerprint . '=EXCLUDED.' . $fingerprint,
+            'sqlite' => 'ON CONFLICT (' . $fingerprint . ') DO UPDATE SET '
+                . $fingerprint . '=excluded.' . $fingerprint,
+            default => throw new \RuntimeException(__('MetaConfig 原子建件不支持当前数据库类型。')),
+        };
+
+        $statement = $connector->getWrappedConnection()->prepare($sql);
+        $statement->execute($params);
+    }
+
+    private function canonicalIdentity(MetaConfigIdentity $identity): MetaConfigIdentity
+    {
+        return new MetaConfigIdentity(
+            namespace: trim($identity->namespace),
+            configKey: trim($identity->configKey),
+            scope: trim($identity->scope),
+            locale: $identity->locale,
+            identifyId: $this->nullableTrimmedOwner($identity->identifyId),
+            metaId: $identity->metaId,
+            metaIdentify: $this->nullableTrimmedOwner($identity->metaIdentify),
+        );
+    }
+
+    private function identityFromRecord(MetaConfigRecord $record): MetaConfigIdentity
+    {
+        return new MetaConfigIdentity(
+            namespace: $record->namespace,
+            configKey: $record->configKey,
+            scope: $record->scope,
+            locale: $record->locale,
+            identifyId: $record->identifyId,
+            metaId: $record->metaId,
+            metaIdentify: $record->metaIdentify,
+        );
+    }
+
+    private function identityFromRow(mixed $row): MetaConfigIdentity
+    {
+        return new MetaConfigIdentity(
+            namespace: (string)$this->rowValue($row, MetaConfig::schema_fields_NAMESPACE, ''),
+            configKey: (string)$this->rowValue($row, MetaConfig::schema_fields_CONFIG_KEY, ''),
+            scope: (string)$this->rowValue($row, MetaConfig::schema_fields_SCOPE, ''),
+            locale: $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_LOCALE)),
+            identifyId: $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_IDENTIFY_ID)),
+            metaId: $this->nullableInt($this->rowValue($row, MetaConfig::schema_fields_META_ID)),
+            metaIdentify: $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_META_IDENTIFY)),
+        );
+    }
+
+    private function candidateMatchesRequestedIdentity(
+        mixed $row,
+        MetaConfigIdentity $requested,
+    ): bool {
+        if ($this->nullableString($this->rowValue($row, MetaConfig::schema_fields_NAMESPACE)) !== $requested->namespace
+            || $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_CONFIG_KEY)) !== $requested->configKey
+            || $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_SCOPE)) !== $requested->scope
+            || $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_LOCALE)) !== $requested->locale
+        ) {
+            return false;
+        }
+        if ($requested->identifyId !== null
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_IDENTIFY_ID)) !== $requested->identifyId
+        ) {
+            return false;
+        }
+        if ($requested->metaId !== null
+            && $this->nullableInt($this->rowValue($row, MetaConfig::schema_fields_META_ID)) !== $requested->metaId
+        ) {
+            return false;
+        }
+        if ($requested->metaIdentify !== null
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_META_IDENTIFY)) !== $requested->metaIdentify
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function nullableTrimmedOwner(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $value = trim($value);
+        return $value === '' ? null : $value;
+    }
+
+    private function applyExactIdentity(mixed $query, MetaConfigIdentity $identity): void
+    {
+        $this->applyExactValue($query, MetaConfig::schema_fields_NAMESPACE, $identity->namespace);
+        $this->applyExactValue($query, MetaConfig::schema_fields_CONFIG_KEY, $identity->configKey);
+        $this->applyExactValue($query, MetaConfig::schema_fields_SCOPE, $identity->scope);
+        $this->applyExactValue($query, MetaConfig::schema_fields_LOCALE, $identity->locale);
+        $this->applyExactValue($query, MetaConfig::schema_fields_IDENTIFY_ID, $identity->identifyId);
+        $this->applyExactValue($query, MetaConfig::schema_fields_META_ID, $identity->metaId);
+        $this->applyExactValue($query, MetaConfig::schema_fields_META_IDENTIFY, $identity->metaIdentify);
+    }
+
+    private function applyExactValue(mixed $query, string $field, string|int|null $value): void
+    {
+        if ($value === null) {
+            $query->where($field, null, 'IS NULL');
+            return;
+        }
+        $query->where($field, $value);
+    }
+
+    private function identityMatchesExactly(mixed $row, MetaConfigIdentity $identity): bool
+    {
+        return $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_NAMESPACE)) === $identity->namespace
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_CONFIG_KEY)) === $identity->configKey
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_SCOPE)) === $identity->scope
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_LOCALE)) === $identity->locale
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_IDENTIFY_ID)) === $identity->identifyId
+            && $this->nullableInt($this->rowValue($row, MetaConfig::schema_fields_META_ID)) === $identity->metaId
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_META_IDENTIFY)) === $identity->metaIdentify;
     }
 
     private function applyOwnerIdentity(
@@ -299,20 +655,34 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
 
     private function ownerMatches(mixed $row, MetaConfigIdentity $identity): bool
     {
-        if ($identity->identifyId !== null
-            && trim($identity->identifyId) !== ''
-            && (string)$this->rowValue($row, MetaConfig::schema_fields_IDENTIFY_ID, '') !== trim($identity->identifyId)
+        return $this->requestedOwnerMatches(
+            $row,
+            $identity->identifyId,
+            $identity->metaId,
+            $identity->metaIdentify,
+        );
+    }
+
+    private function requestedOwnerMatches(
+        mixed $row,
+        ?string $identifyId,
+        ?int $metaId,
+        ?string $metaIdentify,
+    ): bool {
+        if ($identifyId !== null
+            && trim($identifyId) !== ''
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_IDENTIFY_ID)) !== trim($identifyId)
         ) {
             return false;
         }
-        if ($identity->metaId !== null
-            && (int)$this->rowValue($row, MetaConfig::schema_fields_META_ID, 0) !== $identity->metaId
+        if ($metaId !== null
+            && $this->nullableInt($this->rowValue($row, MetaConfig::schema_fields_META_ID)) !== $metaId
         ) {
             return false;
         }
-        if ($identity->metaIdentify !== null
-            && trim($identity->metaIdentify) !== ''
-            && (string)$this->rowValue($row, MetaConfig::schema_fields_META_IDENTIFY, '') !== trim($identity->metaIdentify)
+        if ($metaIdentify !== null
+            && trim($metaIdentify) !== ''
+            && $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_META_IDENTIFY)) !== trim($metaIdentify)
         ) {
             return false;
         }
@@ -385,30 +755,71 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
         return $value === null ? null : (string)$value;
     }
 
+    private function nullableInt(mixed $value): ?int
+    {
+        return $value === null || $value === '' ? null : (int)$value;
+    }
+
     private function runAtomically(callable $operation): mixed
     {
-        $query = $this->configs->newQuery();
-        if (!method_exists($query, 'getConnectionInterface')) {
-            throw new \RuntimeException('Meta config repository requires a transaction-aware database connector.');
+        $connection = $this->configs->getConnection();
+        if ($this->transactions->isActive($connection)) {
+            // Enter the coordinator's nested write scope even when the caller
+            // already owns the transaction.  If the operation fails and the
+            // caller catches that exception, the coordinator still marks the
+            // outer transaction rollback-only; partial insert/upsert effects
+            // can therefore never be committed.  A SQLite read transaction is
+            // rejected by runWrite because its intent cannot be upgraded.
+            return $this->transactions->runWrite($connection, $operation);
         }
 
-        $connection = $query->getConnectionInterface();
-        $ownsTransaction = !$connection->inTransaction();
-        if ($ownsTransaction) {
-            $connection->beginTransaction();
+        for ($attempt = 1; $attempt <= self::MAX_TRANSACTION_ATTEMPTS; $attempt++) {
+            try {
+                return $this->transactions->runWrite($connection, $operation);
+            } catch (\Throwable $exception) {
+                if ($attempt >= self::MAX_TRANSACTION_ATTEMPTS
+                    || !$this->isRetryableTransactionConflict($exception)) {
+                    throw $exception;
+                }
+            }
         }
 
-        try {
-            $result = $operation();
-            if ($ownsTransaction) {
-                $connection->commit();
+        throw new \LogicException('MetaConfig transaction retry loop exhausted unexpectedly.');
+    }
+
+    private function isRetryableTransactionConflict(\Throwable $exception): bool
+    {
+        $diagnostics = [];
+        do {
+            $diagnostics[] = strtolower($exception->getMessage());
+            $diagnostics[] = strtolower((string)$exception->getCode());
+            if ($exception instanceof \PDOException && is_array($exception->errorInfo ?? null)) {
+                $diagnostics[] = strtolower(implode(' ', array_map('strval', $exception->errorInfo)));
             }
-            return $result;
-        } catch (\Throwable $throwable) {
-            if ($ownsTransaction && $connection->inTransaction()) {
-                $connection->rollBack();
-            }
-            throw $throwable;
-        }
+            $exception = $exception->getPrevious();
+        } while ($exception instanceof \Throwable);
+
+        $diagnostic = implode(' ', $diagnostics);
+        return str_contains($diagnostic, '40001')
+            || str_contains($diagnostic, '40p01')
+            || str_contains($diagnostic, '1213')
+            || str_contains($diagnostic, 'deadlock found')
+            || str_contains($diagnostic, 'deadlock detected');
+    }
+
+    private function supportsForUpdate(): bool
+    {
+        return in_array($this->databaseType(), ['mysql', 'mariadb', 'pgsql', 'postgres', 'postgresql'], true);
+    }
+
+    private function isSqlite(): bool
+    {
+        return $this->databaseType() === 'sqlite';
+    }
+
+    private function databaseType(): string
+    {
+        return strtolower((string)$this->configs->getConnection()
+            ->getConnector()->getConfigProvider()->getDbType());
     }
 }

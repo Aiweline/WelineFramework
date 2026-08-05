@@ -87,7 +87,11 @@ function getAdminSessionBootstrapModes(options = {}) {
     ? runtime.runtime.target_origin
     : getBaseUrl(options);
 
-  return isLikelyFallbackPhpOrigin(targetOrigin) ? ['fpm', 'wls'] : ['wls', 'fpm'];
+  // A session written to the FPM store cannot authenticate a real WLS target.
+  // Worse, creating that fallback session updates BackendUser.session_id and
+  // invalidates the just-created WLS session. Keep storage mode aligned with
+  // the server that the browser will actually reach.
+  return isLikelyFallbackPhpOrigin(targetOrigin) ? ['fpm'] : ['wls'];
 }
 
 function bootstrapAdminSession(mode, options = {}) {
@@ -537,29 +541,38 @@ async function loginAsAdmin(page, options = {}) {
   const bootstrapOnly = options.bootstrapOnly === true;
 
   for (const mode of (options.bootstrapModes || getAdminSessionBootstrapModes(options))) {
-    try {
-      const sessionInfo = bootstrapAdminSession(mode, options);
-      await applyAdminSessionCookie(page, sessionInfo, options);
-      if (bootstrapOnly) {
-        return getBackendRoot(options);
-      }
-      await gotoBackend(page, 'admin', {
-        waitUntil: 'domcontentloaded',
-        timeout,
-        settleMs: options.settleMs || 1000,
-        // When caller forces proxy usage (e.g. PLAYWRIGHT_DISABLE_PROXY=1),
-        // ensure all internal navigations stay consistent.
-        useProxy: options.useProxy,
-      });
+    const attempts = mode === 'wls' ? Number(options.wlsBootstrapAttempts || 2) : 1;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const sessionInfo = bootstrapAdminSession(mode, options);
+        await applyAdminSessionCookie(page, sessionInfo, options);
+        if (bootstrapOnly) {
+          return getBackendRoot(options);
+        }
+        await gotoBackend(page, 'admin', {
+          waitUntil: 'domcontentloaded',
+          timeout,
+          settleMs: options.settleMs || 1000,
+          // When caller forces direct target usage (PLAYWRIGHT_DISABLE_PROXY=1),
+          // ensure all internal navigations stay consistent.
+          useProxy: options.useProxy,
+        });
 
-      if (!(await isBackendLoginPage(page))) {
-        return deriveBackendRoot(page.url(), options);
-      }
+        if (!(await isBackendLoginPage(page))) {
+          return deriveBackendRoot(page.url(), options);
+        }
 
-      bootstrapFailure = new Error(`Admin session bootstrap mode "${mode}" did not reach an authenticated backend page.`);
-    } catch (error) {
-      bootstrapFailure = error;
+        bootstrapFailure = new Error(
+          `Admin session bootstrap mode "${mode}" attempt ${attempt}/${attempts} did not reach an authenticated backend page (${page.url()}).`,
+        );
+      } catch (error) {
+        bootstrapFailure = error;
+      }
     }
+  }
+
+  if (bootstrapFailure && options.allowPasswordFallback !== true) {
+    throw bootstrapFailure;
   }
 
   let lastGotoError = null;

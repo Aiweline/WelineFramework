@@ -8,9 +8,11 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'SMTP 发送日志表')]
-#[Index(name: 'FROM_EMAIL', columns: ['from_email'], type: 'FULLTEXT')]
-#[Index(name: 'TO_EMAIL', columns: ['to_email'], type: 'FULLTEXT')]
-#[Index(name: 'SEND_MODULE', columns: ['module'], type: 'FULLTEXT')]
+// PG 现网为 BTREE；FULLTEXT 在 PG 映射为 GIN 会导致 setup:upgrade 定义不一致。
+// 发件人/收件人/模块检索用 BTREE 足够（跨 MySQL/PG 可对齐）。
+#[Index(name: 'FROM_EMAIL', columns: ['from_email'], type: 'DEFAULT', method: 'BTREE')]
+#[Index(name: 'TO_EMAIL', columns: ['to_email'], type: 'DEFAULT', method: 'BTREE')]
+#[Index(name: 'SEND_MODULE', columns: ['module'], type: 'DEFAULT', method: 'BTREE')]
 class SmtpSendLog extends Model
 {
     public const schema_table = 'weline_smtp_send_log';

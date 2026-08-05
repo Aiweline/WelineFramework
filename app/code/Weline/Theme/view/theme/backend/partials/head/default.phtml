@@ -108,8 +108,8 @@ if ($isDev) {
     $modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
 }
 
-$currentLang = \w_env('user.lang', 'zh_Hans_CN');
-$currentCurrency = \w_env('user.currency', 'CNY');
+$currentLang = \Weline\Framework\App\State::getLang() ?: 'zh_Hans_CN';
+$currentCurrency = \Weline\Framework\App\State::getCurrency() ?: 'CNY';
 $defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
 $availableCurrencies = [];
 try {
@@ -192,9 +192,23 @@ $this->setData('envConfig', $envConfig);
         if (!window.__WelineThemeConfig) {
             window.__WelineThemeConfig = {};
         }
-        // 使用Object.assign合并，保留Frontend模块已设置的配置
+        // 请求级 Admin head 已按路由写入 currentLang；chrome 预热片段不得用预热语言覆盖。
+        const prevLang = window.__WelineThemeConfig.currentLang;
+        const prevCurrency = window.__WelineThemeConfig.currentCurrency;
+        const prevDefaultLocale = window.__WelineThemeConfig.url && window.__WelineThemeConfig.url.defaultLocale;
         const themeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
+        if (prevLang) {
+            window.__WelineThemeConfig.currentLang = prevLang;
+        }
+        if (prevCurrency) {
+            window.__WelineThemeConfig.currentCurrency = prevCurrency;
+        }
+        if (prevDefaultLocale) {
+            window.__WelineThemeConfig.url = Object.assign({}, window.__WelineThemeConfig.url || {}, {
+                defaultLocale: prevDefaultLocale
+            });
+        }
         
         // 关键：确保全局变量 modulesConfigUrl 也被设置，支持 theme.js 直接访问
         if (window.__WelineThemeConfig.modulesConfigUrl) {

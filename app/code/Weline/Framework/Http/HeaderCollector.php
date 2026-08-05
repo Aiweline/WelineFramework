@@ -155,6 +155,14 @@ class HeaderCollector implements HeaderCollectorInterface
         bool $httpOnly = true,
         string $sameSite = 'Lax'
     ): static {
+        // TASK-P1D-001 / TEST-SEC-08：HTTPS 下强制 Secure，禁止明文 Cookie。
+        if (!$secure && $this->isHttpsTransport()) {
+            $secure = true;
+        }
+        $sameSite = \trim($sameSite);
+        if ($sameSite === '') {
+            $sameSite = 'Lax';
+        }
         $storageKey = $this->getCookieStorageKey($name, $path, $domain);
         $this->cookies[$storageKey] = [
             'name' => $name,
@@ -167,6 +175,26 @@ class HeaderCollector implements HeaderCollectorInterface
             'sameSite' => $sameSite,
         ];
         return $this;
+    }
+
+    private function isHttpsTransport(): bool
+    {
+        try {
+            if (\function_exists('w_env')) {
+                $flag = \strtolower(\trim((string)\w_env('server.https', '')));
+                if ($flag === 'on' || $flag === '1' || $flag === 'true') {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+        }
+        $https = $_SERVER['HTTPS'] ?? '';
+        if ($https !== '' && \strtolower((string)$https) !== 'off') {
+            return true;
+        }
+        $proto = \strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+
+        return $proto === 'https';
     }
 
     public function removeCookie(string $name): static

@@ -375,7 +375,8 @@ class ConfigService
     {
         $websiteId = WebsiteData::getWebsiteId();
         
-        if (!$websiteId) {
+        // 0 是有效的 default 站点；只有 null 表示尚未命中站点。
+        if ($websiteId === null) {
             return null;
         }
         
@@ -402,8 +403,8 @@ class ConfigService
 
 ```php
 $websiteId = WebsiteData::getWebsiteId();
-if ($websiteId) {
-    // 网站已检测到，可以安全使用
+if ($websiteId !== null) {
+    // 网站已检测到；0 是系统默认站点的有效 ID
 } else {
     // 网站未检测到，使用默认值或提示错误
 }
@@ -495,8 +496,8 @@ Format格式为 "小数位数,整数位数"：
 
 ```php
 $websiteId = WebsiteData::getWebsiteId();
-if ($websiteId) {
-    // 网站已检测到
+if ($websiteId !== null) {
+    // 网站已检测到；不要把 ID 0 当作未检测到
 } else {
     // 网站未检测到
 }

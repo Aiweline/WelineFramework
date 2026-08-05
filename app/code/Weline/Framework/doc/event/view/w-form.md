@@ -12,10 +12,12 @@ HTML 的 JavaScript 才保留最终 `<form>` 字符串，并必须声明 `data-w
 - 扩展属性：规范命名的 `data-*` 与 `aria-*`；事件处理器属性不会透传。
 - 批量属性：`attributes="变量名"`，变量值必须是属性数组；标签上显式属性覆盖数组同名项。
 
-未写 `method` 时保持 HTML 原生默认 `get`。`csrf` 和 `captcha` 都默认使用 `auto`：
-POST 表单自动注入 CSRF，并在 Google Enterprise 可用时注入 Google 挑战，否则注入框架
-本地图形挑战；GET 表单不注入 CSRF 或挑战。Captcha 没有总关闭开关，不能因 Google 未配置而
-省略验证。`action` 仅接受相对地址或 `http/https` 地址，全部输出属性会再次转义。
+未写 `method` 时保持 HTML 原生默认 `get`。`csrf` 默认使用 `auto`，POST 表单自动注入
+CSRF，GET 不注入。`captcha` 默认使用 `off`，普通 GET/POST 表单都不注入挑战；需要验证码的
+入口必须显式设置 `captcha="auto"` 或 `captcha="required"`。`auto` 仅在 POST 表单注入，
+`required` 声明该入口必须验证。启用后，Google Enterprise 可用时注入 Google 挑战，否则
+注入框架本地图形挑战，不能因 Google 未配置而静默跳过。`action` 仅接受相对地址或
+`http/https` 地址，全部输出属性会再次转义。
 
 ```html
 <w:form id="language-request" method="post"
@@ -35,10 +37,14 @@ POST 表单自动注入 CSRF，并在 Google Enterprise 可用时注入 Google �
 </w:form>
 ```
 
-业务表单通常不应显式填写 `csrf` 或 `captcha`，让框架统一采用 `auto`。已有人工 CSRF
-字段且暂时不能迁移的表单可设置 `csrf="off"` 防止重复；只有明确不允许 Captcha 注入的
-框架内部特殊表单才使用 `captcha="off"`。官方业务 POST 表单不得关闭 Captcha；
-`captcha="required"` 可用于声明入口的强制验证语义，但 `auto` 同样不会产生无验证码状态。
+业务表单通常不应显式填写 `csrf`，让框架采用 `auto`。普通业务表单也不必填写 `captcha`，
+默认即为 `off`；登录、注册、找回密码、公开写入等经风险评审需要验证码的入口，才显式选择
+`auto` 或 `required` 并声明稳定的 `intent`。已有人工 CSRF 字段且暂时不能迁移的表单可设置
+`csrf="off"` 防止重复。
+
+`captcha` 属性只控制挑战渲染，不替代服务端授权与验证。启用验证码的提交入口必须使用同一个
+`intent` 调用 `CaptchaManagerInterface::verifySubmission()`；后台登录使用 `admin.login`，
+前台登录使用 `customer.login`。
 
 服务端扩展事件：
 

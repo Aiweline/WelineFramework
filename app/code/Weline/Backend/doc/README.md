@@ -110,6 +110,33 @@ Theme 等渲染层需要当前后台页面标题和面包屑时，使用
 - 模块开放了通知渠道适配器、主题局部 hook、通知 topic/provider 等扩展点。遇到扩展需求，优先挂在这些稳定入口，不要直接改核心模板。
 - 本地开发环境下，后台验证默认账号是 `admin/admin`。AI 在浏览器验证里命中后台登录页时，不应因为“缺少凭据”停住；除非任务明确在测未登录态/错误登录态，或用户提供了其他账号。
 
+### Scoped urgent 通知（P1B-004-NOTIFY / DEC-024）
+
+写链固定为：`w_msg()` → `Weline_Framework_Message::system_notification` →
+`Backend\Observer\SystemNotificationObserver` → `SystemNotification` → `NotificationRouter`。
+`NotificationService` 只负责查询/已读/订阅，不是写入口。
+
+- Scoped urgent 必须带非 Global `ScopeIdentity`（经 `ScopedUrgentNotifier` 或显式
+  `scope_hash` / `dedupe_key` / `metadata.scoped`）。
+- 唯一约束 `(topic_code, scope_hash, dedupe_key)`；重复事件累加 `occurrence_count`。
+- 空 `notify_users` 在 **普通通知** 仍表示全员；在 **scoped urgent** 表示仅写受控审计、零广播。
+- 授权收件人由 `ScopedNotificationRecipientResolver` 按对象 Scope ACL（VIEW）解析；
+  无权用户不会收到敏感摘要。回滚：停外发即可，审计行保留。
+
+## 核心约定
+
+后台页面的 `Weline.Api` 传输使用一次性服务端证明，不以 same-origin Cookie 本身作为后台授权：
+
+- 只为已登录、启用且未删除用户的顶层后台 HTML 导航签发；生产环境必须 HTTPS，本地 `DEV` 才允许 HTTP。
+- 生产请求还必须满足顶层 navigate/document 的 Fetch Metadata；脚本 fetch、XHR、iframe 或不完整 HTML 不会获得证明。
+- 页面只包含唯一的 43 字符 opaque bootstrap ID。证明值放在动态 `HttpOnly + SameSite=Strict` Cookie，成功交换后立即清除；后台 PHP Session ID、指纹、binding digest、Worker Session secret 不进入页面 JavaScript。
+- binding 精确绑定后台用户 ID、Session ID 的 SHA-256、Host 和过期时间，不持久化原始 Session ID。每个签名业务请求都重新核验当前 Session、用户启用/删除状态、Host 与 expiry；登出、Session 轮换、禁用或删除立即失效。
+- Host 统一来自 Framework `RequestAuthority`：标准 `HTTP_HOST` 为主事实，冻结完整 URI 只做一致性校验或缺失 fallback；非法、缺失或冲突时页面证明受控返回 no-store 503。不得从 parser host、`SERVER_NAME`、监听端口或代理 Host 头重建公网 authority，非默认端口必须原样进入签发与恢复绑定。
+- frontend Worker Session 即使浏览器同时携带后台 PHP Session Cookie，也不能调用 `auth=backend` operation。双区域 `runtime_task` 也只能按服务端 execution area 解析 owner，不能由 ambient Cookie 升级。
+- backend operation 除身份绑定外仍必须执行具体 ACL resource 检查；same-origin 只是传输条件，不是授权。`auth=backend` stream 与后台 `runtime_task.events` 当前 fail-closed 禁用。
+
+该证明不是 XSS 沙箱：同源后台 XSS 仍拥有当前页面用户的能力。CSP、输出转义、最小 ACL，以及高隔离场景下使用独立 backend Origin，仍是必要的安全边界。
+
 ## 典型开发流程
 
 1. 新增后台功能时，先补 `etc/backend/menu.xml`，确认父级 source 合法。

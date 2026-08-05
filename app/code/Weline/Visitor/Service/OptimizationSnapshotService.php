@@ -4,19 +4,29 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\Service;
 
-use Weline\Framework\Env\WelineEnv;
 use Weline\Visitor\Model\Pixel;
 
 /** Read-only, PII-free evidence boundary used by optimization engines. */
 final class OptimizationSnapshotService
 {
     private const ATTRIBUTION_VERSION = 'pagebuilder_ai_v1';
+    private const MIN_PAGE_VIEWS = 500;
+    private const MIN_TARGET_EVENTS = 30;
+
+    /** @var null|\Closure(array<string,mixed>,string,string,string):array{rows:list<array<string,mixed>>,truncated:bool} */
+    private readonly ?\Closure $rowSource;
+
+    /** The optional row source is an internal deterministic test seam only. */
+    public function __construct(?\Closure $rowSource = null)
+    {
+        $this->rowSource = $rowSource;
+    }
 
     /** @param array<string,mixed> $params @return array<string,mixed> */
     public function snapshot(array $params): array
     {
-        $websiteId = $this->websiteId($params);
-        $pageType = $this->identifier($params['pageType'] ?? $params['page_type'] ?? '', 64, true);
+        $websiteId = $this->requiredWebsiteId($params);
+        $pageType = $this->identifier($params['pageType'] ?? $params['page_type'] ?? '', 64, false);
         $blockKey = $this->identifier($params['blockKey'] ?? $params['block_key'] ?? '', 128, false);
         $fingerprint = \strtolower(\trim((string)($params['contentFingerprint'] ?? $params['content_fingerprint'] ?? '')));
         if ($fingerprint !== '' && \preg_match('/^[a-f0-9]{64}$/D', $fingerprint) !== 1) {
@@ -29,18 +39,19 @@ final class OptimizationSnapshotService
         $targetEvent = $this->identifier($params['targetEvent'] ?? $params['target_event'] ?? '', 128, false);
         $experimentId = $this->identifier($params['experimentId'] ?? $params['experiment_id'] ?? '', 96, false);
         $variant = $this->identifier($params['variant'] ?? '', 32, false);
-
-        $end = $this->date($params['endDate'] ?? $params['end_date'] ?? null, \date('Y-m-d 23:59:59'));
-        $start = $this->date($params['startDate'] ?? $params['start_date'] ?? null, \date('Y-m-d 00:00:00', \strtotime('-14 days')));
+        $start = $this->requiredDate($params, 'startDate', 'start_date', false);
+        $end = $this->requiredDate($params, 'endDate', 'end_date', true);
         if (\strtotime($start) > \strtotime($end)) {
-            throw new \InvalidArgumentException('startDate must not be after endDate.');
+            throw new \InvalidArgumentException('start_date must not be after end_date.');
         }
+
         $seconds = \max(86400, (int)\strtotime($end) - (int)\strtotime($start) + 1);
         $previousEnd = \date('Y-m-d H:i:s', (int)\strtotime($start) - 1);
         $previousStart = \date('Y-m-d H:i:s', (int)\strtotime($previousEnd) - $seconds + 1);
-
         $filters = [
             'website_id' => $websiteId,
+            'start_date' => $start,
+            'end_date' => $end,
             'page_type' => $pageType,
             'block_key' => $blockKey,
             'plan_revision' => $revision,
@@ -49,12 +60,25 @@ final class OptimizationSnapshotService
             'variant' => $variant,
             'target_event' => $targetEvent,
         ];
-        $rowSet = $this->rows($filters, $previousStart, $end);
-        $rows = $rowSet['rows'];
-        $truncated = $rowSet['truncated'];
+
+        try {
+            $rowSet = $this->rows($filters, $previousStart, $end);
+        } catch (\Throwable) {
+            return $this->response(
+                $filters,
+                $this->emptySummary(),
+                $this->emptySummary(),
+                $previousStart,
+                $previousEnd,
+                0,
+                false,
+                true
+            );
+        }
+
         $currentRows = [];
         $previousRows = [];
-        foreach ($rows as $row) {
+        foreach ($rowSet['rows'] as $row) {
             $createdAt = (string)($row[Pixel::schema_fields_CREATED_AT] ?? '');
             if ($createdAt >= $start && $createdAt <= $end) {
                 $currentRows[] = $row;
@@ -63,36 +87,16 @@ final class OptimizationSnapshotService
             }
         }
 
-        $current = $this->aggregate($currentRows, $targetEvent, $blockKey !== '');
-        $previous = $this->aggregate($previousRows, $targetEvent, $blockKey !== '');
-        $minViews = \max(0, (int)($params['minPageViews'] ?? $params['min_page_views'] ?? 500));
-        $minConversions = \max(0, (int)($params['minConversions'] ?? $params['min_conversions'] ?? 30));
-        $eligible = !$truncated
-            && $current['page_views'] >= $minViews
-            && ($targetEvent === '' || $current['target_events'] >= $minConversions);
-
-        return [
-            'contract' => 'visitor.optimization_snapshot.v1',
-            'filters' => $filters,
-            'window' => ['start' => $start, 'end' => $end],
-            'summary' => $current,
-            'trend' => $current['daily'],
-            'comparison' => [
-                'window' => ['start' => $previousStart, 'end' => $previousEnd],
-                'summary' => $previous,
-                'conversion_rate_change' => $this->relativeChange($previous['conversion_rate'], $current['conversion_rate']),
-                'page_views_change' => $this->relativeChange((float)$previous['page_views'], (float)$current['page_views']),
-            ],
-            'data_quality' => [
-                'attribution_version' => self::ATTRIBUTION_VERSION,
-                'attributed_events' => \count($currentRows),
-                'has_anonymous_sessions' => $current['unique_anonymous_sessions'] > 0,
-                'truncated' => $truncated,
-                'sample_thresholds' => ['page_views' => $minViews, 'target_events' => $minConversions],
-                'sample_eligible' => $eligible,
-                'complete' => !$truncated && \count($currentRows) > 0 && $current['page_views'] > 0,
-            ],
-        ];
+        return $this->response(
+            $filters,
+            $this->aggregate($currentRows, $targetEvent, $blockKey !== ''),
+            $this->aggregate($previousRows, $targetEvent, $blockKey !== ''),
+            $previousStart,
+            $previousEnd,
+            \count($currentRows),
+            (bool)$rowSet['truncated'],
+            false
+        );
     }
 
     /** @param array<string,mixed> $filters @return array{rows:list<array<string,mixed>>,truncated:bool} */
@@ -130,6 +134,18 @@ final class OptimizationSnapshotService
     /** @param array<string,mixed> $filters @return array{rows:list<array<string,mixed>>,truncated:bool} */
     private function filteredRows(array $filters, string $start, string $end, string $event = ''): array
     {
+        if ($this->rowSource !== null) {
+            $result = ($this->rowSource)($filters, $start, $end, $event);
+            if (!\is_array($result) || !isset($result['rows']) || !\is_array($result['rows'])) {
+                throw new \RuntimeException('Optimization snapshot source returned an invalid result.');
+            }
+
+            return [
+                'rows' => \array_values(\array_filter($result['rows'], 'is_array')),
+                'truncated' => (bool)($result['truncated'] ?? false),
+            ];
+        }
+
         $query = \w_obj(Pixel::class)->reset()
             ->where(Pixel::schema_fields_ATTRIBUTION_VERSION, self::ATTRIBUTION_VERSION)
             ->where(Pixel::schema_fields_CREATED_AT, $start, '>=')
@@ -158,7 +174,7 @@ final class OptimizationSnapshotService
         $rows = $query->fields([
             Pixel::schema_fields_EVENT,
             Pixel::schema_fields_VALUE,
-            Pixel::schema_fields_VISITOR_SESSION_HASH,
+            Pixel::schema_fields_SESSION_ID,
             Pixel::schema_fields_CREATED_AT,
         ])->order(Pixel::schema_fields_CREATED_AT, 'ASC')->limit(200001)->select()->fetchArray();
         $rows = \is_array($rows) ? \array_values(\array_filter($rows, 'is_array')) : [];
@@ -180,7 +196,7 @@ final class OptimizationSnapshotService
         foreach ($rows as $row) {
             $event = (string)($row[Pixel::schema_fields_EVENT] ?? '');
             $date = \substr((string)($row[Pixel::schema_fields_CREATED_AT] ?? ''), 0, 10);
-            $session = (string)($row[Pixel::schema_fields_VISITOR_SESSION_HASH] ?? '');
+            $session = (string)($row[Pixel::schema_fields_SESSION_ID] ?? '');
             $eventValue = \max(0.0, (float)($row[Pixel::schema_fields_VALUE] ?? 0));
             if ($event === 'page_view') {
                 $pageViews++;
@@ -207,7 +223,7 @@ final class OptimizationSnapshotService
             }
         }
         $denominator = $blockTarget && $blockImpressions > 0 ? $blockImpressions : $pageViews;
-        $conversionRate = $denominator > 0 ? $targetEvents / $denominator : 0.0;
+        $conversionRate = $denominator > 0 ? (float)$targetEvents / (float)$denominator : 0.0;
         \ksort($events);
         \ksort($daily);
 
@@ -225,26 +241,21 @@ final class OptimizationSnapshotService
     }
 
     /** @param array<string,mixed> $params */
-    private function websiteId(array $params): ?int
+    private function requiredWebsiteId(array $params): int
     {
-        if (\array_key_exists('websiteId', $params) || \array_key_exists('website_id', $params)) {
-            $value = $params['websiteId'] ?? $params['website_id'] ?? null;
-            if ($value === null) {
-                return null;
-            }
-            $normalized = $this->nonNegativeInteger($value);
-            if ($normalized === null) {
-                throw new \InvalidArgumentException('websiteId must be null or a non-negative integer.');
-            }
-            return $normalized;
+        if (!\array_key_exists('websiteId', $params) && !\array_key_exists('website_id', $params)) {
+            throw new \InvalidArgumentException('website_id is required.');
         }
 
-        $websiteId = $this->nonNegativeInteger(WelineEnv::getWebsiteId());
-        if ($websiteId === null) {
-            throw new \InvalidArgumentException('websiteId is required; pass null explicitly for all sites.');
+        $value = \array_key_exists('website_id', $params)
+            ? $params['website_id']
+            : $params['websiteId'];
+        $normalized = $this->nonNegativeInteger($value);
+        if ($normalized === null) {
+            throw new \InvalidArgumentException('website_id must be a non-negative integer.');
         }
 
-        return $websiteId;
+        return $normalized;
     }
 
     private function identifier(mixed $value, int $max, bool $required): string
@@ -287,16 +298,122 @@ final class OptimizationSnapshotService
         return $normalized === false ? null : (int)$normalized;
     }
 
-    private function date(mixed $value, string $default): string
+    /** @param array<string,mixed> $params */
+    private function requiredDate(array $params, string $camel, string $snake, bool $endOfDay): string
     {
-        if ($value === null || \trim((string)$value) === '') {
-            return $default;
+        if (!\array_key_exists($camel, $params) && !\array_key_exists($snake, $params)) {
+            throw new \InvalidArgumentException($snake . ' is required.');
         }
-        $timestamp = \strtotime((string)$value);
+
+        $value = \array_key_exists($snake, $params) ? $params[$snake] : $params[$camel];
+        $value = \trim((string)$value);
+        if ($value === '') {
+            throw new \InvalidArgumentException($snake . ' is required.');
+        }
+        if (\preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) === 1) {
+            $value .= $endOfDay ? ' 23:59:59' : ' 00:00:00';
+        }
+
+        $timestamp = \strtotime($value);
         if ($timestamp === false) {
             throw new \InvalidArgumentException('Optimization snapshot date is invalid.');
         }
+
         return \date('Y-m-d H:i:s', $timestamp);
+    }
+
+    /** @return array<string,mixed> */
+    private function emptySummary(): array
+    {
+        return [
+            'page_views' => 0,
+            'block_impressions' => 0,
+            'unique_anonymous_sessions' => 0,
+            'target_events' => 0,
+            'conversion_denominator' => 0,
+            'conversion_rate' => 0.0,
+            'value' => 0.0,
+            'event_counts' => [],
+            'daily' => [],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $filters
+     * @param array<string,mixed> $current
+     * @param array<string,mixed> $previous
+     * @return array<string,mixed>
+     */
+    private function response(
+        array $filters,
+        array $current,
+        array $previous,
+        string $previousStart,
+        string $previousEnd,
+        int $currentRowCount,
+        bool $truncated,
+        bool $unavailable
+    ): array {
+        $quality = $this->dataQuality($current, $currentRowCount, $truncated, (string)$filters['target_event'], $unavailable);
+
+        return [
+            'contract' => 'visitor.optimization_snapshot.v1',
+            'status' => $quality['status'],
+            'filters' => $filters,
+            'summary' => $current,
+            'comparison' => [
+                'filters' => [
+                    'start_date' => $previousStart,
+                    'end_date' => $previousEnd,
+                ],
+                'summary' => $previous,
+                'conversion_rate_change' => $this->relativeChange((float)$previous['conversion_rate'], (float)$current['conversion_rate']),
+                'page_views_change' => $this->relativeChange((float)$previous['page_views'], (float)$current['page_views']),
+            ],
+            'data_quality' => $quality,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $summary
+     * @return array<string,mixed>
+     */
+    private function dataQuality(
+        array $summary,
+        int $currentRowCount,
+        bool $truncated,
+        string $targetEvent,
+        bool $unavailable
+    ): array {
+        $hasPageViews = (int)$summary['page_views'] > 0;
+        $complete = !$unavailable && !$truncated && $currentRowCount > 0 && $hasPageViews;
+        $thresholdsMet = (int)$summary['page_views'] >= self::MIN_PAGE_VIEWS
+            && ($targetEvent === '' || (int)$summary['target_events'] >= self::MIN_TARGET_EVENTS);
+        $eligible = $complete && $thresholdsMet;
+        $reasons = [];
+        if (!$complete) {
+            $reasons[] = 'evidence_unavailable';
+            if ($truncated) {
+                $reasons[] = 'evidence_truncated';
+            }
+        } elseif (!$thresholdsMet) {
+            $reasons[] = 'sample_insufficient';
+        }
+
+        return [
+            'attribution_version' => self::ATTRIBUTION_VERSION,
+            'thresholds' => [
+                'page_views' => self::MIN_PAGE_VIEWS,
+                'target_events' => $targetEvent === '' ? 0 : self::MIN_TARGET_EVENTS,
+            ],
+            'eligible' => $eligible,
+            'complete' => $complete,
+            'reasons' => $reasons,
+            'attributed_events' => $currentRowCount,
+            'has_anonymous_sessions' => (int)$summary['unique_anonymous_sessions'] > 0,
+            'truncated' => $truncated,
+            'status' => !$complete ? 'evidence_unavailable' : ($eligible ? 'eligible' : 'sample_insufficient'),
+        ];
     }
 
     private function relativeChange(float $before, float $after): ?float

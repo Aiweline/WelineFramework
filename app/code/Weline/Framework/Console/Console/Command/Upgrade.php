@@ -930,7 +930,7 @@ class Upgrade extends CommandAbstract
         }
 
         return str_contains($source, 'PHPUnit\\Framework\\TestCase')
-            || str_contains($source, 'Weline\\Framework\\UnitTest\\TestCore')
+            || str_contains($source, 'Weline\\Framework\\Test\\TestCore')
             || str_contains($source, 'app/bootstrap_phpunit.php')
             || preg_match('/extends\s+\\\\?TestCore\b/', $source) === 1;
     }

@@ -8,6 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
 use Weline\Server\Service\Edge\EdgeAdapterResolver;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxLiveProbe;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
@@ -18,6 +19,8 @@ use Weline\Server\Service\ServerInstanceManager;
 final class ManagedNginxService
 {
     private const LIFECYCLE_LOCK_TIMEOUT_SECONDS = 90.0;
+    private const MAX_HEALTH_RESPONSE_BYTES = 65536;
+    private const MAX_HEALTH_HEADERS_BYTES = 65536;
 
     public function __construct(
         private readonly ManagedNginxPaths $paths = new ManagedNginxPaths(),
@@ -1162,9 +1165,10 @@ final class ManagedNginxService
         $port = (int)($owner['listen_http'] ?? 0);
         $generation = \strtolower(\trim((string)($owner['config_generation'] ?? '')));
         $configSha256 = \strtolower(\trim((string)($owner['config_sha256'] ?? '')));
-        $activeConfigSha256 = \is_file($this->paths->confFile())
-            ? \hash_file('sha256', $this->paths->confFile())
-            : false;
+        $activeConfigSha256 = $this->stableManagedFileSha256(
+            $this->paths->confFile(),
+            'Managed Nginx active config',
+        );
         if ($port < 1
             || $port > 65535
             || \preg_match('/\A[a-f0-9]{32}\z/D', $generation) !== 1
@@ -1382,6 +1386,8 @@ final class ManagedNginxService
 
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $headers = '';
+            $responseBody = '';
+            $responseOverflow = false;
             $handle = @\curl_init(
                 'https://' . $probeHost . ':' . $port . '/_wls/health?detail=1',
             );
@@ -1389,14 +1395,32 @@ final class ManagedNginxService
                 return false;
             }
             $options = [
-                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_RETURNTRANSFER => false,
                 CURLOPT_HEADER => false,
-                CURLOPT_HEADERFUNCTION => static function (mixed $curl, string $line) use (&$headers): int {
+                CURLOPT_HEADERFUNCTION => static function (mixed $curl, string $line) use (
+                    &$headers,
+                    &$responseOverflow,
+                ): int {
                     if (\preg_match('/\AHTTP\//i', $line) === 1) {
                         $headers = '';
                     }
+                    if (\strlen($headers) + \strlen($line) > self::MAX_HEALTH_HEADERS_BYTES) {
+                        $responseOverflow = true;
+                        return 0;
+                    }
                     $headers .= $line;
                     return \strlen($line);
+                },
+                CURLOPT_WRITEFUNCTION => static function (mixed $curl, string $chunk) use (
+                    &$responseBody,
+                    &$responseOverflow,
+                ): int {
+                    if (\strlen($responseBody) + \strlen($chunk) > self::MAX_HEALTH_RESPONSE_BYTES) {
+                        $responseOverflow = true;
+                        return 0;
+                    }
+                    $responseBody .= $chunk;
+                    return \strlen($chunk);
                 },
                 CURLOPT_HTTP_VERSION => $requestedVersion,
                 CURLOPT_SSL_VERIFYPEER => false,
@@ -1408,6 +1432,8 @@ final class ManagedNginxService
                 CURLOPT_FRESH_CONNECT => true,
                 CURLOPT_FORBID_REUSE => true,
                 CURLOPT_PROXY => '',
+                CURLOPT_NOPROXY => '*',
+                CURLOPT_NOSIGNAL => true,
                 CURLOPT_HTTPHEADER => [
                     'Accept: application/json',
                     'Cache-Control: no-cache',
@@ -1421,14 +1447,16 @@ final class ManagedNginxService
                 @\curl_close($handle);
                 return false;
             }
-            $body = @\curl_exec($handle);
+            $completed = @\curl_exec($handle);
             $errno = @\curl_errno($handle);
             $responseCode = (int)@\curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
             $httpVersion = (int)@\curl_getinfo($handle, CURLINFO_HTTP_VERSION);
             @\curl_close($handle);
 
-            $health = \is_string($body) ? \json_decode($body, true) : null;
-            if ($errno === CURLE_OK
+            $health = \json_decode($responseBody, true);
+            if ($completed === true
+                && !$responseOverflow
+                && $errno === CURLE_OK
                 && $responseCode === 200
                 && $httpVersion === $requestedVersion
                 && \is_array($health)
@@ -1536,6 +1564,8 @@ final class ManagedNginxService
         $lastError = 'HTTP/3-only request did not complete';
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $headers = '';
+            $responseBody = '';
+            $responseOverflow = false;
             $handle = \curl_init(
                 'https://' . $probeHost . ':' . $port . '/_wls/health?detail=1'
             );
@@ -1544,11 +1574,32 @@ final class ManagedNginxService
                 break;
             }
             $options = [
-                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_RETURNTRANSFER => false,
                 CURLOPT_HEADER => false,
-                CURLOPT_HEADERFUNCTION => static function (mixed $curl, string $line) use (&$headers): int {
+                CURLOPT_HEADERFUNCTION => static function (mixed $curl, string $line) use (
+                    &$headers,
+                    &$responseOverflow,
+                ): int {
+                    if (\preg_match('/\AHTTP\//i', $line) === 1) {
+                        $headers = '';
+                    }
+                    if (\strlen($headers) + \strlen($line) > self::MAX_HEALTH_HEADERS_BYTES) {
+                        $responseOverflow = true;
+                        return 0;
+                    }
                     $headers .= $line;
                     return \strlen($line);
+                },
+                CURLOPT_WRITEFUNCTION => static function (mixed $curl, string $chunk) use (
+                    &$responseBody,
+                    &$responseOverflow,
+                ): int {
+                    if (\strlen($responseBody) + \strlen($chunk) > self::MAX_HEALTH_RESPONSE_BYTES) {
+                        $responseOverflow = true;
+                        return 0;
+                    }
+                    $responseBody .= $chunk;
+                    return \strlen($chunk);
                 },
                 CURLOPT_HTTP_VERSION => (int)\constant('CURL_HTTP_VERSION_3ONLY'),
                 CURLOPT_SSL_VERIFYPEER => false,
@@ -1559,6 +1610,8 @@ final class ManagedNginxService
                 CURLOPT_FRESH_CONNECT => true,
                 CURLOPT_FORBID_REUSE => true,
                 CURLOPT_PROXY => '',
+                CURLOPT_NOPROXY => '*',
+                CURLOPT_NOSIGNAL => true,
             ];
             if (\defined('CURLOPT_PROTOCOLS') && \defined('CURLPROTO_HTTPS')) {
                 $options[(int)\constant('CURLOPT_PROTOCOLS')] = (int)\constant('CURLPROTO_HTTPS');
@@ -1566,8 +1619,12 @@ final class ManagedNginxService
             if (\defined('CURLOPT_SSLVERSION') && \defined('CURL_SSLVERSION_TLSv1_3')) {
                 $options[(int)\constant('CURLOPT_SSLVERSION')] = (int)\constant('CURL_SSLVERSION_TLSv1_3');
             }
-            \curl_setopt_array($handle, $options);
-            $body = \curl_exec($handle);
+            if (!@\curl_setopt_array($handle, $options)) {
+                @\curl_close($handle);
+                $lastError = 'unable to configure bounded HTTP/3 verifier';
+                break;
+            }
+            $completed = \curl_exec($handle);
             $errno = \curl_errno($handle);
             $error = \curl_error($handle);
             $info = \curl_getinfo($handle);
@@ -1575,9 +1632,10 @@ final class ManagedNginxService
             $http3Version = \defined('CURL_HTTP_VERSION_3')
                 ? (int)\constant('CURL_HTTP_VERSION_3')
                 : 30;
-            $health = \is_string($body) ? \json_decode($body, true) : null;
-            if ($errno === 0
-                && \is_string($body)
+            $health = \json_decode($responseBody, true);
+            if ($completed === true
+                && !$responseOverflow
+                && $errno === 0
                 && (int)($info['http_code'] ?? 0) === 200
                 && (int)($info['http_version'] ?? 0) === $http3Version
                 && \is_array($health)
@@ -1620,10 +1678,14 @@ final class ManagedNginxService
     /** @return array{instance_name:string,upstream_host:string,upstream_port:int,server_names:list<string>,config_generation:string,updated_at:string}|null */
     private function readOwnerFile(string $file): ?array
     {
-        if (!\is_file($file)) {
+        if (!\file_exists($file) && !\is_link($file)) {
             return null;
         }
-        $decoded = \json_decode((string)@\file_get_contents($file), true);
+        $decoded = \json_decode(GatewayProjectStateFilesystem::read(
+            $file,
+            4 * 1024 * 1024,
+            'Managed Nginx owner state',
+        ), true);
         if (!\is_array($decoded)
             || \trim((string)($decoded['instance_name'] ?? '')) === ''
             || \trim((string)($decoded['upstream_host'] ?? '')) === ''
@@ -2119,37 +2181,18 @@ final class ManagedNginxService
     {
         $file = $this->paths->ownerFile();
         $json = \json_encode($owner, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-        $temp = $file . '.candidate.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-        if (\file_put_contents($temp, $json, LOCK_EX) === false) {
-            throw new \RuntimeException('Unable to write managed nginx owner candidate.');
-        }
-        $backup = null;
-        if (\is_file($file)) {
+        if (\file_exists($file) || \is_link($file)) {
+            GatewayProjectStateFilesystem::read(
+                $file,
+                4 * 1024 * 1024,
+                'Existing managed Nginx owner state',
+            );
             $transactionId = \strtolower(\trim((string)($owner['transaction_id'] ?? '')));
             if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
-                @\unlink($temp);
                 throw new \RuntimeException('Managed nginx owner transaction id is invalid.');
             }
-            $backup = $file . '.rollback.' . $transactionId;
-            if (\is_file($backup)) {
-                @\unlink($temp);
-                throw new \RuntimeException('Managed nginx owner rollback already exists.');
-            }
-            if (!@\rename($file, $backup)) {
-                @\unlink($temp);
-                throw new \RuntimeException('Unable to preserve managed nginx owner state.');
-            }
         }
-        if (!@\rename($temp, $file)) {
-            if ($backup !== null) {
-                @\rename($backup, $file);
-            }
-            @\unlink($temp);
-            throw new \RuntimeException('Unable to publish managed nginx owner state.');
-        }
-        if ($backup !== null) {
-            @\unlink($backup);
-        }
+        GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
     }
 
     /** @param array{instance_name:string,upstream_host:string,upstream_port:int,server_names?:list<string>,config_generation:string,updated_at:string} $owner */
@@ -2157,28 +2200,7 @@ final class ManagedNginxService
     {
         $file = $this->paths->ownerIntentFile();
         $json = \json_encode($owner, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-        $temp = $file . '.candidate.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-        if (\file_put_contents($temp, $json, LOCK_EX) === false) {
-            throw new \RuntimeException('Unable to write managed nginx owner intent.');
-        }
-        $previous = null;
-        if (\is_file($file)) {
-            $previous = $file . '.previous.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-            if (!@\rename($file, $previous)) {
-                @\unlink($temp);
-                throw new \RuntimeException('Unable to preserve managed nginx owner intent.');
-            }
-        }
-        if (!@\rename($temp, $file)) {
-            if ($previous !== null) {
-                @\rename($previous, $file);
-            }
-            @\unlink($temp);
-            throw new \RuntimeException('Unable to publish managed nginx owner intent.');
-        }
-        if ($previous !== null) {
-            @\unlink($previous);
-        }
+        GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
     }
 
     /** @param array{instance_name:string,upstream_host:string,upstream_port:int,server_names?:list<string>,config_generation:string,updated_at:string} $expected */
@@ -2205,9 +2227,10 @@ final class ManagedNginxService
         ) {
             throw new \RuntimeException('Managed nginx owner intent changed before commit.');
         }
-        $activeConfigSha256 = \is_file($this->paths->confFile())
-            ? \hash_file('sha256', $this->paths->confFile())
-            : false;
+        $activeConfigSha256 = $this->stableManagedFileSha256(
+            $this->paths->confFile(),
+            'Managed Nginx active config',
+        );
         if (!\is_string($activeConfigSha256)
             || !\hash_equals((string)$intent['config_sha256'], \strtolower($activeConfigSha256))
         ) {
@@ -2309,10 +2332,13 @@ final class ManagedNginxService
             || !\hash_equals((string)$expected['instance_name'], (string)$intent['instance_name'])
             || !\hash_equals((string)$expected['config_generation'], (string)$intent['config_generation'])
             || !\hash_equals((string)$expected['config_sha256'], (string)$intent['config_sha256'])
-            || !@\unlink($intentFile)
         ) {
             throw new \RuntimeException('Managed nginx owner intent could not be finalized.');
         }
+        GatewayProjectStateFilesystem::removeRegular(
+            $intentFile,
+            'Managed Nginx owner intent',
+        );
     }
 
     private function recoverOwnerPublication(): void
@@ -2329,14 +2355,28 @@ final class ManagedNginxService
         $transactionId = (string)($intent['transaction_id'] ?? '');
         if (!\is_file($ownerFile) && $transactionId !== '') {
             $ownerRollback = $ownerFile . '.rollback.' . $transactionId;
-            if (\is_file($ownerRollback) && !@\rename($ownerRollback, $ownerFile)) {
-                throw new \RuntimeException('Unable to recover managed nginx owner transaction.');
+            if (\file_exists($ownerRollback) || \is_link($ownerRollback)) {
+                $rollbackContents = GatewayProjectStateFilesystem::read(
+                    $ownerRollback,
+                    4 * 1024 * 1024,
+                    'Legacy managed Nginx owner rollback',
+                );
+                GatewayProjectStateFilesystem::atomicWrite(
+                    $ownerFile,
+                    $rollbackContents,
+                    0600,
+                );
+                GatewayProjectStateFilesystem::removeRegular(
+                    $ownerRollback,
+                    'Legacy managed Nginx owner rollback',
+                );
             }
         }
         $committedOwner = $this->readOwner();
-        $activeConfigSha256 = \is_file($this->paths->confFile())
-            ? \hash_file('sha256', $this->paths->confFile())
-            : false;
+        $activeConfigSha256 = $this->stableManagedFileSha256(
+            $this->paths->confFile(),
+            'Managed Nginx active config',
+        );
         $committedOwnerIdentityMatches = \is_array($committedOwner)
             && $transactionId !== ''
             && \hash_equals($transactionId, (string)($committedOwner['transaction_id'] ?? ''))
@@ -2362,7 +2402,10 @@ final class ManagedNginxService
             if (!$this->configWriter->commitPublished($configRollback)) {
                 throw new \RuntimeException('Unable to finish committed owner/config bookkeeping.');
             }
-            @\unlink($intentFile);
+            GatewayProjectStateFilesystem::removeRegular(
+                $intentFile,
+                'Committed managed Nginx owner intent',
+            );
             return;
         }
 
@@ -2374,7 +2417,15 @@ final class ManagedNginxService
             ? $this->configWriter->rollbackPathForTransaction($transactionId)
             : null;
         $rollbackExpected = (bool)($intent['config_rollback_expected'] ?? false);
-        $config = @\file_get_contents($this->paths->confFile());
+        try {
+            $config = GatewayProjectStateFilesystem::read(
+                $this->paths->confFile(),
+                16 * 1024 * 1024,
+                'Managed Nginx active config',
+            );
+        } catch (\Throwable) {
+            $config = null;
+        }
         $generation = (string)$intent['config_generation'];
         $uncommittedConfigPublished = \is_string($config)
             && \preg_match(
@@ -2414,7 +2465,10 @@ final class ManagedNginxService
                     );
                 }
             }
-            if (!@\unlink($intentFile) && \is_file($intentFile)) {
+            if (!GatewayProjectStateFilesystem::removeRegular(
+                $intentFile,
+                'Recovered managed Nginx owner intent',
+            )) {
                 throw new \RuntimeException('Unable to clear recovered managed nginx owner intent.');
             }
             return;
@@ -2430,7 +2484,10 @@ final class ManagedNginxService
                 'uncommitted managed nginx intent has no trustworthy rollback identity',
             );
         }
-        if (!@\unlink($intentFile) && \is_file($intentFile)) {
+        if (!GatewayProjectStateFilesystem::removeRegular(
+            $intentFile,
+            'Recovered managed Nginx owner intent',
+        )) {
             throw new \RuntimeException('Unable to clear recovered managed nginx owner intent.');
         }
     }
@@ -2438,11 +2495,21 @@ final class ManagedNginxService
     private function clearOwner(): void
     {
         $file = $this->paths->ownerFile();
-        if (\is_file($file) && !@\unlink($file)) {
+        if ((\file_exists($file) || \is_link($file))
+            && !GatewayProjectStateFilesystem::removeRegular(
+                $file,
+                'Managed Nginx owner state',
+            )
+        ) {
             throw new \RuntimeException('Unable to clear managed nginx owner state.');
         }
         $intent = $this->paths->ownerIntentFile();
-        if (\is_file($intent) && !@\unlink($intent)) {
+        if ((\file_exists($intent) || \is_link($intent))
+            && !GatewayProjectStateFilesystem::removeRegular(
+                $intent,
+                'Managed Nginx owner intent',
+            )
+        ) {
             throw new \RuntimeException('Unable to clear managed nginx owner intent.');
         }
     }
@@ -2456,14 +2523,15 @@ final class ManagedNginxService
             if (!\is_resource($handle)) {
                 return ['ok' => false, 'message' => 'unable to open managed nginx lifecycle lock'];
             }
-            $deadline = \microtime(true) + self::LIFECYCLE_LOCK_TIMEOUT_SECONDS;
+            $deadline = (\hrtime(true) / 1_000_000_000)
+                + self::LIFECYCLE_LOCK_TIMEOUT_SECONDS;
             $locked = false;
             do {
                 $locked = @\flock($handle, LOCK_EX | LOCK_NB);
                 if (!$locked) {
                     SchedulerSystem::usleep(50_000);
                 }
-            } while (!$locked && \microtime(true) < $deadline);
+            } while (!$locked && (\hrtime(true) / 1_000_000_000) < $deadline);
             if (!$locked) {
                 @\fclose($handle);
                 return ['ok' => false, 'message' => 'managed nginx lifecycle lock timed out'];
@@ -2513,9 +2581,10 @@ final class ManagedNginxService
         $ownerListenHttps = (int)($owner['listen_https'] ?? 0);
         $ownerPortsBound = $ownerListenHttp > 0 && $ownerListenHttp <= 65535
             && $ownerListenHttps > 0 && $ownerListenHttps <= 65535;
-        $activeConfigSha256 = \is_file($this->paths->confFile())
-            ? \hash_file('sha256', $this->paths->confFile())
-            : false;
+        $activeConfigSha256 = $this->stableManagedFileSha256(
+            $this->paths->confFile(),
+            'Managed Nginx active config',
+        );
         $ownerConfigBound = \is_array($owner)
             && \is_string($activeConfigSha256)
             && \preg_match('/\A[a-f0-9]{64}\z/D', (string)($owner['config_sha256'] ?? '')) === 1
@@ -2702,11 +2771,31 @@ final class ManagedNginxService
     private function readManifest(): ?array
     {
         $file = $this->paths->manifestFile();
-        if (!\is_file($file)) {
+        if (!\file_exists($file) && !\is_link($file)) {
             return null;
         }
-        $decoded = \json_decode((string)\file_get_contents($file), true);
+        $decoded = \json_decode(GatewayProjectStateFilesystem::read(
+            $file,
+            16 * 1024 * 1024,
+            'Managed Nginx install manifest',
+        ), true);
         return \is_array($decoded) ? $decoded : null;
+    }
+
+    private function stableManagedFileSha256(string $file, string $label): string|false
+    {
+        if (!\file_exists($file) && !\is_link($file)) {
+            return false;
+        }
+        try {
+            return \hash('sha256', GatewayProjectStateFilesystem::read(
+                $file,
+                16 * 1024 * 1024,
+                $label,
+            ));
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public static function fromEnv(): self

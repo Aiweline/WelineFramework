@@ -1,0 +1,26 @@
+{
+    "name": "weline/module-product",
+    "description": "WelineFramework product catalog website shards and commerce kernel contracts",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-websites": "@dev"
+    },
+    "suggest": {
+        "weline/module-cart": "Provides cart contracts for the Product-backed cart snapshot query provider.",
+        "weline/module-inventory": "Provides optional website-aware sellable quantity snapshots for cart lines."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Product\\": ""
+        }
+    },
+    "license": "MIT"
+}

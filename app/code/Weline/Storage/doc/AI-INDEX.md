@@ -25,12 +25,15 @@
 
 入口/配置文件：
 - `app/code/Weline/Storage/etc/backend/menu.xml`
+- `app/code/Weline/Storage/composer.json`
 
-- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：1
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：3
 - `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：1
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：1
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：2
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：2
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：1
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：0
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：2
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
@@ -38,6 +41,8 @@
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
 - 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
+- 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
+- 识别到 QueryProvider 相关 PHP 文件：extends/module/Weline_Framework/Query/StorageAdminQueryProvider.php；前端/跨模块读数据先查 query 帮助。
 
 ## doc 目录
 

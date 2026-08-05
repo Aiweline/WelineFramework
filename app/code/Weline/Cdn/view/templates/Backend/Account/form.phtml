@@ -20,8 +20,11 @@ $originToken = (string)($this->getData('originToken') ?? '');
 <!-- 表单 -->
 <div class="card">
     <div class="card-body">
-        <w:form id="accountForm" method="post" action="@backend-url('*/backend/account/save')">
+        <w:form id="accountForm" method="post" action="@backend-url('*/backend/account/save')" data-testid="cdn-account-editor-form" data-state="idle" data-message="">
             <input type="hidden" name="id" value="<?= ($account && $account->getData('account_id')) ? (string)$account->getData('account_id') : '' ?>">
+            <?php if ($this->request->isIframe()): ?>
+                <input type="hidden" name="isIframe" value="1">
+            <?php endif; ?>
             
             <div class="row mb-3">
                 <label class="col-md-2 col-form-label"><?= __('适配器') ?> <span class="text-danger">*</span></label>
@@ -137,7 +140,7 @@ $originToken = (string)($this->getData('originToken') ?? '');
 
             <div class="row">
                 <div class="col-md-10 offset-md-2">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" data-testid="cdn-account-editor-submit">
                         <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
                     </button>
                     <a href="@backend-url('*/backend/account/index')" class="btn btn-secondary">
@@ -153,12 +156,9 @@ $originToken = (string)($this->getData('originToken') ?? '');
 (function() {
     'use strict';
     
-    var indexUrl = '<?php echo $this->getBackendUrl('*/backend/account/index'); ?>';
-    
     var adapterSelect = document.getElementById('adapterSelect');
     var accountNameInput = document.getElementById('accountNameInput');
     var permissionsInfo = document.getElementById('adapterPermissionsInfo');
-    var accountForm = document.getElementById('accountForm');
     
     function updatePermissionsInfo() {
         if (!adapterSelect || !permissionsInfo) return;
@@ -189,60 +189,5 @@ $originToken = (string)($this->getData('originToken') ?? '');
         }
     });
     
-    if (accountForm) {
-        accountForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            var formData = new FormData(this);
-            
-            var url = this.action;
-            var opts = { method: 'POST', body: formData };
-            window.Weline.Api.request(url, opts)
-            .then(function(res) {
-                var data = (res && res.data) !== undefined ? res.data : res;
-                if (data.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: '<?php echo __('成功'); ?>',
-                            text: data.message,
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(function() {
-                            window.location.href = data.redirect || indexUrl;
-                        });
-                    } else {
-                        BackendToast.success(data.message);
-                        setTimeout(function() {
-                            window.location.href = data.redirect || indexUrl;
-                        }, 1500);
-                    }
-                } else {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'error',
-                            title: '<?php echo __('保存失败'); ?>',
-                            text: data.message,
-                            confirmButtonText: '<?= __('确定') ?>'
-                        });
-                    } else {
-                        BackendToast.error(data.message);
-                    }
-                }
-            })
-            .catch(function(error) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?php echo __('请求失败'); ?>',
-                        text: error.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    BackendToast.error(error.message);
-                }
-            });
-        });
-    }
 })();
 </js:part>

@@ -18,7 +18,7 @@ $confirmMessages = [
 ];
 ?>
 <?php if (empty($embed)): ?>
-<div class="row">
+<div class="row" data-testid="shipping-region-management">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('地区管理') ?></h4>
@@ -34,6 +34,26 @@ $confirmMessages = [
                     </div>
                 </div>
 <?php endif; ?>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card" data-testid="shipping-region-create-form">
+                            <div class="card-header"><h5 class="card-title mb-0"><?= __('新增地区') ?></h5></div>
+                            <div class="card-body">
+                                <w:form method="post" action="@backend-url('shipping/backend/region/save')">
+                                    <div class="row g-3">
+                                        <div class="col-md-2"><label class="form-label"><?= __('国家代码') ?></label><input class="form-control" name="country_code" maxlength="2" value="<?= htmlspecialchars((string)($currentCountryCode ?: 'CN')) ?>" required></div>
+                                        <div class="col-md-2"><label class="form-label"><?= __('地区代码') ?></label><input class="form-control" name="region_code" maxlength="50" required></div>
+                                        <div class="col-md-3"><label class="form-label"><?= __('地区名称') ?></label><input class="form-control" name="region_name" maxlength="255" required></div>
+                                        <div class="col-md-2"><label class="form-label"><?= __('类型') ?></label><select class="form-select" name="region_type"><option value="province"><?= __('省/州') ?></option><option value="city"><?= __('城市') ?></option><option value="district"><?= __('区县') ?></option><option value="country"><?= __('国家') ?></option></select></div>
+                                        <div class="col-md-1"><label class="form-label"><?= __('排序') ?></label><input class="form-control" type="number" min="0" name="sort_order" value="0"></div>
+                                        <div class="col-md-2 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-region-submit"><?= __('创建') ?></button></div>
+                                    </div>
+                                </w:form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="row">
                     <div class="col-12">

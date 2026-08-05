@@ -6,7 +6,7 @@ namespace Weline\DataTable\Test\Unit;
 
 use ReflectionMethod;
 use Weline\DataTable\Service\DemoTableService;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class DemoTableServiceTest extends TestCore
 {

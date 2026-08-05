@@ -72,6 +72,39 @@ final class ProjectIdentityStoreTest extends TestCase
         self::assertSame($rotated['project_uuid'], $clone->projectUuid());
     }
 
+    public function testInstanceGenerationSurvivesEndpointLossAndIgnoresWallClock(): void
+    {
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject($sandbox . DIRECTORY_SEPARATOR . 'instance-counter');
+        $store = new ProjectIdentityStore(
+            $project,
+            $sandbox . DIRECTORY_SEPARATOR . 'host-state',
+            $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json',
+        );
+
+        $first = $store->advanceInstanceGeneration('default');
+        self::assertSame(1, $first['generation']);
+        $untrustedFloor = $store->advanceInstanceGeneration('default', PHP_INT_MAX);
+        self::assertSame(2, $untrustedFloor['generation']);
+
+        $afterRestart = new ProjectIdentityStore(
+            $project,
+            $sandbox . DIRECTORY_SEPARATOR . 'host-state',
+            $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json',
+        );
+        self::assertSame(
+            3,
+            $afterRestart->advanceInstanceGeneration('default')['generation'],
+        );
+        self::assertSame(
+            1,
+            $afterRestart->advanceInstanceGeneration(
+                'another-instance',
+                PHP_INT_MAX,
+            )['generation'],
+        );
+    }
+
     public function testMissingIdentityInReadOnlyProjectFailsWithoutTemporaryUuid(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
@@ -120,6 +153,41 @@ final class ProjectIdentityStoreTest extends TestCase
         } finally {
             \chmod($identity, 0600);
         }
+    }
+
+    public function testFilesystemRootsAreRejectedBeforeStatePathsAreDerived(): void
+    {
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject($sandbox . DIRECTORY_SEPARATOR . 'safe-project');
+        $legacy = $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json';
+        foreach ([
+            'C:\\',
+            "\\\\server\\",
+            "\\\\server\\share\\",
+            "\\\\?\\C:\\",
+            "\\\\?\\UNC\\server\\share\\",
+            "\\\\?\\UNC\\server\\",
+            "\\\\.\\C:\\",
+            "\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\",
+        ] as $hostRoot) {
+            try {
+                new ProjectIdentityStore($project, $hostRoot, $legacy);
+                self::fail('A drive or UNC filesystem root must not become host state.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('must be absolute', $exception->getMessage());
+            }
+        }
+
+        $projectFilesystemRoot = DIRECTORY_SEPARATOR === '/'
+            ? '/'
+            : \substr((string)\realpath(\sys_get_temp_dir()), 0, 3);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('safe WLS project root');
+        new ProjectIdentityStore(
+            $projectFilesystemRoot,
+            $sandbox . DIRECTORY_SEPARATOR . 'host-state',
+            $legacy,
+        );
     }
 
     private function makeSandbox(): string

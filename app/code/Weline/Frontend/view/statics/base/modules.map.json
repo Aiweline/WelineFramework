@@ -1,0 +1,39 @@
+{
+    "jquery": {
+        "paths": [
+            "app/code/Weline/Frontend/view/statics/libs/jquery/3.6.0/jquery.min.js"
+        ]
+    },
+    "vue": {
+        "paths": [
+            "app/code/Weline/Frontend/view/statics/libs/vue/vue2.6.11.js"
+        ]
+    },
+    "weline": {
+        "paths": [
+            "app/code/Weline/Frontend/view/statics/js/weline.js"
+        ],
+        "模块 %{1} 加载失败：未找到 %{2}": "模块 %{1} 加载失败：未找到 %{2}",
+        "模块 %{1} 加载失败：无法加载 %{2}": "模块 %{1} 加载失败：无法加载 %{2}",
+        "预加载模块 %{1} 失败": "预加载模块 %{1} 失败",
+        "Weline.Account.%{1} 已弃用，请使用 %{2}": "Weline.Account.%{1} 已弃用，请使用 %{2}",
+        "登录/注册页面": "登录/注册页面",
+        "用户中心/账户相关页面": "用户中心/账户相关页面",
+        "API相关页面": "API相关页面",
+        "购物车相关页面": "购物车相关页面",
+        "自动预加载模块": "自动预加载模块",
+        "页面": "页面",
+        "原因": "原因",
+        "模块": "模块",
+        "时间": "时间",
+        "模块预加载完成": "模块预加载完成",
+        "模块预加载失败": "模块预加载失败",
+        "错误": "错误",
+        "当前页面无需预加载模块": "当前页面无需预加载模块"
+    },
+    "cookie": {
+        "paths": [
+            "app/code/Weline/Frontend/view/statics/js/cookie.js"
+        ]
+    }
+}

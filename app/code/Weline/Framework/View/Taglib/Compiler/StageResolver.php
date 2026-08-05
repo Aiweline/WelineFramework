@@ -90,10 +90,10 @@ final class StageResolver
      *
      * 优先级：
      * 1. 自定义配置（setTagStage）
-     * 2. 自定义标签（is_custom）强制编译期 - 这些标签的回调返回 PHP 代码
-     * 3. TagDefinition 元数据
-     * 4. 命名空间前缀匹配
-     * 5. 动态属性判断
+     * 2. 动态属性强制运行期解析，避免把 PHP 占位符烘焙为字符串
+     * 3. 自定义标签（is_custom）静态属性走编译期
+     * 4. TagDefinition 元数据
+     * 5. 命名空间前缀匹配
      * 6. 默认编译期
      */
     public function resolve(TagNode $node): string
@@ -104,26 +104,33 @@ final class StageResolver
         if (isset($this->customStages[$tagName])) {
             return $this->customStages[$tagName];
         }
-        
-        // 2. 检查是否是自定义标签（is_custom），这些标签的回调可能返回 PHP 代码
+
+        // 2. 动态属性必须先于静态 TagDefinition 判定。否则 block/lang 等
+        // 编译期标签会把 PHP echo 占位符作为普通字符串传给回调，
+        // 生成不可执行的嵌套 PHP 或错误的字面量。
+        if ($node->hasDynamicAttrs) {
+            return TagNode::STAGE_RUNTIME;
+        }
+
+        // 3. 检查是否是自定义标签（is_custom），这些标签的回调可能返回 PHP 代码
         // 自定义标签需要在编译期处理，以便返回的 PHP 代码被嵌入模板
         // 必须在其他检查之前，因为自定义标签可能有命名空间前缀
         if ($this->isCustomTag($tagName)) {
             return TagNode::STAGE_COMPILE;
         }
 
-        // 3. 从 TagDefinition 获取阶段
+        // 4. 从 TagDefinition 获取阶段
         $definitions = $this->getDefinitions();
         if (isset($definitions[$tagName])) {
             return $definitions[$tagName]->stage;
         }
 
-        // 4. 检查命名空间前缀匹配（如 w:template 匹配 template 定义）
+        // 5. 检查命名空间前缀匹配（如 w:template 匹配 template 定义）
         if (str_contains($tagName, ':')) {
             $parts = explode(':', $tagName, 2);
             $namespace = $parts[0];
             $baseName = $parts[1] ?? '';
-            
+
             // 先检查基础名称是否有定义（w:template -> template）
             if ($baseName !== '' && isset($definitions[$baseName])) {
                 return $definitions[$baseName]->stage;
@@ -138,15 +145,10 @@ final class StageResolver
             return TagNode::STAGE_COMPILE;
         }
 
-        // 5. 根据动态属性判断
-        if ($node->hasDynamicAttrs) {
-            return TagNode::STAGE_RUNTIME;
-        }
-
         // 6. 默认编译期
         return TagNode::STAGE_COMPILE;
     }
-    
+
     /**
      * 检查标签是否是自定义标签（来自 Weline\Taglib 模块）
      */
@@ -155,12 +157,12 @@ final class StageResolver
         // 获取 TaglibRegistry 中的标签定义
         try {
             $tags = CompiledExtensionRegistry::tags();
-            
+
             // 直接匹配
             if (isset($tags[$tagName]) && !empty($tags[$tagName]['is_custom'])) {
                 return true;
             }
-            
+
             // 检查带 w: 前缀的标签
             if (str_starts_with($tagName, 'w:')) {
                 $baseName = substr($tagName, 2);

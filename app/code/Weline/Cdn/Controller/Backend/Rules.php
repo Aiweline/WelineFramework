@@ -24,7 +24,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_rules_manager', 'CDN规则管理', 'mdi-file-document-edit', 'CDN规则管理', '')]
+#[AclAttribute('Weline_Cdn::cdn_rules_manager', 'CDN规则管理', 'mdi-file-document-edit', 'CDN规则管理', 'Weline_Cdn::cdn_manager')]
 class Rules extends BackendController
 {
     /**
@@ -68,10 +68,12 @@ class Rules extends BackendController
                 ];
             }
 
+            $this->assign('domains', $domains);
             $this->assign('rulesList', $rulesList);
             return $this->fetch();
         } catch (\Exception $e) {
             Message::error(__('加载规则列表失败：%{1}', $e->getMessage()));
+            $this->assign('domains', []);
             $this->assign('rulesList', []);
             return $this->fetch();
         }
@@ -596,4 +598,3 @@ class Rules extends BackendController
         return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }
-

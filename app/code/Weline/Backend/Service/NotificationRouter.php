@@ -46,30 +46,48 @@ class NotificationRouter
     }
 
     /**
-     * 路由通知到各个渠道
+     * 路由通知到各个渠道。
+     *
+     * @param array{
+     *   notification_id?:int,
+     *   topic_code?:string,
+     *   type?:string,
+     *   title?:string,
+     *   content?:string,
+     *   priority?:int,
+     *   metadata?:array,
+     *   notify_users?:list<int>,
+     *   require_explicit_recipients?:bool
+     * } $notification
      */
     public function route(array $notification): void
     {
-        $topicCode = $notification['topic_code'] ?? '';
-        $type = $notification['type'] ?? 'info';
         $notificationId = (int) ($notification['notification_id'] ?? 0);
         $specifiedUsers = $notification['notify_users'] ?? [];
+        $requireExplicit = !empty($notification['require_explicit_recipients']);
 
-        $this->createUserStatuses($notificationId, $specifiedUsers);
+        // Scoped urgent：必须显式授权用户；空列表零广播（审计行由 Observer 保留）。
+        if ($requireExplicit && $this->normalizeUserIds($specifiedUsers) === []) {
+            return;
+        }
 
-        $this->routeToExternalChannels($notification);
+        $this->createUserStatuses($notificationId, $specifiedUsers, $requireExplicit);
+
+        $this->routeToExternalChannels($notification, $requireExplicit);
     }
 
     /**
      * 为用户创建通知状态记录
+     *
+     * @param list<int>|array<mixed> $specifiedUsers
      */
-    private function createUserStatuses(int $notificationId, array $specifiedUsers = []): void
+    private function createUserStatuses(int $notificationId, array $specifiedUsers = [], bool $requireExplicit = false): void
     {
         if ($notificationId <= 0) {
             return;
         }
 
-        $users = $this->getTargetUsers($specifiedUsers);
+        $users = $this->getTargetUsers($specifiedUsers, $requireExplicit);
 
         foreach ($users as $user) {
             $userId = (int) ($user['user_id'] ?? 0);
@@ -91,16 +109,26 @@ class NotificationRouter
     }
 
     /**
-     * 获取目标用户列表
+     * 获取目标用户列表。
+     *
+     * @param list<int>|array<mixed> $specifiedUsers
+     * @return list<array<string,mixed>>
      */
-    private function getTargetUsers(array $specifiedUsers = []): array
+    private function getTargetUsers(array $specifiedUsers = [], bool $requireExplicit = false): array
     {
+        $ids = $this->normalizeUserIds($specifiedUsers);
+        if ($requireExplicit && $ids === []) {
+            return [];
+        }
+
         $query = $this->userModel->clearQuery()
             ->where(BackendUser::schema_fields_is_enabled, 1)
             ->where(BackendUser::schema_fields_is_deleted, 0);
 
-        if (!empty($specifiedUsers)) {
-            $query->where(BackendUser::schema_fields_ID, $specifiedUsers, 'IN');
+        if ($ids !== []) {
+            $query->where(BackendUser::schema_fields_ID, $ids, 'IN');
+        } elseif ($requireExplicit) {
+            return [];
         }
 
         return $query->select()->fetchArray();
@@ -108,8 +136,10 @@ class NotificationRouter
 
     /**
      * 路由到外部渠道
+     *
+     * @param array<string, mixed> $notification
      */
-    private function routeToExternalChannels(array $notification): void
+    private function routeToExternalChannels(array $notification, bool $requireExplicit = false): void
     {
         $topicCode = $notification['topic_code'] ?? '';
         $type = $notification['type'] ?? 'info';
@@ -138,7 +168,7 @@ class NotificationRouter
                 continue;
             }
 
-            $users = $this->getTargetUsers($specifiedUsers);
+            $users = $this->getTargetUsers($specifiedUsers, $requireExplicit);
             foreach ($users as $user) {
                 $userId = (int) ($user['user_id'] ?? 0);
                 if ($userId <= 0) {
@@ -178,6 +208,26 @@ class NotificationRouter
         if (!empty($notifiedChannels) && $notificationId > 0) {
             $this->updateExternalNotificationStatus($notificationId, $notifiedChannels);
         }
+    }
+
+    /**
+     * @param mixed $raw
+     * @return list<int>
+     */
+    private function normalizeUserIds(mixed $raw): array
+    {
+        if (!\is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $id) {
+            $userId = (int)$id;
+            if ($userId > 0) {
+                $out[] = $userId;
+            }
+        }
+
+        return \array_values(\array_unique($out));
     }
 
     /**

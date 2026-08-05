@@ -1,0 +1,116 @@
+﻿"仅允许 POST 请求。","仅允许 POST 请求。"
+未知税务配置类型。,未知税务配置类型。
+税务配置创建成功。,税务配置创建成功。
+税务管理,税务管理
+税务配置管理与迁移诊断,税务配置管理与迁移诊断
+税类,税类
+管理税类,管理税类
+税率,税率
+管理税率,管理税率
+税务规则,税务规则
+管理税务规则,管理税务规则
+创建税类,创建税类
+创建税率,创建税率
+创建税务规则,创建税务规则
+税引擎状态,税引擎状态
+查看税引擎状态,查看税引擎状态
+影子验证,影子验证
+查看税务影子验证状态,查看税务影子验证状态
+"已验证 LKG","已验证 LKG"
+"查看已验证税务 LKG","查看已验证税务 LKG"
+迁移状态,迁移状态
+只读查看税务迁移状态,只读查看税务迁移状态
+是,是
+否,否
+只读诊断,只读诊断
+可配置,可配置
+"此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。","此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。"
+"配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。","配置保存到当前数据库；生产迁移与切流仍只能通过受控 CLI 执行。"
+新增%{1},新增%{1}
+"网站 ID","网站 ID"
+税类代码,税类代码
+税类名称,税类名称
+管辖区,管辖区
+税率（基点）,税率（基点）
+规则版本,规则版本
+舍入模式,舍入模式
+启用,启用
+创建,创建
+当前没有记录。,当前没有记录。
+"税务不可用且无同版本同 Scope 的 LKG，新结账已阻断","税务不可用且无同版本同 Scope 的 LKG，新结账已阻断"
+"税务不可用且同版本 LKG 无法安全回放，新结账已阻断","税务不可用且同版本 LKG 无法安全回放，新结账已阻断"
+税务规则版本已变更，请重新报价,税务规则版本已变更，请重新报价
+税务报价缺少有效规则版本，请重新报价,税务报价缺少有效规则版本，请重新报价
+税务当前规则版本不可验证，新结账已阻断,税务当前规则版本不可验证，新结账已阻断
+税务报价行结构无效，新结账已阻断,税务报价行结构无效，新结账已阻断
+税务报价行标识缺失或重复，新结账已阻断,税务报价行标识缺失或重复，新结账已阻断
+税务报价行不能为空，新结账已阻断,税务报价行不能为空，新结账已阻断
+"已验证 LKG 元数据无效或观察窗不足","已验证 LKG 元数据无效或观察窗不足"
+"LKG 条目不存在或 Scope 不唯一","LKG 条目不存在或 Scope 不唯一"
+"无同 Scope、同版本且已验证的 LKG","无同 Scope、同版本且已验证的 LKG"
+税务规则集快照结构无效,税务规则集快照结构无效
+税务规则集快照税类无效,税务规则集快照税类无效
+税务规则集快照税则无效,税务规则集快照税则无效
+税务规则集快照哈希不匹配,税务规则集快照哈希不匹配
+税务引擎不可用,税务引擎不可用
+"税务 Schema 版本不匹配","税务 Schema 版本不匹配"
+税类不存在或已停用：%{1},税类不存在或已停用：%{1}
+税额汇总发生整数溢出,税额汇总发生整数溢出
+税务规则集请求无效,税务规则集请求无效
+"税务规则集 Schema 版本不匹配","税务规则集 Schema 版本不匹配"
+"税类 current source 无效或重复","税类 current source 无效或重复"
+"税则 current source 无效、重复或引用了停用税类","税则 current source 无效、重复或引用了停用税类"
+"无匹配税则：%{1} / %{2}","无匹配税则：%{1} / %{2}"
+税额乘法发生整数溢出,税额乘法发生整数溢出
+税务请求无效,税务请求无效
+税行无效,税行无效
+税行字段无效,税行字段无效
+"税行 ID 重复：%{1}","税行 ID 重复：%{1}"
+税则整数列无效：%{1},税则整数列无效：%{1}
+税类代码必须以小写字母或数字开头，且仅包含小写字母、数字、下划线或短横线。,税类代码必须以小写字母或数字开头，且仅包含小写字母、数字、下划线或短横线。
+"税类名称不能为空且不能超过 255 字节。","税类名称不能为空且不能超过 255 字节。"
+该网站已存在相同税类代码。,该网站已存在相同税类代码。
+税类代码格式无效。,税类代码格式无效。
+"管辖区必须使用 COUNTRY|REGION 格式。","管辖区必须使用 COUNTRY|REGION 格式。"
+"税率基点必须在 0 到 10000 之间。","税率基点必须在 0 到 10000 之间。"
+规则版本必须为正整数。,规则版本必须为正整数。
+舍入模式无效。,舍入模式无效。
+必须先创建并启用对应税类。,必须先创建并启用对应税类。
+相同网站、税类、管辖区和版本的规则已存在。,相同网站、税类、管辖区和版本的规则已存在。
+"网站 ID 必须为非负整数。","网站 ID 必须为非负整数。"
+"冻结税务 Scope 与请求不一致","冻结税务 Scope 与请求不一致"
+"Tax Scope ID 不能为负数","Tax Scope ID 不能为负数"
+"Tax Scope Website/Store 不存在或不匹配","Tax Scope Website/Store 不存在或不匹配"
+"Tax Scope Store 已停用或不在 active 生命周期","Tax Scope Store 已停用或不在 active 生命周期"
+"Tax Scope 配置无效","Tax Scope 配置无效"
+"MIG-P3B：Tax shadow 到精确 Scope allowlist（仅登记的 full clone）","MIG-P3B：Tax shadow 到精确 Scope allowlist（仅登记的 full clone）"
+打印帮助,打印帮助
+"在 full clone 只读清点 100 个持久化报价事实、规则快照与 rollout","在 full clone 只读清点 100 个持久化报价事实、规则快照与 rollout"
+"checkpoint 后执行 current-vs-frozen shadow compare 并保存同版本 LKG；保持 shadow","checkpoint 后执行 current-vs-frozen shadow compare 并保存同版本 LKG；保持 shadow"
+"新进程重载 checkpoint，重算同一观察窗并复核 report/LKG","新进程重载 checkpoint，重算同一观察窗并复核 report/LKG"
+"fresh verify 成功后仅放量指定 Website/Store/Channel","fresh verify 成功后仅放量指定 Website/Store/Channel"
+"按 checkpoint 持久化 mode off；保留 LKG、TaxSnapshot 与审计事实","按 checkpoint 持久化 mode off；保留 LKG、TaxSnapshot 与审计事实"
+"migration registry 已登记的 full mig_clone_*","migration registry 已登记的 full mig_clone_*"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）"
+"目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
+"目标 Store ID，必须 >=1","目标 Store ID，必须 >=1"
+"目标 Channel ID，必须 >=1","目标 Channel ID，必须 >=1"
+显示本帮助,显示本帮助
+"""仅允许 POST 请求。""","仅允许 POST 请求。"
+"""税务不可用且无同版本同 Scope 的 LKG，新结账已阻断""","税务不可用且无同版本同 Scope 的 LKG，新结账已阻断"
+"MIG-P3B：Tax shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P3B：Tax shadow 到 allowlist（apply 必须 --database=mig_clone_*）"
+"""税务不可用且无同版本 LKG，新结账已阻断""","税务不可用且无同版本 LKG，新结账已阻断"
+税务配置,税务配置
+"配置 Scope 税务引擎开关、默认管辖区与 schema 版本。","配置 Scope 税务引擎开关、默认管辖区与 schema 版本。"
+税务运行规则,税务运行规则
+"由 Weline_Tax 提供；保存与 scope 继承由 SystemConfig 负责。","由 Weline_Tax 提供；保存与 scope 继承由 SystemConfig 负责。"
+启用税务引擎,启用税务引擎
+"关闭时保持 checkout stub；开启后由服务端 TaxEngine 算税（P3B-002 接入）。","关闭时保持 checkout stub；开启后由服务端 TaxEngine 算税（P3B-002 接入）。"
+默认管辖区,默认管辖区
+"格式 country|region，例如 CN| 或 US|CA。","格式 country|region，例如 CN| 或 US|CA。"
+"规则 Schema 版本","规则 Schema 版本"
+"必须与引擎 TaxEngine::SCHEMA_VERSION 一致；跨版本 LKG 不可读。","必须与引擎 TaxEngine::SCHEMA_VERSION 一致；跨版本 LKG 不可读。"
+"开卡冻结：half_up（单项舍入误差 ≤1 minor）。","开卡冻结：half_up（单项舍入误差 ≤1 minor）。"
+"四舍五入（Half Up）","四舍五入（Half Up）"
+开卡冻结,开卡冻结
+"管辖区键=country|region；舍入=half_up 按行再汇总；失败禁止回零税；仅同 schema+rule_set_hash 的已验证 LKG 可读。","管辖区键=country|region；舍入=half_up 按行再汇总；失败禁止回零税；仅同 schema+rule_set_hash 的已验证 LKG 可读。"

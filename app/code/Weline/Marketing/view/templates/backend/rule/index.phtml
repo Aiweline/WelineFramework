@@ -1,4 +1,9 @@
 <?php
+$escapeHtml = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
 /**
  * 营销规则管理 - 内容模板
  * @var \Weline\Framework\View\Template $this
@@ -28,12 +33,12 @@
     </div>
 </div>
 
-<div class="row marketing-rule-page">
+<div class="row marketing-rule-page" data-testid="marketing-rule-management">
     <div class="col-12">
         <div class="marketing-rule-card">
             <div class="marketing-rule-card-header">
                 <h5 class="marketing-rule-card-title"><lang>规则列表</lang></h5>
-                <a href="<?= $this->getUrl('marketing/backend/rule/getAdd') ?>" class="marketing-rule-add-btn">
+                <a href="<?= $this->getBackendUrl('marketing/backend/rule/getAdd') ?>" class="marketing-rule-add-btn" data-testid="marketing-rule-create">
                     <i class="ri-add-line"></i><lang>添加规则</lang>
                 </a>
             </div>
@@ -74,10 +79,10 @@
                                                id="rule.id" 
                                                name="rule-name">{{rule.local_name|rule.name}}</local>
                                     <?php else: ?>
-                                        <?= $this->escapeHtml($rule['name'] ?? '') ?>
+                                        <?= $escapeHtml($rule['name'] ?? '') ?>
                                     <?php endif; ?>
                                 </td>
-                                <td><?= $this->escapeHtml($rule['rule_type'] ?? '') ?></td>
+                                <td><?= $escapeHtml($rule['rule_type'] ?? '') ?></td>
                                 <td>
                                     <?php if ($isActive): ?>
                                     <span class="marketing-rule-badge marketing-rule-badge--active"><lang>启用</lang></span>

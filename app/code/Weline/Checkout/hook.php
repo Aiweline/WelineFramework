@@ -129,6 +129,12 @@ return [
         'doc' => 'frontend/partials/checkout/payment-details.md',
     ],
 
+    'Weline_Checkout::frontend::partials::checkout::cart-items' => [
+        'name' => __('结账商品行列表'),
+        'description' => __('服务端渲染结账摘要中的商品行；禁止前端 JS createElement 拼商品 DOM（P2E-003）。'),
+        'doc' => 'frontend/partials/checkout/cart-items.md',
+    ],
+
     'Weline_Checkout::frontend::layouts::checkout::review-before' => [
         'name' => __('结账确认区域之前'),
         'description' => __('在提交订单确认区域之前触发，用于促销、风控、协议或校验提示扩展。'),

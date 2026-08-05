@@ -1,0 +1,11 @@
+﻿"Consent 查询器不支持的操作：%{1}","Consent 查询器不支持的操作：%{1}"
+Consent,Consent
+"前台 Cookie/同意横幅 accept / withdraw / status","前台 Cookie/同意横幅 accept / withdraw / status"
+同意指定类别,同意指定类别
+读取同意状态,读取同意状态
+撤回某一类别同意,撤回某一类别同意
+"我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。","我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。"
+同意,Accept
+稍后,Later
+"""Consent 查询器不支持的操作：%{1}""","Consent 查询器不支持的操作：%{1}"
+"""我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。""","We use cookies to improve your experience. You can accept or manage preferences later."

@@ -3,17 +3,33 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- 消息服务 - 归入系统管理 > 系统服务 -->
+    <!-- 队列运行面归入运营工具；菜单仅暴露列表与只读诊断入口。 -->
     <menu source="Weline_Queue::message_service" name="message_service" title="消息队列" action="" 
-         parent="Weline_Backend::system_service_group"
+         parent="Weline_Backend::commerce:operations:group"
          icon="mdi mdi-message-processing-outline" order="20">
         
-        <menu source="Weline_Queue::listing" name="queue_listing" title="队列列表"
-             action="*/backend/queue"
+        <menu source="Weline_Queue::listing_manager" name="queue_listing" title="队列列表"
+             action="queue/backend/queue/index"
              icon="mdi mdi-view-list-outline" order="10"/>
         
-        <menu source="Weline_Queue::type" name="queue_type" title="队列类型"
-             action="*/backend/type"
+        <menu source="Weline_Queue::type_manager" name="queue_type" title="队列类型"
+             action="queue/backend/type/index"
              icon="mdi mdi-shape-outline" order="20"/>
+
+        <menu source="Weline_Queue::consumer_diagnostics" name="queue_consumers" title="消费者"
+             action="queue/backend/diagnostics/consumers"
+             icon="mdi mdi-account-cog-outline" order="30"/>
+
+        <menu source="Weline_Queue::retry_diagnostics" name="queue_retries" title="重试诊断"
+             action="queue/backend/diagnostics/retries"
+             icon="mdi mdi-reload-alert" order="40"/>
+
+        <menu source="Weline_Queue::inbox_diagnostics" name="queue_inbox" title="Inbox"
+             action="queue/backend/diagnostics/inbox"
+             icon="mdi mdi-inbox-arrow-down-outline" order="50"/>
+
+        <menu source="Weline_Queue::outbox_diagnostics" name="queue_outbox" title="Outbox"
+             action="queue/backend/diagnostics/outbox"
+             icon="mdi mdi-inbox-arrow-up-outline" order="60"/>
     </menu>
 </menus>

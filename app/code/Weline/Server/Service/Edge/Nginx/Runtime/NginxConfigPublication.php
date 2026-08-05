@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Nginx\Runtime;
 
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+
 /**
  * Shared candidate/active/rollback transaction for managed Nginx configs.
  *
@@ -12,12 +14,27 @@ namespace Weline\Server\Service\Edge\Nginx\Runtime;
  */
 final class NginxConfigPublication
 {
+    private const MAX_CONFIG_BYTES = 16 * 1024 * 1024;
+
     public function __construct(
         private readonly string $activeConfig,
         private readonly string $scope = 'managed nginx',
     ) {
-        if (\basename($activeConfig) === '' || \dirname($activeConfig) === '.') {
+        if (!$this->isAbsolutePath($activeConfig)
+            || \basename($activeConfig) === ''
+            || \str_contains($activeConfig, "\0")
+            || \preg_match('#(?:^|[\\/])\.\.?([\\/]|$)#D', $activeConfig) === 1
+        ) {
             throw new \InvalidArgumentException('Nginx active config path must be absolute.');
+        }
+        $directory = \dirname($activeConfig);
+        $resolved = \realpath($directory);
+        if (!\is_string($resolved)
+            || !\is_dir($resolved)
+            || \is_link($directory)
+            || !$this->samePath($resolved, $directory)
+        ) {
+            throw new \InvalidArgumentException('Nginx active config directory is unsafe.');
         }
     }
 
@@ -34,33 +51,81 @@ final class NginxConfigPublication
     public function validateCandidate(string $candidate): void
     {
         $this->assertCandidatePath($candidate);
-        $this->assertRegularFile($candidate, 'candidate');
+        $this->readRegularFile($candidate, 'candidate');
     }
 
     /** @return array{conf:string,rollback:string|null} */
     public function publishCandidate(string $candidate, string $transactionId): array
     {
-        $this->validateCandidate($candidate);
+        $this->assertCandidatePath($candidate);
+        $candidateContents = $this->readRegularFile($candidate, 'candidate');
         $this->assertTransactionId($transactionId);
         $active = $this->activeConfig;
         $rollback = null;
-        if (\file_exists($active)) {
-            $this->assertRegularFile($active, 'active config');
+        $activeContents = null;
+        if (\file_exists($active) || \is_link($active)) {
+            $activeContents = $this->readRegularFile($active, 'active config');
             $rollback = $this->rollbackPathForTransaction($transactionId);
-            if (\file_exists($rollback)) {
+            if (\file_exists($rollback) || \is_link($rollback)) {
                 throw new \RuntimeException($this->scope . ' transaction rollback already exists.');
             }
-            if (!@\rename($active, $rollback)) {
-                throw new \RuntimeException('Unable to preserve the active ' . $this->scope . ' config.');
-            }
+            GatewayProjectStateFilesystem::atomicWrite(
+                $rollback,
+                $activeContents,
+                0600,
+            );
         }
-        if (!@\rename($candidate, $active)) {
-            if ($rollback !== null) {
-                @\rename($rollback, $active);
+        try {
+            GatewayProjectStateFilesystem::atomicWrite(
+                $active,
+                $candidateContents,
+                0600,
+            );
+            GatewayProjectStateFilesystem::removeRegular(
+                $candidate,
+                \ucfirst($this->scope) . ' candidate config',
+            );
+        } catch (\Throwable $throwable) {
+            if ($rollback !== null && $activeContents !== null) {
+                try {
+                    GatewayProjectStateFilesystem::atomicWrite(
+                        $active,
+                        $activeContents,
+                        0600,
+                    );
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $rollback,
+                        \ucfirst($this->scope) . ' rollback config',
+                    );
+                } catch (\Throwable $restoreFailure) {
+                    throw new \RuntimeException(
+                        'Unable to publish or restore the ' . $this->scope
+                            . ' config: ' . $restoreFailure->getMessage(),
+                        0,
+                        $throwable,
+                    );
+                }
+            } elseif (\file_exists($active) || \is_link($active)) {
+                try {
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $active,
+                        \ucfirst($this->scope) . ' failed first active config',
+                    );
+                } catch (\Throwable $restoreFailure) {
+                    throw new \RuntimeException(
+                        'Unable to publish or remove the first ' . $this->scope
+                            . ' config: ' . $restoreFailure->getMessage(),
+                        0,
+                        $throwable,
+                    );
+                }
             }
-            throw new \RuntimeException('Unable to publish the ' . $this->scope . ' candidate config.');
+            throw new \RuntimeException(
+                'Unable to publish the ' . $this->scope . ' candidate config.',
+                0,
+                $throwable,
+            );
         }
-        @\chmod($active, 0600);
 
         return ['conf' => $active, 'rollback' => $rollback];
     }
@@ -71,27 +136,53 @@ final class NginxConfigPublication
             if ($rollback !== $this->rollbackPathForTransaction($this->transactionIdFromRollback($rollback))) {
                 throw new \InvalidArgumentException($this->scope . ' rollback path is outside its config scope.');
             }
-            $this->assertRegularFile($rollback, 'rollback');
+            $rollbackContents = $this->readRegularFile($rollback, 'rollback');
+        } else {
+            $rollbackContents = null;
         }
         $active = $this->activeConfig;
         $rejected = null;
-        if (\file_exists($active)) {
-            $this->assertRegularFile($active, 'active config');
+        if (\file_exists($active) || \is_link($active)) {
+            $activeContents = $this->readRegularFile($active, 'active config');
             $rejected = $active . '.rejected.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-            if (!@\rename($active, $rejected)) {
-                throw new \RuntimeException(
-                    'Unable to preserve the rejected ' . $this->scope . ' config during rollback.'
+            GatewayProjectStateFilesystem::atomicWrite(
+                $rejected,
+                $activeContents,
+                0600,
+            );
+        }
+        $restored = false;
+        try {
+            if ($rollbackContents !== null) {
+                GatewayProjectStateFilesystem::atomicWrite(
+                    $active,
+                    $rollbackContents,
+                    0600,
+                );
+                GatewayProjectStateFilesystem::removeRegular(
+                    (string)$rollback,
+                    \ucfirst($this->scope) . ' rollback config',
+                );
+            } elseif (\file_exists($active) || \is_link($active)) {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $active,
+                    \ucfirst($this->scope) . ' active config',
                 );
             }
-        }
-        if ($rollback !== null && !@\rename($rollback, $active)) {
-            if ($rejected !== null) {
-                @\rename($rejected, $active);
+            $restored = true;
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'Unable to restore the previous ' . $this->scope . ' config.',
+                0,
+                $throwable,
+            );
+        } finally {
+            if ($restored && $rejected !== null) {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $rejected,
+                    \ucfirst($this->scope) . ' rejected config',
+                );
             }
-            throw new \RuntimeException('Unable to restore the previous ' . $this->scope . ' config.');
-        }
-        if ($rejected !== null) {
-            @\unlink($rejected);
         }
     }
 
@@ -102,25 +193,22 @@ final class NginxConfigPublication
             return;
         }
         $lastGood = $this->lastGoodPath();
-        if (!\is_file($lastGood) || \is_link($lastGood)) {
+        if (!\file_exists($lastGood) && !\is_link($lastGood)) {
             return;
         }
-        $contents = @\file_get_contents($lastGood);
-        if (!\is_string($contents) || $contents === '') {
-            throw new \RuntimeException($this->scope . ' last-known-good config is unreadable.');
-        }
-        $candidate = $this->stageCandidate($contents);
-        if (!@\rename($candidate, $this->activeConfig)) {
-            @\unlink($candidate);
-            throw new \RuntimeException('Unable to recover the last-known-good ' . $this->scope . ' config.');
-        }
-        @\chmod($this->activeConfig, 0600);
+        $contents = $this->readRegularFile($lastGood, 'last-known-good config');
+        GatewayProjectStateFilesystem::atomicWrite(
+            $this->activeConfig,
+            $contents,
+            0600,
+        );
     }
 
     public function rollbackPathForTransaction(string $transactionId): string
     {
         $this->assertTransactionId($transactionId);
-        return $this->activeConfig . '.rollback.' . \strtolower($transactionId);
+        return $this->activeConfig . '.rollback.'
+            . \strtolower(\trim($transactionId));
     }
 
     public function commitPublished(?string $rollback): bool
@@ -133,13 +221,12 @@ final class NginxConfigPublication
             if ($rollback !== $this->rollbackPathForTransaction($transactionId)) {
                 return false;
             }
-            $this->assertRegularFile($rollback, 'rollback');
-            $contents = @\file_get_contents($rollback);
-            if (!\is_string($contents) || $contents === '') {
-                return false;
-            }
+            $contents = $this->readRegularFile($rollback, 'rollback');
             $this->replaceFile($this->lastGoodPath(), $contents, 0600);
-            return @\unlink($rollback) || !\file_exists($rollback);
+            return GatewayProjectStateFilesystem::removeRegular(
+                $rollback,
+                \ucfirst($this->scope) . ' committed rollback config',
+            );
         } catch (\Throwable) {
             return false;
         }
@@ -148,8 +235,11 @@ final class NginxConfigPublication
     public function discardCandidate(string $candidate): void
     {
         $this->assertCandidatePath($candidate);
-        if (\is_file($candidate) && !\is_link($candidate)) {
-            @\unlink($candidate);
+        if (\file_exists($candidate) || \is_link($candidate)) {
+            GatewayProjectStateFilesystem::removeRegular(
+                $candidate,
+                \ucfirst($this->scope) . ' discarded candidate config',
+            );
         }
     }
 
@@ -164,6 +254,10 @@ final class NginxConfigPublication
         $prefix = $this->activeConfig . '.candidate.';
         if (\dirname($candidate) !== \dirname($this->activeConfig)
             || !\str_starts_with($candidate, $prefix)
+            || \preg_match(
+                '/\A[1-9][0-9]*\.[a-f0-9]{8}\z/D',
+                \substr($candidate, \strlen($prefix)),
+            ) !== 1
         ) {
             throw new \InvalidArgumentException(
                 \ucfirst($this->scope) . ' candidate path is outside the isolated config scope.'
@@ -193,11 +287,18 @@ final class NginxConfigPublication
 
     private function assertRegularFile(string $file, string $kind): void
     {
-        if (!\is_file($file) || \is_link($file)) {
-            throw new \RuntimeException(
-                \ucfirst($this->scope) . ' ' . $kind . ' is missing or unsafe.'
-            );
-        }
+        // Reuse the sealed state-file reader so interrupted recovery only
+        // continues against a regular, size-bounded config path.
+        $this->readRegularFile($file, $kind);
+    }
+
+    private function readRegularFile(string $file, string $kind): string
+    {
+        return GatewayProjectStateFilesystem::read(
+            $file,
+            self::MAX_CONFIG_BYTES,
+            \ucfirst($this->scope) . ' ' . $kind,
+        );
     }
 
     private function lastGoodPath(): string
@@ -210,59 +311,30 @@ final class NginxConfigPublication
         if (\file_exists($file) || \is_link($file)) {
             throw new \RuntimeException('Refusing to overwrite an existing ' . $this->scope . ' staging file.');
         }
-        $handle = @\fopen($file, 'xb');
-        if (!\is_resource($handle)) {
-            throw new \RuntimeException('Unable to create the ' . $this->scope . ' staging file.');
-        }
-        try {
-            $remaining = $contents;
-            while ($remaining !== '') {
-                $written = @\fwrite($handle, $remaining);
-                if (!\is_int($written) || $written < 1) {
-                    throw new \RuntimeException('Unable to write the ' . $this->scope . ' staging file.');
-                }
-                $remaining = (string)\substr($remaining, $written);
-            }
-            if (!@\fflush($handle)) {
-                throw new \RuntimeException('Unable to flush the ' . $this->scope . ' staging file.');
-            }
-            if (\function_exists('fsync')) {
-                @\fsync($handle);
-            }
-        } catch (\Throwable $throwable) {
-            @\fclose($handle);
-            @\unlink($file);
-            throw $throwable;
-        }
-        @\fclose($handle);
-        @\chmod($file, $mode);
+        GatewayProjectStateFilesystem::atomicWrite($file, $contents, $mode);
     }
 
     private function replaceFile(string $target, string $contents, int $mode): void
     {
-        if (\is_link($target) || (\file_exists($target) && !\is_file($target))) {
-            throw new \RuntimeException('Refusing to replace an unsafe ' . $this->scope . ' file.');
+        GatewayProjectStateFilesystem::atomicWrite($target, $contents, $mode);
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return \preg_match('/\A(?:[A-Za-z]:[\\\\\/]|\\\\\\\\[^\\\\\/]+[\\\\\/][^\\\\\/]+)/D', $path) === 1;
         }
-        $temporary = $target . '.candidate.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-        $this->writeNewFile($temporary, $contents, $mode);
-        $previous = null;
-        if (\is_file($target)) {
-            $previous = $target . '.previous.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-            if (!@\rename($target, $previous)) {
-                @\unlink($temporary);
-                throw new \RuntimeException('Unable to preserve the existing ' . $this->scope . ' file.');
-            }
+        return \str_starts_with($path, '/');
+    }
+
+    private function samePath(string $left, string $right): bool
+    {
+        $left = \rtrim(\str_replace('\\', '/', $left), '/');
+        $right = \rtrim(\str_replace('\\', '/', $right), '/');
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $left = \strtolower($left);
+            $right = \strtolower($right);
         }
-        if (!@\rename($temporary, $target)) {
-            if ($previous !== null) {
-                @\rename($previous, $target);
-            }
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to replace the ' . $this->scope . ' file.');
-        }
-        @\chmod($target, $mode);
-        if ($previous !== null) {
-            @\unlink($previous);
-        }
+        return \hash_equals($left, $right);
     }
 }

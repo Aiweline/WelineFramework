@@ -6,6 +6,8 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\WebsiteCacheInvalidationService;
 #[Table(comment: '网站-语言关联表')]
 #[Index(name: 'idx_website_id', columns: ['website_id'], comment: '网站ID索引')]
 #[Index(name: 'idx_language_code', columns: ['language_code'], comment: '语言代码索引')]
@@ -14,6 +16,9 @@ class WebsiteLanguage extends Model
 {
     public const schema_table = 'weline_websites_website_language';
     public const schema_primary_key = 'website_language_id';
+
+    private ?int $invalidationPreviousWebsiteId = null;
+    private ?int $invalidationDeletedWebsiteId = null;
 
 
     #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '关联ID')]
@@ -110,21 +115,82 @@ class WebsiteLanguage extends Model
             }
         }
 
-        $this->clearWebsiteLanguageCaches();
+        $this->clearWebsiteLanguageCaches($websiteId);
 
         return $this;
     }
 
-    private function clearWebsiteLanguageCaches(): void
+    /**
+     * Public cache clear for services that upsert language rows outside Model
+     * save/delete hooks (e.g. WebsiteLanguageAssignment::ensureAssigned).
+     */
+    public function clearWebsiteLanguageCaches(int $websiteId): void
     {
-        try {
-            w_cache('website')->clear();
-            w_cache('i18n')->clear();
-            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
-            \Weline\Websites\Observer\DetectWebsite::clearProcessCache();
-        } catch (\Throwable) {
+        $this->invalidateWebsiteLanguage($websiteId);
+    }
+
+    public function save_before(): void
+    {
+        parent::save_before();
+        $this->invalidationPreviousWebsiteId = null;
+        $id = (int)$this->getData(self::schema_fields_ID);
+        if ($id > 0) {
+            $existing = clone $this;
+            $row = $existing->clearData()->clearQuery()
+                ->where(self::schema_fields_ID, $id)
+                ->find()
+                ->fetchArray();
+            if (is_array($row) && array_is_list($row)) {
+                $row = $row[0] ?? null;
+            }
+            if (is_array($row) && array_key_exists(self::schema_fields_WEBSITE_ID, $row)) {
+                $this->invalidationPreviousWebsiteId = (int)$row[self::schema_fields_WEBSITE_ID];
+            }
         }
     }
-}
 
+    public function save_after(): void
+    {
+        parent::save_after();
+        try {
+            $websiteId = $this->getWebsiteId();
+            $this->invalidateWebsiteLanguage($websiteId);
+            if ($this->invalidationPreviousWebsiteId !== null
+                && $this->invalidationPreviousWebsiteId !== $websiteId) {
+                $this->invalidateWebsiteLanguage($this->invalidationPreviousWebsiteId);
+            }
+        } finally {
+            $this->invalidationPreviousWebsiteId = null;
+        }
+    }
+
+    public function delete_before(): void
+    {
+        parent::delete_before();
+        $this->invalidationDeletedWebsiteId = $this->hasData(self::schema_fields_WEBSITE_ID)
+            ? (int)$this->getData(self::schema_fields_WEBSITE_ID)
+            : null;
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        try {
+            if ($this->invalidationDeletedWebsiteId !== null) {
+                $this->invalidateWebsiteLanguage($this->invalidationDeletedWebsiteId);
+            }
+        } finally {
+            $this->invalidationDeletedWebsiteId = null;
+        }
+    }
+
+    private function invalidateWebsiteLanguage(int $websiteId): void
+    {
+        ObjectManager::getInstance(WebsiteCacheInvalidationService::class)->invalidateWebsite(
+            $this->getConnection(),
+            $websiteId,
+            ['language'],
+        );
+    }
+}
 

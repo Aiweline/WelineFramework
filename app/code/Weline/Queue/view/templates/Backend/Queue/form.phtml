@@ -3,8 +3,39 @@
  * 队列表单 - 内容模板
  * @var \Weline\Framework\View\Template $this
  */
+$queueFormData = isset($queueData) && is_array($queueData) ? $queueData : [];
+$queueFormTypeId = (string)($queueFormData['type_id'] ?? '');
+$queueFormActiveName = (string)($queueFormData['progress'] ?? 'progress-select-queueData');
+if (!in_array($queueFormActiveName, ['progress-select-queueData', 'progress-params'], true)) {
+    $queueFormActiveName = $queueFormTypeId !== '' ? 'progress-params' : 'progress-select-queueData';
+}
+$queueFormBoot = [
+    'dir' => (string)($dir ?? ''),
+    'module' => (string)($module ?? ''),
+    'params' => [
+        'queue_id' => (string)($queueFormData['queue_id'] ?? ''),
+        'type_id' => $queueFormTypeId,
+        'attributes' => [],
+        'name' => (string)($queueFormData['name'] ?? ''),
+        'biz_key' => (string)($queueFormData['biz_key'] ?? ''),
+    ],
+    'active_name' => $queueFormActiveName,
+    'queue_types' => isset($queue_types) && is_array($queue_types) ? array_values($queue_types) : [],
+];
+$queueFormBootJson = json_encode(
+    $queueFormBoot,
+    JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_INVALID_UTF8_SUBSTITUTE,
+);
+if (!is_string($queueFormBootJson)) {
+    $queueFormBootJson = '{"dir":"","module":"","params":{"queue_id":"","type_id":"","attributes":[],"name":"","biz_key":""},"active_name":"progress-select-queueData","queue_types":[]}';
+}
 ?>
-<link rel='stylesheet' href='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.css)'>
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <w:js>Weline_Backend::/backend/lib/vue/vue2.6.11.js</w:js>
 <w:css>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.css</w:css>
@@ -165,12 +196,28 @@ span.required {
     margin-bottom: var(--backend-spacing-sm, 12px);
     display: block;
 }
+
+.weline-queue-form button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.weline-queue-form [aria-busy="true"] {
+    cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .weline-queue-wizard-step,
+    .weline-queue-wizard-step .step-number,
+    .weline-queue-form .mdi-spin,
+    .weline-queue-form .progress-bar {
+        animation: none !important;
+        transition: none !important;
+    }
+}
 </style>
 
 <div class="weline-queue-form" id="QueuePage">
-    <div class='row'>
-        <template>Weline_Component::message.phtml</template>
-    </div>
     <div class='card'>
         <div class='card-body overflow-hidden'>
             <div id='progress-wizard' class='twitter-bs-wizard'>
@@ -213,7 +260,12 @@ span.required {
                 </ul>
 
                 <div id='bar' class='progress mt-5'>
-                    <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'></div>
+                    <div class='progress-bar bg-success progress-bar-striped progress-bar-animated'
+                         role='progressbar'
+                         :aria-valuenow='progressPercent'
+                         aria-valuemin='0'
+                         aria-valuemax='100'
+                         :style="{width: progressPercent + '%'}"></div>
                 </div>
                 <div class='tab-content twitter-bs-wizard-tab-content'>
                     <div class='tab-pane' :class="{active:activeName=='progress-select-queueData'}">
@@ -229,7 +281,10 @@ span.required {
                                            @input="renderSearchQueueTypes()"
                                            aria-describedby='search-addon'/>
                                     <button type='button' class='btn btn-outline-primary'
+                                            :disabled='isSearchingTypes'
+                                            :aria-busy="isSearchingTypes ? 'true' : 'false'"
                                             @click='renderSearchQueueTypes()'>
+                                        <i v-if='isSearchingTypes' class='mdi mdi-loading mdi-spin me-1' aria-hidden='true'></i>
                                         <lang>搜索队列类型</lang>
                                     </button>
                                 </div>
@@ -268,7 +323,9 @@ span.required {
                                             class='form-select form-control rounded' size='30' name='type_id'
                                             data-style='btn-primary' data-width='fit'
                                             aria-label='@lang{搜索【队列类型】结果}'
-                                            v-model='params.type_id' aria-describedby='search-addon' required>
+                                            v-model='params.type_id'
+                                            @change='handleTypeSelection'
+                                            aria-describedby='search-addon' required>
                                         <option v-for='v in queue_types' :value='v.type_id' :label='v.name' :tip='v.tip'
                                                 v-bind:selected='v.type_id == params.type_id'
                                                 @click="changeTypeTip(v)">
@@ -288,6 +345,7 @@ span.required {
                         <div class='row'>
                             <div class='mx-auto col-lg-6 mt-2 mb-4'>
                                 <button type='button' class='btn btn-outline-primary pull-right'
+                                        :disabled="params.type_id === '' || isLoadingAttributes"
                                         @click='changeNav("progress-params")'>
                                     <lang>下一步</lang>
                                 </button>
@@ -306,7 +364,21 @@ span.required {
                                 </div>
                             </div>
                         </div>
-                        <div class='row' id="queueParamsForm">
+                        <div v-if='isLoadingAttributes' class='text-center py-4' aria-live='polite'>
+                            <i class='mdi mdi-loading mdi-spin me-1' aria-hidden='true'></i>
+                            <lang>正在执行...</lang>
+                        </div>
+                        <div v-if='unresolvedDependenceCodes.length > 0'
+                             class='alert alert-danger d-flex align-items-center justify-content-between gap-2'
+                             role='alert' aria-live='assertive'>
+                            <span><lang>部分依赖属性更新失败，请重试后再继续。</lang></span>
+                            <button type='button' class='btn btn-sm btn-outline-danger'
+                                    :disabled='isLoadingAttributes || pendingDependenceRequests > 0'
+                                    @click='retryDependenceResolution'>
+                                <lang>重试</lang>
+                            </button>
+                        </div>
+                        <div class='row' id="queueParamsForm" :aria-busy="isLoadingAttributes ? 'true' : 'false'">
                         </div>
                         <div class='row'>
                             <div class='mx-auto col-lg-6 mt-2 mb-4'>
@@ -315,6 +387,7 @@ span.required {
                                     <lang>上一步</lang>
                                 </button>
                                 <button type='button' class='btn btn-outline-primary pull-right'
+                                        :disabled='isLoadingAttributes || pendingDependenceRequests > 0 || unresolvedDependenceCodes.length > 0 || !clickedParamsProcess'
                                         @click='changeNav("progress-confirm")'>
                                     <lang>下一步</lang>
                                 </button>
@@ -367,7 +440,12 @@ span.required {
                                     <lang>上一步</lang>
                                 </button>
                                 <div v-if="(activeName=='progress-confirm')">
-                                    <button class='btn btn-primary pull-right' @click='submitQueue'>
+                                    <button type='button'
+                                            class='btn btn-primary pull-right'
+                                            :disabled='!canSubmitQueue'
+                                            :aria-busy="isSubmitting ? 'true' : 'false'"
+                                            @click='submitQueue'>
+                                        <i v-if='isSubmitting' class='mdi mdi-loading mdi-spin me-1' aria-hidden='true'></i>
                                         <lang>提交</lang>
                                     </button>
                                 </div>
@@ -380,10 +458,6 @@ span.required {
     </div>
 </div>
 
-<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js)'></script>
-<script src='@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)'></script>
-<script src='@static(Weline_Admin::assets/libs/twitter-bootstrap-wizard/prettify.js)'></script>
-<script src='@static(Weline_Queue::backend/js/pages/form-wizard.init.js)'></script>
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script src='@static(Weline_Admin::assets/js/pages/sweet-alerts.init.js)'></script>
 <w:js>Weline_Eav::libs/bootstrap-colorpicker/bootstrap-colorpicker.min.js</w:js>
@@ -391,33 +465,433 @@ span.required {
 <script>
 (function() {
     'use strict';
-    
+
+    var queueText = <?= json_encode([
+        'apiUnavailable' => (string)__('网络错误，请检查网络后重试'),
+        'warningTitle' => (string)__('错误！'),
+        'confirmText' => (string)__('好的'),
+        'saveFailed' => (string)__('队列创建失败!'),
+        'typeRequiredTitle' => (string)__('请先选择队列类型再操作！'),
+        'typeRequiredText' => (string)__('当前队列类型为空！无法创建属性！'),
+        'noAttributes' => (string)__('队列无属性，可以直接进行下一步提交。'),
+        'requiredField' => (string)__('设置队列属性失败！请修改重试。%{1}'),
+        'dependenceLoading' => (string)__('正在更新依赖属性...'),
+        'dependenceFailed' => (string)__('更新队列属性依赖失败，请重试。'),
+        'dependenceUnresolved' => (string)__('部分依赖属性更新失败，请重试后再继续。')
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var queueBoot = <?= $queueFormBootJson ?>;
+    var queueAdminPromise = null;
+
+    function getQueueApiHost() {
+        if (window.parent === window) {
+            return window;
+        }
+        try {
+            if (
+                window.parent.location.origin === window.location.origin
+                && window.parent.Weline
+                && typeof window.parent.Weline.load === 'function'
+            ) {
+                return window.parent;
+            }
+        } catch (error) {
+            // Cross-origin parents must never receive or proxy backend authority.
+        }
+        throw new Error(queueText.apiUnavailable);
+    }
+
+    async function getQueueAdmin() {
+        if (!queueAdminPromise) {
+            queueAdminPromise = (async function() {
+                var apiHost = getQueueApiHost();
+                if (!apiHost.Weline || typeof apiHost.Weline.load !== 'function') {
+                    throw new Error(queueText.apiUnavailable);
+                }
+                var api = await apiHost.Weline.load('api');
+                return api.resource('queue_admin');
+            })().catch(function(error) {
+                queueAdminPromise = null;
+                throw error;
+            });
+        }
+        return queueAdminPromise;
+    }
+
+    async function queueAdminCall(operation, params) {
+        var api = await getQueueAdmin();
+        if (!api || typeof api[operation] !== 'function') {
+            throw new Error(queueText.apiUnavailable);
+        }
+        return api[operation](params || {}, { keepBusinessResult: true, silent: true });
+    }
+
+    function notifyError(message) {
+        var text = String(message || queueText.apiUnavailable);
+        if (typeof BackendToast !== 'undefined') {
+            BackendToast.error(text);
+            return;
+        }
+        Swal.fire({
+            title: queueText.warningTitle,
+            text: text,
+            icon: 'error',
+            confirmButtonText: queueText.confirmText
+        });
+    }
+
+    function sanitizeAttributeHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+        template.content.querySelectorAll(
+            'script, style, iframe, object, embed, link, meta, base'
+        ).forEach(function(element) {
+            element.remove();
+        });
+        template.content.querySelectorAll('*').forEach(function(element) {
+            Array.prototype.slice.call(element.attributes || []).forEach(function(attribute) {
+                var name = String(attribute.name || '').toLowerCase();
+                var value = String(attribute.value || '');
+                var compactValue = value.replace(/[\u0000-\u0020]+/g, '').toLowerCase();
+                var isUrlAttribute = [
+                    'href', 'src', 'xlink:href', 'action', 'formaction', 'poster', 'background'
+                ].indexOf(name) !== -1;
+                var hasExecutableUrl = /^(?:javascript:|vbscript:|data:text\/html)/i.test(compactValue);
+                if (name.indexOf('on') === 0
+                    || name === 'srcdoc'
+                    || name === 'style'
+                    || name === 'srcset'
+                    || (isUrlAttribute && hasExecutableUrl)) {
+                    element.removeAttribute(attribute.name);
+                }
+            });
+        });
+
+        return template.content;
+    }
+
+    function findAttributeElement(root, code) {
+        var elements = root.querySelectorAll('[code]');
+        for (var i = 0; i < elements.length; i++) {
+            if (String(elements[i].getAttribute('code') || '') === String(code || '')) {
+                return elements[i];
+            }
+        }
+        return null;
+    }
+
+    function readAttributeValue(element) {
+        if (!element) {
+            return '';
+        }
+        if (element.tagName === 'SELECT' && element.multiple) {
+            return Array.prototype.slice.call(element.selectedOptions || []).map(function(option) {
+                return option.value;
+            });
+        }
+        if (element.tagName === 'INPUT'
+            && (element.type === 'checkbox' || element.type === 'radio')
+            && !element.checked) {
+            return '';
+        }
+        return element.value === undefined || element.value === null ? '' : element.value;
+    }
+
+    function hasAttributeValue(value) {
+        if (Array.isArray(value)) {
+            return value.length > 0;
+        }
+        return value !== null && value !== undefined && String(value) !== '';
+    }
+
+    function attributeValueAlias(elements, value) {
+        var first = elements[0];
+        if (!first) {
+            return '';
+        }
+        if (first.tagName === 'SELECT') {
+            return Array.prototype.slice.call(first.selectedOptions || []).map(function(option) {
+                return option.textContent || option.value;
+            }).join(',');
+        }
+        var labels = {};
+        var raw = first.getAttribute('model_class_data') || '';
+        if (raw) {
+            try {
+                var decoded = JSON.parse(raw);
+                labels = decoded && typeof decoded === 'object' ? decoded : {};
+            } catch (error) {
+                labels = {};
+            }
+        }
+        var values = Array.isArray(value) ? value : [value];
+        return values.map(function(item) {
+            var key = String(item === undefined || item === null ? '' : item);
+            return Object.prototype.hasOwnProperty.call(labels, key) ? String(labels[key]) : key;
+        }).join(',');
+    }
+
+    function collectQueueAttributes(root) {
+        var groups = new Map();
+        Array.prototype.slice.call(root.querySelectorAll('*[scope="queue"]')).forEach(function(element) {
+            if (element.disabled) {
+                return;
+            }
+            var code = String(element.getAttribute('code') || element.getAttribute('name') || '').trim();
+            if (!code) {
+                return;
+            }
+            if (!groups.has(code)) {
+                groups.set(code, []);
+            }
+            groups.get(code).push(element);
+        });
+
+        var attributes = [];
+        var invalidElement = null;
+        groups.forEach(function(elements, code) {
+            if (invalidElement) {
+                return;
+            }
+            var first = elements[0];
+            var type = first && first.tagName === 'INPUT' ? String(first.type || '').toLowerCase() : '';
+            var value;
+            if (type === 'checkbox') {
+                value = elements.filter(function(element) {
+                    return element.checked;
+                }).map(readAttributeValue);
+            } else if (type === 'radio') {
+                var selected = elements.find(function(element) {
+                    return element.checked;
+                });
+                value = selected ? readAttributeValue(selected) : '';
+            } else if (elements.length === 1) {
+                value = readAttributeValue(first);
+            } else {
+                value = elements.map(readAttributeValue).filter(hasAttributeValue);
+            }
+
+            var required = elements.some(function(element) {
+                return element.hasAttribute('required');
+            });
+            if (required && !hasAttributeValue(value)) {
+                invalidElement = first;
+                return;
+            }
+            attributes.push({
+                name: String(first.getAttribute('title') || ''),
+                code: code,
+                value: value,
+                value_alias: attributeValueAlias(elements, value)
+            });
+        });
+
+        return {attributes: attributes, invalidElement: invalidElement};
+    }
+
+    function rememberAttributeDisabledState(element) {
+        if (!element || element.dataset.queueOriginalDisabled !== undefined) {
+            return;
+        }
+        element.dataset.queueOriginalDisabled = element.disabled ? '1' : '0';
+    }
+
+    function setAttributeAvailability(element, wrapper, available) {
+        rememberAttributeDisabledState(element);
+        wrapper.hidden = !available;
+        wrapper.setAttribute('aria-hidden', available ? 'false' : 'true');
+        element.disabled = !available || element.dataset.queueOriginalDisabled === '1';
+    }
+
+    function setDependenceLoading(element, wrapper, loading) {
+        rememberAttributeDisabledState(element);
+        if (loading) {
+            wrapper.setAttribute('aria-busy', 'true');
+            wrapper.setAttribute('aria-label', queueText.dependenceLoading);
+            element.disabled = true;
+            return;
+        }
+        wrapper.removeAttribute('aria-busy');
+        wrapper.removeAttribute('aria-label');
+        element.disabled = element.dataset.queueOriginalDisabled === '1';
+    }
+
+    function applyDependenceOptions(element, items) {
+        var optionMap = items && typeof items === 'object' ? items : {};
+        var keys = Object.keys(optionMap);
+        if (element.tagName === 'SELECT') {
+            var previous = readAttributeValue(element);
+            var previousValues = Array.isArray(previous) ? previous.map(String) : [String(previous)];
+            element.replaceChildren();
+            keys.forEach(function(key) {
+                var option = document.createElement('option');
+                option.value = key;
+                option.textContent = String(optionMap[key]);
+                option.selected = previousValues.indexOf(String(key)) !== -1;
+                element.appendChild(option);
+            });
+            return;
+        }
+        if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+            element.value = keys.map(function(key) {
+                return String(optionMap[key]);
+            }).join(',');
+        }
+    }
+
+    function bindAttributeDependences(vm, root, items, dependenceGeneration) {
+        items.forEach(function(item) {
+            var dependenceCodes = Array.isArray(item && item.dependence) ? item.dependence : [];
+            if (!item || !item.code || dependenceCodes.length === 0) {
+                return;
+            }
+            var currentElement = findAttributeElement(root, item.code);
+            if (!currentElement) {
+                return;
+            }
+            var currentWrapper = currentElement.closest('.weline-queue-attribute-field');
+            if (!currentWrapper) {
+                return;
+            }
+            var dependenceElements = dependenceCodes.map(function(code) {
+                return {code: code, element: findAttributeElement(root, code)};
+            }).filter(function(entry) {
+                return !!entry.element;
+            });
+            if (dependenceElements.length !== dependenceCodes.length) {
+                setAttributeAvailability(currentElement, currentWrapper, false);
+                vm.setDependenceUnresolved(item.code, true, dependenceGeneration);
+                vm.registerDependenceRetry(item.code, function() {
+                    notifyError(queueText.dependenceFailed);
+                    return false;
+                }, dependenceGeneration);
+                return;
+            }
+
+            var requestVersion = 0;
+            var lastDependenceCode = dependenceElements[0].code;
+            var refresh = async function(changedDependenceCode) {
+                if (dependenceGeneration !== vm.dependenceGeneration || !currentWrapper.isConnected) {
+                    return;
+                }
+                var requestedDependence = dependenceElements.find(function(entry) {
+                    return entry.code === changedDependenceCode;
+                }) || dependenceElements[0];
+                lastDependenceCode = requestedDependence.code;
+                var emptyDependence = dependenceElements.some(function(entry) {
+                    return entry.element.disabled || !hasAttributeValue(readAttributeValue(entry.element));
+                });
+                if (emptyDependence) {
+                    requestVersion += 1;
+                    vm.setDependenceUnresolved(item.code, false, dependenceGeneration);
+                    setDependenceLoading(currentElement, currentWrapper, false);
+                    setAttributeAvailability(currentElement, currentWrapper, false);
+                    return;
+                }
+
+                var version = ++requestVersion;
+                var applied = false;
+                setAttributeAvailability(currentElement, currentWrapper, false);
+                setDependenceLoading(currentElement, currentWrapper, true);
+                vm.pendingDependenceRequests += 1;
+                try {
+                    var result = await queueAdminCall('resolveAttributeDependence', {
+                        type_id: parseInt(String(vm.params.type_id), 10),
+                        attribute: String(item.code),
+                        dependence_attribute: String(requestedDependence.code),
+                        dependence_value: readAttributeValue(requestedDependence.element),
+                        attribute_value: readAttributeValue(currentElement)
+                    });
+                    if (dependenceGeneration !== vm.dependenceGeneration
+                        || version !== requestVersion
+                        || !currentWrapper.isConnected) {
+                        return;
+                    }
+                    if (!result || !result.success) {
+                        throw new Error(String((result && result.msg) || queueText.dependenceFailed));
+                    }
+                    applyDependenceOptions(currentElement, result.data);
+                    vm.setDependenceUnresolved(item.code, false, dependenceGeneration);
+                    applied = true;
+                } catch (error) {
+                    if (dependenceGeneration === vm.dependenceGeneration
+                        && version === requestVersion) {
+                        vm.setDependenceUnresolved(item.code, true, dependenceGeneration);
+                        notifyError(error && error.message ? error.message : queueText.dependenceFailed);
+                    }
+                } finally {
+                    if (dependenceGeneration === vm.dependenceGeneration) {
+                        vm.pendingDependenceRequests = Math.max(0, vm.pendingDependenceRequests - 1);
+                    }
+                    if (dependenceGeneration === vm.dependenceGeneration
+                        && version === requestVersion
+                        && currentWrapper.isConnected) {
+                        setDependenceLoading(currentElement, currentWrapper, false);
+                        setAttributeAvailability(currentElement, currentWrapper, applied);
+                    }
+                }
+            };
+
+            vm.registerDependenceRetry(item.code, function() {
+                return refresh(lastDependenceCode);
+            }, dependenceGeneration);
+
+            dependenceElements.forEach(function(entry) {
+                var inputTimer = null;
+                entry.element.addEventListener('input', function() {
+                    window.clearTimeout(inputTimer);
+                    inputTimer = window.setTimeout(function() {
+                        refresh(entry.code);
+                    }, 250);
+                });
+                entry.element.addEventListener('change', function() {
+                    window.clearTimeout(inputTimer);
+                    refresh(entry.code);
+                });
+            });
+            refresh(dependenceElements[0].code);
+        });
+    }
+
     window.QueuePage = new Vue({
         el: '#QueuePage',
         data: {
             tip: '',
-            dir: '{{dir}}',
-            module: '{{module}}',
-            queueName: '{{queueData.name}}',
-            params: {
-                id: '{{queueData.queue_id}}',
-                type_id: '{{queueData.type_id}}',
-                attributes: [],
-                name: '{{queueData.name}}',
-            },
-            activeName: '{{queueData.progress|"progress-select-queueData"}}',
+            dir: queueBoot.dir,
+            module: queueBoot.module,
+            params: queueBoot.params,
+            activeName: queueBoot.active_name,
             QueueTypesSearchVal: '',
-            queue_types: <?= isset($queue_types) ? json_encode($queue_types) : '[]' ?>,
+            queue_types: queueBoot.queue_types,
             typeAttributeParams: [],
-            types: <?= isset($types) ? json_encode($types) : '[]' ?>,
             clickedParamsProcess: false,
+            isSearchingTypes: false,
+            isLoadingAttributes: false,
+            isSubmitting: false,
+            pendingDependenceRequests: 0,
+            unresolvedDependenceCodes: [],
+            dependenceRetryHandlers: {},
+            dependenceGeneration: 0,
+            attributeRequestVersion: 0
+        },
+        computed: {
+            progressPercent: function() {
+                var steps = ['progress-select-queueData', 'progress-params', 'progress-confirm'];
+                var index = steps.indexOf(this.activeName);
+                return index < 0 ? 0 : Math.round(((index + 1) / steps.length) * 100);
+            },
+            canSubmitQueue: function() {
+                return this.activeName === 'progress-confirm'
+                    && !this.isSubmitting
+                    && !this.isLoadingAttributes
+                    && this.clickedParamsProcess
+                    && this.pendingDependenceRequests === 0
+                    && this.unresolvedDependenceCodes.length === 0;
+            }
         },
         mounted: function() {
-            this.activeName = '{{queueData.progress|"progress-select-queueData"}}';
+            this.activeName = queueBoot.active_name;
             if (this.params.type_id) {
                 this.renderSearchQueueTypeAttributes();
-            }
-            if (this.params.type_id) {
                 for (var i = 0; i < this.queue_types.length; i++) {
                     if (this.queue_types[i].type_id == this.params.type_id) {
                         this.changeTypeTip(this.queue_types[i]);
@@ -428,131 +902,199 @@ span.required {
         },
         methods: {
             changeTypeTip: function(t) {
-                this.tip = t.tip;
-                this.queueName = t.name;
+                this.tip = t && t.tip ? t.tip : '';
                 this.clickedParamsProcess = false;
             },
-            submitQueue: function() {
-                var self = this;
+            handleTypeSelection: function() {
+                this.attributeRequestVersion += 1;
+                this.invalidateDependenceState();
+                this.isLoadingAttributes = false;
+                this.typeAttributeParams = [];
+                this.clickedParamsProcess = false;
+                var queueParamsForm = document.getElementById('queueParamsForm');
+                if (queueParamsForm) {
+                    queueParamsForm.replaceChildren();
+                }
+                if (window.hideLoading) hideLoading();
+                for (var i = 0; i < this.queue_types.length; i++) {
+                    if (this.queue_types[i].type_id == this.params.type_id) {
+                        this.changeTypeTip(this.queue_types[i]);
+                        return;
+                    }
+                }
+                this.tip = '';
+                this.clickedParamsProcess = false;
+            },
+            submitQueue: async function() {
+                if (!this.canSubmitQueue) {
+                    return false;
+                }
                 if (!this.params.type_id) {
                     Swal.fire({
-                        title: '@lang{请先选择队列类型再操作！}',
-                        text: '@lang{当前队列类型为空！无法创建属性！}',
+                        title: queueText.typeRequiredTitle,
+                        text: queueText.typeRequiredText,
                         icon: 'warning',
-                        confirmButtonText: '@lang{好的}'
+                        confirmButtonText: queueText.confirmText
                     });
                     return false;
                 }
-                $.ajax({
-                    type: 'POST',
-                    url: "@backend-url('*/backend/queue/form')?module=" + this.module + "&dir=" + this.dir,
-                    data: this.params,
-                    success: function(res) {
-                        if (res.code === 200) {
-                            Swal.fire({
-                                title: res.msg,
-                                icon: 'success',
-                                confirmButtonText: '@lang{好的}'
-                            }).then(function(result) {
-                                if (result.isConfirmed) {
-                                    if (window.showLoading) showLoading();
-                                    window.parent.location.reload();
-                                }
-                            });
-                        } else {
-                            Swal.fire({
-                                title: '@lang{队列创建失败!}',
-                                text: JSON.stringify(res.msg),
-                                icon: 'error',
-                                confirmButtonText: '@lang{好的}'
-                            });
-                        }
-                    }
-                });
-            },
-            debounceChange: debounce(function(code, type_id, set_id, group_id) {
-                var self = this;
-                if (!type_id) {
-                    Swal.fire({
-                        title: '@lang{请先选择队列类型再操作！}',
-                        text: '@lang{当前队列类型为空！无法创建属性！}',
-                        icon: 'warning',
-                        confirmButtonText: '@lang{好的}'
-                    }).then(function(result) {
-                        if (result.isConfirmed) {
-                            self.activeName = 'progress-select-queueData';
-                        }
-                    });
-                    return false;
+                var payload = {
+                    type_id: parseInt(String(this.params.type_id), 10),
+                    name: String(this.params.name || ''),
+                    attributes: Array.isArray(this.params.attributes) ? this.params.attributes : []
+                };
+                var queueId = parseInt(String(this.params.queue_id || ''), 10);
+                if (Number.isFinite(queueId) && queueId > 0) {
+                    payload.queue_id = queueId;
                 }
-                $.ajax({
-                    type: "get",
-                    url: '@backend-url("*/backend/queue/search")?field=code&limit=1&search=' + code + '&type_id=' + type_id + '&set_id=' + set_id + '&group_id=' + group_id,
-                    dataType: "json",
-                    success: function(res) {
-                        if (res.items.length > 0) {
-                            Swal.fire({
-                                title: '@lang{属性已存在！}',
-                                text: '@lang{该属性已存在！}',
-                                icon: 'warning',
-                                confirmButtonText: '@lang{好的}'
-                            }).then(function(result) {
-                                if (result.isConfirmed) {
-                                    $('#progress-queueData-code').css({border: 'red 1px solid'});
-                                }
-                            });
-                        } else {
-                            $('#progress-queueData-code').css({border: 'green 1px solid'});
-                        }
-                    }
-                });
-            }, 500),
-            checkCode: function(e) {
-                this.debounceChange(this.params.code, this.params.type_id, this.params.set_id, this.params.group_id);
-            },
-            renderSearchQueueTypes: debounce(function(e) {
-                var self = this;
-                $.ajax({
-                    url: '@backend-url("*/backend/queue/searchType")?q=' + this.QueueTypesSearchVal + '&module={{module}}&dir={{dir}}',
-                    success: function(res) {
-                        self.queue_types = res['data'];
-                    }
-                });
-            }, 500),
-            renderSearchQueueTypeAttributes: function(e) {
-                var self = this;
+                if (this.params.biz_key) {
+                    payload.biz_key = String(this.params.biz_key);
+                }
+                this.isSubmitting = true;
+                var committed = false;
                 if (window.showLoading) showLoading();
-                var queue_id = '';
-                if (this.params.id) {
-                    queue_id = '&queue_id=' + this.params.id;
+                try {
+                    var res = await queueAdminCall('save', payload);
+                    if (res && res.success) {
+                        committed = true;
+                        var savedQueueId = parseInt(String(res.queue_id || ''), 10);
+                        if (Number.isFinite(savedQueueId) && savedQueueId > 0) {
+                            this.params.queue_id = String(savedQueueId);
+                        }
+                        if (window.hideLoading) hideLoading();
+                        await Swal.fire({
+                            title: res.msg,
+                            text: Array.isArray(res.warnings) ? res.warnings.join(' ') : '',
+                            icon: 'success',
+                            confirmButtonText: queueText.confirmText,
+                            allowEscapeKey: false,
+                            allowOutsideClick: false
+                        });
+                        if (window.showLoading) showLoading();
+                        window.parent.location.reload();
+                        return true;
+                    } else {
+                        Swal.fire({
+                            title: queueText.saveFailed,
+                            text: String((res && res.msg) || queueText.apiUnavailable),
+                            icon: 'error',
+                            confirmButtonText: queueText.confirmText
+                        });
+                    }
+                } catch (error) {
+                    if (committed) {
+                        if (window.showLoading) showLoading();
+                        window.parent.location.reload();
+                    } else {
+                        notifyError(error && error.message ? error.message : queueText.apiUnavailable);
+                    }
+                } finally {
+                    this.isSubmitting = committed;
+                    if (!committed && window.hideLoading) hideLoading();
                 }
-                $.ajax({
-                    url: '@backend-url("*/backend/queue/typeAttributes")?id=' + this.params.id + '&type_id=' + this.params.type_id,
-                    success: function(res) {
-                        if (res['msg']) {
-                            Swal.fire({
-                                title: '警告！',
-                                text: res['msg'],
-                                icon: 'error',
-                                dangerMode: true,
-                                confirmButtonText: '@lang{好的}'
-                            });
-                            return false;
-                        }
-                        var html = '';
-                        var queueParamsForm = $('#queueParamsForm');
-                        queueParamsForm.html(html);
-                        for (var i = 0; i < res['data'].length; i++) {
-                            html += '<div class="gap-2 col-lg-4 col-md-6 col-sm-12">' + res['data'][i].html + '</div>';
-                        }
-                        if ('' === html) {
-                            html = '<lang>队列无属性，可以直接进行下一步提交。</lang>';
-                        }
-                        queueParamsForm.html(html);
-                        self.typeAttributeParams = res['data'];
+            },
+            renderSearchQueueTypes: debounce(async function() {
+                this.isSearchingTypes = true;
+                try {
+                    var res = await queueAdminCall('searchTypes', {
+                        q: String(this.QueueTypesSearchVal || ''),
+                        module: String(this.module || ''),
+                        dir: String(this.dir || '')
+                    });
+                    if (res && res.success) {
+                        this.queue_types = Array.isArray(res.data) ? res.data : [];
+                    } else {
+                        notifyError((res && res.msg) || queueText.apiUnavailable);
+                    }
+                } catch (error) {
+                    notifyError(error && error.message ? error.message : queueText.apiUnavailable);
+                } finally {
+                    this.isSearchingTypes = false;
+                }
+            }, 500),
+            renderSearchQueueTypeAttributes: async function() {
+                if (!this.params.type_id) {
+                    return false;
+                }
+                var typeId = parseInt(String(this.params.type_id), 10);
+                if (!Number.isFinite(typeId) || typeId <= 0) {
+                    Swal.fire({
+                        title: queueText.typeRequiredTitle,
+                        text: queueText.typeRequiredText,
+                        icon: 'warning',
+                        confirmButtonText: queueText.confirmText
+                    });
+                    return false;
+                }
+                var requestVersion = ++this.attributeRequestVersion;
+                var dependenceGeneration = this.invalidateDependenceState();
+                var params = { type_id: typeId };
+                var queueId = parseInt(String(this.params.queue_id || ''), 10);
+                if (Number.isFinite(queueId) && queueId > 0) {
+                    params.queue_id = queueId;
+                }
+                this.isLoadingAttributes = true;
+                this.clickedParamsProcess = false;
+                if (window.showLoading) showLoading();
+                try {
+                    var res = await queueAdminCall('typeAttributes', params);
+                    if (requestVersion !== this.attributeRequestVersion
+                        || typeId !== parseInt(String(this.params.type_id || ''), 10)) {
+                        return false;
+                    }
+                    if (!res || !res.success) {
+                        this.clickedParamsProcess = false;
+                        Swal.fire({
+                            title: queueText.warningTitle,
+                            text: String((res && res.msg) || queueText.apiUnavailable),
+                            icon: 'error',
+                            confirmButtonText: queueText.confirmText
+                        });
+                        return false;
+                    }
+                    var items = Array.isArray(res.data) ? res.data : [];
+                    var queueParamsForm = document.getElementById('queueParamsForm');
+                    if (!queueParamsForm) {
+                        throw new Error(queueText.apiUnavailable);
+                    }
+                    queueParamsForm.replaceChildren();
+                    items.forEach(function(item) {
+                        var wrapper = document.createElement('div');
+                        wrapper.className = 'weline-queue-attribute-field gap-2 col-lg-4 col-md-6 col-sm-12';
+                        wrapper.appendChild(sanitizeAttributeHtml(item && item.html ? item.html : ''));
+                        queueParamsForm.appendChild(wrapper);
+                    });
+                    if (items.length === 0) {
+                        var empty = document.createElement('div');
+                        empty.className = 'weline-queue-params-empty col-12';
+                        var emptyIcon = document.createElement('i');
+                        emptyIcon.className = 'mdi mdi-information-outline';
+                        emptyIcon.setAttribute('aria-hidden', 'true');
+                        var emptyText = document.createElement('p');
+                        emptyText.className = 'mb-0';
+                        emptyText.textContent = queueText.noAttributes;
+                        empty.appendChild(emptyIcon);
+                        empty.appendChild(emptyText);
+                        queueParamsForm.appendChild(empty);
+                    }
+                    bindAttributeDependences(this, queueParamsForm, items, dependenceGeneration);
+                    this.typeAttributeParams = items;
+                    this.clickedParamsProcess = true;
+                    return true;
+                } catch (error) {
+                    if (requestVersion === this.attributeRequestVersion
+                        && typeId === parseInt(String(this.params.type_id || ''), 10)) {
+                        this.clickedParamsProcess = false;
+                        notifyError(error && error.message ? error.message : queueText.apiUnavailable);
+                    }
+                    return false;
+                } finally {
+                    if (requestVersion === this.attributeRequestVersion
+                        && typeId === parseInt(String(this.params.type_id || ''), 10)) {
+                        this.isLoadingAttributes = false;
                         if (window.hideLoading) hideLoading();
                     }
-                });
+                }
             },
             findLabel: function(arr, id, key, name) {
                 var label = '';
@@ -563,100 +1105,124 @@ span.required {
                 });
                 return label;
             },
-            changeType: function(arr, id) {
-                var find_item = {};
-                var self = this;
-                arr.forEach(function(item) {
-                    if (item.type_id == Number(id)) {
-                        self.params.has_option = item.is_swatch;
-                        self.stopable = item.is_swatch;
-                        find_item = item;
+            focusInvalidElement: function(element) {
+                if (!element) {
+                    return;
+                }
+                var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
+                element.focus();
+                element.style.border = '1px solid var(--backend-color-danger, #f46a6a)';
+            },
+            invalidateDependenceState: function() {
+                this.dependenceGeneration += 1;
+                this.pendingDependenceRequests = 0;
+                this.unresolvedDependenceCodes = [];
+                this.dependenceRetryHandlers = {};
+                return this.dependenceGeneration;
+            },
+            setDependenceUnresolved: function(code, unresolved, generation) {
+                if (generation !== this.dependenceGeneration) {
+                    return;
+                }
+                var normalizedCode = String(code || '');
+                if (!normalizedCode) {
+                    return;
+                }
+                var codes = this.unresolvedDependenceCodes.slice();
+                var index = codes.indexOf(normalizedCode);
+                if (unresolved && index === -1) {
+                    codes.push(normalizedCode);
+                } else if (!unresolved && index !== -1) {
+                    codes.splice(index, 1);
+                }
+                this.unresolvedDependenceCodes = codes;
+            },
+            registerDependenceRetry: function(code, handler, generation) {
+                if (generation !== this.dependenceGeneration || typeof handler !== 'function') {
+                    return;
+                }
+                var normalizedCode = String(code || '');
+                if (!normalizedCode) {
+                    return;
+                }
+                this.dependenceRetryHandlers[normalizedCode] = handler;
+            },
+            retryDependenceResolution: function() {
+                if (this.isLoadingAttributes || this.pendingDependenceRequests > 0) {
+                    return false;
+                }
+                var handlers = this.dependenceRetryHandlers;
+                var started = false;
+                this.unresolvedDependenceCodes.slice().forEach(function(code) {
+                    if (typeof handlers[code] === 'function') {
+                        started = true;
+                        handlers[code]();
                     }
                 });
-                this.debounceSaveType(find_item);
-                this.activeAttrItem = find_item;
+                if (!started) {
+                    notifyError(queueText.dependenceFailed);
+                }
+                return started;
             },
             changeNav: function(name, reload) {
+                if (name !== 'progress-select-queueData' && !this.params.type_id) {
+                    Swal.fire({
+                        title: queueText.typeRequiredTitle,
+                        text: queueText.typeRequiredText,
+                        icon: 'warning',
+                        confirmButtonText: queueText.confirmText
+                    });
+                    this.activeName = 'progress-select-queueData';
+                    return false;
+                }
+                if (name === 'progress-confirm'
+                    && (this.isLoadingAttributes
+                        || this.pendingDependenceRequests > 0
+                        || this.unresolvedDependenceCodes.length > 0
+                        || !this.clickedParamsProcess)) {
+                    this.activeName = 'progress-params';
+                    return false;
+                }
                 if (reload === undefined) reload = true;
                 if (this.clickedParamsProcess) {
                     reload = false;
                 }
                 this.activeName = name;
                 if (name === 'progress-params' && this.params.type_id !== '' && reload) {
-                    this.clickedParamsProcess = true;
                     this.renderSearchQueueTypeAttributes();
                 }
                 if (name === 'progress-confirm') {
-                    var self = this;
-                    var queueParamsForm = $('#queueParamsForm');
                     if (!this.params.name) {
-                        var queueName = $('#queueName');
+                        var queueName = document.getElementById('queueName');
                         this.changeNav('progress-params');
-                        $('html, body').animate({
-                            scrollTop: queueName.offset().top - 10
-                        }, 500);
-                        queueName.focus().css({border: 'red 1px solid'});
+                        this.focusInvalidElement(queueName);
                         return false;
                     }
-                    var inputs = queueParamsForm.find('*[scope="queue"]');
-                    this.params.attributes = [];
-                    var hasError = false;
-                    inputs.each(function(index, item) {
-                        item = $(item);
-                        if (item.attr('required')) {
-                            if (!item.val() || (typeof item.val() === 'object' && item.val().length === 0)) {
-                                item.focus();
-                                self.changeNav('progress-params', false);
-                                $('html, body').animate({
-                                    scrollTop: item.offset().top - 10
-                                }, 500);
-                                item.css({border: 'red 1px solid'});
-                                Swal.fire({
-                                    title: '警告！',
-                                    text: '@lang(请填写必填项: )' + item.attr('title'),
-                                    icon: 'error',
-                                    dangerMode: true,
-                                    confirmButtonText: '@lang{好的}'
-                                });
-                                hasError = true;
-                                return false;
-                            }
-                        }
-                        var model_class_data = item.attr('model_class_data');
-                        if (model_class_data) {
-                            model_class_data = JSON.parse(model_class_data);
-                        }
-                        var options = item.find('option');
-                        model_class_data = {};
-                        options.each(function(index, itemOption) {
-                            itemOption = $(itemOption);
-                            model_class_data[itemOption.val()] = itemOption.text();
+                    var queueParamsForm = document.getElementById('queueParamsForm');
+                    if (!queueParamsForm) {
+                        return false;
+                    }
+                    var collected = collectQueueAttributes(queueParamsForm);
+                    if (collected.invalidElement) {
+                        this.changeNav('progress-params', false);
+                        this.focusInvalidElement(collected.invalidElement);
+                        Swal.fire({
+                            title: queueText.warningTitle,
+                            text: queueText.requiredField.replace(
+                                '%{1}',
+                                collected.invalidElement.getAttribute('title') || ''
+                            ),
+                            icon: 'error',
+                            confirmButtonText: queueText.confirmText
                         });
-                        var alias = item.val();
-                        if (model_class_data) {
-                            if (typeof item.val() === 'object') {
-                                alias = '';
-                                item.val().forEach(function(i) {
-                                    if (model_class_data[i]) {
-                                        alias += model_class_data[i] + ',';
-                                    }
-                                });
-                            } else {
-                                if (model_class_data[alias]) {
-                                    alias = model_class_data[alias];
-                                }
-                            }
-                        }
-                        self.params.attributes.push({
-                            name: item.attr('title'),
-                            code: item.attr('name'),
-                            value: item.val(),
-                            value_alias: alias
-                        });
-                    });
+                        return false;
+                    }
+                    this.params.attributes = collected.attributes;
                 }
-            },
-        },
+                return true;
+            }
+        }
     });
 })();
 </script>

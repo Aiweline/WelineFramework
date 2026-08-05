@@ -22,12 +22,34 @@ class CartService
 
     private readonly CartItemSnapshotProviderRegistry $snapshotProviderRegistry;
 
+    private readonly ?CartV2Service $cartV2;
+
+    private readonly CartPriceSellabilityGate $sellabilityGate;
+
+    private readonly CartScopeResolver $scopeResolver;
+
+    private readonly CartCurrentCustomerResolver $currentCustomerResolver;
+
     public function __construct(
         private readonly CartSession $cartSession,
-        ?CartItemSnapshotProviderRegistry $snapshotProviderRegistry = null
+        ?CartItemSnapshotProviderRegistry $snapshotProviderRegistry = null,
+        ?CartV2Service $cartV2 = null,
+        ?CartPriceSellabilityGate $sellabilityGate = null,
+        ?CartScopeResolver $scopeResolver = null,
+        ?CartCurrentCustomerResolver $currentCustomerResolver = null,
     ) {
         $this->snapshotProviderRegistry = $snapshotProviderRegistry
             ?? ObjectManager::getInstance(CartItemSnapshotProviderRegistry::class);
+        $this->cartV2 = $cartV2 ?? ObjectManager::getInstance(CartV2Service::class);
+        $this->sellabilityGate = $sellabilityGate
+            ?? ObjectManager::getInstance(CartPriceSellabilityGate::class);
+        $this->scopeResolver = $scopeResolver ?? new CartScopeResolver();
+        $this->currentCustomerResolver = $currentCustomerResolver ?? new CartCurrentCustomerResolver();
+    }
+
+    public function cartV2(): ?CartV2Service
+    {
+        return $this->cartV2;
     }
 
     /**
@@ -61,10 +83,31 @@ class CartService
      */
     public function add(array $params): array
     {
+        // V2 path：显式 OfferIdentity 时走 CartV2Service（若已注入）
+        if ($this->cartV2 !== null && $this->isV2AddParams($params)) {
+            return $this->addV2($params);
+        }
+
         $productId = (int)($params['product_id'] ?? $params['id'] ?? 0);
         $qty = $this->normalizeQty($params['qty'] ?? 1);
         if ($productId <= 0) {
             return $this->summary(false, (string)__('请选择要加入购物车的商品。'));
+        }
+
+        $sellability = $this->sellabilityGate->assertOrAllow($params + ['product_id' => $productId]);
+        if (($sellability['ok'] ?? true) === false) {
+            $blocked = $this->summary(
+                false,
+                (string)($sellability['message'] ?? __('该商品暂不可售。')),
+            );
+            $errorCode = (string)($sellability['error_code'] ?? 'price_not_sellable');
+            $blocked['error_code'] = $errorCode;
+            $blocked['code'] = $errorCode;
+            if (isset($sellability['detail']) && \is_array($sellability['detail'])) {
+                $blocked['error_detail'] = $sellability['detail'];
+            }
+
+            return $blocked;
         }
 
         $selectedOptions = $params['selected_options'] ?? $params['options'] ?? [];
@@ -262,6 +305,65 @@ class CartService
     }
 
     /**
+     * Read the browser owner's current cart for the storefront page.
+     *
+     * Cart V2 is the durable OfferIdentity cart used by the product catalog and
+     * checkout. Keep the legacy session summary as a compatibility fallback,
+     * but never let the cart page report empty after a successful V2 add.
+     *
+     * @return array<string, mixed>
+     */
+    public function storefrontSummary(): array
+    {
+        $legacy = $this->summary();
+        if ($this->cartV2 === null) {
+            return $legacy;
+        }
+
+        try {
+            $customerId = $this->currentCustomerResolver->currentCustomerId();
+            $guestToken = $customerId === null
+                ? \trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE))
+                : null;
+            if ($customerId === null && $guestToken === '') {
+                return $legacy;
+            }
+
+            $summary = $this->cartV2->getCart(
+                $this->scopeResolver->fromParams([]),
+                $guestToken,
+                $customerId,
+            );
+            if (($summary['is_empty'] ?? true) && !($legacy['is_empty'] ?? true)) {
+                return $legacy;
+            }
+
+            $items = \is_array($summary['items'] ?? null) ? $summary['items'] : [];
+            foreach ($items as &$item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $item['price'] = \round(((int)($item['unit_price_minor'] ?? 0)) / 100, 2);
+                $item['row_total'] = \round(((int)($item['row_total_minor'] ?? 0)) / 100, 2);
+            }
+            unset($item);
+
+            $summary['items'] = $items;
+            $summary['subtotal'] = \round(((int)($summary['subtotal_minor'] ?? 0)) / 100, 2);
+            $summary['grand_total'] = \round(((int)($summary['grand_total_minor'] ?? 0)) / 100, 2);
+            $this->syncCountCookie((int)($summary['cart_count'] ?? 0));
+
+            return $summary;
+        } catch (\Throwable $throwable) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Storefront Cart V2 summary failed: ' . $throwable->getMessage());
+            }
+
+            return $legacy;
+        }
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $items
      */
     private function setItems(array $items): void
@@ -448,5 +550,57 @@ class CartService
             'httponly' => false,
             'samesite' => 'Lax',
         ]);
+    }
+
+    /** @param array<string, mixed> $params */
+    private function isV2AddParams(array $params): bool
+    {
+        $offer = trim((string)($params['global_offer_uuid'] ?? $params['offer_uuid'] ?? ''));
+        $provider = trim((string)($params['provider_code'] ?? ''));
+        return $offer !== '' && $provider !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function addV2(array $params): array
+    {
+        if ($this->cartV2 === null) {
+            return $this->summary(false, (string)__('Cart V2 未启用'));
+        }
+        try {
+            $scope = $this->scopeFromParams($params);
+            $offer = \Weline\Cart\Api\Data\OfferIdentity::fromArray($params);
+            $selection = $params['selection'] ?? $params['selected_options'] ?? $params['options'] ?? [];
+            $selection = \is_array($selection) ? $selection : [];
+            $result = $this->cartV2->add(
+                scope: $scope,
+                offer: $offer,
+                selection: $selection,
+                qty: $this->normalizeQty($params['qty'] ?? 1),
+                guestToken: isset($params['guest_token']) ? (string)$params['guest_token'] : null,
+                customerId: isset($params['customer_id']) ? (int)$params['customer_id'] : null,
+                clientSelectionHash: isset($params['selection_hash']) ? (string)$params['selection_hash'] : null,
+                currency: isset($params['currency']) ? (string)$params['currency'] : null,
+            );
+            // Bridge V2 minor totals into legacy float summary shape for API clients
+            $result['subtotal'] = round(((int)($result['subtotal_minor'] ?? 0)) / 100, 2);
+            $result['grand_total'] = round(((int)($result['grand_total_minor'] ?? 0)) / 100, 2);
+            return $result;
+        } catch (CartV2ConflictException $e) {
+            return $this->summary(false, $e->getMessage()) + [
+                'error_code' => $e->errorCode(),
+                'error_context' => $e->context(),
+            ];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function scopeFromParams(array $params): \Weline\Framework\Runtime\ScopeIdentity
+    {
+        return $this->scopeResolver->fromParams($params);
     }
 }

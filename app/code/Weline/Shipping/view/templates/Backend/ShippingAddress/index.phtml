@@ -24,7 +24,7 @@ $confirmMessages = [
     'deleteAddress' => (string)__('确定要删除这个地址吗？'),
 ];
 ?>
-<div class="row">
+<div class="row" data-testid="shipping-address-management">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('发货地址管理') ?></h4>
@@ -47,8 +47,8 @@ $confirmMessages = [
                                         <h5 class="card-title mb-0"><?= __('发货地址列表') ?></h5>
                                     </div>
                                     <div class="col-md-6 text-end">
-                                        <a href="<?= $createUrl ?>" class="btn btn-primary">
-                                            <i class="mdi mdi-plus"></i> <?= __('新增地址') ?>
+                                        <a href="<?= $createUrl ?>" class="btn btn-primary" data-testid="shipping-address-create">
+                                            <i class="mdi mdi-plus" aria-hidden="true"></i> <?= __('新增地址') ?>
                                         </a>
                                     </div>
                                 </div>
@@ -104,59 +104,59 @@ $confirmMessages = [
                                             <?php else: ?>
                                                 <?php foreach ($addresses as $address): ?>
                                                     <tr>
-                                                        <td><?= $address[ShippingAddress::fields_ID] ?? '' ?></td>
-                                                        <td><?= htmlspecialchars($address[ShippingAddress::fields_NAME] ?? '') ?></td>
-                                                        <td><?= htmlspecialchars($address[ShippingAddress::fields_CONTACT_NAME] ?? '') ?></td>
-                                                        <td><?= htmlspecialchars($address[ShippingAddress::fields_CONTACT_PHONE] ?? '') ?></td>
+                                                        <td><?= $address[ShippingAddress::schema_fields_ID] ?? '' ?></td>
+                                                        <td><?= htmlspecialchars($address[ShippingAddress::schema_fields_NAME] ?? '') ?></td>
+                                                        <td><?= htmlspecialchars($address[ShippingAddress::schema_fields_CONTACT_NAME] ?? '') ?></td>
+                                                        <td><?= htmlspecialchars($address[ShippingAddress::schema_fields_CONTACT_PHONE] ?? '') ?></td>
                                                         <td>
                                                             <?= htmlspecialchars(
-                                                                ($address[ShippingAddress::fields_COUNTRY] ?? '') .
-                                                                ($address[ShippingAddress::fields_PROVINCE] ?? '') .
-                                                                ($address[ShippingAddress::fields_CITY] ?? '') .
-                                                                ($address[ShippingAddress::fields_DISTRICT] ?? '') .
-                                                                ($address[ShippingAddress::fields_STREET] ?? '')
+                                                                ($address[ShippingAddress::schema_fields_COUNTRY] ?? '') .
+                                                                ($address[ShippingAddress::schema_fields_PROVINCE] ?? '') .
+                                                                ($address[ShippingAddress::schema_fields_CITY] ?? '') .
+                                                                ($address[ShippingAddress::schema_fields_DISTRICT] ?? '') .
+                                                                ($address[ShippingAddress::schema_fields_STREET] ?? '')
                                                             ) ?>
                                                         </td>
                                                         <td>
-                                                            <?php if (!empty($address[ShippingAddress::fields_IS_DEFAULT])): ?>
+                                                            <?php if (!empty($address[ShippingAddress::schema_fields_IS_DEFAULT])): ?>
                                                                 <span class="badge bg-success"><?= __('是') ?></span>
                                                             <?php else: ?>
                                                                 <span class="badge bg-secondary"><?= __('否') ?></span>
                                                             <?php endif; ?>
                                                         </td>
                                                         <td>
-                                                            <?php if (!empty($address[ShippingAddress::fields_IS_ENABLED])): ?>
+                                                            <?php if (!empty($address[ShippingAddress::schema_fields_IS_ENABLED])): ?>
                                                                 <span class="badge bg-success"><?= __('启用') ?></span>
                                                             <?php else: ?>
                                                                 <span class="badge bg-danger"><?= __('禁用') ?></span>
                                                             <?php endif; ?>
                                                         </td>
-                                                        <td><?= $address[ShippingAddress::fields_CREATED_AT] ?? '' ?></td>
+                                                        <td><?= $address[ShippingAddress::schema_fields_CREATED_AT] ?? '' ?></td>
                                                         <td>
                                                             <div class="btn-group btn-group-sm">
-                                                                <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/edit', ['id' => $address[ShippingAddress::fields_ID]]) ?>" 
+                                                                <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/edit', ['id' => $address[ShippingAddress::schema_fields_ID]]) ?>" 
                                                                    class="btn btn-primary btn-sm">
                                                                     <i class="mdi mdi-pencil"></i>
                                                                 </a>
-                                                                <?php if (empty($address[ShippingAddress::fields_IS_DEFAULT])): ?>
-                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/setDefault', ['id' => $address[ShippingAddress::fields_ID]]) ?>" 
+                                                                <?php if (empty($address[ShippingAddress::schema_fields_IS_DEFAULT])): ?>
+                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/setDefault', ['id' => $address[ShippingAddress::schema_fields_ID]]) ?>" 
                                                                        class="btn btn-info btn-sm" 
                                                                        data-shipping-address-confirm="setDefault">
                                                                         <i class="mdi mdi-star"></i>
                                                                     </a>
                                                                 <?php endif; ?>
-                                                                <?php if (!empty($address[ShippingAddress::fields_IS_ENABLED])): ?>
-                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/disable', ['id' => $address[ShippingAddress::fields_ID]]) ?>" 
+                                                                <?php if (!empty($address[ShippingAddress::schema_fields_IS_ENABLED])): ?>
+                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/disable', ['id' => $address[ShippingAddress::schema_fields_ID]]) ?>" 
                                                                        class="btn btn-warning btn-sm">
                                                                         <i class="mdi mdi-cancel"></i>
                                                                     </a>
                                                                 <?php else: ?>
-                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/enable', ['id' => $address[ShippingAddress::fields_ID]]) ?>" 
+                                                                    <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/enable', ['id' => $address[ShippingAddress::schema_fields_ID]]) ?>" 
                                                                        class="btn btn-success btn-sm">
                                                                         <i class="mdi mdi-check-circle"></i>
                                                                     </a>
                                                                 <?php endif; ?>
-                                                                <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/delete', ['id' => $address[ShippingAddress::fields_ID]]) ?>" 
+                                                                <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/delete', ['id' => $address[ShippingAddress::schema_fields_ID]]) ?>" 
                                                                    class="btn btn-danger btn-sm" 
                                                                    data-shipping-address-confirm="deleteAddress">
                                                                     <i class="mdi mdi-delete"></i>

@@ -6,11 +6,6 @@
  */
 $skills = \is_array($skills ?? null) ? $skills : [];
 $adapters = \is_array($adapters ?? null) ? $adapters : [];
-$catalogUrl = $this->getBackendUrl('ai/backend/skill/post-catalog');
-$saveUrl = $this->getBackendUrl('ai/backend/skill/post-save');
-$importUrl = $this->getBackendUrl('ai/backend/skill/post-import-url');
-$bindUrl = $this->getBackendUrl('ai/backend/skill/post-bind-adapter-skill');
-$unbindUrl = $this->getBackendUrl('ai/backend/skill/post-unbind-adapter-skill');
 $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
 $skillI18n = [
     'apiUnavailable' => (string)__('前端 API 不可用，请刷新页面后重试。'),
@@ -384,11 +379,6 @@ $skillI18n = [
 (function () {
     'use strict';
 
-    var catalogUrl = <?= \json_encode($catalogUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var saveUrl = <?= \json_encode($saveUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var importUrl = <?= \json_encode($importUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var bindUrl = <?= \json_encode($bindUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var unbindUrl = <?= \json_encode($unbindUrl, JSON_UNESCAPED_SLASHES) ?>;
     var exportUrl = <?= \json_encode($exportUrl, JSON_UNESCAPED_SLASHES) ?>;
     var initialAdapters = <?= \json_encode($adapters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     var i18n = <?= \json_encode($skillI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>;
@@ -430,44 +420,32 @@ $skillI18n = [
         importStatus: document.getElementById('ai-skill-import-status')
     };
 
-    function post(url, data) {
-        var body = new URLSearchParams();
-        Object.keys(data || {}).forEach(function (key) {
-            var value = data[key];
-            body.append(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
-        });
-        return apiRequest(url, {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: body.toString(),
-            silent: true
-        }).then(function (res) {
-            return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
-        });
-    }
-
-    function apiRequest(url, options) {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
-            return window.Weline.Api.request(url, options);
-        }
-        if (window.Weline && typeof window.Weline.load === 'function') {
-            return window.Weline.load('api').then(function () {
-                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
-                    return window.Weline.Api.request(url, options);
-                }
-                throw new Error(i18n.apiUnavailable);
+    function aiOp(operation, data) {
+        var run = function (api) {
+            var resource = api.resource('ai');
+            if (!resource || typeof resource[operation] !== 'function') {
+                return Promise.reject(new Error(i18n.apiUnavailable));
+            }
+            return resource[operation](data || {}).then(function (res) {
+                return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
             });
+        };
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api').then(run);
+        }
+        if (window.Weline && window.Weline.Api) {
+            return Promise.resolve(run(window.Weline.Api));
         }
         return Promise.reject(new Error(i18n.apiUnavailable));
     }
 
     function responseErrorMessage(err, fallback) {
         var data = err && err.response && err.response.data ? err.response.data : null;
-        return (data && (data.message || data.msg)) || (err && err.message) || fallback;
+        var nested = data && data.error ? data.error : null;
+        return (nested && (nested.message || nested.msg))
+            || (data && (data.message || data.msg))
+            || (err && err.message)
+            || fallback;
     }
 
     function setStatus(el, text, isError) {
@@ -774,9 +752,9 @@ $skillI18n = [
     function refreshCatalog() {
         var adapterCode = selectedAdapterCode();
         els.listStatus.textContent = i18n.loading;
-        return post(catalogUrl, {
+        return aiOp('skillCatalog', {
             adapter_code: adapterCode,
-            include_inactive: 1
+            include_inactive: true
         }).then(function (payload) {
             if (!payload || payload.success === false) {
                 throw new Error((payload && payload.message) || i18n.catalogLoadFailed);
@@ -798,7 +776,7 @@ $skillI18n = [
 
     function saveCurrentSkill() {
         setStatus(els.formStatus, i18n.saving, false);
-        return post(saveUrl, {
+        return aiOp('skillSave', {
             code: els.code.value || '',
             name: els.name.value || '',
             description: els.description.value || '',
@@ -823,7 +801,7 @@ $skillI18n = [
             return;
         }
         setStatus(els.formStatus, i18n.updatingStatus, false);
-        return post(saveUrl, {
+        return aiOp('skillSave', {
             code: skill.code,
             name: els.name.value || skill.name || '',
             description: els.description.value || skill.description || '',
@@ -847,7 +825,7 @@ $skillI18n = [
             return;
         }
         setStatus(els.formStatus, bind ? i18n.binding : i18n.unbinding, false);
-        return post(bind ? bindUrl : unbindUrl, {
+        return aiOp(bind ? 'skillBindAdapter' : 'skillUnbindAdapter', {
             adapter_code: selectedAdapterCode(),
             skill_code: skill.code
         }).then(function (payload) {
@@ -863,7 +841,7 @@ $skillI18n = [
 
     function importSkill() {
         setStatus(els.importStatus, i18n.importing, false);
-        return post(importUrl, {
+        return aiOp('skillImportUrl', {
             url: els.importUrl.value || ''
         }).then(function (payload) {
             if (!payload || payload.success === false) {

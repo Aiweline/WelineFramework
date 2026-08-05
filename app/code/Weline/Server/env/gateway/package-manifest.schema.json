@@ -39,6 +39,9 @@
     },
     "capabilities": {
       "type": "object",
+      "properties": {
+        "windows_kernel32_ffi_atomic_write": {"type": "boolean"}
+      },
       "additionalProperties": {"type": "boolean"}
     },
     "components": {
@@ -63,6 +66,25 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {"platform": {"const": "Windows"}},
+        "required": ["platform"]
+      },
+      "then": {
+        "properties": {
+          "capabilities": {
+            "required": ["windows_kernel32_ffi_atomic_write"],
+            "properties": {
+              "windows_kernel32_ffi_atomic_write": {"const": true}
+            }
+          },
+          "components": {
+            "required": ["bin/wls-bounded-command.exe"]
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {"release_ready": {"const": true}},

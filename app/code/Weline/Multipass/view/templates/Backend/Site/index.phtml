@@ -302,7 +302,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     var formData = new FormData();
                     formData.append('site_id', siteId);
                     
-                    window.Weline.Api.post(deleteUrl, formData)
+                    bqAdmin['multipass'](deleteUrl, formData)
                         .then(function(res) {
                             var data = (res && res.data) !== undefined ? res.data : res;
                             if (data.success || data.code === 200) {
@@ -349,7 +349,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         
         var formData = new FormData(this);
         
-        window.Weline.Api.post(saveUrl, formData)
+        bqAdmin['multipass'](saveUrl, formData)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success || data.code === 200) {

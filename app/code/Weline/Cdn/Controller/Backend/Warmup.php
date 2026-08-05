@@ -24,7 +24,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_warmup_manager', 'CDN预热管理', 'mdi-fire', 'CDN预热管理', '')]
+#[AclAttribute('Weline_Cdn::cdn_warmup_manager', 'CDN预热管理', 'mdi-fire', 'CDN预热管理', 'Weline_Cdn::cdn_manager')]
 class Warmup extends BackendController
 {
     /**
@@ -84,7 +84,8 @@ class Warmup extends BackendController
             }
 
             // 统计
-            $total = $query->count();
+            $countQuery = clone $query;
+            $total = $countQuery->count();
 
             // 分页查询
             $urls = $query
@@ -291,4 +292,3 @@ class Warmup extends BackendController
         }
     }
 }
-

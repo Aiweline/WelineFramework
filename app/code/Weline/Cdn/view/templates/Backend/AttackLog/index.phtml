@@ -34,7 +34,7 @@ $escapeAttr = static function (mixed $value): string {
 ?>
 
 <!-- 统计卡片 -->
-<div class="row mb-4">
+<div class="row mb-4" data-testid="cdn-attack-log-management">
     <div class="col-md-3">
         <div class="card">
             <div class="card-body d-flex align-items-center gap-3">
@@ -381,12 +381,8 @@ $escapeAttr = static function (mixed $value): string {
                 cancelButtonText: '<?= __("取消") ?>'
             }).then(function(result) {
                 if (result.isConfirmed) {
-                    fetch(deleteUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: new URLSearchParams({ id: id }).toString()
-                    })
-                    .then(function(response) { return response.json(); })
+                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                    .then(function(api){ return api.resource('cdn').deleteAttackLog({ id: id }); })
                     .then(function(data) {
                         if (data.success) {
                             Swal.fire({
@@ -425,11 +421,8 @@ $escapeAttr = static function (mixed $value): string {
                     var formData = new FormData();
                     ids.forEach(function(id) { formData.append('ids[]', id); });
                     
-                    fetch(batchDeleteUrl, {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(function(response) { return response.json(); })
+                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                    .then(function(api){ return api.resource('cdn').batchDeleteAttackLogs({ ids: ids }); })
                     .then(function(data) {
                         if (data.success) {
                             Swal.fire({
@@ -450,12 +443,8 @@ $escapeAttr = static function (mixed $value): string {
         cleanupLogs: function() {
             var days = document.getElementById('cleanupDays').value;
             
-            fetch(cleanupUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ days: days }).toString()
-            })
-            .then(function(response) { return response.json(); })
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('cdn').cleanupAttackLogs({ days: days }); })
             .then(function(data) {
                 bootstrap.Modal.getInstance(document.getElementById('cleanupModal')).hide();
                 if (data.success) {

@@ -169,7 +169,7 @@ class LoggerFactory
         ]);
 
         // 过滤器
-        $filter = LogFilter::getInstance();
+        $filter = new LogFilter($config);
 
         return new FpmLogger($channel, $handler, $formatter, $filter);
     }

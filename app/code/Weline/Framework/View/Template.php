@@ -19,6 +19,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Hook\Hooker;
@@ -1245,13 +1246,53 @@ class Template extends DataObject
         }
 
         try {
-            return $type . ':' . KeyBuilder::environmentHash(
+            $hash = KeyBuilder::environmentHash(
                 ['scope' => $eventName],
                 ['currency' => $type === 'currency']
             );
+            // Language switcher hrefs are path-local (`/{locale}/about` vs `/`).
+            // Without a route segment the aggregate cache reuses home links on
+            // every page after the first render in that language.
+            if ($type === 'language') {
+                $hash .= ':route:' . $this->resolveI18nLanguageHookRouteCacheKey();
+            }
+
+            return $type . ':' . $hash;
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function resolveI18nLanguageHookRouteCacheKey(): string
+    {
+        $handle = '';
+        $pageId = '';
+        try {
+            $handle = \trim((string)WelineEnv::getGet('handle', ''));
+            $pageId = \trim((string)WelineEnv::getGet('page_id', ''));
+        } catch (\Throwable) {
+        }
+
+        $path = '';
+        try {
+            $path = \trim((string)(
+                WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+                ?: WelineEnv::get('origin_request_uri', '')
+                ?: (\function_exists('w_env_request_uri') ? \w_env_request_uri() : '')
+            ));
+        } catch (\Throwable) {
+        }
+
+        $pathOnly = \parse_url($path, \PHP_URL_PATH);
+        if (\is_string($pathOnly) && $pathOnly !== '') {
+            $path = $pathOnly;
+        }
+        $path = \strtolower(\trim(\str_replace('\\', '/', (string)$path), '/'));
+        if (\str_starts_with($path, 'pagebuilder/frontend/page')) {
+            $path = '';
+        }
+
+        return \sha1('v2|' . $handle . '|' . $pageId . '|' . $path);
     }
 
     private function hasEventObservers(string $eventName): bool
@@ -2097,6 +2138,97 @@ class Template extends DataObject
         }
 
         return $hooker_content;
+    }
+
+    /**
+     * Structured hook result（P2C / REQ-008）.
+     *
+     * @param bool $preferFallbackOnEmpty Taglib `<else/>` opt-in：有实现但空输出且非 handled_empty 时允许 fallback
+     */
+    public function getHookResult(string $name, bool $forceRefresh = false, bool $preferFallbackOnEmpty = false): \Weline\Framework\Hook\HookRenderResult
+    {
+        $name = \trim($name);
+        if ($name === '') {
+            return new \Weline\Framework\Hook\HookRenderResult(
+                html: '',
+                handledEmpty: false,
+                useFallback: true,
+                fileCount: 0,
+            );
+        }
+
+        $fileCount = $this->countHookImplementationFiles($name);
+        $handledEmptyKey = 'view.hook.handled_empty.' . $name;
+        $decorateOutputKey = 'view.hook.decorate_output';
+        $hadDecorateOutput = RequestContext::has($decorateOutputKey);
+        $previousDecorateOutput = RequestContext::get($decorateOutputKey);
+        RequestContext::remove($handledEmptyKey);
+
+        if ($preferFallbackOnEmpty) {
+            // Fallback must be decided from semantic output, never from DEV/visual-editor comments.
+            RequestContext::set($decorateOutputKey, false);
+        }
+
+        try {
+            // Opt-in fallback needs a fresh semantic render: an older request-cache entry
+            // cannot prove whether an empty result was explicitly handled.
+            $html = $this->getHook($name, $forceRefresh || $preferFallbackOnEmpty);
+            $handledEmpty = (bool)RequestContext::get($handledEmptyKey);
+        } finally {
+            RequestContext::remove($handledEmptyKey);
+            if ($preferFallbackOnEmpty) {
+                if ($hadDecorateOutput) {
+                    RequestContext::set($decorateOutputKey, $previousDecorateOutput);
+                } else {
+                    RequestContext::remove($decorateOutputKey);
+                }
+            }
+        }
+
+        $marker = '<!--weline:hook:handled_empty-->';
+        if (\str_contains($html, $marker)) {
+            $handledEmpty = true;
+            $html = \str_replace($marker, '', $html);
+        }
+        $empty = \trim($html) === '';
+        $useFallback = $fileCount === 0
+            || ($preferFallbackOnEmpty && $empty && !$handledEmpty);
+
+        return new \Weline\Framework\Hook\HookRenderResult(
+            html: $html,
+            handledEmpty: $handledEmpty,
+            useFallback: $useFallback,
+            fileCount: $fileCount,
+        );
+    }
+
+    /** Mark current hook render as intentional empty (blocks opt-in fallback). */
+    public function markHookHandledEmpty(string $name): void
+    {
+        $name = \trim($name);
+        if ($name !== '') {
+            RequestContext::set('view.hook.handled_empty.' . $name, true);
+        }
+    }
+
+    private function countHookImplementationFiles(string $name): int
+    {
+        try {
+            /** @var \Weline\Framework\Hook\Config\HookReader $hookReader */
+            $hookReader = ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
+            $hookReader->setPath($name);
+            $files = $hookReader->getFileList();
+            return \is_array($files) ? \count($files) : 0;
+        } catch (\Throwable) {
+            try {
+                /** @var Hooker $hooker */
+                $hooker = ObjectManager::getInstance(Hooker::class);
+                $files = $hooker->getHook($name);
+                return \is_array($files) ? \count($files) : 0;
+            } catch (\Throwable) {
+                return 0;
+            }
+        }
     }
 
     private function rememberStaticHookAggregate(string $cacheKey, string $html, int $ttl, string $status = 'fresh'): void

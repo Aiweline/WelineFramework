@@ -501,7 +501,38 @@ class ControlClient implements ChildControlClientInterface, BeforeReadyGuardAwar
             $leaseId = (string)($this->registerInfo['lease_id'] ?? $leaseId);
             $generation = (int)($this->registerInfo['generation'] ?? $generation);
         }
-        return $this->send(ControlMessage::ready($role, $workerId, $port, $epoch, $launchId, $msgId, $slotId, $leaseId, $generation));
+        $hostLeaseId = '';
+        $rawHostLeaseId = $_SERVER['WLS_GATEWAY_HOST_LEASE_ID']
+            ?? $_ENV['WLS_GATEWAY_HOST_LEASE_ID']
+            ?? \getenv('WLS_GATEWAY_HOST_LEASE_ID');
+        $hostLeaseId = \is_string($rawHostLeaseId)
+            ? \strtolower(\trim($rawHostLeaseId))
+            : '';
+        $hostLeaseRequired = \in_array($role, [
+            ControlMessage::ROLE_GATEWAY_FALLBACK,
+            ControlMessage::ROLE_GATEWAY_BACKEND,
+        ], true);
+        if (($hostLeaseRequired || $hostLeaseId !== '')
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $hostLeaseId) !== 1
+        ) {
+            $this->ipcLog(
+                "[IPC-{$this->selfTag}] gateway_host_lease_missing error_code=host_lease_missing",
+            );
+            $this->readyStateConfirmed = false;
+            return false;
+        }
+        return $this->send(ControlMessage::ready(
+            $role,
+            $workerId,
+            $port,
+            $epoch,
+            $launchId,
+            $msgId,
+            $slotId,
+            $leaseId,
+            $generation,
+            $hostLeaseId,
+        ));
     }
 
     /**

@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\MasterLeaseManager;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Runtime\RuntimeSelection;
 use Weline\Server\Service\ServerInstanceManager;
@@ -36,6 +37,7 @@ final class ServerInstanceManagerMasterLeaseOverlayTest extends TestCase
             @\unlink($this->leaseFile);
         }
         if ($this->leaseFile !== '') {
+            @\unlink(\dirname($this->leaseFile) . DIRECTORY_SEPARATOR . 'master_lease.lock');
             @\rmdir(\dirname($this->leaseFile));
         }
     }
@@ -122,19 +124,46 @@ PHP;
 
     public function testFreshNewerLeaseVetoesDestructiveCleanupWhenPidIsInAnotherNamespace(): void
     {
-        $this->manager = new ServerInstanceManager();
         $this->instanceName = 'ut-master-foreign-namespace-' . \bin2hex(\random_bytes(4));
+        $leasePid = 987654322;
+        $observerNamespace = 'pid:[4026532999]';
+        $runtime = new MasterLeaseRuntimeIdentity(
+            bootIdentityResolver: static fn (): string => \str_repeat('8', 64),
+            monotonicClock: static fn (): float => 5_000.0,
+            processInfoResolver: static fn (int $pid): array => [
+                'exists' => $pid === $leasePid,
+                'name' => $pid === $leasePid ? 'php' : '',
+                'command' => $pid === $leasePid ? 'php bin/w --name=foreign-master' : '',
+                'start_time' => $pid === $leasePid ? 'foreign-birth' : '',
+            ],
+            managedProcessVerifier: static fn (int $pid, string $instance): bool => $pid === $leasePid,
+            pidNamespaceResolver: static function (int $pid) use (
+                $leasePid,
+                &$observerNamespace,
+            ): ?string {
+                if ($pid === $leasePid) {
+                    return 'pid:[4026532999]';
+                }
+                if ($pid === (int)\getmypid()) {
+                    return $observerNamespace;
+                }
+                return null;
+            },
+        );
+        $leaseManager = new MasterLeaseManager($runtime);
+        $this->manager = new ServerInstanceManager($leaseManager);
         $this->instanceFile = $this->manager->getInstanceFile($this->instanceName);
         $this->leaseFile = MasterLeaseManager::pathForInstance($this->instanceName);
         $oldNamespacePid = 987654321;
         $this->writeEndpoint($oldNamespacePid, 6);
-        (new MasterLeaseManager())->writeRunning(
+        $leaseManager->writeRunning(
             $this->instanceName,
-            987654322,
+            $leasePid,
             24681,
             7,
             \bin2hex(\random_bytes(32)),
         );
+        $observerNamespace = 'pid:[4026532001]';
 
         self::assertTrue(
             $this->manager->hasSupersedingLiveMasterGeneration(

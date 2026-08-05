@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Search::commerce:tax-search:control-center" name="search_control_center"
+          title="搜索管理" action="" parent="Weline_Backend::commerce:tax-search:group"
+          icon="mdi mdi-magnify-scan" order="20">
+        <menu source="Weline_Search::commerce:tax-search:config" name="search_config" title="搜索配置"
+              action="search/backend/controlcenter/config" icon="mdi mdi-cog-outline" order="10"/>
+        <menu source="Weline_Search::commerce:tax-search:generations" name="search_generations" title="索引代次"
+              action="search/backend/controlcenter/generations" icon="mdi mdi-layers-triple-outline" order="20"/>
+        <menu source="Weline_Search::commerce:tax-search:incremental" name="search_incremental" title="增量状态"
+              action="search/backend/controlcenter/incremental" icon="mdi mdi-update" order="30"/>
+        <menu source="Weline_Search::commerce:tax-search:degraded" name="search_degraded" title="降级状态"
+              action="search/backend/controlcenter/degraded" icon="mdi mdi-alert-decagram-outline" order="40"/>
+        <menu source="Weline_Search::commerce:tax-search:migration" name="search_migration" title="迁移状态"
+              action="search/backend/controlcenter/migration" icon="mdi mdi-database-eye-outline" order="50"/>
+    </menu>
+</menus>

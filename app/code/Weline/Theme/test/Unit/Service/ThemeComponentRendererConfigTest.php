@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Dto\ThemeRenderable;
 use Weline\Theme\Service\ThemeComponentRenderer;

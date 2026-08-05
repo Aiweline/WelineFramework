@@ -454,6 +454,10 @@ function wlsDrainPostResponseTasks(
 /**
  * Unwind a suspended request Fiber so its Runtime and Worker finally blocks
  * execute before the connection state and request scope are discarded.
+ *
+ * Long-lived SSE handlers may re-suspend once while catching RequestExitException.
+ * Retry a bounded number of throws before grading the cancel incomplete, and only
+ * quarantine the Worker after a streak of incomplete cancels (not a single flake).
  */
 if (!\function_exists('wlsUnwindRequestFiberForCancellation')) {
 function wlsUnwindRequestFiberForCancellation(
@@ -462,6 +466,7 @@ function wlsUnwindRequestFiberForCancellation(
     string $reason = 'request_cancelled',
 ): bool {
     if ($fiber->isTerminated()) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::clearIncompleteRequestFiberCancelStreak();
         return true;
     }
     if (!$fiber->isSuspended()) {
@@ -471,33 +476,59 @@ function wlsUnwindRequestFiberForCancellation(
         return false;
     }
 
-    try {
-        if ($fiberContext !== null && \method_exists($fiberContext, 'restoreForFiber')) {
-            $fiberContext->restoreForFiber($fiber);
+    $maxThrows = 3;
+    for ($attempt = 0; $attempt < $maxThrows; $attempt++) {
+        if ($fiber->isTerminated()) {
+            break;
         }
-        $fiber->throw(new \Weline\Framework\Runtime\RequestExitException());
-    } catch (\Weline\Framework\Runtime\RequestExitException) {
-        // Expected control flow after request finally blocks have unwound.
-    } catch (\Throwable $throwable) {
-        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
-            'request_fiber_cancel_failure'
-        );
-        \Weline\Server\Log\WlsLogger::error_(
-            'Request Fiber cancellation failed (' . $reason . '): ' . $throwable->getMessage()
-        );
+        if (!$fiber->isSuspended()) {
+            \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+                'request_fiber_cancel_not_suspended'
+            );
+            return false;
+        }
+        try {
+            if ($fiberContext !== null && \method_exists($fiberContext, 'restoreForFiber')) {
+                $fiberContext->restoreForFiber($fiber);
+            }
+            $fiber->throw(new \Weline\Framework\Runtime\RequestExitException());
+        } catch (\Weline\Framework\Runtime\RequestExitException) {
+            // Expected control flow after request finally blocks have unwound.
+        } catch (\Throwable $throwable) {
+            \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
+                'request_fiber_cancel_failure'
+            );
+            \Weline\Server\Log\WlsLogger::error_(
+                'Request Fiber cancellation failed (' . $reason . '): ' . $throwable->getMessage()
+            );
+            return false;
+        }
     }
 
-    if (!$fiber->isTerminated()) {
+    if ($fiber->isTerminated()) {
+        \Weline\Server\Service\WorkerResponseMemoryGuard::clearIncompleteRequestFiberCancelStreak();
+        return true;
+    }
+
+    $streak = \Weline\Server\Service\WorkerResponseMemoryGuard::noteIncompleteRequestFiberCancel();
+    $threshold = \Weline\Server\Service\WorkerResponseMemoryGuard::INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK;
+    if ($streak >= $threshold) {
         \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse(
             'request_fiber_cancel_incomplete'
         );
         \Weline\Server\Log\WlsLogger::error_(
-            'Request Fiber remained suspended after cancellation: ' . $reason
+            'Request Fiber remained suspended after cancellation ('
+            . $reason . '); Worker quarantine streak ' . $streak . '/' . $threshold
         );
-        return false;
+    } else {
+        \Weline\Server\Log\WlsLogger::warning_(
+            'Request Fiber remained suspended after cancellation ('
+            . $reason . '); incomplete streak ' . $streak . '/' . $threshold
+            . ' (quarantine deferred)'
+        );
     }
 
-    return true;
+    return false;
 }
 }
 

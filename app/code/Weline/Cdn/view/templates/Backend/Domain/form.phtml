@@ -27,7 +27,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <!-- 表单 -->
 <div class="card">
     <div class="card-body">
-        <w:form id="domainForm" method="post" action="@var($this->getBackendUrl('*/backend/domain/save'))">
+        <w:form id="domainForm" method="post" action="@var($this->getBackendUrl('*/backend/domain/save'))" data-testid="cdn-domain-editor-form" data-state="idle" data-message="">
             <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
             
             <div class="row mb-3">
@@ -124,7 +124,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <div class="row">
                 <div class="col-md-10 offset-md-2">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" data-testid="cdn-domain-editor-submit">
                         <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
                     </button>
                     <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="btn btn-secondary">
@@ -232,10 +232,25 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             
             var url = this.action;
             var opts = { method: 'POST', body: formData };
-            window.Weline.Api.request(url, opts)
-            .then(function(res) {
-                var data = (res && res.data) !== undefined ? res.data : res;
+            var params = {};
+            if (opts.body instanceof FormData) { opts.body.forEach(function(v,k){ params[k]=v; }); }
+            else if (typeof opts.body === 'string') { new URLSearchParams(opts.body).forEach(function(v,k){ params[k]=v; }); }
+            if (params.id) { params.domain_id = params.id; }
+            delete params.id;
+            delete params.csrf;
+            if (!params.account_id) { delete params.account_id; }
+            params.site_id = Number(params.site_id);
+            params.warmup_interval_seconds = Number(params.warmup_interval_seconds || 300);
+            params.inherit_default = params.inherit_default === '1';
+            params.enabled = params.enabled === '1';
+            domainForm.dataset.state = 'saving';
+            domainForm.dataset.message = '';
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('cdn').saveDomain(params); })
+            .then(function(data) {
                 if (data.success) {
+                    domainForm.dataset.state = 'saved';
+                    domainForm.dataset.message = data.message || '';
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
@@ -253,6 +268,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         }, 1500);
                     }
                 } else {
+                    domainForm.dataset.state = 'error';
+                    domainForm.dataset.message = data.message || '<?= __('保存失败') ?>';
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'error',
@@ -266,6 +283,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 }
             })
             .catch(function(error) {
+                domainForm.dataset.state = 'error';
+                domainForm.dataset.message = error && error.message ? error.message : String(error);
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',

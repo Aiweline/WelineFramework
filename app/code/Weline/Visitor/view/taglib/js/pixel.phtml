@@ -80,6 +80,21 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         return consent.enabled ? consent[key] === true : true;
     }
 
+    function __isPageBuilderPreview() {
+        if (window.__PAGEBUILDER_PREVIEW__ === true) {
+            return true;
+        }
+        try {
+            return new URLSearchParams(String(window.location && window.location.search || '')).get('preview') === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function __visitorOptimizationEvidenceWriteAllowed() {
+        return __visitorConsentAllows('analytics') && !__isPageBuilderPreview();
+    }
+
     function __visitorMarketingStorageKey() {
         var consentConfig = __visitorConfigSection('consent') || {};
         var key = String(consentConfig.marketingStorageKey || 'ad_storage').trim();
@@ -2369,6 +2384,110 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         };
     }
 
+    function __pageBuilderAttributionPath(value) {
+        try {
+            var parsed = new URL(String(value || ''), window.location.origin);
+            var path = String(parsed.pathname || '/').replace(/\/{2,}/g, '/');
+            return path.length > 1 ? path.replace(/\/+$/, '') : path;
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function __pageBuilderAttributionText(node, attribute, maxLength) {
+        var value = node && node.getAttribute ? String(node.getAttribute(attribute) || '').trim() : '';
+        return value.length > maxLength ? value.slice(0, maxLength) : value;
+    }
+
+    function __pageBuilderAttributionNode(element, eventName) {
+        var selector = '[data-pb-attribution-version="pagebuilder_ai_v1"]';
+        var node = element && element.closest ? element.closest(selector) : null;
+        if (!node && eventName === 'page_view') {
+            node = document.querySelector(selector);
+        }
+
+        return node;
+    }
+
+    function __buildPageBuilderAttribution(element, eventName) {
+        if (__isPageBuilderPreview() || !__visitorConsentAllows('analytics')) {
+            return null;
+        }
+
+        var node = __pageBuilderAttributionNode(element, eventName);
+        if (!node) {
+            return null;
+        }
+
+        var websiteId = __pageBuilderAttributionText(node, 'data-pb-website-id', 32);
+        var environmentWebsiteId = __getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID');
+        if (!/^\d+$/.test(websiteId)
+            || (environmentWebsiteId !== undefined
+                && environmentWebsiteId !== null
+                && String(environmentWebsiteId).trim() !== ''
+                && String(environmentWebsiteId).trim() !== websiteId)) {
+            return null;
+        }
+
+        var pageType = __pageBuilderAttributionText(node, 'data-pb-page-type', 64);
+        var revisionText = __pageBuilderAttributionText(node, 'data-pb-plan-revision', 16);
+        var canonicalPath = __pageBuilderAttributionPath(__pageBuilderAttributionText(node, 'data-pb-canonical-path', 255));
+        var currentPath = __pageBuilderAttributionPath(window.location.pathname || '/');
+        if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(pageType)
+            || !/^\d+$/.test(revisionText)
+            || !canonicalPath
+            || canonicalPath !== currentPath) {
+            return null;
+        }
+
+        var planRevision = Number(revisionText);
+        if (!isFinite(planRevision) || planRevision < 0 || planRevision > 2147483647) {
+            return null;
+        }
+
+        var isPageView = eventName === 'page_view';
+        var blockKey = isPageView ? '' : __pageBuilderAttributionText(node, 'data-pb-block-key', 128);
+        var fingerprint = isPageView ? '' : __pageBuilderAttributionText(node, 'data-pb-content-fingerprint', 64).toLowerCase();
+        if (!isPageView
+            && (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(blockKey)
+                || !/^[a-f0-9]{64}$/.test(fingerprint))) {
+            return null;
+        }
+
+        var experimentId = __pageBuilderAttributionText(
+            node,
+            isPageView ? 'data-pb-page-experiment-id' : 'data-pb-experiment-id',
+            96
+        );
+        var variant = __pageBuilderAttributionText(
+            node,
+            isPageView ? 'data-pb-page-variant' : 'data-pb-variant',
+            32
+        );
+        if ((experimentId && !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/.test(experimentId))
+            || (variant && !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,31}$/.test(variant))) {
+            return null;
+        }
+
+        return {
+            attribution_version: 'pagebuilder_ai_v1',
+            source: 'pagebuilder_rendered_dom',
+            surface: 'published',
+            analytics_consent: 'granted',
+            preview: false,
+            website_id: websiteId,
+            page_type: pageType,
+            block_key: blockKey,
+            plan_revision: Math.floor(planRevision),
+            content_fingerprint: fingerprint,
+            experiment_id: experimentId,
+            variant: variant,
+            page_experiment_id: __pageBuilderAttributionText(node, 'data-pb-page-experiment-id', 96),
+            page_variant: __pageBuilderAttributionText(node, 'data-pb-page-variant', 32),
+            canonical_path: canonicalPath
+        };
+    }
+
     function __compactPixelPayloadForWorker(payload) {
         payload = payload || {};
         var additionalInfo = payload.additionalInfo && typeof payload.additionalInfo === 'object' ? payload.additionalInfo : {};
@@ -2428,6 +2547,14 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             };
         }
 
+        var pageBuilderAttribution = additionalInfo.pagebuilder_attribution
+            && typeof additionalInfo.pagebuilder_attribution === 'object'
+            ? additionalInfo.pagebuilder_attribution
+            : {};
+        var compactPageBuilderRevision = Number(pageBuilderAttribution.plan_revision);
+        if (!isFinite(compactPageBuilderRevision) || compactPageBuilderRevision < 0) {
+            compactPageBuilderRevision = 0;
+        }
         var ecommerceItems = Array.isArray(compact.items)
             ? compact.items
             : (additionalInfo.ecommerce && Array.isArray(additionalInfo.ecommerce.items)
@@ -2457,6 +2584,23 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             },
             viewport: additionalInfo.viewport || {},
             meta: additionalInfo.meta || {},
+            pagebuilder_attribution: pageBuilderAttribution.attribution_version === 'pagebuilder_ai_v1' ? {
+                attribution_version: 'pagebuilder_ai_v1',
+                source: __pixelTruncate(pageBuilderAttribution.source, 64),
+                surface: __pixelTruncate(pageBuilderAttribution.surface, 32),
+                analytics_consent: __pixelTruncate(pageBuilderAttribution.analytics_consent, 16),
+                preview: pageBuilderAttribution.preview === true,
+                website_id: __pixelTruncate(pageBuilderAttribution.website_id, 32),
+                page_type: __pixelTruncate(pageBuilderAttribution.page_type, 64),
+                block_key: __pixelTruncate(pageBuilderAttribution.block_key, 128),
+                plan_revision: Math.floor(compactPageBuilderRevision),
+                content_fingerprint: __pixelTruncate(pageBuilderAttribution.content_fingerprint, 64),
+                experiment_id: __pixelTruncate(pageBuilderAttribution.experiment_id, 96),
+                variant: __pixelTruncate(pageBuilderAttribution.variant, 32),
+                page_experiment_id: __pixelTruncate(pageBuilderAttribution.page_experiment_id, 96),
+                page_variant: __pixelTruncate(pageBuilderAttribution.page_variant, 32),
+                canonical_path: __pixelTruncate(pageBuilderAttribution.canonical_path, 255)
+            } : {},
             // F03：worker 压缩时保留电商 items，供服务端商品表现展开
             ecommerce: {
                 items: ecommerceItems.slice(0, 20),
@@ -2492,6 +2636,10 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     }
 
     function __drainPixelQueue() {
+        if (!__visitorOptimizationEvidenceWriteAllowed()) {
+            __pixelSendQueue = [];
+            return;
+        }
         if (__pixelSendActive || __pixelSendQueue.length === 0) {
             return;
         }
@@ -2588,7 +2736,7 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
                 forwarding: visitorEvent.forwarding
             });
 
-            if (__visitorPixelEnabled()) {
+            if (__visitorPixelEnabled() && __visitorOptimizationEvidenceWriteAllowed()) {
                 __enqueuePixelPayload(payloadData, keepalive);
             }
             // 回写原对象，便于 track() 返回值与调试面板读取到 section 溯源字段
@@ -2629,6 +2777,10 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
             payload.elementInfo = mergedMeta.element ? mergedMeta.element : null;
             __applyEventMetaToPayload(payload, mergedMeta);
             payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, Object.assign({}, mergedMeta, { domElement: domElement }), options.startedAt);
+            var pageBuilderAttribution = __buildPageBuilderAttribution(domElement, normalizedEventName);
+            if (pageBuilderAttribution) {
+                payload.additionalInfo.pagebuilder_attribution = pageBuilderAttribution;
+            }
             payload.environment = (payload.additionalInfo && payload.additionalInfo.environment)
                 || __buildEventEnvironmentContext(domElement);
             // GA4-aligned top-level mirrors for funnel / path attribution consumers.
@@ -3039,7 +3191,53 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         });
     }
 
+    function __initPageBuilderOptimizationImpressions() {
+        if (window.__WelinePageBuilderOptimizationImpressionsLoaded
+            || !window.WelinePixel
+            || typeof window.WelinePixel.track !== 'function'
+            || !window.IntersectionObserver) {
+            return;
+        }
+        window.__WelinePageBuilderOptimizationImpressionsLoaded = true;
+        var blocks = document.querySelectorAll(
+            '[data-pb-attribution-version="pagebuilder_ai_v1"][data-pb-block-key]'
+        );
+        if (!blocks.length) {
+            return;
+        }
+
+        var observer = new window.IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                var block = entry.target;
+                if (!entry.isIntersecting
+                    || Number(entry.intersectionRatio || 0) < 0.5
+                    || block.getAttribute('data-pb-ai-impression-sent') === '1') {
+                    return;
+                }
+                block.setAttribute('data-pb-ai-impression-sent', '1');
+                observer.unobserve(block);
+                window.WelinePixel.track('ai_block_impression', {
+                    source: 'pagebuilder_ai_site',
+                    trigger: 'intersection'
+                }, { element: block });
+            });
+        }, { threshold: [0.5] });
+
+        Array.prototype.forEach.call(blocks, function (block) {
+            observer.observe(block);
+        });
+    }
+
+    function __startPageBuilderOptimizationImpressions() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', __initPageBuilderOptimizationImpressions, { once: true });
+            return;
+        }
+        __initPageBuilderOptimizationImpressions();
+    }
+
     __initBehaviorTelemetry();
+    __startPageBuilderOptimizationImpressions();
 
     // 创建 iframe 沙箱
     function initPixelSandbox() {

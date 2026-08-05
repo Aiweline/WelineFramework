@@ -5,7 +5,7 @@
 
 namespace Weline\DataTable\Test\Unit;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\DataTable\Taglib\Table;
 use Weline\DataTable\Taglib\TableHeader;
 use Weline\DataTable\Taglib\TableFilter;

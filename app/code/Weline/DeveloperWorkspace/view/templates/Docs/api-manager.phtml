@@ -73,7 +73,38 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     <css>Weline_Admin::backend/lib/font-awesome-4.7.0/css/font-awesome.min.css</css>
     <!-- Material Design Icons -->
     <css>Weline_Admin::assets/css/icons.min.css</css>
-    <script data-no-extract="true">
+
+<script>
+(function(g){
+  if(g.__bqAdmin_developer_workspace) return;
+  g.__bqAdmin_developer_workspace=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['developer_workspace']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('developer_workspace').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    if(!(g.Weline&&typeof g.Weline.load==='function')){
+      return Promise.reject(new Error('Weline API runtime is unavailable.'));
+    }
+    return g.Weline.load('api').then(run).then(toResp);
+  };
+})(window);
+</script>
+<script data-no-extract="true">
         window.WelineApiConfig = window.WelineApiConfig || {};
         window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || '<?= htmlspecialchars($apiDocsWorkerUrl, ENT_QUOTES, 'UTF-8') ?>';
         window.WelineApiConfig.endpoint = window.WelineApiConfig.endpoint || <?= json_encode($apiDocsQueryBinUrl, $jsonForScriptFlags) ?>;
@@ -5190,7 +5221,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             const startTime = Date.now();
             
             try {
-                const response = await fetch(requestUrl.toString(), {
+                const response = await bqAdmin['developer_workspace'](requestUrl.toString(), {
                     method: method,
                     headers: headers,
                     body: body
@@ -5814,7 +5845,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             }
             
             try {
-                const response = await fetch(loginUrl, {
+                const response = await bqAdmin['developer_workspace'](loginUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -6487,4 +6518,3 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     <w:seo slot="inspector"/>
 </body>
 </html>
-

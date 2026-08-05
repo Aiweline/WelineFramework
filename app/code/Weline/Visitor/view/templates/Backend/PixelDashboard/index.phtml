@@ -4,7 +4,8 @@
  *
  * @var \Weline\Framework\View\Template $this
  * @var array $filters
- * @var array $website_options
+ * @var array $website_select_options
+ * @var string $website_select_options_json
  * @var array $event_options
  * @var array $summary
  * @var array $trend
@@ -17,7 +18,6 @@
  */
 
 $filters = $filters ?? [];
-$websiteOptions = $website_options ?? [];
 $eventOptions = $event_options ?? [];
 $summary = $summary ?? [];
 $trend = $trend ?? [];
@@ -30,7 +30,16 @@ $recentEvents = $recent_events ?? [];
 
 $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $num = static fn($value, int $decimals = 0): string => number_format((float)$value, $decimals);
+$websiteSelectOptions = is_array($website_select_options ?? null) ? $website_select_options : [];
+$websiteSelectOptionsJson = (string)($website_select_options_json ?? '');
+if ($websiteSelectOptionsJson === '') {
+    $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+}
 $selectedWebsite = (string)($filters['website_id_raw'] ?? '');
+$selectedWebsiteDisplay = \Weline\Visitor\Service\PixelStatisticsService::resolveWebsiteSelectDisplay(
+    $websiteSelectOptions,
+    $selectedWebsite
+);
 $selectedEvent = (string)($filters['event'] ?? '');
 $selectedRange = (string)($filters['range'] ?? '30d');
 $rangeLabels = [

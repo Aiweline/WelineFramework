@@ -7,7 +7,7 @@ namespace Weline\Framework\Test\Unit\View;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\TemplateCacheManager;
 
 final class TemplateCacheManagerEnvironmentKeyTest extends TestCore

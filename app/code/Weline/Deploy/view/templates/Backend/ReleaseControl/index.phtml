@@ -154,6 +154,35 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     </div>
 </div>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_deploy) return;
+  g.__bqAdmin_deploy=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['deploy']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('deploy').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
 (function () {
     const branchesUrl = <?= json_encode($branchesUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -182,7 +211,7 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     function postForm(url, data) {
         const body = new URLSearchParams();
         Object.keys(data).forEach((key) => body.append(key, data[key]));
-        return fetch(url, {
+        return bqAdmin['deploy'](url, {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
             body: body.toString(),
@@ -193,7 +222,7 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     function loadBranches() {
         if (!branchesUrl) return;
         setStatus('<?= $attr((string)__('加载分支中...')) ?>');
-        fetch(branchesUrl, {credentials: 'same-origin'})
+        bqAdmin['deploy'](branchesUrl, {credentials: 'same-origin'})
             .then((res) => res.json())
             .then((data) => {
                 if (!data.success) throw new Error(data.message || '<?= $attr((string)__('加载分支失败')) ?>');
@@ -223,7 +252,7 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
         if (!commitsUrl || !branchSelect) return;
         setStatus('<?= $attr((string)__('加载提交中...')) ?>');
         const url = commitsUrl + (commitsUrl.indexOf('?') >= 0 ? '&' : '?') + 'branch=' + encodeURIComponent(branchSelect.value);
-        fetch(url, {credentials: 'same-origin'})
+        bqAdmin['deploy'](url, {credentials: 'same-origin'})
             .then((res) => res.json())
             .then((data) => {
                 if (!data.success) throw new Error(data.message || '<?= $attr((string)__('加载提交失败')) ?>');
@@ -249,7 +278,7 @@ $attr = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8'
     function loadTags() {
         if (!tagsUrl) return;
         setStatus('<?= $attr((string)__('加载 Tags 中...')) ?>');
-        fetch(tagsUrl, {credentials: 'same-origin'})
+        bqAdmin['deploy'](tagsUrl, {credentials: 'same-origin'})
             .then((res) => res.json())
             .then((data) => {
                 if (!data.success) throw new Error(data.message || '<?= $attr((string)__('加载 Tags 失败')) ?>');

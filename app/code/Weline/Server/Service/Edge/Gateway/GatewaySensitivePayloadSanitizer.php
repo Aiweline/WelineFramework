@@ -60,13 +60,13 @@ final class GatewaySensitivePayloadSanitizer
         }
         if (\str_contains($normalized, 'credential')) {
             if (\preg_match(
-                '/credential(?:id|identifier|reference|generation|digest|hash|fingerprint|thumbprint|installed|available|present|status)\z/D',
+                '/credential(?:id|identifier|reference|generation|digest|hash|fingerprint|thumbprint|installed|available|present|status|receipt)\z/D',
                 $normalized,
             ) !== 1) {
                 return true;
             }
             $prefix = (string)\preg_replace(
-                '/credential(?:id|identifier|reference|generation|digest|hash|fingerprint|thumbprint|installed|available|present|status)\z/D',
+                '/credential(?:id|identifier|reference|generation|digest|hash|fingerprint|thumbprint|installed|available|present|status|receipt)\z/D',
                 '',
                 $normalized,
             );

@@ -9,6 +9,75 @@ use Weline\Server\Service\Edge\Gateway\GatewayBackendCapabilityResolver;
 
 final class GatewayBackendCapabilityResolverTest extends TestCase
 {
+    public function testLaunchSnapshotFreezesCapabilityAndBindsGenerationAndLaunch(): void
+    {
+        $resolver = new GatewayBackendCapabilityResolver();
+        $capability = $resolver->resolve([
+            'gateway' => [
+                'instance_generation' => 11,
+                'backend_capability' => 'stateless',
+                'backend_capability_source' => 'runtime_config',
+                'backend_capability_generation' => 11,
+            ],
+        ]);
+        $launchId = \str_repeat('a', 32);
+        $snapshot = $resolver->createLaunchSnapshot($capability, 11, $launchId);
+
+        self::assertSame(
+            $capability,
+            $resolver->capabilityFromLaunchSnapshot([
+                'gateway' => [
+                    'instance_generation' => 11,
+                    'launch_id' => $launchId,
+                    'backend_capability_launch' => $snapshot,
+                ],
+            ]),
+        );
+    }
+
+    public function testLaunchSnapshotRejectsGenerationDriftInsteadOfReprobing(): void
+    {
+        $resolver = new GatewayBackendCapabilityResolver();
+        $capability = $resolver->resolve([
+            'gateway' => [
+                'instance_generation' => 11,
+                'backend_capability' => 'stateless',
+                'backend_capability_source' => 'runtime_config',
+                'backend_capability_generation' => 11,
+            ],
+        ]);
+        $launchId = \str_repeat('b', 32);
+        $snapshot = $resolver->createLaunchSnapshot($capability, 11, $launchId);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('missing or stale');
+        $resolver->capabilityFromLaunchSnapshot([
+            'gateway' => [
+                'instance_generation' => 12,
+                'launch_id' => $launchId,
+                'backend_capability_launch' => $snapshot,
+            ],
+        ]);
+    }
+
+    public function testWorkerAttestationDoesNotReadCapabilityAnswersFromRequestHeaders(): void
+    {
+        $worker = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/bin/worker.php',
+        );
+
+        self::assertStringContainsString(
+            'WLS_WORKER_GATEWAY_SESSION_CAPABILITY',
+            $worker,
+        );
+        self::assertStringContainsString(
+            'WLS_WORKER_GATEWAY_SESSION_CAPABILITY_EVIDENCE_DIGEST',
+            $worker,
+        );
+        self::assertStringNotContainsString('x-wls-attest-session-capability', $worker);
+        self::assertStringNotContainsString('x-wls-attest-evidence-digest', $worker);
+    }
+
     public function testManagedWlsSessionRequiresAuthenticatedLiveRuntimeProof(): void
     {
         $probeCalls = 0;

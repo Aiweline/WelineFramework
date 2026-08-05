@@ -12,14 +12,15 @@ final readonly class MetaConfigScopeSearch
         public ?int $metaId = null,
         public ?string $metaIdentify = null,
     ) {
-        if (trim($this->namespace) === '') {
-            throw new \InvalidArgumentException('Meta config scope search requires a namespace.');
-        }
+        MetaConfigIdentity::assertNamespace($this->namespace);
+        MetaConfigIdentity::assertIdentifyId($this->identifyId);
+        MetaConfigIdentity::assertMetaIdentify($this->metaIdentify);
         if (!$this->hasOwnerIdentity()) {
             throw new \InvalidArgumentException('Meta config scope search requires identifyId, metaId, or metaIdentify.');
         }
-        if ($this->metaId !== null && $this->metaId < 1) {
-            throw new \InvalidArgumentException('Meta config metaId must be a positive integer when provided.');
+        if ($this->metaId !== null
+            && ($this->metaId < 1 || $this->metaId > MetaConfigIdentity::META_ID_MAX)) {
+            throw new \InvalidArgumentException('Meta config metaId must fit a positive signed 32-bit integer.');
         }
     }
 

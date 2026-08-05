@@ -26,15 +26,17 @@
 入口/配置文件：
 - `app/code/Weline/Social/etc/module.xml`
 - `app/code/Weline/Social/etc/backend/menu.xml`
+- `app/code/Weline/Social/composer.json`
 
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：2
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：3
 - `Interface`：模块发布的接口契约。跨模块依赖优先使用这里的稳定契约。 文件数：2
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：6
 - `Queue`：队列生产/消费入口。读 Queue 技能和模块文档后再改。 文件数：1
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：6
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
-- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：2
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：10
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：3
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：23
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：2
 - `view/theme`：主题资源贡献层。读 Weline_Theme/doc/AI-INDEX.md 后按 layout/partial/component/widget 规则开发。 文件数：1
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0

@@ -11,6 +11,7 @@
 5. 按任务继续读：
    - 布局：[`layout-discovery-guide.md`](./layout-discovery-guide.md)
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
+   - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
    - Slot：[`widget-slot-attributes.md`](./widget-slot-attributes.md)
    - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
    - WLS 视图预热贡献：[`worker-view-warmup-contributions.md`](./worker-view-warmup-contributions.md)
@@ -74,7 +75,15 @@
 - 禁止 `axios`
 - 禁止手写 `/api/framework/query-bin`
 
-### 4. 严格边界
+### 4. 下拉浮层基座
+
+Theme.js 前后端入口统一发布 `window.WelineSmartDropdown`，作为 Taglib、主题组件和页头选择器的浮层定位基座。业务控件只负责触发、选项、搜索与回填，并调用 `place()` 或 `mount()`；不得各自复制视口计算算法。
+
+基座统一处理 `visualViewport`、四边 8px 安全边距、窄屏宽度夹取、上下方向选择和剩余高度约束。需要脱离裁剪容器时使用 `mount()` 的默认 body portal；必须保留父子 CSS/hover 关系时使用 `place()` 或 `portal: false`。
+
+当面板仍留在锚点子树内且 `gap > 0` 时，基座默认插入透明 `data-weline-dropdown-hover-bridge`，覆盖触发器与面板之间的空隙（含水平并集），避免鼠标移入面板时 `:hover` 中断。可显式传 `hoverBridge: true/false` 覆盖默认。
+
+### 5. 严格边界
 
 不要改：
 
@@ -88,7 +97,7 @@
 - `design/frontend/default/layout.html`
 - 旧 `{block}` / `{include}` 模板结构
 
-### 5. I18n 单向依赖
+### 6. I18n 单向依赖
 
 Theme 明确 `requires Weline_I18n`，依赖方向只能是：
 
@@ -106,7 +115,7 @@ Theme 的词典、locale 列表、翻译收集和文案解析只允许使用：
 `Weline\Theme\Api\I18n\ThemeJavascriptModuleConfigProvider` 实现 I18n 公共 Provider 契约并通过编译注册表发布；
 I18n 不反向感知 Theme。新增 I18n 集成时必须沿用这个方向，不得重新形成循环。
 
-### 6. 跨模块边界
+### 7. 跨模块边界
 
 Theme 启动和运行时直接使用 `Framework`、`Backend`、`I18n`、`Meta`、
 `SystemConfig` 和 `Widget` 的公开契约，因此它们是必需依赖。AI、CDN、EAV、
@@ -192,6 +201,12 @@ Theme 对外提供 `w_query('theme', 'copyTargetLayoutData', ...)`，供 CMS 等
 `Weline\Theme\Api\Preview\PreviewContext::frontend()` 获取 `previewMode/shell/editorArea`
 纯标量。调用方不得引用 `PreviewContextService`；布局草稿/发布状态使用
 `Weline\Theme\Api\Layout\LayoutStatus`，不得引用 `ThemeLayout` Model 常量。
+
+### 布局 Scope / store_mode（TASK-P1C-005-THEME）
+
+`ThemeLayoutScopeNormalizer` 将布局 identity 的 `scope` 升格为规范三段存储串，并把非
+`normal` 的 `store_mode` 编码为 `scope~{mode}`，使 normal/test 草稿行互不可见。
+`PreviewContextService` 保留独立 `store_mode` 字段与三段 `scope`；写入布局时再编码。
 
 ## 相关计划与专题文档
 

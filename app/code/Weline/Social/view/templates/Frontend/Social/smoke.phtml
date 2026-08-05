@@ -38,7 +38,7 @@ $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUO
 </head>
 <body>
 <main data-social-smoke="<?= $passed ? 'passed' : 'failed' ?>">
-    <section class="panel">
+    <section class="panel" weline-code="social.smoke.section_1">
         <span class="status <?= $passed ? 'passed' : 'failed' ?>">
             <?= $passed ? __('Fake 验证通过') : __('Fake 验证失败') ?>
         </span>

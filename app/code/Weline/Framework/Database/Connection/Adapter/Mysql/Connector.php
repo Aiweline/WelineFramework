@@ -23,6 +23,7 @@ use Weline\Framework\Database\Compiler\Dialect\MysqlDialect;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
+use Weline\Framework\Database\Connection\Api\Sql\CreatesTableFromSchemaTrait;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultIdentifierFormatter;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
@@ -36,6 +37,8 @@ use Weline\Framework\Manager\ObjectManager;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    use CreatesTableFromSchemaTrait;
+
     public function __construct(
         private readonly ?ConfigProvider $configProvider
     ) {
@@ -444,14 +447,53 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         return 'ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4';
     }
 
+    /**
+     * MySQL requires AUTO_INCREMENT to lead at least one index; reorder composite PK when needed.
+     *
+     * @param list<string> $pkColumns
+     * @param list<string> $autoIncrementPkColumns
+     * @param list<array<string,mixed>> $indexes
+     * @return list<string>
+     */
+    protected function orderCompositePrimaryKeyColumns(
+        array $pkColumns,
+        array $autoIncrementPkColumns,
+        array $indexes,
+    ): array {
+        if (count($autoIncrementPkColumns) !== 1) {
+            return $pkColumns;
+        }
+        $autoIncrementPk = $autoIncrementPkColumns[0];
+        $hasLeadingIndex = false;
+        foreach ($indexes as $index) {
+            if (($index['columns'][0] ?? null) === $autoIncrementPk) {
+                $hasLeadingIndex = true;
+                break;
+            }
+        }
+        if (($pkColumns[0] ?? null) === $autoIncrementPk || $hasLeadingIndex) {
+            return $pkColumns;
+        }
+
+        return array_merge(
+            [$autoIncrementPk],
+            array_values(array_diff($pkColumns, [$autoIncrementPk])),
+        );
+    }
+
     /** @inheritDoc */
     public function getTableColumns(string $table): array
     {
         [$schema, $physical] = $this->resolveMetadataTable($table);
         $statement = $this->getWrappedConnection()->prepare(
-            'SELECT COLUMN_NAME AS Field, COLUMN_TYPE AS Type, IS_NULLABLE AS `Null`, COLUMN_KEY AS `Key`, '
-            . 'COLUMN_DEFAULT AS `Default`, EXTRA AS Extra, COLUMN_COMMENT AS Comment '
-            . 'FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table ORDER BY ORDINAL_POSITION'
+            'SELECT c.COLUMN_NAME AS Field, c.COLUMN_TYPE AS Type, c.IS_NULLABLE AS `Null`, '
+            . 'c.COLUMN_KEY AS `Key`, c.COLUMN_DEFAULT AS `Default`, c.EXTRA AS Extra, '
+            . 'c.COLUMN_COMMENT AS Comment, CASE WHEN pk.COLUMN_NAME IS NULL THEN 0 ELSE 1 END AS Is_primary '
+            . 'FROM information_schema.COLUMNS c '
+            . 'LEFT JOIN information_schema.STATISTICS pk '
+            . 'ON pk.TABLE_SCHEMA = c.TABLE_SCHEMA AND pk.TABLE_NAME = c.TABLE_NAME '
+            . "AND pk.INDEX_NAME = 'PRIMARY' AND pk.COLUMN_NAME = c.COLUMN_NAME "
+            . 'WHERE c.TABLE_SCHEMA = :schema AND c.TABLE_NAME = :table ORDER BY c.ORDINAL_POSITION'
         );
         $statement->execute([':schema' => $schema, ':table' => $physical]);
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -465,7 +507,11 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             $extra = $row['Extra'] ?? $row['extra'] ?? '';
             $comment = $row['Comment'] ?? $row['comment'] ?? '';
             $nullable = $null !== 'NO';
-            $primaryKey = $key === 'PRI';
+            // COLUMN_KEY=PRI is not an authoritative PRIMARY marker. MySQL may
+            // expose PRI for NOT NULL columns of the first suitable UNIQUE key
+            // when a table has no explicit PRIMARY. Only INDEX_NAME=PRIMARY is
+            // the physical primary-key fact.
+            $primaryKey = (int)($row['Is_primary'] ?? $row['is_primary'] ?? 0) === 1;
             $autoIncrement = stripos($extra, 'auto_increment') !== false;
             $unique = $key === 'UNI';
             [$baseType, $length] = $this->parseColumnTypeMysql($type);
@@ -488,11 +534,11 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     private function parseColumnTypeMysql(string $type): array
     {
         $type = trim($type);
-        if (preg_match('/^(\w+)\s*\(\s*(\d+)\s*\)/', $type, $m)) {
-            return [$m[1], (int) $m[2]];
-        }
         if (preg_match('/^(\w+)\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/', $type, $m)) {
             return [$m[1], $m[2] . ',' . $m[3]];
+        }
+        if (preg_match('/^(\w+)\s*\(\s*(\d+)\s*\)/', $type, $m)) {
+            return [$m[1], (int) $m[2]];
         }
         return [strtolower($type), null];
     }
@@ -502,7 +548,8 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         [$schema, $physical] = $this->resolveMetadataTable($table);
         $statement = $this->getWrappedConnection()->prepare(
-            'SELECT INDEX_NAME AS Key_name, COLUMN_NAME AS Column_name, NON_UNIQUE AS Non_unique, SEQ_IN_INDEX AS Seq_in_index '
+            'SELECT INDEX_NAME AS Key_name, COLUMN_NAME AS Column_name, NON_UNIQUE AS Non_unique, '
+            . 'SEQ_IN_INDEX AS Seq_in_index, INDEX_TYPE AS Index_type '
             . 'FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table ORDER BY INDEX_NAME, SEQ_IN_INDEX'
         );
         $statement->execute([':schema' => $schema, ':table' => $physical]);
@@ -513,18 +560,30 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             $column = $row['Column_name'] ?? $row['column_name'] ?? '';
             $nonUnique = (int) ($row['Non_unique'] ?? $row['non_unique'] ?? 1);
             $seq = (int) ($row['Seq_in_index'] ?? $row['seq_in_index'] ?? 0);
+            $indexType = strtoupper((string)($row['Index_type'] ?? $row['index_type'] ?? 'BTREE'));
             if ($keyName === 'PRIMARY') {
                 continue;
             }
             if (!isset($byName[$keyName])) {
-                $byName[$keyName] = ['columns' => [], 'unique' => $nonUnique === 0];
+                $byName[$keyName] = [
+                    'columns' => [],
+                    'unique' => $nonUnique === 0,
+                    'type' => $indexType === 'FULLTEXT' ? 'FULLTEXT' : ($nonUnique === 0 ? 'UNIQUE' : 'DEFAULT'),
+                    'method' => $indexType,
+                ];
             }
             $byName[$keyName]['columns'][$seq] = $column;
         }
         $list = [];
         foreach ($byName as $name => $data) {
             ksort($data['columns']);
-            $list[] = ['name' => $name, 'columns' => array_values($data['columns']), 'unique' => $data['unique']];
+            $list[] = [
+                'name' => $name,
+                'columns' => array_values($data['columns']),
+                'unique' => $data['unique'],
+                'type' => $data['type'],
+                'method' => $data['method'],
+            ];
         }
         return $list;
     }
@@ -585,6 +644,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         if ($type === 'UNIQUE') {
             return "ALTER TABLE {$t} ADD UNIQUE {$name} ({$colList})";
         }
+        if ($type === 'FULLTEXT') {
+            return "ALTER TABLE {$t} ADD FULLTEXT INDEX {$name} ({$colList})";
+        }
         return "ALTER TABLE {$t} ADD INDEX {$name} ({$colList})";
     }
 
@@ -639,9 +701,6 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             $opts[] = is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP'
                 ? 'DEFAULT CURRENT_TIMESTAMP'
                 : (is_string($d) ? "DEFAULT '" . str_replace("'", "''", $d) . "'" : "DEFAULT {$d}");
-        }
-        if (!empty($col['unique']) && empty($col['primaryKey'])) {
-            $opts[] = 'UNIQUE';
         }
         $optStr = implode(' ', $opts);
         $comment = isset($col['comment']) && $col['comment'] !== ''

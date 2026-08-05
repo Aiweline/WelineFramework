@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Http\Sse;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 final class SseWriterTest extends TestCase
@@ -16,12 +17,14 @@ final class SseWriterTest extends TestCase
     protected function setUp(): void
     {
         SseContext::reset();
+        RequestContext::remove(RequestContext::SSE_WRITER_KEY);
         SchedulerSystem::disableScheduler();
     }
 
     protected function tearDown(): void
     {
         SseContext::reset();
+        RequestContext::remove(RequestContext::SSE_WRITER_KEY);
         SchedulerSystem::disableScheduler();
 
         foreach ($this->streams as $stream) {
@@ -30,6 +33,21 @@ final class SseWriterTest extends TestCase
             }
         }
         $this->streams = [];
+    }
+
+    public function testStartPublishesCurrentWriterToRequestContext(): void
+    {
+        $stream = $this->createStream();
+        SseContext::setConnection($stream);
+
+        $sse = new SseWriter();
+        $sse->start();
+
+        self::assertSame(
+            $sse,
+            RequestContext::get(RequestContext::SSE_WRITER_KEY),
+            'Nested AI chunk callbacks must receive the live request writer, not a boolean marker.'
+        );
     }
 
     public function testSendEventSendsCorrectFormat(): void

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\Exception\TemplateException;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;

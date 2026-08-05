@@ -218,9 +218,10 @@ final class RuntimeStrategyResolver
     /**
      * Resolve the platform topology contract without probing optional runtime
      * dependencies. This is the single pre-install source used by server:start:
-     * Auto/direct always stays Direct or fails closed. POSIX uses a verified
-     * shared listener, while Windows uses one loopback port per Worker so Nginx
-     * can balance directly without a PHP Dispatcher hop.
+     * POSIX uses a verified shared listener. A Windows schema-5 startup lease
+     * is duplicated into one Dispatcher so the reserved socket remains owned
+     * continuously; legacy managed Nginx without that marker may still use one
+     * loopback port per Worker.
      *
      * @param array<string, mixed> $config
      * @param array<int|string, mixed> $args
@@ -239,9 +240,25 @@ final class RuntimeStrategyResolver
             ?? $edge['adapter']
             ?? \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
         ))) === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS;
+        $gateway = \is_array($config['gateway'] ?? null) ? $config['gateway'] : [];
+        $startupHandoff = \is_array($gateway['startup_listener_handoff'] ?? null)
+            ? $gateway['startup_listener_handoff']
+            : [];
+        $requiresWindowsDispatcher = ($startupHandoff['continuous_ownership'] ?? false) === true
+            && \hash_equals(
+                WindowsListenerHandoff::TRANSPORT,
+                (string)($startupHandoff['transport'] ?? ''),
+            );
 
         if ($osFamily === 'Windows') {
+            if ($requiresWindowsDispatcher && $requested === RequestedTopology::Direct) {
+                throw new \RuntimeException(
+                    'Windows continuous listener handoff requires the single Dispatcher owner; '
+                    . 'remove --direct and start with --dispatcher.'
+                );
+            }
             if ($requested === RequestedTopology::Dispatcher
+                || $requiresWindowsDispatcher
                 || ($pureWls && $requested === RequestedTopology::Auto)
             ) {
                 if ($listenerMode !== 'auto') {
@@ -254,12 +271,16 @@ final class RuntimeStrategyResolver
                     'requested' => $requested,
                     'effective' => EffectiveTopology::Dispatcher,
                     'source' => $source,
-                    'reason' => $pureWls && $requested === RequestedTopology::Auto
-                        ? 'pure WLS on Windows selected the single public Dispatcher endpoint'
-                        : 'explicit Dispatcher topology',
-                    'reason_code' => $pureWls && $requested === RequestedTopology::Auto
-                        ? 'windows_pure_wls_auto_dispatcher'
-                        : 'explicit_dispatcher',
+                    'reason' => $requiresWindowsDispatcher
+                        ? 'Windows schema-5 listener ownership selected the single Dispatcher endpoint'
+                        : ($pureWls && $requested === RequestedTopology::Auto
+                            ? 'pure WLS on Windows selected the single public Dispatcher endpoint'
+                            : 'explicit Dispatcher topology'),
+                    'reason_code' => $requiresWindowsDispatcher
+                        ? 'windows_continuous_listener_dispatcher'
+                        : ($pureWls && $requested === RequestedTopology::Auto
+                            ? 'windows_pure_wls_auto_dispatcher'
+                            : 'explicit_dispatcher'),
                 ];
             }
             if ($pureWls) {

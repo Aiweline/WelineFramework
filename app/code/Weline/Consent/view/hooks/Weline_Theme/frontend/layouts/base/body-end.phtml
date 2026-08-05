@@ -1,0 +1,59 @@
+<?php
+/**
+ * Consent banner (TASK-P1D-004-CONSENT).
+ *
+ * Hook: Weline_Theme::frontend::layouts::base::body-end
+ * @hook-priority 100
+ * @hook-sort-order 60
+ * @hook-solo false
+ */
+?>
+<div id="weline-consent-banner" role="dialog" aria-live="polite" style="display:none;position:fixed;inset-inline:0;bottom:0;z-index:9999;padding:12px 16px;background:#111;color:#fff;font:14px/1.4 system-ui,sans-serif;">
+    <p style="margin:0 0 8px;"><?= htmlspecialchars((string)__('我们使用 Cookie 以改善体验。您可以同意或稍后管理偏好。'), ENT_QUOTES, 'UTF-8') ?></p>
+    <button type="button" data-consent-accept style="margin-right:8px;padding:6px 12px;"><?= htmlspecialchars((string)__('同意'), ENT_QUOTES, 'UTF-8') ?></button>
+    <button type="button" data-consent-dismiss style="padding:6px 12px;background:transparent;color:#fff;border:1px solid #666;"><?= htmlspecialchars((string)__('稍后'), ENT_QUOTES, 'UTF-8') ?></button>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('weline-consent-banner');
+  if (!root) return;
+  function hide() { root.style.display = 'none'; }
+  function show() { root.style.display = 'block'; }
+  function runWithApi(run, done) {
+    var failed = function () {
+      root.setAttribute('data-consent-error', '1');
+      show();
+    };
+    if (window.Weline && typeof Weline.load === 'function') {
+      Weline.load('api').then(run).then(done).catch(failed);
+    } else if (window.Weline && Weline.Api && typeof Weline.Api.resource === 'function') {
+      Promise.resolve(run(Weline.Api)).then(done).catch(failed);
+    } else {
+      failed();
+    }
+  }
+  root.querySelector('[data-consent-dismiss]')?.addEventListener('click', hide);
+  root.querySelector('[data-consent-accept]')?.addEventListener('click', function () {
+    runWithApi(function (api) {
+      return api.resource('consent').accept({
+        categories: ['analytics', 'marketing']
+      });
+    }, function (result) {
+      if (result && result.success === true && result.show_banner === false) {
+        hide();
+        return;
+      }
+      show();
+    });
+  });
+  runWithApi(function (api) {
+    return api.resource('consent').status({});
+  }, function (result) {
+    if (result && result.recording_enabled !== false && result.show_banner === true) {
+      show();
+      return;
+    }
+    hide();
+  });
+})();
+</script>

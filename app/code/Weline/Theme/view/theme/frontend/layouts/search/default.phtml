@@ -72,7 +72,7 @@ $meta = $this->getData('meta') ?? [];
                     </w:slot>
                 </aside>
 
-                <section class="search-layout__results">
+                <section class="search-layout__results" weline-code="theme.search.section_1">
                     <w:slot id="search-results"
                             name="搜索结果区"
                             accept="layout-search-results,layout-product-list-grid,product-grid,product-list-view,search-results"
@@ -98,7 +98,7 @@ $meta = $this->getData('meta') ?? [];
                     multiple="true"
                     position="content"
                     wrapper="section"
-                    class="search-layout__recommendations">
+                    class="search-layout__recommendations" weline-code="theme.search.search_recommendations">
                 <w:hook>Weline_Theme::frontend::layouts::search::recommendations</w:hook>
             </w:slot>
             </w:slot>

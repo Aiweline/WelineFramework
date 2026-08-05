@@ -127,11 +127,11 @@ document.getElementById('partials-config-form').addEventListener('submit', funct
     });
     
     var url = '<?= $this->getUrl('theme/backend/config/partials/save') ?>';
-    var req = window.Weline.Api.request(url, { method: 'POST', body: frontendData });
+    var req = WelineThemeBinQuery.request(url, { method: 'POST', body: frontendData });
     req.then(function(res) {
         var data = (res && res.data) || res;
         if (data.status === 'success') {
-            var req2 = window.Weline.Api.request(url, { method: 'POST', body: backendData });
+            var req2 = WelineThemeBinQuery.request(url, { method: 'POST', body: backendData });
             return req2.then(function(r) { return (r && r.data) || r; });
         } else {
             throw new Error(data.message || '<?= __('保存失败') ?>');

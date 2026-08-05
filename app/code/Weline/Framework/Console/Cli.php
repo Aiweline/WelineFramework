@@ -16,6 +16,7 @@ use Weline\Framework\Manager\ObjectManager;
 class Cli extends CliAbstract
 {
     public const core_FRAMEWORK_NAMESPACE = Env::framework_name . '\\Framework';
+    private bool $skipFollowUpCommands = false;
 
     /**
      * @DESC         |方法描述
@@ -28,6 +29,7 @@ class Cli extends CliAbstract
      */
     public function run(): int
     {
+        $this->skipFollowUpCommands = false;
         ConsoleEncoding::initForCli();
         $args = $this->parseArgs($this->argv);
         // 检查是否是查找命令 (find 或 -f)
@@ -35,7 +37,7 @@ class Cli extends CliAbstract
             $this->handleFindCommand($args);
             return 0;
         }
-        
+
         // 有命令时，需要接受用户检查 和 参数检查 但是在检测到env环境为空时，允许执行，方便安装
         $env_user = Env::get('user');
         if (isset($args['command']) && $env_user) {
@@ -64,26 +66,46 @@ class Cli extends CliAbstract
         $command = $command_class['command'] ?? '';
         $data = $command_class['data'];
         $commandResult = ObjectManager::getInstance($command_class['class'])->execute($args, $data);
-        
-        // 触发命令执行完成事件（传规范命令名，便于观察者按前缀匹配，如 setup: 而非别名 s:up）
-        $canonicalCommand = $this->getCanonicalCommandName($command, $command_class['class']);
-        $this->dispatchCommandExecutedEvent($canonicalCommand, $args);
-        $skipFooter = ($canonicalCommand === 'cron:test'
-                && (\in_array('--list', $this->argv, true) || \in_array('-l', $this->argv, true)))
-            || $this->isJsonOutputCommand($args);
-        if (!$skipFooter) {
-            $this->printer->printing("\n");
-            $this->printer->note(__('执行命令：') . $command_class['command'] . ' ' . ($this->argv[1] ?? '')/*,$this->printer->colorize('CLI-System','red')*/);
+
+        if ($commandResult instanceof CommandResult && $commandResult->shouldSkipPostExecution()) {
+            $this->skipFollowUpCommands = true;
+            $commandResult->finalize();
+            return $commandResult->exitCode();
         }
 
-        // Commands may return an integer process status. Keep legacy null/bool/
-        // object results successful so existing commands do not change meaning;
-        // the top-level bin entrypoint is the sole owner of process termination.
-        return $this->normalizeCommandExitCode($commandResult);
+        try {
+            // 触发命令执行完成事件（传规范命令名，便于观察者按前缀匹配，如 setup: 而非别名 s:up）
+            $canonicalCommand = $this->getCanonicalCommandName($command, $command_class['class']);
+            $this->dispatchCommandExecutedEvent($canonicalCommand, $args);
+            $skipFooter = ($canonicalCommand === 'cron:test'
+                    && (\in_array('--list', $this->argv, true) || \in_array('-l', $this->argv, true)))
+                || $this->isJsonOutputCommand($args);
+            if (!$skipFooter) {
+                $this->printer->printing("\n");
+                $this->printer->note(__('执行命令：') . $command_class['command'] . ' ' . ($this->argv[1] ?? '')/*,$this->printer->colorize('CLI-System','red')*/);
+            }
+
+            // Commands may return an integer process status. Keep legacy null/bool/
+            // object results successful so existing commands do not change meaning;
+            // the top-level bin entrypoint is the sole owner of process termination.
+            return $this->normalizeCommandExitCode($commandResult);
+        } finally {
+            if ($commandResult instanceof CommandResult) {
+                $commandResult->finalize();
+            }
+        }
+    }
+
+    public function shouldSkipFollowUpCommands(): bool
+    {
+        return $this->skipFollowUpCommands;
     }
 
     protected function normalizeCommandExitCode(mixed $commandResult): int
     {
+        if ($commandResult instanceof CommandResult) {
+            return $commandResult->exitCode();
+        }
         return \is_int($commandResult) ? \max(0, \min(255, $commandResult)) : 0;
     }
 
@@ -553,12 +575,17 @@ class Cli extends CliAbstract
 //            exit($this->printer->error('命令系统异常！请完整执行（不能简写）更新模块命令后重试：php bin/w command:upgrade'));
         }
 
-        // 检查完整命令
+        // 检查完整命令。同名命令可能同时来自 vendor 与 app/code；
+        // 精确匹配也必须遵循项目实现优先，不能因注册分组顺序而执行旧版。
+        $exactMatches = [];
         foreach ($commands as $group => $group_commands) {
             if (isset($group_commands[$command]) && $command_data = $group_commands[$command]) {
                 $command_class = $command_data['class'];
-                return ['class' => $command_class, 'command' => $command, 'data' => $command_data];
+                $exactMatches[] = ['class' => $command_class, 'command' => $command, 'data' => $command_data];
             }
+        }
+        if ($exactMatches !== []) {
+            return $this->selectPreferredCommand($exactMatches);
         }
         $recommendCommands = $this->recommendCommand($commands, $command);
         $commands = [];
@@ -757,6 +784,20 @@ class Cli extends CliAbstract
         // 降级：通过模块名判断（Weline_Framework_* 通常在 vendor）
         // 但这不够准确，因为 Framework 模块也可能在 app/code
         return false;
+    }
+
+    /**
+     * @param non-empty-list<array{class:string,command:string,data:array}> $matches
+     * @return array{class:string,command:string,data:array}
+     */
+    private function selectPreferredCommand(array $matches): array
+    {
+        usort($matches, function (array $left, array $right): int {
+            return ((int)$this->isVendorCommand((string)$left['class']))
+                <=> ((int)$this->isVendorCommand((string)$right['class']));
+        });
+
+        return $matches[0];
     }
     
     /**

@@ -11,6 +11,8 @@
  * @var string $default_utm_source
  * @var bool $code_readonly
  * @var bool $is_edit
+ * @var list<array{value:string,label:string,meta:string}> $website_select_options
+ * @var string $website_select_options_json
  */
 
 $form = $form ?? [];
@@ -20,6 +22,16 @@ $action = (string)($action ?? '');
 $formTitle = (string)($form_title ?? __('新建投放渠道'));
 $codeReadonly = !empty($code_readonly);
 $isEdit = !empty($is_edit);
+$websiteSelectOptions = is_array($website_select_options ?? null) ? $website_select_options : [];
+$websiteSelectOptionsJson = (string)($website_select_options_json ?? '');
+if ($websiteSelectOptionsJson === '') {
+    $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+}
+$selectedWebsite = (string)(int)($form['website_id'] ?? 0);
+$selectedWebsiteDisplay = \Weline\Visitor\Service\PixelStatisticsService::resolveWebsiteSelectDisplay(
+    $websiteSelectOptions,
+    $selectedWebsite
+);
 $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $indexUrl = $this->getBackendUrlPath('visitor/backend/traffic-channel/index');
 $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
@@ -75,10 +87,21 @@ $mediumJson = $h(\json_encode($mediumByType, JSON_UNESCAPED_UNICODE) ?: '{}');
                         </select>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label"><lang>站点ID</lang></label>
-                        <input type="number" name="website_id" class="form-control" min="0"
-                               value="<?= $h((string)($form['website_id'] ?? 0)) ?>"/>
-                        <div class="form-text"><lang>0 表示全局渠道。</lang></div>
+                        <label class="form-label" for="channel-website_trigger"><lang>站点</lang></label>
+                        <w:websites:website:select
+                            id="channel-website"
+                            name="website_id"
+                            value="selectedWebsite"
+                            display="selectedWebsiteDisplay"
+                            options="websiteSelectOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            clearable="false"
+                            empty-label="@lang(请选择站点)"
+                            placeholder="@lang(搜索站点名称或编码)"
+                            class="weline-traffic-channel-website-select"
+                        />
+                        <div class="form-text"><lang>选择系统默认站表示全局渠道（website_id=0）。</lang></div>
                     </div>
                 </div>
 

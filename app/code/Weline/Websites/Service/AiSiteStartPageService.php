@@ -9,6 +9,7 @@ use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\ConfigStore;
 use Weline\Websites\Api\DomainStartPageConfig;
 use Weline\Websites\Exception\AiSiteProvisioningException;
@@ -88,7 +89,7 @@ class AiSiteStartPageService
             // from the global scope during that early routing phase.
             scope: ConfigStore::SCOPE_GLOBAL,
             locale: ConfigStore::LOCALE_DEFAULT,
-            options: ['operation' => 'pagebuilder_ai_site_start_page_publish']
+            options: ['operation' => 'pb_ai_start_page_publish']
         );
         if (!$saved) {
             throw new AiSiteProvisioningException(
@@ -99,14 +100,19 @@ class AiSiteStartPageService
 
         // Also mirror the website-scoped key used by admin forms / StarPage so
         // both the domain-hash reader and the website-code reader stay aligned.
+        // SystemConfig rejects short raw scopes; pass ScopeIdentity so storage
+        // becomes "{websiteCode}.default.default".
         $websiteScopedSaved = $this->configStore->setScopedConfig(
             key: 'frontend_start_page_path',
             value: $startPagePath,
             module: self::CONFIG_MODULE,
             area: ConfigStore::area_FRONTEND,
-            scope: $websiteCode,
+            scope: ConfigStore::SCOPE_GLOBAL,
             locale: ConfigStore::LOCALE_DEFAULT,
-            options: ['operation' => 'pagebuilder_ai_site_start_page_website_scope']
+            options: [
+                'operation' => 'pb_ai_start_page_site',
+                'scope_identity' => ScopeIdentity::website($websiteId, $websiteCode),
+            ]
         );
         if (!$websiteScopedSaved) {
             throw new AiSiteProvisioningException(

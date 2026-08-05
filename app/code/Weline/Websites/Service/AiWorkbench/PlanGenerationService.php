@@ -51,6 +51,7 @@ class PlanGenerationService
         $references = $this->normalizeReferenceList($draftPayload['reference_urls'] ?? []);
         $conversation = $this->normalizeConversation($draftPayload['chat_messages'] ?? []);
         $currentPlan = \is_array($draftPayload['current_plan'] ?? null) ? $draftPayload['current_plan'] : [];
+        $fakeMode = $this->isTruthyFlag($draftPayload['fake_mode'] ?? false);
 
         if ($emit !== null) {
             $emit('status', [
@@ -58,7 +59,9 @@ class PlanGenerationService
             ]);
         }
 
-        $generated = $this->streamAiPlan($brief, $references, $conversation, $currentPlan, $userMessage, $emit);
+        $generated = $fakeMode
+            ? $this->buildFakePlan($brief, $references, $userMessage, $emit)
+            : $this->streamAiPlan($brief, $references, $conversation, $currentPlan, $userMessage, $emit);
 
         $generated['build_mode'] = $this->normalizeBuildMode((string)($generated['build_mode'] ?? ''));
         $generated['page_types'] = $this->normalizeGeneratedPageTypes(
@@ -69,7 +72,17 @@ class PlanGenerationService
         );
         $generated['plan_markdown'] = $this->buildPlanMarkdown($generated);
         $generated['reference_urls'] = $references;
-        $generated['updated_from_message'] = $userMessage;
+        $updated = $userMessage !== '' ? $userMessage : $brief;
+        if (\mb_strlen($updated) > 500) {
+            $updated = (string)\mb_substr($updated, 0, 500) . '…';
+        }
+        $generated['updated_from_message'] = $updated;
+        if (isset($generated['brief_description']) && \is_string($generated['brief_description']) && \mb_strlen($generated['brief_description']) > 500) {
+            $generated['brief_description'] = (string)\mb_substr($generated['brief_description'], 0, 500) . '…';
+        }
+        if ($fakeMode) {
+            $generated['fake_mode'] = 1;
+        }
 
         if ($emit !== null) {
             $emit('plan_completed', [
@@ -79,6 +92,348 @@ class PlanGenerationService
         }
 
         return $generated;
+    }
+
+    /**
+     * Rewrite a site brief into a structured, production-ready requirement document.
+     *
+     * Output follows the ChronoAI-style sections:
+     * Role & System Prompt / Project Context / Architecture & Layout /
+     * Interactive Requirements / Code Quality & Constraints.
+     *
+     * @return array{success:bool,message:string,description?:string}
+     */
+    public function polishDescription(
+        string $description,
+        bool $fakeMode = false,
+        string $contentLocale = '',
+        string $planLocale = '',
+        array $languageCodes = []
+    ): array {
+        $description = \trim($description);
+        if ($description === '') {
+            return [
+                'success' => false,
+                'message' => (string)__('请先输入一句话需求'),
+            ];
+        }
+        if (\mb_strlen($description, 'UTF-8') > 8000) {
+            $description = (string)\mb_substr($description, 0, 8000, 'UTF-8');
+        }
+
+        $fallbackLocale = $this->resolveFallbackLocale();
+        $contentLocale = $this->normalizePolishLocale($contentLocale, $fallbackLocale);
+        $planLocale = $this->normalizePolishLocale($planLocale, $contentLocale);
+        $languageCodes = $this->normalizePolishLocaleList($languageCodes, $contentLocale);
+
+        if ($fakeMode) {
+            return [
+                'success' => true,
+                'message' => (string)__('润色完成'),
+                'description' => $this->buildFakeStructuredBrief($description, $contentLocale, $planLocale, $languageCodes),
+                'content_locale' => $contentLocale,
+                'plan_locale' => $planLocale,
+                'language_codes' => $languageCodes,
+            ];
+        }
+
+        $aiService = $this->getAiRuntime();
+        if ($aiService === null) {
+            return [
+                'success' => false,
+                'message' => (string)__('AI 服务不可用，无法润色需求'),
+            ];
+        }
+
+        $instruction = $this->buildPolishInstruction($description, $contentLocale, $planLocale, $languageCodes);
+
+        try {
+            $polished = \trim((string)$aiService->generate(
+                $instruction,
+                null,
+                self::PLAN_SCENARIO_CODE,
+                $planLocale,
+                [
+                    'temperature' => 0.45,
+                    // DeepSeek V4 thinking shares this budget with CoT; keep headroom for the brief.
+                    'max_tokens' => 16384,
+                    // Polish is a template rewrite — disable thinking so CoT cannot empty content.
+                    'thinking' => ['type' => 'disabled'],
+                    'reasoning_text_fallback' => true,
+                    'reasoning_text_fallback_markers' => ['# Role & System Prompt'],
+                    'disable_conversation_history' => true,
+                    'disable_conversation_persist' => true,
+                    'request_source' => 'site_builder_polish_description',
+                ],
+                null,
+                true
+            ));
+            $polished = \preg_replace('/^```(?:markdown|md)?\s*/u', '', $polished) ?? $polished;
+            $polished = \preg_replace('/\s*```$/u', '', $polished) ?? $polished;
+            $polished = \preg_replace('/^["“]|["”]$/u', '', $polished) ?? $polished;
+            $polished = \trim((string)$polished);
+            if ($polished === '') {
+                return [
+                    'success' => false,
+                    'message' => (string)__('润色失败：模型未返回内容（思考链可能占满输出额度，请重试）'),
+                ];
+            }
+
+            return [
+                'success' => true,
+                'message' => (string)__('润色完成'),
+                'description' => $polished,
+                'content_locale' => $contentLocale,
+                'plan_locale' => $planLocale,
+                'language_codes' => $languageCodes,
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => (string)__('润色失败：%{1}', [$throwable->getMessage()]),
+            ];
+        }
+    }
+
+    /**
+     * @param list<string> $languageCodes
+     */
+    private function buildPolishInstruction(
+        string $description,
+        string $contentLocale,
+        string $planLocale,
+        array $languageCodes = []
+    ): string {
+        $related = \array_values(\array_filter(
+            $languageCodes,
+            static fn (string $code): bool => $code !== $contentLocale
+        ));
+        $relatedText = $related === []
+            ? 'none (single-language site)'
+            : \implode(', ', $related);
+
+        $languageRule = $contentLocale === $planLocale
+            ? "Write the entire polished brief body in {$planLocale} (except the fixed English section titles below, brand names, and technical codes)."
+            : "Write the polished brief body (operator/planning explanations) in {$planLocale}. Explicitly require all visitor-facing site copy (titles, body, buttons, SEO, alt text) to use {$contentLocale} as the default language. Do not mix these two languages incorrectly.";
+
+        return "You are a world-class full-stack frontend engineer and UX design expert, and also a website-brief polishing assistant. Rewrite the user's website requirement into a high-fidelity, interactive, production-ready MVP landing/site specification.\n\nHard output format (must use these Markdown H1 headings in this exact order; keep the English titles unchanged; no preamble, no epilogue, no code fences, no \"here is the result\" wording):\n\n# Role & System Prompt\nIn second person, define the role and overall goal: deliver a high-fidelity interactive production site; preserve the user's industry, market, languages, and conversion goals; state tech/stack constraints suited to the site type (marketing/APK promo sites emphasize semantic HTML, responsive layout, clear conversion funnel, and SEO — do not rewrite into an unrelated product).\n\n# Project Context\nExpand with project name, positioning, visual style (include primary/accent hex colors), and target audience. Must explicitly state:\n- Website/content language (visitor-facing default): {$contentLocale}\n- Related languages (additional locales): {$relatedText}\n- Plan/brief language (operator-facing): {$planLocale}\nIf related languages exist, require language switcher / localized CTA support for those locales. Reasonable enrichment is allowed but must not contradict the user.\n\n# Architecture & Layout\nDescribe overall layout and 3–6 core sections/modules; each section uses a bold subheading + bullets covering hero, trust/content, download or conversion, SEO/localization, etc.\n\n# Interactive Requirements (核心交互逻辑)\nList 3–6 hard demoable interactions (tab/state switching, primary CTA, form/download feedback, toast/modal, theme or language switch, etc.), each with trigger and visible result. If related languages exist, include a language switcher interaction.\n\n# Code Quality & Constraints\nCover Self-Contained, Responsiveness, No Placeholders, Icons/asset constraints; forbid Lorem Ipsum and TODO; copy must be realistic for the product context. Reiterate visitor default copy language = {$contentLocale}; related languages = {$relatedText}.\n\nLanguage rules: {$languageRule}\nKeep user constraints (market, gameplay, safe download, local aesthetics, SEO, mobile, etc.); enrich executable detail; output only the structured body above.\n\nUser requirement:\n{$description}";
+    }
+
+    private function resolveFallbackLocale(): string
+    {
+        try {
+            $lang = \trim((string)\Weline\Framework\App\State::getLang());
+            if ($lang !== '') {
+                return $this->normalizePolishLocale($lang, 'zh_Hans_CN');
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'zh_Hans_CN';
+    }
+
+    private function normalizePolishLocale(string $locale, string $fallback): string
+    {
+        $locale = \trim(\str_replace('-', '_', $locale));
+        if ($locale === '') {
+            return $fallback;
+        }
+        if (!\preg_match('/^[A-Za-z]{2,3}(?:_[A-Za-z0-9]{2,8}){0,3}$/', $locale)) {
+            return $fallback;
+        }
+
+        return $locale;
+    }
+
+    /**
+     * @param list<mixed> $languageCodes
+     * @return list<string>
+     */
+    private function normalizePolishLocaleList(array $languageCodes, string $contentLocale): array
+    {
+        $values = [];
+        foreach ($languageCodes as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $code = $this->normalizePolishLocale((string)$item, '');
+            if ($code === '' || \in_array($code, $values, true)) {
+                continue;
+            }
+            $values[] = $code;
+        }
+        if ($contentLocale !== '' && !\in_array($contentLocale, $values, true)) {
+            \array_unshift($values, $contentLocale);
+        }
+
+        return $values;
+    }
+
+    private function isEnglishPlanLocale(string $planLocale): bool
+    {
+        return \str_starts_with(\strtolower($planLocale), 'en');
+    }
+
+    /**
+     * Deterministic site plan for fake_mode / offline tests (no live AI stream).
+     *
+     * @param list<string> $references
+     * @return array<string, mixed>
+     */
+    private function buildFakePlan(
+        string $brief,
+        array $references,
+        string $userMessage,
+        ?callable $emit
+    ): array {
+        if ($emit !== null) {
+            $emit('chunk', [
+                'chunk' => (string)__('Local demo mode: building a deterministic site plan...'),
+                'message' => (string)__('Local demo mode: building a deterministic site plan...'),
+            ]);
+        }
+
+        $title = $this->pickString($userMessage, $brief, 'Demo Site');
+        $title = \trim((string)\preg_replace('/\s+/u', ' ', $title));
+        if (\mb_strlen($title) > 48) {
+            $title = (string)\mb_substr($title, 0, 48);
+        }
+        if ($title === '') {
+            $title = 'Demo Site';
+        }
+        $shortBrief = $brief !== '' ? $brief : $title;
+        if (\mb_strlen($shortBrief) > 240) {
+            $shortBrief = (string)\mb_substr($shortBrief, 0, 240) . '…';
+        }
+
+        return [
+            'site_positioning' => (string)__('Local demo landing site for %{title}', ['title' => $title]),
+            'brand_tone' => (string)__('Trustworthy, conversion-focused, modern'),
+            'color_palette' => ['#0f172a', '#2563eb', '#10b981'],
+            'visual_style' => (string)__('Clean cards, soft shadows, mobile-first'),
+            'seo_keywords' => [$title, (string)__('official site'), (string)__('download')],
+            'page_types' => ['home_page', 'about_page', 'contact_page', 'privacy_policy'],
+            'build_mode' => 'static',
+            'shared_elements' => ['header', 'footer'],
+            'references_summary' => $references === []
+                ? (string)__('No reference URLs provided.')
+                : (string)__('References: %{list}', ['list' => \implode(', ', \array_slice($references, 0, 5))]),
+            'domain_strategy' => (string)__('Prefer a short brandable domain; local .weline.test is fine for demo.'),
+            'site_title' => $title,
+            'site_tagline' => (string)__('Demo plan generated in local fake mode'),
+            'brief_description' => $shortBrief,
+        ];
+    }
+
+    private function isTruthyFlag(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value === 1;
+        }
+        if (\is_string($value)) {
+            return \in_array(\strtolower(\trim($value)), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Deterministic structured brief for fake_mode / offline tests.
+     *
+     * @param list<string> $languageCodes
+     */
+    private function buildFakeStructuredBrief(
+        string $description,
+        string $contentLocale = 'zh_Hans_CN',
+        string $planLocale = 'zh_Hans_CN',
+        array $languageCodes = []
+    ): string {
+        $title = \trim((string)\preg_replace('/\s+/u', ' ', $description));
+        if (\mb_strlen($title, 'UTF-8') > 48) {
+            $title = (string)\mb_substr($title, 0, 48, 'UTF-8') . '…';
+        }
+        $related = \array_values(\array_filter(
+            $languageCodes,
+            static fn (string $code): bool => $code !== $contentLocale
+        ));
+        $relatedText = $related === [] ? 'none' : \implode(', ', $related);
+
+        if ($this->isEnglishPlanLocale($planLocale)) {
+            return <<<MD
+# Role & System Prompt
+You are a world-class full-stack frontend engineer and UX design expert. Based on the requirement below, deliver a high-fidelity, interactive, production-ready MVP website/landing page: {$title}. Pages must be semantic, responsive, conversion-clear, and adapted to the target market aesthetics and SEO.
+
+# Project Context
+- **Project name**: {$title}
+- **Positioning**: A high-conversion site for the target audience, highlighting core benefits, trust, and primary CTA.
+- **Visual style**: Modern refined look; primary #0f172a, accents #2563eb / #10b981; rounded cards, soft shadows, micro-interactions.
+- **Target audience**: Visitors matching the user brief (including mobile users).
+- **Website/content language (visitor-facing default)**: {$contentLocale}
+- **Related languages**: {$relatedText}
+- **Plan/brief language (operator-facing)**: {$planLocale}
+
+# Architecture & Layout
+Use a top navigation + main single-page scroll (or a few inner pages). Core sections:
+1. **Hero**: Value proposition, primary/secondary CTAs, trust chips.
+2. **Features / gameplay**: 3–4 feature cards or screenshot wall.
+3. **Trust & safety**: Reviews, certifications, privacy notes.
+4. **Conversion**: Download/register primary button and supporting guidance.
+5. **Footer**: Links, compliance, and contact.
+
+# Interactive Requirements (核心交互逻辑)
+- **Primary CTA**: Clicking download/register shows a success toast.
+- **Anchor navigation**: Top-nav clicks smooth-scroll to sections.
+- **Mobile menu**: Hamburger open/close on small screens.
+- **Language switcher**: Switch between {$contentLocale} and related languages when configured.
+- **Trust accordion**: FAQ/details expand and collapse.
+
+# Code Quality & Constraints
+- **Self-Contained**: Mock data must be embedded; no external backends that require API keys.
+- **Responsiveness**: Full Desktop / Mobile support.
+- **No Placeholders**: No Lorem Ipsum or TODO; copy must be realistic and usable.
+- **Icons**: Use one consistent icon set.
+- **Language**: Visitor-facing default copy must use {$contentLocale}; related languages: {$relatedText}.
+MD;
+        }
+
+        return <<<MD
+# Role & System Prompt
+你是一位世界顶级的前端全栈工程师与 UX 设计专家。请基于下列需求，交付一个高保真、可交互的生产级 MVP 官网/落地页：{$title}。页面需语义化、响应式，转化路径清晰，并适配目标市场审美与 SEO。
+
+# Project Context
+- **项目名称**: {$title}
+- **定位**: 面向目标用户的高转化官网，突出核心卖点、信任背书与主 CTA。
+- **视觉风格**: 现代精致风；主色 #0f172a，点缀色 #2563eb / #10b981；卡片圆角、轻阴影与微动效。
+- **目标受众**: 与用户需求一致的目标市场访客（含移动端用户）。
+- **网站内容语言（访客默认）**: {$contentLocale}
+- **关联语言**: {$relatedText}
+- **方案/润色语言（运营侧）**: {$planLocale}
+
+# Architecture & Layout
+采用顶栏导航 + 主内容单页滚动（或少量内页）结构，核心板块包括：
+1. **Hero 首屏**: 价值主张、主副 CTA、信任短标签。
+2. **卖点/玩法展示**: 3～4 个特性卡片或截图墙。
+3. **信任与安全**: 评价、认证、隐私说明。
+4. **转化区**: 下载/注册主按钮与辅助引导。
+5. **页脚**: 链接、合规与联系方式。
+
+# Interactive Requirements (核心交互逻辑)
+- **主 CTA**: 点击下载/注册按钮出现成功反馈 Toast。
+- **锚点导航**: 顶栏点击平滑滚动到对应板块。
+- **移动端菜单**: 小屏展开/收起汉堡菜单。
+- **语言切换**: 在 {$contentLocale} 与关联语言之间切换（若已配置）。
+- **信任折叠**: FAQ 或说明区可展开。
+
+# Code Quality & Constraints
+- **Self-Contained**: Mock 数据内置，不依赖需 API Key 的外部后端。
+- **Responsiveness**: Desktop / Mobile 完整适配。
+- **No Placeholders**: 禁止 Lorem Ipsum 与 TODO；文案真实可用。
+- **Icons**: 使用统一图标集，风格一致。
+- **Language**: 访客默认文案必须使用 {$contentLocale}；关联语言：{$relatedText}。
+MD;
     }
 
     /**

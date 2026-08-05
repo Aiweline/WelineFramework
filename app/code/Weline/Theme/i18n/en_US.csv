@@ -38,6 +38,8 @@
 "Theme editor signed backend request bridge","Theme editor signed backend request bridge"
 同步后台亮色/暗色模式,同步后台亮色/暗色模式
 "light 或 dark","light 或 dark"
+按区域激活主题,按区域激活主题
+"frontend 或 backend","frontend 或 backend"
 "Theme 虚拟部件智能体","Theme virtual component agent"
 "用于生成、微调和验证 Weline Theme 的虚拟部件 JSON 与模板内容。","Used to generate, fine-tune, and validate the virtual component JSON and template content of the Weline Theme"
 "AI 查询入口不可用。","AI 查询入口不可用。"
@@ -118,6 +120,8 @@
 标签已存在,"Tag already exists"
 标签太短,"Tag too short"
 标签太长,"Tag too long"
+"w:slot wrapper=""section"" 必须配置 weline-code 属性（用于事件溯源）","w:slot wrapper=""section"" 必须配置 weline-code 属性（用于事件溯源）"
+"w:slot wrapper=""section"" 的 weline-code 不能为空","w:slot wrapper=""section"" 的 weline-code 不能为空"
 "w:slot 标签缺少必填属性 id","w:slot tag missing required attribute id"
 "w:slot 标签 id 格式无效: ""%{id}""，只允许字母开头，包含字母、数字、下划线、连字符","w:slot tag id format invalid: ""%{id}"", must start with letter, contains letters, numbers, underscore, hyphen"
 "w:slot 标签 id 重复: ""%{id}""","w:slot tag id duplicate: ""%{id}"""
@@ -522,7 +526,12 @@
 "后台 Topbar Logo","Background Topbar Logo"
 "覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。","Override the Logo area in the backend top bar, which can be implemented by modules such as Weline_Backend to read logo_dark/logo_light/logo_sm from their own configuration. If not implemented, the Admin default static Logo will be used."
 站点,站点
+"主题布局迁移失败（bestsellers 侧栏归位）：%{1}","主题布局迁移失败（bestsellers 侧栏归位）：%{1}"
+"默认主题区域激活回填失败：主题 #%{1} 在探测后无法重新加载","默认主题区域激活回填失败：主题 #%{1} 在探测后无法重新加载"
+默认主题区域激活回填失败：%{1},默认主题区域激活回填失败：%{1}
 主题异常：,"Theme exception:"
+"Theme ResourceChange Observer 只接受 v1 契约","Theme ResourceChange Observer 只接受 v1 契约"
+"Theme 资源变更缓存刷新未全部成功","Theme 资源变更缓存刷新未全部成功"
 "LayoutAssetsGenerator: 开始执行","LayoutAssetsGenerator: Start execution"
 "LayoutAssetsGenerator: eventData不是DataObject实例，跳过处理","LayoutAssetsGenerator: eventData is not a DataObject instance, skip processing"
 "LayoutAssetsGenerator: layoutType为空，跳过处理","LayoutAssetsGenerator: layoutType is empty, skip processing"
@@ -695,9 +704,9 @@ Default,Default
 已释放编辑锁定,"Edit lock released"
 释放锁定失败,"Failed to release lock"
 主题管理,"Theme management"
-"主题不支持 %{1} 区域","Theme does not support the %{1} area"
 主题激活成功,"Theme activated successfully"
-激活失败：%{1},"Activation failed: %{1}"
+激活失败,"Activation failed"
+"主题不支持 %{1} 区域","Theme does not support the %{1} area"
 预览图生成成功,"Preview image generated successfully"
 预览图生成失败,"Preview image generation failed"
 生成预览图失败：%{1},"Generation preview image failed: %{1}"
@@ -844,68 +853,6 @@ Dashboard,Dashboard
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-购物车是空的,"Cart is empty"
-您的购物车是空的,"Your shopping cart is empty"
-继续购物,"Continue Shopping"
-Theme,Theme
-Home,Home
-Products,Products
-Solutions,Solutions
-Contact,Contact
-Support,Support
-"Help Center","Help Center"
-Orders,Orders
-Returns,Returns
-FAQ,FAQ
-Policies,Policies
-Privacy,Privacy
-Terms,Terms
-Cookie,Cookie
-Disclaimer,Disclaimer
-WeChat,WeChat
-Douyin,Douyin
-YouTube,YouTube
-Instagram,Instagram
-"A clean default theme surface for modules, real data hooks, and visual composition.","A clean default theme surface for modules, real data hooks, and visual composition."
-"Get updates","Get updates"
-"Email address","Email address"
-Subscribe,Subscribe
-"Back to top","Back to top"
-"Weline Framework","Weline Framework"
-Weline,Weline
-Docs,Docs
-"Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
-Search...,Search...
-Search,Search
-Account,Account
-Cart,Cart
-"Toggle navigation","Toggle navigation"
-指标区,指标区
-只放关键数值、KPI、状态数字。,只放关键数值、KPI、状态数字。
-"最多 4 个","最多 4 个"
-"拖入 KPI / 统计数字部件","拖入 KPI / 统计数字部件"
-主分析区,主分析区
-用于趋势图、核心图表和主要观察。,用于趋势图、核心图表和主要观察。
-"拖入图表 / 趋势部件","拖入图表 / 趋势部件"
-侧栏洞察,侧栏洞察
-放状态、短列表、异常提醒。,放状态、短列表、异常提醒。
-"拖入状态 / 列表部件","拖入状态 / 列表部件"
-明细区,明细区
-放表格、排行和可展开列表。,放表格、排行和可展开列表。
-默认明细,默认明细
-视图,视图
-默认概览,默认概览
-系统共享视图,系统共享视图
-布局,Layout
-"4 个固定区域","4 个固定区域"
-指标、分析、侧栏、明细,指标、分析、侧栏、明细
-部件,Component
-后台专用,后台专用
-由后台统计部件提供,由后台统计部件提供
-"Weline Admin","Weline Admin"
-"Weline Admin 管理面板","Weline Admin Management Panel"
-"Weline Framework - 后台管理系统","Weline Framework - Backend Management System"
-"Weline, Framework, Admin, PHP","Weline, Framework, Admin, PHP"
 卡片内容,卡片内容
 拖入表单、表格、文本或按钮,拖入表单、表格、文本或按钮
 卡片底部,"Card Bottom"
@@ -963,6 +910,7 @@ Cart,Cart
 订单提交成功！,"Order submitted successfully!"
 订单号：,"Order number:"
 查看订单,"View Orders"
+继续购物,"Continue Shopping"
 拖拽部件或容器到此处,"Drag a component or container here"
 "空白布局不会渲染 header、footer 或面包屑","空白布局不会渲染 header、footer 或面包屑"
 支持富文本、Banner、图片、视频等部件,"Supports rich text, banners, images, video, and other components"
@@ -1072,7 +1020,7 @@ Product,Product
 配送方式,"Shipping method"
 支付与订单确认,支付与订单确认
 订单摘要,订单摘要
-"摘要 slot，可由结账模块写入真实金额、优惠和配送信息。","摘要 slot，可由结账模块写入真实金额、优惠和配送信息。"
+"摘要 slot，可由结账模块写入真实商品行与金额。","摘要 slot，可由结账模块写入真实商品行与金额。"
 商品,Product
 配送,配送
 合计,合计
@@ -1094,6 +1042,8 @@ Product,Product
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
 "分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
 "推荐产品区域 - 拖拽推荐部件到此处","Recommended product area - Drag recommended widgets here"
+购物车是空的,"Cart is empty"
+您的购物车是空的,"Your shopping cart is empty"
 登录页工具,"Login page tools"
 "这里预留账户导航 slot，可由会员模块接入真实菜单。","这里预留账户导航 slot，可由会员模块接入真实菜单。"
 我的订单,"My orders"
@@ -1351,6 +1301,37 @@ Product,Product
 网络错误,"Network error"
 无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
 分页导航,"Pagination navigation"
+了解我们,了解我们
+职业机会,职业机会
+新闻中心,"News Center"
+投资者关系,投资者关系
+设备与服务,设备与服务
+赚钱,赚钱
+在网站上销售,在网站上销售
+销售您的应用,销售您的应用
+成为合作伙伴,成为合作伙伴
+广告,Advertisement
+自助出版,自助出版
+付款产品,付款产品
+商店卡,商店卡
+购物积分,购物积分
+货币转换器,货币转换器
+礼品卡,礼品卡
+需要帮助？,需要帮助？
+COVID-19和网站,COVID-19和网站
+您的账户,您的账户
+配送率和政策,配送率和政策
+退货和换货,退货和换货
+管理您的内容和设备,管理您的内容和设备
+帮助,帮助
+法律与政策,法律与政策
+微信公众号,微信公众号
+微博,微博
+抖音,抖音
+B站,B站
+小红书,小红书
+关注我们,"Follow Us"
+返回顶部,返回顶部
 NEW,NEW
 SALE,SALE
 缺货,"Out of Stock"
@@ -1358,14 +1339,170 @@ SALE,SALE
 加入购物车,"Add to Cart"
 暂时缺货,"Temporarily out of stock"
 已添加,Added
+"Weline Framework","Weline Framework"
 示例分类,"Example Category"
 当前页面,"Current page"
+跳转到主要内容,跳转到主要内容
 网站Logo,"Site Logo"
+选择配送地址,选择配送地址
+配送至,配送至
+中国大陆,中国大陆
 搜索商品...,"Search products..."
 搜索,Search
-切换语言,"Change language"
+搜索建议,搜索建议
+展开搜索,展开搜索
+我的,我的
+我的菜单,我的菜单
+账户及心愿单,账户及心愿单
+账户,Account
+账户设置,账户设置
+退出登录,"Sign out"
 语言,Language
+简体中文,简体中文
+繁體中文,繁體中文
+货币,货币
+切换语言,"Change language"
+ZH,ZH
+语言选项,语言选项
+English,English
 切换货币,"Change currency"
+CNY,CNY
+货币选项,货币选项
+账户菜单,账户菜单
+"您好, 登录","您好, 登录"
+退货,退货
+与我的订单,与我的订单
+打开购物车,打开购物车
+关闭购物车,关闭购物车
+总计,总计
+查看购物车,"View Shopping Cart"
+去结算,"Proceed to Checkout"
+打开所有类别菜单,打开所有类别菜单
+关闭菜单,关闭菜单
+Weline,Weline
+电子产品,Electronics
+手机通讯,手机通讯
+智能手机,智能手机
+功能手机,功能手机
+5G手机,5G手机
+折叠手机,折叠手机
+手机壳,手机壳
+屏幕保护膜,屏幕保护膜
+充电器,Chargers
+数据线,Cables
+移动电源,移动电源
+手机耳机,手机耳机
+电脑办公,电脑办公
+笔记本,笔记本
+游戏本,游戏本
+超极本,超极本
+台式机,台式机
+一体机,一体机
+平板电脑,平板电脑
+显示器,Monitors
+键盘,Keyboards
+鼠标,Mice
+摄像头,摄像头
+存储设备,存储设备
+智能设备,智能设备
+智能手表,Smartwatches
+运动手环,运动手环
+智能音箱,智能音箱
+智能照明,智能照明
+智能门锁,智能门锁
+智能摄像头,智能摄像头
+智能家居套装,智能家居套装
+可穿戴设备,可穿戴设备
+影音娱乐,影音娱乐
+无线耳机,无线耳机
+有线耳机,有线耳机
+入耳式耳机,入耳式耳机
+蓝牙音响,蓝牙音响
+Soundbar,Soundbar
+单反相机,单反相机
+微单相机,微单相机
+运动相机,运动相机
+游戏主机,游戏主机
+游戏配件,游戏配件
+服装服饰,服装服饰
+男装,"Men's clothing"
+衬衫,衬衫
+T恤,T恤
+Polo衫,Polo衫
+长裤,长裤
+短裤,短裤
+外套,外套
+毛衣,毛衣
+皮鞋,皮鞋
+运动鞋,运动鞋
+皮带,皮带
+手表,手表
+包袋,包袋
+女装,"Women's Clothing"
+连衣裙,连衣裙
+上装,上装
+下装,下装
+半身裙,半身裙
+大衣,大衣
+高跟鞋,高跟鞋
+平底鞋,平底鞋
+靴子,靴子
+手提包,手提包
+斜挎包,斜挎包
+首饰,首饰
+童装,"Children's Clothing"
+男童装,男童装
+女童装,女童装
+婴儿装,婴儿装
+童鞋,童鞋
+童装配饰,童装配饰
+校服,校服
+泳装,泳装
+运动服饰,运动服饰
+运动装,运动装
+跑步装备,跑步装备
+健身服,健身服
+跑鞋,跑鞋
+篮球鞋,篮球鞋
+户外装备,户外装备
+露营装备,露营装备
+家居用品,家居用品
+家具,Furniture
+沙发,沙发
+沙发床,沙发床
+餐桌,餐桌
+茶几,茶几
+椅子,椅子
+办公椅,办公椅
+床具,床具
+衣柜,衣柜
+书柜,书柜
+家纺,"Home Textiles"
+床上用品,床上用品
+床单被套,床单被套
+枕头,枕头
+被子,被子
+窗帘,窗帘
+毛巾,毛巾
+地毯,地毯
+靠垫,靠垫
+厨房用品,厨房用品
+锅具,锅具
+刀具,刀具
+餐具,餐具
+杯具,杯具
+收纳,Organize
+厨房工具,厨房工具
+小家电,小家电
+装饰用品,装饰用品
+墙饰,墙饰
+花瓶,花瓶
+灯具,灯具
+镜子,镜子
+绿植,绿植
+运动户外,"Sports & Outdoors"
+图书音像,图书音像
+食品饮料,食品饮料
 导航菜单,"Navigation menu"
 我的账户,"My Account"
 我的收藏,"My Favorites"
@@ -1378,9 +1515,6 @@ SALE,SALE
 去购物,"Go Shopping"
 删除,Delete
 小计,Subtotal
-查看购物车,"View Shopping Cart"
-去结算,"Proceed to Checkout"
-关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
 热门标签,"Popular Tags"
@@ -1388,20 +1522,13 @@ SALE,SALE
 电脑,Computer
 耳机,Headphones
 相机,Camera
-智能手表,Smartwatches
 平板,Tablet
-充电器,Chargers
-数据线,Cables
 保护壳,"Protective Case"
 蓝牙,Bluetooth
 音箱,Speaker
-键盘,Keyboards
-鼠标,Mice
-显示器,Monitors
 路由器,Router
 夏季促销,"Summer promotion"
 新品上市,"New Product Launch"
-广告,Advertisement
 订阅我们,"Subscribe to Us"
 订阅获取最新优惠信息,"Subscribe for the Latest Deals"
 订阅,Subscribe
@@ -1412,7 +1539,6 @@ SALE,SALE
 支付方式,"Payment method"
 公司简介,"Company Profile"
 加入我们,"Join Us"
-新闻中心,"News Center"
 帮助中心,"Help center"
 配送说明,"Shipping instructions"
 退换政策,"Return and Exchange Policy"
@@ -1426,19 +1552,11 @@ Cookie政策,"Cookie Policy"
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 视频加载中...,"Video loading..."
 商品分类,"Product Category"
-电子产品,Electronics
 服装鞋帽,"Clothing, Shoes & Hats"
-男装,"Men's clothing"
-女装,"Women's Clothing"
-童装,"Children's Clothing"
 家居生活,"Home & Living"
-家具,Furniture
-家纺,"Home Textiles"
-收纳,Organize
 美妆个护,"Beauty & Personal Care"
 食品生鲜,"Food & Fresh Produce"
 母婴用品,"Baby & Maternity Products"
-运动户外,"Sports & Outdoors"
 图书文具,"Books and stationery"
 件商品,"items of goods"
 如何下单购买？,"How do I place an order?"
@@ -1546,7 +1664,6 @@ VIP会员,"VIP Member"
 示例商品名称,"Example Product Name"
 欢迎光临！免费配送满,"Welcome! Free shipping on orders over"
 订单跟踪,"Order Tracking"
-账户,Account
 收藏,Favorite
 菜单,Menu
 热门分类,"Popular Categories"
@@ -1557,7 +1674,6 @@ VIP会员,"VIP Member"
 热卖,"Hot selling."
 新品,"New Product"
 促销活动,"Promotional Campaign"
-退出登录,"Sign out"
 欢迎回来,"Welcome back"
 注册,Register
 2026春季新品上市,"2026 spring new product launch"
@@ -1572,10 +1688,36 @@ VIP会员,"VIP Member"
 第%d张,"Slide %d"
 限时特惠！全场满300减50,"Limited Time Offer! Spend $300 and save $50 on your entire order"
 打印,Print
+指标区,指标区
+只放关键数值、KPI、状态数字。,只放关键数值、KPI、状态数字。
+"最多 4 个","最多 4 个"
+"拖入 KPI / 统计数字部件","拖入 KPI / 统计数字部件"
+主分析区,主分析区
+用于趋势图、核心图表和主要观察。,用于趋势图、核心图表和主要观察。
+"拖入图表 / 趋势部件","拖入图表 / 趋势部件"
+侧栏洞察,侧栏洞察
+放状态、短列表、异常提醒。,放状态、短列表、异常提醒。
+"拖入状态 / 列表部件","拖入状态 / 列表部件"
+明细区,明细区
+放表格、排行和可展开列表。,放表格、排行和可展开列表。
+默认明细,默认明细
+视图,视图
+默认概览,默认概览
+系统共享视图,系统共享视图
+布局,Layout
+"4 个固定区域","4 个固定区域"
+指标、分析、侧栏、明细,指标、分析、侧栏、明细
+部件,Component
+后台专用,后台专用
+由后台统计部件提供,由后台统计部件提供
 发送通知失败,"Failed to send notification"
 确认操作,"Confirm Action"
 确定,Confirm
 输入,Input
+"Weline Admin","Weline Admin"
+"Weline Admin 管理面板","Weline Admin Management Panel"
+"Weline Framework - 后台管理系统","Weline Framework - Backend Management System"
+"Weline, Framework, Admin, PHP","Weline, Framework, Admin, PHP"
 管理后台,"Admin Panel"
 后台Logo,"Background Logo"
 保存,Save
@@ -1880,10 +2022,10 @@ AI创建虚拟主题,AI创建虚拟主题
 准备生成...,"Preparing to generate..."
 取消任务,取消任务
 正在生成预览图，请稍候...,"Generating preview image, please wait..."
-"可恢复任务 API 不可用。","可恢复任务 API 不可用。"
 后台任务启动响应无效。,后台任务启动响应无效。
-虚拟主题任务失败,虚拟主题任务失败
 用户明确取消,用户明确取消
+虚拟主题任务已断开,虚拟主题任务已断开
+虚拟主题任务失败,虚拟主题任务失败
 暂无可选技能,暂无可选技能
 正在创建,正在创建
 AI目录加载失败,AI目录加载失败
@@ -1901,29 +2043,22 @@ AI目录加载失败,AI目录加载失败
 未找到预览图任务结果,未找到预览图任务结果
 预览图生成已取消,预览图生成已取消
 客户端失联超时，预览图任务已停止,客户端失联超时，预览图任务已停止
-预览图任务无法安全恢复,预览图任务无法安全恢复
-预览图任务事件达到资源上限,预览图任务事件达到资源上限
-连接暂时中断，正在重连…,连接暂时中断，正在重连…
 无法启动预览图任务,无法启动预览图任务
 自动生成中,Generating
 前台,Frontend
-自动生成完成,"Generation complete"
 自动生成失败,"Generation failed"
 正在批量生成预览图，请稍候...,"Batch generating preview images, please wait..."
 批量生成已完成，但存在失败项,"Batch generation completed, but there are failures"
 批量生成完成,"Batch generation completed"
-已恢复预览图任务订阅,已恢复预览图任务订阅
-批量预览图生成失败,批量预览图生成失败
+自动生成完成,"Generation complete"
 批量预览图生成已取消,批量预览图生成已取消
 客户端失联超时，批量预览图任务已停止,客户端失联超时，批量预览图任务已停止
-批量预览图任务无法安全恢复,批量预览图任务无法安全恢复
-批量预览图任务事件达到资源上限,批量预览图任务事件达到资源上限
+批量预览图生成失败,批量预览图生成失败
 无法启动批量预览图任务,无法启动批量预览图任务
 用户取消批量预览图任务,用户取消批量预览图任务
 取消任务失败,取消任务失败
 用户取消预览图任务,用户取消预览图任务
 "主题已设置为 %{1} 主题","Theme has been set to %{1} theme"
-激活失败,"Activation failed"
 生成,Generate
 预览图,"Preview image"
 中...,middle...
@@ -1945,6 +2080,7 @@ AI目录加载失败,AI目录加载失败
 "主题 %{1} 的 %{2} 页面已成功发布","The %{2} page of topic %{1} was successfully published"
 "主题 %{1} 的 %{2} 页面发布失败：%{3}","The %{2} page of topic %{1} failed to publish: %{3}"
 "CDN 缓存刷新失败（域名：%{1}）：%{2}","CDN cache refresh failed (domain name: %{1}): %{2}"
+激活失败：%{1},"Activation failed: %{1}"
 目标类型不能为空,目标类型不能为空
 全局,全局
 分类商品默认,分类商品默认
@@ -2378,5 +2514,42 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 编译less静态资源！,"Compile Less Static Resources!"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
-安心购物，快捷配送。,"Shop with confidence. Fast delivery."
-展开搜索,"Open search"
+"摘要 slot，可由结账模块写入真实金额、优惠和配送信息。","摘要 slot，可由结账模块写入真实金额、优惠和配送信息。"
+Theme,Theme
+Home,Home
+Products,Products
+Solutions,Solutions
+Contact,Contact
+Support,Support
+"Help Center","Help Center"
+Orders,Orders
+Returns,Returns
+FAQ,FAQ
+Policies,Policies
+Privacy,Privacy
+Terms,Terms
+Cookie,Cookie
+Disclaimer,Disclaimer
+WeChat,WeChat
+Douyin,Douyin
+YouTube,YouTube
+Instagram,Instagram
+"A clean default theme surface for modules, real data hooks, and visual composition.","A clean default theme surface for modules, real data hooks, and visual composition."
+"Get updates","Get updates"
+"Email address","Email address"
+Subscribe,Subscribe
+"Back to top","Back to top"
+Docs,Docs
+"Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
+Search...,Search...
+Search,Search
+Account,Account
+Cart,Cart
+"Toggle navigation","Toggle navigation"
+"可恢复任务 API 不可用。","可恢复任务 API 不可用。"
+预览图任务无法安全恢复,预览图任务无法安全恢复
+预览图任务事件达到资源上限,预览图任务事件达到资源上限
+连接暂时中断，正在重连…,连接暂时中断，正在重连…
+已恢复预览图任务订阅,已恢复预览图任务订阅
+批量预览图任务无法安全恢复,批量预览图任务无法安全恢复
+批量预览图任务事件达到资源上限,批量预览图任务事件达到资源上限

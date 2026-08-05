@@ -17,6 +17,7 @@ use Weline\Ai\Service\Provider\AnthropicProvider;
 use Weline\Ai\Service\Provider\GeminiProvider;
 use Weline\Ai\Service\Provider\VectorEngineProvider;
 use Weline\Framework\App\Env;
+use Weline\Framework\Database\Connection\Api\Sql\WriteIntentQueryInterface;
 
 /**
  * Provider Account Service
@@ -27,6 +28,10 @@ use Weline\Framework\App\Env;
  */
 class AccountService
 {
+    private const BALANCE_PENDING = 0;
+    private const BALANCE_APPLIED = 1;
+    private const BALANCE_CLAIMED = 2;
+
     private string $lastProviderInstanceError = '';
 
     /**
@@ -34,12 +39,15 @@ class AccountService
      */
     private ObjectManager $objectManager;
 
+    private UsageAuditOutbox $usageAuditOutbox;
+
     /**
      * Constructor
      */
-    public function __construct()
+    public function __construct(?UsageAuditOutbox $usageAuditOutbox = null)
     {
         $this->objectManager = ObjectManager::getInstance();
+        $this->usageAuditOutbox = $usageAuditOutbox ?? new UsageAuditOutbox();
     }
 
     /**
@@ -458,43 +466,571 @@ class AccountService
 
     public function recordUsage(Account $account, AiModel $model, array $usage, array $context = []): UsageRecord
     {
-        /** @var UsageRecord $record */
-        $record = $this->objectManager->make(UsageRecord::class);
-        
-        // 计算费用
+        return $this->persistUsagePayload($this->buildUsagePayload($account, $model, $usage, $context));
+    }
+
+    /**
+     * Persist usage without allowing an audit-store outage to invalidate a
+     * provider response that has already completed.
+     *
+     * @return bool true when the database is current, false when a durable
+     *              outbox event was created for Scheduler recovery.
+     */
+    public function recordUsageReliably(
+        Account $account,
+        AiModel $model,
+        array $usage,
+        array $context = [],
+    ): bool {
+        try {
+            $payload = $this->buildUsagePayload($account, $model, $usage, $context);
+        } catch (\Throwable $payloadFailure) {
+            $requestId = trim((string)($context['request_id'] ?? ''));
+            $signal = $this->auditFailureSignal($payloadFailure);
+            Env::log(
+                'ai_usage_audit_emergency.log',
+                sprintf(
+                    '[payload_failed] request_sha256=%s class=%s category=%s message_sha256=%s',
+                    hash('sha256', $requestId),
+                    $signal['class'],
+                    $signal['category'],
+                    $signal['message_sha256'],
+                ),
+                'CRITICAL',
+                true,
+                true,
+                0,
+            );
+
+            return false;
+        }
+        try {
+            $this->persistUsagePayload($payload);
+            $this->usageAuditOutbox->acknowledge($payload);
+
+            return true;
+        } catch (\Throwable $databaseFailure) {
+            $databaseSignal = $this->auditFailureSignal($databaseFailure);
+            try {
+                $path = $this->usageAuditOutbox->defer($payload, $databaseFailure);
+                Env::log(
+                    'ai_usage_audit_recovery.log',
+                    sprintf(
+                        '[deferred] request_sha256=%s outbox=%s class=%s category=%s message_sha256=%s',
+                        hash('sha256', (string)$payload[UsageRecord::schema_fields_REQUEST_ID]),
+                        basename($path),
+                        $databaseSignal['class'],
+                        $databaseSignal['category'],
+                        $databaseSignal['message_sha256'],
+                    ),
+                    'ERROR',
+                    true,
+                    true,
+                    0,
+                );
+            } catch (\Throwable $outboxFailure) {
+                // Preserve the successful provider result. This independent
+                // append-only log is the last-resort audit signal when both
+                // SQLite and the structured outbox path are unavailable.
+                $outboxSignal = $this->auditFailureSignal($outboxFailure);
+                Env::log(
+                    'ai_usage_audit_emergency.log',
+                    sprintf(
+                        '[outbox_failed] request_sha256=%s db_class=%s db_category=%s db_message_sha256=%s'
+                        . ' outbox_class=%s outbox_category=%s outbox_message_sha256=%s',
+                        hash('sha256', (string)$payload[UsageRecord::schema_fields_REQUEST_ID]),
+                        $databaseSignal['class'],
+                        $databaseSignal['category'],
+                        $databaseSignal['message_sha256'],
+                        $outboxSignal['class'],
+                        $outboxSignal['category'],
+                        $outboxSignal['message_sha256'],
+                    ),
+                    'CRITICAL',
+                    true,
+                    true,
+                    0,
+                );
+            }
+
+            return false;
+        }
+    }
+
+    /**
+     * @return array{recovered:int,failed:int,dead:int,skipped:int}
+     */
+    public function recoverDeferredUsage(int $limit = 50): array
+    {
+        $result = $this->usageAuditOutbox->recover(
+            function (array $payload): void {
+                $this->persistUsagePayload($payload);
+            },
+            $limit,
+        );
+        if ($result['recovered'] > 0 || $result['failed'] > 0 || $result['dead'] > 0) {
+            Env::log(
+                'ai_usage_audit_recovery.log',
+                sprintf(
+                    '[recovery] recovered=%d failed=%d dead=%d skipped=%d',
+                    $result['recovered'],
+                    $result['failed'],
+                    $result['dead'],
+                    $result['skipped'],
+                ),
+                $result['failed'] > 0 ? 'ERROR' : 'INFO',
+                true,
+                true,
+                0,
+            );
+        }
+
+        return $result;
+    }
+
+    /** @return array<string,mixed> */
+    private function buildUsagePayload(
+        Account $account,
+        AiModel $model,
+        array $usage,
+        array $context,
+    ): array {
+        $promptTokens = max(0, (int)($usage['prompt_tokens'] ?? 0));
+        $completionTokens = max(0, (int)($usage['completion_tokens'] ?? 0));
+        $totalTokens = max(
+            $promptTokens + $completionTokens,
+            (int)($usage['total_tokens'] ?? 0),
+        );
         $inputPrice = (float)$model->getData(AiModel::schema_fields_TOKEN_PRICE_INPUT);
         $outputPrice = (float)$model->getData(AiModel::schema_fields_TOKEN_PRICE_OUTPUT);
-        
-        $record->setData([
+        $inputCost = ($promptTokens / 1000) * $inputPrice;
+        $outputCost = ($completionTokens / 1000) * $outputPrice;
+        $status = (string)($context['status'] ?? 'success');
+        if (!in_array($status, ['success', 'failed'], true)) {
+            throw new \InvalidArgumentException('AI provider usage status is invalid.');
+        }
+
+        return [
             UsageRecord::schema_fields_ACCOUNT_ID => $account->getId(),
             UsageRecord::schema_fields_PROVIDER_CODE => $account->getData(Account::schema_fields_PROVIDER_CODE),
             UsageRecord::schema_fields_MODEL_CODE => $model->getData(AiModel::schema_fields_MODEL_CODE),
             UsageRecord::schema_fields_MODEL_NAME => $model->getData(AiModel::schema_fields_NAME),
-            UsageRecord::schema_fields_REQUEST_ID => $context['request_id'] ?? uniqid('req_'),
+            UsageRecord::schema_fields_REQUEST_ID => $this->normalizeUsageRequestId($context['request_id'] ?? null),
             UsageRecord::schema_fields_USER_ID => $context['user_id'] ?? null,
             UsageRecord::schema_fields_USER_NAME => $context['user_name'] ?? null,
             UsageRecord::schema_fields_REQUEST_TYPE => $context['request_type'] ?? 'chat',
-            UsageRecord::schema_fields_PROMPT_TOKENS => $usage['prompt_tokens'] ?? 0,
-            UsageRecord::schema_fields_COMPLETION_TOKENS => $usage['completion_tokens'] ?? 0,
-            UsageRecord::schema_fields_TOTAL_TOKENS => $usage['total_tokens'] ?? 0,
+            UsageRecord::schema_fields_PROMPT_TOKENS => $promptTokens,
+            UsageRecord::schema_fields_COMPLETION_TOKENS => $completionTokens,
+            UsageRecord::schema_fields_TOTAL_TOKENS => $totalTokens,
+            UsageRecord::schema_fields_INPUT_COST => $inputCost,
+            UsageRecord::schema_fields_OUTPUT_COST => $outputCost,
+            UsageRecord::schema_fields_TOTAL_COST => $inputCost + $outputCost,
             UsageRecord::schema_fields_CURRENCY => $account->getData(Account::schema_fields_CURRENCY),
             UsageRecord::schema_fields_REQUEST_TIME => $context['request_time'] ?? null,
-            UsageRecord::schema_fields_STATUS => $context['status'] ?? 'success',
-            UsageRecord::schema_fields_ERROR_MESSAGE => $context['error_message'] ?? null,
-            UsageRecord::schema_fields_CREATED_AT => time()
-        ]);
-        
-        // 计算费用
-        $record->calculateCost($inputPrice, $outputPrice);
-        $record->save();
-        
-        // 更新账户余额
-        if ($record->getData(UsageRecord::schema_fields_STATUS) === 'success') {
-            $account->updateBalance((float)$record->getData(UsageRecord::schema_fields_TOTAL_COST));
-            $account->save();
+            UsageRecord::schema_fields_STATUS => $status,
+            UsageRecord::schema_fields_ERROR_MESSAGE => $status === 'failed' ? 'provider_failed' : null,
+            UsageRecord::schema_fields_CREATED_AT => (int)($context['created_at'] ?? time()),
+        ];
+    }
+
+    protected function persistUsagePayload(array $payload): UsageRecord
+    {
+        $requestId = $this->normalizeUsageRequestId(
+            $payload[UsageRecord::schema_fields_REQUEST_ID] ?? null,
+        );
+        $payload[UsageRecord::schema_fields_REQUEST_ID] = $requestId;
+        $payload[UsageRecord::schema_fields_REQUEST_KEY] = hash('sha256', $requestId);
+        $payload[UsageRecord::schema_fields_REQUEST_IDENTITY_STATUS] =
+            UsageRecord::REQUEST_IDENTITY_CANONICAL;
+        $existing = $this->findUsageRecordByRequestId($requestId);
+        if ($existing !== null) {
+            $this->assertExistingUsageMatches($existing, $payload);
+
+            return $this->reconcileExistingUsageRecord($existing, $payload);
         }
-        
+
+        try {
+            return $this->insertUsageRecordAndDebit($payload);
+        } catch (\Throwable $failure) {
+            // A concurrent writer may have won the UNIQUE request_key race.
+            // Re-read only for reconciliation; preserve the original busy or
+            // storage failure when no canonical row exists.
+            try {
+                $existing = $this->findUsageRecordByRequestId($requestId);
+            } catch (\Throwable) {
+                $existing = null;
+            }
+            if ($existing === null) {
+                throw $failure;
+            }
+            $this->assertExistingUsageMatches($existing, $payload);
+
+            return $this->reconcileExistingUsageRecord($existing, $payload);
+        }
+    }
+
+    protected function findUsageRecordByRequestId(string $requestId): ?UsageRecord
+    {
+        /** @var UsageRecord $record */
+        $record = $this->objectManager->make(UsageRecord::class);
+        $record = $record->clear()
+            ->where(UsageRecord::schema_fields_REQUEST_KEY, hash('sha256', $requestId))
+            ->find()
+            ->fetch();
+
+        if (!$record->getId()) {
+            return null;
+        }
+        $this->ensureUsageIdentityIsReplayable($record);
+
         return $record;
+    }
+
+    protected function ensureUsageIdentityIsReplayable(UsageRecord $record): void
+    {
+        if (
+            (string)$record->getData(UsageRecord::schema_fields_REQUEST_IDENTITY_STATUS)
+            === UsageRecord::REQUEST_IDENTITY_LEGACY_CONFLICT
+        ) {
+            throw new \RuntimeException(
+                'AI provider usage request_id has a quarantined historical conflict.',
+            );
+        }
+    }
+
+    protected function insertUsageRecordAndDebit(array $payload): UsageRecord
+    {
+        /** @var UsageRecord $transactionModel */
+        $transactionModel = $this->objectManager->make(UsageRecord::class);
+        $transactionQuery = $transactionModel->getQuery(false);
+        if ($transactionQuery instanceof WriteIntentQueryInterface) {
+            $transactionQuery->beginWriteTransaction();
+        } else {
+            $transactionQuery->beginTransaction();
+        }
+
+        try {
+            $requestId = (string)$payload[UsageRecord::schema_fields_REQUEST_ID];
+            $existing = $this->findUsageRecordByRequestId($requestId);
+            if ($existing !== null) {
+                $this->assertExistingUsageMatches($existing, $payload);
+                $settled = $this->applyBalanceWithinTransaction($existing, $payload);
+                $transactionQuery->commit();
+
+                return $settled
+                    ? $existing
+                    : $this->requireSettledUsageRecord($requestId);
+            }
+
+            /** @var UsageRecord $record */
+            $record = $this->objectManager->make(UsageRecord::class);
+            $record->setData($payload);
+            $record->setData(
+                UsageRecord::schema_fields_BALANCE_APPLIED,
+                ($payload[UsageRecord::schema_fields_STATUS] ?? '') === 'success'
+                    ? self::BALANCE_PENDING
+                    : self::BALANCE_APPLIED,
+            );
+            $record->save();
+            $settled = $this->applyBalanceWithinTransaction($record, $payload);
+            $transactionQuery->commit();
+
+            return $settled
+                ? $record
+                : $this->requireSettledUsageRecord($requestId);
+        } catch (\Throwable $failure) {
+            try {
+                $transactionQuery->rollBack();
+            } catch (\Throwable) {
+                // Preserve the original persistence failure.
+            }
+            throw $failure;
+        }
+    }
+
+    protected function reconcileExistingUsageRecord(UsageRecord $record, array $payload): UsageRecord
+    {
+        if (
+            ($payload[UsageRecord::schema_fields_STATUS] ?? '') !== 'success'
+            || (int)$record->getData(UsageRecord::schema_fields_BALANCE_APPLIED) === self::BALANCE_APPLIED
+        ) {
+            return $record;
+        }
+
+        /** @var UsageRecord $transactionModel */
+        $transactionModel = $this->objectManager->make(UsageRecord::class);
+        $transactionQuery = $transactionModel->getQuery(false);
+        if ($transactionQuery instanceof WriteIntentQueryInterface) {
+            $transactionQuery->beginWriteTransaction();
+        } else {
+            $transactionQuery->beginTransaction();
+        }
+        $fresh = null;
+        $settled = false;
+        try {
+            $fresh = $this->findUsageRecordByRequestId(
+                (string)$payload[UsageRecord::schema_fields_REQUEST_ID],
+            );
+            if ($fresh === null) {
+                throw new \RuntimeException('AI provider usage record disappeared during reconciliation.');
+            }
+            $this->assertExistingUsageMatches($fresh, $payload);
+            $settled = $this->applyBalanceWithinTransaction($fresh, $payload);
+            $transactionQuery->commit();
+        } catch (\Throwable $failure) {
+            try {
+                $transactionQuery->rollBack();
+            } catch (\Throwable) {
+                // Preserve the original reconciliation failure.
+            }
+            throw $failure;
+        }
+        if (!$settled) {
+            return $this->requireSettledUsageRecord(
+                (string)$payload[UsageRecord::schema_fields_REQUEST_ID],
+            );
+        }
+
+        return $fresh;
+    }
+
+    protected function applyBalanceWithinTransaction(UsageRecord $record, array $payload): bool
+    {
+        if (($payload[UsageRecord::schema_fields_STATUS] ?? '') !== 'success') {
+            return true;
+        }
+        $balanceState = (int)$record->getData(UsageRecord::schema_fields_BALANCE_APPLIED);
+        if ($balanceState === self::BALANCE_APPLIED) {
+            return true;
+        }
+        if ($balanceState !== self::BALANCE_PENDING) {
+            throw new \RuntimeException('AI provider usage balance claim is incomplete.');
+        }
+        if (!$this->claimBalanceWithinTransaction($record)) {
+            return false;
+        }
+
+        if (!$this->atomicAccountBalanceDebitWithinTransaction(
+            (int)$payload[UsageRecord::schema_fields_ACCOUNT_ID],
+            (float)$payload[UsageRecord::schema_fields_TOTAL_COST],
+        )) {
+            throw new \RuntimeException('AI provider usage account is unavailable during balance debit.');
+        }
+        if (!$this->markBalanceAppliedWithinTransaction($record)) {
+            throw new \RuntimeException('AI provider usage balance claim finalization failed.');
+        }
+
+        return true;
+    }
+
+    protected function atomicAccountBalanceDebitWithinTransaction(int $accountId, float $amount): bool
+    {
+        if ($accountId < 1 || !is_finite($amount)) {
+            throw new \RuntimeException('AI provider usage account debit is invalid.');
+        }
+
+        /** @var Account $account */
+        $account = $this->objectManager->make(Account::class);
+        $accountQuery = $account->getQuery(false);
+        $accountQuery->where(Account::schema_fields_ID, $accountId);
+        if ($amount >= 0) {
+            $accountQuery
+                ->dec(Account::schema_fields_BALANCE, $amount)
+                ->inc(Account::schema_fields_TOTAL_SPENT, $amount);
+        } else {
+            // Match Account::updateBalance() for negative adjustments without
+            // generating invalid "--N" SQL in Query::dec().
+            $absoluteAmount = abs($amount);
+            $accountQuery
+                ->inc(Account::schema_fields_BALANCE, $absoluteAmount)
+                ->dec(Account::schema_fields_TOTAL_SPENT, $absoluteAmount);
+        }
+        $accountQuery->update();
+        $statement = $accountQuery->PDOStatement ?? null;
+        $bindings = $accountQuery->bound_values ?? null;
+        if (!$statement instanceof \PDOStatement || !is_array($bindings)) {
+            $accountQuery->clearQuery();
+            throw new \RuntimeException('AI provider usage account debit statement is unavailable.');
+        }
+
+        try {
+            if (!$statement->execute($bindings)) {
+                throw new \RuntimeException('AI provider usage account debit execution failed.');
+            }
+            $affectedRows = $statement->rowCount();
+            if ($affectedRows === 1) {
+                return true;
+            }
+            if ($affectedRows !== 0) {
+                throw new \RuntimeException('AI provider usage account debit affected an invalid row count.');
+            }
+        } finally {
+            $accountQuery->clearQuery();
+        }
+
+        // MySQL can report zero changed rows when DECIMAL storage rounds a
+        // sub-cent debit back to the same values. Distinguish that valid match
+        // from a missing account without reverting to a read/modify/write.
+        /** @var Account $existing */
+        $existing = $this->objectManager->make(Account::class);
+        $existing = $existing->clear()
+            ->where(Account::schema_fields_ID, $accountId)
+            ->find()
+            ->fetch();
+
+        return (int)$existing->getId() === $accountId;
+    }
+
+    protected function claimBalanceWithinTransaction(UsageRecord $record): bool
+    {
+        $id = (int)$record->getId();
+        $requestKey = (string)$record->getData(UsageRecord::schema_fields_REQUEST_KEY);
+        if ($id < 1 || preg_match('/^[a-f0-9]{64}$/', $requestKey) !== 1) {
+            throw new \RuntimeException('AI provider usage balance claim identity is invalid.');
+        }
+
+        $claimed = $this->atomicBalanceStateUpdate(
+            $record,
+            self::BALANCE_PENDING,
+            self::BALANCE_CLAIMED,
+        );
+        if ($claimed) {
+            $record->setData(UsageRecord::schema_fields_BALANCE_APPLIED, self::BALANCE_CLAIMED);
+        }
+
+        return $claimed;
+    }
+
+    protected function markBalanceAppliedWithinTransaction(UsageRecord $record): bool
+    {
+        $applied = $this->atomicBalanceStateUpdate(
+            $record,
+            self::BALANCE_CLAIMED,
+            self::BALANCE_APPLIED,
+        );
+        if ($applied) {
+            $record->setData(UsageRecord::schema_fields_BALANCE_APPLIED, self::BALANCE_APPLIED);
+        }
+
+        return $applied;
+    }
+
+    protected function atomicBalanceStateUpdate(
+        UsageRecord $record,
+        int $expectedState,
+        int $nextState,
+    ): bool {
+        /** @var UsageRecord $claim */
+        $claim = $this->objectManager->make(UsageRecord::class);
+        $claimQuery = $claim->getQuery(false);
+        $claimQuery
+            ->where(UsageRecord::schema_fields_ID, (int)$record->getId())
+            ->where(
+                UsageRecord::schema_fields_REQUEST_KEY,
+                (string)$record->getData(UsageRecord::schema_fields_REQUEST_KEY),
+            )
+            ->where(UsageRecord::schema_fields_BALANCE_APPLIED, $expectedState)
+            ->update([
+                UsageRecord::schema_fields_BALANCE_APPLIED => $nextState,
+            ]);
+        $statement = $claimQuery->PDOStatement ?? null;
+        $bindings = $claimQuery->bound_values ?? null;
+        if (!$statement instanceof \PDOStatement || !is_array($bindings)) {
+            $claimQuery->clearQuery();
+            throw new \RuntimeException('AI provider usage balance claim statement is unavailable.');
+        }
+
+        try {
+            if (!$statement->execute($bindings)) {
+                throw new \RuntimeException('AI provider usage balance claim execution failed.');
+            }
+
+            // Model::fetch() returns a model object and SQLite Query::fetch()
+            // collapses UPDATE's empty result set to false. The prepared PDO
+            // statement is the only portable exact ownership result here.
+            return $statement->rowCount() === 1;
+        } finally {
+            $claimQuery->clearQuery();
+        }
+    }
+
+    private function requireSettledUsageRecord(string $requestId): UsageRecord
+    {
+        $record = $this->findUsageRecordByRequestId($requestId);
+        if (
+            $record === null
+            || (int)$record->getData(UsageRecord::schema_fields_BALANCE_APPLIED) !== self::BALANCE_APPLIED
+        ) {
+            throw new \RuntimeException('AI provider usage balance claim is still active.');
+        }
+
+        return $record;
+    }
+
+    private function assertExistingUsageMatches(UsageRecord $record, array $payload): void
+    {
+        foreach ([
+            UsageRecord::schema_fields_ACCOUNT_ID,
+            UsageRecord::schema_fields_PROVIDER_CODE,
+            UsageRecord::schema_fields_MODEL_CODE,
+            UsageRecord::schema_fields_REQUEST_TYPE,
+            UsageRecord::schema_fields_PROMPT_TOKENS,
+            UsageRecord::schema_fields_COMPLETION_TOKENS,
+            UsageRecord::schema_fields_TOTAL_TOKENS,
+            UsageRecord::schema_fields_CURRENCY,
+            UsageRecord::schema_fields_STATUS,
+        ] as $field) {
+            if ((string)$record->getData($field) !== (string)($payload[$field] ?? '')) {
+                throw new \RuntimeException('AI provider usage request_id payload conflict.');
+            }
+        }
+        foreach ([
+            UsageRecord::schema_fields_INPUT_COST,
+            UsageRecord::schema_fields_OUTPUT_COST,
+            UsageRecord::schema_fields_TOTAL_COST,
+        ] as $field) {
+            if (abs((float)$record->getData($field) - (float)($payload[$field] ?? 0)) > 0.0000005) {
+                throw new \RuntimeException('AI provider usage request_id cost conflict.');
+            }
+        }
+    }
+
+    /** @return array{class:string,category:string,message_sha256:string} */
+    private function auditFailureSignal(\Throwable $failure): array
+    {
+        $message = strtolower($failure->getMessage());
+        $category = match (true) {
+            str_contains($message, 'database is locked'),
+            str_contains($message, 'database table is locked'),
+            str_contains($message, 'lock wait timeout'),
+            str_contains($message, 'deadlock') => 'transient_lock',
+            str_contains($message, 'unique constraint'),
+            str_contains($message, 'duplicate entry'),
+            str_contains($message, 'payload conflict') => 'identity_conflict',
+            str_contains($message, 'permission denied'),
+            str_contains($message, 'read-only'),
+            str_contains($message, 'readonly') => 'storage_permission',
+            default => 'unexpected',
+        };
+
+        return [
+            'class' => $failure::class,
+            'category' => $category,
+            'message_sha256' => hash('sha256', $failure->getMessage()),
+        ];
+    }
+
+    private function normalizeUsageRequestId(mixed $requestId): string
+    {
+        $requestId = trim((string)$requestId);
+        if ($requestId === '') {
+            return 'req_' . bin2hex(random_bytes(16));
+        }
+        if (strlen($requestId) > 100 || preg_match('/[\x00-\x1F\x7F]/', $requestId) === 1) {
+            return 'req_' . hash('sha256', $requestId);
+        }
+
+        return $requestId;
     }
 
     /**

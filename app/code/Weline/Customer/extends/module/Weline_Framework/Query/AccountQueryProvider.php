@@ -7,6 +7,7 @@ use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
 use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
+use Weline\Customer\Service\AccountSidebarContentGate;
 use Weline\Customer\Service\CustomerAccountService;
 use Weline\Customer\Service\CustomerAuthReturnUrlService;
 use Weline\Customer\Service\PasswordResetService;
@@ -17,6 +18,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\View\Template;
 
 class AccountQueryProvider implements QueryProviderInterface
 {
@@ -52,8 +54,52 @@ class AccountQueryProvider implements QueryProviderInterface
             'requestPasswordReset' => $this->requestPasswordReset($params),
             'resetPassword' => $this->resetPassword($params),
             'completeChallenge' => $this->completeChallenge($params),
+            'getSidebarSection' => $this->getSidebarSection($params),
             default => throw new \InvalidArgumentException('Account query provider does not support operation: ' . $operation),
         };
+    }
+
+    /**
+     * Lazy-load one account sidebar content section via official Hook (JSON, no HTML fetch).
+     *
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function getSidebarSection(array $params): array
+    {
+        $session = $this->sessionFactory->createFrontendSession();
+        $user = $session->getUser();
+        if (!$session->isLoggedIn() || !$user instanceof Customer || !$user->getId()) {
+            return [
+                'success' => false,
+                'message' => (string)__('请先登录'),
+                'redirect' => '/customer/account/login',
+            ];
+        }
+
+        $section = trim((string)($params['section'] ?? ''));
+        if ($section === '') {
+            return [
+                'success' => false,
+                'message' => (string)__('缺少账户分区参数'),
+            ];
+        }
+
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+        AccountSidebarContentGate::setRequestedSection($section);
+        try {
+            $html = (string)$template->getHook('account.sidebar.content');
+        } finally {
+            AccountSidebarContentGate::setRequestedSection(null);
+        }
+
+        return [
+            'success' => true,
+            'html' => $html,
+            'length' => strlen($html),
+            'section' => $section,
+        ];
     }
 
     private function current(): array
@@ -583,6 +629,19 @@ class AccountQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Complete storefront account login challenge',
+                ],
+                [
+                    'name' => 'getSidebarSection',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'auth' => 'customer',
+                    'params' => [
+                        'section' => ['type' => 'string', 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Load one account sidebar content section via Hook as JSON',
                 ],
             ],
         ];

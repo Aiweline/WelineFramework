@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Nginx;
 
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxChildProcessProbe;
+
 /**
  * Proves TLS 1.3 session resumption against the loopback-only managed Nginx probe.
  *
@@ -24,6 +26,8 @@ final class ManagedNginxTlsSessionResumptionVerifier
     private const CONNECT_TIMEOUT_MS = 1_000;
     private const REQUEST_TIMEOUT_MS = 2_000;
     private const VERIFICATION_DEADLINE_SECONDS = 30.0;
+    private const MAX_HEADER_BYTES = 65536;
+    private const MAX_HEADER_COUNT = 128;
 
     /**
      * @param list<string> $serverNames
@@ -80,9 +84,12 @@ final class ManagedNginxTlsSessionResumptionVerifier
             $sameWorkerResumedCount = 0;
             $crossWorkerResumedCount = 0;
             $resumedTlsHandshakeMicros = [];
-            $deadline = \microtime(true) + self::VERIFICATION_DEADLINE_SECONDS;
+            $deadline = (\hrtime(true) / 1_000_000_000)
+                + self::VERIFICATION_DEADLINE_SECONDS;
 
-            while ($sampleCount < self::MAX_PROOF_PAIRS && \microtime(true) < $deadline) {
+            while ($sampleCount < self::MAX_PROOF_PAIRS
+                && (\hrtime(true) / 1_000_000_000) < $deadline
+            ) {
                 $pair = $this->performProofPair(
                     $peerName,
                     $port,
@@ -528,6 +535,9 @@ final class ManagedNginxTlsSessionResumptionVerifier
     {
         $state = new \stdClass();
         $state->headers = [];
+        $state->header_bytes = 0;
+        $state->header_count = 0;
+        $state->overflow = false;
         $url = 'https://' . $peerName . ':' . $port . self::PROBE_PATH;
         $handle = @\curl_init($url);
         if ($handle === false) {
@@ -563,17 +573,32 @@ final class ManagedNginxTlsSessionResumptionVerifier
                 $trimmed = \rtrim($line, "\r\n");
                 if (\preg_match('/\AHTTP\//i', $trimmed) === 1) {
                     $state->headers = [];
-                    return \strlen($line);
+                    $state->header_bytes = 0;
+                    $state->header_count = 0;
+                }
+                $lineBytes = \strlen($line);
+                if ($state->header_bytes + $lineBytes > self::MAX_HEADER_BYTES) {
+                    $state->overflow = true;
+                    return 0;
+                }
+                $state->header_bytes += $lineBytes;
+                if (\preg_match('/\AHTTP\//i', $trimmed) === 1) {
+                    return $lineBytes;
                 }
                 $separator = \strpos($trimmed, ':');
                 if ($separator !== false) {
                     $name = \strtolower(\trim(\substr($trimmed, 0, $separator)));
                     $value = \trim(\substr($trimmed, $separator + 1));
                     if ($name !== '') {
+                        if ($state->header_count >= self::MAX_HEADER_COUNT) {
+                            $state->overflow = true;
+                            return 0;
+                        }
                         $state->headers[$name] = $value;
+                        $state->header_count++;
                     }
                 }
-                return \strlen($line);
+                return $lineBytes;
             },
             CURLOPT_WRITEFUNCTION => static fn(mixed $curl, string $chunk): int => \strlen($chunk),
         ];
@@ -602,6 +627,7 @@ final class ManagedNginxTlsSessionResumptionVerifier
         $workerPid = \ctype_digit($workerPidRaw) ? (int)$workerPidRaw : 0;
         $httpVersion = (int)@\curl_getinfo($handle, CURLINFO_HTTP_VERSION);
         $valid = @\curl_errno($handle) === CURLE_OK
+            && ($request['state']->overflow ?? true) === false
             && (int)@\curl_getinfo($handle, CURLINFO_RESPONSE_CODE) === 200
             && $httpVersion === CURL_HTTP_VERSION_1_1
             && \hash_equals(
@@ -660,44 +686,8 @@ final class ManagedNginxTlsSessionResumptionVerifier
         if (PHP_OS_FAMILY === 'Windows') {
             return 1;
         }
+        $workers = NginxChildProcessProbe::workerPids($masterPid);
 
-        $workers = [];
-        if (PHP_OS_FAMILY === 'Linux') {
-            $childrenFile = '/proc/' . $masterPid . '/task/' . $masterPid . '/children';
-            $children = @\file_get_contents($childrenFile);
-            if (\is_string($children)) {
-                foreach (\preg_split('/\s+/', \trim($children)) ?: [] as $child) {
-                    if (!\ctype_digit($child)) {
-                        continue;
-                    }
-                    $command = @\file_get_contents('/proc/' . $child . '/cmdline');
-                    $title = \is_string($command) ? \str_replace("\0", ' ', $command) : '';
-                    if (\str_contains(\strtolower($title), 'nginx: worker process')) {
-                        $workers[(int)$child] = true;
-                    }
-                }
-            }
-        }
-        if ($workers !== []) {
-            return \count($workers);
-        }
-
-        $output = [];
-        $code = 1;
-        @\exec('ps -axo pid=,ppid=,command= 2>/dev/null', $output, $code);
-        if ($code !== 0) {
-            return 0;
-        }
-        foreach ($output as $line) {
-            if (\preg_match('/\A\s*([1-9][0-9]*)\s+([1-9][0-9]*)\s+(.+)\z/D', $line, $match) !== 1
-                || (int)$match[2] !== $masterPid
-                || !\str_contains(\strtolower((string)$match[3]), 'nginx: worker process')
-            ) {
-                continue;
-            }
-            $workers[(int)$match[1]] = true;
-        }
-
-        return \count($workers);
+        return \is_array($workers) ? \count($workers) : 0;
     }
 }

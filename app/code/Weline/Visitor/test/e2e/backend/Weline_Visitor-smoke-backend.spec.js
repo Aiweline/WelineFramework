@@ -1,7 +1,8 @@
 /**
  * Weline_Visitor：诚实路由 smoke + 后台真实交互 flow（Wave2/3 假用例整治）
  *
- * 说明：openPrimary 会在候选后台路由中探测出「真正渲染出后台内容区(main#main-content)」的入口，
+ * 说明：优先从侧栏「像素分析」菜单进入主入口；菜单不可达时再探测候选深链。
+ * openPrimary 会在候选后台路由中探测出「真正渲染出后台内容区(main#main-content)」的入口，
  * 猜测/空白/404 路由不会渲染内容区，从而让 smoke 诚实失败（防假绿），而非靠“无 Fatal”蒙混。
  *
  * @weline-e2e-spec { module: Weline_Visitor, type: flow, layer: backend }
@@ -17,6 +18,7 @@ const {
   waitForBackendShellReady,
   submitAndExpectParam,
 } = require('../../../../../../../tests/e2e/framework');
+const { PIXEL_MENU, openPixelSidebarMenu, revealPixelMenuGroup } = require('./pixel-menu-nav');
 
 const MODULE = 'Weline_Visitor';
 const FATAL = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
@@ -26,11 +28,31 @@ const CONTENT = CONTENT_SHELL;
 // 候选后台路由（来自模块 Controller/Backend 的 index/get* 动作 + 兜底猜测），按序探测
 const CANDIDATE_ROUTES = ["trafficChannel","trafficchannel","traffic_channel","pixelDashboard","pixeldashboard","pixel_dashboard","visitor","index","config","dashboard"];
 
+async function openViaPixelMenu(page) {
+  try {
+    await revealPixelMenuGroup(page);
+    await openPixelSidebarMenu(page, PIXEL_MENU.index, {
+      urlIncludes: '/visitor/backend/pixel-dashboard/index',
+    });
+    const shell = page.locator(CONTENT_SHELL).first();
+    if (await shell.isVisible().catch(() => false)) {
+      const txt = ((await shell.innerText().catch(() => '')) || '').trim();
+      if (txt.length > 0) return { route: 'menu:pixel_dashboard_index', fatal: null };
+    }
+  } catch (_e) {
+    // 菜单尚未收集 / 权限不足时回退深链探测
+  }
+  return null;
+}
+
 // 返回 { route, fatal }：
 //  - route!=null：命中真正渲染后台内容区的入口；
 //  - route==null & fatal!=null：候选路由触发运行期错误(FATAL/500) → 真实 Bug，用例应失败留证；
 //  - route==null & fatal==null：候选均为 404/空白 → 该模块无独立后台页 → 用例诚实 skip。
 async function openPrimary(page) {
+  const viaMenu = await openViaPixelMenu(page);
+  if (viaMenu) return viaMenu;
+
   let fatal = null;
   for (const route of CANDIDATE_ROUTES) {
     try {

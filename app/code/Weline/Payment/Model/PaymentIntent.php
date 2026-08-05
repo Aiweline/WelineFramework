@@ -11,12 +11,16 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 
 #[Table(comment: 'Payment intent table')]
 #[Index(name: 'uniq_payment_intent_code', columns: ['intent_code'], type: 'UNIQUE')]
+#[Index(name: 'uniq_payment_intent_active_guard', columns: ['environment', 'payable_type', 'payable_id', 'active_guard'], type: 'UNIQUE')]
 #[Index(name: 'idx_payment_intent_payable', columns: ['environment', 'payable_type', 'payable_id', 'active_flag'])]
 #[Index(name: 'idx_payment_intent_method_status', columns: ['method_code', 'provider_code', 'status'])]
 #[Index(name: 'idx_payment_intent_scope', columns: ['scope', 'scope_version'])]
 #[Index(name: 'idx_payment_intent_created_at', columns: ['created_at'])]
 class PaymentIntent extends Model
 {
+    /** Nullable unique guard：active 时 = active，终态/supersede 时 NULL（MOD-P2F-002）。 */
+    public const ACTIVE_GUARD_VALUE = 'active';
+
     public const schema_table = 'weline_payment_intent';
     public const schema_primary_key = 'intent_id';
 
@@ -83,10 +87,15 @@ class PaymentIntent extends Model
     public const schema_fields_STATUS = 'status';
     #[Col('smallint', 1, nullable: false, default: 1, comment: 'Active intent flag')]
     public const schema_fields_ACTIVE_FLAG = 'active_flag';
+    #[Col('varchar', 16, nullable: true, comment: 'Nullable active guard (active|NULL)')]
+    public const schema_fields_ACTIVE_GUARD = 'active_guard';
+    #[Col('varchar', 128, nullable: true, comment: 'Request hash for idempotency')]
+    public const schema_fields_REQUEST_HASH = 'request_hash';
     #[Col('varchar', 96, nullable: true, comment: 'Failure reason code')]
     public const schema_fields_FAILURE_REASON_CODE = 'failure_reason_code';
     #[Col('varchar', 128, nullable: true, comment: 'Idempotency key')]
     public const schema_fields_IDEMPOTENCY_KEY = 'idempotency_key';
+
     #[Col('text', nullable: true, comment: 'Frozen amount snapshot JSON')]
     public const schema_fields_AMOUNT_SNAPSHOT = 'amount_snapshot';
     #[Col('text', nullable: true, comment: 'Frozen config snapshot JSON')]

@@ -59,11 +59,27 @@ class ModelUpdateAfter implements ObserverInterface
             if ($has->getId() and $has->getModel() == $model::class) {
                 return;
             }
+            if ($has->getId() && $has->getModuleName() === $module->getName()) {
+                $previousModel = trim($has->getModel());
+                if ($previousModel !== ''
+                    && !str_starts_with($previousModel, 'Eav::')
+                    && class_exists($previousModel)) {
+                    throw new Exception(__('表 %{1} 在模块 %{2} 中仍由有效模型 %{3} 使用，不能自动改绑到 %{4}', [
+                        $table,
+                        $module->getName(),
+                        $previousModel,
+                        $model::class,
+                    ]));
+                }
+                $has->setModel($model::class)->save(true);
+                return;
+            }
             
             $this->table->reset()->clearData()
                 ->setData($this->table::schema_fields_module_name, $module->getName())
-                ->setData($this->table::schema_fields_name, $table, true)
+                ->setData($this->table::schema_fields_name, $table)
                 ->setData($this->table::schema_fields_model, $model::class, true)
+                ->setData($this->table::schema_fields_TABLE_POLICY, $this->table::POLICY_OWNED)
                 ->save(true);
         }
     }

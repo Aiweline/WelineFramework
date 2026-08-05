@@ -1,3 +1,28 @@
+
+(function(g){
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['eav_admin']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('eav_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(typeof window!=='undefined'?window:globalThis);
 /**
  * EAV管理器
  * 提供树形导航和详情编辑功能
@@ -174,7 +199,7 @@ const EavManager = (function() {
         state.loading = true;
         showLoading();
         var url = config.apiBase + '/tree' + (search ? '?search=' + encodeURIComponent(search) : '');
-        window.Weline.Api.get(url, { silent: true })
+        bqAdmin['eav_admin'](url, { silent: true })
         .then(function(response) {
             var res = (response && response.data) || response;
             if (res && res.success) {
@@ -374,7 +399,7 @@ const EavManager = (function() {
         renderTree(true); // 先渲染显示加载中，保持展开状态
         saveStateToStorage(); // 保存展开状态
         var url = config.apiBase + '/children?type=' + encodeURIComponent(node.type) + '&id=' + encodeURIComponent(node.nodeId);
-        window.Weline.Api.get(url, { silent: true })
+        bqAdmin['eav_admin'](url, { silent: true })
         .then(function(response) {
             state.loadingNodes.delete(node.id);
             var res = (response && response.data) || response;
@@ -644,7 +669,7 @@ const EavManager = (function() {
 
         const detailAction = getDetailAction(node.type);
         
-        $.ajax({
+        bqAdmin['eav_admin']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: config.apiBase + '/' + detailAction,
             method: 'GET',
             data: { id: node.nodeId },
@@ -1021,7 +1046,7 @@ const EavManager = (function() {
         const $submitBtn = $form.find('button[type="submit"]');
         $submitBtn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin me-1"></i> 保存中...');
         var url = config.apiBase + '/' + getSaveAction(type);
-        window.Weline.Api.request(url, { method: 'POST', body: formData, silent: true })
+        bqAdmin['eav_admin'](url, { method: 'POST', body: formData, silent: true })
         .then(function(response) {
             var res = (response && response.data) || response;
             if (res && res.success) {
@@ -1068,7 +1093,7 @@ const EavManager = (function() {
     function performDelete(node) {
         var url = config.apiBase + '/delete';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'type=' + encodeURIComponent(node.type) + '&id=' + encodeURIComponent(node.nodeId) };
-        window.Weline.Api.request(url, Object.assign(opts, { silent: true }))
+        bqAdmin['eav_admin'](url, Object.assign(opts, { silent: true }))
         .then(function(response) {
             var res = (response && response.data) || response;
             if (res && res.success) {

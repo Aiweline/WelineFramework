@@ -2,10 +2,15 @@
 
 namespace Weline\Currency\Model;
 
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
+use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
+use Weline\Framework\Manager\ObjectManager;
 #[Table(comment: '货币表')]
 #[Index(name: 'idx_currency_code', columns: ['code'], type: 'UNIQUE')]
 class Currency extends Model
@@ -34,6 +39,26 @@ class Currency extends Model
     public const schema_fields_DECIMAL_SEPARATOR = 'decimal_separator';
     #[Col(type: 'varchar', length: 3, nullable: false, default: 'CNY', comment: '基准货币代码')]
     public const schema_fields_BASE_CURRENCY = 'base_currency';
+
+    /** Keep the currency write and aggregate price generation atomic. */
+    public function save(string|array|bool|AbstractModel $data = [], string|array $sequence = ''): bool|int
+    {
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        return $transactions->run(
+            $this->getConnection(),
+            fn(): bool|int => parent::save($data, $sequence),
+        );
+    }
+
+    /** Keep deletion and aggregate price generation atomic. */
+    public function delete(): static
+    {
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        return $transactions->run(
+            $this->getConnection(),
+            fn(): static => parent::delete(),
+        );
+    }
 
     public function getCode(): string
     {
@@ -269,6 +294,7 @@ class Currency extends Model
     public function save_after()
     {
         parent::save_after();
+        $this->invalidateStorefrontPriceVersion();
         // 清除货币缓存
         try {
             w_cache('currency')->clear();
@@ -276,5 +302,24 @@ class Currency extends Model
         } catch (\Throwable $e) {
             // 缓存清除失败，静默处理
         }
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        $this->invalidateStorefrontPriceVersion();
+        try {
+            w_cache('currency')->clear();
+            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
+        } catch (\Throwable) {
+        }
+    }
+
+    private function invalidateStorefrontPriceVersion(): void
+    {
+        $path = ObjectManager::getInstance(NamespacePath::class);
+        ObjectManager::getInstance(NamespaceGenerationInterface::class)->bump(
+            $path->global('storefront', ['price']),
+        );
     }
 }

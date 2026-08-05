@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\I18n\Service\I18nResourceChangePublisher;
 
 /**
  * 后台 I18n 操作的 bin-query 适配层。
@@ -17,9 +19,63 @@ use Weline\Framework\Session\SessionFactory;
  */
 final class I18nAdminQueryProvider implements QueryProviderInterface
 {
+    private const ACTION_ACL_SOURCES = [
+        'country-install' => 'Weline_I18n::i18n_countries',
+        'country-activate' => 'Weline_I18n::i18n_countries',
+        'country-disable' => 'Weline_I18n::i18n_countries',
+        'country-uninstall' => 'Weline_I18n::i18n_countries',
+        'country-batch-install' => 'Weline_I18n::i18n_countries',
+        'country-batch-activate' => 'Weline_I18n::i18n_countries',
+        'country-batch-disable' => 'Weline_I18n::i18n_countries',
+        'country-batch-uninstall' => 'Weline_I18n::i18n_countries',
+        'country-sync' => 'Weline_I18n::i18n_countries',
+        'locale-install' => 'Weline_I18n::i18n_countries',
+        'locale-activate' => 'Weline_I18n::i18n_countries',
+        'locale-deactivate' => 'Weline_I18n::i18n_countries',
+        'locale-uninstall' => 'Weline_I18n::i18n_countries',
+        'locale-sync' => 'Weline_I18n::i18n_countries',
+        'localization-install' => 'Weline_I18n::i18n_localization',
+        'localization-activate' => 'Weline_I18n::i18n_localization',
+        'localization-deactivate' => 'Weline_I18n::i18n_localization',
+        'localization-uninstall' => 'Weline_I18n::i18n_localization',
+        'localization-sync' => 'Weline_I18n::i18n_localization',
+        'localization-cleanup' => 'Weline_I18n::i18n_localization',
+        'localization-batch-install' => 'Weline_I18n::i18n_localization',
+        'localization-batch-activate' => 'Weline_I18n::i18n_localization',
+        'localization-batch-deactivate' => 'Weline_I18n::i18n_localization',
+        'localization-batch-uninstall' => 'Weline_I18n::i18n_localization',
+        'word-collect' => 'Weline_I18n::i18n_dictionaries',
+        'word-translate' => 'Weline_I18n::i18n_dictionaries',
+        'word-restore' => 'Weline_I18n::i18n_dictionaries',
+        'word-push' => 'Weline_I18n::i18n_dictionaries',
+        'word-enable' => 'Weline_I18n::i18n_dictionaries',
+        'word-disable' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-delete' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-import' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-clear-locale' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-clear-all' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-add' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-edit' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-quick-save' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-collect' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-auto-register-enable' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-auto-register-disable' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-translation-mode' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-check-auto-register' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-current-translation-mode' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-quick-data' => 'Weline_I18n::i18n_dictionaries',
+        'ai-save' => 'Weline_I18n::i18n_ai_translation',
+        'ai-enqueue' => 'Weline_I18n::i18n_ai_translation',
+        'ai-enqueue-all' => 'Weline_I18n::i18n_ai_translation',
+        'ai-export-modules' => 'Weline_I18n::i18n_ai_translation',
+        'taglib-local-save' => 'Weline_I18n::i18n_dictionaries',
+    ];
+
     public function __construct(
         private readonly SessionFactory $sessionFactory,
-        private readonly Request $request
+        private readonly Request $request,
+        private readonly TransactionCoordinatorInterface $transactions,
+        private readonly I18nResourceChangePublisher $resourceChanges,
     ) {
     }
 
@@ -51,7 +107,42 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             $payload['action'] = $innerAction;
         }
 
-        return $this->invokeController($controllerClass, $method, $payload, $requestMethod);
+        if (!$this->isResourceMutation($action)) {
+            return $this->invokeController($controllerClass, $method, $payload, $requestMethod);
+        }
+
+        return $this->transactions->run(
+            $this->resourceChanges->connection(),
+            function () use ($controllerClass, $method, $payload, $requestMethod, $action): mixed {
+                $result = $this->invokeController($controllerClass, $method, $payload, $requestMethod);
+                if ($this->isSuccessfulResult($result)) {
+                    $this->resourceChanges->publishAction($action, $payload);
+                }
+                return $result;
+            },
+        );
+    }
+
+    private function isResourceMutation(string $action): bool
+    {
+        return in_array($action, [
+            'dictionary-add',
+            'dictionary-edit',
+            'dictionary-quick-save',
+            'taglib-local-save',
+        ], true);
+    }
+
+    private function isSuccessfulResult(mixed $result): bool
+    {
+        if (is_string($result)) {
+            $decoded = json_decode($result, true);
+            if (is_array($decoded)) {
+                $result = $decoded;
+            }
+        }
+        return !is_array($result)
+            || (($result['success'] ?? true) !== false && (int)($result['code'] ?? 200) < 400);
     }
 
     public function getDescriptor(): array
@@ -69,6 +160,11 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
                     'graph' => false,
                     'cost' => 3,
                     'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'param_map',
+                        'param' => 'action',
+                        'map' => self::ACTION_ACL_SOURCES,
+                    ],
                     'params' => [
                         ['name' => 'action', 'type' => 'string', 'required' => true, 'max_length' => 80],
                         ['name' => 'payload', 'type' => 'map', 'required' => false, 'max_items' => 300],

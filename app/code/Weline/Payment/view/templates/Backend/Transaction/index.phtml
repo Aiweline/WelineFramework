@@ -5,7 +5,7 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
+<div class="row" data-testid="payment-transaction-management">
     <div class="col-12">
         <div class="page-title-box">
             <h4 class="page-title">
@@ -84,10 +84,10 @@
                             <?php else: ?>
                                 <?php foreach ($transactions as $transaction): ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($transaction->getData('transaction_no')) ?></td>
-                                        <td><?= htmlspecialchars($transaction->getData('order_id')) ?></td>
-                                        <td><?= htmlspecialchars($transaction->getData('method_code')) ?></td>
-                                        <td><?= htmlspecialchars($transaction->getData('amount')) ?> <?= htmlspecialchars($transaction->getData('currency')) ?></td>
+                                        <td><?= htmlspecialchars((string)$transaction->getData('transaction_no'), ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td><?= htmlspecialchars((string)$transaction->getData('order_id'), ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td><?= htmlspecialchars((string)$transaction->getData('method_code'), ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td><?= htmlspecialchars((string)$transaction->getData('amount'), ENT_QUOTES, 'UTF-8') ?> <?= htmlspecialchars((string)$transaction->getData('currency'), ENT_QUOTES, 'UTF-8') ?></td>
                                         <td>
                                             <?php
                                             $status = $transaction->getData('status');
@@ -102,16 +102,20 @@
                                             ?>
                                             <span class="badge bg-<?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
                                         </td>
-                                        <td><?= htmlspecialchars($transaction->getData('created_at')) ?></td>
+                                        <td><?= htmlspecialchars((string)$transaction->getData('created_at'), ENT_QUOTES, 'UTF-8') ?></td>
                                         <td>
                                             <a href="<?= $this->getUrl('*/backend/transaction/view', ['id' => $transaction->getId()]) ?>" 
                                                class="btn btn-sm btn-info">
                                                 <i class="mdi mdi-eye"></i> <?= __('查看') ?>
                                             </a>
-                                            <?php if (!$transaction->isSuccess() && !$transaction->isFailed()): ?>
+                                            <?php
+                                            $replayGrantVersion = (int)($replay_grant_versions[(int)$transaction->getId()] ?? 0);
+                                            ?>
+                                            <?php if ($replayGrantVersion > 0 && !$transaction->isSuccess() && !$transaction->isFailed()): ?>
                                                 <button type="button" 
                                                         class="btn btn-sm btn-primary weline-payment-query-status"
-                                                        data-id="<?= $transaction->getId() ?>">
+                                                        data-id="<?= (int)$transaction->getId() ?>"
+                                                        data-grant-version="<?= $replayGrantVersion ?>">
                                                     <i class="mdi mdi-refresh"></i> <?= __('查询状态') ?>
                                                 </button>
                                             <?php endif; ?>
@@ -150,27 +154,31 @@
         document.querySelectorAll('.weline-payment-query-status').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var id = this.getAttribute('data-id');
+                var grantVersion = this.getAttribute('data-grant-version');
                 
-                var url = '<?= $this->getUrl("*/backend/transaction/query") ?>';
-                var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
-                window.Weline.Api.request(url, opts)
-                .then(function(res) {
-                    var data = (res && res.data) !== undefined ? res.data : res;
-                    if (data.success) {
+                Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                .then(function(api){
+                    return api.resource('payment').queryTransactionStatus({
+                        id: id,
+                        expected_grant_version: grantVersion
+                    });
+                })
+                .then(function(data) {
+                    if (data && data.success !== false) {
                         if (typeof BackendToast !== 'undefined') {
-                            BackendToast.success(data.message || '<?= __('查询成功') ?>');
+                            BackendToast.success((data && data.message) || '<?= __('查询成功') ?>');
                         }
                         setTimeout(function() { location.reload(); }, 1500);
                     } else {
                         if (typeof BackendToast !== 'undefined') {
-                            BackendToast.error(data.message || '<?= __('查询失败') ?>');
+                            BackendToast.error((window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError({response:{data:data}}, '<?= __('查询失败') ?>')) || '<?= __('查询失败') ?>');
                         }
                     }
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
                     if (typeof BackendToast !== 'undefined') {
-                        BackendToast.error('<?= __('查询失败，请重试') ?>');
+                        BackendToast.error((window.Weline.ApiBusiness && window.Weline.ApiBusiness.formatApiError(error, '<?= __('查询失败，请重试') ?>')) || '<?= __('查询失败，请重试') ?>');
                     }
                 });
             });

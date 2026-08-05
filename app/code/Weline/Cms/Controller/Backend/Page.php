@@ -5,17 +5,21 @@ namespace Weline\Cms\Controller\Backend;
 
 use Weline\BackendActivity\Api\BusinessContextInterface;
 use Weline\Cms\Model\Page as CmsPage;
+use Weline\Cms\Service\PageLocaleService;
 use Weline\Cms\Service\PageService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Manager\ObjectManager;
 
 #[Acl('Weline_Cms::page', 'CMS 页面', 'mdi mdi-text-box-outline', '管理 CMS 页面', 'Weline_Backend::cms_group')]
 class Page extends BackendController
 {
     public function __construct(
         private readonly PageService $pageService,
-        private readonly BusinessContextInterface $activityContext
+        private readonly BusinessContextInterface $activityContext,
+        private ?PageLocaleService $pageLocaleService = null,
     ) {
     }
 
@@ -106,12 +110,29 @@ class Page extends BackendController
         $layoutSelection = $page
             ? $this->pageService->resolveLayoutSelectionForPage($page)
             : ['layout_type' => CmsPage::LAYOUT_TYPE, 'layout_option' => 'default', 'layout_code' => 'default'];
+        $localePayload = [
+            'supported_locales' => [],
+            'source_locale' => '',
+            'current_locale' => '',
+            'current_title' => '',
+            'titles' => [],
+            'entries' => [],
+        ];
+        if ($page !== null && $page->getPageId() > 0) {
+            $localeService = $this->pageLocaleService ??= ObjectManager::getInstance(PageLocaleService::class);
+            $requestedLocale = (string)$this->request->getGet('locale_code', State::getLangLocal());
+            $localePayload = $localeService->buildEditorPayload($page, $requestedLocale);
+        }
 
         $layoutOptions = $this->loadLayoutOptions($scope);
         $themeEditorUrl = '';
         $previewUrl = '';
         if ($page !== null && $page->getPageId() > 0) {
-            $themeEditorUrl = $this->buildThemeEditorUrl($page, (string)$layoutSelection['layout_option']);
+            $themeEditorUrl = $this->buildThemeEditorUrl(
+                $page,
+                (string)$layoutSelection['layout_option'],
+                (string)$localePayload['current_locale'],
+            );
             $previewUrl = $this->pageService->buildPreviewUrl($page);
         }
 
@@ -140,10 +161,11 @@ class Page extends BackendController
         $this->assign('websites', $websites);
         $this->assign('layout_options', $layoutOptions);
         $this->assign('layout_selection', $layoutSelection);
+        $this->assign('locale_payload', $localePayload);
         $this->assign('theme_editor_url', $themeEditorUrl);
         $this->assign('preview_url', $previewUrl);
 
-        return $this->fetch('edit');
+        return $this->fetch('Weline_Cms::templates/Backend/Page/edit.phtml');
     }
 
     #[Acl('Weline_Cms::page_save', '保存 CMS 页面', 'mdi mdi-content-save-outline', '保存 CMS 页面')]
@@ -179,16 +201,23 @@ class Page extends BackendController
                 'path_group_alias' => $page->getPathGroupAlias(),
                 'slug' => $page->getSlug(),
                 'layout_option' => $layoutOption,
+            'locale' => $locale,
                 'layout_success' => $layoutResult === [] ? null : !empty($layoutResult['success']),
             ]);
             $this->getMessageManager()->addSuccess(__('CMS 页面已保存。'));
-            return $this->redirect('cms/backend/page/edit', ['page_id' => $page->getPageId()]);
+            return $this->redirect('cms/backend/page/edit', [
+                'page_id' => $page->getPageId(),
+                'locale_code' => (string)($data['locale_code'] ?? ''),
+            ]);
         } catch (ResponseTerminateException $e) {
             throw $e;
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError($e->getMessage());
             $pageId = (int)($data['page_id'] ?? 0);
             $params = $pageId > 0 ? ['page_id' => $pageId] : [];
+            if (trim((string)($data['locale_code'] ?? '')) !== '') {
+                $params['locale_code'] = (string)$data['locale_code'];
+            }
             return $this->redirect('cms/backend/page/edit', $params);
         }
     }
@@ -628,9 +657,10 @@ class Page extends BackendController
         return $pathGroup !== '' ? $pathGroup : '__root__';
     }
 
-    private function buildThemeEditorUrl(CmsPage $page, string $layoutOption): string
+    private function buildThemeEditorUrl(CmsPage $page, string $layoutOption, string $locale = ''): string
     {
         $layoutOption = trim($layoutOption) !== '' ? trim($layoutOption) : 'default';
+        $locale = trim($locale);
 
         return $this->_url->getBackendUrl('theme/backend/theme-editor', [
             'page_type' => CmsPage::LAYOUT_TYPE,
@@ -873,7 +903,11 @@ class Page extends BackendController
             'alias',
             'path_group_alias',
             'slug',
+            'slug_mode',
             'title',
+            'locale_code',
+            'source_locale',
+            'locale_titles_json',
             'identifier',
             'path',
             'scope',

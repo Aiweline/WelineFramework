@@ -149,16 +149,18 @@ final class Watch extends CommandAbstract
         $workerId = max(1, $this->integerArgument($args, 'worker-id', 1));
         $masterPid = $this->integerArgument($args, 'master-pid');
         $masterLeaseFile = $this->stringArgument($args, 'master-lease-file');
-        $masterToken = $this->stringArgument($args, 'master-token');
-        if ($masterToken === '') {
-            $arguments = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
-            $masterToken = (new MasterLeaseManager())->resolveProtectedCredentialFromArguments(
-                \is_array($arguments) ? $arguments : [],
-                $instanceName,
-                $masterPid,
-                $epoch,
+        if ($this->stringArgument($args, 'master-token') !== '') {
+            throw new \RuntimeException(
+                'Runtime Watchdog --master-token is forbidden; use the protected child ledger.'
             );
         }
+        $arguments = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        $masterToken = (new MasterLeaseManager())->resolveProtectedCredentialFromArguments(
+            \is_array($arguments) ? $arguments : [],
+            $instanceName,
+            $masterPid,
+            $epoch,
+        );
         $controlPort = SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
         if ($controlPort <= 0) {
             throw new \RuntimeException('Runtime Watchdog cannot resolve the WLS control endpoint.');

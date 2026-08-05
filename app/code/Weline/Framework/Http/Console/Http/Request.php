@@ -980,6 +980,11 @@ class Request extends CommandAbstract
         }
     }
     
+    public static function isSuccessfulHttpStatusCode(int $statusCode): bool
+    {
+        return $statusCode >= 200 && $statusCode < 400;
+    }
+
     /**
      * 执行并发请求
      */
@@ -1038,26 +1043,38 @@ class Request extends CommandAbstract
         // 统计数据
         $successCount = 0;
         $failedCount = 0;
+        $completedCount = 0;
         $totalTime = 0;
         $responseTimes = [];
         $statusCodes = [];
         
         $pool = new \GuzzleHttp\Pool($client, $requests(), [
             'concurrency' => min($times, 100), // 最大并发数
-            'fulfilled' => function($response, $index) use (&$successCount, &$responseTimes, &$statusCodes, $start) {
-                $successCount++;
+            'fulfilled' => function($response, $index) use (&$successCount, &$failedCount, &$completedCount, &$responseTimes, &$statusCodes, $start) {
                 $requestTime = (microtime(true) - $start) * 1000;
                 $responseTimes[] = $requestTime;
                 $statusCode = $response->getStatusCode();
                 $statusCodes[$statusCode] = ($statusCodes[$statusCode] ?? 0) + 1;
                 
+                if (self::isSuccessfulHttpStatusCode($statusCode)) {
+                    $successCount++;
+                } else {
+                    $failedCount++;
+                    $this->printer->warning(__(
+                        '请求 #%{1} 返回失败状态码: HTTP %{2}',
+                        [$index + 1, $statusCode]
+                    ));
+                }
+                $completedCount++;
+
                 // 实时输出进度
-                if ($successCount % 10 == 0 || $successCount == 1) {
-                    $this->printer->printing("已完成: {$successCount} 个请求");
+                if ($completedCount % 10 == 0 || $completedCount == 1) {
+                    $this->printer->printing("已完成: {$completedCount} 个请求");
                 }
             },
-            'rejected' => function($reason, $index) use (&$failedCount) {
+            'rejected' => function($reason, $index) use (&$failedCount, &$completedCount) {
                 $failedCount++;
+                $completedCount++;
                 $this->printer->warning(__('请求 #%{1} 失败: %{2}', [$index + 1, $reason->getMessage()]));
             },
         ]);
@@ -1138,6 +1155,13 @@ class Request extends CommandAbstract
         }
         
         $this->printer->printing($this->printer->colorize('═══════════════════════════════════════════════════════════', 'cyan'));
+
+        if ($failedCount > 0) {
+            throw new \RuntimeException(__(
+                '并发请求验收失败：%{1}/%{2} 个请求失败。',
+                [$failedCount, $times]
+            ));
+        }
     }
     
     /**

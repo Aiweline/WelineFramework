@@ -3,7 +3,7 @@
 namespace Weline\FileManager\Test;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\Template;
 
 class FileManagerTest extends TestCore

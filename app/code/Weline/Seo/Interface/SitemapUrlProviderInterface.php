@@ -59,6 +59,7 @@ interface SitemapUrlProviderInterface
      * [
      *     [
      *         'url_key' => 'unique_key',      // 必需：唯一标识符
+     *         'locale' => 'en_US',            // 可选：省略或空值进入 legacy/default 桶
      *         'loc' => 'https://...',         // 必需：完整URL
      *         'lastmod' => '2026-01-30',      // 可选：最后修改日期 (Y-m-d 格式)
      *         'changefreq' => 'daily',        // 可选：更新频率
@@ -68,7 +69,8 @@ interface SitemapUrlProviderInterface
      * ]
      *
      * 注意：
-     * - url_key 在同一站点+scope+module下必须唯一
+     * - 数据身份为 website_id+scope+module+url_key+locale
+     * - 同一实体的所有语言必须保持相同 url_key，不得把 locale 拼入 url_key
      * - 同一个 url_key 可以出现在多个站点
      * - 业务实体属于多个站点时，Provider 必须为每个站点分别提供 URL
      * - cron 会自动发现此 Provider 并立即拉取 URL，不能依赖后台手动写入

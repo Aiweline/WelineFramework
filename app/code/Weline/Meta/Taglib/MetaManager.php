@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Meta\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Form\FormRenderer;
 use Weline\Framework\View\Taglib as TaglibView;
 use Weline\Meta\Model\Meta as MetaModel;
 use Weline\Framework\Taglib\TaglibInterface;
@@ -766,7 +767,7 @@ CSS;
         $layoutActiveCallback = $data['layout_active_callback'] ?? '';
         $layoutActiveCallbackJs = $layoutActiveCallback ? "'" . addslashes($layoutActiveCallback) . "'" : 'null';
 
-        return <<<JS
+        $javascript = <<<JS
 <script>
 (function() {
     const uniqueId = '{$uniqueId}';
@@ -2653,6 +2654,7 @@ CSS;
 })();
 </script>
 JS;
+        return FormRenderer::runtimeBootstrap() . $javascript;
     }
 
     static function tag_self_close(): bool
@@ -2687,4 +2689,3 @@ JS;
                '<w:meta-manager namespace="$theme.namespace" area="$config.area" identity-id="$theme.id" />';
     }
 }
-

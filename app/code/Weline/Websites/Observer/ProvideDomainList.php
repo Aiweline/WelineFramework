@@ -33,6 +33,12 @@ class ProvideDomainList implements ObserverInterface
     {
         $data = $event->getData();
         $filter = $data['filter'] ?? [];
+        $edgeRouteAuthority = ($filter['edge_routable_only'] ?? false) === true;
+        if ($edgeRouteAuthority) {
+            // Distinguish an installed provider whose query failed from a
+            // project that intentionally has no WebsiteDomain authority.
+            $event->setData('route_authority_present', true);
+        }
         
         try {
             // 获取现有域名列表
@@ -41,8 +47,11 @@ class ProvideDomainList implements ObserverInterface
             // 从 WebsiteDomain 获取所有域名
             $websiteDomains = $this->getWebsiteDomains($filter);
             
-            // 从 DomainPool 获取域名池
-            $poolDomains = $this->getDomainPoolDomains($filter);
+            // DomainPool 记录可能只是待分配资产，不是已绑定到本项目
+            // 后端的路由权威。WLS Edge 只消费 ACTIVE WebsiteDomain。
+            $poolDomains = $edgeRouteAuthority
+                ? []
+                : $this->getDomainPoolDomains($filter);
             
             // 合并并去重
             $domains = \array_merge($domains, $websiteDomains, $poolDomains);
@@ -56,6 +65,13 @@ class ProvideDomainList implements ObserverInterface
             // 更新事件数据
             $event->setData('domains', $domains);
             $event->setData('provider', 'Weline_Websites');
+            if ($edgeRouteAuthority) {
+                // 仅在整个权威查询成功后封印完整性。异常路径留下
+                // false，让网关 desired-state 构建失败关闭，不把短暂 DB
+                // 故障误解为删除全部域名。
+                $event->setData('route_authority_complete', true);
+                $event->setData('route_authority_provider', 'Weline_Websites');
+            }
             
         } catch (\Throwable $e) {
             w_log_error('[ProvideDomainList] ' . __('获取域名列表失败：%{1}', [$e->getMessage()]));

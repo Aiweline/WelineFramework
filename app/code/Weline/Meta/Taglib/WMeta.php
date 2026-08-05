@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Meta\Taglib;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Taglib;
@@ -19,11 +20,11 @@ use Weline\I18n\Api\Translation\DictionaryRepositoryInterface;
 
 class WMeta implements TaglibInterface
 {
-    private static $ids = [];
+    private const REQUEST_IDS_KEY = 'meta.taglib.translation_ids.v1';
 
     public static function resetRequestState(): void
     {
-        self::$ids = [];
+        RequestContext::remove(self::REQUEST_IDS_KEY);
     }
 
     static public function name(): string
@@ -53,8 +54,7 @@ class WMeta implements TaglibInterface
 
     static function callback(): callable
     {
-        $ids = &self::$ids;
-        return function ($tag_key, $config, $tag_data, $attributes) use (&$ids) {
+        return function ($tag_key, $config, $tag_data, $attributes) {
             // 只处理成对标签
             if ($tag_key !== 'tag') {
                 return '';
@@ -189,11 +189,7 @@ PHP;
             $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
             
             // 生成唯一ID
-            $idName = 'meta-translate-' . md5($metaKey);
-            if (in_array($idName, $ids)) {
-                $idName .= '-' . count($ids);
-            }
-            $ids[] = $idName;
+            $idName = self::nextTranslationId($metaKey);
 
             // 构建翻译URL（包含 scope）
             if ($isPhpScope) {
@@ -316,6 +312,23 @@ PHP;
                 </script>
 TAG;
         };
+    }
+
+    private static function nextTranslationId(string $metaKey): string
+    {
+        $ids = RequestContext::get(self::REQUEST_IDS_KEY, []);
+        if (!is_array($ids)) {
+            $ids = [];
+        }
+
+        $id = 'meta-translate-' . md5($metaKey);
+        if (in_array($id, $ids, true)) {
+            $id .= '-' . count($ids);
+        }
+        $ids[] = $id;
+        RequestContext::set(self::REQUEST_IDS_KEY, $ids);
+
+        return $id;
     }
 
     private static function dictionaryRepository(): DictionaryRepositoryInterface

@@ -1,0 +1,600 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$entries = $this->getData('entries') ?? [];
+$packages = $this->getData('packages') ?? [];
+$duplicatePolicies = $this->getData('duplicate_policies') ?? [];
+$config = [
+    'provider' => 'product_copy',
+    'messages' => [
+        'apiUnavailable' => (string)__('复制服务暂不可用，请刷新页面后重试'),
+        'scopeLoadFailed' => (string)__('Website/Store 选项加载失败'),
+        'ready' => (string)__('请选择复制范围，然后创建草稿并预览'),
+        'previewing' => (string)__('正在创建草稿并计算预览…'),
+        'previewReady' => (string)__('预览已就绪，请核对统计后提交'),
+        'previewFailed' => (string)__('复制预览失败'),
+        'committing' => (string)__('正在原子提交目录、Store 覆盖与库存…'),
+        'committed' => (string)__('复制提交成功'),
+        'commitFailed' => (string)__('复制提交失败'),
+        'cancelling' => (string)__('正在取消草稿…'),
+        'cancelled' => (string)__('草稿已取消'),
+        'cancelFailed' => (string)__('取消草稿失败'),
+        'targetRequired' => (string)__('请选择目标 Website 与 Store'),
+        'sourceRequired' => (string)__('当前入口需要选择来源 Website 与 Store'),
+        'sourceWebsiteRequired' => (string)__('当前入口需要选择来源 Website'),
+        'emptyOption' => (string)__('请选择'),
+        'noStores' => (string)__('该 Website 没有可用 Store'),
+        'draft' => (string)__('草稿'),
+        'state' => (string)__('状态'),
+        'errorCode' => (string)__('错误码'),
+    ],
+];
+?>
+<div class="container-fluid py-3"
+     data-testid="store-copy-wizard"
+     data-plan-cases="TEST-P2C-COPY-01,TEST-P2C-COPY-02,TEST-P2C-COPY-03,TEST-P2C-COPY-04,TEST-P2C-COPY-05">
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+        <div>
+            <h3 class="mb-1" data-testid="store-copy-title"><lang>Store 商品复制向导</lang></h3>
+            <p class="text-muted mb-0" data-testid="store-copy-summary">
+                <lang>三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。</lang>
+            </p>
+        </div>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+            <lang>持久化事务模式</lang>
+        </span>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-7">
+            <div class="card h-100">
+                <div class="card-header">
+                    <strong><lang>复制范围</lang></strong>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label" for="store-copy-entry"><lang>入口</lang></label>
+                            <select class="form-select" id="store-copy-entry" data-testid="store-copy-entry">
+                                <?php foreach ($entries as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-testid="store-copy-entry-<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?>
+                                        (<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label" for="store-copy-target-website"><lang>目标 Website</lang></label>
+                            <select class="form-select"
+                                    id="store-copy-target-website"
+                                    data-testid="store-copy-target-website"></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="store-copy-target-store"><lang>目标 Store</lang></label>
+                            <select class="form-select"
+                                    id="store-copy-target-store"
+                                    data-testid="store-copy-target-store"></select>
+                        </div>
+
+                        <div class="col-md-6" data-copy-source-field="website">
+                            <label class="form-label" for="store-copy-source-website"><lang>来源 Website</lang></label>
+                            <select class="form-select"
+                                    id="store-copy-source-website"
+                                    data-testid="store-copy-source-website"></select>
+                        </div>
+                        <div class="col-md-6" data-copy-source-field="store">
+                            <label class="form-label" for="store-copy-source-store"><lang>来源 Store</lang></label>
+                            <select class="form-select"
+                                    id="store-copy-source-store"
+                                    data-testid="store-copy-source-store"></select>
+                        </div>
+
+                        <div class="col-md-6" data-copy-catalog-field>
+                            <label class="form-label" for="store-copy-category-ids"><lang>分类 ID</lang></label>
+                            <input class="form-control"
+                                   id="store-copy-category-ids"
+                                   data-testid="store-copy-category-ids"
+                                   inputmode="numeric"
+                                   placeholder="<?= htmlspecialchars((string)__('逗号分隔；留空表示全部分类'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-6" data-copy-catalog-field>
+                            <label class="form-label" for="store-copy-excluded-category-ids"><lang>排除分类 ID</lang></label>
+                            <input class="form-control"
+                                   id="store-copy-excluded-category-ids"
+                                   data-testid="store-copy-excluded-category-ids"
+                                   inputmode="numeric"
+                                   placeholder="<?= htmlspecialchars((string)__('逗号分隔；排除所选分类及完整子树'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+
+                        <div class="col-md-6" data-copy-catalog-field>
+                            <div class="form-check form-switch mt-md-4 pt-md-2">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       role="switch"
+                                       id="store-copy-include-products"
+                                       data-testid="store-copy-include-products"
+                                       checked>
+                                <label class="form-check-label" for="store-copy-include-products">
+                                    <lang>复制分类下商品</lang>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="store-copy-duplicate-policy"><lang>重复复制策略</lang></label>
+                            <select class="form-select"
+                                    id="store-copy-duplicate-policy"
+                                    data-testid="store-copy-duplicate-policy">
+                                <?php foreach ($duplicatePolicies as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?>
+                                        (<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h6><lang>字段包</lang></h6>
+                    <div class="row g-2" data-testid="store-copy-packages">
+                        <?php foreach ($packages as $pkg): ?>
+                            <div class="col-6 col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="store-copy-package"
+                                           value="<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>"
+                                           id="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>"
+                                           data-testid="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>"
+                                           checked>
+                                    <label class="form-check-label"
+                                           for="store-copy-package-<?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?>">
+                                        <code><?= htmlspecialchars((string)$pkg, ENT_QUOTES, 'UTF-8') ?></code>
+                                    </label>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="form-check form-switch mt-3">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               role="switch"
+                               id="store-copy-inventory-copy-qty"
+                               data-testid="store-copy-inventory-copy-qty">
+                        <label class="form-check-label" for="store-copy-inventory-copy-qty">
+                            <lang>显式复制库存数量（不勾选时目标 on_hand=0）</lang>
+                        </label>
+                    </div>
+                </div>
+                <div class="card-footer d-flex flex-wrap gap-2">
+                    <button type="button"
+                            class="btn btn-primary"
+                            id="store-copy-preview"
+                            data-testid="store-copy-preview">
+                        <lang>创建草稿并预览</lang>
+                    </button>
+                    <button type="button"
+                            class="btn btn-success"
+                            id="store-copy-commit"
+                            data-testid="store-copy-commit"
+                            disabled>
+                        <lang>提交复制</lang>
+                    </button>
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            id="store-copy-cancel"
+                            data-testid="store-copy-cancel"
+                            disabled>
+                        <lang>取消草稿</lang>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-5">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <strong><lang>预览与提交结果</lang></strong>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-secondary mb-3"
+                         role="status"
+                         aria-live="polite"
+                         data-testid="store-copy-status"
+                         id="store-copy-status">
+                        <lang>正在加载 Website/Store 选项…</lang>
+                    </div>
+                    <div class="row mb-3 small">
+                        <span class="col-6"><lang>分类</lang></span>
+                        <span class="col-6 text-end" data-testid="store-copy-count-categories">0</span>
+                        <span class="col-6"><lang>商品</lang></span>
+                        <span class="col-6 text-end" data-testid="store-copy-count-products">0</span>
+                        <span class="col-6"><lang>Offer</lang></span>
+                        <span class="col-6 text-end" data-testid="store-copy-count-offers">0</span>
+                        <span class="col-6"><lang>创建 / 跳过 / 更新</lang></span>
+                        <span class="col-6 text-end" data-testid="store-copy-count-actions">0 / 0 / 0</span>
+                        <span class="col-6"><lang>复制库存数量</lang></span>
+                        <span class="col-6 text-end" data-testid="store-copy-preview-inventory">false</span>
+                    </div>
+                    <pre class="bg-light border rounded p-3 small mb-0"
+                         style="min-height: 9rem; max-height: 24rem; overflow: auto;"
+                         data-testid="store-copy-result"
+                         id="store-copy-result">{}</pre>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <strong><lang>契约要点</lang></strong>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-3 ps-3" data-testid="store-copy-contracts">
+                        <li class="mb-2" data-testid="store-copy-contract-tree">
+                            <lang>分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。</lang>
+                        </li>
+                        <li class="mb-2" data-testid="store-copy-contract-inventory">
+                            <lang>库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。</lang>
+                        </li>
+                        <li class="mb-2" data-testid="store-copy-contract-cross-website">
+                            <lang>跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。</lang>
+                        </li>
+                        <li data-testid="store-copy-contract-duplicate">
+                            <lang>同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。</lang>
+                        </li>
+                    </ul>
+                    <p class="mb-0 small">
+                        <lang>详细契约见</lang>
+                        <code data-testid="store-copy-guide-path">app/code/Weline/Product/doc/copy-guide.md</code>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="store-copy-config"><?= json_encode(
+    $config,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT,
+) ?></script>
+<script>
+(function () {
+    'use strict';
+
+    var configNode = document.getElementById('store-copy-config');
+    var config = configNode ? JSON.parse(configNode.textContent || '{}') : {};
+    var messages = config.messages || {};
+    var state = {
+        websites: [],
+        stores: [],
+        draft: null,
+        preview: null,
+        requestHash: ''
+    };
+    var elements = {
+        entry: document.getElementById('store-copy-entry'),
+        targetWebsite: document.getElementById('store-copy-target-website'),
+        targetStore: document.getElementById('store-copy-target-store'),
+        sourceWebsite: document.getElementById('store-copy-source-website'),
+        sourceStore: document.getElementById('store-copy-source-store'),
+        categories: document.getElementById('store-copy-category-ids'),
+        excludedCategories: document.getElementById('store-copy-excluded-category-ids'),
+        includeProducts: document.getElementById('store-copy-include-products'),
+        inventoryCopyQty: document.getElementById('store-copy-inventory-copy-qty'),
+        duplicatePolicy: document.getElementById('store-copy-duplicate-policy'),
+        previewButton: document.getElementById('store-copy-preview'),
+        commitButton: document.getElementById('store-copy-commit'),
+        cancelButton: document.getElementById('store-copy-cancel'),
+        status: document.getElementById('store-copy-status'),
+        result: document.getElementById('store-copy-result')
+    };
+
+    function toast(type, message) {
+        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+            window.BackendToast[type](message);
+        }
+    }
+
+    function formatError(error, fallback) {
+        var business = window.WelineApiBusiness || (window.Weline && window.Weline.ApiBusiness);
+        if (business && typeof business.formatApiError === 'function') {
+            return business.formatApiError(error, fallback);
+        }
+        return error && error.message ? error.message : fallback;
+    }
+
+    function setStatus(message, type) {
+        elements.status.className = 'alert mb-3 alert-' + (type || 'secondary');
+        elements.status.textContent = message;
+    }
+
+    function resource() {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            throw new Error(messages.apiUnavailable || 'product_copy_api_unavailable');
+        }
+        return Promise.resolve(window.Weline.Api.resource(config.provider || 'product_copy'));
+    }
+
+    function fillWebsiteSelect(select, selectedValue) {
+        select.innerHTML = '';
+        state.websites.forEach(function (website) {
+            var option = document.createElement('option');
+            option.value = String(website.website_id);
+            option.textContent = website.name + ' (' + website.code + ', ID=' + website.website_id + ')';
+            select.appendChild(option);
+        });
+        if (selectedValue !== undefined && selectedValue !== null) {
+            select.value = String(selectedValue);
+        }
+    }
+
+    function fillStoreSelect(select, websiteId, selectedValue) {
+        select.innerHTML = '';
+        var stores = state.stores.filter(function (store) {
+            return Number(store.website_id) === Number(websiteId);
+        });
+        if (stores.length === 0) {
+            var empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = messages.noStores || '';
+            select.appendChild(empty);
+            select.disabled = true;
+            return;
+        }
+        select.disabled = false;
+        stores.forEach(function (store) {
+            var option = document.createElement('option');
+            option.value = String(store.store_id);
+            option.textContent = store.name + ' (' + store.code + ', ID=' + store.store_id + ')';
+            select.appendChild(option);
+        });
+        if (selectedValue !== undefined && selectedValue !== null) {
+            select.value = String(selectedValue);
+        }
+    }
+
+    function updateEntryFields() {
+        var entry = elements.entry.value;
+        var blank = entry === 'blank';
+        var inherit = entry === 'store_inherit';
+        document.querySelectorAll('[data-copy-source-field="website"]').forEach(function (node) {
+            node.classList.toggle('d-none', blank);
+        });
+        document.querySelectorAll('[data-copy-source-field="store"]').forEach(function (node) {
+            node.classList.toggle('d-none', !inherit);
+        });
+        document.querySelectorAll('[data-copy-catalog-field]').forEach(function (node) {
+            node.classList.toggle('d-none', blank);
+        });
+        elements.sourceWebsite.disabled = blank;
+        elements.sourceStore.disabled = !inherit;
+        elements.categories.disabled = blank;
+        elements.excludedCategories.disabled = blank;
+        elements.includeProducts.disabled = blank;
+    }
+
+    function parseIdList(value) {
+        var unique = {};
+        String(value || '').split(/[\s,，;；]+/).forEach(function (raw) {
+            if (!/^[1-9][0-9]*$/.test(raw)) {
+                return;
+            }
+            unique[Number(raw)] = true;
+        });
+        return Object.keys(unique).map(Number).sort(function (a, b) { return a - b; });
+    }
+
+    function selectedPackages() {
+        return Array.prototype.slice.call(
+            document.querySelectorAll('input[name="store-copy-package"]:checked')
+        ).map(function (input) {
+            return input.value;
+        });
+    }
+
+    function payload() {
+        var entry = elements.entry.value;
+        var data = {
+            entry: entry,
+            target_website_id: Number(elements.targetWebsite.value),
+            target_store_id: Number(elements.targetStore.value),
+            category_ids: parseIdList(elements.categories.value),
+            excluded_category_ids: parseIdList(elements.excludedCategories.value),
+            include_products: !!elements.includeProducts.checked,
+            field_packages: selectedPackages(),
+            inventory_copy_qty: !!elements.inventoryCopyQty.checked,
+            duplicate_policy: elements.duplicatePolicy.value
+        };
+        if (entry === 'site_pull' || entry === 'store_inherit') {
+            data.source_website_id = Number(elements.sourceWebsite.value);
+        }
+        if (entry === 'store_inherit') {
+            data.source_store_id = Number(elements.sourceStore.value);
+        }
+        return data;
+    }
+
+    function validatePayload(data) {
+        if (!Number.isInteger(data.target_website_id) || !Number.isInteger(data.target_store_id) || data.target_store_id <= 0) {
+            throw new Error(messages.targetRequired || '');
+        }
+        if (data.entry === 'site_pull' && !Number.isInteger(data.source_website_id)) {
+            throw new Error(messages.sourceWebsiteRequired || '');
+        }
+        if (data.entry === 'store_inherit'
+            && (!Number.isInteger(data.source_website_id)
+                || !Number.isInteger(data.source_store_id)
+                || data.source_store_id <= 0)) {
+            throw new Error(messages.sourceRequired || '');
+        }
+    }
+
+    function isDraftCancellable() {
+        return state.draft && state.draft.state === 'draft';
+    }
+
+    function setBusy(busy) {
+        elements.previewButton.disabled = busy || state.websites.length === 0;
+        elements.commitButton.disabled = busy || !state.draft || !state.preview;
+        elements.cancelButton.disabled = busy || !isDraftCancellable();
+    }
+
+    function renderPreview(preview) {
+        document.querySelector('[data-testid="store-copy-count-categories"]').textContent = String(preview.category_count || 0);
+        document.querySelector('[data-testid="store-copy-count-products"]').textContent = String(preview.product_count || 0);
+        document.querySelector('[data-testid="store-copy-count-offers"]').textContent = String(preview.offer_count || 0);
+        document.querySelector('[data-testid="store-copy-count-actions"]').textContent = [
+            preview.create_count || 0,
+            preview.skip_count || 0,
+            preview.update_count || 0
+        ].join(' / ');
+        document.querySelector('[data-testid="store-copy-preview-inventory"]').textContent =
+            preview.inventory_will_copy_qty ? 'true' : 'false';
+        elements.result.textContent = JSON.stringify({
+            draft_id: preview.draft_id,
+            warnings: preview.warnings || [],
+            items: preview.items || []
+        }, null, 2);
+    }
+
+    function randomHashMaterial() {
+        if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            var bytes = new Uint8Array(32);
+            window.crypto.getRandomValues(bytes);
+            return Array.prototype.map.call(bytes, function (value) {
+                return value.toString(16).padStart(2, '0');
+            }).join('');
+        }
+        var seed = String(Date.now()) + ':' + String(Math.random());
+        var output = '';
+        for (var i = 0; i < 64; i += 1) {
+            output += ((seed.charCodeAt(i % seed.length) + i * 17) % 16).toString(16);
+        }
+        return output;
+    }
+
+    async function requestHash(draft) {
+        var material = JSON.stringify(draft);
+        if (!window.crypto || !window.crypto.subtle || typeof window.TextEncoder === 'undefined') {
+            return randomHashMaterial();
+        }
+        var digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(material));
+        return Array.prototype.map.call(new Uint8Array(digest), function (value) {
+            return value.toString(16).padStart(2, '0');
+        }).join('');
+    }
+
+    async function loadScopes() {
+        try {
+            var api = await resource();
+            var response = await api.scopeOptions({}, {silent: true});
+            state.websites = response.websites || [];
+            state.stores = response.stores || [];
+            fillWebsiteSelect(elements.targetWebsite, 0);
+            fillWebsiteSelect(elements.sourceWebsite, 0);
+            fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
+            fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
+            updateEntryFields();
+            setStatus(messages.ready || '', 'secondary');
+        } catch (error) {
+            var message = formatError(error, messages.scopeLoadFailed || '');
+            setStatus(message, 'danger');
+            toast('error', message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function createAndPreview() {
+        setBusy(true);
+        setStatus(messages.previewing || '', 'info');
+        try {
+            var data = payload();
+            validatePayload(data);
+            var api = await resource();
+            var created = await api.createDraft(data, {silent: true});
+            state.draft = created.draft;
+            state.requestHash = await requestHash(state.draft);
+            var previewed = await api.preview({draft_id: state.draft.draft_id}, {silent: true});
+            state.preview = previewed.preview;
+            renderPreview(state.preview);
+            setStatus(messages.previewReady || '', 'success');
+            toast('success', messages.previewReady || '');
+        } catch (error) {
+            state.draft = null;
+            state.preview = null;
+            state.requestHash = '';
+            var message = formatError(error, messages.previewFailed || '');
+            setStatus(message, 'danger');
+            toast('error', message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function commitDraft() {
+        if (!state.draft || !state.preview) {
+            return;
+        }
+        setBusy(true);
+        setStatus(messages.committing || '', 'info');
+        try {
+            var api = await resource();
+            var result = await api.commit({
+                draft_id: state.draft.draft_id,
+                request_hash: state.requestHash
+            }, {silent: true});
+            elements.result.textContent = JSON.stringify(result, null, 2);
+            state.draft.state = 'committed';
+            state.preview = null;
+            setStatus(messages.committed || '', 'success');
+            toast('success', messages.committed || '');
+        } catch (error) {
+            var message = formatError(error, messages.commitFailed || '');
+            setStatus(message, 'danger');
+            toast('error', message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function cancelDraft() {
+        if (!isDraftCancellable()) {
+            return;
+        }
+        setBusy(true);
+        setStatus(messages.cancelling || '', 'info');
+        try {
+            var api = await resource();
+            var result = await api.cancel({draft_id: state.draft.draft_id}, {silent: true});
+            elements.result.textContent = JSON.stringify(result, null, 2);
+            state.draft = null;
+            state.preview = null;
+            state.requestHash = '';
+            setStatus(messages.cancelled || '', 'secondary');
+            toast('success', messages.cancelled || '');
+        } catch (error) {
+            var message = formatError(error, messages.cancelFailed || '');
+            setStatus(message, 'danger');
+            toast('error', message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    elements.entry.addEventListener('change', updateEntryFields);
+    elements.targetWebsite.addEventListener('change', function () {
+        fillStoreSelect(elements.targetStore, elements.targetWebsite.value);
+    });
+    elements.sourceWebsite.addEventListener('change', function () {
+        fillStoreSelect(elements.sourceStore, elements.sourceWebsite.value);
+    });
+    elements.previewButton.addEventListener('click', createAndPreview);
+    elements.commitButton.addEventListener('click', commitDraft);
+    elements.cancelButton.addEventListener('click', cancelDraft);
+
+    setBusy(true);
+    loadScopes();
+})();
+</script>

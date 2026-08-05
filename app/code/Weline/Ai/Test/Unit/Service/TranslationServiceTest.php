@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Test\Unit\Service;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Ai\Service\TranslationService;
 use Weline\Ai\Service\AiService;

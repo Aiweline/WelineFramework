@@ -112,7 +112,8 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--master-lease-file=')) {
         $masterLeaseFile = (string)\substr($arg, 20);
     } elseif (\str_starts_with($arg, '--master-token=')) {
-        $masterToken = (string)\substr($arg, 15);
+        \fwrite(\STDERR, "Event SSL Worker --master-token is forbidden; use the protected child ledger.\n");
+        exit(1);
     } elseif (\str_starts_with($arg, '--ssl-cert=')) {
         $sslCert = \substr($arg, 11);
     } elseif (\str_starts_with($arg, '--ssl-key=')) {

@@ -11,7 +11,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::contact', '联系人', 'mdi-account-box', '管理联系人（多渠道配置）', 'Weline_Backend::notification_settings')]
+#[Acl('Weline_Backend::contact', '联系人', 'mdi-account-box', '管理联系人（多渠道配置）', 'Weline_Backend::customer_group')]
 class Contact extends BackendController
 {
     private ContactService $contactService;

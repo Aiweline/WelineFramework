@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\System\File;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class UploaderTest extends TestCore
 {

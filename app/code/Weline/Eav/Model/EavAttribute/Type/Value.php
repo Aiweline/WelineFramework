@@ -33,6 +33,14 @@ class Value extends \Weline\Framework\Database\Model implements \Weline\Framewor
     public const schema_fields_attribute_id = 'attribute_id';
     public const schema_fields_entity_id = 'entity_id';
     public const schema_fields_value = 'value';
+    /** P1B-005 typed Scope 列（NULL scope_kind = 遗留行） */
+    public const schema_fields_SCOPE_KIND = 'scope_kind';
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    public const schema_fields_WEBSITE_CODE = 'website_code';
+    public const schema_fields_STORE_CODE = 'store_code';
+    public const schema_fields_CHANNEL_CODE = 'channel_code';
+    public const schema_fields_IS_CLEARED = 'is_cleared';
+    public const schema_fields_LOCALE = 'locale';
 
     public array $attributes_type_fields = [];
     public array $_index_sort_keys = [self::schema_fields_attribute_id, self::schema_fields_entity_id];
@@ -106,6 +114,7 @@ class Value extends \Weline\Framework\Database\Model implements \Weline\Framewor
                             'not null',
                             '属性值'
                         );
+                    $this->appendTypedScopeColumns($table);
                     if ($type->getIsSwatch()) {
                         $table->addColumn($type::schema_fields_is_swatch, TableInterface::column_type_BOOLEAN, 0, 'default 0', '是否有样本');
                         if ($type->hasSwatchImage()) {
@@ -314,5 +323,62 @@ class Value extends \Weline\Framework\Database\Model implements \Weline\Framewor
         if (!$this->getIsSwatch()) {
             throw new Exception(__('此属性没有样本，无法为属性值设置样本！'));
         }
+    }
+
+    /**
+     * @param object $table createTable builder
+     */
+    private function appendTypedScopeColumns(object $table): void
+    {
+        $table
+            ->addColumn(
+                self::schema_fields_SCOPE_KIND,
+                TableInterface::column_type_VARCHAR,
+                16,
+                'null',
+                'Scope kind：global|website|store|channel；NULL=遗留行',
+            )
+            ->addColumn(
+                self::schema_fields_WEBSITE_ID,
+                TableInterface::column_type_INTEGER,
+                11,
+                'null',
+                'Website ID（0 合法）',
+            )
+            ->addColumn(
+                self::schema_fields_WEBSITE_CODE,
+                TableInterface::column_type_VARCHAR,
+                64,
+                'null',
+                'Website code',
+            )
+            ->addColumn(
+                self::schema_fields_STORE_CODE,
+                TableInterface::column_type_VARCHAR,
+                64,
+                'null',
+                'Store code',
+            )
+            ->addColumn(
+                self::schema_fields_CHANNEL_CODE,
+                TableInterface::column_type_VARCHAR,
+                64,
+                'null',
+                'Channel code',
+            )
+            ->addColumn(
+                self::schema_fields_IS_CLEARED,
+                TableInterface::column_type_SMALLINT,
+                1,
+                'default 0',
+                'cleared：阻断向上继承',
+            )
+            ->addColumn(
+                self::schema_fields_LOCALE,
+                TableInterface::column_type_VARCHAR,
+                16,
+                "default ''",
+                'locale；空串=默认 locale',
+            );
     }
 }

@@ -47,6 +47,11 @@ trait SqlTrait
 
     public static function convertMySQLToSQLite($mysqlSql): string
     {
+        $mysqlSql = self::normalizeLogicalDatabaseTableReferences((string)$mysqlSql);
+        // SQLite rebuild builders use a comment separator so higher-level schema
+        // executors can preserve statement boundaries. Direct connector query()
+        // must materialize the same boundary as a semicolon before conversion.
+        $mysqlSql = str_replace(Connector::DDL_STATEMENT_SEPARATOR, ";\n", $mysqlSql);
         $createTables = self::extractCreateTableStatements($mysqlSql);
         // 如果有创建表语句
         if ($createTables) {
@@ -189,8 +194,22 @@ trait SqlTrait
         // 去除SET NAMES utf8mb4;
         $mysqlSql = preg_replace('/SET\s+NAMES\s+\w+/i', '', $mysqlSql);
 
-        // 转换 TRUNCATE 语句，支持带反引号、双引号和不带引号的表名
-        $mysqlSql = preg_replace('/TRUNCATE\s+TABLE\s+[`"]?(\w+)[`"]?/i', 'DELETE FROM "$1"', $mysqlSql);
+        // SQLite uses one physical database file. A model may still expose a
+        // logical database-qualified table name, so TRUNCATE must retain only
+        // the final physical table segment when it is converted to DELETE.
+        $mysqlSql = preg_replace_callback(
+            '/TRUNCATE\s+TABLE\s+((?:[`"]?[A-Za-z_][A-Za-z0-9_]*[`"]?)(?:\s*\.\s*(?:[`"]?[A-Za-z_][A-Za-z0-9_]*[`"]?))*)/i',
+            static function (array $matches): string {
+                $raw = str_replace(['`', '"'], '', (string)($matches[1] ?? ''));
+                $parts = array_values(array_filter(
+                    array_map('trim', explode('.', $raw)),
+                    static fn(string $part): bool => $part !== '',
+                ));
+                $physicalTable = (string)end($parts);
+                return 'DELETE FROM "' . str_replace('"', '""', $physicalTable) . '"';
+            },
+            $mysqlSql,
+        );
 
         $statements = Tool::extract_sql_statements($mysqlSql);
         $convertedStatements = [];
@@ -340,6 +359,54 @@ trait SqlTrait
         }
         // 处理字段引用中的_`order`关键字,改为_order
         return str_replace('_`order`', '_order', $sql);
+    }
+
+    /**
+     * SQLite 在当前适配器契约中只使用一个物理数据库文件。框架仍会为了
+     * 跨驱动一致性生成 database.table，因此仅在 SQL 的表/索引目标位置
+     * 移除逻辑 database 段；字段别名和字符串内容不参与替换。
+     */
+    private static function normalizeLogicalDatabaseTableReferences(string $sql): string
+    {
+        $identifier = '(?:`[^`]+`|"[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)';
+        $tableTarget = '(?<database>' . $identifier . ')\s*\.\s*(?<table>' . $identifier . ')';
+        $keyword = '(?<prefix>\b(?:'
+            . 'CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)(?:\s+IF\s+NOT\s+EXISTS)?'
+            . '|ALTER\s+TABLE'
+            . '|DROP\s+(?:TABLE|VIEW|INDEX)(?:\s+IF\s+EXISTS)?'
+            . '|INSERT\s+(?:OR\s+(?:IGNORE|REPLACE)\s+)?INTO'
+            . '|REPLACE\s+INTO'
+            . '|UPDATE'
+            . '|DELETE\s+FROM'
+            . '|FROM'
+            . '|JOIN'
+            . '|REFERENCES'
+            . ')\s+)';
+
+        $normalized = preg_replace_callback(
+            '~' . $keyword . $tableTarget . '~i',
+            static function (array $matches): string {
+                $database = strtolower(trim((string)($matches['database'] ?? ''), "`\"[] \t\n\r\0\x0B"));
+                if ($database === 'main' || $database === 'temp') {
+                    return (string)$matches[0];
+                }
+                return (string)($matches['prefix'] ?? '') . (string)($matches['table'] ?? '');
+            },
+            $sql,
+        ) ?? $sql;
+
+        return preg_replace_callback(
+            '~(?<prefix>\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+' . $identifier . '\s+ON\s+)'
+            . $tableTarget . '~i',
+            static function (array $matches): string {
+                $database = strtolower(trim((string)($matches['database'] ?? ''), "`\"[] \t\n\r\0\x0B"));
+                if ($database === 'main' || $database === 'temp') {
+                    return (string)$matches[0];
+                }
+                return (string)($matches['prefix'] ?? '') . (string)($matches['table'] ?? '');
+            },
+            $normalized,
+        ) ?? $normalized;
     }
 
 }

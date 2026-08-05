@@ -45,8 +45,18 @@ Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。
 缺少发件人配置数据,缺少发件人配置数据
 请选择自建邮箱账号,"Please select a self-hosted mailbox account"
 保存成功,"Saved successfully"
+"SMTP 配置","SMTP 配置"
+"SMTP 邮件服务配置","SMTP 邮件服务配置"
+配置页,配置页
+"查看 SMTP 配置","查看 SMTP 配置"
+保存配置,保存配置
+"保存 SMTP 配置","保存 SMTP 配置"
+测试发送,测试发送
+"测试 SMTP 发送","测试 SMTP 发送"
 删除成功！,"Deletion successful!"
 你要删除的记录已不存在！,"The record you want to delete no longer exists!"
+"SMTP 发件记录","SMTP 发件记录"
+"查看 SMTP 发送日志","查看 SMTP 发送日志"
 "SMTP 发件人配置","SMTP sender configuration"
 添加发件人,"Add Sender"
 说明,Description
@@ -101,3 +111,4 @@ Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
+"""Smtp 查询器不支持的操作：%{1}""","Smtp 查询器不支持的操作：%{1}"

@@ -8,7 +8,7 @@ use Weline\Database\Model\MigrationBackup;
 use Weline\Database\Service\BackupService;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 final class BackupRestoreScopeTest extends TestCore
 {

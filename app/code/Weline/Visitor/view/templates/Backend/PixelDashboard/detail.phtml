@@ -23,6 +23,8 @@
  * @var array $ecommerce_items
  * @var array $path_exploration
  * @var array $retention
+ * @var array $website_select_options
+ * @var string $website_select_options_json
  */
 
 $websiteId = (int)($website_id ?? 0);
@@ -114,6 +116,16 @@ $retentionOffsetSummary = is_array($retention['offset_summary'] ?? null) ? $rete
 
 $h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $num = static fn($value, int $decimals = 0): string => number_format((float)$value, $decimals);
+$websiteSelectOptions = is_array($website_select_options ?? null) ? $website_select_options : [];
+$websiteSelectOptionsJson = (string)($website_select_options_json ?? '');
+if ($websiteSelectOptionsJson === '') {
+    $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+}
+$selectedWebsite = (string)$websiteId;
+$selectedWebsiteDisplay = \Weline\Visitor\Service\PixelStatisticsService::resolveWebsiteSelectDisplay(
+    $websiteSelectOptions,
+    $selectedWebsite
+);
 $selectedRange = (string)($filters['range'] ?? '30d');
 $rangeLabels = [
     'today' => __('今日'),
@@ -136,6 +148,7 @@ $listBaseQuery = \Weline\Visitor\Service\PixelStatisticsService::buildListDrilld
     'websiteId' => (string)$websiteId,
 ]);
 $listUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $listBaseQuery);
+$detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/detail');
 ?>
 <style>
 .weline-pixel-insight { color: var(--backend-color-text-primary, #212529); }
@@ -153,7 +166,7 @@ $listUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $lis
 <div class="weline-pixel-insight">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <div>
-            <h4 class="mb-1"><?= __('像素详情报表') ?> · <?= __('站点') ?> #<?= (int)$websiteId ?></h4>
+            <h4 class="mb-1"><?= __('像素详情报表') ?></h4>
             <div class="weline-pixel-muted small">
                 <?= $h($rangeLabels[$selectedRange] ?? $selectedRange) ?>
                 · <?= __('对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源') ?>
@@ -163,6 +176,51 @@ $listUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $lis
             <a class="btn btn-outline-secondary btn-sm" href="<?= $h($indexUrl) ?>"><?= __('返回事件看板') ?></a>
             <a class="btn btn-outline-primary btn-sm" href="<?= $h($listUrl) ?>"><?= __('事件列表') ?></a>
             <a class="btn btn-primary btn-sm" href="<?= $h($refreshUrl) ?>"><?= __('刷新') ?></a>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <w:form method="get" action="@var($detailFormAction)" class="row g-2 align-items-end" id="pixel-detail-site-form">
+                <div class="col-md-6 col-xl-4 weline-pixel-website-filter">
+                    <label class="form-label" for="detail-filter-website_trigger"><lang>站点</lang></label>
+                    <w:websites:website:select
+                        id="detail-filter-website"
+                        name="websiteId"
+                        value="selectedWebsite"
+                        display="selectedWebsiteDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        clearable="false"
+                        empty-label="@lang(请选择站点)"
+                        placeholder="@lang(搜索站点名称或编码)"
+                        class="weline-pixel-website-select"
+                    />
+                </div>
+                <div class="col-md-3 col-xl-2">
+                    <label class="form-label" for="detail-filter-range"><lang>时间范围</lang></label>
+                    <select name="range" id="detail-filter-range" class="form-select">
+                        <?php foreach ($rangeLabels as $rangeValue => $rangeLabel): ?>
+                            <option value="<?= $h($rangeValue) ?>" <?= $selectedRange === $rangeValue ? 'selected' : '' ?>>
+                                <?= $h($rangeLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php if ((string)($filters['event'] ?? '') !== ''): ?>
+                    <input type="hidden" name="event" value="<?= $h((string)$filters['event']) ?>">
+                <?php endif; ?>
+                <?php if ((string)($filters['start_day'] ?? '') !== ''): ?>
+                    <input type="hidden" name="startDate" value="<?= $h((string)$filters['start_day']) ?>">
+                <?php endif; ?>
+                <?php if ((string)($filters['end_day'] ?? '') !== ''): ?>
+                    <input type="hidden" name="endDate" value="<?= $h((string)$filters['end_day']) ?>">
+                <?php endif; ?>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-outline-primary"><?= __('切换站点') ?></button>
+                </div>
+            </w:form>
         </div>
     </div>
 

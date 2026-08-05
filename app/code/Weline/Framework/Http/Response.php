@@ -275,6 +275,15 @@ class Response implements ResponseInterface
         return $this;
     }
 
+    /**
+     * Alias used by Backend controllers (Config/Order/...).
+     * Prefer setHttpResponseCode in new code; keep setCode for compatibility.
+     */
+    public function setCode(int $code): static
+    {
+        return $this->setHttpResponseCode($code);
+    }
+
     public function setBody(string $body): static
     {
         $this->body = $body;

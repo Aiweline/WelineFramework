@@ -1,17 +1,18 @@
 <?php
 
 /**
- * 分析API HTTP集成测试
+ * 分析 API HTTP 手工探针
  * 
  * 测试像素数据分析API的HTTP请求和响应
  */
 
 namespace Weline\Visitor\Test\Http;
 
+use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Visitor\Model\Pixel;
 
-class AnalyticsApiHttpTest extends FrontendRestController
+class AnalyticsApiHttpProbe extends FrontendRestController
 {
     /**
      * 测试：商业价值分析
@@ -187,3 +188,15 @@ class AnalyticsApiHttpTest extends FrontendRestController
     }
 }
 
+
+
+final class AnalyticsApiHttpTest extends TestCase
+{
+    public function testManualProbeDeclaresExpectedHttpActions(): void
+    {
+        self::assertTrue(is_subclass_of(AnalyticsApiHttpProbe::class, FrontendRestController::class));
+        foreach (['getBusinessValue', 'getDashboard', 'getAbTest', 'getRunAll'] as $method) {
+            self::assertTrue(method_exists(AnalyticsApiHttpProbe::class, $method), $method);
+        }
+    }
+}

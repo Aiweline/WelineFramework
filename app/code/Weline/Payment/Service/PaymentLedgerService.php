@@ -162,7 +162,8 @@ class PaymentLedgerService
 
     private function newLedger(): PaymentLedger
     {
-        return ($this->objectManager ?? ObjectManager::getInstance())->getInstance(PaymentLedger::class);
+        return ($this->objectManager ?? ObjectManager::getInstance())
+            ->getInstance(PaymentLedger::class, [], false);
     }
 
     private function generateLedgerCode(): string

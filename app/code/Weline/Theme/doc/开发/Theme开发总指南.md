@@ -16,6 +16,7 @@
    - 布局：`app/code/Weline/Theme/doc/layout-discovery-guide.md`
    - 部件：`app/code/Weline/Theme/doc/部件开发指南.md`
    - Slot 属性：`app/code/Weline/Theme/doc/widget-slot-attributes.md`
+   - **前台 section `weline-code`（强约束）**：`app/code/Weline/Theme/doc/frontend-section-weline-code.md`
    - Theme.js：`app/code/Weline/Theme/doc/Theme.js使用指南.md`
    - 浏览器业务请求：`app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
    - Taglib：`app/code/Weline/Taglib/doc/README.md`
@@ -119,8 +120,11 @@
 - 使用：
   - `Weline.Api.resource('provider')`
   - `Weline.Api.graph()`
-  - `Weline.Api.stream()`
-  - `Weline.Api.request()/get()/post()`（低层 helper）
+  - `Weline.Api.createStream()` / `Weline.Api.stream()`
+
+主题运行时会读取服务端唯一的 opaque meta 并立即预热 Scope/Backend Worker bootstrap。业务代码不得手工构造、复制或持久化 bootstrap ID，也不得在 Worker/身份失效后绕过刷新流程。
+
+后台 `ModuleLoader` 对动态脚本使用 `loading / loaded / failed` 显式状态：同一逻辑路径（包括带 `_weline_retry` 的重试 URL）只保留一个 in-flight 请求，并发调用共享结果；只有 loaded，或预期全局模块已经就绪的服务端直出脚本，才可直接复用，声明阶段的按需加载 Proxy 不属于已就绪模块。服务端直出脚本存在但全局模块缺失、模块仅为不完整 fallback，或动态脚本触发 onerror 时，必须移除该元素，让上层清理 `loadingModules` 后的下一次用户刷新真正重新发起脚本请求，不得把残留的失败 `<script>` 误认为成功。加载器仅在真实失败后为同一路径附加递增的 `_weline_retry` 查询参数，绕过浏览器同页失败 URL 的负缓存；正常首次加载不附加该参数，继续使用既有静态资源缓存。
 
 禁止：
 
@@ -212,14 +216,18 @@ component 负责：
 
 - `position` / `page_layouts` / `slot` / `supports` 表示部件允许出现的位置和协议
 - `default_injections` 只表示“建议默认放在哪里”
+- Dashboard 注入可选 `default_view`（`DashboardView.code`）：声明后才在对应视图身份就绪时自动挂载；删除后写 `user_deleted`，手动“应用”可恢复
+- Theme 监听 `Weline_Dashboard::layout_identity_ready`，只匹配 `default_view === view_code` 做一次性补齐
 - `accept="*"` 表示接受所有部件
 - `accept="a,b,c"` 是硬白名单
+- **强约束**：前台字面 `<section>` 与 `w:slot wrapper="section"` **必须**配置非空语义 `weline-code`（命名与写法见 `frontend-section-weline-code.md`）；缺省会被 `setup:upgrade` / Rules 致命拦截，且 Visitor Pixel 无法稳定归因区块来源
 
 规范文档：
 
 - `app/code/Weline/Theme/doc/部件开发指南.md`
 - `app/code/Weline/Theme/doc/widget-slot-attributes.md`
 - `app/code/Weline/Theme/doc/widget-rules.md`
+- `app/code/Weline/Theme/doc/frontend-section-weline-code.md`
 - `app/code/Weline/Widget/doc/开发指南.md`
 
 ## 7. 严禁直接修改的东西
@@ -241,6 +249,7 @@ component 负责：
 ### 改了布局 / partial / 组件 / widget 模板
 
 - 至少做 `php -l <file>`
+- 若触及前台 `<section>` / `wrapper="section"`：必须跑 `php bin/w frontend:check-section-code`（退出码 0）
 - 如影响真实页面，补最接近的 `php bin/w http:request <route>`
 - 用户可见改动最终要有 Browser 冒烟，除非环境阻塞
 
@@ -273,6 +282,7 @@ component 负责：
 - 在 layout 里塞业务流程与交互脚本
 - 不区分 layout / partial / component / widget 的职责
 - 不写 `@widget.*` / `@param` 就想让编辑器自动识别
+- 前台 `<section>` / `wrapper=section` 不配 `weline-code`（升级致命 + Pixel 溯源降级）
 - 直接在浏览器侧拼 query-bin URL
 - 把 `app/design` 覆盖与模块 `view/theme` 追加混为一谈
 
@@ -284,12 +294,14 @@ component 负责：
 2. 这是基础组件还是可视化编辑器部件？
 3. 这次改动属于默认主题，还是某个设计主题覆盖？
 4. 有没有浏览器业务请求？如果有，是否走了 `Weline.Api.*`？
-5. 最终验证入口是什么？
+5. 新增/改动的前台 section 是否已配非空语义 `weline-code`？
+6. 最终验证入口是什么？
 
 然后对应去读：
 
 - layout：`layout-discovery-guide.md`
 - widget：`部件开发指南.md`
+- section code：`frontend-section-weline-code.md`
 - request：`Weline.Api使用指南.md`
 - overall：本文件
 
@@ -300,6 +312,7 @@ component 负责：
 - `app/code/Weline/Theme/doc/layout-discovery-guide.md`
 - `app/code/Weline/Theme/doc/部件开发指南.md`
 - `app/code/Weline/Theme/doc/widget-slot-attributes.md`
+- `app/code/Weline/Theme/doc/frontend-section-weline-code.md`
 - `app/code/Weline/Theme/doc/Theme.js使用指南.md`
 - `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
 - `app/code/Weline/Taglib/doc/README.md`

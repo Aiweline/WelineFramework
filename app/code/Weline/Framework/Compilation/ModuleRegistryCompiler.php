@@ -31,7 +31,10 @@ final class ModuleRegistryCompiler
     public function compile(string $modulesRoot, string $target): array
     {
         $manifests = $this->manifestReader->readAll($modulesRoot);
-        $errors = $this->graphValidator->validate($manifests);
+        $errors = array_merge(
+            $this->graphValidator->validate($manifests),
+            $this->validateProviderImplementations($manifests),
+        );
         if ($errors !== []) {
             throw new \RuntimeException("Module registry compilation failed:\n- " . implode("\n- ", $errors));
         }
@@ -51,6 +54,49 @@ final class ModuleRegistryCompiler
         $this->writer->write($target, $registry);
 
         return $registry;
+    }
+
+    /**
+     * @param array<string, ModuleManifest> $manifests
+     * @return list<string>
+     */
+    private function validateProviderImplementations(array $manifests): array
+    {
+        $errors = [];
+        foreach ($manifests as $moduleName => $manifest) {
+            foreach ($manifest->provides as $contract => $implementation) {
+                try {
+                    if (!class_exists($implementation)) {
+                        $errors[] = sprintf(
+                            '%s provider %s => %s is not loadable.',
+                            $moduleName,
+                            $contract,
+                            $implementation,
+                        );
+                        continue;
+                    }
+
+                    if (!(new \ReflectionClass($implementation))->isInstantiable()) {
+                        $errors[] = sprintf(
+                            '%s provider %s => %s is not instantiable.',
+                            $moduleName,
+                            $contract,
+                            $implementation,
+                        );
+                    }
+                } catch (\Throwable $exception) {
+                    $errors[] = sprintf(
+                        '%s provider %s => %s cannot be loaded: %s',
+                        $moduleName,
+                        $contract,
+                        $implementation,
+                        $exception->getMessage(),
+                    );
+                }
+            }
+        }
+
+        return $errors;
     }
 
     /**

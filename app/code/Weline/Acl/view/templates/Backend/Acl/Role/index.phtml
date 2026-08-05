@@ -28,11 +28,11 @@
 }
 </style>
 <!-- start page title -->
-<div class='row'>
+<div class='row' data-testid="acl-role-management">
     <div class='col-12'>
         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
             <h4 class='mb-sm-0'>
-                <lang>Acl权限管理</lang>
+                <lang>权限角色</lang>
             </h4>
 
             <div class='page-title-right'>
@@ -55,16 +55,12 @@
     </div>
 </div>
 <!-- end page title -->
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div> <!-- end message -->
 <div class='row'>
     <div class='col-12'>
         <div class='card'>
             <div class='card-body'>
                 <h4 class='card-title'>
-                    <lang>Acl权限管理</lang>
+                    <lang>权限角色</lang>
                 </h4>
                 <p class='card-title-desc'>
                     <lang>支持角色权限管理</lang>
@@ -81,7 +77,7 @@
                         </div>
                     </div>
                     <div class='col-6'>
-                        <button type="button" class='btn btn-primary pull-right mt-1 mb-1' data-bs-toggle="offcanvas" data-bs-target="#roleAddOffcanvas" aria-controls="roleAddOffcanvas">
+                        <button type="button" class='btn btn-primary pull-right mt-1 mb-1' data-testid="acl-role-add" data-bs-toggle="offcanvas" data-bs-target="#roleAddOffcanvas" aria-controls="roleAddOffcanvas">
                             <lang>添加</lang>
                         </button>
                     </div>
@@ -104,7 +100,7 @@
                             </thead>
                             <tbody>
                             <foreach name="roles" item="role" key="key">
-                                <tr>
+                                <tr data-testid="acl-role-row" data-role-name="{{role.role_name}}">
                                     <td class='co-name'>{{role.role_id}}</td>
                                     <td class='co-name'>{{role.role_name}}</td>
                                     <td class='co-name'>{{role.role_description}}</td>
@@ -155,7 +151,11 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body">
-        <w:form id="roleAddForm" class="needs-validation" novalidate>
+        <w:form id="roleAddForm"
+                class="needs-validation"
+                method="post"
+                action="@backend-url('*/backend/acl/role/add')"
+                novalidate>
             <div class="mb-3">
                 <label for="role_name" class="form-label">
                     <lang>角色名</lang> <span class="text-danger">*</span>
@@ -188,143 +188,17 @@
 
 
 <script>
-(function(g){
-  if(g.__bqAdmin_acl) return;
-  g.__bqAdmin_acl=true;
-  g.bqAdmin=g.bqAdmin||{};
-  g.bqAdmin['acl']=function(url, options){
-    options=options||{};
-    var body=options.body;
-    if(body && typeof FormData!=='undefined' && body instanceof FormData){
-      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
-    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
-    var run=function(api){ return api.resource('acl').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
-    var toResp=function(data){
-      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
-      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
-        return _biz.wrapAdminBridgeResult(data);
-      }
-      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
-      var ok=!(body&&body.success===false);
-      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
-      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
-      return resp;
-    };
-    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
-    return p.then(toResp);
-  };
-})(window);
-</script>
-<script>
 (function() {
     'use strict';
-    
+
     var form = document.getElementById('roleAddForm');
     var offcanvasElement = document.getElementById('roleAddOffcanvas');
-    var offcanvas = null;
-    
-    // 延迟初始化 offcanvas，确保 Bootstrap 已加载
-    function getOffcanvas() {
-        if (!offcanvas && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-            offcanvas = bootstrap.Offcanvas.getInstance(offcanvasElement) || new bootstrap.Offcanvas(offcanvasElement);
-        }
-        return offcanvas;
-    }
 
-    function normalizeApiResult(res) {
-        if (typeof res === 'string') {
-            try {
-                return JSON.parse(res);
-            } catch (e) {
-                return {success: false, message: res};
-            }
-        }
-        if (!res || typeof res !== 'object') {
-            return res;
-        }
-        if (Object.prototype.hasOwnProperty.call(res, 'success') ||
-            Object.prototype.hasOwnProperty.call(res, 'code') ||
-            Object.prototype.hasOwnProperty.call(res, 'msg') ||
-            Object.prototype.hasOwnProperty.call(res, 'message')) {
-            return res;
-        }
-        if (Object.prototype.hasOwnProperty.call(res, 'data')) {
-            return normalizeApiResult(res.data);
-        }
-        return res;
-    }
-
-    function apiErrorMessage(error, fallback) {
-        var response = error && error.response ? error.response : null;
-        var data = response && response.data !== undefined ? normalizeApiResult(response.data) : null;
-
-        if (data && typeof data === 'object') {
-            return data.msg || data.message || (data.error && data.error.message) || fallback;
-        }
-        if (typeof data === 'string' && data.trim()) {
-            return data;
-        }
-        return (error && error.message) || fallback;
-    }
-    
-    var submitting = false;
-    form.addEventListener('submit', function(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        
-        if (submitting) return;
-        if (!form.checkValidity()) {
-            form.classList.add('was-validated');
-            return;
-        }
-        submitting = true;
-        
-        var formData = new FormData(form);
-        var data = {};
-        for (var pair of formData.entries()) {
-            data[pair[0]] = pair[1];
-        }
-        
-        // 禁用提交按钮防止重复提交
-        var submitBtn = form.querySelector('button[type="submit"]');
-        var originalText = submitBtn.innerHTML;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('正在创建...') ?>';
-        
-        BackendToast.info('<?= __('正在创建角色...') ?>');
-        
-        var roleUrl = '<?= $this->getBackendUrl("*/backend/acl/role/add") ?>';
-        var roleOpts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(data) };
-        window.Weline.Api.request(roleUrl, roleOpts)
-        .then(function(res) {
-            var result = normalizeApiResult(res);
-            if (result && result.success) {
-                BackendToast.success(result.message || '<?= __('角色创建成功！') ?>');
-                var oc = getOffcanvas();
-                if (oc) oc.hide();
-                form.reset();
-                form.classList.remove('was-validated');
-                setTimeout(function() {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                BackendToast.error(result.message || '<?= __('角色创建失败，请检查输入后重试') ?>');
-            }
-        })
-        .catch(function(error) {
-            console.error('Error:', error);
-            BackendToast.error(apiErrorMessage(error, '<?= __('角色创建失败，请检查输入后重试') ?>'));
-        })
-        .finally(function() {
-            submitting = false;
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
-        });
-    });
-    
-    offcanvasElement.addEventListener('hidden.bs.offcanvas', function() {
+    if (form && offcanvasElement) {
+      offcanvasElement.addEventListener('hidden.bs.offcanvas', function() {
         form.reset();
         form.classList.remove('was-validated');
-    });
+      });
+    }
 })();
 </script>

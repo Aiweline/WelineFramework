@@ -9,6 +9,9 @@ namespace Weline\Server\Service\Edge\Nginx;
  */
 final class HostNginxDetector
 {
+    private const MAX_PATH_ENV_BYTES = 64 * 1024;
+    private const MAX_PATH_DIRECTORIES = 256;
+
     /** @var array<string, string|null> */
     private static array $cache = [];
 
@@ -68,19 +71,27 @@ final class HostNginxDetector
 
     private function detectFromPath(string $excludeInstallRoot): ?string
     {
-        $command = \PHP_OS_FAMILY === 'Windows'
-            ? 'where nginx 2>NUL'
-            : 'command -v nginx 2>/dev/null';
-        $output = [];
-        $code = 1;
-        @\exec($command, $output, $code);
-        if ($code !== 0 || $output === []) {
+        $pathEnvironment = (string)\getenv('PATH');
+        if ($pathEnvironment === '' || \strlen($pathEnvironment) > self::MAX_PATH_ENV_BYTES) {
             return null;
         }
-        foreach ($output as $line) {
-            $path = \trim((string)$line);
-            if ($path !== '' && $this->isUsableHostBinary($path, $excludeInstallRoot)) {
-                return $path;
+        $directories = \explode(PATH_SEPARATOR, $pathEnvironment);
+        if (\count($directories) > self::MAX_PATH_DIRECTORIES) {
+            return null;
+        }
+        $binaryNames = \PHP_OS_FAMILY === 'Windows'
+            ? ['nginx.exe', 'nginx']
+            : ['nginx'];
+        foreach ($directories as $directory) {
+            $directory = \trim($directory, " \t\n\r\0\x0B\"'");
+            if ($directory === '' || \str_contains($directory, "\0")) {
+                continue;
+            }
+            foreach ($binaryNames as $binaryName) {
+                $candidate = \rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $binaryName;
+                if ($this->isUsableHostBinary($candidate, $excludeInstallRoot)) {
+                    return $candidate;
+                }
             }
         }
         return null;
@@ -89,7 +100,11 @@ final class HostNginxDetector
     private function isUsableHostBinary(string $path, string $excludeInstallRoot): bool
     {
         $path = \trim($path);
-        if ($path === '' || !\is_file($path)) {
+        if ($path === ''
+            || !$this->isAbsolutePath($path)
+            || \is_link($path)
+            || !\is_file($path)
+        ) {
             return false;
         }
         if (\PHP_OS_FAMILY !== 'Windows' && !\is_executable($path)) {
@@ -100,6 +115,13 @@ final class HostNginxDetector
             return false;
         }
         return true;
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return \PHP_OS_FAMILY === 'Windows'
+            ? \preg_match('/\A(?:[A-Za-z]:[\\\/]|\\\\[^\\\/]+[\\\/][^\\\/]+)/D', $path) === 1
+            : \str_starts_with($path, '/');
     }
 
     private function normalizePath(string $path): string

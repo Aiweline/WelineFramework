@@ -17,7 +17,9 @@
 
 #### 功能说明
 
-`Weline_Cdn::clear` 事件在清理CDN缓存时触发，允许其他模块监听并处理缓存清理操作。事件数据包含域名、清理模式等信息。
+`Weline_Cdn::clear` 是手工或兼容清理命令。`Clear` Observer 调用 `CachePurger`
+并把结果写回事件的 `result`；参数验证或服务商调用失败会以
+`result.success=false` 返回。它不是 Website 资源变更的生产者事件。
 
 该事件主要用于：
 - 执行缓存清理
@@ -59,11 +61,28 @@
 
 ```php
 [
-    'domain' => string,      // 域名
+    'domain' => int|string,  // 数字 domain_id（多站点推荐）或域名
     'mode' => string,        // 清理模式：everything, urls, hosts, tags, cache_keys
     'data' => array,         // 附加数据
 ]
 ```
+
+### 站点边界
+
+`Weline_Cdn::clear` 本身没有 `site_id`；传域名字符串时是历史的非站点化查找。
+在多站点路径中，调用方必须先在精确站点内解析 `domain_id` 再投递，不得依赖
+“首个同名域名”。需要传站点时使用 `Weline_Cdn::request`：
+
+- 显式 `site_id`/`website_id=0` 是合法的系统默认站点。
+- 只有字段缺失才尝试当前运行时站点；显式 `null` 表示无站点上下文。
+- 显式域名未在该站点命中时直接失败，不退回该站其他域名，更不跨站。
+
+### 与 ResourceChange 的关系
+
+Website 增删改的自动 CDN 处理订阅 `Weline_Framework::resource_changed`，不调用本事件。
+CDN Observer 是 `delivery="async"` + `coalesce="latest"`；它在已提交的
+`ResourceChange.website_id` 内精确查询域名，将新旧 URL 影响合并后定向清理。
+`website_id=0` 同样是合法目标，无匹配域名时不会退回其他站点。
 
 #### 相关文件
 
@@ -72,5 +91,5 @@
 
 ## 更新日志
 
+- **2026-07-22**：明确手工清理与 ResourceChange 自动清理的边界、精确站点和 ID 0 语义
 - **2024-12-19**：初始版本，添加 `Weline_Cdn::clear` 事件文档
-

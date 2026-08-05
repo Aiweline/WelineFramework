@@ -18,8 +18,74 @@
         valueOf: true
     };
 
+    function readBackendBootstrapId() {
+        var nodes = document.querySelectorAll('meta[name="weline-worker-backend-bootstrap"]');
+        if (nodes.length === 0) {
+            return '';
+        }
+        if (nodes.length !== 1) {
+            var duplicateError = new Error('[Weline.Api] expected exactly one backend Worker bootstrap marker.');
+            duplicateError.code = 'backend_attestation_invalid';
+            throw duplicateError;
+        }
+        var bootstrapId = String(nodes[0].getAttribute('content') || '').trim();
+        if (!/^[A-Za-z0-9_-]{43}$/.test(bootstrapId)) {
+            var invalidError = new Error('[Weline.Api] backend Worker bootstrap marker is invalid.');
+            invalidError.code = 'backend_attestation_invalid';
+            throw invalidError;
+        }
+        return bootstrapId;
+    }
+
     function isDevMode() {
         return !!(window.DEV || window.WELINE_ENV === 'DEV' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    }
+
+    function summarizeBinQueryPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return 'unknown';
+        }
+        if (payload.type === 'call') {
+            return 'call ' + String(payload.provider || '') + '.' + String(payload.operation || '');
+        }
+        if (payload.type === 'graph') {
+            return 'graph';
+        }
+        if (payload.type === 'stream-ticket') {
+            return ('stream-ticket ' + String(payload.channel || '')).trim();
+        }
+        if (payload.type === 'backend-bootstrap') {
+            return 'backend-bootstrap';
+        }
+        return String(payload.type || 'request');
+    }
+
+    function cloneDevLogValue(value) {
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (error) {
+            return value;
+        }
+    }
+
+    function sanitizeBinQueryPayloadForLog(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return payload || {};
+        }
+        var sanitized = {};
+        Object.keys(payload).forEach(function (key) {
+            if (key === 'options') {
+                var options = payload.options && typeof payload.options === 'object' ? payload.options : {};
+                sanitized.options = {
+                    silent: !!options.silent,
+                    keepBusinessResult: !!options.keepBusinessResult,
+                    requestTimeoutMs: options.requestTimeoutMs || options.timeoutMs || options.timeout || undefined
+                };
+                return;
+            }
+            sanitized[key] = payload[key];
+        });
+        return cloneDevLogValue(sanitized);
     }
 
     function currentScriptUrl() {
@@ -314,6 +380,7 @@
             locale: normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || ''),
             defaultCurrency: normalizeCurrencyCode(apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'),
             availableCurrencies: normalizeCurrencyList(apiConfig.availableCurrencies || apiConfig.supportedCurrencies || apiConfig.currencyCodes || apiConfig.currencies || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || []),
+            backendBootstrapId: readBackendBootstrapId(),
             requestTimeoutMs: parseInt(apiConfig.requestTimeoutMs || runtimeConfig.requestTimeoutMs || 60000, 10)
         };
         config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || '', config);
@@ -771,6 +838,9 @@
         this.worker = null;
         this.requestId = 0;
         this.pending = {};
+        this.devTraces = {};
+        this.backendWarmupPromise = null;
+        this.backendWarmupComplete = false;
         this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
         this.handleWorkerError = this.handleWorkerError.bind(this);
     }
@@ -781,6 +851,12 @@
         // causes "bin-query worker request timed out" even though the server finished.
         if (this.worker) {
             return;
+        }
+        if (this.backendWarmupComplete && config.backendBootstrapId) {
+            var reloadError = new Error('[Weline.Api] backend Worker authority cannot be re-created after the one-time proof was consumed. Reload the page.');
+            reloadError.code = 'backend_attestation_invalid';
+            reloadError.status = 401;
+            throw reloadError;
         }
         if (typeof window.Worker !== 'function') {
             throw new Error('[Weline.Api] Worker is unavailable; bin-query requests are disabled.');
@@ -849,6 +925,113 @@
 
     BackendQueryBinClient.prototype.send = function (payload) {
         var config = buildQueryBinConfig();
+        if (config.backendBootstrapId && payload && payload.type !== 'backend-bootstrap') {
+            return this.warmup(config).then(function () {
+                return this.sendToWorker(payload, config);
+            }.bind(this));
+        }
+        return this.sendToWorker(payload, config);
+    };
+
+    BackendQueryBinClient.prototype.warmup = function (config) {
+        config = config || buildQueryBinConfig();
+        if (!config.backendBootstrapId || this.backendWarmupComplete) {
+            return Promise.resolve(null);
+        }
+        if (!this.backendWarmupPromise) {
+            this.backendWarmupPromise = this.sendToWorker({
+                type: 'backend-bootstrap',
+                options: {silent: true}
+            }, config).then(function (result) {
+                this.backendWarmupComplete = true;
+                return result;
+            }.bind(this)).finally(function () {
+                if (!this.backendWarmupComplete) {
+                    this.backendWarmupPromise = null;
+                }
+            }.bind(this));
+        }
+        return this.backendWarmupPromise;
+    };
+
+    BackendQueryBinClient.prototype.beginDevTrace = function (messageId, payload) {
+        if (!isDevMode() || !messageId) {
+            return;
+        }
+        this.devTraces[messageId] = {
+            startedAt: performance.now(),
+            payload: payload || {}
+        };
+    };
+
+    BackendQueryBinClient.prototype.finishDevTrace = function (messageId, responseMeta, requestPayloadOverride, startedAtOverride) {
+        if (!isDevMode()) {
+            return;
+        }
+
+        var trace = null;
+        if (messageId && this.devTraces[messageId]) {
+            trace = this.devTraces[messageId];
+            delete this.devTraces[messageId];
+        }
+
+        var requestPayload = requestPayloadOverride || (trace && trace.payload) || {};
+        var startedAt = startedAtOverride || (trace && trace.startedAt) || performance.now();
+        var durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+        var summary = summarizeBinQueryPayload(requestPayload);
+        var ok = !!(responseMeta && responseMeta.ok === true);
+        var status = responseMeta && responseMeta.status ? (' ' + responseMeta.status) : '';
+        var endpoint = '';
+        try {
+            endpoint = buildQueryBinConfig().endpoint;
+        } catch (error) {
+            endpoint = '';
+        }
+        var label = '[Weline.BinQuery] ' + (ok ? '✓' : '✗') + ' ' + summary + status + ' · ' + durationMs + 'ms';
+        var requestLog = sanitizeBinQueryPayloadForLog(requestPayload);
+        var responseLog = cloneDevLogValue(responseMeta || {});
+
+        if (typeof console.groupCollapsed === 'function') {
+            console.groupCollapsed(label);
+            console.log('endpoint:', endpoint);
+            console.log('request:', requestLog);
+            console.log('response:', responseLog);
+            console.groupEnd();
+            return;
+        }
+        console.log(label, {endpoint: endpoint, request: requestLog, response: responseLog});
+    };
+
+    BackendQueryBinClient.prototype.reportDevError = function (error, detail) {
+        if (!isDevMode() || !error) {
+            return;
+        }
+        if (error._welineApiDevLogged) {
+            return;
+        }
+        error._welineApiDevLogged = true;
+        if (detail && detail.skipConsole) {
+            return;
+        }
+        var label = '[Weline.BinQuery] request failed';
+        var extra = detail && typeof detail === 'object' ? detail : {};
+        if (typeof console.groupCollapsed === 'function') {
+            console.groupCollapsed(label);
+            console.error(error);
+            if (error && error.response) {
+                console.log('response:', error.response);
+            }
+            if (Object.keys(extra).length > 0) {
+                console.log('detail:', extra);
+            }
+            console.groupEnd();
+            return;
+        }
+        console.error(label, error, extra);
+    };
+
+    BackendQueryBinClient.prototype.sendToWorker = function (payload, config) {
+        config = config || buildQueryBinConfig();
         this.ensureWorker(config);
         var messageId = this.nextId();
         var optionTimeout = payload && payload.options
@@ -858,15 +1041,26 @@
         var timeoutMs = isFinite(configuredTimeout) ? Math.max(1000, configuredTimeout) : 60000;
         var worker = this.worker;
         var pending = this.pending;
+        var client = this;
 
         return new Promise(function (resolve, reject) {
             var timeoutId = window.setTimeout(function () {
                 if (!pending[messageId]) {
                     return;
                 }
+                var timedOut = pending[messageId];
                 delete pending[messageId];
                 var error = new Error('[Weline.Api] bin-query worker request timed out.');
                 error.code = 'worker_timeout';
+                client.finishDevTrace(messageId, {
+                    ok: false,
+                    error: {code: error.code, message: error.message}
+                });
+                client.reportDevError(error, {
+                    type: 'timeout',
+                    request: timedOut && timedOut.payload,
+                    skipConsole: true
+                });
                 reject(error);
             }, timeoutMs);
 
@@ -877,6 +1071,7 @@
                 payload: payload
             };
 
+            client.beginDevTrace(messageId, payload);
             worker.postMessage(Object.assign({}, payload, {
                 id: messageId,
                 config: {
@@ -886,7 +1081,8 @@
                     locale: config.locale,
                     currency: config.currency,
                     defaultCurrency: config.defaultCurrency,
-                    availableCurrencies: config.availableCurrencies
+                    availableCurrencies: config.availableCurrencies,
+                    backendBootstrapId: config.backendBootstrapId
                 }
             }));
         });
@@ -917,9 +1113,32 @@
                     maintenance: !!data.maintenance
                 }, buildQueryBinConfig().endpoint);
                 businessError.code = (businessData && businessData.code) || 'business_error';
+                this.finishDevTrace(data.id, {
+                    ok: false,
+                    status: businessError.status,
+                    statusText: data.statusText || '',
+                    error: {code: businessError.code, message: message},
+                    data: businessData,
+                    headers: data.headers || {}
+                });
+                this.reportDevError(businessError, {
+                    status: businessError.status,
+                    silent: !!(requestOptions && requestOptions.silent),
+                    request: pending.payload,
+                    workerMessage: data,
+                    skipConsole: true
+                });
                 pending.reject(businessError);
                 return;
             }
+            this.finishDevTrace(data.id, {
+                ok: !isBusinessFailure(businessData),
+                status: data.status || 200,
+                statusText: data.statusText || '',
+                data: wrapper.data,
+                request_id: wrapper.request_id || '',
+                headers: data.headers || {}
+            });
             pending.resolve(businessData);
             return;
         }
@@ -934,6 +1153,21 @@
             maintenance: !!data.maintenance
         }, buildQueryBinConfig().endpoint);
         error.code = serverError.code || 'protocol_error';
+        this.finishDevTrace(data.id, {
+            ok: false,
+            status: error.status,
+            statusText: data.statusText || '',
+            error: serverError,
+            body: wrapper,
+            headers: data.headers || {}
+        });
+        this.reportDevError(error, {
+            status: error.status,
+            silent: !!(pending.payload && pending.payload.options && pending.payload.options.silent),
+            request: pending.payload,
+            workerMessage: data,
+            skipConsole: true
+        });
         pending.reject(error);
     };
 
@@ -947,13 +1181,31 @@
             var pending = this.pending[id];
             delete this.pending[id];
             window.clearTimeout(pending.timeoutId);
-            pending.reject(buildError(message, {
+            var error = buildError(message, {
                 ok: false,
                 status: 0,
                 statusText: '',
                 data: null,
                 maintenance: false
-            }, buildQueryBinConfig().endpoint));
+            }, buildQueryBinConfig().endpoint);
+            error.code = 'worker_error';
+            this.finishDevTrace(id, {
+                ok: false,
+                error: {code: error.code, message: message},
+                worker: {
+                    message: event && event.message,
+                    filename: event && event.filename,
+                    lineno: event && event.lineno,
+                    colno: event && event.colno
+                }
+            });
+            this.reportDevError(error, {
+                type: 'worker_crash',
+                requestId: id,
+                request: pending && pending.payload,
+                skipConsole: true
+            });
+            pending.reject(error);
         }, this);
     };
 
@@ -1072,6 +1324,12 @@
             // caller that only subscribes to e.g. `progress` would miss a
             // persisted `completed`/`failed` frame and reconnect forever.
             this.terminalEvents.forEach(type => this._eventTypes.add(type));
+            // Transport auth failures are reconnectable, never task-terminal.
+            this._eventTypes.add('transport_error');
+            // Runtime subscription windows end with runtime_rotate so the
+            // client can mint a fresh one-time ticket instead of retrying the
+            // consumed EventSource URL.
+            this._eventTypes.add('runtime_rotate');
 
             this._onlineHandler = () => this.handleOnline();
             this._offlineHandler = () => this.dispatchLifecycleEvent('offline');
@@ -1262,6 +1520,18 @@
                 this.openSource(sameOriginUrl(ticket.url));
                 this.startLeaseRenewal();
             } catch (error) {
+                if (this.isNonRetryableAuthorityError(error)) {
+                    // Page attestation / Scope reload cannot be healed by
+                    // retrying the same worker session. Stop the reopen loop
+                    // and surface a terminal failed event for the caller.
+                    this.dispatchAuthorityFailure(error);
+                    this.markTerminal();
+                    if (initial && this.options.rejectOnInitialError === true) {
+                        this.close();
+                        throw error;
+                    }
+                    return;
+                }
                 this.dispatchError(error);
                 this.scheduleReconnect();
                 // A recoverable initial ticket failure must not strand a
@@ -1327,6 +1597,17 @@
         }
 
         receiveEvent(event) {
+            const eventType = String(event && event.type || '').toLowerCase();
+            if (eventType === 'runtime_rotate') {
+                // Subscription window ended cleanly. Native EventSource would
+                // auto-retry the consumed ticket URL; force a ticket refresh.
+                // Do not emit `error` — callers treat that as visible 断流.
+                this.closeSource();
+                this.dispatchEvent(this.createMessageEvent(event));
+                this._retryAttempt = 0;
+                this.scheduleReconnect({ immediate: true });
+                return;
+            }
             const eventId = normalizeStreamCursor(event && event.lastEventId);
             if (eventId && this.isDuplicateEvent(eventId)) {
                 return;
@@ -1336,6 +1617,14 @@
             }
 
             const forwarded = this.createMessageEvent(event);
+            if (this.isReconnectableTransportEvent(forwarded)) {
+                // Do not emit business `failed`/`transport_error` to callers —
+                // they historically treat `failed` as a durable task terminal.
+                this.closeSource();
+                this.dispatchEvent(this.createEvent('error', event));
+                this.scheduleReconnect();
+                return;
+            }
             this.dispatchEvent(forwarded);
             if (this.isTerminalEvent(forwarded)) {
                 this.markTerminal();
@@ -1364,20 +1653,104 @@
             this.persistState();
         }
 
-        isTerminalEvent(event) {
-            const type = String(event.type || '').toLowerCase();
-            if (this.terminalEvents.has(type)) {
-                return true;
-            }
-            let payload = event.data;
+        parseEventPayload(event) {
+            let payload = event && event.data;
             if (typeof payload === 'string') {
                 try {
                     payload = JSON.parse(payload);
                 } catch (error) {
-                    return false;
+                    return null;
                 }
             }
             if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                return null;
+            }
+            return payload;
+        }
+
+        isNonRetryableAuthorityCode(code) {
+            const normalized = String(code || '').trim().toLowerCase();
+            return normalized === 'backend_attestation_invalid'
+                || normalized === 'scope_reload_required'
+                || normalized === 'scope_binding_required'
+                || normalized === 'scope_bootstrap_invalid';
+        }
+
+        isNonRetryableAuthorityError(error) {
+            if (!error || typeof error !== 'object') {
+                return false;
+            }
+            if (this.isNonRetryableAuthorityCode(error.code)) {
+                return true;
+            }
+            const responseCode = error.response
+                && error.response.error
+                && error.response.error.code;
+            return this.isNonRetryableAuthorityCode(responseCode);
+        }
+
+        isTransportAuthFailurePayload(payload) {
+            if (!payload) {
+                return false;
+            }
+            const code = String(payload.code || payload.error_code || '').trim().toLowerCase();
+            if (this.isNonRetryableAuthorityCode(code)) {
+                return false;
+            }
+            const status = Number(payload.http_status || 0);
+            return code === 'auth_error'
+                || code === 'worker_store_unavailable'
+                || status === 401;
+        }
+
+        isReconnectableTransportEvent(event) {
+            const type = String(event && event.type || '').toLowerCase();
+            if (type === 'transport_error' || type === 'runtime_rotate') {
+                return true;
+            }
+            if (type !== 'failed') {
+                return false;
+            }
+            return this.isTransportAuthFailurePayload(this.parseEventPayload(event));
+        }
+
+        dispatchAuthorityFailure(error) {
+            const code = String(
+                (error && error.code)
+                || (error && error.response && error.response.error && error.response.error.code)
+                || 'backend_attestation_invalid'
+            ).trim().toLowerCase() || 'backend_attestation_invalid';
+            const message = String(
+                (error && error.message)
+                || (error && error.response && error.response.error && error.response.error.message)
+                || 'Backend page attestation is invalid. Reload the page to continue.'
+            );
+            const status = Number((error && (error.status || error.http_status)) || 401) || 401;
+            const payload = {
+                code: code,
+                error_code: code,
+                message: message,
+                reason: message,
+                http_status: status,
+                terminal: true,
+            };
+            this.dispatchEvent(this.createMessageEvent({
+                type: 'failed',
+                data: JSON.stringify(payload),
+                lastEventId: '',
+            }));
+        }
+
+        isTerminalEvent(event) {
+            if (this.isReconnectableTransportEvent(event)) {
+                return false;
+            }
+            const type = String(event.type || '').toLowerCase();
+            if (this.terminalEvents.has(type)) {
+                return true;
+            }
+            const payload = this.parseEventPayload(event);
+            if (!payload) {
                 return false;
             }
             if (payload.terminal === true) {
@@ -1400,14 +1773,27 @@
             this.dispatchLifecycleEvent('terminal');
         }
 
-        scheduleReconnect() {
+        scheduleReconnect(options = {}) {
             if (this._closed || this._terminal || this._retryTimer !== null || this.isOffline()) {
                 return;
             }
-            this._retryAttempt += 1;
-            const baseDelay = Math.min(this.retryMaxMs, this.retryMinMs * (2 ** (this._retryAttempt - 1)));
-            const delay = Math.max(this.retryMinMs, Math.round(baseDelay * (0.75 + (Math.random() * 0.5))));
-            this.dispatchLifecycleEvent('reconnecting', { attempt: this._retryAttempt, delay });
+            const immediate = !!(options && options.immediate);
+            if (immediate) {
+                this._retryAttempt = 0;
+            } else {
+                this._retryAttempt += 1;
+            }
+            const baseDelay = immediate
+                ? 0
+                : Math.min(this.retryMaxMs, this.retryMinMs * (2 ** (this._retryAttempt - 1)));
+            const delay = immediate
+                ? 0
+                : Math.max(this.retryMinMs, Math.round(baseDelay * (0.75 + (Math.random() * 0.5))));
+            this.dispatchLifecycleEvent('reconnecting', {
+                attempt: this._retryAttempt,
+                delay,
+                reason: immediate ? 'runtime_rotate' : 'transport',
+            });
             this._retryTimer = window.setTimeout(() => {
                 this._retryTimer = null;
                 this.connect(false).catch(() => {});
@@ -1575,6 +1961,9 @@
         resource: function (provider, optionalMap) {
             return queryBinClient.resource(provider, optionalMap);
         },
+        bootstrapBackend: function () {
+            return queryBinClient.warmup();
+        },
         StreamHandle: StreamHandle,
         markCartActive: function () {},
         markCartEmpty: function () {},
@@ -1588,4 +1977,24 @@
     window.WelineApiModule = ApiModule;
     window.Weline = window.Weline || {};
     window.Weline.Api = ApiModule;
+
+    try {
+        if (readBackendBootstrapId() !== '') {
+            ApiModule.bootstrapBackend().catch(function (error) {
+                window.dispatchEvent(new CustomEvent('weline:backend-bootstrap-failed', {
+                    detail: {
+                        code: error && error.code ? error.code : 'backend_attestation_invalid',
+                        status: error && error.status ? error.status : 0
+                    }
+                }));
+            });
+        }
+    } catch (error) {
+        window.dispatchEvent(new CustomEvent('weline:backend-bootstrap-failed', {
+            detail: {
+                code: error && error.code ? error.code : 'backend_attestation_invalid',
+                status: 0
+            }
+        }));
+    }
 })(window);

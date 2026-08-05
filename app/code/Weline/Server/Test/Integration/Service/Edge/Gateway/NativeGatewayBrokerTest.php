@@ -55,6 +55,7 @@ final class NativeGatewayBrokerTest extends TestCase
             ...$sodiumCompileFlags,
             $source,
             ...$sodiumLinkFlags,
+            ...(\PHP_OS_FAMILY === 'Darwin' ? ['-lproc'] : []),
             '-o',
             $this->broker,
         ];
@@ -129,7 +130,9 @@ final class NativeGatewayBrokerTest extends TestCase
         $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'project.sock';
         $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'controller.sock';
         $lockFile = $this->root . DIRECTORY_SEPARATOR . 'broker.lock';
-        $fencingFile = $this->root . DIRECTORY_SEPARATOR . 'fencing';
+        $trust = $this->root . DIRECTORY_SEPARATOR . 'trust';
+        self::assertTrue(\mkdir($trust, 0700));
+        $fencingFile = $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token';
         $evidenceFile = $this->root . DIRECTORY_SEPARATOR . 'evidence.jsonl';
         $controller = \stream_socket_server(
             'unix://' . $controllerSocket,
@@ -147,10 +150,13 @@ final class NativeGatewayBrokerTest extends TestCase
                 if (!\is_resource($client)) {
                     exit(20);
                 }
+                if (!$this->authenticateBrokerProbe($client, $fencingFile)) {
+                    exit(21);
+                }
                 $header = @\fgets($client, 4096);
                 $payload = @\fgets($client, 4096);
                 if (!\is_string($header) || !\is_string($payload)) {
-                    exit(21);
+                    exit(22);
                 }
                 \file_put_contents(
                     $evidenceFile,
@@ -221,8 +227,8 @@ final class NativeGatewayBrokerTest extends TestCase
             self::assertSame(['admin', 'project'], \array_column($headers, 'channel'));
             self::assertSame((int)\posix_geteuid(), (int)$headers[0]['uid']);
             self::assertSame((int)\posix_geteuid(), (int)$headers[1]['uid']);
-            self::assertSame(1, (int)$headers[0]['action_protocol']);
-            self::assertSame(1, (int)$headers[1]['action_protocol']);
+            self::assertSame(2, (int)$headers[0]['action_protocol']);
+            self::assertSame(2, (int)$headers[1]['action_protocol']);
             self::assertGreaterThan(0, (int)$headers[0]['pid']);
             self::assertSame($headers[0]['fencing_token'], $headers[1]['fencing_token']);
             self::assertMatchesRegularExpression(
@@ -255,21 +261,39 @@ final class NativeGatewayBrokerTest extends TestCase
         $project = $this->root . DIRECTORY_SEPARATOR . 'project';
         $certificateRoot = $project . DIRECTORY_SEPARATOR . 'app/etc/ssl';
         $digest = \str_repeat('a', 64);
+        $privateDigest = \str_repeat('b', 64);
         self::assertTrue(\mkdir($state, 0700, true));
         self::assertTrue(\mkdir($trust, 0700, true));
         self::assertTrue(\mkdir($snapshots . DIRECTORY_SEPARATOR . $digest, 0700, true));
+        self::assertTrue(\mkdir(
+            $snapshots . DIRECTORY_SEPARATOR . $privateDigest,
+            0700,
+            true,
+        ));
         self::assertTrue(\mkdir($certificateRoot, 0700, true));
         self::assertSame(18, \file_put_contents(
             $certificateRoot . DIRECTORY_SEPARATOR . 'source.pem',
             'project-owned-cert',
         ));
         self::assertTrue(\chmod($certificateRoot . DIRECTORY_SEPARATOR . 'source.pem', 0600));
+        $privateKey = $certificateRoot . DIRECTORY_SEPARATOR . 'source-key.pem';
+        self::assertSame(19, \file_put_contents($privateKey, 'project-private-key'));
+        self::assertTrue(\chmod($privateKey, \PHP_OS_FAMILY === 'Darwin' ? 0600 : 0644));
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $acl = $this->runCommand([
+                '/bin/chmod',
+                '+a',
+                'everyone allow read',
+                $privateKey,
+            ]);
+            self::assertSame(0, $acl['code'], $acl['output']);
+        }
 
         $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'action-admin.sock';
         $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'action-project.sock';
         $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'action-controller.sock';
         $lockFile = $this->root . DIRECTORY_SEPARATOR . 'action-broker.lock';
-        $fencingFile = $this->root . DIRECTORY_SEPARATOR . 'action-fencing';
+        $fencingFile = $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token';
         $controller = \stream_socket_server(
             'unix://' . $controllerSocket,
             $errno,
@@ -278,41 +302,88 @@ final class NativeGatewayBrokerTest extends TestCase
         );
         self::assertIsResource($controller, $error);
         $projectUuid = '123e4567-e89b-42d3-a456-426614174099';
+        $transactionId = \bin2hex(\random_bytes(16));
+        $intentDigest = \hash('sha256', 'native-broker-auth-intent');
+        $projectStatus = \stat((string)\realpath($project));
+        $certificateStatus = \stat((string)\realpath($certificateRoot));
+        self::assertIsArray($projectStatus);
+        self::assertIsArray($certificateStatus);
+        $projectObject = \dechex((int)$projectStatus['dev']) . '-'
+            . \dechex((int)$projectStatus['ino']);
+        $certificateObject = \dechex((int)$certificateStatus['dev']) . '-'
+            . \dechex((int)$certificateStatus['ino']);
+        $attestation = \hash('sha256', $projectUuid . "\n"
+            . $transactionId . "\n" . $intentDigest . "\n1\n"
+            . (string)\posix_geteuid() . "\nproject_ssl\n"
+            . $projectObject . "\n" . $certificateObject . "\n");
+        $rootsDigest = \hash(
+            'sha256',
+            "project_ssl\t1\t{$projectObject}\t{$certificateObject}\t{$attestation}\n",
+        );
 
         $controllerPid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $controllerPid);
         if ($controllerPid === 0) {
             $actions = [
-                'WLS-ACTION/1' . "\t" . \implode("\t", [
-                    'AUTH',
+                ['WLS-ACTION/2' . "\t" . \implode("\t", [
+                    'AUTH_PREPARE',
                     $projectUuid,
-                    '7',
+                    $transactionId,
+                    $intentDigest,
                     (string)\posix_geteuid(),
                     'project_ssl',
                     \bin2hex((string)\realpath($project)),
                     \bin2hex((string)\realpath($certificateRoot)),
-                ]) . "\n",
-                'WLS-ACTION/1' . "\t" . \implode("\t", [
+                    '1',
+                    '0',
+                ]) . "\n", true],
+                ['WLS-ACTION/2' . "\t" . \implode("\t", [
+                    'AUTH_COMMIT',
+                    $projectUuid,
+                    $transactionId,
+                    $intentDigest,
+                    '1',
+                    $rootsDigest,
+                ]) . "\n", true],
+                ['WLS-ACTION/2' . "\t" . \implode("\t", [
                     'SNAP',
                     $projectUuid,
-                    '7',
+                    $transactionId,
+                    $intentDigest,
                     'project_ssl',
                     \bin2hex('source.pem'),
                     $digest,
                     'source-cert.pem',
-                ]) . "\n",
+                ]) . "\n", true],
+                ['WLS-ACTION/2' . "\t" . \implode("\t", [
+                    'SNAP',
+                    $projectUuid,
+                    $transactionId,
+                    $intentDigest,
+                    'project_ssl',
+                    \bin2hex('source-key.pem'),
+                    $privateDigest,
+                    'source-key.pem',
+                ]) . "\n", false],
             ];
-            foreach ($actions as $action) {
+            foreach ($actions as [$action, $expectedSuccess]) {
                 $client = @\stream_socket_accept($controller, 5);
                 if (!\is_resource($client)) exit(30);
-                if (!\is_string(@\fgets($client, 4096))
+                if (!$this->authenticateBrokerProbe($client, $fencingFile)
+                    || !\is_string(@\fgets($client, 4096))
                     || !\is_string(@\fgets($client, 4096))
                     || @\fwrite($client, $action) !== \strlen($action)
                 ) {
                     exit(31);
                 }
                 $ack = @\fgets($client, 4096);
-                if ($ack !== "WLS-ACTION/1\tOK\n") exit(32);
+                if (($expectedSuccess
+                        && !\str_starts_with((string)$ack, "WLS-ACTION/2\tOK\t"))
+                    || (!$expectedSuccess
+                        && !\str_starts_with((string)$ack, "WLS-ACTION/2\tERR\t"))
+                ) {
+                    exit(32);
+                }
                 @\fwrite($client, '{"protocol":"wls-edge/2","request_id":"action","ok":true}' . "\n");
                 @\fclose($client);
             }
@@ -347,7 +418,7 @@ final class NativeGatewayBrokerTest extends TestCase
             self::assertIsResource($process);
             $this->waitForSocket($adminSocket);
             $this->waitForSocket($projectSocket);
-            foreach ([$adminSocket, $projectSocket] as $socket) {
+            foreach ([$adminSocket, $adminSocket, $projectSocket, $projectSocket] as $socket) {
                 $client = @\stream_socket_client('unix://' . $socket, $errno, $error, 2.0);
                 self::assertIsResource($client, $error);
                 self::assertNotFalse(@\fwrite($client, '{"request_id":"action"}' . "\n"));
@@ -361,7 +432,11 @@ final class NativeGatewayBrokerTest extends TestCase
                     . DIRECTORY_SEPARATOR . 'source-cert.pem'
                 ),
             );
-            $registry = $trust . DIRECTORY_SEPARATOR . 'broker-enrollments.tsv';
+            self::assertFileDoesNotExist(
+                $snapshots . DIRECTORY_SEPARATOR . $privateDigest
+                . DIRECTORY_SEPARATOR . 'source-key.pem',
+            );
+            $registry = $trust . DIRECTORY_SEPARATOR . 'broker-security-v2.tsv';
             self::assertFileExists($registry);
             self::assertSame(0600, \fileperms($registry) & 0777);
             $waited = \pcntl_waitpid($controllerPid, $controllerStatus);
@@ -391,7 +466,9 @@ final class NativeGatewayBrokerTest extends TestCase
         $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'concurrent-project.sock';
         $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'concurrent-controller.sock';
         $lockFile = $this->root . DIRECTORY_SEPARATOR . 'concurrent-broker.lock';
-        $fencingFile = $this->root . DIRECTORY_SEPARATOR . 'concurrent-fencing';
+        $trust = $this->root . DIRECTORY_SEPARATOR . 'trust';
+        self::assertTrue(\mkdir($trust, 0700));
+        $fencingFile = $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token';
         $slowAccepted = $this->root . DIRECTORY_SEPARATOR . 'slow-accepted';
         $slowResponded = $this->root . DIRECTORY_SEPARATOR . 'slow-responded';
         $controller = \stream_socket_server(
@@ -407,6 +484,7 @@ final class NativeGatewayBrokerTest extends TestCase
         if ($controllerPid === 0) {
             $slow = @\stream_socket_accept($controller, 5);
             if (!\is_resource($slow)
+                || !$this->authenticateBrokerProbe($slow, $fencingFile)
                 || !\is_string(@\fgets($slow, 4096))
                 || !\is_string(@\fgets($slow, 4096))) {
                 exit(40);
@@ -415,6 +493,7 @@ final class NativeGatewayBrokerTest extends TestCase
 
             $fast = @\stream_socket_accept($controller, 5);
             if (!\is_resource($fast)
+                || !$this->authenticateBrokerProbe($fast, $fencingFile)
                 || !\is_string(@\fgets($fast, 4096))
                 || !\is_string(@\fgets($fast, 4096))
                 || @\fwrite($fast, '{"request_id":"fast","ok":true}' . "\n") === false) {
@@ -430,6 +509,7 @@ final class NativeGatewayBrokerTest extends TestCase
 
             $liveness = @\stream_socket_accept($controller, 5);
             if (!\is_resource($liveness)
+                || !$this->authenticateBrokerProbe($liveness, $fencingFile)
                 || !\is_string(@\fgets($liveness, 4096))
                 || !\is_string(@\fgets($liveness, 4096))
                 || @\fwrite($liveness, '{"request_id":"alive","ok":true}' . "\n") === false) {
@@ -525,11 +605,12 @@ final class NativeGatewayBrokerTest extends TestCase
 
         $home = $this->root . DIRECTORY_SEPARATOR . 'restart-home';
         self::assertTrue(\mkdir($home, 0700));
+        self::assertTrue(\mkdir($home . DIRECTORY_SEPARATOR . 'trust', 0700));
         $adminSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-admin.sock';
         $projectSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-project.sock';
         $controllerSocket = $this->root . DIRECTORY_SEPARATOR . 'restart-controller.sock';
         $lockFile = $this->root . DIRECTORY_SEPARATOR . 'restart-broker.lock';
-        $fencingFile = $this->root . DIRECTORY_SEPARATOR . 'restart-fencing';
+        $fencingFile = $home . DIRECTORY_SEPARATOR . 'trust/broker-fencing-token';
         $pidFile = $home . DIRECTORY_SEPARATOR . 'controller-pids.log';
         $controllerScript = $this->root . DIRECTORY_SEPARATOR . 'restart-controller.php';
         $controllerSource = <<<'PHP'
@@ -537,15 +618,62 @@ final class NativeGatewayBrokerTest extends TestCase
 declare(strict_types=1);
 $home = '';
 $endpoint = '';
+$fencingFile = '';
+$hostBootId = '';
 foreach ($argv as $argument) {
     if (str_starts_with($argument, '--home=')) {
         $home = substr($argument, 7);
     } elseif (str_starts_with($argument, '--broker-internal=unix://')) {
         $endpoint = substr($argument, strlen('--broker-internal=unix://'));
+    } elseif (str_starts_with($argument, '--broker-fencing-file=')) {
+        $fencingFile = substr($argument, strlen('--broker-fencing-file='));
+    } elseif (str_starts_with($argument, '--host-boot-id=')) {
+        $hostBootId = substr($argument, strlen('--host-boot-id='));
     }
 }
-if ($home === '' || $endpoint === '') {
+if ($home === '' || $endpoint === '' || $fencingFile === ''
+    || preg_match('/\A[a-f0-9]{64}\z/D', $hostBootId) !== 1
+) {
     exit(64);
+}
+function authenticateBroker($client, string $fencingFile): bool
+{
+    $fencing = trim((string)@file_get_contents($fencingFile));
+    $probe = @fgets($client, 512);
+    if (preg_match(
+        '/\AWLS-BROKER-PROBE\/1\t([a-f0-9]{64})\t([a-f0-9]{64})\n\z/D',
+        is_string($probe) ? $probe : '',
+        $matches,
+    ) !== 1 || preg_match('/\A[a-f0-9]{64}\z/D', $fencing) !== 1) {
+        return false;
+    }
+    $key = hex2bin($fencing);
+    if (!is_string($key) || strlen($key) !== 32) {
+        return false;
+    }
+    try {
+        $nonce = (string)$matches[1];
+        if (!hash_equals(
+            hash_hmac('sha256', "WLS-BROKER-PROBE/1\nnonce={$nonce}\n", $key),
+            (string)$matches[2],
+        )) {
+            return false;
+        }
+        $response = "WLS-BROKER-READY/1\t"
+            . hash_hmac('sha256', "WLS-BROKER-READY/1\nnonce={$nonce}\n", $key)
+            . "\n";
+        $offset = 0;
+        while ($offset < strlen($response)) {
+            $written = @fwrite($client, substr($response, $offset));
+            if (!is_int($written) || $written < 1) {
+                return false;
+            }
+            $offset += $written;
+        }
+        return true;
+    } finally {
+        sodium_memzero($key);
+    }
 }
 @unlink($endpoint);
 $server = stream_socket_server(
@@ -567,7 +695,15 @@ while (true) {
     if (!is_resource($client)) {
         continue;
     }
+    if (!authenticateBroker($client, $fencingFile)) {
+        @fclose($client);
+        continue;
+    }
     $header = @fgets($client, 4096);
+    if (!is_string($header)) {
+        @fclose($client);
+        continue;
+    }
     $requestLine = @fgets($client, 4096);
     $request = is_string($requestLine) ? json_decode($requestLine, true) : null;
     $requestId = is_array($request) ? (string)($request['request_id'] ?? '') : '';
@@ -609,6 +745,10 @@ PHP;
             $home,
             '--controller-user',
             $controllerUser,
+            '--active-slot',
+            'A',
+            '--runtime-generation',
+            \str_repeat('0', 64),
         ], [
             0 => ['file', '/dev/null', 'r'],
             1 => ['file', $log, 'a'],
@@ -730,6 +870,67 @@ PHP;
             \usleep(10_000);
         } while (\microtime(true) < $deadline);
         self::fail('Native broker evidence did not appear: ' . $path);
+    }
+
+    /** @param resource $client */
+    private function authenticateBrokerProbe($client, string $fencingFile): bool
+    {
+        if (!\is_resource($client)) {
+            return false;
+        }
+        \stream_set_timeout($client, 3);
+        $deadline = \microtime(true) + 3.0;
+        $fencing = '';
+        do {
+            $contents = @\file_get_contents($fencingFile);
+            if (\is_string($contents)) {
+                $fencing = \trim($contents);
+            }
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $fencing) === 1) {
+                break;
+            }
+            \usleep(10_000);
+        } while (\microtime(true) < $deadline);
+        $probe = @\fgets($client, 512);
+        if (\preg_match(
+            '/\AWLS-BROKER-PROBE\/1\t([a-f0-9]{64})\t([a-f0-9]{64})\n\z/D',
+            \is_string($probe) ? $probe : '',
+            $matches,
+        ) !== 1) {
+            return false;
+        }
+        $key = \hex2bin($fencing);
+        if (!\is_string($key) || \strlen($key) !== 32) {
+            return false;
+        }
+        try {
+            $nonce = (string)$matches[1];
+            $expected = \hash_hmac(
+                'sha256',
+                "WLS-BROKER-PROBE/1\nnonce={$nonce}\n",
+                $key,
+            );
+            if (!\hash_equals($expected, (string)$matches[2])) {
+                return false;
+            }
+            $response = "WLS-BROKER-READY/1\t"
+                . \hash_hmac(
+                    'sha256',
+                    "WLS-BROKER-READY/1\nnonce={$nonce}\n",
+                    $key,
+                ) . "\n";
+            $offset = 0;
+            while ($offset < \strlen($response)) {
+                $written = @\fwrite($client, \substr($response, $offset));
+                if (!\is_int($written) || $written < 1) {
+                    return false;
+                }
+                $offset += $written;
+            }
+            return true;
+        } finally {
+            \sodium_memzero($key);
+        }
     }
 
     /**

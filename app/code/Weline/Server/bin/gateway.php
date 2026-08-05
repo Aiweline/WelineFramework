@@ -27,6 +27,9 @@ foreach (\array_slice($argv, 6) as $arg) {
         continue;
     }
     [$key, $value] = \array_pad(\explode('=', \substr($arg, 2), 2), 2, '');
+    if ($key === 'master-token') {
+        throw new \RuntimeException('Gateway --master-token is forbidden.');
+    }
     $runtimeArgs[$key] = \trim($value, "\"'");
 }
 
@@ -49,10 +52,12 @@ use Weline\Server\Model\ReverseProxy;
 $gateway = new WlsGateway();
 $gateway->setListenAddress($listenHost, $listenPort);
 $gateway->setInstanceName((string)$instanceName);
+$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
+    ->resolveProtectedCredentialFromArguments($argv, (string)$instanceName, $masterPid);
 $childMasterGuard = new \Weline\Server\IPC\ChildControl\ChildMasterGuard(
     $masterPid,
     (string)($runtimeArgs['master-lease-file'] ?? ''),
-    (string)($runtimeArgs['master-token'] ?? ''),
+    $masterToken,
     'Gateway:' . $listenPort,
     (string)$instanceName,
     (int)($runtimeArgs['epoch'] ?? 0)

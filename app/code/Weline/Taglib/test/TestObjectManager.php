@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Taglib\test;
 
-class TestObjectManager extends \Weline\Framework\UnitTest\TestCore
+class TestObjectManager extends \Weline\Framework\Test\TestCore
 {
     function testT()
     {

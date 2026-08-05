@@ -201,6 +201,7 @@ $seoContext = [
     'alternates' => [
         'x-default' => $seoHomeUrl,
         'zh-CN' => $seoHomeUrl,
+        'en-US' => rtrim($seoHomeUrl, '/') . '/en_US/',
     ],
     'site_search_enabled' => true,
     'search_url_template' => $seoAbsoluteUrl($docsUrl . '?search={search_term_string}'),
@@ -238,12 +239,24 @@ if ($seoCanonicalUrl !== '') {
     $seoContext['canonical_url'] = $seoCanonicalUrl;
 }
 $this->setData('seo', $seoContext);
+
+$htmlLang = 'zh-CN';
+try {
+    $htmlLang = str_replace('_', '-', (string)\Weline\Framework\App\State::getLangLocal());
+    if ($htmlLang === '') {
+        $htmlLang = str_replace('_', '-', (string)\Weline\Framework\App\State::getLang());
+    }
+} catch (\Throwable) {
+    $htmlLang = 'zh-CN';
+}
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= $escapeRaw($htmlLang !== '' ? $htmlLang : 'zh-CN') ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <link rel="icon" type="image/svg+xml" href="<?= $escapeRaw($seoFaviconSvg) ?>">
     <link rel="icon" type="image/png" sizes="32x32" href="<?= $escapeRaw($seoFaviconPng) ?>">
     <link rel="apple-touch-icon" sizes="180x180" href="<?= $escapeRaw($seoFaviconPng) ?>">
@@ -307,7 +320,11 @@ $this->setData('seo', $seoContext);
         }
 
         .wf-home {
-            overflow: hidden;
+            /* Keep decorative bleed clipped horizontally, but never clip the
+               language dropdown that hangs below the nav (overflow:hidden made
+               the panel open "under" the hero status card and look stuck). */
+            overflow-x: clip;
+            overflow-y: visible;
         }
 
         .wf-home__shell {
@@ -316,6 +333,8 @@ $this->setData('seo', $seoContext);
         }
 
         .wf-nav {
+            position: relative;
+            z-index: 80;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -351,7 +370,7 @@ $this->setData('seo', $seoContext);
             gap: 8px;
         }
 
-        .wf-nav__links a,
+        .wf-nav__links > a,
         .wf-btn {
             min-height: 40px;
             display: inline-flex;
@@ -367,13 +386,54 @@ $this->setData('seo', $seoContext);
             transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
         }
 
-        .wf-nav__links a {
+        .wf-nav__links > a {
             color: var(--wf-muted);
         }
 
-        .wf-nav__links a:hover {
+        .wf-nav__links > a:hover {
             color: var(--wf-blue);
             background: rgba(37, 99, 235, 0.08);
+        }
+
+        .wf-nav__lang {
+            position: relative;
+            z-index: 90;
+            margin-left: 4px;
+        }
+
+        .wf-nav__lang:has(.weline-choice-open),
+        .wf-nav__lang:hover {
+            z-index: 120;
+        }
+
+        .wf-nav__lang .weline-choice-switcher,
+        .wf-nav__lang .language-switcher {
+            min-height: 40px;
+            min-width: 72px;
+            padding: 0.35rem 0.7rem;
+            border-radius: var(--wf-radius-sm);
+            border: 1px solid var(--wf-border);
+            color: var(--wf-ink);
+            background: var(--wf-surface);
+        }
+
+        .wf-nav__lang .weline-choice-switcher:hover,
+        .wf-nav__lang .language-switcher:hover,
+        .wf-nav__lang .weline-choice-switcher.weline-choice-open {
+            border-color: var(--wf-blue);
+            color: var(--wf-blue);
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .wf-nav__lang .action-line-1 {
+            color: var(--wf-muted);
+        }
+
+        .wf-nav__lang .weline-choice-panel,
+        .wf-nav__lang .language-options {
+            right: 0;
+            left: auto;
+            z-index: 130;
         }
 
         .wf-btn {
@@ -400,6 +460,8 @@ $this->setData('seo', $seoContext);
         }
 
         .wf-hero {
+            position: relative;
+            z-index: 1;
             display: grid;
             grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.72fr);
             align-items: center;
@@ -870,11 +932,14 @@ $this->setData('seo', $seoContext);
             <a href="#quick-start" data-pixel-event="nav_quick_start"><?= $escape('快速开发') ?></a>
             <a href="#advantages" data-pixel-event="nav_advantages"><?= $escape('优势') ?></a>
             <a href="<?= $escapeRaw($backendUrl) ?>" data-pixel-event="nav_backend"><?= $escape('后台') ?></a>
+            <div class="wf-nav__lang" data-hook="header-language-switcher">
+                <w:hook>header-language-switcher</w:hook>
+            </div>
         </nav>
     </header>
 
     <main id="top">
-        <section class="wf-home__shell wf-hero" aria-labelledby="wf-home-title">
+        <section class="wf-home__shell wf-hero" aria-labelledby="wf-home-title" weline-code="index.home.wf_home_title">
             <div>
                 <p class="wf-kicker"><?= $escape('默认前端已经就绪') ?></p>
                 <h1 id="wf-home-title"><?= $escape($seoTitle) ?></h1>
@@ -908,7 +973,7 @@ $this->setData('seo', $seoContext);
             </aside>
         </section>
 
-        <section class="wf-home__shell wf-section" aria-labelledby="wf-links-title">
+        <section class="wf-home__shell wf-section" aria-labelledby="wf-links-title" weline-code="index.home.wf_links_title">
             <div class="wf-section__header">
                 <span class="wf-section__eyebrow"><?= $escape('从这里开始') ?></span>
                 <h2 id="wf-links-title"><?= $escape('常用入口') ?></h2>
@@ -928,7 +993,7 @@ $this->setData('seo', $seoContext);
             </div>
         </section>
 
-        <section class="wf-home__shell wf-section" id="quick-start" aria-labelledby="wf-quick-title">
+        <section class="wf-home__shell wf-section" id="quick-start" aria-labelledby="wf-quick-title" weline-code="index.home.quick_start">
             <div class="wf-section__header">
                 <span class="wf-section__eyebrow"><?= $escape('快速开发') ?></span>
                 <h2 id="wf-quick-title"><?= $escape('快速开发教程') ?></h2>
@@ -946,7 +1011,7 @@ $this->setData('seo', $seoContext);
             </div>
         </section>
 
-        <section class="wf-home__shell wf-section" id="advantages" aria-labelledby="wf-advantages-title">
+        <section class="wf-home__shell wf-section" id="advantages" aria-labelledby="wf-advantages-title" weline-code="index.home.advantages">
             <div class="wf-section__header">
                 <span class="wf-section__eyebrow"><?= $escape('框架优势') ?></span>
                 <h2 id="wf-advantages-title"><?= $escape('框架优势') ?></h2>
@@ -963,7 +1028,7 @@ $this->setData('seo', $seoContext);
             </div>
         </section>
 
-        <section class="wf-home__shell wf-section" aria-labelledby="wf-use-cases-title">
+        <section class="wf-home__shell wf-section" aria-labelledby="wf-use-cases-title" weline-code="index.home.wf_use_cases_title">
             <div class="wf-section__header">
                 <span class="wf-section__eyebrow"><?= $escape('适用场景') ?></span>
                 <h2 id="wf-use-cases-title"><?= $escape('适合持续演进的 PHP 业务系统') ?></h2>
@@ -980,7 +1045,7 @@ $this->setData('seo', $seoContext);
             </div>
         </section>
 
-        <section class="wf-home__shell wf-section" aria-labelledby="wf-workflow-title">
+        <section class="wf-home__shell wf-section" aria-labelledby="wf-workflow-title" weline-code="index.home.wf_workflow_title">
             <div class="wf-section__header">
                 <span class="wf-section__eyebrow"><?= $escape('开发流程') ?></span>
                 <h2 id="wf-workflow-title"><?= $escape('从开发到诊断的完整闭环') ?></h2>
@@ -997,7 +1062,7 @@ $this->setData('seo', $seoContext);
             </div>
         </section>
 
-        <section class="wf-home__shell wf-section" aria-label="<?= $escape('官网账户') ?>">
+        <section class="wf-home__shell wf-section" aria-label="<?= $escape('官网账户') ?>" weline-code="index.home.section_7">
             <div class="wf-account">
                 <div>
                     <?php if ($isLoggedIn): ?>

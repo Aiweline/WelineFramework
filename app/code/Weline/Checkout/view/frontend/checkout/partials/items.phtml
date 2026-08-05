@@ -1,0 +1,12 @@
+<?php
+/**
+ * Server-rendered checkout cart items（P2E-003）.
+ * @var \Weline\Framework\View\Template $this
+ */
+$items = $this->getData('checkout_items');
+$items = \is_array($items) ? $items : [];
+$currency = (string)($this->getData('checkout_currency') ?? 'CNY');
+$empty = (string)($this->getData('checkout_items_empty_message') ?? __('购物车为空，请先加入商品。'));
+/** @var \Weline\Checkout\Service\CheckoutHtmlRenderer $renderer */
+$renderer = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutHtmlRenderer::class);
+echo $renderer->renderItems($items, $currency, $empty);

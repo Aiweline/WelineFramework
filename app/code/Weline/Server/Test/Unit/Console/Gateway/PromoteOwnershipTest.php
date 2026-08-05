@@ -42,7 +42,7 @@ final class PromoteOwnershipTest extends TestCase
         @\rmdir($this->root);
     }
 
-    public function testPromotionPersistsAutoEdgeIntentAndRollbackRestoresExactConfig(): void
+    public function testPromotionJournalsOnlyOwnedFieldsAndRollbackPreservesConcurrentConfig(): void
     {
         if (!\defined('BP')) {
             \define(
@@ -66,6 +66,7 @@ final class PromoteOwnershipTest extends TestCase
             'edge_mode' => 'legacy',
             'edge_adapter' => 'nginx',
             'ssl_enabled' => false,
+            'database_password' => 'must-not-enter-host-journal',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         self::assertNotFalse(\file_put_contents($file, $original));
         self::assertTrue(\chmod($file, 0640));
@@ -73,10 +74,23 @@ final class PromoteOwnershipTest extends TestCase
         $command = (new \ReflectionClass(Promote::class))->newInstanceWithoutConstructor();
         $persist = new \ReflectionMethod(Promote::class, 'persistPromotedInstanceEdgeMode');
         $restore = new \ReflectionMethod(Promote::class, 'restoreSavedInstanceEdgeMode');
-        $snapshot = $persist->invoke($command, $instance);
+        $journaledSnapshot = null;
+        $snapshot = $persist->invoke(
+            $command,
+            $instance,
+            static function (array $captured) use (&$journaledSnapshot): void {
+                $journaledSnapshot = $captured;
+            },
+        );
         $promoted = \json_decode((string)\file_get_contents($file), true);
 
         self::assertIsArray($snapshot);
+        self::assertSame($snapshot, $journaledSnapshot);
+        self::assertArrayNotHasKey('content', $snapshot);
+        self::assertStringNotContainsString(
+            'must-not-enter-host-journal',
+            \json_encode($snapshot, JSON_THROW_ON_ERROR),
+        );
         self::assertSame('auto', $promoted['edge_mode'] ?? null);
         self::assertSame('nginx', $promoted['edge_adapter'] ?? null);
         self::assertFalse($promoted['ssl_enabled'] ?? true);
@@ -84,8 +98,24 @@ final class PromoteOwnershipTest extends TestCase
             self::assertSame(0640, (int)\fileperms($file) & 0777);
         }
 
+        $promoted['database_password'] = 'rotated-concurrently';
+        $promoted['concurrent_setting'] = 'preserved';
+        self::assertNotFalse(\file_put_contents(
+            $file,
+            \json_encode(
+                $promoted,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            ) . "\n",
+        ));
+
         $restore->invoke($command, $instance, $snapshot);
-        self::assertSame($original, \file_get_contents($file));
+        $restored = \json_decode((string)\file_get_contents($file), true);
+        self::assertSame('legacy', $restored['edge_mode'] ?? null);
+        self::assertSame('nginx', $restored['edge_adapter'] ?? null);
+        self::assertFalse($restored['ssl_enabled'] ?? true);
+        self::assertArrayNotHasKey('saved_at', $restored);
+        self::assertSame('rotated-concurrently', $restored['database_password'] ?? null);
+        self::assertSame('preserved', $restored['concurrent_setting'] ?? null);
         if (\PHP_OS_FAMILY !== 'Windows') {
             self::assertSame(0640, (int)\fileperms($file) & 0777);
         }

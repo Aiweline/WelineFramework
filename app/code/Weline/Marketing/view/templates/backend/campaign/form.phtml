@@ -1,0 +1,67 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$rules = $rules ?? [];
+?>
+<div class="row" data-testid="marketing-campaign-form">
+    <div class="col-12">
+        <div class="page-title-box d-flex align-items-center justify-content-between">
+            <h4 class="page-title"><?= __('新建促销活动') ?></h4>
+            <a class="btn btn-light" href="<?= $this->getBackendUrl('marketing/backend/campaign/index') ?>">
+                <?= __('返回列表') ?>
+            </a>
+        </div>
+        <template>Weline_Component::message.phtml</template>
+        <div class="card">
+            <div class="card-body">
+                <w:form method="post" action="@var($this->getBackendUrl('marketing/backend/campaign/save'))">
+                    <div class="mb-3">
+                        <label class="form-label" for="marketing-campaign-name"><?= __('活动名称') ?></label>
+                        <input id="marketing-campaign-name" data-testid="marketing-campaign-name" class="form-control" type="text" name="name" required maxlength="255">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="marketing-campaign-description"><?= __('活动描述') ?></label>
+                        <textarea id="marketing-campaign-description" class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="marketing-campaign-rule"><?= __('营销规则') ?></label>
+                            <select id="marketing-campaign-rule" data-testid="marketing-campaign-rule" class="form-select" name="rule_id" required>
+                                <option value=""><?= __('请选择') ?></option>
+                                <?php foreach ($rules as $rule): ?>
+                                    <option value="<?= (int)$rule->getId() ?>">
+                                        <?= htmlspecialchars((string)$rule->getData('name'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label" for="marketing-campaign-status"><?= __('状态') ?></label>
+                            <select id="marketing-campaign-status" class="form-select" name="status">
+                                <option value="draft"><?= __('草稿') ?></option>
+                                <option value="active"><?= __('启用') ?></option>
+                                <option value="paused"><?= __('暂停') ?></option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label" for="marketing-campaign-budget"><?= __('预算') ?></label>
+                            <input id="marketing-campaign-budget" data-testid="marketing-campaign-budget" class="form-control" type="number" name="budget" min="0" step="0.01" value="1000">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="marketing-campaign-start"><?= __('开始时间') ?></label>
+                            <input id="marketing-campaign-start" data-testid="marketing-campaign-start" class="form-control" type="datetime-local" name="start_date" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="marketing-campaign-end"><?= __('结束时间') ?></label>
+                            <input id="marketing-campaign-end" data-testid="marketing-campaign-end" class="form-control" type="datetime-local" name="end_date" required>
+                        </div>
+                    </div>
+                    <button data-testid="marketing-campaign-submit" class="btn btn-primary" type="submit">
+                        <?= __('保存促销活动') ?>
+                    </button>
+                </w:form>
+            </div>
+        </div>
+    </div>
+</div>

@@ -35,29 +35,22 @@ final class AiLegacyExecutionBoundaryTest extends TestCase
         self::assertStringNotContainsString('/ai/api/chat/generate', $manual);
     }
 
-    public function testGenericAiQueryGatewayDoesNotExposeDirectGenerationOperations(): void
+    /**
+     * 执行型操作（generate/generateStream/generateImage/executeAgent 等）仅供
+     * 服务端 w_query 调用链使用；它们绝不能出现在提供器描述符中，否则会被
+     * 前端查询网关暴露给浏览器直接调用。
+     */
+    public function testGenericAiQueryGatewayDoesNotDeclareExecutionOperationsToFrontend(): void
     {
-        $moduleRoot = dirname(__DIR__, 4);
-        $provider = (string)file_get_contents(
-            $moduleRoot . '/extends/module/Weline_Framework/Query/AiQueryProvider.php'
-        );
-
-        foreach ([
-            "'generate', 'generateText' =>",
-            "'generateImage' =>",
-            "'generateStream' =>",
-            "'generateStreamBatch' =>",
-            "'name' => 'generate'",
-        ] as $legacyOperation) {
-            self::assertStringNotContainsString($legacyOperation, $provider);
-        }
-    }
-
-    public function testGenericAiQueryGatewayRejectsEveryRemovedExecutionOperation(): void
-    {
+        $sessionFactory = $this->createMock(SessionFactory::class);
         $provider = new AiQueryProvider(
             $this->createMock(AiService::class),
-            $this->createMock(SessionFactory::class),
+            $sessionFactory,
+        );
+
+        $declared = array_map(
+            static fn(array $operation): string => (string)($operation['name'] ?? ''),
+            $provider->getDescriptor()['operations'] ?? []
         );
 
         foreach ([
@@ -66,13 +59,30 @@ final class AiLegacyExecutionBoundaryTest extends TestCase
             'generateImage',
             'generateStream',
             'generateStreamBatch',
-        ] as $legacyOperation) {
-            try {
-                $provider->execute($legacyOperation);
-                self::fail($legacyOperation . ' must not be exposed by the generic AI query gateway.');
-            } catch (\InvalidArgumentException $exception) {
-                self::assertStringContainsString($legacyOperation, $exception->getMessage());
-            }
+            'chat',
+            'analyzeImage',
+            'executeAgent',
+        ] as $executionOperation) {
+            self::assertNotContains(
+                $executionOperation,
+                $declared,
+                $executionOperation . ' must not be declared in the frontend-facing descriptor.'
+            );
+        }
+    }
+
+    public function testLegacyChatOperationIsRemovedFromGenericAiQueryGateway(): void
+    {
+        $provider = new AiQueryProvider(
+            $this->createMock(AiService::class),
+            $this->createMock(SessionFactory::class),
+        );
+
+        try {
+            $provider->execute('chat', ['message' => 'hi']);
+            self::fail('chat must not be exposed by the generic AI query gateway.');
+        } catch (\InvalidArgumentException $exception) {
+            self::assertStringContainsString('chat', $exception->getMessage());
         }
     }
 }

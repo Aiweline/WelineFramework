@@ -39,6 +39,7 @@ final readonly class TaskPolicy
         public int $eventCoalesceIntervalMilliseconds = self::DEFAULT_EVENT_COALESCE_INTERVAL_MILLISECONDS,
         public int $eventCoalesceMaxBytes = self::DEFAULT_EVENT_COALESCE_MAX_BYTES,
         public bool $recoveryEnabled = true,
+        public TaskLivenessMode $livenessMode = TaskLivenessMode::CLIENT_LEASE,
     ) {
         foreach ([
             'lease ttl' => $this->leaseTtlSeconds,
@@ -75,7 +76,22 @@ final readonly class TaskPolicy
     }
 
     /**
-     * @return array<string, int|bool>
+     * Explicit opt-in policy for trusted scheduler-owned work. System tasks
+     * have no browser lease and therefore must never be stopped simply
+     * because no client is subscribed to their event stream.
+     */
+    public static function systemDefaults(): self
+    {
+        return new self(livenessMode: TaskLivenessMode::SYSTEM);
+    }
+
+    public function requiresClientLease(): bool
+    {
+        return $this->livenessMode->requiresClientLease();
+    }
+
+    /**
+     * @return array<string, int|bool|string>
      */
     public function toArray(): array
     {
@@ -94,6 +110,7 @@ final readonly class TaskPolicy
             'event_coalesce_interval_milliseconds' => $this->eventCoalesceIntervalMilliseconds,
             'event_coalesce_max_bytes' => $this->eventCoalesceMaxBytes,
             'recovery_enabled' => $this->recoveryEnabled,
+            'liveness_mode' => $this->livenessMode->value,
         ];
     }
 }

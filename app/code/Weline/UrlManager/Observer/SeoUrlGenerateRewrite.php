@@ -3,6 +3,7 @@
 namespace Weline\UrlManager\Observer;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -229,50 +230,16 @@ class SeoUrlGenerateRewrite implements ObserverInterface
      */
     private function resolveCurrentSiteLocaleSegments(string $uri): array
     {
-        $segments = \explode('/', \ltrim($uri, '/'));
-        $currency = '';
-        $language = '';
-
-        $currencyCandidates = [];
-        foreach ([
-            RequestContext::currency(),
-            \w_env('user.currency', ''),
-            \w_env('website.currency', ''),
-            Env::get('currency', 'CNY'),
-        ] as $candidate) {
-            $candidate = \strtoupper(\trim((string)$candidate));
-            if ($candidate !== '') {
-                $currencyCandidates[$candidate] = true;
-            }
-        }
-
-        if (isset($segments[0])) {
-            $first = \strtoupper(\trim((string)$segments[0]));
-            if ($first !== '' && isset($currencyCandidates[$first])) {
-                $currency = $first;
-            }
-        }
-
-        $languageCandidates = [];
-        foreach ([
-            RequestContext::locale(),
-            \w_env('user.lang', ''),
-            \w_env('website.language', ''),
-            Env::get('lang', Env::get('locale', 'zh_Hans_CN')),
-        ] as $candidate) {
-            $candidate = \trim((string)$candidate);
-            if ($candidate !== '') {
-                $languageCandidates[$candidate] = true;
-            }
-        }
-
-        $languageIndex = $currency !== '' ? 1 : 0;
-        if (isset($segments[$languageIndex])) {
-            $candidate = \trim((string)$segments[$languageIndex]);
-            if ($candidate !== '' && isset($languageCandidates[$candidate])) {
-                $language = $candidate;
-            }
-        }
+        $segments = \array_values(\array_filter(
+            \explode('/', \ltrim($uri, '/')),
+            static fn(string $part): bool => $part !== ''
+        ));
+        // Recognize locale/currency by path shape (framework State), not only by the
+        // already-active RequestContext locale. Otherwise /en_US/contact is never
+        // stripped when the cookie/context is still bn_IN, and rewrite misses.
+        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+        $currency = \strtoupper(\trim((string)($localization['currency'] ?? '')));
+        $language = \trim((string)($localization['language'] ?? ''));
 
         return [$currency, $language];
     }
@@ -381,20 +348,13 @@ class SeoUrlGenerateRewrite implements ObserverInterface
      */
     private function findRewrite(int $websiteId, string $path): ?array
     {
-        $rewrite = $this->urlRewrite->reset()
-            ->clearQuery()
-            ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(UrlRewrite::schema_fields_PATH, $path)
-            ->order(UrlRewrite::schema_fields_ID, 'DESC')
-            ->find()
-            ->fetch();
-
-        if (!$rewrite->getId()) {
+        $rewrite = $this->urlRewrite->findLatestByWebsiteAndPath($websiteId, $path);
+        if ($rewrite === null) {
             return null;
         }
 
         return [
-            'rewrite' => (string)$rewrite->getData('rewrite'),
+            'rewrite' => (string)($rewrite[UrlRewrite::schema_fields_REWRITE] ?? ''),
             'matched_uri' => $path,
         ];
     }

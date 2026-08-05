@@ -90,6 +90,31 @@ final class ProviderTimeoutPolicy
         return \min(self::DEFAULT_LOW_SPEED_TIME, \max(30, (int)\ceil($timeout / 4)));
     }
 
+    /**
+     * Long structured generations may legitimately return no response bytes
+     * while the provider is still producing the first JSON token. Callers can
+     * opt into a longer low-speed window without weakening the default policy
+     * for every OpenAI-compatible request.
+     *
+     * @param array<string,mixed> $params
+     */
+    public static function resolveRequestLowSpeedTime(array $params, int $timeout): int
+    {
+        if (!\array_key_exists('low_speed_time', $params)) {
+            return self::resolveLowSpeedTime($timeout);
+        }
+
+        $requested = \max(0, (int)$params['low_speed_time']);
+        if ($requested === 0) {
+            return 0;
+        }
+
+        $requested = \max(30, $requested);
+        $timeout = \max(0, $timeout);
+
+        return $timeout > 0 ? \min($requested, $timeout) : $requested;
+    }
+
     public static function resolveStreamLowSpeedTime(array $params, int $timeout): int
     {
         if (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout']))) {
@@ -97,6 +122,9 @@ final class ProviderTimeoutPolicy
         }
 
         $timeout = \max(0, $timeout);
+        if (\array_key_exists('low_speed_time', $params)) {
+            return self::resolveRequestLowSpeedTime($params, $timeout);
+        }
         if ($timeout > 0) {
             return self::resolveLowSpeedTime($timeout);
         }

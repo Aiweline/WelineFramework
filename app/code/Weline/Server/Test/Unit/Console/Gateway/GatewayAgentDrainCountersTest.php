@@ -11,6 +11,75 @@ use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 
 final class GatewayAgentDrainCountersTest extends TestCase
 {
+    public function testDesiredStateWorkerUsesPidBoundManagedTaskCapability(): void
+    {
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(Agent::class))->getFileName(),
+        );
+        $procOpen = \strpos($source, '$process = @\\proc_open(');
+        $authorize = \strpos($source, '->authorizeTaskFromManagedParent(');
+
+        self::assertIsInt($procOpen);
+        self::assertIsInt($authorize);
+        self::assertLessThan($authorize, $procOpen);
+        self::assertStringContainsString('->revokeTaskFromManagedParent(', $source);
+        self::assertStringContainsString(
+            '$this->assertDesiredStateTaskAuthorized($taskGuard, \'result commit\');',
+            $source,
+        );
+        self::assertStringContainsString(
+            'Gateway desired-state worker --master-token is forbidden.',
+            $source,
+        );
+        self::assertStringContainsString(
+            'array{0:?SubprocessControlKernel,1:?ChildMasterGuard,2:string,3:string}',
+            $source,
+        );
+        self::assertStringContainsString(
+            '$parentSlotId = $this->stringArgument($args, \'slot-id\');',
+            $source,
+        );
+        self::assertStringContainsString("'--slot-id=' . \$taskSlotId", $source);
+        self::assertStringContainsString(
+            'self::validDesiredStateTaskSlot($taskSlotId)',
+            $source,
+        );
+        self::assertStringNotContainsString('DESIRED_STATE_TASK_SLOT', $source);
+        self::assertStringContainsString(
+            'DESIRED_STATE_LAUNCH_FAILURE_LOG_SECONDS',
+            $source,
+        );
+    }
+
+    public function testAuthenticatedDrainingLatchPrecedesBackendEnableAndReplaySideEffects(): void
+    {
+        $source = (string)\file_get_contents(
+            (string)(new \ReflectionClass(Agent::class))->getFileName(),
+        );
+        $latch = \strpos(
+            $source,
+            '$projectDraining = self::latchProjectInstanceDraining(',
+        );
+        $backendEnable = \strpos(
+            $source,
+            'ControlMessage::ACTION_GATEWAY_BACKEND_ENABLE',
+        );
+
+        self::assertIsInt($latch);
+        self::assertIsInt($backendEnable);
+        self::assertLessThan($backendEnable, $latch);
+        self::assertStringContainsString(
+            'if (!$projectDraining && $heartbeatDue)',
+            $source,
+        );
+        self::assertStringContainsString(
+            'if (!$projectDraining) {' . "\n"
+                . '                    try {' . "\n"
+                . '                        $certificateReplay',
+            $source,
+        );
+    }
+
     public function testManagedProcessIdentityIsRedactedAndGenerationBound(): void
     {
         self::assertSame(
@@ -71,12 +140,19 @@ final class GatewayAgentDrainCountersTest extends TestCase
         $control = [
             'ok' => true,
             'ready' => false,
+            'control_plane_ready' => true,
             'release_ready' => true,
             'broker_ready' => true,
             'supervisor_ready' => true,
             'protocol' => 'wls-edge/2',
             'implementation_level' => 'wls-2.0',
             'security_profile' => 'native-broker-v1',
+            'protocol_min' => 2,
+            'protocol_max' => 2,
+            'epoch' => \str_repeat('a', 32),
+            'host_boot_id' => \str_repeat('b', 64),
+            'public_http' => 80,
+            'public_https' => 443,
         ];
         self::assertTrue(Agent::gatewayControlDiscoverable($control));
         self::assertFalse(Agent::gatewayControlDiscoverable(
@@ -89,6 +165,142 @@ final class GatewayAgentDrainCountersTest extends TestCase
         self::assertFalse(GatewayHostManager::controlPlaneAcceptsRegistration(
             [...$control, 'supervisor_ready' => false],
         ));
+    }
+
+    public function testDiscoveryTrustRequiresExactActiveRoutePublication(): void
+    {
+        $active = [
+            'authenticated' => true,
+            'state' => 'ACTIVE',
+            'active_route_ids' => [\str_repeat('a', 32)],
+            'certificate_ready_route_count' => 1,
+            'certificate_ready_unavailable_route_count' => 0,
+        ];
+        self::assertTrue(Agent::routePublicationProvesActive($active));
+        self::assertFalse(Agent::routePublicationProvesActive([
+            ...$active,
+            'authenticated' => false,
+        ]));
+        self::assertFalse(Agent::routePublicationProvesActive([
+            ...$active,
+            'active_route_ids' => [],
+        ]));
+        self::assertFalse(Agent::routePublicationProvesActive([
+            ...$active,
+            'certificate_ready_route_count' => 2,
+        ]));
+    }
+
+    public function testAuthenticatedDataPlaneDownCanUseOnlyValidLocalCertificatesForFallback(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174071';
+        $instanceName = 'fallback-first-start';
+        $boot = \str_repeat('b', 64);
+        $domain = 'fallback-first-start.example.test';
+        $routeId = \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32);
+        $registration = [
+            'project_uuid' => $projectUuid,
+            'instance_id' => $instanceName,
+            'project_generation' => 3,
+            'instance_generation' => 4,
+            'instance_digest' => \str_repeat('c', 64),
+            'master_epoch' => 5,
+            'launch_id' => \str_repeat('d', 32),
+            'request_digest' => \str_repeat('e', 64),
+            'non_certificate_desired_digest' => \str_repeat('f', 64),
+            'routes' => [[
+                'route_id' => $routeId,
+                'domain' => $domain,
+                'certificate' => [
+                    'pending' => false,
+                    'generation' => 2,
+                    'leaf_fingerprint_sha256' => \str_repeat('1', 64),
+                    'source_digest' => \str_repeat('2', 64),
+                ],
+            ]],
+        ];
+        $status = [
+            'ok' => true,
+            'control_plane_ready' => true,
+            'release_ready' => true,
+            'broker_ready' => true,
+            'supervisor_ready' => true,
+            'protocol' => 'wls-edge/2',
+            'implementation_level' => 'wls-2.0',
+            'security_profile' => 'native-broker-v1',
+            'protocol_min' => 2,
+            'protocol_max' => 2,
+            'epoch' => \str_repeat('a', 32),
+            'host_boot_id' => $boot,
+            'public_http' => 80,
+            'public_https' => 443,
+            'project_uuid' => $projectUuid,
+            'state' => 'DATA_PLANE_DOWN',
+            'data_plane' => ['running' => false],
+            'instances' => [],
+        ];
+
+        self::assertSame(1, Agent::localFallbackCertificateReadyRouteCount(
+            $registration,
+            $status,
+            $projectUuid,
+            $instanceName,
+            $boot,
+        ));
+        self::assertSame(1, Agent::localFallbackCertificateReadyRouteCount(
+            $registration,
+            [...$status, 'data_plane' => ['running' => true]],
+            $projectUuid,
+            $instanceName,
+            $boot,
+        ));
+        self::assertSame(0, Agent::localFallbackCertificateReadyRouteCount(
+            $registration,
+            [
+                ...$status,
+                'instances' => [[
+                    'instance_id' => $instanceName,
+                    'status' => 'DRAINING',
+                    'generation' => 4,
+                    'master_epoch' => 5,
+                    'launch_id' => \str_repeat('d', 32),
+                    'digest' => \str_repeat('c', 64),
+                ]],
+            ],
+            $projectUuid,
+            $instanceName,
+            $boot,
+        ));
+        self::assertSame(0, Agent::localFallbackCertificateReadyRouteCount(
+            [
+                ...$registration,
+                'routes' => [[
+                    ...$registration['routes'][0],
+                    'certificate' => [
+                        ...$registration['routes'][0]['certificate'],
+                        'pending' => true,
+                    ],
+                ]],
+            ],
+            $status,
+            $projectUuid,
+            $instanceName,
+            $boot,
+        ));
+        foreach ([
+            [...$status, 'state' => 'CONTROL_DEGRADED'],
+            [...$status, 'data_plane' => ['running' => 'false']],
+            [...$status, 'project_uuid' => '123e4567-e89b-42d3-a456-426614174072'],
+            [...$status, 'host_boot_id' => \str_repeat('9', 64)],
+        ] as $rejectedStatus) {
+            self::assertSame(0, Agent::localFallbackCertificateReadyRouteCount(
+                $registration,
+                $rejectedStatus,
+                $projectUuid,
+                $instanceName,
+                $boot,
+            ));
+        }
     }
 
     public function testPublicationKeepaliveUsesHeartbeatIntervalAndStopsOnShutdown(): void
@@ -139,37 +351,98 @@ final class GatewayAgentDrainCountersTest extends TestCase
 
     public function testFallbackDrainTimestampSurvivesAgentSelfHealAndDeadWorker(): void
     {
+        $boot = \str_repeat('a', 64);
+        $otherBoot = \str_repeat('b', 64);
         self::assertSame(0.0, Agent::restoreFallbackDrainStartedAt(
-            ['state' => 'ACTIVE', 'draining_timestamp' => 700],
+            [
+                'state' => 'ACTIVE',
+                'draining_host_boot_id' => $boot,
+                'draining_monotonic' => 700.0,
+            ],
             1000.0,
-            1000,
+            $boot,
         ));
         self::assertSame(1000.0, Agent::restoreFallbackDrainStartedAt(
             ['state' => 'DRAINING'],
             1000.0,
-            1000,
+            $boot,
         ));
         self::assertSame(880.0, Agent::restoreFallbackDrainStartedAt(
-            ['state' => 'draining', 'draining_timestamp' => 880],
+            [
+                'state' => 'draining',
+                'draining_host_boot_id' => $boot,
+                'draining_monotonic' => 880.0,
+            ],
             1000.0,
-            1000,
+            $boot,
         ));
         self::assertSame(700.0, Agent::restoreFallbackDrainStartedAt(
-            ['state' => 'DRAINING', 'draining_timestamp' => 100],
+            [
+                'state' => 'DRAINING',
+                'draining_host_boot_id' => $boot,
+                'draining_monotonic' => 100.0,
+            ],
             1000.0,
-            1000,
+            $boot,
+        ));
+        self::assertSame(1000.0, Agent::restoreFallbackDrainStartedAt(
+            [
+                'state' => 'DRAINING',
+                'draining_host_boot_id' => $otherBoot,
+                'draining_monotonic' => 100.0,
+                'draining_timestamp' => 1,
+            ],
+            1000.0,
+            $boot,
+        ));
+        self::assertSame(1000.0, Agent::restoreFallbackDrainStartedAt(
+            [
+                'state' => 'DRAINING',
+                'draining_host_boot_id' => $boot,
+                'draining_monotonic' => 1001.0,
+            ],
+            1000.0,
+            $boot,
         ));
         self::assertSame(910.0, Agent::reconcileFallbackDrainStartedAt(
             900.0,
-            ['state' => 'DRAINING', 'draining_timestamp' => 910],
+            [
+                'state' => 'DRAINING',
+                'draining_host_boot_id' => $boot,
+                'draining_monotonic' => 910.0,
+            ],
             1000.0,
-            1000,
+            $boot,
         ));
         self::assertSame(920.0, Agent::reconcileFallbackDrainStartedAt(
             920.0,
-            ['state' => 'DRAINING', 'draining_timestamp' => 910],
+            [
+                'state' => 'DRAINING',
+                'draining_host_boot_id' => $boot,
+                'draining_monotonic' => 910.0,
+            ],
             1000.0,
-            1000,
+            $boot,
+        ));
+        self::assertSame(1000.0, Agent::reconcileFallbackDrainStartedAt(
+            1000.0,
+            [
+                'state' => 'DRAINING',
+                'draining_host_boot_id' => $otherBoot,
+                'draining_monotonic' => 100.0,
+            ],
+            1001.0,
+            $boot,
+        ));
+        self::assertSame(1000.0, Agent::reconcileFallbackDrainStartedAt(
+            1000.0,
+            [
+                'state' => 'DRAINING',
+                'draining_host_boot_id' => $otherBoot,
+                'draining_monotonic' => 100.0,
+            ],
+            1299.999,
+            $boot,
         ));
 
         self::assertSame(
@@ -185,10 +458,11 @@ final class GatewayAgentDrainCountersTest extends TestCase
                     [
                         'state' => 'DRAINING',
                         'live' => false,
-                        'draining_timestamp' => 100,
+                        'draining_host_boot_id' => $boot,
+                        'draining_monotonic' => 100.0,
                     ],
                     1000.0,
-                    1000,
+                    $boot,
                 ),
                 lastFallbackCommandAt: 0.0,
                 fallbackRequested: true,
@@ -322,73 +596,96 @@ final class GatewayAgentDrainCountersTest extends TestCase
     {
         $currentProject = '11111111-1111-4111-8111-111111111111';
         $otherProject = '22222222-2222-4222-8222-222222222222';
-        $otherInstanceOnly = [
-            'routes' => [[
-                'project_uuid' => $currentProject,
-                'instance_id' => 'worker',
+        $generation = 7;
+        $masterEpoch = 9;
+        $launchId = \str_repeat('a', 32);
+        $drainingStatus = [
+            'project_uuid' => $currentProject,
+            'instances' => [[
+                'instance_id' => 'api',
                 'status' => 'DRAINING',
-                'instances' => [
-                    'worker' => [
-                        'instance_id' => 'worker',
-                        'status' => 'DRAINING',
-                    ],
-                ],
+                'generation' => $generation,
+                'master_epoch' => $masterEpoch,
+                'launch_id' => $launchId,
             ]],
-            'instances' => [
-                $currentProject => [
-                    'worker' => [
-                        'instance_id' => 'worker',
-                        'status' => 'DRAINING',
-                    ],
-                ],
-            ],
         ];
         self::assertFalse(Agent::projectInstanceDraining(
-            $otherInstanceOnly,
+            $drainingStatus,
             $currentProject,
-            'api',
+            'worker',
+            $generation,
+            $masterEpoch,
+            $launchId,
         ));
         self::assertFalse(Agent::projectInstanceDraining(
-            [
-                'routes' => [[
-                    'project_uuid' => $otherProject,
-                    'instances' => [
-                        'api' => [
-                            'instance_id' => 'api',
-                            'status' => 'DRAINING',
-                        ],
-                    ],
-                ]],
-            ],
+            [...$drainingStatus, 'project_uuid' => $otherProject],
             $currentProject,
             'api',
+            $generation,
+            $masterEpoch,
+            $launchId,
         ));
         self::assertTrue(Agent::projectInstanceDraining(
-            [
-                'routes' => [[
-                    'project_uuid' => $currentProject,
-                    'instances' => [
-                        'api' => [
-                            'instance_id' => 'api',
-                            'status' => 'DRAINING',
-                        ],
-                    ],
-                ]],
-            ],
+            $drainingStatus,
             $currentProject,
             'api',
+            $generation,
+            $masterEpoch,
+            $launchId,
         ));
-        self::assertTrue(Agent::projectInstanceDraining(
+        foreach ([
+            ['generation' => $generation + 1],
+            ['master_epoch' => $masterEpoch + 1],
+            ['launch_id' => \str_repeat('b', 32)],
+            ['status' => 'ACTIVE'],
+        ] as $mismatch) {
+            self::assertFalse(Agent::projectInstanceDraining(
+                [
+                    ...$drainingStatus,
+                    'instances' => [[...$drainingStatus['instances'][0], ...$mismatch]],
+                ],
+                $currentProject,
+                'api',
+                $generation,
+                $masterEpoch,
+                $launchId,
+            ));
+        }
+        self::assertFalse(Agent::projectInstanceDraining(
             [
+                ...$drainingStatus,
                 'instances' => [
-                    $currentProject => [
-                        'api' => [
-                            'instance_id' => 'api',
-                            'status' => 'DRAINING',
-                        ],
-                    ],
+                    $drainingStatus['instances'][0],
+                    $drainingStatus['instances'][0],
                 ],
             ],
+            $currentProject,
+            'api',
+            $generation,
+            $masterEpoch,
+            $launchId,
+        ));
+        self::assertFalse(Agent::latchProjectInstanceDraining(
+            false,
+            ['ok' => false, ...$drainingStatus],
+            $currentProject,
+            'api',
+            $generation,
+            $masterEpoch,
+            $launchId,
+        ));
+        self::assertTrue(Agent::latchProjectInstanceDraining(
+            false,
+            ['ok' => true, ...$drainingStatus],
+            $currentProject,
+            'api',
+            $generation,
+            $masterEpoch,
+            $launchId,
+        ));
+        self::assertTrue(Agent::latchProjectInstanceDraining(
+            true,
+            ['ok' => true, 'routes' => [], 'instances' => []],
             $currentProject,
             'api',
         ));
@@ -563,7 +860,7 @@ final class GatewayAgentDrainCountersTest extends TestCase
             'metadata' => [
                 'lease_id' => $lease,
                 'generation' => $generation,
-                'last_status_report_at' => $reportedAt,
+                'last_status_report_monotonic' => $reportedAt,
                 'last_status_report' => [
                     'drain_counters_version' => 1,
                     'active_requests' => $activeRequests,

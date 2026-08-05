@@ -304,6 +304,9 @@ module.exports = defineConfig({
     'app/code/*/*/test/E2E/**/*.spec.js',
     'app/code/*/*/Test/E2E/**/*.spec.js',
   ],
+  // var/ 下是 WLS 隔离克隆的历史副本（含旧版 framework helper），
+  // 不排除会导致同一用例跑多遍且命中过期代码。
+  testIgnore: ['var/**', '**/var/**', 'node_modules/**', '**/node_modules/**'],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

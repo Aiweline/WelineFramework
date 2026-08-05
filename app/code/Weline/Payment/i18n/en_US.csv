@@ -1,9 +1,13 @@
 ﻿"Payment query provider does not support operation: %{1}","Payment query provider does not support operation: %{1}"
+支付状态查询成功,"Payment status queried successfully"
+支付状态查询失败,支付状态查询失败
 "已有 %{1} 个可用于结账的支付方式。","已有 %{1} 个可用于结账的支付方式。"
 "暂无可用于结账的支付方式，请启用并配置至少一个 Weline_Payment 支付 Provider。","暂无可用于结账的支付方式，请启用并配置至少一个 Weline_Payment 支付 Provider。"
 "支付 Provider 实例不可用。","支付 Provider 实例不可用。"
 "Payment methods","Payment methods"
 "Weline_Payment payment method registry and checkout availability provider.","Weline_Payment payment method registry and checkout availability provider."
+"显式后台目标 scope；可使用 global 或完整 website.store.channel","显式后台目标 scope；可使用 global 或完整 website.store.channel"
+读取/预览返回的对象授权版本；提交前必须保持一致,读取/预览返回的对象授权版本；提交前必须保持一致
 "Payment method, payable ID and amount are required.","Payment method, payable ID and amount are required."
 Payment,Payment
 "Payment transaction created.","Payment transaction created."
@@ -12,13 +16,33 @@ Payment,Payment
 "Payment succeeded.","Payment succeeded."
 "Payment failed or is still processing.","Payment failed or is still processing."
 "Query payment status failed: %{message}","Query payment status failed: %{message}"
-缺少支付方式代码,"Payment method code is required"
 缺少交易ID,"Transaction ID is required"
-交易记录不存在,"Transaction record does not exist"
-支付状态查询成功,"Payment status queried successfully"
-"查询失败: %{1}","Query failed: %{1}"
+支付交易管理,支付交易管理
+支付交易记录管理,支付交易记录管理
+查看交易记录,查看交易记录
+查看支付交易记录列表,查看支付交易记录列表
+查看交易详情,查看交易详情
+查看支付交易详情,查看支付交易详情
+查询支付状态,查询支付状态
+操作授权条件不满足,操作授权条件不满足
+支付诊断,支付诊断
 支付统计驾驶舱,"Payment Dashboard"
+查看支付统计驾驶舱,查看支付统计驾驶舱
+缺少支付方式代码,"Payment method code is required"
 支付方式不存在,"Payment method does not exist"
+支付方式管理,"Payment Method Management"
+查看支付方式,查看支付方式
+查看支付方式列表,查看支付方式列表
+编辑支付方式,"Edit Payment Method"
+编辑支付方式配置,编辑支付方式配置
+支付诊断工作台,支付诊断工作台
+支付只读诊断,支付只读诊断
+Webhook诊断,Webhook诊断
+"查看 Webhook 端点与收件状态","查看 Webhook 端点与收件状态"
+支付对账,支付对账
+查看支付对账审计,查看支付对账审计
+退款对账,退款对账
+查看退款对账事实,查看退款对账事实
 获取支付方式列表成功,"Payment method list loaded successfully"
 缺少必需参数,"Required parameters are missing"
 订单支付,"Order Payment"
@@ -26,7 +50,9 @@ Payment,Payment
 支付订单创建成功,"Payment order created successfully"
 "创建支付订单失败: %{1}","Failed to create payment order: %{1}"
 缺少交易号,"Transaction number is required"
+交易记录不存在,"Transaction record does not exist"
 查询成功,"Query successful"
+"查询失败: %{1}","Query failed: %{1}"
 支付成功,"Payment successful"
 支付待处理,"Payment Pending"
 支付处理中,"Payment Processing"
@@ -125,7 +151,31 @@ More,More
 响应数据,"Response Data"
 回调数据,"Callback Data"
 返回,Back
-支付方式管理,"Payment Method Management"
+扫描不可用,"Scan unavailable"
+扫描已截断,"Scan truncated"
+需要处理,"Action required"
+不变量正常,"Invariants healthy"
+"Scope %{1} 的只读 ORM 扫描；修复只能通过双人授权 CLI 执行。","Read-only ORM scan for Scope %{1}; repair requires the two-person authorized CLI."
+支付对账不变量,"Payment reconciliation invariants"
+最近扫描时间,"Latest scan time"
+对账扫描不可用,"Reconciliation scan unavailable"
+"扫描达到 %{1} 行安全上限，repair 将保持关闭；请缩小 Scope 或归档历史数据。","The scan reached the %{1}-row safety limit. Repair remains disabled; narrow the Scope or archive historical data."
+"当前 Scope 的支付对账不变量全部通过。","All payment reconciliation invariants pass for the current Scope."
+不变量,Invariant
+异常数,Exceptions
+修复策略,"Repair policy"
+"双人授权 CLI","Two-person authorized CLI"
+仅告警，人工处置,"Alert only; manual action"
+"异常 %{1}","%{1} exceptions"
+通过,Pass
+"Correlation 链","Correlation chain"
+审计保留,"Audit retention"
+天,days
+是,Yes
+否,No
+此工作台仅显示脱敏支付事实，不触发真实资金、修复或退款动作。,此工作台仅显示脱敏支付事实，不触发真实资金、修复或退款动作。
+当前没有记录。,当前没有记录。
+同步支付提供商,同步支付提供商
 支付方式名称,"Payment Method Name"
 支付提供商,"Payment Provider"
 是否启用,"Is Active"
@@ -134,7 +184,8 @@ More,More
 启用,Enabled
 禁用,Disabled
 查看配置,"View Config"
-编辑支付方式,"Edit Payment Method"
+支付提供商同步成功,支付提供商同步成功
+支付提供商同步失败,支付提供商同步失败
 支付方式配置入口,"Payment Method Configuration Entry"
 打开系统配置中心,"Open SystemConfig"
 "支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。","SystemConfig owns ordinary payment method configuration, scope selection, inherited source display, save, validation, and cache invalidation."
@@ -148,17 +199,26 @@ More,More
 代码,Code
 类型,Type
 是否必填,Required
-是,Yes
-否,No
 当前运行时配置摘要,"Current Runtime Configuration Summary"
+"Payment Webhook Inbox 消费","Payment Webhook Inbox 消费"
+"消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect","消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect"
+"Payment 资产终态消费","Payment 资产终态消费"
+"独立重试资产 commit/release，不重复调用现金 Provider","独立重试资产 commit/release，不重复调用现金 Provider"
 "支付方式 %{code} 不存在或未启用","Payment method %{code} does not exist or is not enabled"
 支付提供商实例化失败,"Failed to instantiate payment provider"
 创建支付订单失败,"Failed to create payment order"
-"支付方式 %{code} 不存在","Payment method %{code} does not exist"
-签名验证失败,"Signature verification failed"
-回调数据中缺少交易号,"Transaction number is missing in callback data"
-"交易记录不存在: %{no}","Transaction record does not exist: %{no}"
 "支付提供商 method_code 不能为空","支付提供商 method_code 不能为空"
+"支付方式 %{code} 不存在","Payment method %{code} does not exist"
+"成功的支付尝试缺少后续 effect outbox","Succeeded payment attempt is missing downstream effect outbox rows"
+"已支付订单缺少发票 effect","Paid order is missing the invoice effect"
+"支付回调 inbox 已接收但超时未应用","Payment callback inbox was received but not applied before timeout"
+"退款通道 pending 或 unknown 超过 24 小时","Refund channel remained pending or unknown for more than 24 hours"
+非终态支付尝试的库存预占租约已过期,"Inventory reservation lease expired for a non-terminal payment attempt"
+"支付 outbox 处于 pending 且超时未处理","Payment outbox remained pending beyond the processing timeout"
+"支付 outbox 已进入 dead 终态","Payment outbox entered the dead terminal state"
+支付对账已执行修复,"Payment reconciliation repair executed"
+"支付对账在 Scope %{1} 补齐 %{2} 条唯一 effect，请复核审计 %{3}。","Payment reconciliation added %{2} unique effects in Scope %{1}. Review audit %{3}."
+"PaymentFacadeV2 orchestrator 不可用","PaymentFacadeV2 orchestrator 不可用"
 该支付方式不允许当前可支付对象。,"This payment method blocks the current payable object."
 该支付方式未开放给当前可支付对象。,"This payment method is not available for the current payable object."
 该支付方式要求付款人先登录或完成身份识别。,"This payment method requires the payer to sign in or complete identity verification first."
@@ -171,3 +231,37 @@ More,More
 当前业务标签不能使用该支付方式。,"The current business tag cannot use this payment method."
 当前业务对象缺少该支付方式要求的业务标签。,"The current payable object is missing a business tag required by this payment method."
 "支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。","Payment config scope can contain lowercase letters, numbers, underscores, dashes, and up to three dot-separated segments."
+"MIG-P2-PAYMENT：历史 Transaction→Intent/Attempt（仅登记的隔离 clone）","MIG-P2-PAYMENT: legacy Transaction to Intent/Attempt (registered isolated clones only)"
+打印帮助,"Print help"
+"只读清点历史、冲突、Schema 与全部财务水位","Read-only inventory of history, conflicts, schemas, and all financial watermarks"
+"checkpoint 后在登记 clone 上事务映射","Map transactionally on the registered clone after checkpointing"
+"新进程复核守恒、唯一性、水位和 journal","Verify conservation, uniqueness, watermarks, and the journal in a fresh process"
+"按 checkpoint 关闭 rollout；保留全部事实","Turn rollout off by checkpoint while retaining all facts"
+"migration registry 已登记的 mig_clone_*","A mig_clone_* registered in the migration registry"
+"apply 输出的 checkpoint ID（verify/rollback 必需）","Checkpoint ID returned by apply (required for verify and rollback)"
+显示本帮助,"Show help"
+"Payment 持久化不变量对账：dry-run / catalog / 双人授权 repair","Persistent Payment invariant reconciliation: dry-run / catalog / two-person repair"
+列出不变量、可修复标记与关联链,"List invariants, repairability, and the correlation chain"
+"只读扫描 ORM 差异并持久化审计证据","Scan ORM differences read-only and persist audit evidence"
+"只补唯一缺失 effect，默认关闭","Only add unique missing effects; disabled by default"
+"必填三段 Scope；dry-run 可显式使用 global","A three-segment Scope is required; dry-run may explicitly use global"
+"显式打开本次 repair","Explicitly enable this repair run"
+"操作者后台用户 ID","Operator backend user ID"
+"操作者当前 reconcile grant version","Operator's current reconcile grant version"
+"独立审批者后台用户 ID，必须与操作者不同","Independent approver backend user ID; must differ from the operator"
+"审批者当前 reconcile grant version","Approver's current reconcile grant version"
+"外部审批引用；审计仅保存 SHA-256","External approval reference; audit stores SHA-256 only"
+"8–128 位 repair 请求幂等键","8–128 character repair request idempotency key"
+"""Payment query provider does not support operation: %{1}""","Payment query provider does not support operation: %{1}"
+"Payment 不变量对账：dry-run / catalog / repair（默认关闭 repair）","Payment 不变量对账：dry-run / catalog / repair（默认关闭 repair）"
+支付回调处理失败,支付回调处理失败
+"支付方式 %{method} 回调处理失败，请检查验签与交易号。错误摘要：%{error}","支付方式 %{method} 回调处理失败，请检查验签与交易号。错误摘要：%{error}"
+未知,未知
+签名验证失败,"Signature verification failed"
+回调数据中缺少交易号,"Transaction number is missing in callback data"
+"交易记录不存在: %{no}","Transaction record does not exist: %{no}"
+"WebhookEndpointDirectory 当前仅 memory/harness","WebhookEndpointDirectory 当前仅 memory/harness"
+"PaymentCallbackReceiver 当前仅 memory/harness","PaymentCallbackReceiver 当前仅 memory/harness"
+"PaymentFacadeV2 orchestrator 仅 memory/harness","PaymentFacadeV2 orchestrator 仅 memory/harness"
+"当前 P2F 对账覆盖支付状态与唯一 effect；跨结算周期的总账 checksum 和净收款财务一致性仍属于后续账本阶段。","Current P2F reconciliation covers payment state and unique effects. Cross-settlement ledger checksum and net-receipt consistency remain in the later ledger phase."
+"对账扫描达到安全上限，repair 会 fail closed；请按更细 Scope 执行或先归档历史数据。","The reconciliation scan reached its safety limit and repair will fail closed. Use a narrower Scope or archive historical data first."

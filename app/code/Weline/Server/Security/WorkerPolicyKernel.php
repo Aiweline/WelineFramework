@@ -1122,6 +1122,9 @@ final class WorkerPolicyKernel
         if ($host === '') {
             return $this->invalidParsed('missing_host');
         }
+        if (!$this->requestTargetMatchesHost($target, $host)) {
+            return $this->invalidParsed('target_host_mismatch');
+        }
         return [
             'method' => $method,
             'protocol' => $protocol,
@@ -1174,6 +1177,9 @@ final class WorkerPolicyKernel
         $host = (string)($headers['host'] ?? '');
         if ($host === '') {
             return $this->invalidParsed('missing_host');
+        }
+        if (!$this->requestTargetMatchesHost($target, $host)) {
+            return $this->invalidParsed('target_host_mismatch');
         }
         $protocol = $this->normalizeValidatedProtocol((string)$frame['protocol']);
         if ($protocol === null) {
@@ -1292,6 +1298,47 @@ final class WorkerPolicyKernel
     {
         $port = (int)$port;
         return $port >= 1 && $port <= 65535;
+    }
+
+    private function requestTargetMatchesHost(string $target, string $host): bool
+    {
+        if (\str_starts_with($target, '//')) {
+            return false;
+        }
+        try {
+            $parts = \parse_url($target);
+        } catch (\ValueError) {
+            return false;
+        }
+        if (!\is_array($parts)) {
+            return false;
+        }
+        $scheme = \strtolower((string)($parts['scheme'] ?? ''));
+        $targetHost = \strtolower(\rtrim((string)($parts['host'] ?? ''), '.'));
+        if ($scheme === '' && $targetHost === '') {
+            return \str_starts_with($target, '/');
+        }
+        if (!\in_array($scheme, ['http', 'https'], true)
+            || $targetHost === ''
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['fragment'])
+        ) {
+            return false;
+        }
+        try {
+            $header = \parse_url($scheme . '://' . $host);
+        } catch (\ValueError) {
+            return false;
+        }
+        if (!\is_array($header)) {
+            return false;
+        }
+        $headerHost = \strtolower(\rtrim((string)($header['host'] ?? ''), '.'));
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+        return $headerHost !== ''
+            && \hash_equals($targetHost, $headerHost)
+            && (int)($parts['port'] ?? $defaultPort) === (int)($header['port'] ?? $defaultPort);
     }
 
     /** @param list<string> $allowedHosts */

@@ -9,7 +9,7 @@ $templates = $this->getData('templates') ?? [];
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row">
+<div class="row" data-testid="shipping-rate-template-management">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('费用模板') ?></h4>
@@ -25,6 +25,18 @@ $embed = $this->getData('embed') ?? false;
                     </div>
                 </div>
 <?php endif; ?>
+
+                <div class="row mb-3"><div class="col-12"><div class="card" data-testid="shipping-rate-template-create-form">
+                    <div class="card-header"><h5 class="card-title mb-0"><?= __('新增费用模板') ?></h5></div>
+                    <div class="card-body"><w:form method="post" action="@backend-url('shipping/backend/ratetemplate/save')"><div class="row g-3">
+                        <div class="col-md-3"><label class="form-label"><?= __('模板名称') ?></label><input class="form-control" name="template_name" maxlength="255" required></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('模板代码') ?></label><input class="form-control" name="template_code" maxlength="50" required></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('计算类型') ?></label><select class="form-select" name="calculation_type"><option value="fixed"><?= __('固定费用') ?></option><option value="weight"><?= __('按重量') ?></option><option value="volume"><?= __('按体积') ?></option><option value="quantity"><?= __('按件数') ?></option></select></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('基础费用') ?></label><input class="form-control" type="number" min="0" step="0.01" name="base_fee" value="10.00" required></div>
+                        <div class="col-md-1"><label class="form-label"><?= __('货币') ?></label><input class="form-control" name="currency_code" maxlength="3" value="CNY" required></div>
+                        <div class="col-md-2 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-rate-template-submit"><?= __('创建') ?></button></div>
+                    </div></w:form></div>
+                </div></div></div>
 
                 <div class="row">
                     <div class="col-12">
@@ -52,11 +64,11 @@ $embed = $this->getData('embed') ?? false;
                                             <?php /** @var RateTemplate $template */ ?>
                                             <?php foreach ($templates as $template): ?>
                                                 <tr>
-                                                    <td><?= htmlspecialchars($template->getData(RateTemplate::fields_TEMPLATE_NAME)) ?></td>
-                                                    <td><?= htmlspecialchars($template->getData(RateTemplate::fields_TEMPLATE_CODE)) ?></td>
-                                                    <td><?= htmlspecialchars($template->getData(RateTemplate::fields_CALCULATION_TYPE)) ?></td>
+                                                    <td><?= htmlspecialchars($template->getData(RateTemplate::schema_fields_TEMPLATE_NAME)) ?></td>
+                                                    <td><?= htmlspecialchars($template->getData(RateTemplate::schema_fields_TEMPLATE_CODE)) ?></td>
+                                                    <td><?= htmlspecialchars($template->getData(RateTemplate::schema_fields_CALCULATION_TYPE)) ?></td>
                                                     <td>
-                                                        <?php if ($template->getData(RateTemplate::fields_IS_ACTIVE)): ?>
+                                                        <?php if ($template->getData(RateTemplate::schema_fields_IS_ACTIVE)): ?>
                                                             <span class="badge bg-success"><?= __('启用') ?></span>
                                                         <?php else: ?>
                                                             <span class="badge bg-secondary"><?= __('禁用') ?></span>

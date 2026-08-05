@@ -23,6 +23,7 @@ use Weline\Framework\Database\Compiler\Dialect\SqliteDialect;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Connection\PdoConnection;
 use Weline\Framework\Database\Connection\Api\Sql;
+use Weline\Framework\Database\Connection\Api\Sql\CreatesTableFromSchemaTrait;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrategy;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionLease;
@@ -32,6 +33,7 @@ use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 use Weline\Framework\Database\Exception\DatabaseRetryTimeoutException;
 use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Helper\Standar;
+use Weline\Framework\Database\Schema\IndexDefinitionContract;
 use Weline\Framework\Database\Retry\RetryBudget;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
@@ -39,6 +41,8 @@ use Weline\Framework\Runtime\SchedulerSystem;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    use CreatesTableFromSchemaTrait;
+
     public const REBUILD_MARKER = '/* WELINE_SQLITE_REBUILD */';
     public const DDL_STATEMENT_SEPARATOR = "\n-- WELINE_DDL_STATEMENT\n";
 
@@ -660,13 +664,40 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         if (!is_array($rows)) {
             return [];
         }
+        $autoIncrementColumns = [];
+        try {
+            [$definitions] = $this->sqliteTableDefinitions($table);
+            foreach ($definitions as $definition) {
+                $columnName = $this->sqliteDefinitionColumnName($definition);
+                if ($columnName !== null && preg_match('/\bAUTOINCREMENT\b/i', $definition) === 1) {
+                    $autoIncrementColumns[strtolower($columnName)] = true;
+                }
+            }
+        } catch (\Throwable) {
+            // Metadata remains readable for legacy/virtual tables.  Without an
+            // explicit AUTOINCREMENT token, do not infer the stronger semantic
+            // merely from SQLite's INTEGER PRIMARY KEY rowid alias.
+        }
         $uniqueColumns = [];
-        foreach ($this->getTableIndexes($table) as $index) {
-            if (!empty($index['unique']) && count((array)($index['columns'] ?? [])) === 1) {
-                $uniqueColumns[(string)$index['columns'][0]] = true;
+        $indexList = $this->query("PRAGMA index_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
+        if (is_array($indexList)) {
+            foreach ($indexList as $index) {
+                if (empty($index['unique'])) {
+                    continue;
+                }
+                $indexName = (string)($index['name'] ?? '');
+                $indexInfo = $this->query(
+                    "PRAGMA index_info(" . $this->getLink()->quote($indexName) . ")"
+                )->fetchArray();
+                if (!is_array($indexInfo) || count($indexInfo) !== 1) {
+                    continue;
+                }
+                $columnName = (string)($indexInfo[0]['name'] ?? '');
+                if ($columnName !== '') {
+                    $uniqueColumns[$columnName] = true;
+                }
             }
         }
-        $primaryKeyCount = count(array_filter($rows, static fn(array $row): bool => (int)($row['pk'] ?? 0) > 0));
         $list = [];
         foreach ($rows as $row) {
             $name = $row['name'] ?? '';
@@ -680,7 +711,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                 'length' => $typeInfo['length'],
                 'nullable' => $pk > 0 ? false : $notnull === 0,
                 'primary_key' => $pk > 0,
-                'auto_increment' => $primaryKeyCount === 1 && $pk > 0 && in_array($typeInfo['type'], ['integer', 'int'], true),
+                'auto_increment' => isset($autoIncrementColumns[strtolower((string)$name)]),
                 'default' => $this->normalizeSqliteDefault($default),
                 'comment' => '',
                 'unique' => isset($uniqueColumns[$name]),
@@ -731,16 +762,14 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getTableIndexes(string $table): array
     {
         $table = $this->resolveSqliteTable($table);
+        $canonicalPrefix = Standar::getIndexName($this->formatTableName($table), '');
         $indexList = $this->query("PRAGMA index_list(" . $this->getLink()->quote($table) . ")")->fetchArray();
         if (!is_array($indexList)) {
             return [];
         }
         $list = [];
         foreach ($indexList as $idx) {
-            $name = $idx['name'] ?? '';
-            if (str_starts_with((string) $name, 'sqlite_autoindex_')) {
-                continue;
-            }
+            $name = (string)($idx['name'] ?? '');
             $unique = (bool) ($idx['unique'] ?? false);
             $info = $this->query("PRAGMA index_info(" . $this->getLink()->quote($name) . ")")->fetchArray();
             $columns = [];
@@ -749,7 +778,23 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                     $columns[] = $r['name'] ?? '';
                 }
             }
-            $list[] = ['name' => $name, 'columns' => $columns, 'unique' => $unique];
+            if (str_starts_with($name, 'sqlite_autoindex_')) {
+                if (!$unique || strtolower((string)($idx['origin'] ?? '')) !== 'u' || $columns === []) {
+                    continue;
+                }
+                $logicalName = $this->sqliteConstraintUniqueIndexName($table, $columns);
+            } else {
+                $logicalName = str_starts_with($name, $canonicalPrefix)
+                    ? substr($name, strlen($canonicalPrefix))
+                    : $name;
+            }
+            $list[] = [
+                'name' => $logicalName,
+                'columns' => $columns,
+                'unique' => $unique,
+                'type' => $unique ? 'UNIQUE' : 'DEFAULT',
+                'method' => 'BTREE',
+            ];
         }
         return $list;
     }
@@ -772,7 +817,42 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $d = $this->getDialect();
         $t = $d->quoteTable($table);
         $def = $this->sqliteColumnDef($col);
-        return "ALTER TABLE {$t} ADD COLUMN {$def}";
+        if (empty($col['primaryKey']) && empty($col['unique'])) {
+            return "ALTER TABLE {$t} ADD COLUMN {$def}";
+        }
+
+        [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
+        $columnName = trim((string)($col['name'] ?? ''));
+        foreach ($definitions as $definition) {
+            if (strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $columnName) === 0) {
+                throw new \RuntimeException(__("SQLite 表 %{1} 已存在列 %{2}", [$table, $columnName]));
+            }
+        }
+        if (!empty($col['primaryKey']) && !empty($col['autoIncrement'])) {
+            foreach ($definitions as $definition) {
+                if (preg_match('/\bPRIMARY\s+KEY\b/i', $definition) === 1) {
+                    throw new \RuntimeException(__(
+                        'SQLite 表 %{1} 添加自增主键 %{2} 前必须先降级旧主键',
+                        [$table, $columnName],
+                    ));
+                }
+            }
+        }
+        $definitions[] = $this->sqliteColumnDef($col, true);
+        $definitions = $this->sqliteNormalizePrimaryKeyDefinitions($definitions);
+
+        return $this->sqliteBuildRecreateTableSql($table, $definitions, $suffix);
+    }
+
+    /**
+     * Build rollback DDL for a DROP COLUMN while the source column still
+     * exists. It is intentionally not validated against the current snapshot.
+     */
+    public function buildAlterAddProjectedColumnSql(string $table, array $col): string
+    {
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        return "ALTER TABLE {$t} ADD COLUMN " . $this->sqliteColumnDef($col);
     }
 
     /** @inheritDoc */
@@ -780,7 +860,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
         $columnName = (string)($col['name'] ?? '');
-        $replacement = $this->sqliteColumnDef($col);
+        $preserveLegacyInlineUnique = !empty($col['unique'])
+            && $this->sqliteColumnDefinitionHasInlineUnique($definitions, $columnName);
+        $replacement = $this->sqliteColumnDef($col, $preserveLegacyInlineUnique);
         $hasTablePrimaryKey = false;
         foreach ($definitions as $definition) {
             if (preg_match('/^\s*(?:CONSTRAINT\s+[^\s]+\s+)?PRIMARY\s+KEY\b/i', $definition) === 1) {
@@ -800,9 +882,22 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                 break;
             }
         }
+        if (empty($col['unique'])) {
+            foreach ($definitions as $index => $definition) {
+                if ($this->sqliteSingleColumnUniqueDefinitionMatches($definition, $columnName)) {
+                    unset($definitions[$index]);
+                }
+            }
+            $definitions = array_values($definitions);
+        }
         if (!$replaced) {
             throw new \RuntimeException(__("SQLite 表 %{1} 不存在待修改列 %{2}", [$table, $columnName]));
         }
+
+        // SQLite rejects multiple column-level PRIMARY KEY clauses. When a modify
+        // introduces a second PK (common for LocalModel id + local_code), collapse
+        // them into one table-level composite PRIMARY KEY — matching createTableFromSchema.
+        $definitions = $this->sqliteNormalizePrimaryKeyDefinitions($definitions);
 
         return $this->sqliteBuildRecreateTableSql($table, $definitions, $suffix);
     }
@@ -810,10 +905,44 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAlterDropColumnSql(string $table, string $colName): string
     {
-        $d = $this->getDialect();
-        $t = $d->quoteTable($table);
-        $c = $d->quoteIdentifier($colName);
-        return "ALTER TABLE {$t} DROP COLUMN {$c}";
+        [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
+        $remaining = [];
+        $removed = false;
+        foreach ($definitions as $definition) {
+            if (strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $colName) === 0) {
+                $removed = true;
+                continue;
+            }
+            if ($this->sqliteTableConstraintReferencesColumn($definition, $colName)) {
+                continue;
+            }
+            $remaining[] = $definition;
+        }
+        if (!$removed) {
+            throw new \RuntimeException(__("SQLite 表 %{1} 不存在待删除列 %{2}", [$table, $colName]));
+        }
+
+        return $this->sqliteBuildRecreateTableSql($table, $remaining, $suffix);
+    }
+
+    /**
+     * Build rollback DDL for an ADD COLUMN before the projected column exists.
+     * The current definitions are the rollback target; execution happens after
+     * the forward add and copies only these original columns.
+     */
+    public function buildAlterDropProjectedColumnSql(string $table, string $colName): string
+    {
+        [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
+        foreach ($definitions as $definition) {
+            if (strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $colName) === 0) {
+                throw new \RuntimeException(__(
+                    "SQLite 表 %{1} 的投影新增列 %{2} 已存在，拒绝生成过期回滚",
+                    [$table, $colName],
+                ));
+            }
+        }
+
+        return $this->sqliteBuildRecreateTableSql($table, $definitions, $suffix);
     }
 
     /** @inheritDoc */
@@ -827,7 +956,9 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     {
         $d = $this->getDialect();
         $t = $d->quoteTable($table);
-        $name = $d->quoteIdentifier($idx['name'] ?? '');
+        $logicalName = (string)($idx['name'] ?? '');
+        $physicalName = Standar::getIndexName($this->formatTableName($table), $logicalName);
+        $name = $d->quoteIdentifier($physicalName);
         $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $idx['columns'] ?? []);
         $colList = implode(',', $cols);
         $type = strtoupper($idx['type'] ?? 'INDEX');
@@ -840,7 +971,44 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildDropIndexSql(string $table, string $indexName): string
     {
-        $n = $this->getDialect()->quoteIdentifier($indexName);
+        if (str_starts_with(strtolower($indexName), IndexDefinitionContract::SQLITE_CONSTRAINT_INDEX_PREFIX)) {
+            $physicalTable = $this->resolveSqliteTable($table);
+            $canonical = Standar::getIndexName($this->formatTableName($physicalTable), $indexName);
+            $physicalIndexes = $this->query(
+                "PRAGMA index_list(" . $this->getLink()->quote($physicalTable) . ")"
+            )->fetchArray();
+            foreach (is_array($physicalIndexes) ? $physicalIndexes : [] as $index) {
+                $physicalName = (string)($index['name'] ?? '');
+                if (strtolower((string)($index['origin'] ?? '')) === 'c'
+                    && ($physicalName === $canonical || $physicalName === $indexName)) {
+                    return 'DROP INDEX IF EXISTS ' . $this->getDialect()->quoteIdentifier($physicalName);
+                }
+            }
+            foreach ($this->getTableIndexes($table) as $index) {
+                if (strcasecmp((string)($index['name'] ?? ''), $indexName) === 0) {
+                    return $this->sqliteBuildDropUniqueConstraintSql(
+                        $table,
+                        array_values(array_map('strval', (array)($index['columns'] ?? []))),
+                    );
+                }
+            }
+            return '';
+        }
+        $physicalTable = $this->resolveSqliteTable($table);
+        $canonical = Standar::getIndexName($this->formatTableName($physicalTable), $indexName);
+        $statement = $this->getWrappedConnection()->prepare(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=:table AND name IN (:raw, :canonical)"
+        );
+        $statement->execute([
+            ':table' => $physicalTable,
+            ':raw' => $indexName,
+            ':canonical' => $canonical,
+        ]);
+        $existing = array_map('strval', $statement->fetchAll(PDO::FETCH_COLUMN, 0) ?: []);
+        $physicalName = in_array($canonical, $existing, true)
+            ? $canonical
+            : (in_array($indexName, $existing, true) ? $indexName : $canonical);
+        $n = $this->getDialect()->quoteIdentifier($physicalName);
         return "DROP INDEX IF EXISTS {$n}";
     }
 
@@ -995,6 +1163,115 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         return $name !== '' ? $name : null;
     }
 
+    /**
+     * Collapse multiple PRIMARY KEY declarations into one table-level constraint.
+     *
+     * @param list<string> $definitions
+     * @return list<string>
+     */
+    private function sqliteNormalizePrimaryKeyDefinitions(array $definitions): array
+    {
+        $pkColumns = [];
+        $tablePkIndexes = [];
+        foreach ($definitions as $index => $definition) {
+            if (preg_match('/^\s*(?:CONSTRAINT\s+[^\s]+\s+)?PRIMARY\s+KEY\s*\((.+)\)\s*$/is', $definition, $matches) === 1) {
+                $tablePkIndexes[] = $index;
+                foreach ($this->sqliteSplitIdentifierList((string)$matches[1]) as $column) {
+                    if ($column !== '' && !in_array($column, $pkColumns, true)) {
+                        $pkColumns[] = $column;
+                    }
+                }
+                continue;
+            }
+            $columnName = $this->sqliteDefinitionColumnName($definition);
+            if ($columnName === null) {
+                continue;
+            }
+            if (preg_match('/\bPRIMARY\s+KEY\b/i', $definition) !== 1) {
+                continue;
+            }
+            if (!in_array($columnName, $pkColumns, true)) {
+                $pkColumns[] = $columnName;
+            }
+        }
+
+        if (count($pkColumns) <= 1) {
+            return $definitions;
+        }
+
+        $pkScores = [];
+        foreach ($pkColumns as $column) {
+            $score = 0;
+            if (strcasecmp($column, 'id') === 0 || str_ends_with(strtolower($column), '_id')) {
+                $score -= 10;
+            }
+            foreach ($definitions as $definition) {
+                if (strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $column) !== 0) {
+                    continue;
+                }
+                if (preg_match('/\bAUTOINCREMENT\b/i', $definition) === 1) {
+                    $score -= 20;
+                }
+                break;
+            }
+            $pkScores[$column] = $score;
+        }
+        usort($pkColumns, static function (string $left, string $right) use ($pkScores): int {
+            return ($pkScores[$left] ?? 0) <=> ($pkScores[$right] ?? 0) ?: strcmp($left, $right);
+        });
+
+        foreach ($definitions as $index => $definition) {
+            $columnName = $this->sqliteDefinitionColumnName($definition);
+            if ($columnName === null) {
+                continue;
+            }
+            if (preg_match('/\bPRIMARY\s+KEY\b/i', $definition) !== 1) {
+                continue;
+            }
+            $stripped = trim((string)preg_replace('/\s+PRIMARY\s+KEY(?:\s+AUTOINCREMENT)?\b/i', '', $definition));
+            $stripped = trim((string)preg_replace('/\s+AUTOINCREMENT\b/i', '', $stripped));
+            if (!preg_match('/\bNOT\s+NULL\b/i', $stripped)) {
+                $stripped .= ' NOT NULL';
+            }
+            $definitions[$index] = $stripped;
+        }
+
+        foreach (array_reverse($tablePkIndexes) as $index) {
+            unset($definitions[$index]);
+        }
+
+        $quoted = array_map(
+            static fn(string $column): string => '"' . str_replace('"', '""', $column) . '"',
+            $pkColumns
+        );
+        $definitions[] = 'PRIMARY KEY (' . implode(', ', $quoted) . ')';
+
+        return array_values($definitions);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function sqliteSplitIdentifierList(string $list): array
+    {
+        $names = [];
+        foreach (explode(',', $list) as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            if (preg_match('/^(?:"((?:""|[^"])*)"|`((?:``|[^`])*)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/', $part, $matches) === 1) {
+                $name = $matches[1] !== '' ? str_replace('""', '"', $matches[1])
+                    : ($matches[2] !== '' ? str_replace('``', '`', $matches[2])
+                        : ($matches[3] !== '' ? $matches[3] : $matches[4]));
+                if ($name !== '') {
+                    $names[] = $name;
+                }
+            }
+        }
+        return $names;
+    }
+
     private function sqliteForeignKeyConstraintName(string $definition): ?string
     {
         if (preg_match('/^\s*CONSTRAINT\s+(?:"((?:""|[^"])*)"|`((?:``|[^`])*)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))\s+FOREIGN\s+KEY\b/i', $definition, $matches) !== 1) {
@@ -1003,6 +1280,20 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         return $matches[1] !== '' ? str_replace('""', '"', $matches[1])
             : ($matches[2] !== '' ? str_replace('``', '`', $matches[2])
                 : ($matches[3] !== '' ? $matches[3] : $matches[4]));
+    }
+
+    private function sqliteTableConstraintReferencesColumn(string $definition, string $column): bool
+    {
+        if (preg_match('/^\s*(?:CONSTRAINT\s+[^\s]+\s+)?(?:PRIMARY\s+KEY|UNIQUE|FOREIGN\s+KEY|CHECK)\b/i', $definition) !== 1) {
+            return false;
+        }
+        $tokens = preg_split('/[^A-Za-z0-9_]+/', $definition, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($tokens as $token) {
+            if (strcasecmp($token, $column) === 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** @param array<string,mixed> $foreignKey */
@@ -1026,10 +1317,17 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $quotedTable = $this->quoteIdentifier($rawTable);
         $temporary = $rawTable . '__weline_rebuild_' . bin2hex(random_bytes(6));
         $quotedTemporary = $this->quoteIdentifier($temporary);
+        $definedColumns = [];
+        foreach ($definitions as $definition) {
+            $definedColumn = $this->sqliteDefinitionColumnName($definition);
+            if ($definedColumn !== null) {
+                $definedColumns[strtolower($definedColumn)] = true;
+            }
+        }
         $columns = [];
         foreach ($this->getTableColumns($rawTable) as $column) {
             $name = trim((string)($column['name'] ?? $column['Field'] ?? ''));
-            if ($name !== '') {
+            if ($name !== '' && isset($definedColumns[strtolower($name)])) {
                 $columns[] = $name;
             }
         }
@@ -1037,10 +1335,32 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             throw new \RuntimeException(__('SQLite 表 %{1} 没有可复制列', $table));
         }
         $quotedColumns = array_map(fn(string $column): string => $this->quoteIdentifier($column), $columns);
+        $selectExpressions = [];
+        foreach ($columns as $column) {
+            $quoted = $this->quoteIdentifier($column);
+            $defaultLiteral = null;
+            foreach ($definitions as $definition) {
+                if (strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $column) !== 0) {
+                    continue;
+                }
+                // When promoting nullable historical data to NOT NULL DEFAULT ...,
+                // COALESCE keeps the rebuild INSERT from failing on existing NULLs.
+                if (
+                    preg_match('/\bNOT\s+NULL\b/i', $definition) === 1
+                    && preg_match('/\bDEFAULT\s+((?:\'(?:\'\'|[^\'])*\')|(?:"(?:""|[^"])*")|(?:\([^)]*\))|(?:[^\s,]+))/i', $definition, $matches) === 1
+                ) {
+                    $defaultLiteral = trim((string)$matches[1]);
+                }
+                break;
+            }
+            $selectExpressions[] = $defaultLiteral !== null
+                ? 'COALESCE(' . $quoted . ', ' . $defaultLiteral . ')'
+                : $quoted;
+        }
         $suffixSql = $suffix !== '' ? ' ' . rtrim($suffix, ';') : '';
         $statements = [
             "CREATE TABLE {$quotedTemporary} (\n  " . implode(",\n  ", $definitions) . "\n){$suffixSql}",
-            "INSERT INTO {$quotedTemporary} (" . implode(',', $quotedColumns) . ") SELECT " . implode(',', $quotedColumns) . " FROM {$quotedTable}",
+            "INSERT INTO {$quotedTemporary} (" . implode(',', $quotedColumns) . ") SELECT " . implode(',', $selectExpressions) . " FROM {$quotedTable}",
             "DROP TABLE {$quotedTable}",
             "ALTER TABLE {$quotedTemporary} RENAME TO {$quotedTable}",
         ];
@@ -1060,7 +1380,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         return self::REBUILD_MARKER . "\n" . implode(self::DDL_STATEMENT_SEPARATOR, $statements);
     }
 
-    private function sqliteColumnDef(array $col): string
+    private function sqliteColumnDef(array $col, bool $includeUnique = false): string
     {
         $c = $this->getDialect()->quoteIdentifier($col['name'] ?? '');
         $type = strtoupper($col['type'] ?? 'TEXT');
@@ -1084,11 +1404,116 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                 ? "DEFAULT (datetime('now'))"
                 : (is_string($d) ? "DEFAULT '" . str_replace("'", "''", $d) . "'" : "DEFAULT {$d}");
         }
-        if (!empty($col['unique']) && empty($col['primaryKey'])) {
+        if ($includeUnique && !empty($col['unique']) && empty($col['primaryKey'])) {
             $opts[] = 'UNIQUE';
         }
         $optStr = implode(' ', $opts);
         return "{$c} {$typeLen} {$optStr}";
+    }
+
+    /** @param list<string> $definitions */
+    private function sqliteColumnDefinitionHasInlineUnique(array $definitions, string $columnName): bool
+    {
+        foreach ($definitions as $definition) {
+            if (strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $columnName) === 0
+                && preg_match('/\bUNIQUE\b/i', $definition) === 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function sqliteSingleColumnUniqueDefinitionMatches(string $definition, string $columnName): bool
+    {
+        if (preg_match(
+            '/^\s*(?:CONSTRAINT\s+(?:"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+)?UNIQUE\s*\(\s*(?:"((?:[^"]|"")*)"|`((?:[^`]|``)*)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))\s*\)\s*(?:ON\s+CONFLICT\s+\w+)?\s*$/i',
+            $definition,
+            $matches,
+        ) !== 1) {
+            return false;
+        }
+        $name = ($matches[1] ?? '') !== '' ? str_replace('""', '"', $matches[1])
+            : (($matches[2] ?? '') !== '' ? str_replace('``', '`', $matches[2])
+                : (($matches[3] ?? '') !== '' ? $matches[3] : ($matches[4] ?? '')));
+        return strcasecmp($name, $columnName) === 0;
+    }
+
+    /** @param list<string> $columns */
+    private function sqliteConstraintUniqueIndexName(string $table, array $columns): string
+    {
+        return IndexDefinitionContract::SQLITE_CONSTRAINT_INDEX_PREFIX
+            . substr(hash('sha256', strtolower($table) . "\0" . implode("\0", $columns)), 0, 20);
+    }
+
+    /** @param list<string> $columns */
+    private function sqliteBuildDropUniqueConstraintSql(string $table, array $columns): string
+    {
+        [$definitions, $suffix] = $this->sqliteTableDefinitions($table);
+        $changed = false;
+        foreach ($definitions as $index => $definition) {
+            $definitionColumns = $this->sqliteUniqueDefinitionColumns($definition);
+            if ($definitionColumns !== null && $this->sqliteIdentifierListsEqual($definitionColumns, $columns)) {
+                unset($definitions[$index]);
+                $changed = true;
+                continue;
+            }
+            if (count($columns) !== 1
+                || strcasecmp((string)$this->sqliteDefinitionColumnName($definition), $columns[0]) !== 0
+                || preg_match('/\bUNIQUE\b/i', $definition) !== 1) {
+                continue;
+            }
+            $definitions[$index] = trim((string)preg_replace(
+                '/\s+(?:CONSTRAINT\s+(?:"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+)?UNIQUE(?:\s+ON\s+CONFLICT\s+\w+)?\b/i',
+                '',
+                $definition,
+                1,
+            ));
+            $changed = true;
+        }
+        if (!$changed) {
+            throw new \RuntimeException(__(
+                'SQLite 表 %{1} 未找到待删除的 UNIQUE 约束 (%{2})',
+                [$table, implode(',', $columns)],
+            ));
+        }
+        return $this->sqliteBuildRecreateTableSql($table, array_values($definitions), $suffix);
+    }
+
+    /** @return list<string>|null */
+    private function sqliteUniqueDefinitionColumns(string $definition): ?array
+    {
+        if (preg_match(
+            '/^\s*(?:CONSTRAINT\s+(?:"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+)?UNIQUE\s*\((.*)\)\s*(?:ON\s+CONFLICT\s+\w+)?\s*$/is',
+            $definition,
+            $matches,
+        ) !== 1) {
+            return null;
+        }
+        $columns = [];
+        foreach ($this->sqliteSplitDefinitions($matches[1]) as $column) {
+            $column = trim($column);
+            if (preg_match('/^(?:"((?:[^"]|"")*)"|`((?:[^`]|``)*)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))$/', $column, $parts) !== 1) {
+                return null;
+            }
+            $columns[] = ($parts[1] ?? '') !== '' ? str_replace('""', '"', $parts[1])
+                : (($parts[2] ?? '') !== '' ? str_replace('``', '`', $parts[2])
+                    : (($parts[3] ?? '') !== '' ? $parts[3] : ($parts[4] ?? '')));
+        }
+        return $columns;
+    }
+
+    /** @param list<string> $left @param list<string> $right */
+    private function sqliteIdentifierListsEqual(array $left, array $right): bool
+    {
+        if (count($left) !== count($right)) {
+            return false;
+        }
+        foreach ($left as $position => $identifier) {
+            if (strcasecmp($identifier, $right[$position]) !== 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** @inheritDoc */
@@ -1136,6 +1561,40 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getDefaultTableAdditional(): string
     {
         return '';
+    }
+
+    /**
+     * SQLite: composite PRIMARY KEY cannot include AUTOINCREMENT; keep AI only for single-column PK.
+     *
+     * @param array<string,mixed> $col
+     */
+    protected function buildCreateSchemaColumnOptions(array $col, bool $hasCompositePk): string
+    {
+        $opts = [];
+        if (!empty($col['primaryKey']) && !$hasCompositePk) {
+            $opts[] = 'PRIMARY KEY';
+        }
+        if (!empty($col['autoIncrement']) && !$hasCompositePk) {
+            $opts[] = 'AUTO_INCREMENT';
+        }
+        if (empty($col['nullable']) && empty($col['primaryKey'])) {
+            $opts[] = 'NOT NULL';
+        }
+        if (array_key_exists('default', $col) && $col['default'] !== null) {
+            $default = $col['default'];
+            if (is_string($default) && strtoupper($default) === 'CURRENT_TIMESTAMP') {
+                $opts[] = 'DEFAULT CURRENT_TIMESTAMP';
+            } elseif (is_string($default)) {
+                $opts[] = "DEFAULT '" . str_replace("'", "''", $default) . "'";
+            } else {
+                $opts[] = 'DEFAULT ' . $default;
+            }
+        }
+        if (!empty($col['unique']) && empty($col['primaryKey'])) {
+            $opts[] = 'UNIQUE';
+        }
+
+        return implode(' ', $opts);
     }
 
     private function resolveSqliteTable(string $table): string

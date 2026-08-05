@@ -6,10 +6,17 @@
     "require": {
         "php": "^8.4",
         "weline/module-backend": "@dev",
-    "weline/module-customer": "@dev",
-    "weline/framework": "@dev",
-    "weline/module-i18n": "@dev",
-    "weline/module-payment": "@dev"
+        "weline/module-cart": "@dev",
+        "weline/module-customer": "@dev",
+        "weline/framework": "@dev",
+        "weline/module-i18n": "@dev",
+        "weline/module-inventory": "@dev",
+        "weline/module-order": "@dev",
+        "weline/module-payment": "@dev",
+        "weline/module-shipping": "@dev"
+    },
+    "suggest": {
+        "weline/module-tax": "Provides server-side Tax calculation after TASK-P3B-002 is accepted."
     },
     "autoload": {
         "psr-4": {

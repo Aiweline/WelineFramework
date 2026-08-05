@@ -287,8 +287,20 @@ class Core
 
         $uri = (string)(\w_env('request.uri', $this->request->getUri()) ?? '');
         $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
+        $path = \trim($path, '/');
+        if ($path === '') {
+            return true;
+        }
 
-        return \trim($path, '/') === '';
+        // /en_US、/USD/en_US 等「仅本地化前缀」与 / 同属前台首页根，须走 start-page / 默认 index 路径。
+        $segments = \array_values(\array_filter(
+            \explode('/', $path),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $localization = State::resolveLocalizationFromPathSegments($segments);
+
+        return (int)($localization['area_offset'] ?? 0) === 0
+            && ($localization['remaining'] ?? null) === [];
     }
 
     private function shouldUseDirectGeneratedRouteFastPath(bool $hasPreviewTheme, bool $isFrontendRootRequest): bool
@@ -489,25 +501,7 @@ class Core
      */
     private function getStrippedUrlPath(): string
     {
-        $url = $this->request->getUrlPath();
-        if ($this->is_backend || (\Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND === $this->request_area)) {
-            $url = str_replace($this->area_router, '', $url);
-        }
-        $url = str_replace('//', '/', trim($url, '/'));
-        // 后台：WELINE_AREA=backend 时 getAreaRouter() 为空，str_replace(area_router) 不会去掉入口 key。
-        // 若 REQUEST_URI 仍含 /{backendPrefix}/...（解析未写回或上下文漂移），此处兜底剥掉首段，避免误匹配。
-        if ($this->is_backend && $url !== '') {
-            $backendPrefix = Env::getAreaRoutePrefix('backend');
-            if (\is_string($backendPrefix) && $backendPrefix !== '') {
-                $segments = \explode('/', $url);
-                if (isset($segments[0]) && \strcasecmp((string)$segments[0], $backendPrefix) === 0) {
-                    \array_shift($segments);
-                    $url = \implode('/', $segments);
-                }
-            }
-        }
-        // 后台：路径可能带最多两段本地化前缀，剥离后再与路由表匹配
-        return $this->stripLeadingLocaleCurrencySegments($url);
+        return $this->stripLeadingLocaleCurrencySegments($this->request->getUrlPath());
     }
 
     private function stripLeadingLocaleCurrencySegments(string $url): string
@@ -517,39 +511,16 @@ class Core
             return '';
         }
 
-        $segments = explode('/', $url);
-        $stripCount = 0;
-        foreach (array_slice($segments, 0, 2) as $segment) {
-            if ($this->isCurrencySegment($segment) || $this->isLocaleSegment($segment)) {
-                $stripCount++;
-                continue;
-            }
-            break;
-        }
+        $segments = array_values(array_filter(
+            explode('/', $url),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $localization = State::resolveLocalizationFromPathSegments($segments);
+        $remaining = \is_array($localization['remaining'] ?? null)
+            ? $localization['remaining']
+            : $segments;
 
-        if ($stripCount === 0 || count($segments) <= $stripCount) {
-            return $url;
-        }
-
-        return implode('/', array_slice($segments, $stripCount));
-    }
-
-    private function isCurrencySegment(string $segment): bool
-    {
-        return \strlen($segment) === 3
-            && $segment === \strtoupper($segment)
-            && \ctype_alpha($segment)
-            && !Env::isAreaRoutePathSegment($segment);
-    }
-
-    private function isLocaleSegment(string $segment): bool
-    {
-        $length = strlen($segment);
-        return $length > 3
-            && $length <= 16
-            && ctype_lower(substr($segment, 0, 2))
-            && isset($segment[2])
-            && ($segment[2] === '_' || $segment[2] === '-');
+        return implode('/', $remaining);
     }
     
     /**
@@ -770,6 +741,10 @@ class Core
             return $this->routeFrontendQueryBinApi();
         }
 
+        if (!$is_api_admin && $this->isFrontendStreamApiUrl($url)) {
+            return $this->routeFrontendStreamApi();
+        }
+
         if ($is_api_admin && $this->isBackendFrameworkQueryApiUrl($url)) {
             return $this->routeBackendFrameworkQueryApi();
         }
@@ -813,6 +788,17 @@ class Core
         return $normalized === 'framework/query-bin'
             || $normalized === 'api/framework/query-bin'
             || ($prefixedQueryBin !== '' && $normalized === $prefixedQueryBin);
+    }
+
+    private function isFrontendStreamApiUrl(string $url): bool
+    {
+        $normalized = \strtolower(\trim($url, '/'));
+        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
+        $prefixedStream = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/framework/stream' : '';
+
+        return $normalized === 'framework/stream'
+            || $normalized === 'api/framework/stream'
+            || ($prefixedStream !== '' && $normalized === $prefixedStream);
     }
 
     private function isExternalBinQueryApiUrl(string $url): bool
@@ -889,6 +875,25 @@ class Core
                 'controller_name' => 'QueryBin',
                 'method' => 'postIndex',
                 'request_method' => 'POST',
+            ],
+            'type' => 'api',
+        ];
+
+        return $this->route();
+    }
+
+    private function routeFrontendStreamApi()
+    {
+        $this->router = [
+            'module' => Env::MODULE_FRAMEWORK,
+            'module_path' => Env::framework_code_path,
+            'router' => 'framework',
+            'class' => [
+                'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
+                'name' => \Weline\Framework\Controller\Api\Stream::class,
+                'controller_name' => 'Stream',
+                'method' => 'getIndex',
+                'request_method' => 'GET',
             ],
             'type' => 'api',
         ];
@@ -1920,19 +1925,10 @@ class Core
             return;
         }
 
+        $policyService = new \Weline\Framework\Http\Security\SecurityHeaderPolicyService();
         $collector = HeaderCollector::getInstance();
-        $collector->setHeader('X-Frame-Options', 'SAMEORIGIN');
-        $collector->setHeader('X-Content-Type-Options', 'nosniff');
-        $collector->setHeader('X-XSS-Protection', '1; mode=block');
-
-        $cspReportOnly = trim((string)Env::get('security.headers.csp_report_only', ''));
-        if ($cspReportOnly !== '') {
-            $collector->setHeader('Content-Security-Policy-Report-Only', $cspReportOnly);
-        }
-
-        $csp = trim((string)Env::get('security.headers.csp', ''));
-        if ($csp !== '') {
-            $collector->setHeader('Content-Security-Policy', $csp);
+        foreach ($policyService->resolveCurrentResponseHeaders() as $name => $value) {
+            $collector->setHeader($name, $value);
         }
     }
 

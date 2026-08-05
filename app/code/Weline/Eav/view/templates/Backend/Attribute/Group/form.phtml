@@ -1,3 +1,32 @@
+
+<script>
+(function(g){
+  if(g.__bqAdmin_eav_admin) return;
+  g.__bqAdmin_eav_admin=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['eav_admin']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('eav_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <?php
 /**@var \Weline\Framework\View\Template $this */
 ?>
@@ -125,7 +154,7 @@
     }
 
     function renderAttributeSet(eav_entity_id) {
-        $.get("@backend-url('*/backend/attribute/set/api-search')?eav_entity_id=" + eav_entity_id).then(function(res) {
+        bqAdmin['eav_admin']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})("@backend-url('*/backend/attribute/set/api-search')?eav_entity_id=" + eav_entity_id).then(function(res) {
             var items = res['items'];
             validationSet.empty();
             for (var itemsKey in items) {

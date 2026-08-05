@@ -1,9 +1,13 @@
 ﻿"Payment query provider does not support operation: %{1}","Payment query provider does not support operation: %{1}"
+支付状态查询成功,支付状态查询成功
+支付状态查询失败,支付状态查询失败
 "已有 %{1} 个可用于结账的支付方式。","已有 %{1} 个可用于结账的支付方式。"
 "暂无可用于结账的支付方式，请启用并配置至少一个 Weline_Payment 支付 Provider。","暂无可用于结账的支付方式，请启用并配置至少一个 Weline_Payment 支付 Provider。"
 "支付 Provider 实例不可用。","支付 Provider 实例不可用。"
 "Payment methods","Payment methods"
 "Weline_Payment payment method registry and checkout availability provider.","Weline_Payment payment method registry and checkout availability provider."
+"显式后台目标 scope；可使用 global 或完整 website.store.channel","显式后台目标 scope；可使用 global 或完整 website.store.channel"
+读取/预览返回的对象授权版本；提交前必须保持一致,读取/预览返回的对象授权版本；提交前必须保持一致
 "Payment method, payable ID and amount are required.","Payment method, payable ID and amount are required."
 Payment,Payment
 "Payment transaction created.","Payment transaction created."
@@ -12,13 +16,33 @@ Payment,Payment
 "Payment succeeded.","Payment succeeded."
 "Payment failed or is still processing.","Payment failed or is still processing."
 "Query payment status failed: %{message}","Query payment status failed: %{message}"
-缺少支付方式代码,缺少支付方式代码
 缺少交易ID,缺少交易ID
-交易记录不存在,交易记录不存在
-支付状态查询成功,支付状态查询成功
-"查询失败: %{1}","查询失败: %{1}"
+支付交易管理,支付交易管理
+支付交易记录管理,支付交易记录管理
+查看交易记录,查看交易记录
+查看支付交易记录列表,查看支付交易记录列表
+查看交易详情,查看交易详情
+查看支付交易详情,查看支付交易详情
+查询支付状态,查询支付状态
+操作授权条件不满足,操作授权条件不满足
+支付诊断,支付诊断
 支付统计驾驶舱,支付统计驾驶舱
+查看支付统计驾驶舱,查看支付统计驾驶舱
+缺少支付方式代码,缺少支付方式代码
 支付方式不存在,支付方式不存在
+支付方式管理,支付方式管理
+查看支付方式,查看支付方式
+查看支付方式列表,查看支付方式列表
+编辑支付方式,编辑支付方式
+编辑支付方式配置,编辑支付方式配置
+支付诊断工作台,支付诊断工作台
+支付只读诊断,支付只读诊断
+Webhook诊断,Webhook诊断
+"查看 Webhook 端点与收件状态","查看 Webhook 端点与收件状态"
+支付对账,支付对账
+查看支付对账审计,查看支付对账审计
+退款对账,退款对账
+查看退款对账事实,查看退款对账事实
 获取支付方式列表成功,获取支付方式列表成功
 缺少必需参数,缺少必需参数
 订单支付,订单支付
@@ -26,7 +50,9 @@ Payment,Payment
 支付订单创建成功,支付订单创建成功
 "创建支付订单失败: %{1}","创建支付订单失败: %{1}"
 缺少交易号,缺少交易号
+交易记录不存在,交易记录不存在
 查询成功,查询成功
+"查询失败: %{1}","查询失败: %{1}"
 支付成功,支付成功
 支付待处理,支付待处理
 支付处理中,支付处理中
@@ -125,7 +151,31 @@ More,More
 响应数据,响应数据
 回调数据,回调数据
 返回,返回
-支付方式管理,支付方式管理
+扫描不可用,扫描不可用
+扫描已截断,扫描已截断
+需要处理,需要处理
+不变量正常,不变量正常
+"Scope %{1} 的只读 ORM 扫描；修复只能通过双人授权 CLI 执行。","Scope %{1} 的只读 ORM 扫描；修复只能通过双人授权 CLI 执行。"
+支付对账不变量,支付对账不变量
+最近扫描时间,最近扫描时间
+对账扫描不可用,对账扫描不可用
+"扫描达到 %{1} 行安全上限，repair 将保持关闭；请缩小 Scope 或归档历史数据。","扫描达到 %{1} 行安全上限，repair 将保持关闭；请缩小 Scope 或归档历史数据。"
+"当前 Scope 的支付对账不变量全部通过。","当前 Scope 的支付对账不变量全部通过。"
+不变量,不变量
+异常数,异常数
+修复策略,修复策略
+"双人授权 CLI","双人授权 CLI"
+仅告警，人工处置,仅告警，人工处置
+"异常 %{1}","异常 %{1}"
+通过,通过
+"Correlation 链","Correlation 链"
+审计保留,审计保留
+天,天
+是,是
+否,否
+此工作台仅显示脱敏支付事实，不触发真实资金、修复或退款动作。,此工作台仅显示脱敏支付事实，不触发真实资金、修复或退款动作。
+当前没有记录。,当前没有记录。
+同步支付提供商,同步支付提供商
 支付方式名称,支付方式名称
 支付提供商,支付提供商
 是否启用,是否启用
@@ -134,7 +184,8 @@ More,More
 启用,启用
 禁用,禁用
 查看配置,查看配置
-编辑支付方式,编辑支付方式
+支付提供商同步成功,支付提供商同步成功
+支付提供商同步失败,支付提供商同步失败
 支付方式配置入口,支付方式配置入口
 打开系统配置中心,打开系统配置中心
 "支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。","支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。"
@@ -148,17 +199,26 @@ More,More
 代码,代码
 类型,类型
 是否必填,是否必填
-是,是
-否,否
 当前运行时配置摘要,当前运行时配置摘要
+"Payment Webhook Inbox 消费","Payment Webhook Inbox 消费"
+"消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect","消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect"
+"Payment 资产终态消费","Payment 资产终态消费"
+"独立重试资产 commit/release，不重复调用现金 Provider","独立重试资产 commit/release，不重复调用现金 Provider"
 "支付方式 %{code} 不存在或未启用","支付方式 %{code} 不存在或未启用"
 支付提供商实例化失败,支付提供商实例化失败
 创建支付订单失败,创建支付订单失败
-"支付方式 %{code} 不存在","支付方式 %{code} 不存在"
-签名验证失败,签名验证失败
-回调数据中缺少交易号,回调数据中缺少交易号
-"交易记录不存在: %{no}","交易记录不存在: %{no}"
 "支付提供商 method_code 不能为空","支付提供商 method_code 不能为空"
+"支付方式 %{code} 不存在","支付方式 %{code} 不存在"
+"成功的支付尝试缺少后续 effect outbox","成功的支付尝试缺少后续 effect outbox"
+"已支付订单缺少发票 effect","已支付订单缺少发票 effect"
+"支付回调 inbox 已接收但超时未应用","支付回调 inbox 已接收但超时未应用"
+"退款通道 pending 或 unknown 超过 24 小时","退款通道 pending 或 unknown 超过 24 小时"
+非终态支付尝试的库存预占租约已过期,非终态支付尝试的库存预占租约已过期
+"支付 outbox 处于 pending 且超时未处理","支付 outbox 处于 pending 且超时未处理"
+"支付 outbox 已进入 dead 终态","支付 outbox 已进入 dead 终态"
+支付对账已执行修复,支付对账已执行修复
+"支付对账在 Scope %{1} 补齐 %{2} 条唯一 effect，请复核审计 %{3}。","支付对账在 Scope %{1} 补齐 %{2} 条唯一 effect，请复核审计 %{3}。"
+"PaymentFacadeV2 orchestrator 不可用","PaymentFacadeV2 orchestrator 不可用"
 该支付方式不允许当前可支付对象。,该支付方式不允许当前可支付对象。
 该支付方式未开放给当前可支付对象。,该支付方式未开放给当前可支付对象。
 该支付方式要求付款人先登录或完成身份识别。,该支付方式要求付款人先登录或完成身份识别。
@@ -171,3 +231,31 @@ More,More
 当前业务标签不能使用该支付方式。,当前业务标签不能使用该支付方式。
 当前业务对象缺少该支付方式要求的业务标签。,当前业务对象缺少该支付方式要求的业务标签。
 "支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。","支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。"
+"MIG-P2-PAYMENT：历史 Transaction→Intent/Attempt（仅登记的隔离 clone）","MIG-P2-PAYMENT：历史 Transaction→Intent/Attempt（仅登记的隔离 clone）"
+打印帮助,打印帮助
+"只读清点历史、冲突、Schema 与全部财务水位","只读清点历史、冲突、Schema 与全部财务水位"
+"checkpoint 后在登记 clone 上事务映射","checkpoint 后在登记 clone 上事务映射"
+"新进程复核守恒、唯一性、水位和 journal","新进程复核守恒、唯一性、水位和 journal"
+"按 checkpoint 关闭 rollout；保留全部事实","按 checkpoint 关闭 rollout；保留全部事实"
+"migration registry 已登记的 mig_clone_*","migration registry 已登记的 mig_clone_*"
+"apply 输出的 checkpoint ID（verify/rollback 必需）","apply 输出的 checkpoint ID（verify/rollback 必需）"
+显示本帮助,显示本帮助
+"Payment 持久化不变量对账：dry-run / catalog / 双人授权 repair","Payment 持久化不变量对账：dry-run / catalog / 双人授权 repair"
+列出不变量、可修复标记与关联链,列出不变量、可修复标记与关联链
+"只读扫描 ORM 差异并持久化审计证据","只读扫描 ORM 差异并持久化审计证据"
+"只补唯一缺失 effect，默认关闭","只补唯一缺失 effect，默认关闭"
+"必填三段 Scope；dry-run 可显式使用 global","必填三段 Scope；dry-run 可显式使用 global"
+"显式打开本次 repair","显式打开本次 repair"
+"操作者后台用户 ID","操作者后台用户 ID"
+"操作者当前 reconcile grant version","操作者当前 reconcile grant version"
+"独立审批者后台用户 ID，必须与操作者不同","独立审批者后台用户 ID，必须与操作者不同"
+"审批者当前 reconcile grant version","审批者当前 reconcile grant version"
+"外部审批引用；审计仅保存 SHA-256","外部审批引用；审计仅保存 SHA-256"
+"8–128 位 repair 请求幂等键","8–128 位 repair 请求幂等键"
+"""Payment query provider does not support operation: %{1}""","Payment query provider does not support operation: %{1}"
+签名验证失败,签名验证失败
+回调数据中缺少交易号,回调数据中缺少交易号
+"交易记录不存在: %{no}","交易记录不存在: %{no}"
+"WebhookEndpointDirectory 当前仅 memory/harness","WebhookEndpointDirectory 当前仅 memory/harness"
+"PaymentCallbackReceiver 当前仅 memory/harness","PaymentCallbackReceiver 当前仅 memory/harness"
+"PaymentFacadeV2 orchestrator 仅 memory/harness","PaymentFacadeV2 orchestrator 仅 memory/harness"

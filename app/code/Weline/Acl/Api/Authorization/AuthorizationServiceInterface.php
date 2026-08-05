@@ -18,4 +18,23 @@ interface AuthorizationServiceInterface
     public function hasMenuPermission(int $roleId): bool;
 
     public function getDefaultRouteFromAcl(int $roleId): ?string;
+
+    /**
+     * 对象 Scope 动作授权（P1B-004-ACL）。$objectScope 为 ScopeIdentity::toArray()。
+     *
+     * @param array<string, mixed> $objectScope
+     */
+    public function isObjectActionAllowed(int $roleId, string $action, array $objectScope): bool;
+
+    /**
+     * 提交重鉴权：expectedGrantVersion 必须仍匹配。
+     *
+     * @param array<string, mixed> $objectScope
+     */
+    public function isObjectActionAllowedForSubmit(
+        int $roleId,
+        string $action,
+        array $objectScope,
+        int $expectedGrantVersion,
+    ): bool;
 }

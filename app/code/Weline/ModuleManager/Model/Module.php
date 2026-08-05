@@ -13,8 +13,10 @@ namespace Weline\ModuleManager\Model;
 
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '模组')]
+#[Index(name: 'uk_weline_module_name', columns: ['name'], type: 'UNIQUE')]
 class Module extends Model
 {
     public const schema_table = 'weline_module';

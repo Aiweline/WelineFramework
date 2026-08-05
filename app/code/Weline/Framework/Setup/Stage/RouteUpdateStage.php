@@ -105,8 +105,10 @@ class RouteUpdateStage extends AbstractStage
                 try {
                     $this->routerHelper->clearModuleRouters($path, $this->modulesToClear);
                 } catch (\Exception $e) {
-                    // 清理失败时记录错误，但不中断整个升级流程，由上层统一处理
-                    $this->addError(__('清理模块 %{1} 路由失败：%{2}', [implode(', ', $this->modulesToClear), $e->getMessage()]));
+                    throw new Exception(__('清理模块 %{1} 路由失败：%{2}', [
+                        implode(', ', $this->modulesToClear),
+                        $e->getMessage(),
+                    ]), 0, $e);
                 }
             }
         } else {

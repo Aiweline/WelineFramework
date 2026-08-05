@@ -11,5 +11,8 @@ interface BackendIdentityContextProviderInterface
     /** @return array{user_id:int,role_id:int,is_enabled:int}|null */
     public function getAclContext(int $userId): ?array;
 
+    /** @return array{user_id:int,role_id:int,is_enabled:int}|null */
+    public function currentAclContext(): ?array;
+
     public function currentWarmupUserId(Request $request): int;
 }

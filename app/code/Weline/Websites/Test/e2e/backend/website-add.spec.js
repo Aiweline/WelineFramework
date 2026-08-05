@@ -1,6 +1,13 @@
 // @weline-e2e-runtime wls
 // @ts-check
-const { test, expect, gotoBackend, loginAsAdmin, getRuntimeInfo } = require('../../../../../../../tests/e2e/framework');
+const {
+  test,
+  expect,
+  gotoBackend,
+  loginAsAdmin,
+  getRuntimeInfo,
+  openBackendMenuBySource,
+} = require('../../../../../../../tests/e2e/framework');
 
 const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught Error|Call to undefined|Undefined variable/i;
 const STYLE_ERROR_PATTERN = /Failed to load resource|Refused to apply style|stylesheet.*404|MIME type .*text\/html/i;
@@ -83,9 +90,9 @@ async function collectFrameStyleHealth(frameLocator) {
 }
 
 async function openWebsiteIndex(page) {
-  await gotoBackend(page, 'websites/admin/website', {
-    timeout: 60000,
-    settleMs: 1000,
+  await openBackendMenuBySource(page, 'Weline_Websites::website', {
+    urlIncludes: '/websites/admin/website',
+    pageAnchor: '[data-testid="website-management"]',
   });
 }
 

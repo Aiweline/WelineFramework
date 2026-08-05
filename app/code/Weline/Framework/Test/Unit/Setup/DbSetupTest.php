@@ -50,4 +50,17 @@ final class DbSetupTest extends TestCase
         self::assertSame($setup, $setup->setConnector($connector));
         self::assertSame($connector, $setup->getConnector());
     }
+
+    public function testFrameworkBootstrapIncludesCacheNamespaceAuthorityTable(): void
+    {
+        $stage = new \ReflectionClass(\Weline\Framework\Setup\Stage\FrameworkDbBootstrapStage::class);
+        $models = $stage->getReflectionConstant('BOOTSTRAP_MODELS')?->getValue();
+
+        self::assertIsArray($models);
+        self::assertContains(
+            \Weline\Framework\Model\Cache\NamespaceVersion::class,
+            $models,
+            'The order-0 framework bootstrap must create the cache namespace authority table.'
+        );
+    }
 }

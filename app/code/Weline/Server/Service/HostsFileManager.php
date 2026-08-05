@@ -333,16 +333,28 @@ PS1;
         }
         @\chmod($payloadPath, 0600);
 
-        // Copy the prepared hosts body into /etc/hosts under admin privileges.
-        $shell = '/bin/cat ' . \escapeshellarg($payloadPath) . ' > ' . \escapeshellarg($hostsFile);
-        $appleScript = 'do shell script '
-            . \escapeshellarg($shell)
-            . ' with administrator privileges';
-        $command = \escapeshellcmd($osascript) . ' -e ' . \escapeshellarg($appleScript) . ' 2>&1';
+        // Never nest escapeshellarg() inside an AppleScript -e string: that
+        // produces invalid tokens like `'\''` and macOS rejects the script
+        // before any privilege dialog appears. Write a temp .applescript file
+        // with escaped double-quoted POSIX paths instead.
+        $scriptPath = $payloadPath . '.applescript';
+        $scriptBody = 'do shell script "/bin/cat '
+            . self::escapeAppleScriptDoubleQuotedPath($payloadPath)
+            . ' > '
+            . self::escapeAppleScriptDoubleQuotedPath($hostsFile)
+            . '" with administrator privileges' . "\n";
+        if (\file_put_contents($scriptPath, $scriptBody) === false) {
+            @\unlink($payloadPath);
 
+            return null;
+        }
+        @\chmod($scriptPath, 0600);
+
+        $command = \escapeshellcmd($osascript) . ' ' . \escapeshellarg($scriptPath) . ' 2>&1';
         $output = [];
         $exitCode = 1;
         @\exec($command, $output, $exitCode);
+        @\unlink($scriptPath);
         @\unlink($payloadPath);
 
         if ($exitCode === 0) {
@@ -363,6 +375,18 @@ PS1;
             'needs_admin' => true,
             'command' => self::getAdminCommand($domain, $ip),
         ];
+    }
+
+    /**
+     * Escape a filesystem path for use inside an AppleScript double-quoted string.
+     */
+    private static function escapeAppleScriptDoubleQuotedPath(string $path): string
+    {
+        return \str_replace(
+            ['\\', '"'],
+            ['\\\\', '\\"'],
+            $path
+        );
     }
 
     private static function tryAddDomainWithSudo(string $hostsFile, string $newContent, string $domain, string $ip): ?array

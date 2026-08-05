@@ -5,68 +5,90 @@ declare(strict_types=1);
 namespace Weline\DataTable\Helper;
 
 use Weline\Framework\Database\Connection\ConnectionInterface;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestResetException;
 
 class TransactionManager
 {
-    private static ?ConnectionInterface $connection = null;
-
-    /**
-     * @var array<int, array{name:string,level:int,started_at:float,is_savepoint?:bool}>
-     */
-    private static array $transactionStack = [];
-
-    /**
-     * @var array<int, string>
-     */
-    private static array $savepoints = [];
-
-    private static int $transactionLevel = 0;
+    private const REQUEST_STATE_KEY = 'datatable.transaction_manager.state.v1';
 
     private static function getConnection(): ConnectionInterface
     {
-        if (self::$connection === null) {
+        $state = self::requestState();
+        if (!$state['connection'] instanceof ConnectionInterface) {
             /** @var ConnectionFactory $connectionFactory */
             $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
-            self::$connection = $connectionFactory->getConnector()->getWrappedConnection();
+            $connector = $connectionFactory->getConnectorAdapter()->create();
+            try {
+                $connection = $connector->getWrappedConnection();
+            } catch (\Throwable $connectionFailure) {
+                try {
+                    $connector->close();
+                } catch (\Throwable $closeFailure) {
+                    throw new \RuntimeException(
+                        sprintf(
+                            'Wrapped connection acquisition failed (%s: %s); connector close also failed (%s: %s).',
+                            $connectionFailure::class,
+                            $connectionFailure->getMessage(),
+                            $closeFailure::class,
+                            $closeFailure->getMessage(),
+                        ),
+                        0,
+                        $connectionFailure,
+                    );
+                }
+                throw $connectionFailure;
+            }
+
+            $state['connector'] = $connector;
+            $state['connection'] = $connection;
+            self::storeRequestState($state);
         }
 
-        return self::$connection;
+        return $state['connection'];
     }
 
     public static function beginTransaction(string $name = ''): bool
     {
         try {
             $connection = self::getConnection();
+            $state = self::requestState();
 
-            if (self::$transactionLevel === 0) {
+            if ($state['transaction_level'] === 0) {
                 if (!$connection->beginTransaction()) {
                     return false;
                 }
 
-                self::$transactionLevel = 1;
-                self::$transactionStack[] = [
+                $state['transaction_level'] = 1;
+                $state['transaction_stack'][] = [
                     'name' => $name !== '' ? $name : 'main_transaction',
-                    'level' => self::$transactionLevel,
+                    'level' => $state['transaction_level'],
                     'started_at' => microtime(true),
                 ];
+                self::storeRequestState($state);
 
                 self::log('Transaction started', $name);
                 return true;
             }
 
-            $savepointName = self::sanitizeSavepointName($name !== '' ? $name : 'sp_' . (self::$transactionLevel + 1));
+            $savepointName = self::sanitizeSavepointName(
+                $name !== '' ? $name : 'sp_' . ($state['transaction_level'] + 1)
+            );
             $connection->execute(sprintf('SAVEPOINT %s', $savepointName));
 
-            self::$transactionLevel++;
-            self::$savepoints[] = $savepointName;
-            self::$transactionStack[] = [
+            $state['transaction_level']++;
+            $state['savepoints'][] = $savepointName;
+            $state['transaction_stack'][] = [
                 'name' => $savepointName,
-                'level' => self::$transactionLevel,
+                'level' => $state['transaction_level'],
                 'started_at' => microtime(true),
                 'is_savepoint' => true,
             ];
+            self::storeRequestState($state);
 
             self::log('Savepoint created', $savepointName);
             return true;
@@ -79,34 +101,44 @@ class TransactionManager
     public static function commit(string $name = ''): bool
     {
         try {
-            if (self::$transactionLevel === 0) {
+            $state = self::requestState();
+            if ($state['transaction_level'] === 0) {
                 self::log('No active transaction to commit', $name);
                 return false;
             }
 
             $connection = self::getConnection();
-            $lastTransaction = array_pop(self::$transactionStack);
+            $lastTransaction = end($state['transaction_stack']);
+            $lastTransaction = is_array($lastTransaction) ? $lastTransaction : null;
 
-            if (self::$transactionLevel === 1) {
+            if ($state['transaction_level'] === 1) {
                 if (!$connection->commit()) {
                     return false;
                 }
 
-                self::$transactionLevel = 0;
-                self::$savepoints = [];
+                array_pop($state['transaction_stack']);
+                $state['transaction_level'] = 0;
+                $state['savepoints'] = [];
+                self::storeRequestState($state);
 
                 $duration = $lastTransaction ? microtime(true) - (float) $lastTransaction['started_at'] : 0.0;
                 self::log('Transaction committed', $lastTransaction['name'] ?? $name, sprintf('Duration: %.6fs', $duration));
                 return true;
             }
 
-            $savepointName = array_pop(self::$savepoints);
+            $savepointName = end($state['savepoints']);
             if ($savepointName === null) {
+                return false;
+            }
+            if (!is_string($savepointName) || $savepointName === '') {
                 return false;
             }
 
             $connection->execute(sprintf('RELEASE SAVEPOINT %s', $savepointName));
-            self::$transactionLevel--;
+            array_pop($state['savepoints']);
+            array_pop($state['transaction_stack']);
+            $state['transaction_level']--;
+            self::storeRequestState($state);
 
             $duration = $lastTransaction ? microtime(true) - (float) $lastTransaction['started_at'] : 0.0;
             self::log('Savepoint released', $savepointName, sprintf('Duration: %.6fs', $duration));
@@ -120,34 +152,44 @@ class TransactionManager
     public static function rollback(string $name = ''): bool
     {
         try {
-            if (self::$transactionLevel === 0) {
+            $state = self::requestState();
+            if ($state['transaction_level'] === 0) {
                 self::log('No active transaction to rollback', $name);
                 return false;
             }
 
             $connection = self::getConnection();
-            $lastTransaction = array_pop(self::$transactionStack);
+            $lastTransaction = end($state['transaction_stack']);
+            $lastTransaction = is_array($lastTransaction) ? $lastTransaction : null;
 
-            if (self::$transactionLevel === 1) {
+            if ($state['transaction_level'] === 1) {
                 if (!$connection->rollBack()) {
                     return false;
                 }
 
-                self::$transactionLevel = 0;
-                self::$savepoints = [];
+                array_pop($state['transaction_stack']);
+                $state['transaction_level'] = 0;
+                $state['savepoints'] = [];
+                self::storeRequestState($state);
 
                 $duration = $lastTransaction ? microtime(true) - (float) $lastTransaction['started_at'] : 0.0;
                 self::log('Transaction rolled back', $lastTransaction['name'] ?? $name, sprintf('Duration: %.6fs', $duration));
                 return true;
             }
 
-            $savepointName = array_pop(self::$savepoints);
+            $savepointName = end($state['savepoints']);
             if ($savepointName === null) {
+                return false;
+            }
+            if (!is_string($savepointName) || $savepointName === '') {
                 return false;
             }
 
             $connection->execute(sprintf('ROLLBACK TO SAVEPOINT %s', $savepointName));
-            self::$transactionLevel--;
+            array_pop($state['savepoints']);
+            array_pop($state['transaction_stack']);
+            $state['transaction_level']--;
+            self::storeRequestState($state);
 
             $duration = $lastTransaction ? microtime(true) - (float) $lastTransaction['started_at'] : 0.0;
             self::log('Rolled back to savepoint', $savepointName, sprintf('Duration: %.6fs', $duration));
@@ -180,12 +222,12 @@ class TransactionManager
 
     public static function getTransactionLevel(): int
     {
-        return self::$transactionLevel;
+        return self::requestState()['transaction_level'];
     }
 
     public static function inTransaction(): bool
     {
-        return self::$transactionLevel > 0;
+        return self::getTransactionLevel() > 0;
     }
 
     /**
@@ -193,7 +235,7 @@ class TransactionManager
      */
     public static function getTransactionStack(): array
     {
-        return self::$transactionStack;
+        return self::requestState()['transaction_stack'];
     }
 
     /**
@@ -201,17 +243,19 @@ class TransactionManager
      */
     public static function getSavepoints(): array
     {
-        return self::$savepoints;
+        return self::requestState()['savepoints'];
     }
 
     public static function rollbackAll(): bool
     {
         try {
-            if (self::$transactionLevel > 0) {
+            $state = self::requestState();
+            if ($state['transaction_level'] > 0) {
                 self::getConnection()->rollBack();
-                self::$transactionLevel = 0;
-                self::$transactionStack = [];
-                self::$savepoints = [];
+                $state['transaction_level'] = 0;
+                $state['transaction_stack'] = [];
+                $state['savepoints'] = [];
+                self::storeRequestState($state);
                 self::log('All transactions rolled back', 'force_rollback');
             }
 
@@ -227,28 +271,140 @@ class TransactionManager
      */
     public static function getStatistics(): array
     {
+        $state = self::requestState();
         $totalDuration = 0.0;
-        foreach (self::$transactionStack as $transaction) {
+        foreach ($state['transaction_stack'] as $transaction) {
             $totalDuration += microtime(true) - (float) $transaction['started_at'];
         }
 
         return [
-            'current_level' => self::$transactionLevel,
-            'active_transactions' => count(self::$transactionStack),
-            'savepoints_count' => count(self::$savepoints),
+            'current_level' => $state['transaction_level'],
+            'active_transactions' => count($state['transaction_stack']),
+            'savepoints_count' => count($state['savepoints']),
             'total_duration' => $totalDuration,
-            'in_transaction' => self::inTransaction(),
+            'in_transaction' => $state['transaction_level'] > 0,
         ];
     }
 
     public static function cleanup(): void
     {
-        self::$transactionLevel = 0;
-        self::$transactionStack = [];
-        self::$savepoints = [];
-        self::$connection = null;
+        $state = self::requestState();
+        $connection = $state['connection'];
+        $connector = $state['connector'];
+        $failures = [];
+        $unsafeConnector = false;
 
-        self::log('Transaction state cleaned up', 'cleanup');
+        try {
+            if ($connection instanceof ConnectionInterface && $connection->inTransaction()) {
+                if (!$connection->rollBack()) {
+                    $markedUnhealthy = self::markConnectionUnhealthy($connection);
+                    $failures[] = [
+                        'stage' => 'rollback',
+                        'exception' => new \RuntimeException(
+                            'DataTable request transaction rollback returned false during cleanup.'
+                        ),
+                    ];
+                    if (!$markedUnhealthy) {
+                        $failures[] = [
+                            'stage' => 'mark_connection_unhealthy',
+                            'exception' => new \RuntimeException(
+                                'DataTable request connection could not be marked unhealthy after rollback failure.'
+                            ),
+                        ];
+                        $unsafeConnector = $connector instanceof ConnectorInterface;
+                    }
+                    self::log('Failed to rollback transaction during cleanup', 'cleanup');
+                }
+            }
+        } catch (\Throwable $throwable) {
+            if ($connection instanceof ConnectionInterface) {
+                if (!self::markConnectionUnhealthy($connection)) {
+                    $failures[] = [
+                        'stage' => 'mark_connection_unhealthy',
+                        'exception' => new \RuntimeException(
+                            'DataTable request connection could not be marked unhealthy after rollback exception.'
+                        ),
+                    ];
+                    $unsafeConnector = $connector instanceof ConnectorInterface;
+                }
+            }
+            RequestResetException::append($failures, 'rollback', $throwable);
+            self::log('Failed to rollback transaction during cleanup', 'cleanup', $throwable->getMessage());
+        }
+
+        if (!$unsafeConnector) {
+            RequestContext::remove(self::REQUEST_STATE_KEY);
+        }
+        if ($connector instanceof ConnectorInterface && !$unsafeConnector) {
+            try {
+                $connector->close();
+            } catch (\Throwable $throwable) {
+                RequestResetException::append($failures, 'connector_close', $throwable);
+                w_log_warning('[TransactionManager] Failed to close request connector: ' . $throwable->getMessage());
+            }
+        }
+
+        self::log(
+            $unsafeConnector
+                ? 'Transaction state retained because connector release is unsafe'
+                : 'Transaction state cleaned up',
+            'cleanup'
+        );
+
+        if ($failures !== []) {
+            throw new RequestResetException('datatable_transaction_manager_cleanup', $failures);
+        }
+    }
+
+    /**
+     * @return array{
+     *     connector: ConnectorInterface|null,
+     *     connection: ConnectionInterface|null,
+     *     transaction_stack: array<int, array{name:string,level:int,started_at:float,is_savepoint?:bool}>,
+     *     savepoints: array<int, string>,
+     *     transaction_level: int
+     * }
+     */
+    private static function requestState(): array
+    {
+        $state = RequestContext::get(self::REQUEST_STATE_KEY, []);
+        if (!is_array($state)) {
+            $state = [];
+        }
+
+        return [
+            'connector' => ($state['connector'] ?? null) instanceof ConnectorInterface
+                ? $state['connector']
+                : null,
+            'connection' => ($state['connection'] ?? null) instanceof ConnectionInterface
+                ? $state['connection']
+                : null,
+            'transaction_stack' => is_array($state['transaction_stack'] ?? null)
+                ? array_values($state['transaction_stack'])
+                : [],
+            'savepoints' => is_array($state['savepoints'] ?? null)
+                ? array_values($state['savepoints'])
+                : [],
+            'transaction_level' => max(0, (int)($state['transaction_level'] ?? 0)),
+        ];
+    }
+
+    private static function storeRequestState(array $state): void
+    {
+        RequestContext::set(self::REQUEST_STATE_KEY, $state);
+    }
+
+    private static function markConnectionUnhealthy(ConnectionInterface $connection): bool
+    {
+        try {
+            ConnectionPool::markConnectionUnhealthy($connection->getPdo());
+            return true;
+        } catch (\Throwable $throwable) {
+            w_log_warning(
+                '[TransactionManager] Failed to mark request connection unhealthy: ' . $throwable->getMessage()
+            );
+            return false;
+        }
     }
 
     private static function log(string $action, string $name = '', string $details = ''): void
@@ -257,7 +413,7 @@ class TransactionManager
             '[TransactionManager] %s - Name: %s, Level: %d, Details: %s',
             $action,
             $name,
-            self::$transactionLevel,
+            self::getTransactionLevel(),
             $details
         );
 
@@ -270,7 +426,7 @@ class TransactionManager
         $normalized = trim($normalized, '_');
 
         if ($normalized === '') {
-            return 'sp_' . (self::$transactionLevel + 1);
+            return 'sp_' . (self::getTransactionLevel() + 1);
         }
 
         if (preg_match('/^[0-9]/', $normalized)) {

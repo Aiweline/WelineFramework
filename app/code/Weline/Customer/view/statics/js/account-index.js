@@ -1,3 +1,28 @@
+
+(function(g){
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['customer_admin']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('customer_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(typeof window!=='undefined'?window:globalThis);
 (function() {
     if (window.__welineAccountIndexInitialized) {
         return;
@@ -245,24 +270,11 @@
                 return sidebarContentLoading[sectionName];
             }
 
-            var url = buildSidebarContentUrl(sectionName);
-            if (!url) {
-                loadedSidebarSections[sectionName] = true;
-                return Promise.resolve(false);
-            }
-
-            sidebarContentLoading[sectionName] = fetch(url, {
-                credentials: 'same-origin',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }).then(function(response) {
-                if (!response.ok) {
-                    throw new Error('Account sections request failed: ' + response.status);
-                }
-
-                return response.json();
+            sidebarContentLoading[sectionName] = (window.Weline && window.Weline.load
+                ? window.Weline.load('api')
+                : Promise.resolve(window.Weline && window.Weline.Api)
+            ).then(function(api) {
+                return api.resource('account').getSidebarSection({ section: sectionName });
             }).then(function(payload) {
                 if (!payload || payload.success === false) {
                     if (payload && payload.redirect) {

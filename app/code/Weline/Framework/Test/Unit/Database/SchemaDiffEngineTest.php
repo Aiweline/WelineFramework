@@ -6,6 +6,7 @@ namespace Weline\Framework\Database\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Database\Schema\ColumnDefinition;
+use Weline\Framework\Database\Schema\IndexDefinition;
 use Weline\Framework\Database\Schema\SchemaDiffEngine;
 use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
@@ -135,5 +136,42 @@ final class SchemaDiffEngineTest extends TestCase
         );
 
         self::assertSame([], (new SchemaDiffEngine())->diff($declared, $actual, 'sqlite'));
+    }
+
+    public function testIndexDependingOnAddedColumnIsEmittedInTheSameDiff(): void
+    {
+        $declared = new TableSchema(
+            tableName: 'demo',
+            comment: '',
+            columns: [
+                new ColumnDefinition('id', 'int', null, false, true, true),
+                new ColumnDefinition('client_request_id', 'varchar', 64, false),
+            ],
+            indexes: [
+                new IndexDefinition(
+                    'idx_demo_client_request_unique',
+                    ['id', 'client_request_id'],
+                    'UNIQUE',
+                ),
+            ],
+            foreignKeys: [],
+            modelClass: null,
+        );
+        $actual = new TableSchema(
+            tableName: 'demo',
+            comment: '',
+            columns: [new ColumnDefinition('id', 'int', null, false, true, true)],
+            indexes: [],
+            foreignKeys: [],
+            modelClass: null,
+        );
+
+        $operations = (new SchemaDiffEngine())->diff($declared, $actual);
+
+        self::assertSame(
+            [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_ADD_INDEX],
+            array_map(static fn (SchemaDiffOp $operation): string => $operation->kind, $operations),
+        );
+        self::assertSame('idx_demo_client_request_unique', $operations[1]->payload->name);
     }
 }

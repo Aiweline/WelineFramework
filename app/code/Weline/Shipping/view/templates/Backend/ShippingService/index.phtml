@@ -6,10 +6,12 @@
 use Weline\Shipping\Model\ShippingService;
 
 $services = $this->getData('services') ?? [];
+$carriers = $this->getData('carriers') ?? [];
+$zones = $this->getData('zones') ?? [];
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row">
+<div class="row" data-testid="shipping-service-management">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('配送服务') ?></h4>
@@ -25,6 +27,19 @@ $embed = $this->getData('embed') ?? false;
                     </div>
                 </div>
 <?php endif; ?>
+
+                <div class="row mb-3"><div class="col-12"><div class="card" data-testid="shipping-service-create-form">
+                    <div class="card-header"><h5 class="card-title mb-0"><?= __('新增配送服务') ?></h5></div>
+                    <div class="card-body"><w:form method="post" action="@backend-url('shipping/backend/shippingservice/save')"><div class="row g-3">
+                        <div class="col-md-3"><label class="form-label"><?= __('服务名称') ?></label><input class="form-control" name="service_name" maxlength="255" required></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('服务代码') ?></label><input class="form-control" name="service_code" maxlength="50" required></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('快递公司') ?></label><select class="form-select" name="carrier_id" required><option value=""><?= __('请选择') ?></option><?php foreach ($carriers as $carrier): ?><option value="<?= (int)$carrier->getId() ?>"><?= htmlspecialchars((string)$carrier->getData(\Weline\Shipping\Model\Carrier::schema_fields_CARRIER_NAME)) ?></option><?php endforeach; ?></select></div>
+                        <div class="col-md-2"><label class="form-label"><?= __('配送区域') ?></label><select class="form-select" name="zone_id" required><option value=""><?= __('请选择') ?></option><?php foreach ($zones as $zone): ?><option value="<?= (int)$zone->getId() ?>"><?= htmlspecialchars((string)$zone->getData(\Weline\Shipping\Model\Zone::schema_fields_ZONE_NAME)) ?></option><?php endforeach; ?></select></div>
+                        <div class="col-md-1"><label class="form-label"><?= __('最少天数') ?></label><input class="form-control" type="number" min="0" name="estimated_days_min" value="1"></div>
+                        <div class="col-md-1"><label class="form-label"><?= __('最多天数') ?></label><input class="form-control" type="number" min="0" name="estimated_days_max" value="3"></div>
+                        <div class="col-md-1 d-flex align-items-end"><input type="hidden" name="is_active" value="1"><button class="btn btn-primary w-100" type="submit" data-testid="shipping-service-submit"><?= __('创建') ?></button></div>
+                    </div></w:form></div>
+                </div></div></div>
 
                 <div class="row">
                     <div class="col-12">
@@ -53,12 +68,12 @@ $embed = $this->getData('embed') ?? false;
                                             <?php /** @var ShippingService $service */ ?>
                                             <?php foreach ($services as $service): ?>
                                                 <tr>
-                                                    <td><?= htmlspecialchars($service->getData(ShippingService::fields_SERVICE_NAME)) ?></td>
-                                                    <td><?= htmlspecialchars($service->getData(ShippingService::fields_SERVICE_CODE)) ?></td>
-                                                    <td><?= htmlspecialchars($service->getData(ShippingService::fields_CARRIER_ID)) ?></td>
-                                                    <td><?= htmlspecialchars($service->getData(ShippingService::fields_ZONE_ID)) ?></td>
+                                                    <td><?= htmlspecialchars($service->getData(ShippingService::schema_fields_SERVICE_NAME)) ?></td>
+                                                    <td><?= htmlspecialchars($service->getData(ShippingService::schema_fields_SERVICE_CODE)) ?></td>
+                                                    <td><?= htmlspecialchars($service->getData(ShippingService::schema_fields_CARRIER_ID)) ?></td>
+                                                    <td><?= htmlspecialchars($service->getData(ShippingService::schema_fields_ZONE_ID)) ?></td>
                                                     <td>
-                                                        <?php if ($service->getData(ShippingService::fields_IS_ACTIVE)): ?>
+                                                        <?php if ($service->getData(ShippingService::schema_fields_IS_ACTIVE)): ?>
                                                             <span class="badge bg-success"><?= __('启用') ?></span>
                                                         <?php else: ?>
                                                             <span class="badge bg-secondary"><?= __('禁用') ?></span>

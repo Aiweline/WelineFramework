@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Shipping',
-    "version" => '1.0.0',
+    "version" => '2.2.0',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Customer' => '*',
@@ -16,5 +16,7 @@ return [
     "provides" => [
         'template_cache_policy.Weline_Shipping' => \Weline\Shipping\Api\View\TemplateCachePolicyProvider::class,
         'view_warmup_contribution.Weline_Shipping' => \Weline\Shipping\Api\View\ViewWarmupContributionProvider::class,
+        \Weline\Shipping\Api\Quote\ShippingQuoteServiceInterface::class
+            => \Weline\Shipping\Service\ScopedShippingQuoteService::class,
     ],
 ];

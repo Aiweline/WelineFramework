@@ -14,6 +14,7 @@ namespace Weline\Eav\Model;
 
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -23,6 +24,8 @@ use Weline\Framework\Manager\ObjectManager;
  * 表结构由 #[Table]/#[Col] 声明，供 SchemaDiff 同步；与 Schema/EavEntitySchema.php 定义一致。
  */
 #[Table(comment: 'EAV实体表')]
+#[Index(name: 'idx_code', columns: ['code'], type: 'UNIQUE', comment: '实体编码唯一索引')]
+#[Index(name: 'idx_name', columns: ['name'], comment: '实体名索引')]
 class EavEntity extends Model
 {
     public const schema_table = 'eav_entity';
@@ -32,7 +35,7 @@ class EavEntity extends Model
     #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '实体ID')]
     public const schema_fields_ID = 'eav_entity_id';
     public const schema_fields_eav_entity_id = 'eav_entity_id';
-    #[Col('varchar', 255, nullable: false, unique: true, comment: '实体代码')]
+    #[Col('varchar', 255, nullable: false, comment: '实体代码')]
     public const schema_fields_code = 'code';
     #[Col('varchar', 255, nullable: false, comment: '实体名')]
     public const schema_fields_name = 'name';

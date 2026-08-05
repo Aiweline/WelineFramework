@@ -125,7 +125,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
         self::assertSame([], $orchestrator->startupReadyMarks);
 
-        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $worker->setMeta('dispatcher_pool_confirmed_at', (\hrtime(true) / 1_000_000_000));
         $registry->updateInstance($worker);
 
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
@@ -168,7 +168,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         ));
         $firstWorker = $registry->getInstance('worker', 1);
         self::assertInstanceOf(ServiceInstance::class, $firstWorker);
-        $firstWorker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $firstWorker->setMeta('dispatcher_pool_confirmed_at', (\hrtime(true) / 1_000_000_000));
         $registry->updateInstance($firstWorker);
         $context = $this->createWorkerInfraContext();
         $this->writePrivate($orchestrator, 'context', $context);
@@ -182,7 +182,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $secondWorker = $registry->getInstance('worker', 2);
         self::assertInstanceOf(ServiceInstance::class, $secondWorker);
         $secondWorker->state = ServiceInstance::STATE_READY;
-        $secondWorker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $secondWorker->setMeta('dispatcher_pool_confirmed_at', (\hrtime(true) / 1_000_000_000));
         $registry->updateInstance($secondWorker);
 
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
@@ -256,7 +256,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             $this->invokePrivateWithArgs($orchestrator, 'collectStartupAcceptancePendingLabels', [$startupAcceptance])
         );
 
-        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $worker->setMeta('dispatcher_pool_confirmed_at', (\hrtime(true) / 1_000_000_000));
         $registry->updateInstance($worker);
 
         self::assertSame(
@@ -480,7 +480,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'event_loop' => 'select',
             'ssl_engine' => 'stream',
         ]);
-        $worker->setMeta('worker_loop_started_at', \microtime(true));
+        $worker->setMeta('worker_loop_started_at', (\hrtime(true) / 1_000_000_000));
 
         $previous = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
         try {
@@ -1160,7 +1160,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: $context->mainPort,
             pid: 0,
             state: ServiceInstance::STATE_STARTING,
-            startedAt: \microtime(true) - 25.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 25.0,
         );
         $registry->addInstance($dispatcher);
 
@@ -1220,7 +1220,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: $context->mainPort,
             pid: 0,
             state: ServiceInstance::STATE_STARTING,
-            startedAt: \microtime(true) - 2.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 2.0,
         );
         $registry->addInstance($dispatcher);
 
@@ -1663,7 +1663,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             pid: \getmypid(),
             port: 18081,
             state: ServiceInstance::STATE_FAILED,
-            startedAt: \microtime(true) - 10.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 10.0,
             metadata: [
                 'resurrection_queued_from_state' => ServiceInstance::STATE_STARTING,
             ],
@@ -1688,7 +1688,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             pid: \getmypid(),
             port: 0,
             state: ServiceInstance::STATE_FAILED,
-            startedAt: \microtime(true) - 30.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 30.0,
         );
 
         $occupancy = $this->invokePrivateWithArgs($orchestrator, 'inspectSlotOccupancy', [$instance]);
@@ -1720,7 +1720,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                 pid: 0,
                 port: $port,
                 state: ServiceInstance::STATE_FAILED,
-                startedAt: \microtime(true) - 30.0,
+                startedAt: (\hrtime(true) / 1_000_000_000) - 30.0,
             );
 
             $occupancy = $this->invokePrivateWithArgs($orchestrator, 'inspectSlotOccupancy', [$instance]);
@@ -1744,7 +1744,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             pid: 0,
             port: 0,
             state: ServiceInstance::STATE_FAILED,
-            startedAt: \microtime(true) - 30.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 30.0,
         );
 
         $occupancy = $this->invokePrivateWithArgs($orchestrator, 'inspectSlotOccupancy', [$instance]);
@@ -2178,7 +2178,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             pid: \getmypid(),
             port: 18081,
             state: ServiceInstance::STATE_FAILED,
-            startedAt: \microtime(true) - 10.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 10.0,
             metadata: [
                 'resurrection_queued_from_state' => ServiceInstance::STATE_STARTING,
             ],
@@ -2193,7 +2193,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'instanceId' => 1,
                 'maxRestarts' => 10,
                 'restartDelay' => 0.0,
-                'scheduledAt' => \microtime(true) - 1.0,
+                'scheduledAt' => (\hrtime(true) / 1_000_000_000) - 1.0,
                 'delayed' => true,
                 'pid' => \getmypid(),
                 'port' => 18081,
@@ -2263,7 +2263,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                             launchId: 'test-launch',
                             port: $port,
                             state: ServiceInstance::STATE_READY,
-                            startedAt: \microtime(true),
+                            startedAt: (\hrtime(true) / 1_000_000_000),
                             ipcClientId: $ipcId,
                         );
                         $registry->addInstance($inst);
@@ -2463,7 +2463,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                             launchId: 'phase-one-launch',
                             port: $provider->getPort($i, $context),
                             state: ServiceInstance::STATE_READY,
-                            startedAt: \microtime(true),
+                            startedAt: (\hrtime(true) / 1_000_000_000),
                             ipcClientId: $role === ControlMessage::ROLE_DISPATCHER ? 401 : null,
                         );
                         $this->getRegistry()->addInstance($instance);
@@ -2559,7 +2559,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                             launchId: 'phase-one-test',
                             port: $provider->getPort($i, $context),
                             state: ServiceInstance::STATE_READY,
-                            startedAt: \microtime(true),
+                            startedAt: (\hrtime(true) / 1_000_000_000),
                             ipcClientId: $role === ControlMessage::ROLE_DISPATCHER ? 301 : null,
                         );
                         $this->getRegistry()->addInstance($instance);
@@ -2825,7 +2825,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $maintenance->setMeta('slot_id', 'maintenance#1');
         $maintenance->setMeta('lease_id', 'dup-ready');
         $maintenance->setMeta('generation', 1);
-        $maintenance->setMeta('ready_at', \microtime(true) - 1.0);
+        $maintenance->setMeta('ready_at', (\hrtime(true) / 1_000_000_000) - 1.0);
         $registry->addInstance($maintenance);
 
         $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
@@ -2917,8 +2917,8 @@ class ServiceOrchestratorStartupTest extends TestCase
         );
         $worker->setProcessTreePids(1001);
         $worker->setMeta('worker_id', 1);
-        $worker->setMeta('ready_at', \microtime(true) - 4.0);
-        $worker->setMeta('ready_received_at', \microtime(true) - 4.0);
+        $worker->setMeta('ready_at', (\hrtime(true) / 1_000_000_000) - 4.0);
+        $worker->setMeta('ready_received_at', (\hrtime(true) / 1_000_000_000) - 4.0);
         $worker->setMeta('dispatcher_pool_confirmed_at', null);
         $worker->setMeta('lease_state', 'registered');
         $registry->addInstance($worker);
@@ -3338,14 +3338,14 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: 28001,
             state: ServiceInstance::STATE_READY,
             ipcClientId: 301,
-            startedAt: \microtime(true) - 30.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 30.0,
         );
         $worker->setMeta('worker_id', 1);
         $worker->setMeta('slot_id', 'worker#1');
         $worker->setMeta('lease_id', 'worker-lease');
         $worker->setMeta('generation', 1);
         $worker->setMeta('lease_state', 'in_pool');
-        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true) - 1.0);
+        $worker->setMeta('dispatcher_pool_confirmed_at', (\hrtime(true) / 1_000_000_000) - 1.0);
         $registry->addInstance($worker);
 
         $orchestrator->handleIpcDisconnect(301, [
@@ -3424,7 +3424,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             instanceId: 1,
             port: 29333,
             state: ServiceInstance::STATE_STARTING,
-            startedAt: \microtime(true),
+            startedAt: (\hrtime(true) / 1_000_000_000),
             ipcClientId: 901,
         ));
 
@@ -3477,7 +3477,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: 29333,
             state: ServiceInstance::STATE_READY,
             ipcClientId: 903,
-            startedAt: \microtime(true) - 20.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 20.0,
         ));
 
         $orchestrator->handleIpcDisconnect(903, [], $this->createMock(MasterControlServer::class));
@@ -3507,7 +3507,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: 29333,
             state: ServiceInstance::STATE_READY,
             ipcClientId: 904,
-            startedAt: \microtime(true) - 20.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 20.0,
         );
         $instance->setProcessTreePids(999999, \getmypid(), \getmypid());
         $registry->addInstance($instance);
@@ -3541,7 +3541,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             pid: 0,
             port: 29333,
             state: ServiceInstance::STATE_READY,
-            startedAt: \microtime(true) - 20.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 20.0,
         ));
 
         $instance = $registry->getInstance(ControlMessage::ROLE_MAINTENANCE, 1);
@@ -3607,7 +3607,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: $context->mainPort,
             state: ServiceInstance::STATE_READY,
             ipcClientId: 999,
-            startedAt: \microtime(true) - 120.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 120.0,
         );
         $registry->addInstance($oldDispatcher);
 
@@ -3668,7 +3668,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: $context->mainPort,
             state: ServiceInstance::STATE_READY,
             ipcClientId: 1001,
-            startedAt: \microtime(true) - 120.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 120.0,
         );
         $dispatcher->setProcessTreePids(999999, \getmypid(), \getmypid());
         $registry->addInstance($dispatcher);
@@ -4058,6 +4058,12 @@ class ServiceOrchestratorStartupTest extends TestCase
                         'protocol' => 'wls-edge/2',
                         'project_uuid' => '9f7bbff7-271a-4bdf-bdf1-7c655d419700',
                         'epoch' => '0123456789abcdef0123456789abcdef',
+                        'instance_generation' => 23,
+                        'launch_id' => \str_repeat('d', 32),
+                        'backend_capability_launch' => self::gatewayCapabilityLaunch(
+                            23,
+                            \str_repeat('d', 32),
+                        ),
                     ],
                     'http' => [
                         'protocols' => ['h1'],
@@ -4123,6 +4129,10 @@ class ServiceOrchestratorStartupTest extends TestCase
                         'epoch' => '0123456789abcdef0123456789abcdef',
                         'instance_generation' => 17,
                         'launch_id' => $instanceLaunchId,
+                        'backend_capability_launch' => self::gatewayCapabilityLaunch(
+                            17,
+                            $instanceLaunchId,
+                        ),
                     ],
                     'http' => [
                         'protocols' => ['h1'],
@@ -4149,6 +4159,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             self::assertContains('--gateway-instance-generation=17', $command->arguments);
             self::assertContains(
                 '--gateway-instance-launch-id=' . $instanceLaunchId,
+                $command->arguments,
+            );
+            self::assertContains('--gateway-session-capability=isolated', $command->arguments);
+            self::assertContains(
+                '--gateway-session-capability-evidence-digest=' . \str_repeat('0', 64),
                 $command->arguments,
             );
         } finally {
@@ -4191,6 +4206,10 @@ class ServiceOrchestratorStartupTest extends TestCase
                         'epoch' => '0123456789abcdef0123456789abcdef',
                         'instance_generation' => 19,
                         'launch_id' => $instanceLaunchId,
+                        'backend_capability_launch' => self::gatewayCapabilityLaunch(
+                            19,
+                            $instanceLaunchId,
+                        ),
                     ],
                 ],
             ],
@@ -4210,6 +4229,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             self::assertContains('--gateway-instance-generation=19', $command->arguments);
             self::assertContains(
                 '--gateway-instance-launch-id=' . $instanceLaunchId,
+                $command->arguments,
+            );
+            self::assertContains('--gateway-session-capability=isolated', $command->arguments);
+            self::assertContains(
+                '--gateway-session-capability-evidence-digest=' . \str_repeat('0', 64),
                 $command->arguments,
             );
         } finally {
@@ -4637,7 +4661,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             launchId: 'worker-under-maintenance',
             port: 18080,
             state: ServiceInstance::STATE_STARTING,
-            startedAt: \microtime(true) - 1.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 1.0,
             ipcClientId: 301,
         ));
 
@@ -4752,11 +4776,11 @@ class ServiceOrchestratorStartupTest extends TestCase
             launchId: 'worker-dup-ready-1',
             port: 18080,
             state: ServiceInstance::STATE_READY,
-            startedAt: \microtime(true) - 1.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 1.0,
             ipcClientId: 301,
         );
         $workerOne->setMeta('worker_id', 1);
-        $workerOne->setMeta('ready_at', \microtime(true) - 1.0);
+        $workerOne->setMeta('ready_at', (\hrtime(true) / 1_000_000_000) - 1.0);
         $registry->addInstance($workerOne);
 
         $registry->addInstance(new ServiceInstance(
@@ -4766,7 +4790,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             launchId: 'worker-dup-ready-2',
             port: 18081,
             state: ServiceInstance::STATE_READY,
-            startedAt: \microtime(true) - 1.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 1.0,
             ipcClientId: 302,
         ));
 
@@ -4843,7 +4867,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             launchId: 'worker-pool-ack-rejected',
             port: 18080,
             state: ServiceInstance::STATE_READY,
-            startedAt: \microtime(true) - 1.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 1.0,
             ipcClientId: 301,
         );
         $registry->addInstance($worker);
@@ -4889,7 +4913,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                 'instanceId' => 1,
                 'maxRestarts' => 10,
                 'restartDelay' => 0.0,
-                'scheduledAt' => \microtime(true) - 1.0,
+                'scheduledAt' => (\hrtime(true) / 1_000_000_000) - 1.0,
                 'delayed' => false,
                 'pid' => 0,
                 'port' => 18080,
@@ -4906,10 +4930,10 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertTrue($scheduled);
 
         $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
-        $tasks['periodic:resurrect_queue']['startedAt'] = \microtime(true) - 30.0;
+        $tasks['periodic:resurrect_queue']['startedAt'] = (\hrtime(true) / 1_000_000_000) - 30.0;
         $this->writePrivate($orchestrator, 'mainLoopTasks', $tasks);
 
-        $now = \microtime(true);
+        $now = (\hrtime(true) / 1_000_000_000);
         $this->invokePrivateWithArgs($orchestrator, 'guardResurrectQueueTasks', [$now]);
 
         $tasks = $this->readPrivate($orchestrator, 'mainLoopTasks');
@@ -4936,7 +4960,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $worker->setMeta('generation', 1);
         $orchestrator->getRegistry()->addInstance($worker);
 
-        $now = \microtime(true);
+        $now = (\hrtime(true) / 1_000_000_000);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
             'worker:1' => [
                 'role' => ControlMessage::ROLE_WORKER,
@@ -4992,7 +5016,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator = new ServiceOrchestrator();
 
         $scheduled = $this->invokePrivateWithArgs($orchestrator, 'scheduleResurrectQueueMainLoopTaskIfDue', [
-            \microtime(true),
+            (\hrtime(true) / 1_000_000_000),
         ]);
 
         self::assertFalse($scheduled);
@@ -5003,7 +5027,7 @@ class ServiceOrchestratorStartupTest extends TestCase
     public function testResurrectQueueMainLoopTaskIsNotScheduledForOnlyFutureWork(): void
     {
         $orchestrator = new ServiceOrchestrator();
-        $now = \microtime(true);
+        $now = (\hrtime(true) / 1_000_000_000);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
             'worker:1' => [
                 'role' => ControlMessage::ROLE_WORKER,
@@ -5027,7 +5051,7 @@ class ServiceOrchestratorStartupTest extends TestCase
     public function testResurrectQueueMainLoopTaskIsScheduledForDueWork(): void
     {
         $orchestrator = new ServiceOrchestrator();
-        $now = \microtime(true);
+        $now = (\hrtime(true) / 1_000_000_000);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
             'worker:1' => [
                 'role' => ControlMessage::ROLE_WORKER,
@@ -5055,7 +5079,7 @@ class ServiceOrchestratorStartupTest extends TestCase
     public function testMaintenanceResurrectQueueCleanupStillRunsWhenMaintenanceModeIsOff(): void
     {
         $orchestrator = new ServiceOrchestrator();
-        $now = \microtime(true);
+        $now = (\hrtime(true) / 1_000_000_000);
         $this->writePrivate($orchestrator, 'maintenanceMode', false);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
             'maintenance:1' => [
@@ -5094,7 +5118,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             pid: 0,
             port: 18081,
             state: ServiceInstance::STATE_FAILED,
-            startedAt: \microtime(true) - 30.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 30.0,
         );
         $worker->setMeta('slot_id', 'worker#1');
         $worker->setMeta('lease_id', 'worker-emergency-frozen-generation');
@@ -5106,7 +5130,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             'instanceId' => 1,
             'maxRestarts' => 10,
             'restartDelay' => 0.0,
-            'scheduledAt' => \microtime(true) - 1.0,
+            'scheduledAt' => (\hrtime(true) / 1_000_000_000) - 1.0,
             'delayed' => false,
             'pid' => 0,
             'port' => 18081,
@@ -5175,7 +5199,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $worker->setMeta('generation', 1);
         $orchestrator->getRegistry()->addInstance($worker);
 
-        $now = \microtime(true);
+        $now = (\hrtime(true) / 1_000_000_000);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
             'worker:1' => [
                 'role' => ControlMessage::ROLE_WORKER,
@@ -5258,7 +5282,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             state: ServiceInstance::STATE_FAILED,
             pid: 4567,
             port: 18080,
-            startedAt: \microtime(true) - 60.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 60.0,
             ipcClientId: 321,
         );
         $worker->setMeta('slot_id', 'worker#1');
@@ -5320,7 +5344,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             state: ServiceInstance::STATE_FAILED,
             pid: 0,
             port: 18080,
-            startedAt: \microtime(true) - 60.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 60.0,
             ipcClientId: 321,
         );
         $failedWorker->setMeta('slot_id', 'worker#1');
@@ -5335,7 +5359,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             state: ServiceInstance::STATE_READY,
             pid: 0,
             port: 18081,
-            startedAt: \microtime(true) - 60.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 60.0,
             ipcClientId: 322,
         ));
 
@@ -5619,6 +5643,28 @@ class ServiceOrchestratorStartupTest extends TestCase
                 @\unlink($file . '.lock');
             }
         });
+    }
+
+    /** @return array<string,mixed> */
+    private static function gatewayCapabilityLaunch(
+        int $instanceGeneration,
+        string $launchId,
+    ): array {
+        $evidence = [
+            'schema' => 'wls-session-capability/1',
+            'reason' => 'unit-isolated',
+        ];
+        return [
+            'schema' => \Weline\Server\Service\Edge\Gateway\GatewayBackendCapabilityResolver::LAUNCH_SNAPSHOT_SCHEMA,
+            'instance_generation' => $instanceGeneration,
+            'launch_id' => $launchId,
+            'mode' => 'isolated',
+            'evidence' => $evidence,
+            'evidence_digest' => \hash(
+                'sha256',
+                \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($evidence),
+            ),
+        ];
     }
 
     private function invokePrivate(object $object, string $method): mixed

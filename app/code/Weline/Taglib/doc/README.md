@@ -23,10 +23,12 @@ Taglib 是模板语义扩展层，不是“所有前端能力都往里塞”的�
 ## 当前推荐阅读顺序
 
 1. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-2. `app/code/Weline/Framework/View/doc/README.md`
-3. `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
-4. 本 README
-5. 如果是主题标签，再补 `Weline_Theme/doc/AI-INDEX.md` 和相关专项文档
+2. **场景映射与全量目录（强制）**：`dev/ai/skills/framework-taglib-catalog/SKILL.md` → `tag-catalog.md`
+3. 新增/变更标签：`dev/ai/skills/framework-taglib-catalog/tag-development.md`
+4. `app/code/Weline/Framework/View/doc/README.md`
+5. `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
+6. 本 README
+7. 如果是主题标签，再补 `Weline_Theme/doc/AI-INDEX.md` 和相关专项文档
 
 ## Taglib 适合做什么
 
@@ -96,15 +98,30 @@ ID 与 data-only metadata。Taglib Model/Controller 不得引用 ModuleManager M
 
 再考虑 Taglib
 
+## 场景映射（选择器用官方标签）
+
+模板需要站点、店铺、语言、文件、编辑器、ACL、DataTable 等能力时，先查：
+
+- `dev/ai/skills/framework-taglib-catalog/SKILL.md`（场景 → 标签）
+- `dev/ai/skills/framework-taglib-catalog/tag-catalog.md`（全量清单）
+
+例如：站点选择用 `<w:websites:website:select .../>`，语言配置用 `<w:i18n:language:select .../>`，界面切换用 `<w:i18n:language:switcher .../>`。禁止手写裸 select 拼领域选项。
+
+新增标签后必须在同一任务内更新上述目录与映射表（见 `tag-development.md`）。
+
 ## 快速示例
 
 最小自定义 Taglib 仍然可以按 `TaglibInterface` 方式实现，但具体接口用法、编译流程与缓存细节请直接看：
 
+- `dev/ai/skills/framework-taglib-catalog/tag-development.md`
 - `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
 - `app/code/Weline/Framework/View/doc/Taglib/架构设计.md`
 
 ## 相关文档
 
+- `dev/ai/skills/framework-taglib-catalog/SKILL.md`
+- `dev/ai/skills/framework-taglib-catalog/tag-catalog.md`
+- `dev/ai/skills/framework-taglib-catalog/tag-development.md`
 - `app/code/Weline/Framework/View/doc/README.md`
 - `app/code/Weline/Framework/View/doc/Taglib/使用指南.md`
 - `app/code/Weline/Taglib/doc/AI-INDEX.md`

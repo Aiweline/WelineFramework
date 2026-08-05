@@ -15,7 +15,7 @@ declare(strict_types=1);
  *   php posix_detached_spawn.php <config.json-path>
  *
  * Config JSON file:
- *   { "cwd": "...", "argv": ["php","bin/w",...], "stdout": "/path/or/dev/null" }
+ *   { "cwd": "...", "argv": ["php","bin/w",...], "stdout": "/path", "stderr": "/path" }
  *
  * Prints the detached child PID on stdout and exits 0.
  */
@@ -40,6 +40,7 @@ if (!\is_array($config)) {
 $cwd = (string)($config['cwd'] ?? '');
 $argvList = $config['argv'] ?? null;
 $stdoutPath = (string)($config['stdout'] ?? '/dev/null');
+$stderrPath = (string)($config['stderr'] ?? $stdoutPath);
 if ($cwd === '' || !\is_dir($cwd) || !\is_array($argvList) || $argvList === []) {
     \fwrite(\STDERR, "spawn config missing cwd/argv\n");
     \exit(2);
@@ -112,14 +113,23 @@ $stdout = @\fopen($stdoutPath !== '' ? $stdoutPath : '/dev/null', 'ab');
 if (!\is_resource($stdout)) {
     $stdout = @\fopen('/dev/null', 'ab');
 }
-$stderr = @\fopen($stdoutPath !== '' ? $stdoutPath : '/dev/null', 'ab');
+$stderr = @\fopen($stderrPath !== '' ? $stderrPath : '/dev/null', 'ab');
 if (!\is_resource($stderr)) {
     $stderr = @\fopen('/dev/null', 'ab');
 }
 
 $php = (string)\array_shift($normalizedArgv);
+$logArgv = \array_map(static function (string $argument): string {
+    foreach (['--setup-gate-handoff=', '--launch-id='] as $sensitivePrefix) {
+        if (\str_starts_with($argument, $sensitivePrefix)) {
+            return $sensitivePrefix . '[redacted]';
+        }
+    }
+
+    return $argument;
+}, $normalizedArgv);
 @\fwrite($stdout, '[spawn] detached child pid=' . \getmypid() . ' at ' . \date('c') . PHP_EOL);
-@\fwrite($stdout, '[spawn] exec=' . $php . ' ' . \implode(' ', $normalizedArgv) . PHP_EOL);
+@\fwrite($stdout, '[spawn] exec=' . $php . ' ' . \implode(' ', $logArgv) . PHP_EOL);
 @\fflush($stdout);
 
 // pcntl_exec keeps this PID as the queue worker. QueueDispatch records the

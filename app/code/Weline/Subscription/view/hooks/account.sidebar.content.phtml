@@ -1,0 +1,21 @@
+<?php
+/**
+ * Weline_Subscription — account content section.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 170
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+use Weline\Customer\Service\AccountSidebarContentGate;
+
+if (!AccountSidebarContentGate::accepts('subscriptions')) {
+    return;
+}
+
+$GLOBALS['__weline_subscription_account_sidebar_content_rendered'] = true;
+?>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="subscriptions-section" data-account-section="subscriptions" hidden weline-code="subscription.hook.account_sidebar_content.subscriptions_section">
+    <w:hook name="Weline_Subscription::frontend::account::index::subscriptions"/>
+</section>

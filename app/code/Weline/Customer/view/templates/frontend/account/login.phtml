@@ -772,7 +772,7 @@ html.dark .auth-form__select {
         <template>Weline_Component::message.phtml</template>
     </div>
 
-    <w:form id="loginForm" class="auth-form__body" action="/customer/account/login" method="post" csrf="off">
+    <w:form id="loginForm" class="auth-form__body" action="/customer/account/login" method="post" csrf="off" captcha="required" intent="customer.login">
         <?= $this->getFormKey('/customer/account/login') ?>
         <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>" />
 

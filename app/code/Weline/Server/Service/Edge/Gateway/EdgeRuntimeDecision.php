@@ -17,6 +17,7 @@ final class EdgeRuntimeDecision
 
     /**
      * @param array<string,mixed> $gateway
+     * @param array<string,mixed> $portLease
      */
     public function __construct(
         public readonly string $adapter,
@@ -28,6 +29,7 @@ final class EdgeRuntimeDecision
         public readonly string $fallbackReason = '',
         public readonly int $fallbackPort = 0,
         public readonly array $gateway = [],
+        public readonly array $portLease = [],
     ) {
         if (!\in_array($adapter, [
             EdgeAdapterInterface::NAME_NGINX,
@@ -44,8 +46,36 @@ final class EdgeRuntimeDecision
         ) {
             throw new \InvalidArgumentException('WLS edge decision contains an invalid mode.');
         }
-        if (\trim($source) === '' || \trim($reason) === '') {
-            throw new \InvalidArgumentException('WLS edge decision source and reason must not be empty.');
+        if ($source !== \trim($source)
+            || $reason !== \trim($reason)
+            || $fallbackReason !== \trim($fallbackReason)
+            || $source === ''
+            || $reason === ''
+            || \strlen($source) > 128
+            || \strlen($reason) > 256
+            || \strlen($fallbackReason) > 256
+            || \preg_match('/[\x00-\x1f\x7f]/D', $source . $reason . $fallbackReason) === 1
+        ) {
+            throw new \InvalidArgumentException(
+                'WLS edge decision source or reason is empty, unbounded or unsafe.'
+            );
+        }
+        try {
+            $variableState = GatewayClient::canonicalJson([
+                'gateway' => $gateway,
+                'port_lease' => $portLease,
+            ]);
+        } catch (\Throwable $throwable) {
+            throw new \InvalidArgumentException(
+                'WLS edge decision variable state is not serializable.',
+                0,
+                $throwable,
+            );
+        }
+        if (\strlen($variableState) > 65_536) {
+            throw new \InvalidArgumentException(
+                'WLS edge decision variable state exceeds its fixed bound.'
+            );
         }
         if (!\in_array($scope, [
             self::SCOPE_HOST_GATEWAY,
@@ -74,6 +104,36 @@ final class EdgeRuntimeDecision
         ) {
             throw new \InvalidArgumentException('Automatic pure-WLS fallback requires a reason.');
         }
+        if ($portLease !== []) {
+            $leasePort = (int)($portLease['port'] ?? 0);
+            $allocationScope = (string)($portLease['allocation_scope'] ?? '');
+            $scopeIsValid = ($allocationScope === 'stable_range'
+                    && $leasePort >= 20000
+                    && $leasePort <= 29999
+                    && $fallbackPort === $leasePort)
+                || ($allocationScope === 'exact'
+                    && $leasePort >= 1
+                    && $leasePort <= 65535
+                    && $fallbackPort === 0);
+            if (!$scopeIsValid
+                || (int)($portLease['schema_version'] ?? 0) !== 5
+                || !\hash_equals('RESERVED', (string)($portLease['state'] ?? ''))
+                || \preg_match(
+                    '/\A[a-f0-9]{32}\z/D',
+                    (string)($portLease['lease_id'] ?? ''),
+                ) !== 1
+                || \preg_match(
+                    '/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D',
+                    (string)($portLease['instance'] ?? ''),
+                ) !== 1
+                || \filter_var(
+                    (string)($portLease['bind_host'] ?? ''),
+                    FILTER_VALIDATE_IP,
+                ) === false
+            ) {
+                throw new \InvalidArgumentException('WLS public port lease is invalid.');
+            }
+        }
     }
 
     /**
@@ -91,6 +151,7 @@ final class EdgeRuntimeDecision
             'fallback_reason' => $this->fallbackReason,
             'fallback_port' => $this->fallbackPort,
             'gateway' => $this->gateway,
+            'port_lease' => $this->portLease,
         ];
     }
 
@@ -109,6 +170,7 @@ final class EdgeRuntimeDecision
             fallbackReason: \trim((string)($data['fallback_reason'] ?? '')),
             fallbackPort: (int)($data['fallback_port'] ?? 0),
             gateway: \is_array($data['gateway'] ?? null) ? $data['gateway'] : [],
+            portLease: \is_array($data['port_lease'] ?? null) ? $data['port_lease'] : [],
         );
     }
 

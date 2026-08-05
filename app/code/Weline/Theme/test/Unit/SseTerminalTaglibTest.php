@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Theme\Taglib\SseTerminal;
 
 class SseTerminalTaglibTest extends TestCore

@@ -61,25 +61,25 @@ class RefundService
         
         // 验证订单是否可以退款
         if (!$order->canRefund()) {
-            throw new \Exception(__('订单当前状态不允许退款'));
+            throw new \Exception(\__('订单当前状态不允许退款'));
         }
         
         // 验证退款金额
         if (empty($refundData['amount'])) {
-            throw new \Exception(__('退款金额不能为空'));
+            throw new \Exception(\__('退款金额不能为空'));
         }
         
         $refundAmount = (float)$refundData['amount'];
         $grandTotal = (float)$order->getData(Order::schema_fields_GRAND_TOTAL);
         
         if ($refundAmount > $grandTotal) {
-            throw new \Exception(__('退款金额不能超过订单总额'));
+            throw new \Exception(\__('退款金额不能超过订单总额'));
         }
         
         // 检查已退款金额
         $refundedAmount = $this->getRefundedAmount($orderId);
         if ($refundedAmount + $refundAmount > $grandTotal) {
-            throw new \Exception(__('退款总额不能超过订单总额'));
+            throw new \Exception(\__('退款总额不能超过订单总额'));
         }
         
         // 创建退款记录
@@ -105,11 +105,11 @@ class RefundService
         $refund = $this->getRefundModel()->reset()->load($refundId);
         
         if (!$refund->getId()) {
-            throw new \Exception(__('退款记录不存在'));
+            throw new \Exception(\__('退款记录不存在'));
         }
         
         if ($refund->getData(OrderRefund::schema_fields_STATUS) !== OrderRefund::STATUS_PENDING) {
-            throw new \Exception(__('只有待处理的退款才能处理'));
+            throw new \Exception(\__('只有待处理的退款才能处理'));
         }
         
         // 更新退款状态
@@ -128,7 +128,7 @@ class RefundService
             // 使用状态机转换订单状态
             $stateMachine = $this->objectManager->getInstance(OrderStateMachine::class);
             try {
-                $stateMachine->transition($orderId, Order::STATUS_REFUNDED, __('订单已退款'));
+                $stateMachine->transition($orderId, Order::STATUS_REFUNDED, \__('订单已退款'));
             } catch (\Exception $e) {
                 // 如果状态转换失败，不影响退款记录
             }

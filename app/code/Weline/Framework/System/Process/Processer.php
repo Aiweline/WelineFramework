@@ -1261,7 +1261,13 @@ class Processer
             'trim',
             \explode(',', \ini_get('disable_functions') ?: '')
         );
-        foreach (['pcntl_fork', 'pcntl_exec', 'posix_setsid', 'posix_kill'] as $required) {
+        foreach ([
+            'pcntl_fork',
+            'pcntl_exec',
+            'posix_setsid',
+            'posix_kill',
+            'stream_socket_pair',
+        ] as $required) {
             if (!\function_exists($required)
                 || \in_array($required, $disabledFunctions, true)
             ) {
@@ -1299,19 +1305,92 @@ class Processer
             }
         }
 
+        $execGate = @\stream_socket_pair(
+            \STREAM_PF_UNIX,
+            \STREAM_SOCK_STREAM,
+            \STREAM_IPPROTO_IP
+        );
+        if (!\is_array($execGate)
+            || !\is_resource($execGate[0] ?? null)
+            || !\is_resource($execGate[1] ?? null)
+        ) {
+            throw new \RuntimeException(
+                'POSIX detached PHP fork/exec cannot create the lease authorization gate.'
+            );
+        }
+
         $pid = @\pcntl_fork();
         if ($pid < 0) {
+            @\fclose($execGate[0]);
+            @\fclose($execGate[1]);
             return 0;
         }
         if ($pid > 0) {
+            @\fclose($execGate[1]);
+            // A freshly forked PID can reuse a number previously cached by
+            // this long-lived parent. Clear that cache before publishing any
+            // pre-exec record, then keep this registration untrusted.
+            self::untrustPid($pid);
+            try {
+                // The lease is committed before exec, but a raw PID must not
+                // enter the parent's generic trust fast path. The exec'd child
+                // may register itself in its own process after bootstrap.
+                self::setPid($processIdentity, $pid, false);
+            } catch (\Throwable $throwable) {
+                self::untrustPid($pid);
+                // The child has not called exec(). Closing the gate without GO
+                // makes that exact child terminate itself; the parent never
+                // signals an unleased raw PID.
+                @\fwrite($execGate[0], 'A');
+                @\fclose($execGate[0]);
+                throw new \RuntimeException(
+                    'POSIX detached PHP child did not publish its managed process lease'
+                    . ' (pid=' . $pid
+                    . ', name=' . self::getTaskName($processIdentity)
+                    . ', child_action=self_fence).',
+                    0,
+                    $throwable
+                );
+            }
+
+            $authorized = @\fwrite($execGate[0], 'G') === 1;
+            @\fflush($execGate[0]);
+            @\fclose($execGate[0]);
+            if (!$authorized) {
+                try {
+                    self::removeManagedProcessLeaseRecord(
+                        $pid,
+                        $processIdentity,
+                        self::getManagedIdentityLaunchId($processIdentity)
+                    );
+                } catch (\Throwable) {
+                    // The child still fails closed on EOF. A stale exact lease
+                    // is safer than signaling a PID whose ownership is unknown.
+                }
+                throw new \RuntimeException(
+                    'POSIX detached PHP child lease authorization could not be delivered'
+                    . ' (pid=' . $pid
+                    . ', name=' . self::getTaskName($processIdentity)
+                    . ', child_action=self_fence).'
+                );
+            }
             return $pid;
         }
 
+        @\fclose($execGate[0]);
         $sessionId = @\posix_setsid();
         if (!\is_int($sessionId) || $sessionId <= 0) {
+            @\fclose($execGate[1]);
             @\posix_kill((int)\getmypid(), \defined('SIGKILL') ? \SIGKILL : 9);
-            throw new \RuntimeException('POSIX detached child could not create an isolated session.');
+            exit(70);
         }
+        $authorization = @\fread($execGate[1], 1);
+        @\fclose($execGate[1]);
+        if ($authorization !== 'G') {
+            @\posix_kill((int)\getmypid(), \defined('SIGKILL') ? \SIGKILL : 9);
+            exit(70);
+        }
+
         @\chdir($cwd);
         self::closeUnixDescriptorsBeforeExec($openFileDescriptors);
         @\fclose(\STDIN);
@@ -1603,8 +1682,11 @@ class Processer
      * 注册进程 PID。同时更新 name_index.json 和 pid_index.json 索引。
      * 
      * 注：不再创建 {pid}.pid 文件，反向查找统一使用 pid_index.json
+     *
+     * @param bool $trustPid false 仅用于 exec 前 pending lease；该 PID 不得
+     *        进入父进程 generic trust fast path。
      */
-    public static function setPid(string $pname, int $pid): int
+    public static function setPid(string $pname, int $pid, bool $trustPid = true): int
     {
         $identitySource = self::normalizeWindowsCommandLineEncoding($pname);
         $pname = self::buildManagedIdentity($identitySource);
@@ -1652,6 +1734,7 @@ class Processer
             $payload,
             $pname,
             $pid,
+            $trustPid,
             &$registered
         ): void {
             $hadPreviousLease = \is_file($pid_file);
@@ -1689,7 +1772,9 @@ class Processer
                 return;
             }
 
-            self::markPidAsTrusted($pid);
+            if ($trustPid) {
+                self::markPidAsTrusted($pid);
+            }
             $registered = true;
         }, true);
 
@@ -1982,9 +2067,11 @@ class Processer
     /**
      * 对冻结的受管进程 lease 做身份感知三态探测。
      *
-     * expectedProcessName 是 drain 前冻结的真实 OS command/title；expectedPname
-     * 是 Processer 注册记录中的 canonical --name 身份。两者职责不同，不要求
-     * 字符串相同。launch_id 必须同时存在于冻结 lease 与受管记录并精确一致。
+     * expectedProcessName 通常是 drain 前冻结的真实 OS command/title；
+     * expectedPname 是 Processer 注册记录中的 canonical --name 身份。
+     * command-style 子进程提供 requiredLiveArguments 时，expectedProcessName
+     * 必须改为该 lease 的 canonical name，且 exact argv 同时构成身份围栏。
+     * launch_id 必须存在于冻结 lease 与受管记录并精确一致。
      *
      * @return array{
      *     state: string,
@@ -1998,6 +2085,8 @@ class Processer
      *     expected_identity_hash?: string,
      *     live_identity_hash?: string
      * }
+     * @param array<string,string> $requiredLiveArguments Exact argv fences for
+     *        command-style children whose POSIX process title is not replaced.
      */
     public static function probeManagedProcessIdentity(
         int $pid,
@@ -2005,7 +2094,7 @@ class Processer
         string $expectedLaunchId = '',
         ?string $expectedPname = null,
         bool $fresh = false,
-        array $requiredLiveArguments = [],
+        array $requiredLiveArguments = []
     ): array {
         $processState = self::probeProcessState($pid, $fresh);
         $preflight = self::validateManagedProcessIdentitySnapshot(
@@ -2015,7 +2104,7 @@ class Processer
             $expectedPname,
             $processState,
             '',
-            $requiredLiveArguments,
+            $requiredLiveArguments
         );
         if ($processState !== self::PROCESS_STATE_RUNNING
             || ($preflight['reason'] ?? '') !== 'live_identity_unavailable'
@@ -2028,6 +2117,9 @@ class Processer
             $driver->clearPortCache();
         }
         $liveIdentity = \trim($driver->getProcessCommandLine($pid));
+        $exactLiveArguments = $requiredLiveArguments !== [] && !IS_WIN
+            ? self::readExactProcessArguments($pid)
+            : null;
 
         return self::validateManagedProcessIdentitySnapshot(
             $pid,
@@ -2037,6 +2129,7 @@ class Processer
             $processState,
             $liveIdentity,
             $requiredLiveArguments,
+            $exactLiveArguments
         );
     }
 
@@ -2161,6 +2254,7 @@ class Processer
         string $processState,
         string $liveIdentity,
         array $requiredLiveArguments = [],
+        ?array $exactLiveArgv = null
     ): array {
         $expectedProcessName = \trim($expectedProcessName);
         $expectedLaunchId = \trim($expectedLaunchId);
@@ -2249,6 +2343,26 @@ class Processer
             return $result;
         }
 
+        if ($requiredLiveArguments !== []) {
+            if (!\hash_equals($expectedCanonicalName, $expectedProcessName)) {
+                $result['reason'] = 'expected_process_name_conflicts_with_lease';
+                return $result;
+            }
+            $requiredName = $requiredLiveArguments['name'] ?? null;
+            $requiredLaunchId = $requiredLiveArguments['launch-id'] ?? null;
+            if (!\is_string($requiredName)
+                || !\hash_equals(
+                    $expectedCanonicalName,
+                    self::normalizeName($requiredName)
+                )
+                || !\is_string($requiredLaunchId)
+                || !\hash_equals($expectedLaunchId, $requiredLaunchId)
+            ) {
+                $result['reason'] = 'expected_required_identity_invalid';
+                return $result;
+            }
+        }
+
         if ($liveIdentity === '') {
             $result['reason'] = 'live_identity_unavailable';
             return $result;
@@ -2256,39 +2370,43 @@ class Processer
 
         $result['expected_identity_hash'] = \hash('sha256', $expectedProcessName);
         $result['live_identity_hash'] = \hash('sha256', $liveIdentity);
-        if ($requiredLiveArguments !== []) {
-            foreach ($requiredLiveArguments as $argumentName => $expectedValue) {
-                if (!\is_string($argumentName)
-                    || \preg_match('/^[a-z0-9][a-z0-9-]*$/Di', $argumentName) !== 1
-                    || (!\is_scalar($expectedValue) && !$expectedValue instanceof \Stringable)
-                ) {
-                    $result['reason'] = 'expected_required_argument_invalid';
-                    return $result;
-                }
-                $expectedValue = (string)$expectedValue;
-                $values = self::extractCommandLineArgumentValues($liveIdentity, $argumentName);
-                if (\count($values) !== 1 || $values[0] === '') {
-                    $result['reason'] = 'live_required_argument_missing_or_ambiguous';
-                    return $result;
-                }
-                if (!\hash_equals($expectedValue, $values[0])) {
-                    $result['state'] = self::PROCESS_STATE_IDENTITY_MISMATCH;
-                    $result['reason'] = 'live_required_argument_mismatch';
-                    return $result;
-                }
-            }
-
-            $result['state'] = self::PROCESS_STATE_RUNNING;
-            $result['reason'] = 'identity_match';
+        $exactLiveArguments = null;
+        if ($requiredLiveArguments !== [] && IS_WIN) {
+            // Keep the existing Windows CIM rendered-command semantics.
+            // POSIX exact argv hardening must not make Windows Cron/Queue
+            // probes permanently unavailable.
+            $requiredArgumentFailure = self::validateRenderedWindowsRequiredArguments(
+                $liveIdentity,
+                $requiredLiveArguments
+            );
+        } else {
+            $exactLiveArguments = $requiredLiveArguments !== [] && $exactLiveArgv !== null
+                ? self::collectExactCommandLineArguments($exactLiveArgv)
+                : null;
+            $requiredArgumentFailure = self::validateRequiredLiveArguments(
+                $requiredLiveArguments,
+                $exactLiveArguments
+            );
+        }
+        if ($requiredArgumentFailure !== '') {
+            $result['reason'] = $requiredArgumentFailure;
             return $result;
         }
-        $liveLaunchId = self::extractCommandLineArg($liveIdentity, 'launch-id');
-        $liveCanonicalName = self::extractCommandLineArg($liveIdentity, 'name');
 
-        if (PHP_OS_FAMILY === 'Windows') {
+        if ($requiredLiveArguments !== [] && !IS_WIN) {
+            $liveLaunchId = (string)($exactLiveArguments['launch-id'][0] ?? '');
+            $liveCanonicalName = (string)($exactLiveArguments['name'][0] ?? '');
+        } else {
+            $liveLaunchId = self::extractCommandLineArg($liveIdentity, 'launch-id');
+            $liveCanonicalName = self::extractCommandLineArg($liveIdentity, 'name');
+        }
+
+        if (PHP_OS_FAMILY === 'Windows' || $requiredLiveArguments !== []) {
             // CIM exposes the immutable argv, not cli_set_process_title().
             // The generation token plus canonical process name is the identity
-            // fence; quoting and path rendering are deliberately not compared.
+            // fence; command-style POSIX children additionally require their
+            // caller-supplied argv fence above. Quoting and path rendering are
+            // deliberately not compared.
             if ($liveLaunchId === '') {
                 $result['reason'] = 'live_launch_id_missing';
                 return $result;
@@ -2333,9 +2451,262 @@ class Processer
     }
 
     /**
+     * Validate only caller-declared non-secret argv fields. Values never cross
+     * the result/log boundary; failures expose a stable reason code only.
+     *
+     * @param array<string,string> $requiredLiveArguments
+     */
+    private static function validateRequiredLiveArguments(
+        array $requiredLiveArguments,
+        ?array $exactLiveArguments = null
+    ): string {
+        if ($requiredLiveArguments === []) {
+            return '';
+        }
+        if ($exactLiveArguments === null) {
+            return 'live_required_argv_unavailable';
+        }
+
+        $seenNames = [];
+        foreach ($requiredLiveArguments as $name => $expectedValue) {
+            if (!\is_string($name)
+                || \preg_match('/^[a-z0-9][a-z0-9_-]*$/iD', $name) !== 1
+                || (!\is_string($expectedValue) && !\is_numeric($expectedValue))
+                || (string)$expectedValue === ''
+            ) {
+                return 'expected_required_argument_invalid';
+            }
+
+            $normalizedName = \strtolower($name);
+            if (isset($seenNames[$normalizedName])) {
+                return 'expected_required_argument_invalid';
+            }
+            $seenNames[$normalizedName] = true;
+            $actualValues = $exactLiveArguments[$normalizedName] ?? [];
+            if ($actualValues === [] || (string)($actualValues[0] ?? '') === '') {
+                return 'live_required_argument_missing';
+            }
+            if (\count($actualValues) !== 1) {
+                return 'live_required_argument_duplicate';
+            }
+            $actualValue = (string)$actualValues[0];
+            $expectedValue = (string)$expectedValue;
+            if ($normalizedName === 'name') {
+                if (!\hash_equals(
+                    self::normalizeName($expectedValue),
+                    self::normalizeName($actualValue)
+                )) {
+                    return 'live_required_argument_mismatch';
+                }
+                continue;
+            }
+            if (!\hash_equals($expectedValue, $actualValue)) {
+                return 'live_required_argument_mismatch';
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Preserve the pre-existing Windows CIM command-line behavior. Windows
+     * does not expose the POSIX kernel argv sources used by the exact fence.
+     *
+     * @param array<string,string> $requiredLiveArguments
+     */
+    private static function validateRenderedWindowsRequiredArguments(
+        string $liveIdentity,
+        array $requiredLiveArguments
+    ): string {
+        foreach ($requiredLiveArguments as $name => $expectedValue) {
+            if (!\is_string($name)
+                || \preg_match('/^[a-z0-9][a-z0-9_-]*$/iD', $name) !== 1
+                || (!\is_string($expectedValue) && !\is_numeric($expectedValue))
+                || (string)$expectedValue === ''
+            ) {
+                return 'expected_required_argument_invalid';
+            }
+
+            $actualValue = self::extractCommandLineArg($liveIdentity, $name);
+            if ($actualValue === '') {
+                return 'live_required_argument_missing';
+            }
+            $expectedValue = (string)$expectedValue;
+            if (\strtolower($name) === 'name') {
+                if (!\hash_equals(
+                    self::normalizeName($expectedValue),
+                    self::normalizeName($actualValue)
+                )) {
+                    return 'live_required_argument_mismatch';
+                }
+                continue;
+            }
+            if (!\hash_equals($expectedValue, $actualValue)) {
+                return 'live_required_argument_mismatch';
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Parse only exact long-option argv tokens. A flag hidden in another
+     * option's value, a script path, or a repeated key can never satisfy an
+     * identity fence.
+     *
+     * @param list<string> $tokens
+     * @return array<string,list<string>>
+     */
+    private static function collectExactCommandLineArguments(array $tokens): array
+    {
+        $arguments = [];
+        $count = \count($tokens);
+        for ($index = 0; $index < $count; $index++) {
+            $token = (string)$tokens[$index];
+            if (\preg_match(
+                '/^--([a-z0-9][a-z0-9_-]*)(?:=(.*))?$/iD',
+                $token,
+                $matches
+            ) !== 1) {
+                continue;
+            }
+
+            $name = \strtolower((string)$matches[1]);
+            $hasInlineValue = \str_contains($token, '=');
+            $value = $hasInlineValue ? (string)($matches[2] ?? '') : '';
+            if (!$hasInlineValue && isset($tokens[$index + 1])
+                && \preg_match(
+                    '/^--[a-z0-9][a-z0-9_-]*(?:=.*)?$/iD',
+                    (string)$tokens[$index + 1]
+                ) !== 1
+            ) {
+                $value = (string)$tokens[++$index];
+            }
+            $arguments[$name][] = $value;
+        }
+
+        return $arguments;
+    }
+
+    /**
+     * Read the kernel's original argv boundaries. A rendered command string is
+     * never accepted for an exact identity fence because one argv value may
+     * itself contain whitespace followed by a flag-shaped substring.
+     *
+     * @return list<string>|null
+     */
+    private static function readExactProcessArguments(int $pid): ?array
+    {
+        if ($pid <= 0) {
+            return null;
+        }
+
+        $procPath = '/proc/' . $pid . '/cmdline';
+        if (PHP_OS_FAMILY === 'Linux'
+            && \is_file($procPath)
+            && \is_readable($procPath)
+        ) {
+            $raw = @\file_get_contents($procPath);
+            if (!\is_string($raw) || $raw === '') {
+                return null;
+            }
+            $arguments = \explode("\0", $raw);
+            if ($arguments !== [] && $arguments[\count($arguments) - 1] === '') {
+                \array_pop($arguments);
+            }
+            return $arguments !== [] ? \array_values($arguments) : null;
+        }
+
+        if (PHP_OS_FAMILY === 'Darwin') {
+            return self::readDarwinExactProcessArguments($pid);
+        }
+
+        // Windows CIM and generic ps output expose a rendered command line,
+        // not trustworthy argv boundaries. Unsupported platforms fail closed.
+        return null;
+    }
+
+    /**
+     * Read macOS KERN_PROCARGS2 directly. The buffer starts with argc, then the
+     * executable path, alignment NULs, and exactly argc NUL-delimited argv
+     * values. Environment entries that follow are intentionally ignored.
+     *
+     * @return list<string>|null
+     */
+    private static function readDarwinExactProcessArguments(int $pid): ?array
+    {
+        if (!\class_exists(\FFI::class)) {
+            return null;
+        }
+
+        try {
+            $libc = \FFI::cdef(
+                'int sysctl(int *, unsigned int, void *, size_t *, void *, size_t);'
+            );
+            $mib = $libc->new('int[3]');
+            $mib[0] = 1;  // CTL_KERN
+            $mib[1] = 49; // KERN_PROCARGS2
+            $mib[2] = $pid;
+            $size = $libc->new('size_t');
+            if ($libc->sysctl($mib, 3, null, \FFI::addr($size), null, 0) !== 0) {
+                return null;
+            }
+            $length = (int)$size->cdata;
+            if ($length < 8 || $length > 1_048_576) {
+                return null;
+            }
+
+            $buffer = $libc->new('char[' . $length . ']');
+            if ($libc->sysctl($mib, 3, $buffer, \FFI::addr($size), null, 0) !== 0) {
+                return null;
+            }
+            $actualLength = (int)$size->cdata;
+            if ($actualLength < 8 || $actualLength > $length) {
+                return null;
+            }
+            $raw = \FFI::string($buffer, $actualLength);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $header = \unpack('largc', \substr($raw, 0, 4));
+        $argc = (int)($header['argc'] ?? 0);
+        if ($argc < 1 || $argc > 16_384) {
+            return null;
+        }
+
+        $offset = 4;
+        $executableEnd = \strpos($raw, "\0", $offset);
+        if ($executableEnd === false) {
+            return null;
+        }
+        $offset = $executableEnd + 1;
+        while ($offset < $actualLength && $raw[$offset] === "\0") {
+            $offset++;
+        }
+
+        $arguments = [];
+        for ($index = 0; $index < $argc; $index++) {
+            if ($offset >= $actualLength) {
+                return null;
+            }
+            $argumentEnd = \strpos($raw, "\0", $offset);
+            if ($argumentEnd === false) {
+                return null;
+            }
+            $arguments[] = \substr($raw, $offset, $argumentEnd - $offset);
+            $offset = $argumentEnd + 1;
+        }
+
+        return \count($arguments) === $argc ? $arguments : null;
+    }
+
+    /**
      * 身份安全地结束冻结进程 lease。
      *
-     * 只有 fresh probe 得到 running + identity_match 才会发送终止信号。
+     * 只有 fresh probe 得到 running + identity_match 才进入既有终止路径。
+     * POSIX command-style required argv 路径当前没有稳定进程句柄，必须保留
+     * lease 并 fail closed；Windows 与无 required argv 的旧调用保持原语义。
      * identity_mismatch 表示原 lease 已不再占有该 PID，视为 released，但绝不
      * 对当前 PID 发信号；unknown 始终 fail closed。
      *
@@ -2347,6 +2718,7 @@ class Processer
      *     released: bool,
      *     initial_reason?: string
      * }
+     * @param array<string,string> $requiredLiveArguments
      */
     public static function terminateManagedProcessLease(
         int $pid,
@@ -2354,7 +2726,7 @@ class Processer
         string $expectedLaunchId = '',
         ?string $expectedPname = null,
         bool $tree = true,
-        array $requiredLiveArguments = [],
+        array $requiredLiveArguments = []
     ): array {
         $probe = self::probeManagedProcessIdentity(
             $pid,
@@ -2362,7 +2734,7 @@ class Processer
             $expectedLaunchId,
             $expectedPname,
             true,
-            $requiredLiveArguments,
+            $requiredLiveArguments
         );
         $state = (string) ($probe['state'] ?? self::PROCESS_STATE_UNKNOWN);
         if ($state === self::PROCESS_STATE_EXITED
@@ -2375,6 +2747,18 @@ class Processer
             return $probe;
         }
         if ($state !== self::PROCESS_STATE_RUNNING) {
+            $probe['terminated'] = false;
+            $probe['released'] = false;
+            return $probe;
+        }
+
+        if (!IS_WIN && $requiredLiveArguments !== []) {
+            // POSIX exposes no portable stable process handle here. Even after
+            // an exact argv probe, exit -> PID reuse can occur before a raw
+            // PID signal. Preserve the lease and let the child handoff gate or
+            // natural lifecycle stop it instead.
+            $probe['state'] = self::PROCESS_STATE_UNKNOWN;
+            $probe['reason'] = 'termination_unavailable_without_stable_handle';
             $probe['terminated'] = false;
             $probe['released'] = false;
             return $probe;
@@ -2394,7 +2778,7 @@ class Processer
                 $expectedLaunchId,
                 $expectedPname,
                 true,
-                $requiredLiveArguments,
+                $requiredLiveArguments
             );
             $verifiedState = (string) ($verified['state'] ?? self::PROCESS_STATE_UNKNOWN);
             if ($verifiedState === self::PROCESS_STATE_EXITED

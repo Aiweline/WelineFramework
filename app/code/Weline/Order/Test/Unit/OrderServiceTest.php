@@ -11,9 +11,16 @@ declare(strict_types=1);
 
 namespace Weline\Order\Test\Unit;
 
+use PDO;
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\DbManager\ConfigProvider;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Service\OrderFacadeConflictException;
 use Weline\Order\Service\OrderService;
+use Weline\Order\Service\OrderStateMachine;
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderItem;
 
@@ -145,5 +152,69 @@ class OrderServiceTest extends TestCase
         $this->assertEquals(15.00, $order->getData(Order::schema_fields_TAX_AMOUNT));
         $this->assertEquals(5.00, $order->getData(Order::schema_fields_DISCOUNT_AMOUNT));
     }
-}
 
+    public function testTopologySnapshotFieldsCannotBeMutated(): void
+    {
+        self::assertContains('sqlite', PDO::getAvailableDrivers());
+        $path = sys_get_temp_dir() . '/weline_order_service_' . bin2hex(random_bytes(8)) . '.sqlite';
+        $connection = ConnectionFactory::getInstance(new ConfigProvider([
+            'type' => 'sqlite',
+            'database' => '',
+            'path' => $path,
+            'persistent' => false,
+        ]));
+        $connector = $connection->getConnector();
+        try {
+            $connector->query(
+                'CREATE TABLE weline_order ('
+                . 'order_id INTEGER PRIMARY KEY AUTOINCREMENT, '
+                . 'order_uuid VARCHAR(36), checkout_group_uuid VARCHAR(36), '
+                . 'scope_snapshot_json TEXT)'
+            )->fetch();
+            $connector->query(
+                "INSERT INTO weline_order(order_uuid,checkout_group_uuid,scope_snapshot_json) "
+                . "VALUES('order-uuid','group-uuid','{}')"
+            )->fetch();
+            $model = new Order();
+            $model->setConnection($connection);
+            $model->__init();
+            $service = new OrderService(
+                ObjectManager::getInstance(ObjectManager::class),
+                ObjectManager::getInstance(OrderStateMachine::class),
+                ObjectManager::getInstance(EventsManager::class),
+                $model,
+            );
+
+            try {
+                $service->updateOrder(1, [
+                    Order::schema_fields_MONEY_SNAPSHOT_JSON => '{"grand_total_minor":1}',
+                ]);
+                self::fail('new-topology snapshot mutation must fail');
+            } catch (OrderFacadeConflictException $exception) {
+                self::assertSame(OrderService::ERROR_TOPOLOGY_IMMUTABLE, $exception->errorCode());
+                self::assertSame(
+                    Order::schema_fields_MONEY_SNAPSHOT_JSON,
+                    $exception->context()['field'] ?? null,
+                );
+            }
+            $row = $connector->query(
+                'SELECT scope_snapshot_json FROM weline_order WHERE order_id=1'
+            )->fetch();
+            self::assertSame('{}', $row[0]['scope_snapshot_json'] ?? null);
+        } finally {
+            $this->cleanup($path, $connection, $connector);
+        }
+    }
+
+    private function cleanup(
+        string $path,
+        ConnectionFactory $connection,
+        ConnectorInterface $connector,
+    ): void {
+        $connector->close();
+        $connection->close();
+        if (is_file($path)) {
+            unlink($path);
+        }
+    }
+}

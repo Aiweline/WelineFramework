@@ -595,12 +595,19 @@ class YourTask implements CronTaskInterface
 // 6. 多数据库配置
 // app/code/Weline/YourModule/etc/db.php
 return [
-    'default' => 'sqlite',
+    'default' => 'pgsql',
     'master' => [
-        'type' => 'sqlite',
-        'path' => __DIR__ . '/db.sqlite',
+        'type' => 'pgsql',
+        'hostname' => '127.0.0.1',
+        'hostport' => '5432',
+        'database' => 'weline',
+        'username' => 'weline',
+        'password' => 'weline',
+        'prefix' => 'w_',
+        'charset' => 'utf8',
     ],
 ];
+// SQLite 只能显式用于 sandbox_db 或一次性隔离开发/可移植性回归。
 
 // 7. 模型定义
 namespace Weline\YourModule\Model;
@@ -647,7 +654,7 @@ $model->where([
 // 测试类
 namespace Weline\YourModule\Test\Unit;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class YourTest extends TestCore
 {
@@ -1264,4 +1271,3 @@ $mockModel->method('fetch')->willReturn($userData);
 ```
 
 通过以上高度抽象设计原则，我将为您提供符合框架开发规范的专业、可扩展、可维护的WelineFramework开发建议和解决方案。
-

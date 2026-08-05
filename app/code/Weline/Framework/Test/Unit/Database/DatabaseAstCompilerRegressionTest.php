@@ -270,6 +270,115 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
         $this->assertCount(count($rows) * 3, $compiled->bindings);
     }
 
+    public function testSqliteCompilerExecutesGeneratedIdentityBatchAsSingleStatement(): void
+    {
+        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('pdo_sqlite is not enabled.');
+        }
+
+        $query = new CompilerTestQuery();
+        $query->table('website_language')->insert([
+            ['website_id' => 7, 'language_code' => 'en_US'],
+            ['website_id' => 7, 'language_code' => 'zh_Hans_CN'],
+        ]);
+        $query->rebuildAst('insert');
+
+        $compiled = (new SqliteCompiler())->compile($query->getAst(), [
+            'identity_field' => 'website_language_id',
+        ]);
+
+        self::assertSame(1, substr_count(strtoupper($compiled->sql), 'INSERT INTO'));
+        self::assertStringNotContainsString(';', $compiled->sql);
+        self::assertStringContainsString('INSERT INTO "website_language"', $compiled->sql);
+        self::assertStringNotContainsString('"default.website_language"', $compiled->sql);
+        self::assertStringContainsString('RETURNING "website_language_id"', $compiled->sql);
+        self::assertCount(4, $compiled->bindings);
+        foreach (array_keys($compiled->bindings) as $placeholder) {
+            self::assertStringContainsString($placeholder, $compiled->sql);
+        }
+
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec(
+            'CREATE TABLE "website_language" ('
+            . 'website_language_id INTEGER PRIMARY KEY AUTOINCREMENT, '
+            . 'website_id INTEGER NOT NULL, '
+            . 'language_code TEXT NOT NULL)'
+        );
+        $statement = $pdo->prepare($compiled->sql);
+        self::assertInstanceOf(\PDOStatement::class, $statement);
+        self::assertTrue($statement->execute($compiled->bindings));
+        self::assertSame([1, 2], array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN)));
+        self::assertSame(
+            ['en_US', 'zh_Hans_CN'],
+            $pdo->query('SELECT language_code FROM "website_language" ORDER BY website_language_id')->fetchAll(PDO::FETCH_COLUMN),
+        );
+    }
+
+    public function testSqliteCompilerRejectsMixedGeneratedAndExplicitIdentityBatch(): void
+    {
+        $query = new CompilerTestQuery();
+        $query->table('website_language')->insert([
+            ['website_language_id' => 11, 'website_id' => 7, 'language_code' => 'en_US'],
+            ['website_id' => 7, 'language_code' => 'zh_Hans_CN'],
+        ]);
+        $query->rebuildAst('insert');
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('插入的数据记录中不允许同时存在有主键和无主键的情况！');
+
+        (new SqliteCompiler())->compile($query->getAst(), [
+            'identity_field' => 'website_language_id',
+        ]);
+    }
+
+    public function testSqliteTruncateConversionDropsLogicalDatabaseQualifier(): void
+    {
+        $converted = SqliteAdapterTestQuery::convertMySQLToSQLite(
+            'TRUNCATE TABLE "weline"."w_weline_module"',
+        );
+
+        self::assertStringContainsString('DELETE FROM "w_weline_module"', $converted);
+        self::assertStringNotContainsString('"weline".', $converted);
+    }
+
+    public function testSqliteRawQueriesExecuteFormattedLogicalDatabaseTablesAgainstOnePhysicalFile(): void
+    {
+        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+            $this->markTestSkipped('pdo_sqlite is not enabled.');
+        }
+
+        $connector = new SqliteConnector(new ConfigProvider([
+            'type' => 'sqlite',
+            'path' => ':memory:',
+            'database' => 'weline',
+            'prefix' => 'w_',
+        ]));
+        $table = $connector->formatTableName('qualified_probe');
+
+        self::assertStringContainsString('"weline".', $table);
+        $connector->query("CREATE TABLE {$table} (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")->fetch();
+        $connector->query("INSERT INTO {$table} (name) VALUES ('ok')")->fetch();
+        self::assertSame(
+            [['name' => 'ok']],
+            $connector->query("SELECT name FROM {$table} ORDER BY id DESC LIMIT 1")->fetch(),
+        );
+        $connector->query("UPDATE {$table} SET name = 'updated' WHERE id = 1")->fetch();
+        self::assertSame(
+            [['name' => 'updated']],
+            $connector->query("SELECT name FROM {$table} WHERE id = 1")->fetch(),
+        );
+        $connector->query("ALTER TABLE {$table} ADD COLUMN rollback_value TEXT")->fetch();
+        self::assertTrue($connector->hasField('qualified_probe', 'rollback_value'));
+        $connector->query($connector->buildAlterDropColumnSql('qualified_probe', 'rollback_value'))->fetch();
+        self::assertFalse($connector->hasField('qualified_probe', 'rollback_value'));
+        self::assertSame(
+            [['name' => 'updated']],
+            $connector->query("SELECT name FROM {$table} WHERE id = 1")->fetch(),
+        );
+        $connector->close();
+    }
+
     public function testPgsqlCompilerQuotesGroupByFieldsForAggregateSelects(): void
     {
         $query = new CompilerTestQuery();

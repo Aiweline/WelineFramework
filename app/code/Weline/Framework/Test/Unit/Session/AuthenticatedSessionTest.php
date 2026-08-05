@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Session\Test;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Session\Auth\AreaConfig;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSession;
@@ -46,6 +48,10 @@ class AuthenticatedSessionTest extends TestCase
     protected function tearDown(): void
     {
         $this->session->destroy();
+        WelineEnv::getInstance()->reset();
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
     }
 
     public function testImplementsInterface(): void
@@ -149,6 +155,23 @@ class AuthenticatedSessionTest extends TestCase
         $this->authSession->reset();
         
         $this->assertFalse($this->session->isStarted());
+    }
+
+    public function testExistingSessionUsesAuthorityQualifiedCookieName(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        Context::current()->set('input.server.HTTP_HOST', '127.0.0.1:9502');
+        Context::current()->set('input.server.SERVER_PORT', 9502);
+        Context::current()->set('input.host', '127.0.0.1');
+        Context::current()->set('input.cookie', ['WELINE_SESSID_9502' => str_repeat('a', 32)]);
+        Context::current()->set('input.server.HTTP_COOKIE', 'WELINE_SESSID_9502=' . str_repeat('a', 32));
+        $method = new \ReflectionMethod($this->authSession, 'canReadExistingSession');
+
+        self::assertTrue($method->invoke($this->authSession));
+
+        Context::current()->set('input.cookie', ['WELINE_SESSID' => str_repeat('b', 32)]);
+        Context::current()->set('input.server.HTTP_COOKIE', 'WELINE_SESSID=' . str_repeat('b', 32));
+        self::assertFalse($method->invoke($this->authSession));
     }
 
     private function createMockUser(int $id, string $username): AuthenticableInterface

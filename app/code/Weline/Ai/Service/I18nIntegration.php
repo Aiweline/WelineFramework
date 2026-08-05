@@ -151,26 +151,55 @@ class I18nIntegration
      */
     public function normalizeLocaleCode(string $localeCode): string
     {
-        // 将语言代码标准化为I18n模块支持的格式
-        $localeCode = strtolower($localeCode);
-        
-        // 常见的语言代码映射
+        $localeCode = \trim($localeCode);
+        if ($localeCode === '') {
+            return $localeCode;
+        }
+
+        // Catalog identity wins: Weline_I18n stores underscore codes such as
+        // en_US / zh_Hans_CN / bn_IN. Do not rewrite a supported code into a
+        // hyphen form the catalog rejects (that silently falls back to Chinese).
+        if ($this->isLocaleSupported($localeCode)) {
+            return $localeCode;
+        }
+
+        $underscore = \str_replace('-', '_', $localeCode);
+        if ($underscore !== $localeCode && $this->isLocaleSupported($underscore)) {
+            return $underscore;
+        }
+
+        $lookup = \strtolower($underscore);
+        // Common aliases → catalog underscore codes.
         $mapping = [
-            'zh' => 'zh-CN',
-            'zh_cn' => 'zh-CN',
-            'zh-cn' => 'zh-CN',
-            'en' => 'en-US',
-            'en_us' => 'en-US',
-            'en-us' => 'en-US',
-            'ja' => 'ja-JP',
-            'ja_jp' => 'ja-JP',
-            'ja-jp' => 'ja-JP',
-            'ko' => 'ko-KR',
-            'ko_kr' => 'ko-KR',
-            'ko-kr' => 'ko-KR'
+            'zh' => 'zh_Hans_CN',
+            'zh_cn' => 'zh_Hans_CN',
+            'zh_hans_cn' => 'zh_Hans_CN',
+            'zh_hans' => 'zh_Hans_CN',
+            'en' => 'en_US',
+            'en_us' => 'en_US',
+            'ja' => 'ja_JP',
+            'ja_jp' => 'ja_JP',
+            'ko' => 'ko_KR',
+            'ko_kr' => 'ko_KR',
+            'bn' => 'bn_IN',
+            'bn_in' => 'bn_IN',
+            'bn_bd' => 'bn_BD',
         ];
-        
-        return $mapping[$localeCode] ?? $localeCode;
+        if (isset($mapping[$lookup]) && $this->isLocaleSupported($mapping[$lookup])) {
+            return $mapping[$lookup];
+        }
+        if (isset($mapping[$lookup])) {
+            return $mapping[$lookup];
+        }
+
+        // Case-insensitive match against the live catalog (bn_in → bn_IN).
+        foreach ($this->getLocaleCodeList() as $code) {
+            if (\strcasecmp((string)$code, $underscore) === 0) {
+                return (string)$code;
+            }
+        }
+
+        return $underscore;
     }
 
     /**
@@ -180,22 +209,20 @@ class I18nIntegration
      * @param string $fallback
      * @return string
      */
-    public function validateAndGetLocale(string $localeCode, string $fallback = 'zh-CN'): string
+    public function validateAndGetLocale(string $localeCode, string $fallback = 'zh_Hans_CN'): string
     {
-        // 标准化语言代码
         $normalizedLocale = $this->normalizeLocaleCode($localeCode);
-        
-        // 验证是否支持
         if ($this->isLocaleSupported($normalizedLocale)) {
             return $normalizedLocale;
         }
-        
-        // 尝试回退语言
-        if ($this->isLocaleSupported($fallback)) {
-            return $fallback;
+
+        // Prefer keeping the caller's language family over a silent Chinese
+        // fallback — otherwise en_US/bn_IN machine-translate into 中文.
+        $fallbackNormalized = $this->normalizeLocaleCode($fallback);
+        if ($this->isLocaleSupported($fallbackNormalized)) {
+            return $fallbackNormalized;
         }
-        
-        // 最后回退到默认语言
+
         return $this->getDefaultLocale();
     }
 }

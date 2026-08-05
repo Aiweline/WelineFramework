@@ -94,7 +94,7 @@ class OrderStatus extends AbstractModel
 
         // 使用翻译系统，翻译 key 为 order_status_{code}
         $translationKey = 'order_status_' . $code;
-        $translated = __($translationKey);
+        $translated = \__($translationKey);
 
         // 如果翻译不存在，返回默认名称
         if ($translated === $translationKey) {

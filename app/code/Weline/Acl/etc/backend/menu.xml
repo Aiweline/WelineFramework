@@ -13,9 +13,17 @@
              icon="mdi mdi-account-group-outline"
              order="10"/>
         
-        <menu source="Weline_Acl::acl_source" name="acl_source" title="权限资源" action="acl/backend/acl"
-             icon="mdi mdi-format-list-checks"
+        <menu source="Weline_Acl::acl_source" name="acl_source" title="模块资源" action="acl/backend/acl"
+             icon="mdi mdi-puzzle-outline"
              order="20"/>
+
+        <menu source="Weline_Acl::acl_source_by_tag" name="acl_source_by_tag" title="标签资源" action="acl/backend/acl/by-tag"
+             icon="mdi mdi-tag-search-outline"
+             order="25"/>
+
+        <menu source="Weline_Acl::acl_tag" name="acl_tag" title="权限标签" action="acl/backend/acl/tag"
+             icon="mdi mdi-tag-multiple-outline"
+             order="30"/>
     </menu>
     
     <!-- 安全设置 - 归入系统管理 > 用户与权限 -->

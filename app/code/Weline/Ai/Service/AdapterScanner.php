@@ -202,9 +202,9 @@ class AdapterScanner
             w_log_error("文件不存在: {$adapterFile}");
             return null;
         }
-        
-        require_once $adapterFile;
-        
+
+        $this->requireAdapterFileOnce($adapterFile);
+
         // 从文件路径推断类名
         $className = $this->getClassNameFromFile($adapterFile, $moduleName, $module);
         
@@ -226,6 +226,55 @@ class AdapterScanner
         }
 
         return $instance;
+    }
+
+    /**
+     * Require an adapter PHP file once, normalizing realpath so macOS
+     * case-insensitive FS does not double-declare the same class via
+     * Extends/ vs extends/ path spellings.
+     */
+    private function requireAdapterFileOnce(string $adapterFile): void
+    {
+        static $loadedByInode = [];
+
+        $resolved = \realpath($adapterFile);
+        if (\is_string($resolved) && $resolved !== '') {
+            $adapterFile = $resolved;
+        }
+
+        $inodeKey = '';
+        if (\is_file($adapterFile)) {
+            $stat = @\stat($adapterFile);
+            if (\is_array($stat) && isset($stat['dev'], $stat['ino'])) {
+                $inodeKey = (string)$stat['dev'] . ':' . (string)$stat['ino'];
+            }
+        }
+        if ($inodeKey === '') {
+            $inodeKey = \strtolower($adapterFile);
+        }
+        if (isset($loadedByInode[$inodeKey])) {
+            return;
+        }
+
+        foreach (\get_included_files() as $included) {
+            $includedPath = \is_string($included) ? $included : '';
+            if ($includedPath === '' || !\is_file($includedPath)) {
+                continue;
+            }
+            $includedStat = @\stat($includedPath);
+            if (!\is_array($includedStat) || !isset($includedStat['dev'], $includedStat['ino'])) {
+                continue;
+            }
+            $includedKey = (string)$includedStat['dev'] . ':' . (string)$includedStat['ino'];
+            if ($includedKey === $inodeKey) {
+                $loadedByInode[$inodeKey] = true;
+
+                return;
+            }
+        }
+
+        require $adapterFile;
+        $loadedByInode[$inodeKey] = true;
     }
 
     /**
@@ -497,7 +546,7 @@ class AdapterScanner
             // 将相对路径转换为绝对路径
             $adapterFile = BP . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
             if (file_exists($adapterFile)) {
-                require_once $adapterFile;
+                $this->requireAdapterFileOnce($adapterFile);
             } else {
                 w_log_error("适配器文件不存在: {$adapterFile}，尝试从代码中加载适配器: {$code}");
                 return $this->loadAdapterFromCode($code);
@@ -506,7 +555,7 @@ class AdapterScanner
             // 如果没有保存文件路径，则根据类名查找（向后兼容）
             $adapterFile = $this->getAdapterFileFromClassName($className);
             if ($adapterFile && file_exists($adapterFile)) {
-                require_once $adapterFile;
+                $this->requireAdapterFileOnce($adapterFile);
             }
         }
         

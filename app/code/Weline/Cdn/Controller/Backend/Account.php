@@ -24,7 +24,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Cdn
  */
-#[AclAttribute('Weline_Cdn::cdn_account_manager', 'CDN账户管理', 'mdi-account-circle', 'CDN账户管理', '')]
+#[AclAttribute('Weline_Cdn::cdn_account_manager', 'CDN账户管理', 'mdi-account-circle', 'CDN账户管理', 'Weline_Cdn::cdn_manager')]
 class Account extends BackendController
 {
     /**
@@ -459,4 +459,3 @@ class Account extends BackendController
         return (string)(($envConfig['wls'] ?? [])['origin_token'] ?? '');
     }
 }
-

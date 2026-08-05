@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class TraitTemplateTest extends TestCore
 {

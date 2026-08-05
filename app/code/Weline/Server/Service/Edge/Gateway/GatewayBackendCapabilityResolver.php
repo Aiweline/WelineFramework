@@ -12,6 +12,8 @@ use Weline\Server\Session\Client\SessionClient;
  */
 final class GatewayBackendCapabilityResolver
 {
+    public const LAUNCH_SNAPSHOT_SCHEMA = 'wls-backend-capability-launch/1';
+
     /**
      * @param (\Closure(): array<string,mixed>)|null $configProvider
      * @param (\Closure(array<string,mixed>): bool)|null $healthProbe
@@ -162,35 +164,91 @@ final class GatewayBackendCapabilityResolver
      */
     public function instanceIdentityState(array $capability): array
     {
-        $mode = (string)($capability['mode'] ?? '');
-        if (!\in_array($mode, ['isolated', 'stateless', 'shared_session'], true)) {
-            throw new \InvalidArgumentException(
-                'Gateway backend capability instance state is invalid.'
-            );
-        }
+        $this->assertCapabilityObservation($capability);
+        $mode = (string)$capability['mode'];
         if ($mode === 'isolated') {
             return ['session_capability' => 'isolated'];
         }
-        $evidence = \is_array($capability['evidence'] ?? null)
-            ? $capability['evidence']
-            : [];
-        $digest = (string)($capability['evidence_digest'] ?? '');
-        if ($evidence === []
-            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
-            || !\hash_equals(
-                $digest,
-                \hash('sha256', GatewayClient::canonicalJson($evidence)),
-            )
-        ) {
-            throw new \InvalidArgumentException(
-                'Gateway backend capability instance evidence is invalid.'
-            );
-        }
+        $evidence = $capability['evidence'];
+        $digest = (string)$capability['evidence_digest'];
         return [
             'session_capability' => $mode,
             'session_capability_evidence' => $evidence,
             'session_capability_evidence_digest' => $digest,
         ];
+    }
+
+    /**
+     * Freeze the exact non-secret capability fact that every backend child of
+     * this instance generation must attest. Runtime probes performed later by
+     * the registration agent must never silently replace this launch fact.
+     *
+     * @param array<string,mixed> $capability
+     * @return array<string,mixed>
+     */
+    public function createLaunchSnapshot(
+        array $capability,
+        int $instanceGeneration,
+        string $launchId,
+    ): array {
+        $this->assertCapabilityObservation($capability);
+        $launchId = \strtolower(\trim($launchId));
+        if ($instanceGeneration < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway backend capability launch binding is invalid.'
+            );
+        }
+
+        return [
+            'schema' => self::LAUNCH_SNAPSHOT_SCHEMA,
+            'instance_generation' => $instanceGeneration,
+            'launch_id' => $launchId,
+            'mode' => (string)$capability['mode'],
+            'evidence' => $capability['evidence'],
+            'evidence_digest' => (string)$capability['evidence_digest'],
+        ];
+    }
+
+    /**
+     * Read only the generation-bound launch snapshot persisted before Master
+     * spawned its children. This intentionally performs no live capability
+     * probe: a live probe could create a claim no running child can attest.
+     *
+     * @param array<string,mixed> $endpoint
+     * @return array<string,mixed>
+     */
+    public function capabilityFromLaunchSnapshot(array $endpoint): array
+    {
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $snapshot = \is_array($gateway['backend_capability_launch'] ?? null)
+            ? $gateway['backend_capability_launch']
+            : [];
+        $instanceGeneration = (int)($gateway['instance_generation'] ?? 0);
+        $launchId = \strtolower(\trim((string)($gateway['launch_id'] ?? '')));
+        if (!\hash_equals(
+                self::LAUNCH_SNAPSHOT_SCHEMA,
+                (string)($snapshot['schema'] ?? ''),
+            )
+            || $instanceGeneration < 1
+            || (int)($snapshot['instance_generation'] ?? 0) !== $instanceGeneration
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+            || !\hash_equals($launchId, (string)($snapshot['launch_id'] ?? ''))
+        ) {
+            throw new \RuntimeException(
+                'Gateway backend capability launch snapshot is missing or stale; restart the instance.'
+            );
+        }
+        $capability = [
+            'mode' => $snapshot['mode'] ?? null,
+            'evidence' => $snapshot['evidence'] ?? null,
+            'evidence_digest' => $snapshot['evidence_digest'] ?? null,
+        ];
+        $this->assertCapabilityObservation($capability);
+        return $capability;
     }
 
     /**
@@ -267,5 +325,27 @@ final class GatewayBackendCapabilityResolver
                 GatewayClient::canonicalJson($evidence),
             ),
         ];
+    }
+
+    /** @param array<string,mixed> $capability */
+    private function assertCapabilityObservation(array $capability): void
+    {
+        $mode = (string)($capability['mode'] ?? '');
+        $evidence = \is_array($capability['evidence'] ?? null)
+            ? $capability['evidence']
+            : [];
+        $digest = \strtolower(\trim((string)($capability['evidence_digest'] ?? '')));
+        if (!\in_array($mode, ['isolated', 'stateless', 'shared_session'], true)
+            || $evidence === []
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || !\hash_equals(
+                $digest,
+                \hash('sha256', GatewayClient::canonicalJson($evidence)),
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway backend capability observation is invalid.'
+            );
+        }
     }
 }

@@ -140,7 +140,7 @@ $this->assign('title', $title);
                     <div class="category-layout__overlay" id="category-filter-overlay" data-overlay hidden></div>
 
                     <!-- 分类内容区域 -->
-                    <section class="category-layout__content">
+                    <section class="category-layout__content" weline-code="theme.category.section_1">
                         <w:slot id="category-products"
                                 name="分类产品区域"
                                 accept="layout-category-products,product-grid,product-list-view,category-children"
@@ -221,7 +221,7 @@ $this->assign('title', $title);
                     multiple="true"
                     position="content"
                     wrapper="section"
-                    class="category-layout__recommendations">
+                    class="category-layout__recommendations" weline-code="theme.category.category_recommendations">
                 <w:hook>Weline_Theme::frontend::layouts::category::recommendations</w:hook>
             </w:slot>
 

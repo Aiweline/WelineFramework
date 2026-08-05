@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server\Gateway;
 
 use Weline\Framework\Console\CommandHelper;
-use Weline\Framework\App\Env;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedText;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedTreeWalker;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
+use Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
-use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 
 final class Promote extends AbstractGatewayCommand
@@ -20,7 +22,8 @@ final class Promote extends AbstractGatewayCommand
     public function execute(array $args = [], array $data = []): int
     {
         $json = $this->isJson($args);
-        if (!isset($args['confirm'])) {
+        $recoverOnly = isset($args['recover']);
+        if (!$recoverOnly && !isset($args['confirm'])) {
             return $this->failure(
                 __('显式提升必须携带 --confirm，且只能由当前 80/443 的受管 owner 执行。'),
                 $json,
@@ -28,7 +31,7 @@ final class Promote extends AbstractGatewayCommand
             );
         }
         $package = \trim((string)($args['package'] ?? ''));
-        if ($package === '') {
+        if (!$recoverOnly && $package === '') {
             return $this->failure(
                 __('显式提升必须通过 --package 提供签名、自包含的 WLS 2.0 宿主包。'),
                 $json,
@@ -36,6 +39,52 @@ final class Promote extends AbstractGatewayCommand
             );
         }
         $profile = \strtolower(\trim((string)($args['profile'] ?? 'default')));
+        try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $this->promotionLockFile(),
+                $recoverOnly
+                    ? fn (): int => $this->executeRecoveryOnlyLocked($json)
+                    : fn (): int => $this->executePromotionLocked(
+                        $json,
+                        $package,
+                        $profile,
+                    ),
+            );
+        } catch (\Throwable $throwable) {
+            return $this->failure(
+                __('提升事务无法安全启动：%{1}', [$throwable->getMessage()]),
+                $json,
+                'promotion_transaction_unavailable',
+            );
+        }
+    }
+
+    private function executeRecoveryOnlyLocked(bool $json): int
+    {
+        $recovered = $this->recoverIncompletePromotion(new GatewayHostManager());
+        if (!$json) {
+            if ($recovered === []) {
+                $this->printer->success(__('没有未完成的 WLS Gateway 提升事务。'));
+            } else {
+                $this->printer->success(__('WLS Gateway 提升事务恢复完成。'));
+            }
+        }
+        $this->output(['recovery' => $recovered], $json);
+        return 0;
+    }
+
+    private function executePromotionLocked(
+        bool $json,
+        string $package,
+        string $profile,
+    ): int {
+        $gateway = new GatewayHostManager();
+        $recovered = $this->recoverIncompletePromotion($gateway);
+        if ($recovered !== []) {
+            if (!$json) {
+                $this->printer->warning(__('已先恢复上次未完成的提升事务。'));
+            }
+        }
         $legacy = ManagedNginxService::fromEnv();
         $snapshot = $legacy->doctorSnapshot();
         $paths = new GatewayPaths();
@@ -57,7 +106,6 @@ final class Promote extends AbstractGatewayCommand
         $serverNames = (array)($snapshot['owner_server_names'] ?? []);
         $legacyRuntimeRoot = $legacy->paths()->runtimeRoot();
         $legacyRuntimeOwnership = $this->projectRuntimeOwnership($legacyRuntimeRoot);
-        $gateway = new GatewayHostManager();
         $builder = new GatewayRegistrationBuilder();
         $projectRoot = \realpath((string)BP);
         if (!\is_string($projectRoot) || $builder->desiredDomains() === []) {
@@ -82,13 +130,28 @@ final class Promote extends AbstractGatewayCommand
         $staged = null;
         $activated = false;
         $legacyStopped = false;
-        $agentAttached = false;
-        $savedEdgeSnapshot = null;
         $downtimeStarted = 0.0;
+        $journal = null;
         try {
             // Package, Broker, locked runtimes, system definition and project
             // desired state are validated while the legacy owner keeps serving.
             $staged = $gateway->stageLegacyPromotion($package, $profile);
+            $journal = $this->beginPromotionJournal(
+                $staged,
+                $owner,
+                $projectRoot,
+                $upstreamHost,
+                $upstreamPort,
+                $serverNames,
+                $legacyRuntimeRoot,
+                $legacyRuntimeOwnership,
+                $legacyPublicBaseline,
+            );
+            $journal = $this->advancePromotionJournal(
+                $journal,
+                'LEGACY_STOPPING',
+                ['legacy_stop_started' => true],
+            );
             $stopped = $legacy->stopForInstance($owner);
             if (!($stopped['ok'] ?? false)) {
                 throw new \RuntimeException(
@@ -98,27 +161,55 @@ final class Promote extends AbstractGatewayCommand
             }
             $legacyStopped = true;
             $downtimeStarted = \microtime(true);
+            $journal = $this->advancePromotionJournal($journal, 'LEGACY_STOPPED');
+            $journal = $this->advancePromotionJournal(
+                $journal,
+                'GATEWAY_ACTIVATING',
+                ['gateway_activation_started' => true],
+            );
             $gateway->activateLegacyPromotion($staged);
             $activated = true;
+            $journal = $this->advancePromotionJournal($journal, 'GATEWAY_ACTIVE');
             $gateway->enrollCurrentProjectForPromotion($builder, $projectRoot);
+            $journal = $this->advancePromotionJournal($journal, 'PROJECT_ENROLLED');
             // An administrator promotion may encounter a root-owned runtime
             // directory left by WLS 1.x. Repair it before the project Master
             // must create the authenticated join-backend capability token.
             ProtocolEdgeRuntime::ensureTokenFile($owner);
-            $savedEdgeSnapshot = $this->persistPromotedInstanceEdgeMode($owner);
+            $this->persistPromotedInstanceEdgeMode(
+                $owner,
+                function (array $snapshot) use (&$journal): void {
+                    $journal = $this->advancePromotionJournal(
+                        $journal,
+                        'EDGE_MODE_UPDATING',
+                        ['saved_edge_snapshot' => $snapshot],
+                    );
+                },
+            );
+            $journal = $this->advancePromotionJournal($journal, 'EDGE_MODE_UPDATED');
             // Mark the attempt before IPC so a lost enable acknowledgement is
             // still compensated by the idempotent Master-side disable action.
-            $agentAttached = true;
+            $journal = $this->advancePromotionJournal(
+                $journal,
+                'AGENT_ATTACHING',
+                ['agent_attach_started' => true],
+            );
             $agent = $this->setProjectGatewayAgentEnabled($owner, true);
+            $transactionId = (string)(
+                $agent['runtime_endpoint']['transaction_id'] ?? ''
+            );
+            $journal = $this->advancePromotionJournal(
+                $journal,
+                'AGENT_ATTACHED',
+                ['agent_transaction_id' => $transactionId],
+            );
             $registration = $gateway->awaitPromotionProjectActivation(
                 $owner,
                 $projectRoot,
             );
-            $transactionId = (string)(
-                $agent['runtime_endpoint']['transaction_id'] ?? ''
-            );
+            $journal = $this->advancePromotionJournal($journal, 'PROJECT_ACTIVE');
             $commit = $this->commitProjectGatewayAgentPromotion($owner, $transactionId);
-            $agentAttached = false;
+            $journal = $this->advancePromotionJournal($journal, 'COMMITTED');
             $registration['agent'] = $agent;
             $registration['agent_commit'] = $commit;
             $maintenanceWindow = \microtime(true) - $downtimeStarted;
@@ -132,46 +223,92 @@ final class Promote extends AbstractGatewayCommand
                 'owner_instance' => $owner,
                 'maintenance_window_seconds' => \round($maintenanceWindow, 3),
                 'registration' => $registration,
+                'recovered_previous_promotion' => $recovered,
+                'promotion_transaction_id' => (string)$journal['transaction_id'],
             ], $json);
             return 0;
         } catch (\Throwable $throwable) {
+            if (\is_array($journal)) {
+                try {
+                    $rollForward = $this->rollForwardCommittedPromotion($journal);
+                    if ($rollForward !== null) {
+                        if (!$json) {
+                            $this->printer->success(__(
+                                'Gateway Agent 已提交；已从丢失的本地日志确认中前滚恢复。'
+                            ));
+                        }
+                        $this->output([
+                            'promotion_transaction_id' => (string)$journal['transaction_id'],
+                            'recovery' => $rollForward,
+                        ], $json);
+                        return 0;
+                    }
+                } catch (\Throwable $reconciliationError) {
+                    return $this->failure(
+                        __('提升提交状态无法安全对账：%{1}', [
+                            $reconciliationError->getMessage(),
+                        ]),
+                        $json,
+                        'promotion_recovery_blocked',
+                    );
+                }
+            }
             $details = [
                 'legacy_stopped' => $legacyStopped,
                 'gateway_activated' => $activated,
                 'legacy_rollback' => 'not_required',
             ];
-            if ($agentAttached) {
+            if (\is_array($journal)) {
                 try {
-                    $this->setProjectGatewayAgentEnabled($owner, false);
-                    $agentAttached = false;
-                    $details['gateway_agent_cleanup'] = 'detached';
-                } catch (\Throwable $agentCleanup) {
-                    $details['gateway_agent_cleanup'] = 'failed';
-                    $details['gateway_agent_cleanup_error'] = $agentCleanup->getMessage();
-                }
-            }
-            if (\is_array($staged)) {
-                try {
-                    $gateway->abortLegacyPromotion($staged, $activated);
-                } catch (\Throwable $abort) {
-                    $details['gateway_cleanup_error'] = $abort->getMessage();
-                    if (!$json) {
-                        $this->printer->error(
-                            __('宿主网关清理失败：%{1}', [$abort->getMessage()])
+                    $journal = $this->advancePromotionJournal(
+                        $journal,
+                        'ROLLING_BACK',
+                        [
+                            'rollback_started' => true,
+                            'failure_reason' => GatewayBoundedText::singleLine(
+                                $throwable->getMessage(),
+                                1024,
+                                'Promotion failed.',
+                            ),
+                        ],
+                    );
+                    $rollbackDetails = $this->rollbackPromotionFromJournal(
+                        $gateway,
+                        $journal,
+                    );
+                    $details = \array_replace($details, $rollbackDetails);
+                } catch (\Throwable $rollbackError) {
+                    $details['legacy_rollback'] = 'failed';
+                    $details['legacy_rollback_error'] = $rollbackError->getMessage();
+                    try {
+                        $journal = $this->advancePromotionJournal(
+                            $journal,
+                            'ROLLBACK_BLOCKED',
+                            ['rollback_error' => GatewayBoundedText::singleLine(
+                                $rollbackError->getMessage(),
+                                1024,
+                                'Promotion rollback failed.',
+                            )],
                         );
+                    } catch (\Throwable) {
+                    }
+                    if (!$json) {
+                        $this->printer->error(__('提升事务自动恢复失败：%{1}', [
+                            $rollbackError->getMessage(),
+                        ]));
                     }
                 }
-            }
-            if (\is_array($savedEdgeSnapshot)) {
+            } elseif (\is_array($staged)) {
+                // Staging completed but the first durable journal publication
+                // failed. Public ownership has not moved yet, so only discard
+                // the disabled staged service/package.
                 try {
-                    $this->restoreSavedInstanceEdgeMode($owner, $savedEdgeSnapshot);
-                    $details['saved_edge_mode_rollback'] = 'restored';
-                } catch (\Throwable $savedConfigRollback) {
-                    $details['saved_edge_mode_rollback'] = 'failed';
-                    $details['saved_edge_mode_rollback_error'] = $savedConfigRollback->getMessage();
+                    $gateway->abortLegacyPromotion($staged, false);
+                } catch (\Throwable $abort) {
+                    $details['gateway_cleanup_error'] = $abort->getMessage();
                 }
             }
-            if (!$legacyStopped) {
+            if (($details['legacy_rollback'] ?? 'not_required') === 'not_required') {
                 if (!$json) {
                     $this->printer->warning(__('旧项目 Nginx 未进入交接，仍保持原状。'));
                 }
@@ -182,45 +319,7 @@ final class Promote extends AbstractGatewayCommand
                     $details,
                 );
             }
-            try {
-                if (\is_array($legacyRuntimeOwnership)) {
-                    $this->restoreProjectRuntimeOwnership(
-                        $legacyRuntimeRoot,
-                        (int)$legacyRuntimeOwnership['uid'],
-                        (int)$legacyRuntimeOwnership['gid'],
-                    );
-                }
-                $rollback = $this->restoreLegacyNginxThroughProjectMaster(
-                    $owner,
-                    $upstreamPort,
-                    $upstreamHost,
-                    $serverNames,
-                );
-                if ($rollback['ok'] ?? false) {
-                    $rollbackProbe = $this->probeLegacyPublicResponses(
-                        $paths->publicHttpsPort(),
-                        $serverNames,
-                        $legacyPublicBaseline,
-                    );
-                    $details['legacy_rollback_probe'] = $rollbackProbe;
-                    if (!($rollbackProbe['ok'] ?? false)) {
-                        $rollback = [
-                            'ok' => false,
-                            'message' => 'Project-owned legacy Nginx restarted, but its '
-                                . 'complete public response did not recover: '
-                                . (string)($rollbackProbe['reason'] ?? 'probe failed'),
-                        ];
-                    }
-                }
-            } catch (\Throwable $rollbackError) {
-                $rollback = [
-                    'ok' => false,
-                    'message' => 'Project-owned legacy Nginx rollback failed: '
-                        . $rollbackError->getMessage(),
-                ];
-            }
-            if ($rollback['ok'] ?? false) {
-                $details['legacy_rollback'] = 'restored';
+            if (($details['legacy_rollback'] ?? '') === 'restored') {
                 if (!$json) {
                     $this->printer->warning(__('已回滚并恢复原项目托管 Nginx。'));
                 }
@@ -233,13 +332,15 @@ final class Promote extends AbstractGatewayCommand
                         ]));
                     }
                 }
-            } else {
-                $details['legacy_rollback'] = 'failed';
-                $details['legacy_rollback_error'] = (string)($rollback['message'] ?? '');
+            } elseif (!$json) {
+                $message = (string)($details['legacy_rollback_error'] ?? 'unknown rollback failure');
+                $this->printer->error(__('原项目 Nginx 回滚也失败：%{1}', [$message]));
+            }
+            if (($details['legacy_rollback'] ?? '') !== 'restored') {
                 if (!$json) {
-                    $this->printer->error(__('原项目 Nginx 回滚也失败：%{1}', [
-                        (string)($rollback['message'] ?? ''),
-                    ]));
+                    $this->printer->warning(
+                        __('已保留可恢复的提升事务日志；下次 promote 会先继续恢复。')
+                    );
                 }
             }
             return $this->failure(
@@ -251,157 +352,624 @@ final class Promote extends AbstractGatewayCommand
         }
     }
 
-    /** @return array{content:string,mode:int,uid:int,gid:int} */
-    private function persistPromotedInstanceEdgeMode(string $instanceName): array
+    private function promotionStateDirectory(): string
     {
-        $file = $this->savedInstanceConfigFile($instanceName);
-        if (!\is_file($file) || \is_link($file)) {
-            throw new \RuntimeException('Legacy promotion requires a regular saved instance configuration.');
+        $paths = new GatewayPaths();
+        $paths->ensureDirectories();
+        $directory = $paths->trustDir()
+            . DIRECTORY_SEPARATOR . 'promotion-transaction';
+        if (!\is_dir($directory) && !@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
+            throw new \RuntimeException('Unable to create the promotion transaction directory.');
         }
-        $status = @\lstat($file);
-        $content = @\file_get_contents($file);
-        $config = \is_string($content) ? \json_decode($content, true) : null;
-        if (!\is_array($status) || !\is_string($content) || !\is_array($config)) {
-            throw new \RuntimeException('Saved instance configuration is unreadable or invalid.');
-        }
-        $snapshot = [
-            'content' => $content,
-            'mode' => (int)$status['mode'] & 0777,
-            'uid' => (int)($status['uid'] ?? -1),
-            'gid' => (int)($status['gid'] ?? -1),
-        ];
-        $config['edge_mode'] = 'auto';
-        $config['edge_adapter'] = 'nginx';
-        $config['ssl_enabled'] = false;
-        $config['saved_at'] = \date('Y-m-d H:i:s');
-        $encoded = \json_encode(
-            $config,
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-        );
-        if (!\is_string($encoded)
-            || !$this->writeSavedInstanceConfigAtomically(
-                $file,
-                $encoded . "\n",
-                $snapshot['mode'],
-                $snapshot['uid'],
-                $snapshot['gid'],
-            )
+        $canonical = \realpath($directory);
+        $status = @\lstat($directory);
+        if (!\is_string($canonical)
+            || !\hash_equals(\rtrim($canonical, '/\\'), \rtrim($directory, '/\\'))
+            || \is_link($directory)
+            || !\is_array($status)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && (((((int)($status['mode'] ?? 0)) & 0077) !== 0)
+                    || (\function_exists('posix_geteuid')
+                        && (int)($status['uid'] ?? -1) !== (int)\posix_geteuid())))
         ) {
-            throw new \RuntimeException('Unable to persist the promoted instance edge mode.');
+            throw new \RuntimeException('Promotion transaction directory is unsafe.');
         }
-        return $snapshot;
+        return $canonical;
     }
 
-    /** @param array{content:string,mode:int,uid:int,gid:int} $snapshot */
+    private function promotionLockFile(): string
+    {
+        return $this->promotionStateDirectory() . DIRECTORY_SEPARATOR . 'transaction.lock';
+    }
+
+    private function promotionJournalFile(): string
+    {
+        return $this->promotionStateDirectory() . DIRECTORY_SEPARATOR . 'journal.json';
+    }
+
+    /**
+     * @param array<string,mixed> $staged
+     * @param list<string> $serverNames
+     * @param array{uid:int,gid:int}|null $runtimeOwnership
+     * @param array<string,mixed> $baseline
+     * @return array<string,mixed>
+     */
+    private function beginPromotionJournal(
+        array $staged,
+        string $owner,
+        string $projectRoot,
+        string $upstreamHost,
+        int $upstreamPort,
+        array $serverNames,
+        string $runtimeRoot,
+        ?array $runtimeOwnership,
+        array $baseline,
+    ): array {
+        $service = \is_array($staged['service'] ?? null) ? $staged['service'] : [];
+        $kind = \trim((string)($service['kind'] ?? ''));
+        $slot = \strtoupper(\trim((string)($staged['slot'] ?? '')));
+        $previousSlot = \strtoupper(\trim((string)($staged['previous_active_slot'] ?? '')));
+        $profile = \strtolower(\trim((string)($staged['profile'] ?? '')));
+        $runtimeGeneration = \strtolower(\trim((string)(
+            $staged['runtime_generation'] ?? ''
+        )));
+        $normalizedNames = [];
+        foreach ($serverNames as $serverName) {
+            $serverName = \strtolower(\rtrim(\trim((string)$serverName), '.'));
+            if ($serverName === '' || \strlen($serverName) > 253) {
+                continue;
+            }
+            $normalizedNames[$serverName] = true;
+            if (\count($normalizedNames) > 256) {
+                throw new \RuntimeException('Promotion server-name set exceeds its fixed bound.');
+            }
+        }
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $owner) !== 1
+            || !\in_array($slot, ['A', 'B'], true)
+            || ($previousSlot !== '' && !\in_array($previousSlot, ['A', 'B'], true))
+            || !\in_array($profile, ['default', 'ipv4-only'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+            || $kind === ''
+            || \strlen($kind) > 191
+            || $projectRoot === ''
+            || \strlen($projectRoot) > 4096
+            || $runtimeRoot === ''
+            || \strlen($runtimeRoot) > 4096
+            || $upstreamHost === ''
+            || \strlen($upstreamHost) > 253
+            || $upstreamPort < 1
+            || $upstreamPort > 65535
+            || $normalizedNames === []
+        ) {
+            throw new \RuntimeException('Promotion transaction facts are invalid.');
+        }
+        $journal = [
+            'schema_version' => 1,
+            'transaction_id' => \bin2hex(\random_bytes(16)),
+            'phase' => 'PREPARED',
+            'sequence' => 1,
+            'owner_instance' => $owner,
+            'project_root' => $projectRoot,
+            'staged' => [
+                'slot' => $slot,
+                'previous_active_slot' => $previousSlot,
+                'profile' => $profile,
+                'runtime_generation' => $runtimeGeneration,
+                'service' => ['kind' => $kind],
+            ],
+            'legacy' => [
+                'upstream_host' => $upstreamHost,
+                'upstream_port' => $upstreamPort,
+                'server_names' => \array_keys($normalizedNames),
+                'runtime_root' => $runtimeRoot,
+                'runtime_ownership' => $runtimeOwnership,
+                'public_baseline' => $baseline,
+            ],
+            'legacy_stop_started' => false,
+            'gateway_activation_started' => false,
+            'agent_attach_started' => false,
+            'rollback_started' => false,
+            'saved_edge_snapshot' => null,
+            'created_at' => \gmdate(DATE_ATOM),
+        ];
+        return $this->writePromotionJournal($journal);
+    }
+
+    /**
+     * @param array<string,mixed> $journal
+     * @param array<string,mixed> $changes
+     * @return array<string,mixed>
+     */
+    private function advancePromotionJournal(
+        array $journal,
+        string $phase,
+        array $changes = [],
+    ): array {
+        $allowedPhases = [
+            'PREPARED',
+            'LEGACY_STOPPING',
+            'LEGACY_STOPPED',
+            'GATEWAY_ACTIVATING',
+            'GATEWAY_ACTIVE',
+            'PROJECT_ENROLLED',
+            'EDGE_MODE_UPDATING',
+            'EDGE_MODE_UPDATED',
+            'AGENT_ATTACHING',
+            'AGENT_ATTACHED',
+            'PROJECT_ACTIVE',
+            'COMMITTED',
+            'ROLLING_BACK',
+            'GATEWAY_QUIESCED',
+            'LEGACY_RESTORED',
+            'GATEWAY_DISMANTLING',
+            'ROLLED_BACK',
+            'ROLLBACK_BLOCKED',
+        ];
+        if (!\in_array($phase, $allowedPhases, true)) {
+            throw new \RuntimeException('Promotion journal phase is invalid.');
+        }
+        unset($journal['digest'], $journal['updated_at']);
+        foreach ($changes as $key => $value) {
+            if (!\is_string($key)
+                || \preg_match('/\A[a-z][a-z0-9_]{0,63}\z/D', $key) !== 1
+            ) {
+                throw new \RuntimeException('Promotion journal update field is invalid.');
+            }
+            $journal[$key] = $value;
+        }
+        $journal['phase'] = $phase;
+        $journal['sequence'] = (int)($journal['sequence'] ?? 0) + 1;
+        return $this->writePromotionJournal($journal);
+    }
+
+    /** @param array<string,mixed> $journal @return array<string,mixed> */
+    private function writePromotionJournal(array $journal): array
+    {
+        unset($journal['digest']);
+        $journal['updated_at'] = \gmdate(DATE_ATOM);
+        $journal['digest'] = \hash(
+            'sha256',
+            \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($journal),
+        );
+        $encoded = \json_encode(
+            $journal,
+            JSON_PRETTY_PRINT
+                | JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_THROW_ON_ERROR,
+        );
+        if (\strlen($encoded) > 8 * 1024 * 1024) {
+            throw new \RuntimeException('Promotion journal exceeds its fixed size limit.');
+        }
+        GatewayProjectStateFilesystem::atomicWrite(
+            $this->promotionJournalFile(),
+            $encoded . "\n",
+            0600,
+        );
+        return $journal;
+    }
+
+    /** @return array<string,mixed>|null */
+    private function readPromotionJournal(): ?array
+    {
+        $contents = GatewayProjectStateFilesystem::readOptional(
+            $this->promotionJournalFile(),
+            8 * 1024 * 1024,
+            'Promotion transaction journal',
+        );
+        if ($contents === null) {
+            return null;
+        }
+        $journal = \json_decode($contents, true, 64, JSON_THROW_ON_ERROR);
+        if (!\is_array($journal)) {
+            throw new \RuntimeException('Promotion transaction journal is invalid.');
+        }
+        $digest = \strtolower(\trim((string)($journal['digest'] ?? '')));
+        $signed = $journal;
+        unset($signed['digest']);
+        $expected = \hash(
+            'sha256',
+            \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($signed),
+        );
+        if (($journal['schema_version'] ?? null) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($journal['transaction_id'] ?? '')) !== 1
+            || !\is_int($journal['sequence'] ?? null)
+            || (int)$journal['sequence'] < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || !\hash_equals($expected, $digest)
+        ) {
+            throw new \RuntimeException('Promotion transaction journal failed integrity checks.');
+        }
+        return $journal;
+    }
+
+    /** @return array<string,mixed> */
+    private function recoverIncompletePromotion(GatewayHostManager $gateway): array
+    {
+        $journal = $this->readPromotionJournal();
+        if ($journal === null
+            || \in_array((string)($journal['phase'] ?? ''), ['COMMITTED', 'ROLLED_BACK'], true)
+        ) {
+            return [];
+        }
+        $phase = (string)($journal['phase'] ?? 'UNKNOWN');
+        try {
+            $rollbackInProgress = ($journal['rollback_started'] ?? false) === true
+                || \in_array($phase, [
+                    'ROLLING_BACK',
+                    'GATEWAY_QUIESCED',
+                    'LEGACY_RESTORED',
+                    'GATEWAY_DISMANTLING',
+                ], true);
+            if (!$rollbackInProgress
+                && ($journal['agent_attach_started'] ?? false) === true
+            ) {
+                $transactionId = \strtolower(\trim((string)(
+                    $journal['agent_transaction_id'] ?? ''
+                )));
+                if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
+                    // The Master owns transaction allocation. Replaying enable
+                    // after a lost acknowledgement returns its existing
+                    // ATTACHING transaction instead of allocating a second one.
+                    $agent = $this->setProjectGatewayAgentEnabled(
+                        (string)($journal['owner_instance'] ?? ''),
+                        true,
+                    );
+                    $transactionId = \strtolower(\trim((string)(
+                        $agent['runtime_endpoint']['transaction_id'] ?? ''
+                    )));
+                    if (\preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1) {
+                        throw new \RuntimeException(
+                            'Promotion ATTACHING transaction acknowledgement could not be recovered.'
+                        );
+                    }
+                    $journal = $this->advancePromotionJournal(
+                        $journal,
+                        'AGENT_ATTACHED',
+                        [
+                            'agent_transaction_id' => $transactionId,
+                            'agent_acknowledgement_recovered' => true,
+                        ],
+                    );
+                }
+                $rollForward = $this->rollForwardCommittedPromotion($journal);
+                if ($rollForward !== null) {
+                    return [
+                        'transaction_id' => (string)$journal['transaction_id'],
+                        'recovered_from_phase' => $phase,
+                    ] + $rollForward;
+                }
+                // rollForwardCommittedPromotion returns null only for the
+                // matching ATTACHING transaction. That is the sole state in
+                // which compensating rollback is authorized.
+            }
+            $journal = $this->advancePromotionJournal(
+                $journal,
+                'ROLLING_BACK',
+                [
+                    'rollback_started' => true,
+                    'recovered_from_phase' => GatewayBoundedText::singleLine(
+                        $phase,
+                        64,
+                        'UNKNOWN',
+                    ),
+                ],
+            );
+            $details = $this->rollbackPromotionFromJournal($gateway, $journal);
+            return [
+                'transaction_id' => (string)$journal['transaction_id'],
+                'recovered_from_phase' => $phase,
+            ] + $details;
+        } catch (\Throwable $throwable) {
+            try {
+                $this->advancePromotionJournal(
+                    $journal,
+                    'ROLLBACK_BLOCKED',
+                    ['rollback_error' => GatewayBoundedText::singleLine(
+                        $throwable->getMessage(),
+                        1024,
+                        'Promotion recovery failed.',
+                    )],
+                );
+            } catch (\Throwable) {
+            }
+            throw new \RuntimeException(
+                'Incomplete promotion recovery is blocked: ' . $throwable->getMessage(),
+                0,
+                $throwable,
+            );
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $journal
+     * @return array<string,mixed>|null null means the matching transaction is still ATTACHING
+     */
+    private function rollForwardCommittedPromotion(array $journal): ?array
+    {
+        $owner = (string)($journal['owner_instance'] ?? '');
+        $transactionId = \strtolower(\trim((string)(
+            $journal['agent_transaction_id'] ?? ''
+        )));
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $owner) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1
+        ) {
+            return null;
+        }
+        $status = $this->queryProjectGatewayAgentPromotionStatus(
+            $owner,
+            $transactionId,
+        );
+        $state = (string)($status['state'] ?? '');
+        $matches = ($status['matches'] ?? false) === true
+            && \hash_equals(
+                $transactionId,
+                \strtolower(\trim((string)($status['transaction_id'] ?? ''))),
+            );
+        if ($state === 'COMMITTED'
+            && $matches
+            && (string)($status['edge_adapter'] ?? '') === 'wls'
+            && (string)($status['requested_mode'] ?? '') === 'auto'
+        ) {
+            $this->advancePromotionJournal(
+                $journal,
+                'COMMITTED',
+                [
+                    'commit_acknowledgement_recovered' => true,
+                    'agent_transaction_id' => $transactionId,
+                ],
+            );
+            return [
+                'recovery_action' => 'roll_forward',
+                'agent_transaction_id' => $transactionId,
+                'master_state' => 'COMMITTED',
+            ];
+        }
+        if ($state === 'ATTACHING' && $matches) {
+            return null;
+        }
+        throw new \RuntimeException(
+            'Promotion endpoint transaction does not match the recovery journal; '
+                . 'automatic rollback is fenced.'
+        );
+    }
+
+    /** @return array<string,mixed> */
+    private function queryProjectGatewayAgentPromotionStatus(
+        string $instanceName,
+        string $transactionId,
+    ): array {
+        $result = (new IpcControlGateway())->command(
+            $instanceName,
+            ControlMessage::ACTION_GATEWAY_AGENT_STATUS,
+            '',
+            ['promotion_transaction_id' => $transactionId],
+            10.0,
+        );
+        if (!($result['success'] ?? false)) {
+            throw new \RuntimeException(
+                'Gateway Agent promotion status query failed: '
+                    . (string)($result['message'] ?? 'Master rejected the status command.')
+            );
+        }
+        $status = \is_array($result['data'] ?? null) ? $result['data'] : [];
+        if ($status === []
+            || !\is_bool($status['matches'] ?? null)
+            || !\is_string($status['state'] ?? null)
+        ) {
+            throw new \RuntimeException('Gateway Agent promotion status receipt is invalid.');
+        }
+        return $status;
+    }
+
+    /**
+     * @param array<string,mixed> $journal
+     * @return array<string,mixed>
+     */
+    private function rollbackPromotionFromJournal(
+        GatewayHostManager $gateway,
+        array $journal,
+    ): array {
+        $owner = (string)($journal['owner_instance'] ?? '');
+        $staged = \is_array($journal['staged'] ?? null) ? $journal['staged'] : [];
+        $legacy = \is_array($journal['legacy'] ?? null) ? $journal['legacy'] : [];
+        $serverNames = \is_array($legacy['server_names'] ?? null)
+            ? \array_values(\array_map('strval', $legacy['server_names']))
+            : [];
+        $runtimeOwnership = \is_array($legacy['runtime_ownership'] ?? null)
+            ? $legacy['runtime_ownership']
+            : null;
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $owner) !== 1
+            || $staged === []
+            || $serverNames === []
+        ) {
+            throw new \RuntimeException('Promotion rollback journal facts are incomplete.');
+        }
+        $details = ['legacy_rollback' => 'not_required'];
+        if (($journal['agent_attach_started'] ?? false) === true) {
+            try {
+                $this->setProjectGatewayAgentEnabled($owner, false);
+                $details['gateway_agent_cleanup'] = 'detached';
+            } catch (\Throwable $throwable) {
+                // Continue restoring public service; the removed gateway and
+                // restored saved edge mode fence a stale Agent even if its
+                // idempotent disable acknowledgement is lost.
+                $details['gateway_agent_cleanup'] = 'acknowledgement_lost';
+                $details['gateway_agent_cleanup_error'] = GatewayBoundedText::singleLine(
+                    $throwable->getMessage(),
+                    1024,
+                    'Gateway Agent cleanup acknowledgement was lost.',
+                );
+            }
+        }
+        $saved = \is_array($journal['saved_edge_snapshot'] ?? null)
+            ? $journal['saved_edge_snapshot']
+            : null;
+        if ($saved !== null) {
+            $configRollback = $this->restoreSavedInstanceEdgeMode($owner, $saved);
+            $details['saved_edge_mode_rollback'] = $configRollback['conflicts'] === []
+                ? 'restored'
+                : 'concurrent_changes_preserved';
+            $details['saved_edge_mode_fields'] = $configRollback;
+        }
+        if (($journal['gateway_activation_started'] ?? false) === true
+            && ($journal['gateway_quiesced'] ?? false) !== true
+            && ($journal['legacy_restored'] ?? false) !== true
+        ) {
+            $gateway->quiesceLegacyPromotion($staged);
+            $journal = $this->advancePromotionJournal(
+                $journal,
+                'GATEWAY_QUIESCED',
+                ['gateway_quiesced' => true],
+            );
+            $details['gateway_quiesced'] = true;
+        }
+        if (($journal['legacy_stop_started'] ?? false) === true
+            && ($journal['legacy_restored'] ?? false) !== true
+        ) {
+            if ($runtimeOwnership !== null) {
+                $this->restoreProjectRuntimeOwnership(
+                    (string)($legacy['runtime_root'] ?? ''),
+                    (int)($runtimeOwnership['uid'] ?? -1),
+                    (int)($runtimeOwnership['gid'] ?? -1),
+                );
+            }
+            $rollback = $this->restoreLegacyNginxThroughProjectMaster(
+                $owner,
+                (int)($legacy['upstream_port'] ?? 0),
+                (string)($legacy['upstream_host'] ?? ''),
+                $serverNames,
+            );
+            if (!($rollback['ok'] ?? false)) {
+                throw new \RuntimeException(
+                    (string)($rollback['message'] ?? 'Legacy Nginx restore failed.')
+                );
+            }
+            $probe = $this->probeLegacyPublicResponses(
+                (new GatewayPaths())->publicHttpsPort(),
+                $serverNames,
+                \is_array($legacy['public_baseline'] ?? null)
+                    ? $legacy['public_baseline']
+                    : null,
+            );
+            if (!($probe['ok'] ?? false)) {
+                throw new \RuntimeException(
+                    'Legacy Nginx restore probe failed: '
+                        . (string)($probe['reason'] ?? 'unknown response failure')
+                );
+            }
+            $details['legacy_rollback'] = 'restored';
+            $details['legacy_rollback_probe'] = $probe;
+            $journal = $this->advancePromotionJournal(
+                $journal,
+                'LEGACY_RESTORED',
+                ['legacy_restored' => true],
+            );
+        } elseif (($journal['legacy_restored'] ?? false) === true) {
+            $details['legacy_rollback'] = 'restored';
+        }
+
+        // Only now dismantle the reversible gateway staging/activation. Until
+        // this point its immutable slot and service definition remain
+        // available for operator recovery if the legacy owner cannot return.
+        $journal = $this->advancePromotionJournal($journal, 'GATEWAY_DISMANTLING');
+        $gateway->abortLegacyPromotion(
+            $staged,
+            ($journal['gateway_activation_started'] ?? false) === true,
+        );
+        $this->advancePromotionJournal($journal, 'ROLLED_BACK');
+        $details['gateway_cleanup'] = 'removed_after_legacy_probe';
+        return $details;
+    }
+
+    /**
+     * The snapshot is journaled before the first configuration mutation, so a
+     * process crash at either side of the atomic write remains recoverable.
+     *
+     * Only the fields owned by promotion are journaled. Persisting the whole
+     * instance configuration here would copy unrelated project secrets into a
+     * host-level recovery journal and a later rollback could erase concurrent
+     * changes to unrelated settings.
+     *
+     * @param \Closure(array<string,mixed>):void $beforeWrite
+     * @return array<string,mixed>
+     */
+    private function persistPromotedInstanceEdgeMode(
+        string $instanceName,
+        \Closure $beforeWrite,
+    ): array
+    {
+        $savedAt = \date('Y-m-d H:i:s');
+        $afterValues = [
+            'edge_mode' => 'auto',
+            'edge_adapter' => 'nginx',
+            'ssl_enabled' => false,
+            'saved_at' => $savedAt,
+        ];
+        return (new SavedInstanceConfigStore())->update(
+            $instanceName,
+            static function (array $config) use ($beforeWrite, $afterValues): array {
+                $fields = [];
+                $afterFields = [];
+                foreach ($afterValues as $field => $value) {
+                    $fields[$field] = [
+                        'exists' => \array_key_exists($field, $config),
+                        'value' => $config[$field] ?? null,
+                    ];
+                    $afterFields[$field] = ['exists' => true, 'value' => $value];
+                }
+                $snapshot = [
+                    'fields' => $fields,
+                    'after_fields' => $afterFields,
+                    'before_digest' => \hash(
+                        'sha256',
+                        \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($config),
+                    ),
+                ];
+                $next = $config;
+                foreach ($afterValues as $field => $value) {
+                    $next[$field] = $value;
+                }
+                $snapshot['after_digest'] = \hash(
+                    'sha256',
+                    \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($next),
+                );
+                $beforeWrite($snapshot);
+                return [$next, $snapshot];
+            },
+            true,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $snapshot
+     * @return array{restored:list<string>,conflicts:list<string>}
+     */
     private function restoreSavedInstanceEdgeMode(
         string $instanceName,
         array $snapshot,
-    ): void {
-        if (!$this->writeSavedInstanceConfigAtomically(
-            $this->savedInstanceConfigFile($instanceName),
-            (string)$snapshot['content'],
-            (int)$snapshot['mode'],
-            (int)$snapshot['uid'],
-            (int)$snapshot['gid'],
-        )) {
-            throw new \RuntimeException('Unable to restore the saved legacy edge mode.');
-        }
-    }
-
-    private function savedInstanceConfigFile(string $instanceName): string
-    {
-        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $instanceName) !== 1) {
-            throw new \RuntimeException('Promotion instance name is invalid.');
-        }
-        return Env::VAR_DIR . 'server' . DS . 'config' . DS . $instanceName . '.json';
-    }
-
-    private function writeSavedInstanceConfigAtomically(
-        string $file,
-        string $contents,
-        int $mode,
-        int $uid,
-        int $gid,
-    ): bool {
-        $directory = \dirname($file);
-        $canonicalDirectory = \realpath($directory);
-        if (!\is_string($canonicalDirectory)
-            || !\is_dir($canonicalDirectory)
-            || \is_link($directory)
-            || !\hash_equals(\rtrim($canonicalDirectory, '/\\'), \rtrim($directory, '/\\'))
+    ): array {
+        $fields = $snapshot['fields'] ?? null;
+        $afterFields = $snapshot['after_fields'] ?? null;
+        if (!\is_array($fields)
+            || !\is_array($afterFields)
+            || \array_keys($fields) !== ['edge_mode', 'edge_adapter', 'ssl_enabled', 'saved_at']
+            || \array_keys($afterFields) !== \array_keys($fields)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $snapshot['before_digest'] ?? ''
+            )) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $snapshot['after_digest'] ?? ''
+            )) !== 1
         ) {
-            throw new \RuntimeException('Saved instance configuration directory is unsafe.');
+            throw new \RuntimeException('Saved promotion edge-field snapshot is invalid.');
         }
-        $mode = $mode > 0 ? ($mode & 0777) : 0644;
-        $lockFile = $file . '.lock';
-        if (\is_link($lockFile)) {
-            throw new \RuntimeException('Saved instance configuration lock is unsafe.');
-        }
-        $lock = @\fopen($lockFile, 'c');
-        if (!\is_resource($lock)) {
-            return false;
-        }
-        $root = \function_exists('posix_geteuid') && \posix_geteuid() === 0;
-        if ($root) {
-            @\chown($lockFile, $uid);
-            @\chgrp($lockFile, $gid);
-        }
-        @\chmod($lockFile, 0600);
-        if (!@\flock($lock, LOCK_EX)) {
-            @\fclose($lock);
-            return false;
-        }
-        $temporary = $file . '.promotion-' . \bin2hex(\random_bytes(8));
-        try {
-            if (\is_link($file)) {
-                throw new \RuntimeException('Saved instance configuration became a symbolic link.');
-            }
-            $handle = @\fopen($temporary, 'xb');
-            if (!\is_resource($handle)) {
-                return false;
-            }
-            try {
-                $written = 0;
-                $length = \strlen($contents);
-                while ($written < $length) {
-                    $amount = @\fwrite($handle, \substr($contents, $written));
-                    if (!\is_int($amount) || $amount < 1) {
-                        return false;
-                    }
-                    $written += $amount;
-                }
-                if (!@\fflush($handle)
-                    || (\function_exists('fsync') && !@\fsync($handle))
-                ) {
-                    return false;
-                }
-            } finally {
-                @\fclose($handle);
-            }
-            if (!@\chmod($temporary, $mode)) {
-                return false;
-            }
-            if ($root && (!@\chown($temporary, $uid) || !@\chgrp($temporary, $gid))) {
-                return false;
-            }
-            $attempts = \PHP_OS_FAMILY === 'Windows' ? 5 : 1;
-            for ($attempt = 0; $attempt < $attempts; $attempt++) {
-                if (@\rename($temporary, $file)) {
-                    @\chmod($file, $mode);
-                    return true;
-                }
-                if ($attempt + 1 < $attempts) {
-                    \usleep(10000);
-                }
-            }
-            return false;
-        } finally {
-            if (\is_file($temporary) && !\is_link($temporary)) {
-                @\unlink($temporary);
-            }
-            @\flock($lock, LOCK_UN);
-            @\fclose($lock);
-        }
+        return (new SavedInstanceConfigStore())->restoreOwnedFields(
+            $instanceName,
+            $fields,
+            $afterFields,
+        );
     }
 
     /** @return array<string,mixed> */
@@ -447,17 +1015,17 @@ final class Promote extends AbstractGatewayCommand
         if ($result['success'] ?? false) {
             return \is_array($result['data'] ?? null) ? $result['data'] : [];
         }
-        $endpoint = (new ServerInstanceManager())->getRawInstanceData($instanceName);
-        $gateway = \is_array($endpoint['gateway'] ?? null)
-            ? $endpoint['gateway']
-            : [];
-        $committedTransaction = \strtolower(\trim((string)(
-            $gateway['promotion_committed_transaction_id'] ?? ''
-        )));
-        if ((string)($gateway['promotion_state'] ?? '') === 'COMMITTED'
-            && \hash_equals($transactionId, $committedTransaction)
-            && (string)($endpoint['edge_adapter'] ?? '') === 'wls'
-            && (string)($gateway['requested_mode'] ?? '') === 'auto'
+        // A failed command acknowledgement is ambiguous. Read the exact
+        // transaction through the authenticated Master control channel and
+        // under the endpoint lock instead of trusting an unlocked file image.
+        $status = $this->queryProjectGatewayAgentPromotionStatus(
+            $instanceName,
+            $transactionId,
+        );
+        if ((string)($status['state'] ?? '') === 'COMMITTED'
+            && ($status['matches'] ?? false) === true
+            && (string)($status['edge_adapter'] ?? '') === 'wls'
+            && (string)($status['requested_mode'] ?? '') === 'auto'
         ) {
             return [
                 'state' => 'COMMITTED',
@@ -748,27 +1316,13 @@ final class Promote extends AbstractGatewayCommand
                 'Project Nginx runtime ownership target is invalid.'
             );
         }
-        $paths = [];
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator(
-                $canonical,
-                \FilesystemIterator::SKIP_DOTS,
-            ),
-            \RecursiveIteratorIterator::CHILD_FIRST,
-        );
-        foreach ($iterator as $item) {
-            $path = $item->getPathname();
-            if ($item->isLink()
-                || !\str_starts_with($path . DIRECTORY_SEPARATOR, $canonical . DIRECTORY_SEPARATOR)
-            ) {
-                throw new \RuntimeException(
-                    'Project Nginx runtime contains a symbolic link or escaped path.'
-                );
-            }
-            $paths[] = $path;
+        $entries = GatewayBoundedTreeWalker::collect($canonical, true, true);
+        foreach ($entries as $entry) {
+            GatewayBoundedTreeWalker::revalidate($entry);
         }
-        $paths[] = $canonical;
-        foreach ($paths as $path) {
+        foreach ($entries as $entry) {
+            $path = $entry['path'];
+            GatewayBoundedTreeWalker::revalidate($entry);
             if (!@\chown($path, $uid) || !@\chgrp($path, $gid)) {
                 throw new \RuntimeException(
                     'Unable to restore project Nginx runtime ownership: ' . $path
@@ -785,12 +1339,13 @@ final class Promote extends AbstractGatewayCommand
     public function help(): array|string
     {
         return CommandHelper::formatHelp(
-            'server:gateway:promote --package=/absolute/package --confirm [--profile=default]',
+            'server:gateway:promote (--package=/absolute/package --confirm [--profile=default] | --recover)',
             $this->tip(),
             [
                 '--package' => __('签名、自包含的 WLS 2.0 宿主包目录'),
                 '--profile' => __('default（IPv4+IPv6）或 ipv4-only'),
                 '--confirm' => __('确认进入有实测维护窗的公共端口所有权切换'),
+                '--recover' => __('仅恢复/修复未完成事务；无需宿主包或再次确认'),
                 '--json' => __('输出稳定 JSON 文档'),
             ],
             [__('回滚') => __('先在旧入口在线时完成影子预检；交接失败时先停宿主服务，再用冻结快照恢复旧 Nginx。')],

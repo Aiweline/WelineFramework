@@ -16,6 +16,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Acl\Acl;
 use Weline\Marketing\Model\Coupon\Coupon as CouponModel;
+use Weline\Marketing\Model\Rule\Rule as RuleModel;
 use Weline\Marketing\Service\CouponService;
 
 /**
@@ -49,5 +50,46 @@ class Coupon extends BackendController
             return $this->fetch();
         }
     }
-}
 
+    #[Acl('Weline_Marketing::coupon_add', '添加优惠券', 'mdi-plus', '打开优惠券新建表单')]
+    public function getAdd(): string
+    {
+        try {
+            /** @var RuleModel $rules */
+            $rules = ObjectManager::getInstance(RuleModel::class);
+            $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetch();
+            $this->assign('rules', $rules->getItems());
+        } catch (\Throwable $exception) {
+            Message::error(__('加载优惠券表单失败：%{1}', $exception->getMessage()));
+            $this->assign('rules', []);
+        }
+
+        return $this->fetch('form');
+    }
+
+    #[Acl('Weline_Marketing::coupon_save', '保存优惠券', 'mdi-content-save', '保存优惠券')]
+    public function postSave(): string
+    {
+        try {
+            /** @var CouponService $service */
+            $service = ObjectManager::getInstance(CouponService::class);
+            $service->createCoupon([
+                CouponModel::schema_fields_RULE_ID => (int)$this->request->getPost('rule_id', 0),
+                CouponModel::schema_fields_CODE => trim((string)$this->request->getPost('code', '')),
+                CouponModel::schema_fields_TYPE => trim((string)$this->request->getPost('type', '')),
+                CouponModel::schema_fields_DISCOUNT_VALUE => (float)$this->request->getPost('discount_value', 0),
+                CouponModel::schema_fields_MIN_AMOUNT => (float)$this->request->getPost('min_amount', 0),
+                CouponModel::schema_fields_USAGE_LIMIT => (int)$this->request->getPost('usage_limit', 0),
+                CouponModel::schema_fields_CUSTOMER_LIMIT => (int)$this->request->getPost('customer_limit', 1),
+                CouponModel::schema_fields_STATUS => trim((string)$this->request->getPost('status', CouponModel::STATUS_ACTIVE)),
+            ]);
+            Message::success(__('优惠券保存成功'));
+        } catch (\Throwable $exception) {
+            Message::error(__('保存优惠券失败：%{1}', $exception->getMessage()));
+
+            return $this->redirect('marketing/backend/coupon/getAdd');
+        }
+
+        return $this->redirect('marketing/backend/coupon/index');
+    }
+}

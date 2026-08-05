@@ -285,17 +285,26 @@ body[data-layout="horizontal"] .page-content {
 }
 
 .page-title-box {
-    padding-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+    padding-bottom: 12px;
 }
 
 .page-title-box .breadcrumb {
     background-color: transparent;
+    margin: 0;
     padding: 0;
+    line-height: 1.35;
 }
 
 .page-title-box h4 {
+    margin: 0;
     font-size: 18px;
     font-weight: 600;
+    line-height: 1.35;
 }
 
 .footer {
@@ -1129,6 +1138,20 @@ body[data-layout="horizontal"][data-layout-size="boxed"] #page-topbar, body[data
 
 body[data-layout="horizontal"][data-layout-size="boxed"] .container-fluid, body[data-layout="horizontal"][data-layout-size="boxed"] .navbar-header {
     max-width: 1300px;
+}
+
+@media (max-width: 991.98px) {
+    body[data-layout-size="boxed"] #layout-wrapper,
+    body[data-layout-size="boxed"] #page-topbar,
+    body[data-layout-size="boxed"] .footer,
+    body[data-layout-size="boxed"].vertical-collpsed .footer {
+        max-width: 100%;
+    }
+
+    body[data-layout="horizontal"][data-layout-size="boxed"] .container-fluid,
+    body[data-layout="horizontal"][data-layout-size="boxed"] .navbar-header {
+        max-width: 100%;
+    }
 }
 
 /*!

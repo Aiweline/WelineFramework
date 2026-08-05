@@ -25,9 +25,12 @@ final class LocalizationProvider implements LocalizationProviderInterface
             return $codes;
         }
         $websiteId = $this->websiteId();
-        return $websiteId > 0
-            ? ObjectManager::getInstance(WebsiteLanguage::class)->getWebsiteLanguageCodes($websiteId)
-            : [];
+        // website_id=0 是系统默认站点，必须参与查询，不能用 >0 过滤掉。
+        if ($websiteId === null) {
+            return [];
+        }
+
+        return ObjectManager::getInstance(WebsiteLanguage::class)->getWebsiteLanguageCodes($websiteId);
     }
 
     public function currencyCodes(): array
@@ -37,9 +40,11 @@ final class LocalizationProvider implements LocalizationProviderInterface
             return $codes;
         }
         $websiteId = $this->websiteId();
-        return $websiteId > 0
-            ? ObjectManager::getInstance(WebsiteCurrency::class)->getWebsiteCurrencyCodes($websiteId)
-            : [];
+        if ($websiteId === null) {
+            return [];
+        }
+
+        return ObjectManager::getInstance(WebsiteCurrency::class)->getWebsiteCurrencyCodes($websiteId);
     }
 
     public function supportsLanguage(string $code): ?bool
@@ -52,9 +57,26 @@ final class LocalizationProvider implements LocalizationProviderInterface
         return null;
     }
 
-    private function websiteId(): int
+    private function websiteId(): ?int
     {
-        $websiteId = (int)w_env('website_id', 0);
-        return $websiteId > 0 ? $websiteId : (int)WelineEnv::server('WELINE_WEBSITE_ID', 0);
+        try {
+            $id = WebsiteData::getWebsiteId();
+            if ($id !== null) {
+                return (int)$id;
+            }
+        } catch (\Throwable) {
+        }
+
+        $raw = w_env('website_id', null);
+        if ($raw !== null && $raw !== '') {
+            return (int)$raw;
+        }
+
+        $serverId = WelineEnv::server('WELINE_WEBSITE_ID', null);
+        if ($serverId !== null && $serverId !== '') {
+            return (int)$serverId;
+        }
+
+        return null;
     }
 }

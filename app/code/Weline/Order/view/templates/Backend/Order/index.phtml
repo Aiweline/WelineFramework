@@ -13,9 +13,9 @@ $pageSize = $this->getData('page_size') ?? 20;
 $totalPages = $this->getData('total_pages') ?? 1;
 $filters = $this->getData('filters') ?? [];
 
-$backendBase = $this->getBackendUrl('order/backend/order/index');
+$backendBase = $this->getBackendUrl('weline_order/backend/order/index');
 ?>
-<div class="row">
+<div class="row" data-testid="order-management">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0"><?= __('订单管理') ?></h4>
@@ -42,7 +42,7 @@ $backendBase = $this->getBackendUrl('order/backend/order/index');
                         <h5 class="card-title mb-0"><?= __('订单列表') ?></h5>
                     </div>
                     <div class="col-md-6 text-end">
-                        <a href="<?= $this->getBackendUrl('order/backend/order/edit') ?>" class="btn btn-primary">
+                        <a href="<?= $this->getBackendUrl('weline_order/backend/order/edit') ?>" class="btn btn-primary">
                             <i class="mdi mdi-plus"></i> <?= __('新建订单') ?>
                         </a>
                     </div>
@@ -119,22 +119,22 @@ $backendBase = $this->getBackendUrl('order/backend/order/index');
                                 <?php foreach ($orders as $order): ?>
                                     <?php
                                     $orderData = is_object($order) ? $order->getData() : $order;
-                                    $status = $orderData[Order::fields_STATUS] ?? '';
-                                    $paymentStatus = $orderData[Order::fields_PAYMENT_STATUS] ?? '';
-                                    $fulfillmentStatus = $orderData[Order::fields_FULFILLMENT_STATUS] ?? '';
+                                    $status = $orderData[Order::schema_fields_STATUS] ?? '';
+                                    $paymentStatus = $orderData[Order::schema_fields_PAYMENT_STATUS] ?? '';
+                                    $fulfillmentStatus = $orderData[Order::schema_fields_FULFILLMENT_STATUS] ?? '';
                                     ?>
                                     <tr>
                                         <td>
-                                            <a href="<?= $this->getBackendUrl('order/backend/order/view', ['id' => $orderData[Order::fields_ID] ?? '']) ?>">
-                                                <?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?>
+                                            <a href="<?= $this->getBackendUrl('weline_order/backend/order/view', ['id' => $orderData[Order::schema_fields_ID] ?? '']) ?>">
+                                                <?= htmlspecialchars($orderData[Order::schema_fields_ORDER_NUMBER] ?? '') ?>
                                             </a>
                                         </td>
                                         <td>
-                                            <div><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_NAME] ?? '') ?></div>
-                                            <small class="text-muted"><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_EMAIL] ?? '') ?></small>
+                                            <div><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_NAME] ?? '') ?></div>
+                                            <small class="text-muted"><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_EMAIL] ?? '') ?></small>
                                         </td>
                                         <td>
-                                            <strong><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_GRAND_TOTAL] ?? 0), 2) ?></strong>
+                                            <strong><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_GRAND_TOTAL] ?? 0), 2) ?></strong>
                                         </td>
                                         <td>
                                             <?php
@@ -168,14 +168,14 @@ $backendBase = $this->getBackendUrl('order/backend/order/index');
                                             ?>
                                             <span class="badge bg-<?= $fulfillmentClass ?>"><?= $fulfillmentText ?></span>
                                         </td>
-                                        <td><?= $orderData[Order::fields_CREATED_AT] ?? '' ?></td>
+                                        <td><?= $orderData[Order::schema_fields_CREATED_AT] ?? '' ?></td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
-                                                <a href="<?= $this->getBackendUrl('order/backend/order/view', ['id' => $orderData[Order::fields_ID] ?? '']) ?>" 
+                                                <a href="<?= $this->getBackendUrl('weline_order/backend/order/view', ['id' => $orderData[Order::schema_fields_ID] ?? '']) ?>" 
                                                    class="btn btn-primary btn-sm" title="<?= __('查看详情') ?>">
                                                     <i class="mdi mdi-eye"></i>
                                                 </a>
-                                                <a href="<?= $this->getBackendUrl('order/backend/order/edit', ['id' => $orderData[Order::fields_ID] ?? '']) ?>" 
+                                                <a href="<?= $this->getBackendUrl('weline_order/backend/order/edit', ['id' => $orderData[Order::schema_fields_ID] ?? '']) ?>" 
                                                    class="btn btn-info btn-sm" title="<?= __('编辑') ?>">
                                                     <i class="mdi mdi-pencil"></i>
                                                 </a>

@@ -13,7 +13,7 @@ namespace Weline\Backend\Test;
 
 use Weline\Backend\Model\Menu;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class MenuTest extends TestCore
 {

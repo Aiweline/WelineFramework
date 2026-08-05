@@ -23,6 +23,308 @@
 (function (window, document) {
     'use strict';
 
+    window.WelineSmartDropdown = (function () {
+        const VERSION = '2.1.0';
+        const HOVER_BRIDGE_ATTR = 'data-weline-dropdown-hover-bridge';
+
+        function numberOr(value, fallback) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
+
+        function viewportRect() {
+            const viewport = window.visualViewport;
+            const left = viewport ? viewport.offsetLeft : 0;
+            const top = viewport ? viewport.offsetTop : 0;
+            const width = viewport
+                ? viewport.width
+                : (document.documentElement.clientWidth || window.innerWidth || 0);
+            const height = viewport
+                ? viewport.height
+                : (document.documentElement.clientHeight || window.innerHeight || 0);
+
+            return {
+                left,
+                top,
+                right: left + width,
+                bottom: top + height,
+                width,
+                height
+            };
+        }
+
+        function resolveScrollContainer(panel, value) {
+            if (!value) {
+                return null;
+            }
+            if (typeof value === 'string') {
+                return panel.querySelector(value);
+            }
+            return value;
+        }
+
+        function shouldHoverBridge(anchor, panel, config) {
+            if (config.hoverBridge === false) {
+                return false;
+            }
+            if (config.hoverBridge === true) {
+                return true;
+            }
+            // 默认：面板仍在锚点子树内（place / portal:false）时桥接 gap，保住 CSS :hover。
+            return !!(anchor && panel && typeof anchor.contains === 'function' && anchor.contains(panel));
+        }
+
+        function clearHoverBridge(anchor) {
+            if (!anchor || !anchor.querySelectorAll) {
+                return;
+            }
+            const bridges = anchor.querySelectorAll('[' + HOVER_BRIDGE_ATTR + ']');
+            for (let i = 0; i < bridges.length; i++) {
+                bridges[i].remove();
+            }
+        }
+
+        function ensureHoverBridge(anchor, panel, placement, gap) {
+            if (!anchor) {
+                return;
+            }
+            const size = Math.max(0, Math.ceil(numberOr(gap, 0)));
+            if (size <= 0) {
+                clearHoverBridge(anchor);
+                return;
+            }
+
+            const anchorStyle = window.getComputedStyle(anchor);
+            if (anchorStyle.position === 'static') {
+                anchor.style.position = 'relative';
+            }
+
+            let bridge = null;
+            const existing = anchor.querySelectorAll(':scope > [' + HOVER_BRIDGE_ATTR + ']');
+            if (existing.length) {
+                bridge = existing[0];
+                for (let i = 1; i < existing.length; i++) {
+                    existing[i].remove();
+                }
+            } else {
+                bridge = document.createElement('div');
+                bridge.setAttribute(HOVER_BRIDGE_ATTR, '');
+                bridge.setAttribute('aria-hidden', 'true');
+                if (panel && panel.parentNode === anchor) {
+                    anchor.insertBefore(bridge, panel);
+                } else {
+                    anchor.appendChild(bridge);
+                }
+            }
+
+            let leftPx = 0;
+            let rightPx = 0;
+            if (panel && typeof panel.getBoundingClientRect === 'function') {
+                const anchorRect = anchor.getBoundingClientRect();
+                const panelRect = panel.getBoundingClientRect();
+                const unionLeft = Math.min(anchorRect.left, panelRect.left);
+                const unionRight = Math.max(anchorRect.right, panelRect.right);
+                leftPx = Math.round(unionLeft - anchorRect.left);
+                rightPx = Math.round(anchorRect.right - unionRight);
+            }
+
+            bridge.style.position = 'absolute';
+            bridge.style.left = leftPx + 'px';
+            bridge.style.right = rightPx + 'px';
+            bridge.style.width = 'auto';
+            bridge.style.height = size + 'px';
+            bridge.style.pointerEvents = 'auto';
+            bridge.style.background = 'transparent';
+            bridge.style.zIndex = '1';
+            if (placement === 'top') {
+                bridge.style.top = 'auto';
+                bridge.style.bottom = '100%';
+            } else {
+                bridge.style.bottom = 'auto';
+                bridge.style.top = '100%';
+            }
+        }
+
+        function compute(anchorRect, panelRect, panel, config = {}) {
+            const viewport = viewportRect();
+            const margin = Math.max(0, numberOr(config.margin, 8));
+            const gap = Math.max(0, numberOr(config.gap, 4));
+            const availableWidth = Math.max(0, viewport.width - margin * 2);
+            const configuredMinWidth = Math.max(0, numberOr(config.minWidth, 0));
+            const configuredMaxWidth = Math.max(
+                0,
+                numberOr(config.maxWidth, availableWidth)
+            );
+            const naturalWidth = Math.max(
+                anchorRect.width || 0,
+                panelRect.width || 0,
+                panel.scrollWidth || 0,
+                configuredMinWidth
+            );
+            const width = Math.min(
+                naturalWidth,
+                availableWidth,
+                configuredMaxWidth || availableWidth
+            );
+            const naturalHeight = Math.max(panel.scrollHeight || 0, panelRect.height || 0);
+            const preferredHeight = Math.max(
+                0,
+                numberOr(config.preferredHeight, naturalHeight)
+            );
+            const heightTarget = Math.min(
+                naturalHeight || preferredHeight,
+                preferredHeight || naturalHeight
+            );
+            const belowSpace = Math.max(
+                0,
+                viewport.bottom - margin - anchorRect.bottom - gap
+            );
+            const aboveSpace = Math.max(
+                0,
+                anchorRect.top - viewport.top - margin - gap
+            );
+            const openUp = belowSpace < heightTarget && aboveSpace > belowSpace;
+            const availableHeight = openUp ? aboveSpace : belowSpace;
+            const maxHeight = Math.max(
+                0,
+                Math.floor(Math.min(heightTarget || availableHeight, availableHeight))
+            );
+            const renderedHeight = Math.min(naturalHeight || maxHeight, maxHeight);
+            const align = config.align === 'end' || config.align === 'center'
+                ? config.align
+                : 'start';
+            let left = anchorRect.left;
+            if (align === 'end') {
+                left = anchorRect.right - width;
+            } else if (align === 'center') {
+                left = anchorRect.left + (anchorRect.width - width) / 2;
+            }
+            left = Math.min(
+                Math.max(left, viewport.left + margin),
+                Math.max(viewport.left + margin, viewport.right - margin - width)
+            );
+            let top = openUp
+                ? anchorRect.top - gap - renderedHeight
+                : anchorRect.bottom + gap;
+            top = Math.min(
+                Math.max(top, viewport.top + margin),
+                Math.max(viewport.top + margin, viewport.bottom - margin - renderedHeight)
+            );
+
+            return {
+                left,
+                top,
+                width,
+                maxHeight,
+                placement: openUp ? 'top' : 'bottom',
+                gap,
+                viewport
+            };
+        }
+
+        function place(anchor, panel, config = {}) {
+            if (!anchor || !panel) {
+                return null;
+            }
+            if (typeof panel.__welineSmartDropdownOriginalStyle === 'undefined') {
+                panel.__welineSmartDropdownOriginalStyle = panel.getAttribute('style');
+            }
+
+            panel.style.boxSizing = 'border-box';
+            panel.style.position = 'fixed';
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+            panel.style.margin = '0';
+            panel.style.width = '';
+            panel.style.minWidth = '';
+            panel.style.maxWidth = '';
+            panel.style.maxHeight = '';
+
+            const anchorRect = anchor.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            const next = compute(anchorRect, panelRect, panel, config);
+            panel.style.left = Math.round(next.left) + 'px';
+            panel.style.top = Math.round(next.top) + 'px';
+            panel.style.width = Math.round(next.width) + 'px';
+            panel.style.minWidth = Math.round(next.width) + 'px';
+            panel.style.maxWidth = Math.round(next.width) + 'px';
+            panel.style.maxHeight = Math.round(next.maxHeight) + 'px';
+            panel.style.zIndex = String(numberOr(config.zIndex, 4200));
+            panel.setAttribute('data-weline-dropdown-placement', next.placement);
+
+            const scrollContainer = resolveScrollContainer(panel, config.scrollContainer);
+            if (scrollContainer) {
+                const chromeHeight = Math.max(
+                    0,
+                    (panel.scrollHeight || 0) - (scrollContainer.scrollHeight || 0)
+                );
+                scrollContainer.style.maxHeight = Math.max(
+                    0,
+                    next.maxHeight - chromeHeight
+                ) + 'px';
+                panel.style.overflowY = config.overflowY || 'hidden';
+            } else if (config.overflowY) {
+                panel.style.overflowY = config.overflowY;
+            }
+
+            if (shouldHoverBridge(anchor, panel, config)) {
+                ensureHoverBridge(anchor, panel, next.placement, next.gap);
+            } else {
+                clearHoverBridge(anchor);
+            }
+
+            return next;
+        }
+
+        function mount(anchor, panel, config = {}) {
+            if (!anchor || !panel) {
+                return null;
+            }
+            if (!panel.__welineSmartDropdownOriginalParent) {
+                panel.__welineSmartDropdownOriginalParent = panel.parentNode || null;
+                panel.__welineSmartDropdownOriginalNext = panel.nextSibling || null;
+            }
+            if (typeof panel.__welineSmartDropdownOriginalStyle === 'undefined') {
+                panel.__welineSmartDropdownOriginalStyle = panel.getAttribute('style');
+            }
+            if (config.portal !== false && panel.parentNode !== document.body) {
+                document.body.appendChild(panel);
+            }
+            panel.hidden = false;
+            panel.style.display = config.display || 'block';
+            return place(anchor, panel, config);
+        }
+
+        function unmount(panel) {
+            if (!panel) {
+                return;
+            }
+            const parent = panel.__welineSmartDropdownOriginalParent;
+            const next = panel.__welineSmartDropdownOriginalNext;
+            if (parent) {
+                if (next && next.parentNode === parent) {
+                    parent.insertBefore(panel, next);
+                } else {
+                    parent.appendChild(panel);
+                }
+            }
+            const originalStyle = panel.__welineSmartDropdownOriginalStyle;
+            if (originalStyle === null || typeof originalStyle === 'undefined') {
+                panel.removeAttribute('style');
+            } else {
+                panel.setAttribute('style', originalStyle);
+            }
+            panel.hidden = true;
+            panel.removeAttribute('data-weline-dropdown-placement');
+            clearHoverBridge(parent);
+            if (panel.parentNode && panel.parentNode !== parent) {
+                clearHoverBridge(panel.parentNode);
+            }
+        }
+
+        return { version: VERSION, compute, place, mount, unmount };
+    })();
+
     // 防止重复初始化
     if (window.Weline && window.Weline.__initialized) {
         return;
@@ -2405,6 +2707,31 @@
     window.w_providerQuery = window.w_query;
     setupDeprecatedConfigAlias();
 
+    (function preLoadScopeBootstrapApi() {
+        const preload = () => {
+            if (!document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
+                return;
+            }
+            Weline.load('api').then((apiModule) => {
+                if (apiModule && typeof apiModule.bootstrapScope === 'function') {
+                    return apiModule.bootstrapScope();
+                }
+                return null;
+            }).catch(() => {
+                // The API module emits a structured scope-bootstrap failure
+                // event; the theme loader keeps rendering the current page.
+            });
+        };
+
+        if (document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
+            preload();
+        } else if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', preload, { once: true });
+        } else {
+            setTimeout(preload, 0);
+        }
+    })();
+
     /**
      * 注册延迟立即加载队列的 flush 时机
      * - 若 DOM 尚未加载完成，在 DOMContentLoaded 后执行
@@ -2922,21 +3249,10 @@
     (function initLanguageSwitcher() {
         /**
          * 获取当前语言代码
+         * 优先级与服务端 State::getLang / WelineI18n 一致：URL 路径段 > Cookie > 配置
+         * （禁止 Cookie 覆盖 /en_US 等显式前缀，否则切换器会显示中文而页面仍是英文）
          */
         function getCurrentLang() {
-            const cookieLang = readCookieValue('WELINE_USER_LANG');
-            if (cookieLang) {
-                return cookieLang;
-            }
-
-            // 从 URL 参数获取
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlLang = urlParams.get('lang');
-            if (urlLang) {
-                return urlLang;
-            }
-
-            // 从 URL 路径获取（如 /zh_Hans_CN/...）
             const pathParts = window.location.pathname.split('/').filter(Boolean);
             for (const part of pathParts) {
                 if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
@@ -2944,7 +3260,17 @@
                 }
             }
 
-            // 从配置获取
+            const cookieLang = readCookieValue('WELINE_USER_LANG');
+            if (cookieLang) {
+                return cookieLang;
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLang = urlParams.get('lang');
+            if (urlLang) {
+                return urlLang;
+            }
+
             const config = window.__WelineThemeConfig || runtimeConfig || {};
             return config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || 'zh_Hans_CN';
         }
@@ -3069,6 +3395,11 @@
             }
 
             languageSwitchers.forEach(languageSwitcher => {
+                // header choice selector 的 href 由服务端 / WelineI18n 维护，勿用旧 inject_path 覆盖
+                if (languageSwitcher.getAttribute('data-weline-choice-switcher') === 'language') {
+                    return;
+                }
+
                 const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
                 languageOptions.forEach(option => {
                     const langCode = option.getAttribute('data-lang') || option.dataset.lang;
@@ -3181,10 +3512,13 @@
 
         initAfterDOMReady();
 
-        // 监听语言切换事件
+        // 监听语言切换事件（header choice selector 已自管 cookie + 跳转，避免双处理器抢点击）
         document.addEventListener('click', function (e) {
             const languageSwitcher = e.target.closest('[data-i18n-switcher]');
             if (!languageSwitcher) {
+                return;
+            }
+            if (languageSwitcher.getAttribute('data-weline-choice-switcher') === 'language') {
                 return;
             }
 

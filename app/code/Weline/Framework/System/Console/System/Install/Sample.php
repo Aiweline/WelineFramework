@@ -18,23 +18,18 @@ class Sample extends CommandAbstract
         $this->printer->note('安装命令示例：');
         $line_break = IS_WIN ? '^' : '\\';
         $this->printer->success('php bin/w system:install ' . $line_break . '
---db-type=mysql ' . $line_break . '
+--db-type=pgsql ' . $line_break . '
 --db-hostname=127.0.0.1 ' . $line_break . '
+--db-hostport=5432 ' . $line_break . '
 --db-database=weline ' . $line_break . '
 --db-username=weline ' . $line_break . '
 --db-password=weline ' . $line_break . '
---db-charset=utf8mb4 ' . $line_break . '
---db-collate=utf8mb4_general_ci' . $line_break . '
---sandbox_db-type=mysql ' . $line_break . '
---sandbox_db-hostname=127.0.0.1 ' . $line_break . '
---sandbox_db-database=sandbox_weline ' . $line_break . '
---sandbox_db-username=sandbox_weline ' . $line_break . '
---sandbox_db-password=sandbox_weline ' . $line_break . '
---sandbox_db-charset=utf8mb4 ' . $line_break . '
---sandbox_db-collate=utf8mb4_general_ci
+--db-charset=utf8 ' . $line_break . '
+--db-collate=utf8_general_ci' . $line_break . '
+--sandbox_db-type=sqlite
             ');
         $this->printer->note('如果你是Windows11：');
-        $this->printer->success('php bin/w system:install  --db-type=mysql  --db-hostname=127.0.0.1  --db-database=weline  --db-username=weline  --db-password=weline --db-charset=utf8 --db-collate=utf8_general_ci --sandbox_db-type=mysql  --sandbox_db-hostname=127.0.0.1  --sandbox_db-database=sandbox_weline  --sandbox_db-username=sandbox_weline  --sandbox_db-password=sandbox_weline --db-charset=utf8mb4 --sandbox_db-collate=utf8mb4_general_ci');
+        $this->printer->success('php bin/w system:install --db-type=pgsql --db-hostname=127.0.0.1 --db-hostport=5432 --db-database=weline --db-username=weline --db-password=weline --db-charset=utf8 --db-collate=utf8_general_ci --sandbox_db-type=sqlite');
         exit();
     }
 

@@ -24,8 +24,12 @@ use Weline\Queue\Model\Queue\Type;
 #[Index(name: 'type_id', columns: ['type_id'])]
 #[Index(name: 'idx_finished', columns: ['finished'])]
 #[Index(name: 'idx_biz_key', columns: ['biz_key'])]
+#[Index(name: 'uk_idempotency_key', columns: ['idempotency_key'], type: 'UNIQUE')]
+#[Index(name: 'idx_queue_dispatch_lease', columns: ['status', 'dispatch_until'])]
+#[Index(name: 'idx_queue_dispatch_ready', columns: ['status', 'finished', 'auto', 'not_before'])]
 class Queue extends EavModel implements QueueTaskContextInterface
 {
+    public const IDEMPOTENCY_KEY_MAX_BYTES = 191;
     const entity_code = 'queue';
     const entity_name = '队列实体';
     const eav_entity_id_field_type = 'integer';
@@ -61,6 +65,33 @@ class Queue extends EavModel implements QueueTaskContextInterface
     /** 业务侧自定义检索键（如会话/幂等标识），可建索引精确定位；留空表示未使用 */
     #[Col('varchar', 191, nullable: true, comment: '业务检索键')]
     public const schema_fields_BIZ_KEY = 'biz_key';
+    /** 系统幂等键；NULL 表示未启用，非空值由唯一索引保证只创建一条队列 */
+    #[Col('varchar', 191, nullable: true, comment: '系统幂等键')]
+    public const schema_fields_IDEMPOTENCY_KEY = 'idempotency_key';
+    /** 当前派发所有者的 fencing token；Worker 只有匹配时才能接管 */
+    #[Col('char', 64, nullable: true, comment: '派发 fencing token')]
+    public const schema_fields_DISPATCH_TOKEN = 'dispatch_token';
+    /** pending -> running 派发 claim 的到期时间；Worker 接管后清空 */
+    #[Col('datetime', nullable: true, comment: '派发 claim 到期时间')]
+    public const schema_fields_DISPATCH_UNTIL = 'dispatch_until';
+    /** Scheduler 在此 UTC 时间之前不得派发；NULL 表示立即可见 */
+    #[Col('datetime', nullable: true, comment: '最早可派发 UTC 时间')]
+    public const schema_fields_NOT_BEFORE = 'not_before';
+    /** Scope 信封（P1b）：判别 kind，NULL 表示 pre-P1b 遗留行（须经冻结映射或 quarantine，禁止猜零号站） */
+    #[Col('varchar', 16, nullable: true, comment: 'Scope kind: global|website|store|channel')]
+    public const schema_fields_SCOPE_KIND = 'scope_kind';
+    #[Col('int', 11, nullable: true, comment: 'Scope 网站ID（0 为系统默认站，合法）')]
+    public const schema_fields_SCOPE_WEBSITE_ID = 'scope_website_id';
+    #[Col('varchar', 64, nullable: true, comment: 'Scope 网站代码')]
+    public const schema_fields_SCOPE_WEBSITE_CODE = 'scope_website_code';
+    #[Col('varchar', 64, nullable: true, comment: 'Scope 店铺代码')]
+    public const schema_fields_SCOPE_STORE_CODE = 'scope_store_code';
+    #[Col('varchar', 64, nullable: true, comment: 'Scope 渠道代码')]
+    public const schema_fields_SCOPE_CHANNEL_CODE = 'scope_channel_code';
+    #[Col('varchar', 16, nullable: true, comment: 'Scope 店铺模式 normal|dev|test')]
+    public const schema_fields_SCOPE_STORE_MODE = 'scope_store_mode';
+    #[Col('varchar', 16, nullable: true, comment: 'Scope 信封版本（v1）')]
+    public const schema_fields_SCOPE_ENVELOPE_VERSION = 'scope_envelope_version';
     public const status_pending = QueueStatus::PENDING;
     public const status_running = QueueStatus::RUNNING;
     public const status_done = QueueStatus::DONE;
@@ -153,6 +184,165 @@ public function getTypeId(): int
         }
 
         return $this->setData(self::schema_fields_BIZ_KEY, $v);
+    }
+
+    /**
+     * 读取 Scope 信封（P1b）。只有全部 v1 固定列均为空的 pre-P1b 遗留行
+     * 返回 null，消费方才可按迁移策略视作 global。部分写入、非法组合或
+     * 未知版本必须抛错，禁止静默降级为 Global。
+     */
+    public function getScopeEnvelope(): ?\Weline\Framework\Runtime\ScopeEnvelope
+    {
+        $storage = [
+            'scope_kind' => $this->getData(self::schema_fields_SCOPE_KIND),
+            'website_id' => $this->getData(self::schema_fields_SCOPE_WEBSITE_ID),
+            'website_code' => $this->getData(self::schema_fields_SCOPE_WEBSITE_CODE),
+            'store_code' => $this->getData(self::schema_fields_SCOPE_STORE_CODE),
+            'channel_code' => $this->getData(self::schema_fields_SCOPE_CHANNEL_CODE),
+            'store_mode' => $this->getData(self::schema_fields_SCOPE_STORE_MODE),
+            'envelope_version' => $this->getData(self::schema_fields_SCOPE_ENVELOPE_VERSION),
+        ];
+        $hasStoredScopeValue = false;
+        foreach ($storage as $value) {
+            if ($value !== null && $value !== '') {
+                $hasStoredScopeValue = true;
+                break;
+            }
+        }
+        if (!$hasStoredScopeValue) {
+            return null;
+        }
+
+        return \Weline\Framework\Runtime\ScopeEnvelope::fromV1StorageArray($storage);
+    }
+
+    /**
+     * P1B-002：歧义 Scope 遗留行 quarantine 标记（写入 result 前缀，不可领取）。
+     */
+    public function isScopeQuarantined(): bool
+    {
+        $result = (string)$this->getData(self::schema_fields_result);
+
+        return \str_starts_with(
+            $result,
+            \Weline\Queue\Service\QueueScopeProducerMapping::QUARANTINE_RESULT_PREFIX
+        );
+    }
+
+    /**
+     * 写入 Scope 信封固定列（P1b）。传 null 显式写 global。
+     */
+    public function setScopeEnvelope(?\Weline\Framework\Runtime\ScopeEnvelope $envelope): static
+    {
+        $envelope ??= \Weline\Framework\Runtime\ScopeEnvelope::of(
+            \Weline\Framework\Runtime\ScopeIdentity::global(),
+        );
+        $storage = $envelope->toV1StorageArray();
+
+        foreach ([
+            self::schema_fields_SCOPE_KIND => $storage['scope_kind'],
+            self::schema_fields_SCOPE_WEBSITE_ID => $storage['website_id'],
+            self::schema_fields_SCOPE_WEBSITE_CODE => $storage['website_code'],
+            self::schema_fields_SCOPE_STORE_CODE => $storage['store_code'],
+            self::schema_fields_SCOPE_CHANNEL_CODE => $storage['channel_code'],
+            self::schema_fields_SCOPE_STORE_MODE => $storage['store_mode'],
+            self::schema_fields_SCOPE_ENVELOPE_VERSION => $storage['envelope_version'],
+        ] as $field => $value) {
+            // AbstractData::setData(array) replaces the complete data bag. Scope
+            // capture happens in save_before(), so replacing here would discard
+            // type_id/name/content that were already prepared for INSERT.
+            $this->setData($field, $value);
+        }
+
+        return $this;
+    }
+
+    public function save_before()
+    {
+        parent::save_before();
+        // 先验证完整固定列；只有七列全空才是 legacy/null，任何部分写入、
+        // 非规范 kind 或未知版本都必须在落库前失败。
+        $envelope = $this->getScopeEnvelope();
+        $isNew = !$this->hasData(self::schema_fields_ID) || (int)$this->getData(self::schema_fields_ID) <= 0;
+        // P1b：新建队列行完全未指定信封时，自动捕获当前请求 Scope（无上下文 → global）
+        if ($isNew && $envelope === null) {
+            $this->setScopeEnvelope(\Weline\Framework\Runtime\ScopeEnvelope::capture());
+        }
+    }
+
+    public function getIdempotencyKey(): string
+    {
+        $value = $this->getData(self::schema_fields_IDEMPOTENCY_KEY);
+
+        return ($value === null || $value === '') ? '' : (string)$value;
+    }
+
+    public function setIdempotencyKey(?string $idempotencyKey): static
+    {
+        if ($idempotencyKey === null) {
+            return $this->setData(self::schema_fields_IDEMPOTENCY_KEY, null);
+        }
+        $value = \trim($idempotencyKey);
+        if ($value === '') {
+            return $this->setData(self::schema_fields_IDEMPOTENCY_KEY, null);
+        }
+        if (\strlen($value) > self::IDEMPOTENCY_KEY_MAX_BYTES) {
+            throw new \InvalidArgumentException((string)__('幂等键不能超过 %{1} 字节', [
+                self::IDEMPOTENCY_KEY_MAX_BYTES,
+            ]));
+        }
+
+        return $this->setData(self::schema_fields_IDEMPOTENCY_KEY, $value);
+    }
+
+    public function getDispatchToken(): string
+    {
+        $value = $this->getData(self::schema_fields_DISPATCH_TOKEN);
+
+        return ($value === null || $value === '') ? '' : (string)$value;
+    }
+
+    public function setDispatchToken(?string $dispatchToken): static
+    {
+        if ($dispatchToken === null || \trim($dispatchToken) === '') {
+            return $this->setData(self::schema_fields_DISPATCH_TOKEN, null);
+        }
+        $value = \strtolower(\trim($dispatchToken));
+        if (\preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {
+            throw new \InvalidArgumentException('queue_dispatch_token_invalid');
+        }
+
+        return $this->setData(self::schema_fields_DISPATCH_TOKEN, $value);
+    }
+
+    public function getDispatchUntil(): string
+    {
+        $value = $this->getData(self::schema_fields_DISPATCH_UNTIL);
+
+        return ($value === null || $value === '') ? '' : (string)$value;
+    }
+
+    public function setDispatchUntil(?string $dispatchUntil): static
+    {
+        return $this->setData(
+            self::schema_fields_DISPATCH_UNTIL,
+            $dispatchUntil === null || \trim($dispatchUntil) === '' ? null : \trim($dispatchUntil),
+        );
+    }
+
+    public function getNotBefore(): string
+    {
+        $value = $this->getData(self::schema_fields_NOT_BEFORE);
+
+        return ($value === null || $value === '') ? '' : (string)$value;
+    }
+
+    public function setNotBefore(?string $notBefore): static
+    {
+        return $this->setData(
+            self::schema_fields_NOT_BEFORE,
+            $notBefore === null || \trim($notBefore) === '' ? null : \trim($notBefore),
+        );
     }
     public function setStartAt(string $start_at): static
     {
@@ -320,6 +510,29 @@ public function getTypeId(): int
             ];
         }
         return $this->getType()->getAttributes($options_data);
+    }
+
+    /**
+     * Return every attribute owned by the Queue EAV entity, independent of
+     * the row's current type. Safe deletion must also remove values left by a
+     * previous type after an A -> B type change.
+     *
+     * @return array<int, \Weline\Eav\Api\EavAttribute>
+     */
+    public function getAllEavAttributes(): array
+    {
+        /** @var EavAttribute $attributeModel */
+        $attributeModel = ObjectManager::make(EavAttribute::class);
+        $attributeModel->clearData()->clearQuery()
+            ->where(EavAttribute::schema_fields_eav_entity_id, $this->getEavEntityId())
+            ->select()
+            ->fetch();
+        $attributes = $attributeModel->getItems();
+        foreach ($attributes as $attribute) {
+            $attribute->current_setEntity($this);
+        }
+
+        return $attributes;
     }
     public function getAttribute(string $code, int|string $entity_id = 0, array $options_data = []): EavAttribute|null
     {

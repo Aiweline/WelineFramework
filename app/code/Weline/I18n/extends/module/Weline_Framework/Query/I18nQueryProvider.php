@@ -7,7 +7,9 @@ namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\I18n\Api\Translation\TranslationResolverInterface;
 use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
@@ -34,6 +36,7 @@ class I18nQueryProvider implements QueryProviderInterface
             'getLocaleByCode' => $this->getLocaleByCode($params),
             'getLocaleName' => $this->getLocaleName($params),
             'getTranslations' => $this->getTranslations($params),
+            'resolveCurrentScopeTranslation' => $this->resolveCurrentScopeTranslation($params),
             'collect' => $this->collect($params),
             default => throw new \InvalidArgumentException((string)__('Unsupported i18n operation: %{1}', $operation)),
         };
@@ -158,6 +161,43 @@ class I18nQueryProvider implements QueryProviderInterface
         ];
     }
 
+    /**
+     * Resolve one phrase against the trusted Website/Store/Channel request
+     * scope. The caller cannot provide or replace ScopeIdentity.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function resolveCurrentScopeTranslation(array $params): array
+    {
+        $source = trim((string)($params['source'] ?? ''));
+        if ($source === '') {
+            throw new \InvalidArgumentException((string)__('翻译原文不能为空'));
+        }
+        $identity = RequestContext::scopeIdentity();
+        if ($identity === null || $identity->isGlobal()) {
+            return [
+                'success' => false,
+                'error_code' => 'i18n_request_scope_unavailable',
+                'message' => (string)__('当前请求没有可用的商城 Scope'),
+            ];
+        }
+        $locale = trim((string)($params['locale_code'] ?? Cookie::getLangLocal() ?? 'zh_Hans_CN'));
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+
+        /** @var TranslationResolverInterface $resolver */
+        $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
+        $result = $resolver->translateForScope($source, $identity, $locale);
+        $payload = $result->toArray();
+
+        return [
+            'success' => true,
+            'data' => $payload,
+        ] + $payload;
+    }
+
     private function collect(array $params): array
     {
         $words = $params['words'] ?? [];
@@ -174,28 +214,28 @@ class I18nQueryProvider implements QueryProviderInterface
             $module = 'Weline_I18n';
         }
 
-        $collectData = [];
-        foreach ($words as $key => $_word) {
-            if (!\is_string($key) || $key === '') {
-                continue;
-            }
-            $collectData[] = [
-                Dictionary::schema_fields_WORD => $key,
-                Dictionary::schema_fields_IS_BACKEND => 0,
-                Dictionary::schema_fields_MODULE => \substr($module, 0, 255),
-            ];
-        }
-
-        if ($collectData === []) {
-            return [
-                'success' => true,
-                'message' => (string)__('No frontend translation words to collect.'),
-                'count' => 0,
-            ];
-        }
-
-        $created = 0;
         try {
+            $collectData = [];
+            foreach ($words as $key => $_word) {
+                if (!\is_string($key)) {
+                    continue;
+                }
+                $collectData[] = [
+                    Dictionary::schema_fields_WORD => Dictionary::assertWord($key),
+                    Dictionary::schema_fields_IS_BACKEND => 0,
+                    Dictionary::schema_fields_MODULE => \substr($module, 0, 255),
+                ];
+            }
+
+            if ($collectData === []) {
+                return [
+                    'success' => true,
+                    'message' => (string)__('No frontend translation words to collect.'),
+                    'count' => 0,
+                ];
+            }
+
+            $created = 0;
             foreach ($collectData as $row) {
                 $dictionary = clone $this->dictionary;
                 $dictionary->clear()
@@ -286,6 +326,20 @@ class I18nQueryProvider implements QueryProviderInterface
                     'description' => __('Get frontend translation dictionary.'),
                     'params' => [
                         ['name' => 'words', 'type' => 'list', 'required' => false, 'max_items' => 200],
+                    ],
+                    'returns' => ['type' => 'array'],
+                ],
+                [
+                    'name' => 'resolveCurrentScopeTranslation',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'description' => __('按可信请求 Scope 解析一条前台翻译。'),
+                    'params' => [
+                        ['name' => 'source', 'type' => 'string', 'required' => true, 'max_length' => 255],
+                        ['name' => 'locale_code', 'type' => 'string', 'required' => false, 'max_length' => 32],
                     ],
                     'returns' => ['type' => 'array'],
                 ],

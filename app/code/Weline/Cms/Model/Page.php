@@ -25,6 +25,11 @@ class Page extends Model
     public const STATUS_PUBLISHED = 'published';
     public const STATUS_DISABLED = 'disabled';
 
+    public const SLUG_MODE_AUTO = 'auto';
+    public const SLUG_MODE_MANUAL = 'manual';
+    public const SLUG_MODE_FROZEN = 'frozen';
+    public const SLUG_MODES = [self::SLUG_MODE_AUTO, self::SLUG_MODE_MANUAL, self::SLUG_MODE_FROZEN];
+
     public array $_unit_primary_keys = [self::schema_fields_ID];
     public array $_index_sort_keys = [
         self::schema_fields_WEBSITE_ID,
@@ -48,6 +53,12 @@ class Page extends Model
     public const schema_fields_IDENTIFIER = 'identifier';
     #[Col(type: 'varchar', length: 255, nullable: false, comment: '页面标题')]
     public const schema_fields_TITLE = 'title';
+    #[Col(type: 'varchar', length: 16, nullable: false, default: '', comment: '页面源语言')]
+    public const schema_fields_SOURCE_LOCALE = 'source_locale';
+    #[Col(type: 'varchar', length: 16, nullable: false, default: '', comment: 'Slug 管理模式')]
+    public const schema_fields_SLUG_MODE = 'slug_mode';
+    #[Col(type: 'varchar', length: 64, nullable: false, default: '', comment: 'Slug 源标题哈希')]
+    public const schema_fields_SLUG_SOURCE_HASH = 'slug_source_hash';
     #[Col(type: 'varchar', length: 32, nullable: false, default: self::STATUS_DRAFT, comment: '页面状态')]
     public const schema_fields_STATUS = 'status';
     #[Col(type: 'varchar', length: 128, nullable: false, default: 'default', comment: '页面范围')]
@@ -94,9 +105,50 @@ class Page extends Model
         return (string)($this->getData(self::schema_fields_SLUG) ?: '');
     }
 
+    public function getSlugMode(): string
+    {
+        $mode = (string)($this->getData(self::schema_fields_SLUG_MODE) ?: '');
+        return in_array($mode, self::SLUG_MODES, true) ? $mode : '';
+    }
+
+    public function setSlugMode(string $mode): static
+    {
+        if ($mode !== '' && !in_array($mode, self::SLUG_MODES, true)) {
+            throw new \InvalidArgumentException((string)__('Slug 模式无效：%{1}', [$mode]));
+        }
+        $this->setData(self::schema_fields_SLUG_MODE, $mode);
+        return $this;
+    }
+
+    public function getSlugSourceHash(): string
+    {
+        return (string)($this->getData(self::schema_fields_SLUG_SOURCE_HASH) ?: '');
+    }
+
+    public function setSlugSourceHash(string $hash): static
+    {
+        $hash = trim($hash);
+        if (strlen($hash) > 64) {
+            throw new \InvalidArgumentException((string)__('Slug 源标题哈希长度不能超过 64。'));
+        }
+        $this->setData(self::schema_fields_SLUG_SOURCE_HASH, $hash);
+        return $this;
+    }
+
     public function getTitle(): string
     {
         return (string)($this->getData(self::schema_fields_TITLE) ?: '');
+    }
+
+    public function getSourceLocale(): string
+    {
+        return (string)($this->getData(self::schema_fields_SOURCE_LOCALE) ?: '');
+    }
+
+    public function setSourceLocale(string $locale): static
+    {
+        $this->setData(self::schema_fields_SOURCE_LOCALE, $locale);
+        return $this;
     }
 
     public function getStatus(): string
@@ -133,9 +185,12 @@ class Page extends Model
             'path_group_alias' => $this->getPathGroupAlias(),
             'path_group_label' => $this->getPathGroupAlias() !== '' ? $this->getPathGroupAlias() : $this->getPathGroup(),
             'slug' => $this->getSlug(),
+            'slug_mode' => $this->getSlugMode(),
+            'slug_source_hash' => $this->getSlugSourceHash(),
             'identifier' => $this->getIdentifier(),
             'path' => $this->getIdentifier(),
             'title' => $this->getTitle(),
+            'source_locale' => $this->getSourceLocale(),
             'status' => $this->getStatus(),
             'scope' => $this->getScope(),
             'created_at' => (string)($this->getData(self::schema_fields_CREATED_AT) ?: ''),

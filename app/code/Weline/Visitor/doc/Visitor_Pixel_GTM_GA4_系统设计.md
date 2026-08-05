@@ -191,3 +191,13 @@ track → w_pixel（热）
 ### 10.7 门禁
 
 波次 G 单测门禁：`test/Unit/gate-wave-g.sh`（schema / Cron / Router / archive / Retention / 冷查 / 保留配置）。
+
+### 10.8 SEO 优化证据快照
+
+服务端只读 QueryProvider operation：`visitor.analyticsOptimizationSnapshot`。它不暴露给浏览器，也不接受页面浏览、转化或价值的客户端覆盖值。
+
+- 必填：`website_id`、`start_date`、`end_date`；`website_id=0` 是合法的系统默认站。
+- 可选：`page_type`、`block_key`、`plan_revision`、`content_fingerprint`、`experiment_id`、`variant`、`target_event`。
+- 返回固定合同 `visitor.optimization_snapshot.v1`：`filters`、含按日明细的 `summary`、前窗 `comparison` 和 `data_quality`。
+- `data_quality` 始终包含 `attribution_version`、`thresholds`、`eligible`、`complete`、`reasons`。热表不存在、读失败或窗口无可归因 page_view 时，返回 `status=evidence_unavailable` 与稳定 reason，不抛出未处理异常。
+- 生产读取仅来自带 `pagebuilder_ai_v1` 归因版本的持久化 Pixel 事实；测试可通过服务构造器的内部行源注入确定性数据，但请求参数不能覆盖指标。

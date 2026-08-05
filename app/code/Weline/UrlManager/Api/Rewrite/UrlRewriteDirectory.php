@@ -54,21 +54,16 @@ final class UrlRewriteDirectory implements UrlRewriteDirectoryInterface
         if ($path === '') {
             return null;
         }
-        $row = (clone $this->urlRewrite)->reset()
-            ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(UrlRewrite::schema_fields_PATH, $path)
-            ->order(UrlRewrite::schema_fields_ID, 'DESC')
-            ->find()
-            ->fetch();
-        if (!$row->getId()) {
+        $row = $this->urlRewrite->findLatestByWebsiteAndPath($websiteId, $path);
+        if ($row === null) {
             return null;
         }
         return new UrlRewriteRecord(
-            id: (int)$row->getData(UrlRewrite::schema_fields_ID),
-            websiteId: (int)$row->getData(UrlRewrite::schema_fields_WEBSITE_ID),
+            id: (int)($row[UrlRewrite::schema_fields_ID] ?? 0),
+            websiteId: (int)($row[UrlRewrite::schema_fields_WEBSITE_ID] ?? 0),
             websiteIdSpecified: true,
-            path: (string)$row->getData(UrlRewrite::schema_fields_PATH),
-            rewrite: (string)$row->getData(UrlRewrite::schema_fields_REWRITE),
+            path: (string)($row[UrlRewrite::schema_fields_PATH] ?? ''),
+            rewrite: (string)($row[UrlRewrite::schema_fields_REWRITE] ?? ''),
         );
     }
 

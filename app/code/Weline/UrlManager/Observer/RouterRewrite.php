@@ -114,6 +114,47 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         return ltrim(strtok($uri, '?') ?: $uri, '/');
     }
 
+    /**
+     * Drop leading currency/locale segments so rewrite lookup uses the public
+     * pretty path (contact), matching rows stored without localization prefixes.
+     */
+    private function stripLocalizationPrefix(string $uri): string
+    {
+        $path = \trim($this->normalizeRewriteCacheUri($uri), '/');
+        if ($path === '') {
+            return '';
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', $path),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return '';
+        }
+
+        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+        $currency = \strtoupper(\trim((string)($localization['currency'] ?? '')));
+        $language = \trim((string)($localization['language'] ?? ''));
+        if ($language !== '') {
+            // Preserve the visitor-facing path locale after the pretty path is
+            // stripped for rewrite lookup. PageBuilder LIVE rendering reads this
+            // when REQUEST_URI no longer contains /en_US/...
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_URL_PATH_LANG', $language, 'RouterRewrite strip locale');
+            $_SERVER['WELINE_URL_PATH_LANG'] = $language;
+        }
+        if ($currency !== '' && isset($segments[0]) && \strtoupper((string)$segments[0]) === $currency) {
+            \array_shift($segments);
+        }
+        if ($language !== '' && isset($segments[0])
+            && \strcasecmp((string)$segments[0], $language) === 0
+        ) {
+            \array_shift($segments);
+        }
+
+        return \implode('/', $segments);
+    }
+
     private function hasProcessCache(string $cacheKey): bool
     {
         $expiresAt = self::$processCacheExpiresAt[$cacheKey] ?? 0;
@@ -150,7 +191,10 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         $cache = $this->getCache();
         $websiteId = $this->getCurrentWebsiteId();
         $cacheUri = $this->normalizeRewriteCacheUri($uri);
-        $cacheKey = $this->getCacheKey($cacheUri, $websiteId);
+        // Pretty URLs are stored without currency/locale prefixes. Strip them
+        // before lookup so /en_US/contact still hits rewrite=contact.
+        $lookupUri = $this->stripLocalizationPrefix($cacheUri);
+        $cacheKey = $this->getCacheKey($lookupUri, $websiteId);
         
         // 尝试从缓存获取（缓存按 website_id 隔离）
         // 返回值说明：
@@ -158,7 +202,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         // - null: 缓存了"未找到"的结果
         // - false: 缓存未命中，需要查询数据库
         $rewriteData = $this->getProcessCache($cacheKey);
-        if ($rewriteData === false && $this->isCanonicalDirectRoute($cacheUri)) {
+        if ($rewriteData === false && $this->isCanonicalDirectRoute($lookupUri)) {
             $this->setProcessCache($cacheKey, 'not_found');
             return;
         }
@@ -183,9 +227,9 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         }
         
         // $rewriteData === false，缓存未命中，查询数据库
-        $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $cacheUri);
+        $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $lookupUri);
         if (!$rewrite->getId()) {
-            $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $cacheUri);
+            $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $lookupUri);
         }
         
         if ($rewrite->getId()) {
@@ -206,7 +250,8 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 $rewriteData['website_id']
             );
         } else {
-            $path = Url::parse_url($uri, 'path');
+            $path = Url::parse_url($lookupUri, 'path');
+            $path = is_string($path) && $path !== '' ? ltrim($path, '/') : $lookupUri;
             $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, $path);
             if (!$rewrite->getId()) {
                 $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $path);
@@ -314,11 +359,66 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     {
         $queryString = Url::parse_url($decodedUri, 'query') ?: '';
         $originRequestUri = '/' . ltrim($originUri, '/');
+        // Never promote the decoded controller path into ORIGIN when a visitor-
+        // facing pretty path is already known — PageBuilder locale resolution
+        // reads ORIGIN for /en_US/… segments.
+        $existingOrigin = (string)(
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI']
+            ?? WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+            ?? $_SERVER['ORIGIN_REQUEST_URI']
+            ?? ''
+        );
+        $originIsInternal = \str_contains(\strtolower($originRequestUri), 'pagebuilder/frontend/page');
+        $existingIsPretty = $existingOrigin !== ''
+            && !\str_contains(\strtolower($existingOrigin), 'pagebuilder/frontend/page');
+        if ($originIsInternal) {
+            // Prefer any non-internal origin (parser ORIGIN may still hold /en_US/about
+            // or the stripped /about). Never let the controller path become ORIGIN.
+            if ($existingIsPretty) {
+                $originRequestUri = $existingOrigin;
+            } elseif ($existingOrigin !== '' && !\str_contains(\strtolower($existingOrigin), 'pagebuilder/frontend/page')) {
+                $originRequestUri = $existingOrigin;
+            } else {
+                // Last resort: keep whatever non-internal path we can salvage from
+                // the rewrite input before it was replaced by the controller path.
+                $fallback = '/' . \ltrim((string)$originUri, '/');
+                if (!\str_contains(\strtolower($fallback), 'pagebuilder/frontend/page')) {
+                    $originRequestUri = $fallback;
+                }
+            }
+        } elseif ($existingIsPretty
+            && \str_contains(\strtolower($existingOrigin), '/')
+            && !\str_contains(\strtolower($originRequestUri), 'en_us')
+            && \preg_match('#/[a-z]{2}_[A-Za-z0-9_]+/#i', $existingOrigin) === 1
+            && \preg_match('#/[a-z]{2}_[A-Za-z0-9_]+/#i', $originRequestUri) !== 1
+        ) {
+            // Url::detectLanguage may strip /en_US before RouterRewrite runs, so
+            // $originUri is already /about while existing ORIGIN still has /en_US/about.
+            $originRequestUri = $existingOrigin;
+        }
 
         WelineEnv::setServer('REQUEST_URI', $decodedUri, 'RouterRewrite decoded uri');
         WelineEnv::setServer('QUERY_STRING', $queryString, 'RouterRewrite decoded uri');
         WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $originRequestUri, 'RouterRewrite decoded uri');
-
+        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $originRequestUri;
+        $originLocalization = State::resolveLocalizationFromPathSegments(
+            \array_values(\array_filter(
+                \explode('/', \trim($originRequestUri, '/')),
+                static fn(string $segment): bool => $segment !== ''
+            ))
+        );
+        $originLanguage = \trim((string)($originLocalization['language'] ?? ''));
+        if ($originLanguage === '') {
+            $originLanguage = \trim((string)(
+                $_SERVER['WELINE_URL_PATH_LANG']
+                ?? WelineEnv::server('WELINE_URL_PATH_LANG', '')
+                ?? ''
+            ));
+        }
+        if ($originLanguage !== '') {
+            WelineEnv::setServer('WELINE_URL_PATH_LANG', $originLanguage, 'RouterRewrite origin locale');
+            $_SERVER['WELINE_URL_PATH_LANG'] = $originLanguage;
+        }
         if ($websiteId !== null && $websiteId > 0) {
             WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'RouterRewrite decoded website');
             WelineEnv::setServer('WELINE_URL_REWRITE_WEBSITE_ID', (string)$websiteId, 'RouterRewrite decoded rewrite website');
@@ -344,6 +444,9 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 ->setServer('QUERY_STRING', $queryString)
                 ->setServer('WELINE_ORIGIN_REQUEST_URI', $originRequestUri);
 
+            if ($originLanguage !== '') {
+                $request->setServer('WELINE_URL_PATH_LANG', $originLanguage);
+            }
             if ($websiteId !== null && $websiteId > 0) {
                 $request->setServer('WELINE_WEBSITE_ID', (string)$websiteId)
                     ->setServer('WELINE_URL_REWRITE_WEBSITE_ID', (string)$websiteId);

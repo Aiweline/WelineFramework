@@ -1,0 +1,28 @@
+{
+    "name": "weline/module-customer-asset",
+    "description": "PostgreSQL-backed customer asset accounts, immutable ledger and reservations",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-websites": "@dev"
+    },
+    "suggest": {
+        "weline/module-customer": "Supplies authenticated customer ownership.",
+        "weline/module-order": "Consumes immutable asset allocation snapshots in P4D-002.",
+        "weline/module-payment": "Orchestrates asset and cash attempts in P4D-002."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\CustomerAsset\\": ""
+        }
+    },
+    "license": "MIT"
+}

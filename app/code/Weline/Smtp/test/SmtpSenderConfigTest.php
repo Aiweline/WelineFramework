@@ -9,7 +9,7 @@ use ReflectionClass;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
 
-class SmtpSenderConfigTest extends \Weline\Framework\UnitTest\TestCore
+class SmtpSenderConfigTest extends \Weline\Framework\Test\TestCore
 {
     public function testCreateMailerReturnsFreshInstanceWithDebugOff(): void
     {

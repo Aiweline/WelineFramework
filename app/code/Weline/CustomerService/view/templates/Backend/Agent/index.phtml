@@ -14,7 +14,7 @@ $statisticsUrl = $this->getBackendUrl("customerservice/backend/agent/agent-stati
 // 获取后台用户列表（用于选择关联用户）
 /** @var BackendUser $backendUser */
 $backendUser = ObjectManager::getInstance(BackendUser::class);
-$backendUsers = $backendUser->reset()->select()->fetch()->getItems();
+$backendUsers = $backendUser->reset()->select()->csAdmin()->getItems();
 
 // 语言列表
 $locales = \Weline\CustomerService\Model\ServiceAgent::getAvailableLocales();
@@ -418,6 +418,18 @@ $jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
 </div>
 
 <script>
+function csAdmin(url, options){
+  options=options||{};
+  var body=options.body;
+  if(body && typeof FormData!=='undefined' && body instanceof FormData){
+    var p=new URLSearchParams(); body.forEach(function(v,k){p.append(k,String(v));}); body=p.toString();
+  } else if(body && typeof body!=='string'){ try{body=JSON.stringify(body);}catch(e){body='';} }
+  var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''}); };
+  if(window.Weline&&window.Weline.load) return window.Weline.load('api').then(run);
+  return Promise.resolve(run(window.Weline.Api));
+}
+</script>
+<script>
 const AgentManager = {
     saveUrl: <?= json_encode($saveUrl, $jsonForScriptFlags) ?>,
     deleteUrl: <?= json_encode($deleteUrl, $jsonForScriptFlags) ?>,
@@ -659,7 +671,7 @@ function saveAgent() {
     // 处理复选框
     formData.set('is_active', document.getElementById('is_active').checked ? '1' : '0');
     
-    fetch(AgentManager.saveUrl, {
+    csAdmin(AgentManager.saveUrl, {
         method: 'POST',
         body: new URLSearchParams(formData)
     })
@@ -694,7 +706,7 @@ function deleteAgent(agentId) {
     ).then(function (confirmed) {
         if (!confirmed) return;
 
-        fetch(AgentManager.deleteUrl, {
+        csAdmin(AgentManager.deleteUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -723,7 +735,7 @@ function viewStatistics(agentId) {
     }
     const url = AgentManager.statisticsUrl + '?agent_id=' + encodeURIComponent(String(agentId)) + '&period=all';
     
-    fetch(url)
+    csAdmin(url)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -834,4 +846,3 @@ document.addEventListener('click', function(event) {
     }
 });
 </script>
-

@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Query;
 
+use Weline\Framework\Authorization\Resource\AuthorizationResourceCatalogBuilder;
 use Weline\Framework\Compilation\CompiledPhpArrayWriter;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\DefaultCrudProvider;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Service\Query\Value\FrontendWorkerBackendAcl;
 
 final class QueryProviderCompiler
 {
-    public const FORMAT_VERSION = 2;
+    public const FORMAT_VERSION = 3;
 
     private const EXTERNAL_AREAS = ['frontend', 'backend'];
 
@@ -143,6 +145,15 @@ final class QueryProviderCompiler
             'operations' => $operations,
             'external_areas' => $externalAreas,
         ];
+        $catalogSlice = (new AuthorizationResourceCatalogBuilder())->fromQueryProviderRegistry($registry);
+        $registry['authorization_bindings'] = \array_map(
+            static fn($binding) => $binding->toArray(),
+            $catalogSlice['bindings'],
+        );
+        $registry['authorization_definitions'] = \array_map(
+            static fn($definition) => $definition->toArray(),
+            $catalogSlice['definitions'],
+        );
         $this->writer->write($target, $registry);
 
         return $registry;
@@ -208,6 +219,51 @@ final class QueryProviderCompiler
                 );
             }
             $operationDescriptor['name'] = $operationName;
+            $authMode = $operationDescriptor['auth'] ?? null;
+            if (\array_key_exists('backend', $operationDescriptor)
+                && !\is_bool($operationDescriptor['backend'])) {
+                throw new \RuntimeException(
+                    "QueryProvider {$providerName}.{$operationName} backend flag is invalid.",
+                );
+            }
+            if ($authMode !== null
+                && (!\is_string($authMode)
+                    || !\in_array($authMode, ['any', 'guest', 'customer', 'backend'], true))) {
+                throw new \RuntimeException(
+                    "QueryProvider {$providerName}.{$operationName} auth mode is invalid.",
+                );
+            }
+            if (($operationDescriptor['backend'] ?? false) === true
+                && $authMode !== null
+                && $authMode !== 'backend') {
+                throw new \RuntimeException(
+                    "QueryProvider {$providerName}.{$operationName} has conflicting backend auth declarations.",
+                );
+            }
+            $isBackend = $authMode === 'backend' || ($operationDescriptor['backend'] ?? false) === true;
+            if ($isBackend) {
+                try {
+                    $defaultModule = \trim((string)($descriptor['module'] ?? ''));
+                    $defaultTags = $this->normalizeDefaultBackendTags($descriptor['default_backend_tags'] ?? null);
+                    $operationDescriptor['backend_acl'] = FrontendWorkerBackendAcl::normalize(
+                        $operationDescriptor['backend_acl'] ?? null,
+                        $operationDescriptor['params'] ?? [],
+                        $defaultModule,
+                        $defaultTags,
+                    );
+                } catch (\InvalidArgumentException $exception) {
+                    throw new \RuntimeException(
+                        "QueryProvider {$providerName}.{$operationName} backend_acl is invalid: "
+                        . $exception->getMessage(),
+                        0,
+                        $exception,
+                    );
+                }
+            } elseif (\array_key_exists('backend_acl', $operationDescriptor)) {
+                throw new \RuntimeException(
+                    "QueryProvider {$providerName}.{$operationName} declares backend_acl without backend auth.",
+                );
+            }
             if (($operationDescriptor['external'] ?? false) === true) {
                 $mode = \strtolower(\trim((string)($operationDescriptor['mode'] ?? '')));
                 if (!\in_array($mode, ['read', 'write'], true)) {
@@ -244,6 +300,30 @@ final class QueryProviderCompiler
             'module' => (string)($descriptor['module'] ?? ''),
             'operation_count' => \count($descriptor['operations'] ?? []),
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeDefaultBackendTags(mixed $tags): array
+    {
+        if ($tags === null) {
+            return [];
+        }
+        if (!\is_array($tags)) {
+            throw new \RuntimeException('QueryProvider default_backend_tags must be a list.');
+        }
+        $out = [];
+        foreach ($tags as $tag) {
+            if (!\is_string($tag) || \trim($tag) === '') {
+                throw new \RuntimeException('QueryProvider default_backend_tags contains an invalid tag.');
+            }
+            $tag = \trim($tag);
+            if (!\in_array($tag, $out, true)) {
+                $out[] = $tag;
+            }
+        }
+        return $out;
     }
 
     private function assertImmutableValue(mixed $value, string $path, int $depth = 0): void

@@ -59,7 +59,10 @@ class Method extends BackendController
         
         $this->assign('methods', $methods);
         $this->assign('target_scope', $target->isGlobal() ? 'global' : $target->toLegacyScopeString());
-        $this->assign('expected_grant_version', $grantVersion);
+        $updateGrant = ObjectManager::getInstance(BackendObjectAuthorizationGuardInterface::class)
+            ->check(ObjectAction::UPDATE, $target);
+        $this->assign('can_register_providers', $updateGrant->allowed && $updateGrant->matchedGrantVersion > 0);
+        $this->assign('expected_grant_version', $updateGrant->matchedGrantVersion);
         
         return $this->fetch();
     }

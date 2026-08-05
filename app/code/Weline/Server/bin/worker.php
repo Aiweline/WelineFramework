@@ -50,8 +50,20 @@ $protocolEdgeTokenFile = '';
 $gatewayProjectUuid = '';
 $gatewayInstanceGeneration = 0;
 $gatewayInstanceLaunchId = '';
+$gatewayHostLeaseId = '';
+$gatewaySessionCapability = '';
+$gatewaySessionCapabilityEvidenceDigest = '';
 $isMaintenanceWorker = false;
 $isGatewayJoinBackend = false;
+$orchestratorSlotId = '';
+$orchestratorLeaseId = '';
+$orchestratorGeneration = 0;
+$windowsListenerHandoffPath = '';
+$windowsListenerHandoffId = '';
+$windowsListenerIntentDigest = '';
+$windowsListenerLeaseInstance = '';
+$windowsListenerWlsInstance = '';
+$windowsListenerMasterLaunchId = '';
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -77,7 +89,8 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--master-lease-file=')) {
         $masterLeaseFile = (string)\substr($arg, 20);
     } elseif (\str_starts_with($arg, '--master-token=')) {
-        $masterToken = (string)\substr($arg, 15);
+        \fwrite(\STDERR, "Worker --master-token is forbidden; use the protected child ledger.\n");
+        exit(1);
     } elseif (\str_starts_with($arg, '--wls-loop-driver=')) {
         $wlsLoopDriver = (string)\substr($arg, 18);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
@@ -98,6 +111,57 @@ foreach ($argv as $arg) {
         $gatewayInstanceLaunchId = \strtolower(\trim((string)\substr(
             $arg,
             \strlen('--gateway-instance-launch-id='),
+        )));
+    } elseif (\str_starts_with($arg, '--gateway-host-lease-id=')) {
+        $gatewayHostLeaseId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--gateway-host-lease-id='),
+        )));
+    } elseif (\str_starts_with($arg, '--gateway-session-capability=')) {
+        $gatewaySessionCapability = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--gateway-session-capability='),
+        )));
+    } elseif (\str_starts_with($arg, '--gateway-session-capability-evidence-digest=')) {
+        $gatewaySessionCapabilityEvidenceDigest = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--gateway-session-capability-evidence-digest='),
+        )));
+    } elseif (\str_starts_with($arg, '--slot-id=')) {
+        $orchestratorSlotId = \trim((string)\substr($arg, 10));
+    } elseif (\str_starts_with($arg, '--lease-id=')) {
+        $orchestratorLeaseId = \strtolower(\trim((string)\substr($arg, 11)));
+    } elseif (\str_starts_with($arg, '--slot-generation=')) {
+        $orchestratorGeneration = (int)\substr($arg, 18);
+    } elseif (\str_starts_with($arg, '--windows-listener-handoff=')) {
+        $windowsListenerHandoffPath = (string)\substr(
+            $arg,
+            \strlen('--windows-listener-handoff='),
+        );
+    } elseif (\str_starts_with($arg, '--windows-listener-handoff-id=')) {
+        $windowsListenerHandoffId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-handoff-id='),
+        )));
+    } elseif (\str_starts_with($arg, '--windows-listener-intent-digest=')) {
+        $windowsListenerIntentDigest = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-intent-digest='),
+        )));
+    } elseif (\str_starts_with($arg, '--windows-listener-lease-instance=')) {
+        $windowsListenerLeaseInstance = \trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-lease-instance='),
+        ));
+    } elseif (\str_starts_with($arg, '--windows-listener-wls-instance=')) {
+        $windowsListenerWlsInstance = \trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-wls-instance='),
+        ));
+    } elseif (\str_starts_with($arg, '--windows-listener-master-launch-id=')) {
+        $windowsListenerMasterLaunchId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-master-launch-id='),
         )));
     }
 }
@@ -126,10 +190,82 @@ if ($protocolEdgeTokenFile !== ''
         ) !== 1
         || $gatewayInstanceGeneration < 1
         || \preg_match('/^[a-f0-9]{32}$/D', $gatewayInstanceLaunchId) !== 1
+        || !\in_array(
+            $gatewaySessionCapability,
+            ['isolated', 'stateless', 'shared_session'],
+            true,
+        )
+        || \preg_match(
+            '/^[a-f0-9]{64}$/D',
+            $gatewaySessionCapabilityEvidenceDigest,
+        ) !== 1
+        || ($gatewaySessionCapability === 'isolated'
+            && !\hash_equals(
+                \str_repeat('0', 64),
+                $gatewaySessionCapabilityEvidenceDigest,
+            ))
+        || ($gatewaySessionCapability !== 'isolated'
+            && \hash_equals(
+                \str_repeat('0', 64),
+                $gatewaySessionCapabilityEvidenceDigest,
+            ))
     )
 ) {
     \fwrite(\STDERR, "Authenticated Gateway instance identity is required.\n");
     exit(1);
+}
+if ($isGatewayJoinBackend
+    && \preg_match('/^[a-f0-9]{32}$/D', $gatewayHostLeaseId) !== 1
+) {
+    \fwrite(\STDERR, "Gateway join backend host lease identity is required.\n");
+    exit(1);
+}
+$windowsHandoffValues = [
+    $windowsListenerHandoffPath,
+    $windowsListenerHandoffId,
+    $windowsListenerIntentDigest,
+    $windowsListenerLeaseInstance,
+    $windowsListenerWlsInstance,
+    $windowsListenerMasterLaunchId,
+];
+$windowsListenerHandoffPresent = \count(\array_filter(
+    $windowsHandoffValues,
+    static fn (string $value): bool => $value !== '',
+)) > 0;
+if ($windowsListenerHandoffPresent
+    && (\PHP_OS_FAMILY !== 'Windows'
+        || \in_array('', $windowsHandoffValues, true)
+        || !$isGatewayJoinBackend
+        || $listenFd !== 0
+        || $wlsListenerMode !== 'single'
+        || !\hash_equals((string)$instanceName, $windowsListenerWlsInstance)
+        || !\hash_equals($gatewayInstanceLaunchId, $windowsListenerMasterLaunchId)
+        || !\hash_equals($orchestratorLaunchId, $orchestratorLeaseId)
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayHostLeaseId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerHandoffId) !== 1
+        || \preg_match('/\A[a-f0-9]{64}\z/D', $windowsListenerIntentDigest) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerMasterLaunchId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLaunchId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLeaseId) !== 1
+        || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerLeaseInstance) !== 1
+        || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerWlsInstance) !== 1
+        || \preg_match('/\Agateway_backend#[1-9][0-9]*\z/D', $orchestratorSlotId) !== 1
+        || $orchestratorGeneration <= 0)
+) {
+    \fwrite(\STDERR, "Windows gateway join listener handoff identity is invalid.\n");
+    exit(1);
+}
+if (\PHP_OS_FAMILY === 'Windows'
+    && $isGatewayJoinBackend
+    && !$windowsListenerHandoffPresent
+) {
+    \fwrite(\STDERR, "Windows gateway join backend requires target-bound listener adoption.\n");
+    exit(1);
+}
+if ($gatewayHostLeaseId !== '') {
+    $_SERVER['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
+    $_ENV['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
+    @\putenv('WLS_GATEWAY_HOST_LEASE_ID=' . $gatewayHostLeaseId);
 }
 
 if (!\in_array($wlsRuntimeTopology, ['direct', 'dispatcher'], true)) {
@@ -146,13 +282,6 @@ if ($privateListenerRequired
     && !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true)
 ) {
     \fwrite(\STDERR, "Private Worker requires a loopback listener.\n");
-    exit(1);
-}
-if ($protocolEdgeTokenFile !== ''
-    && (\preg_match('/^[a-f0-9-]{36}$/D', $gatewayProjectUuid) !== 1
-        || $gatewayInstanceGeneration < 1)
-) {
-    \fwrite(\STDERR, "Gateway backend identity is incomplete.\n");
     exit(1);
 }
 if ($isMaintenanceWorker && $isGatewayJoinBackend) {
@@ -192,13 +321,32 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
 
-$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
-    ->resolveProtectedCredentialFromArguments(
+if ($windowsListenerHandoffPresent
+    && !\hash_equals(
+        \Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity::forRole(
+            $instanceName,
+            \Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity::ROLE_BACKEND,
+        ),
+        $windowsListenerLeaseInstance,
+    )
+) {
+    \fwrite(\STDERR, "Windows gateway join listener lease instance is invalid.\n");
+    exit(1);
+}
+
+$masterLeaseManager = new \Weline\Server\Service\MasterLeaseManager();
+$masterToken = $masterLeaseManager->resolveProtectedCredentialFromArguments(
         $argv,
         $instanceName,
         $masterPid,
         $orchestratorEpoch,
     );
+$masterRuntimeCredential = $masterLeaseManager->resolveProtectedRuntimeCredentialFromArguments(
+    $argv,
+    $instanceName,
+    $masterPid,
+    $orchestratorEpoch,
+);
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
@@ -281,6 +429,21 @@ if (!\defined('WLS_WORKER_GATEWAY_INSTANCE_GENERATION')) {
 }
 if (!\defined('WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID')) {
     \define('WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID', $gatewayInstanceLaunchId);
+}
+if (!\defined('WLS_WORKER_GATEWAY_LISTENER_HOST')) {
+    \define('WLS_WORKER_GATEWAY_LISTENER_HOST', $normalizedListenerHost);
+}
+if (!\defined('WLS_WORKER_GATEWAY_HOST_LEASE_ID')) {
+    \define('WLS_WORKER_GATEWAY_HOST_LEASE_ID', $gatewayHostLeaseId);
+}
+if (!\defined('WLS_WORKER_GATEWAY_SESSION_CAPABILITY')) {
+    \define('WLS_WORKER_GATEWAY_SESSION_CAPABILITY', $gatewaySessionCapability);
+}
+if (!\defined('WLS_WORKER_GATEWAY_SESSION_CAPABILITY_EVIDENCE_DIGEST')) {
+    \define(
+        'WLS_WORKER_GATEWAY_SESSION_CAPABILITY_EVIDENCE_DIGEST',
+        $gatewaySessionCapabilityEvidenceDigest,
+    );
 }
 if ($publicOrigin !== '') {
     $_SERVER['WLS_PUBLIC_ORIGIN'] = $publicOrigin;
@@ -609,62 +772,14 @@ if ($envConfig !== null && isset(($envConfig['wls'] ?? [])['cache'])) {
 if (!\function_exists('getSystemFreeMemory')) {
     function getSystemFreeMemory(): int
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            return 0;
-        } else {
-            if (\is_readable('/proc/meminfo')) {
-                $meminfo = @\file_get_contents('/proc/meminfo');
-                if ($meminfo && \preg_match('/MemAvailable:\s*(\d+)\s*kB/i', $meminfo, $matches)) {
-                    return (int)$matches[1] * 1024;
-                }
-                if ($meminfo) {
-                    $free = 0;
-                    if (\preg_match('/MemFree:\s*(\d+)\s*kB/i', $meminfo, $m)) $free += (int)$m[1];
-                    if (\preg_match('/Cached:\s*(\d+)\s*kB/i', $meminfo, $m)) $free += (int)$m[1];
-                    if (\preg_match('/Buffers:\s*(\d+)\s*kB/i', $meminfo, $m)) $free += (int)$m[1];
-                    if ($free > 0) return $free * 1024;
-                }
-            }
-            // macOS: vm_stat 仅 "Pages free" 偏小，需加上可回收的 inactive/speculative（与 Linux MemAvailable 语义一致）
-            // 注意：macOS 可能输出千位逗号（如 "1,234,567"），需去掉逗号再转 int，否则会误判为内存严重不足
-            $output = @\shell_exec('vm_stat 2>/dev/null');
-            if ($output) {
-                $pageSize = 4096;
-                $parse = static function (string $text, string $key): int {
-                    if (!\preg_match('/' . \preg_quote($key, '/') . ':\s*([\d,\.]+)/', $text, $m)) {
-                        return 0;
-                    }
-                    return (int)\str_replace([',', '.'], '', $m[1]);
-                };
-                $free = $parse($output, 'Pages free');
-                $inactive = $parse($output, 'Pages inactive');
-                $speculative = $parse($output, 'Pages speculative');
-                $availablePages = $free + $inactive + $speculative;
-                if ($availablePages > 0) {
-                    return $availablePages * $pageSize;
-                }
-            }
-        }
-        return 0;
+        return \Weline\Server\Service\Runtime\SystemMemoryProbe::freeBytes();
     }
 }
 
 if (!\function_exists('getSystemTotalMemory')) {
     function getSystemTotalMemory(): int
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            return 4 * 1024 * 1024 * 1024;
-        } else {
-            if (\is_readable('/proc/meminfo')) {
-                $meminfo = @\file_get_contents('/proc/meminfo');
-                if ($meminfo && \preg_match('/MemTotal:\s*(\d+)\s*kB/i', $meminfo, $matches)) {
-                    return (int)$matches[1] * 1024;
-                }
-            }
-            $output = @\shell_exec('sysctl -n hw.memsize 2>/dev/null');
-            if ($output) return (int)\trim($output);
-        }
-        return 4 * 1024 * 1024 * 1024;
+        return \Weline\Server\Service\Runtime\SystemMemoryProbe::totalBytes();
     }
 }
 
@@ -768,9 +883,50 @@ if ($useReusePort && !$supportsReusePort) {
 $socket = null;
 $reusePortBound = false;
 $sharedListenerBound = false;
+$windowsListenerSocket = null;
+$windowsListenerProof = [];
+$windowsListenerAdopted = false;
+
+// Windows supplemental gateway backend consumes the exact target-PID
+// duplicate. The Master retains its source until this child proves adoption.
+if ($windowsListenerHandoffPresent) {
+    try {
+        $importedListener = \Weline\Server\Service\Runtime\WindowsListenerHandoff::awaitChildSocket(
+            $windowsListenerHandoffPath,
+            [
+                'handoff_id' => $windowsListenerHandoffId,
+                'intent_digest' => $windowsListenerIntentDigest,
+                'lease_id' => $gatewayHostLeaseId,
+                'lease_instance' => $windowsListenerLeaseInstance,
+                'wls_instance' => $windowsListenerWlsInstance,
+                'bind_host' => $normalizedListenerHost,
+                'port' => $port,
+                'master_launch_id' => $windowsListenerMasterLaunchId,
+                'launch_id' => $orchestratorLaunchId,
+                'slot_id' => $orchestratorSlotId,
+                'generation' => $orchestratorGeneration,
+            ],
+        );
+        $windowsListenerSocket = $importedListener['socket'];
+        $windowsListenerProof = $importedListener['proof'];
+        $socket = @\socket_export_stream($windowsListenerSocket);
+        if (!\is_resource($socket)) {
+            @\socket_close($windowsListenerSocket);
+            $windowsListenerSocket = null;
+            throw new \RuntimeException(
+                'Windows adopted gateway join listener could not be exported as a stream.',
+            );
+        }
+        $windowsListenerAdopted = true;
+        WlsLogger::info_("Using target-bound Windows gateway join listener on {$host}:{$port}");
+    } catch (\Throwable $throwable) {
+        WlsLogger::error_('Windows gateway join listener adoption failed: '
+            . $throwable->getMessage());
+        exit(1);
+    }
 
 // POSIX direct 使用 Master 预绑定的单个共享 accept queue，不使用 Dispatcher 或字节透传。
-if ($listenFd > 0) {
+} elseif ($listenFd > 0) {
     $socket = @\fopen('php://fd/' . $listenFd, 'r+');
     if (!\is_resource($socket)) {
         WlsLogger::error_("Unable to open inherited direct listener FD {$listenFd}");
@@ -926,6 +1082,11 @@ WlsLogger::info_("Socket 创建成功，开始监听连接");
         : ($reusePortBound ? 'reuseport' : ($wlsListenerMode === 'worker_ports' ? 'worker_ports' : 'single')),
     $sharedListenerBound ? $listenFd : 0,
 );
+if ($windowsListenerAdopted) {
+    \Weline\Server\Service\Runtime\WorkerReadinessState::setWindowsListenerHandoffProof(
+        $windowsListenerProof,
+    );
+}
 
 // ========== 上报 READY 前跳过 Session/Memory 验证（按需连接） ==========
 // Session/Memory 是共享服务，连接在首次使用时自动建立，无需在启动时预验证
@@ -1924,8 +2085,16 @@ while (true) {
     $now = \time();
 
     if ($childMasterGuard->shouldExit()) {
-        WlsLogger::warning_('[Worker] Master lease/PID 已失效，子进程自治退出: ' . $childMasterGuard->getLastExitReason());
-        $gracefulExit('Master lease/PID 自治退出');
+        $leaseExitReason = $childMasterGuard->getLastExitReason();
+        WlsLogger::warning_('[Worker] Master lease/PID 已失效，子进程自治退出: ' . $leaseExitReason);
+        // Keep the concrete validateRunningLease reason in exit_reason so
+        // startup-trace / Master revive can distinguish stale heartbeat from
+        // flaky Darwin managed-name probes.
+        $gracefulExit(
+            $leaseExitReason !== ''
+                ? ('Master lease/PID 自治退出: ' . $leaseExitReason)
+                : 'Master lease/PID 自治退出'
+        );
     }
 
     // ========== 定时GC触发（防止内存泄漏） ==========
@@ -2728,7 +2897,7 @@ while (true) {
             $maxRequestBodyBytes,
             $maxBufferedRequestBytes,
             $wlsRuntimeTopology,
-            $masterToken
+            $masterRuntimeCredential
         );
         if (($readStep['closed'] ?? false) === true) {
             continue;
@@ -4686,6 +4855,79 @@ function wlsDrainConnectionCounters(array $connections): array
     return $counters;
 }
 
+/**
+ * Canonical JSON for the private gateway/backend attestation. Keep this
+ * dependency-free so health proof remains available when application
+ * bootstrap is degraded.
+ *
+ * @param mixed $value
+ */
+function wlsWorkerAttestationCanonicalJson(mixed $value): string
+{
+    $sort = static function (mixed $candidate) use (&$sort): mixed {
+        if (!\is_array($candidate)) {
+            return $candidate;
+        }
+        if (!\array_is_list($candidate)) {
+            \ksort($candidate, SORT_STRING);
+        }
+        foreach ($candidate as $key => $item) {
+            $candidate[$key] = $sort($item);
+        }
+        return $candidate;
+    };
+    return (string)\json_encode(
+        $sort($value),
+        JSON_UNESCAPED_SLASHES
+            | JSON_UNESCAPED_UNICODE
+            | JSON_PRESERVE_ZERO_FRACTION
+            | JSON_THROW_ON_ERROR,
+    );
+}
+
+/** @return non-empty-string|null */
+function wlsWorkerReadStableEdgeSecret(string $file): ?string
+{
+    if ($file === '' || !\is_file($file) || \is_link($file)) {
+        return null;
+    }
+    $before = @\lstat($file);
+    $stream = @\fopen($file, 'rb');
+    if (!\is_array($before) || !\is_resource($stream)) {
+        return null;
+    }
+    try {
+        $opened = @\fstat($stream);
+        $contents = @\fread($stream, 66);
+    } finally {
+        @\fclose($stream);
+    }
+    $after = @\lstat($file);
+    if (!\is_array($opened)
+        || !\is_array($after)
+        || !\is_string($contents)
+        || \strlen($contents) > 65
+        || (int)($opened['dev'] ?? -1) !== (int)($before['dev'] ?? -2)
+        || (int)($opened['ino'] ?? -1) !== (int)($before['ino'] ?? -2)
+        || (int)($after['dev'] ?? -1) !== (int)($before['dev'] ?? -2)
+        || (int)($after['ino'] ?? -1) !== (int)($before['ino'] ?? -2)
+        || (int)($after['size'] ?? -1) !== (int)($before['size'] ?? -2)
+        || (int)($after['mtime'] ?? -1) !== (int)($before['mtime'] ?? -2)
+        || (((int)($opened['mode'] ?? 0)) & 0170000) !== 0100000
+        || (int)($opened['nlink'] ?? 0) !== 1
+        || (PHP_OS_FAMILY !== 'Windows'
+            && ((((int)($opened['mode'] ?? 0)) & 0077) !== 0
+                || (\function_exists('posix_geteuid')
+                    && (int)($opened['uid'] ?? -1) !== (int)\posix_geteuid())))
+    ) {
+        return null;
+    }
+    $secret = \strtolower(\trim($contents));
+    return \preg_match('/\A[a-f0-9]{64}\z/D', $secret) === 1
+        ? $secret
+        : null;
+}
+
 function handleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
@@ -4753,6 +4995,41 @@ function handleRequest(
         $wantsMemory = $healthOptionEnabled('memory');
         $wantsStaticMemory = $healthOptionEnabled('static');
         $wantsObjectMemory = $healthOptionEnabled('objects');
+        $wantsGatewayAttestation = $healthOptionEnabled('gateway');
+
+        // The public gateway sentinel reaches this branch only after the
+        // mandatory Worker policy has authenticated the configured edge token.
+        // Return the minimum nonce-bound identity needed by the SNI/Host probe;
+        // ordinary health stays the two-byte response and the private signed
+        // detail challenge remains loopback-only.
+        $gatewayProbeNonce = \strtolower(\trim((string)(
+            $policyDecision->headers['x-wls-probe-nonce'] ?? ''
+        )));
+        if (\trim((string)WLS_WORKER_PROTOCOL_EDGE_TOKEN_FILE) !== ''
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayProbeNonce) === 1
+        ) {
+            $gatewayProbeLaunchId = \strtolower(\trim((string)(
+                WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID !== ''
+                    ? WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID
+                    : WLS_WORKER_LAUNCH_ID
+            )));
+            if ((int)WLS_WORKER_MASTER_EPOCH < 1
+                || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayProbeLaunchId) !== 1
+            ) {
+                return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            }
+            $body = (string)\json_encode([
+                'status' => 'healthy',
+                'instance' => $instanceName,
+                'master_epoch' => (int)WLS_WORKER_MASTER_EPOCH,
+                'launch_id' => $gatewayProbeLaunchId,
+                'nonce' => $gatewayProbeNonce,
+            ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $len = \strlen($body);
+            return $keepAlive
+                ? "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
+                : "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
+        }
         
         if ($wantsDetail) {
             // 详细模式：返回完整信息
@@ -4794,21 +5071,82 @@ function handleRequest(
                 'timestamp' => \time(),
                 'fiber_count' => \count($fiberSnapshot),
             ];
-            // Request bootstrap may rebuild superglobals between requests.
-            // Gateway identity is process identity, so read the immutable
-            // launch-time constants instead of mutable request state.
-            $edgeTokenFile = \trim((string)WLS_WORKER_PROTOCOL_EDGE_TOKEN_FILE);
-            $edgeToken = $edgeTokenFile !== ''
-                ? \strtolower(\trim((string)@\file_get_contents($edgeTokenFile)))
-                : '';
-            $health['edge_auth_required'] = \preg_match('/^[a-f0-9]{64}$/D', $edgeToken) === 1;
-            $health['edge_capability_digest'] = $health['edge_auth_required']
-                ? \hash('sha256', $edgeToken)
-                : '';
-            $health['project_uuid'] = (string)WLS_WORKER_GATEWAY_PROJECT_UUID;
-            $health['instance_generation'] = (int)WLS_WORKER_GATEWAY_INSTANCE_GENERATION;
-            if (\preg_match('/[?&]nonce=([a-f0-9]{32})(?:[&\\s]|$)/D', $rawRequest, $nonceMatch) === 1) {
-                $health['nonce'] = (string)$nonceMatch[1];
+            if ($wantsGatewayAttestation) {
+                // A challenge carries no secret. The Worker proves possession
+                // of the project edge capability by signing the challenge and
+                // its immutable launch/listener identity. This endpoint is
+                // loopback-only and is never proxied by the public sentinel.
+                $nonce = \is_scalar($healthOptions['nonce'] ?? null)
+                    ? \strtolower(\trim((string)$healthOptions['nonce']))
+                    : '';
+                $sessionMode = \strtolower(\trim((string)(
+                    WLS_WORKER_GATEWAY_SESSION_CAPABILITY
+                )));
+                $evidenceDigest = \strtolower(\trim((string)(
+                    WLS_WORKER_GATEWAY_SESSION_CAPABILITY_EVIDENCE_DIGEST
+                )));
+                $edgeSecret = wlsWorkerReadStableEdgeSecret(
+                    \trim((string)WLS_WORKER_PROTOCOL_EDGE_TOKEN_FILE),
+                );
+                $projectUuid = \strtolower(\trim((string)WLS_WORKER_GATEWAY_PROJECT_UUID));
+                $launchId = \strtolower(\trim((string)(
+                    WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID !== ''
+                        ? WLS_WORKER_GATEWAY_INSTANCE_LAUNCH_ID
+                        : WLS_WORKER_LAUNCH_ID
+                )));
+                $listenerHost = \strtolower(\trim((string)WLS_WORKER_GATEWAY_LISTENER_HOST));
+                if (\preg_match('/\A[a-f0-9]{32}\z/D', $nonce) !== 1
+                    || !\in_array($sessionMode, ['isolated', 'stateless', 'shared_session'], true)
+                    || \preg_match('/\A[a-f0-9]{64}\z/D', $evidenceDigest) !== 1
+                    || $edgeSecret === null
+                    || \preg_match(
+                        '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                        $projectUuid,
+                    ) !== 1
+                    || (int)WLS_WORKER_GATEWAY_INSTANCE_GENERATION < 1
+                    || (int)WLS_WORKER_MASTER_EPOCH < 1
+                    || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+                    || !\in_array($listenerHost, ['127.0.0.1', '::1'], true)
+                    || $port < 1
+                    || $port > 65535
+                ) {
+                    return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                }
+                $attestation = [
+                    'schema' => 'wls-backend-attestation/1',
+                    'nonce' => $nonce,
+                    'project_uuid' => $projectUuid,
+                    'instance_id' => $instanceName,
+                    'instance_generation' => (int)WLS_WORKER_GATEWAY_INSTANCE_GENERATION,
+                    'master_epoch' => (int)WLS_WORKER_MASTER_EPOCH,
+                    'launch_id' => $launchId,
+                    'edge_capability_digest' => \hash('sha256', $edgeSecret),
+                    'backend_host' => $listenerHost,
+                    'backend_port' => $port,
+                    'listener_lease_id' => \strtolower(\trim((string)(
+                        WLS_WORKER_GATEWAY_HOST_LEASE_ID
+                    ))),
+                    'session_capability' => $sessionMode,
+                    'session_capability_evidence_digest' => $evidenceDigest,
+                    'issued_at' => \time(),
+                ];
+                $binaryKey = \hex2bin($edgeSecret);
+                if (!\is_string($binaryKey) || \strlen($binaryKey) !== 32) {
+                    return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                }
+                try {
+                    $attestation['signature'] = \hash_hmac(
+                        'sha256',
+                        wlsWorkerAttestationCanonicalJson($attestation),
+                        $binaryKey,
+                    );
+                } finally {
+                    if (\function_exists('sodium_memzero')) {
+                        \sodium_memzero($binaryKey);
+                        \sodium_memzero($edgeSecret);
+                    }
+                }
+                $health['backend_attestation'] = $attestation;
             }
             if ($wantsFibers) {
                 $health['fibers'] = $fiberSnapshot;
@@ -4830,32 +5168,31 @@ function handleRequest(
     }
     // ========== 健康检查接口结束 ==========
 
-    // ========== ACME HTTP-01 校验（WLS 虚拟：从 generated/acme-http01 按域名返回 keyAuth，验证完由证书流程删除） ==========
+    // ========== ACME HTTP-01 校验（仅读取项目权威事实包） ==========
     if ($method === 'GET' && \preg_match('#^/\.well-known/acme-challenge/([^/]+)/?$#', $uri, $acmeMatches)) {
         $requestToken = $acmeMatches[1];
-        $hostHeader = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
-        if (\strpos($hostHeader, ':') !== false) {
-            $hostHeader = \trim((string)\explode(':', $hostHeader, 2)[0]);
+        $hostAuthority = \trim((string)($policyDecision->headers['host'] ?? ''));
+        try {
+            $parsedHost = \parse_url('http://' . $hostAuthority, PHP_URL_HOST);
+        } catch (\ValueError) {
+            $parsedHost = false;
         }
-        $safeDomain = \preg_replace('/[^a-z0-9_]/', '', \str_replace('.', '_', \strtolower($hostHeader)));
-        $safeDomain = $safeDomain !== '' ? $safeDomain : 'default';
+        $hostHeader = \is_string($parsedHost) ? $parsedHost : '';
         if (\defined('BP')) {
-            $acmeFile = \rtrim(BP, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR . 'generated' . \DIRECTORY_SEPARATOR . 'acme-http01' . \DIRECTORY_SEPARATOR . $safeDomain . '.json';
-            if (\is_file($acmeFile)) {
-                $json = \Weline\Server\Runtime\Async\AsyncBizAdapters::fileGetContentsWithYield($acmeFile);
-                if ($json !== false) {
-                    $data = \json_decode($json, true);
-                    if (\is_array($data) && isset($data['keyAuth']) && \is_string($data['keyAuth'])
-                        && (string)($data['token'] ?? '') === (string)$requestToken
-                        && (int)($data['expires_at'] ?? ((int)@\filemtime($acmeFile) + 900)) > \time()) {
-                        $body = $data['keyAuth'];
-                        $len = \strlen($body);
-                        $keepAlive = $policyDecision->keepAlive();
-                        return $keepAlive
-                            ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
-                            : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
-                    }
-                }
+            $acmeDirectory = \rtrim(BP, \DIRECTORY_SEPARATOR)
+                . \DIRECTORY_SEPARATOR . 'generated'
+                . \DIRECTORY_SEPARATOR . 'acme-http01';
+            $body = \Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore::resolvePublishedChallenge(
+                $acmeDirectory,
+                $hostHeader,
+                (string)$requestToken,
+            );
+            if ($body !== null) {
+                $len = \strlen($body);
+                $keepAlive = $policyDecision->keepAlive();
+                return $keepAlive
+                    ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
+                    : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
             }
         }
         $notFoundBody = 'ACME challenge not found';

@@ -1,7 +1,6 @@
-<!-- weline:module-readme:auto-generated -->
 # Weline_Index 模块文档
 
-> 本 README 由 `dev/ai/scripts/generate-missing-module-readmes.php` 根据当前代码结构自动生成。它提供模块级结构说明和开发入口，不替代后续人工补充的业务规则、接口契约和专项设计文档。
+> 本 README 已从自动结构稿转为长期维护文档；模块结构变化与首页稳定契约必须在同次任务同步。
 
 ## 当前入口
 
@@ -39,8 +38,12 @@
 - 存在 `Controller/Backend`，后台页面/行为变更时应同时检查菜单、ACL、返回地址和用户提示。
 - 存在 `Model/`，字段或索引变更需走模型 attribute + `setup:upgrade`，不要手改生成物。
 - 存在模板源文件；出现页面问题时先追源码，不要直接改 `view/tpl`。
+- `view/templates/Index.phtml` 自己输出完整 `<!DOCTYPE html>/<head>`，必须在 favicon、SEO 与页面私有样式前挂载 `Weline_Theme::frontend::layouts::base::head-before`，并渲染 `Weline\Theme\Block\Partials(area=frontend,type=head,default-option=default)`。该标准 head partial 负责 Theme runtime config、`theme.js`、`Weline.Api` 与 Worker bootstrap；完整页面不得假设外层 layout 会代为注入。
+- 官方首页导航右侧挂载 `header-language-switcher` Hook（由 `Weline_I18n` 实现）。零号站（`website_id=0`）默认至少启用 `zh_Hans_CN` 与 `en_US`，语言列表按 `WebsiteLanguage` 收窄；`<html lang>` 跟随当前 `State::getLangLocal()`。
+- `/`、`/en_US`、`/USD/en_US` 等「仅本地化前缀」路径与空路径同属前台首页根：`WlsRuntime` 会走 start-page 映射（若有），`Router\Core::isFrontendRootRequest()` 亦按剥本地化后剩余空路径判定；语言切换器切到非默认语言时不得 404。
 - 存在浏览器静态资源；业务请求必须走 `Weline.Api.*`，不要直接写 raw fetch/ajax。
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
+- 官网首页正文词条以 `Weline_Index/i18n` 为准；`en_US` 为中文 source → 英文译文。WLS 常驻运行时只读模块 CSV（不依赖 generated/language 总表）。`i18n:collect` 会保留 CSV 中已有但静态收集未扫到的词条，避免数组字面量再经 `__($var)` 输出的首页文案被冲掉。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
 
 ## 本模块文档资产

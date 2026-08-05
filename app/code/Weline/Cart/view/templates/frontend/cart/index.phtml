@@ -17,7 +17,7 @@ $formatMoney = static function (float $amount) use ($currency): string {
     return $prefix . \number_format($amount, 2);
 };
 ?>
-<section class="weline-cart-shell" data-cart-content="1">
+<section class="weline-cart-shell" data-cart-content="1" weline-code="cart.cart.section_1">
     <div class="weline-cart-shell__header">
         <div>
             <h1><?= __('购物车') ?></h1>

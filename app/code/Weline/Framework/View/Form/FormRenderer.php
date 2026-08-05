@@ -389,6 +389,9 @@ HTML;
         if ($scheme === null) {
             return true;
         }
+        if (!\is_string($scheme)) {
+            return false;
+        }
         if (!\in_array(\strtolower($scheme), ['http', 'https'], true)) {
             return false;
         }

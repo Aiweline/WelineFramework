@@ -2,7 +2,7 @@
 
 namespace Weline\Taglib\test;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Taglib\Observer\TagParser;
 use Weline\Framework\Event\Event;
 use Weline\Framework\DataObject\DataObject;

@@ -33,6 +33,22 @@ interface FrontendWorkerCredentialTransactionInterface
         int $expiresAt,
     ): void;
 
+    /**
+     * Replace an active credential payload and expiry in place.
+     *
+     * Used to slide backend Worker session attestations while the browser keeps
+     * the same worker_session_token across runtime_rotate ticket refreshes.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public function replaceActive(
+        string $type,
+        string $credential,
+        ?string $scope,
+        array $payload,
+        int $expiresAt,
+    ): void;
+
     /** Transition an active one-time credential to a retained consumed tombstone. */
     public function consume(string $type, string $credential, ?string $scope): bool;
 

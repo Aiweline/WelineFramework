@@ -254,8 +254,52 @@ final class GatewayPaths
 
     public function activeSlot(): string
     {
-        $slot = \strtoupper(\trim((string)@\file_get_contents($this->activeSlotFile())));
-        return \in_array($slot, ['A', 'B'], true) ? $slot : 'A';
+        $file = $this->activeSlotFile();
+        $pathStatus = @\lstat($file);
+        if (!\is_array($pathStatus)) {
+            if (\file_exists($file) || \is_link($file)) {
+                throw new \RuntimeException('Gateway active-slot path is unsafe.');
+            }
+            return 'A';
+        }
+        if (\is_link($file)
+            || ((((int)($pathStatus['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($pathStatus['nlink'] ?? 0) !== 1
+            || (int)($pathStatus['size'] ?? -1) < 1
+            || (int)($pathStatus['size'] ?? -1) > 2
+        ) {
+            throw new \RuntimeException('Gateway active-slot path is unsafe.');
+        }
+        $handle = @\fopen($file, 'rb');
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to read the gateway active-slot pointer.');
+        }
+        try {
+            $openedStatus = @\fstat($handle);
+            $contents = @\stream_get_contents($handle, 3);
+            $afterStatus = @\fstat($handle);
+            $pathAfter = @\lstat($file);
+            if (!\is_array($openedStatus)
+                || !\is_array($afterStatus)
+                || !\is_array($pathAfter)
+                || !$this->sameFileState($pathStatus, $openedStatus)
+                || !$this->sameFileState($openedStatus, $afterStatus)
+                || !$this->sameFileState($afterStatus, $pathAfter)
+                || !\is_string($contents)
+                || (int)($afterStatus['size'] ?? -1) !== \strlen($contents)
+            ) {
+                throw new \RuntimeException(
+                    'Gateway active-slot pointer changed while being read.'
+                );
+            }
+        } finally {
+            @\fclose($handle);
+        }
+        $slot = \strtoupper(\trim($contents));
+        if (!\in_array($slot, ['A', 'B'], true)) {
+            throw new \RuntimeException('Gateway active-slot pointer is invalid.');
+        }
+        return $slot;
     }
 
     public function inactiveSlot(): string
@@ -276,13 +320,20 @@ final class GatewayPaths
             $this->home() . DIRECTORY_SEPARATOR . 'snapshots',
             \dirname($this->launcherFile()),
         ] as $directory) {
-            if (!\is_dir($directory) && !@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
-                throw new \RuntimeException('Unable to create WLS Gateway directory: ' . $directory);
-            }
-            if (\is_link($directory)) {
+            $status = $this->ensureDirectory($directory);
+            if (!\is_array($status)
+                || \is_link($directory)
+                || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            ) {
                 throw new \RuntimeException('WLS Gateway directory cannot be a symbolic link: ' . $directory);
             }
-            $mode = (int)(@\fileperms($directory) ?: 0) & 0777;
+            if (\PHP_OS_FAMILY === 'Windows') {
+                // Windows directory authorization is enforced by the
+                // installer through exact DACLs; POSIX chmod bits returned by
+                // PHP are neither authoritative nor consistently mutable.
+                continue;
+            }
+            $mode = ((int)($status['mode'] ?? 0)) & 0777;
             // Production privilege separation deliberately promotes selected
             // roots to 0750/0770 after the service identity exists. Repeated
             // package-lock setup must not silently collapse those directories
@@ -290,9 +341,81 @@ final class GatewayPaths
             if ($this->isTestMode()
                 || !\in_array($mode, [0700, 0750, 0770, 0771], true)
             ) {
-                @\chmod($directory, 0700);
+                if (!@\chmod($directory, 0700)) {
+                    throw new \RuntimeException(
+                        'Unable to restrict WLS Gateway directory: ' . $directory
+                    );
+                }
+                $verified = @\lstat($directory);
+                if (!\is_array($verified)
+                    || ((((int)($verified['mode'] ?? 0)) & 0777) !== 0700)
+                ) {
+                    throw new \RuntimeException(
+                        'WLS Gateway directory mode did not become private: ' . $directory
+                    );
+                }
             }
         }
+    }
+
+    /** @return array<string|int,mixed> */
+    private function ensureDirectory(string $directory): array
+    {
+        if ($directory === ''
+            || \str_contains($directory, "\0")
+            || \strlen($directory) > 4096
+        ) {
+            throw new \RuntimeException('WLS Gateway directory path is invalid.');
+        }
+        $pending = [];
+        $current = $directory;
+        while (!\is_dir($current)) {
+            if (\file_exists($current) || \is_link($current)) {
+                throw new \RuntimeException(
+                    'WLS Gateway directory path is linked or special: ' . $current
+                );
+            }
+            $pending[] = $current;
+            $parent = \dirname($current);
+            if ($parent === $current || $parent === '' || $parent === '.') {
+                throw new \RuntimeException(
+                    'WLS Gateway directory has no trusted existing parent: ' . $directory
+                );
+            }
+            $current = $parent;
+        }
+        $ancestor = @\lstat($current);
+        if (!\is_array($ancestor)
+            || \is_link($current)
+            || ((((int)($ancestor['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException(
+                'WLS Gateway directory ancestor is unsafe: ' . $current
+            );
+        }
+        foreach (\array_reverse($pending) as $path) {
+            if (!@\mkdir($path, 0700) || !\is_dir($path)) {
+                throw new \RuntimeException(
+                    'Unable to create WLS Gateway directory: ' . $path
+                );
+            }
+            $created = @\lstat($path);
+            if (!\is_array($created)
+                || \is_link($path)
+                || ((((int)($created['mode'] ?? 0)) & 0170000) !== 0040000)
+            ) {
+                throw new \RuntimeException(
+                    'Created WLS Gateway directory is unsafe: ' . $path
+                );
+            }
+        }
+        $status = @\lstat($directory);
+        if (!\is_array($status)) {
+            throw new \RuntimeException(
+                'Unable to inspect WLS Gateway directory: ' . $directory
+            );
+        }
+        return $status;
     }
 
     public function isTestMode(): bool
@@ -328,11 +451,21 @@ final class GatewayPaths
 
     private function normalizeAbsolutePath(string $path): string
     {
-        $path = \trim(\str_replace("\0", '', $path));
+        if (\str_contains($path, "\0")) {
+            throw new \RuntimeException('WLS_GATEWAY_HOME contains a null byte.');
+        }
+        $path = \trim($path);
         $isAbsolute = \str_starts_with($path, '/')
             || \preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1
             || \str_starts_with($path, '\\\\');
-        if (!$isAbsolute || \in_array('..', \preg_split('#[\\\\/]+#', $path) ?: [], true)) {
+        if ($this->isFilesystemRoot($path)) {
+            throw new \RuntimeException('WLS_GATEWAY_HOME cannot be a filesystem root.');
+        }
+        $segments = \preg_split('#[\\\\/]+#', $path) ?: [];
+        if (!$isAbsolute
+            || \in_array('.', $segments, true)
+            || \in_array('..', $segments, true)
+        ) {
             throw new \RuntimeException('WLS_GATEWAY_HOME must be an absolute path without traversal.');
         }
         return $path;
@@ -340,12 +473,35 @@ final class GatewayPaths
 
     private function pathIsWithin(string $path, string $root): bool
     {
-        $normalize = static fn (string $value): string => \strtolower(
-            \rtrim(\str_replace('\\', '/', $value), '/')
-        );
+        if ($this->isFilesystemRoot($path) || $this->isFilesystemRoot($root)) {
+            return false;
+        }
+        $normalize = static function (string $value): string {
+            $value = \rtrim(\str_replace('\\', '/', $value), '/');
+            return \PHP_OS_FAMILY === 'Windows' ? \strtolower($value) : $value;
+        };
         $path = $normalize($path);
         $root = $normalize($root);
-        return \str_starts_with($path . '/', $root . '/');
+        return $path !== ''
+            && $root !== ''
+            && \str_starts_with($path . '/', $root . '/');
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $key) {
+            if (!\array_key_exists($key, $before)
+                || !\array_key_exists($key, $after)
+                || (int)$before[$key] !== (int)$after[$key]
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -359,6 +515,11 @@ final class GatewayPaths
     private function canonicalizeForContainment(string $path): string
     {
         $path = \rtrim($this->normalizeAbsolutePath($path), '/\\');
+        if ($path === '' || $this->isFilesystemRoot($path)) {
+            throw new \RuntimeException(
+                'WLS_GATEWAY_HOME cannot be a filesystem root.'
+            );
+        }
         $probe = $path;
         $suffix = [];
         while (!\file_exists($probe) && !\is_link($probe)) {
@@ -378,10 +539,30 @@ final class GatewayPaths
                 'WLS_GATEWAY_HOME cannot resolve a safe existing ancestor.'
             );
         }
-        return \rtrim($canonical, '/\\')
+        $resolved = \rtrim($canonical, '/\\')
             . ($suffix === []
                 ? ''
                 : DIRECTORY_SEPARATOR . \implode(DIRECTORY_SEPARATOR, $suffix));
+        if ($resolved === '' || $this->isFilesystemRoot($resolved)) {
+            throw new \RuntimeException(
+                'WLS_GATEWAY_HOME cannot resolve to a filesystem root.'
+            );
+        }
+        return $resolved;
+    }
+
+    private function isFilesystemRoot(string $path): bool
+    {
+        $normalized = \str_replace('\\', '/', \trim($path));
+        if (\preg_match('#\A/+\z#D', $normalized) === 1) {
+            return true;
+        }
+        $normalized = \rtrim($normalized, '/');
+        return \preg_match('/\A[A-Za-z]:\z/D', $normalized) === 1
+            || \preg_match('#\A//(?![?.](?:/|\z))[^/]+(?:/[^/]+)?\z#D', $normalized) === 1
+            || \preg_match('#\A//[?.]/[A-Za-z]:\z#Di', $normalized) === 1
+            || \preg_match('#\A//[?.]/UNC(?:/[^/]+(?:/[^/]+)?)?\z#Di', $normalized) === 1
+            || \preg_match('#\A//[?.]/Volume\{[0-9A-Fa-f-]+\}\z#Di', $normalized) === 1;
     }
 
     private function normalizeChannel(string $channel): string

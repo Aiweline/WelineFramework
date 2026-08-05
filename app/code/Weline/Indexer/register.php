@@ -13,6 +13,6 @@ Register::register(
     Register::MODULE,
     'Weline_Indexer',
     __DIR__,
-    '1.0.1',
+    '1.0.2',
     '<a href="https://bbs.aiweline.com">官网</a>提供Model模型索引功能。'
 );

@@ -109,7 +109,7 @@ function saveConfig() {
     }
     
     var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) };
-    var req = window.Weline.Api.request(customerServiceConfigSaveUrl, opts);
+    var req = csAdmin(customerServiceConfigSaveUrl, opts);
     req.then(function(res) {
         var data = (res && res.data) || res;
         if (data.success) {
@@ -132,4 +132,3 @@ if (customerServiceConfigForm) {
     });
 }
 </script>
-

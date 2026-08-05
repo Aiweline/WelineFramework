@@ -182,4 +182,32 @@ final class PixelEcommerceItemPerformanceServiceTest extends TestCase
         self::assertStringContainsString('ecommerce-items', $detail);
         self::assertStringContainsString('商品表现', $detail);
     }
+
+    public function testBuildForWebsiteSurfacesInvalidWebsiteId(): void
+    {
+        $result = $this->service->buildForWebsite(
+            -1,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static fn(): array => []
+        );
+
+        self::assertSame('invalid website_id', $result['error']);
+        self::assertSame(0, (int)($result['item_count'] ?? -1));
+    }
+
+    public function testBuildForWebsiteSwallowsQueryErrorsWithoutThrowing(): void
+    {
+        $result = $this->service->buildForWebsite(
+            2,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static function (): array {
+                throw new \RuntimeException('items column not ready');
+            }
+        );
+
+        self::assertSame('items column not ready', $result['error']);
+        self::assertSame(0, (int)($result['item_count'] ?? -1));
+    }
 }

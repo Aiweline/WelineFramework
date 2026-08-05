@@ -196,6 +196,8 @@ class WidgetQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'generateAiWidget',
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Widget::editor'],
                     'mode' => 'write',
                     'description' => __('根据目标 slot 协议生成 AI Widget 并保存为普通 Widget'),
                     'params' => [

@@ -1,0 +1,19 @@
+{
+    "name": "weline/module-search",
+    "description": "WelineFramework Website-sharded Search projection and indexer",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-product": "@dev",
+        "weline/module-queue": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-websites": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "Weline\\Search\\": ""
+        }
+    },
+    "license": "MIT"
+}

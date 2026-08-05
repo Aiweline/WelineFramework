@@ -1,0 +1,30 @@
+{
+    "name": "weline/module-b2-b",
+    "description": "WelineFramework durable B2B pricing, immutable Order snapshots and checkpointed clone cutover",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-websites": "@dev"
+    },
+    "suggest": {
+        "weline/module-cart": "Consumes server-derived B2B candidates during Cart repricing.",
+        "weline/module-checkout": "Revalidates B2B quote versions during submit.",
+        "weline/module-customer": "Supplies authenticated customer identity for B2B membership.",
+        "weline/module-order": "Stores immutable B2B price snapshots after submit.",
+        "weline/module-product": "Supplies canonical SKU and retail pricing inputs."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\B2B\\": ""
+        }
+    },
+    "license": "MIT"
+}

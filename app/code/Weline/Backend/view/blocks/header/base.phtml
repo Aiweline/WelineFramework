@@ -412,6 +412,10 @@ $backendQueryWorkerUrl = (defined('DEV') && DEV)
     ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
     : '/static/Weline/Frontend/js/weline-api-worker.js';
 $backendDeployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
+$backendWorkerAssetVersion = ($backendDeployMeta && is_array($backendDeployMeta))
+    ? (string)(($backendDeployMeta['deploy_version'] ?? 'dev') . '-' . ($backendDeployMeta['worker_build_id'] ?? 'dev'))
+    : 'dev-dev';
+$backendQueryWorkerUrl .= '?v=' . rawurlencode($backendWorkerAssetVersion);
 $backendApiConfig = [
     'workerUrl' => $backendQueryWorkerUrl,
     'queryWorkerUrl' => $backendQueryWorkerUrl,
@@ -425,8 +429,13 @@ $backendApiConfigJson = json_encode($backendApiConfig, $jsonForScriptFlags);
 $backendApiUrl = (defined('DEV') && DEV)
     ? '/Weline/Backend/view/statics/js/weline-api.js'
     : '/static/Weline/Backend/js/weline-api.js';
-$backendApiUrl .= '?v=20260721-backend-bin-query-worker-reuse';
+$backendApiUrl .= '?v=20260805-backend-sse-silent-rotate-v3';
+$backendApiBusinessUrl = (defined('DEV') && DEV)
+    ? '/Weline/Backend/view/statics/js/weline-api-business.js'
+    : '/static/Weline/Backend/js/weline-api-business.js';
+$backendApiBusinessUrl .= '?v=20260725-wrap-admin-bridge-v2';
 ?>
+<meta name="weline-worker-backend-bootstrap-slot" content="">
 <script data-no-extract="true">
     (function() {
         var backendApiConfig = <?= $backendApiConfigJson ?>;
@@ -436,4 +445,5 @@ $backendApiUrl .= '?v=20260721-backend-bin-query-worker-reuse';
     })();
 </script>
 <script src="<?= htmlspecialchars($backendApiUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
+<script src="<?= htmlspecialchars($backendApiBusinessUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
 <hook>Weline_Backend::backend::partials::head::before</hook>

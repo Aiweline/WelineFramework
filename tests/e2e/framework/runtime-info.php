@@ -42,8 +42,28 @@ function getDefaultDbProfile(array $env): ?array
         return null;
     }
 
+    // `db.default` may name either a profile key (legacy) or the driver type,
+    // in which case the profile lives under `master` / a same-type entry.
     $profile = (array)($db[$default] ?? []);
-    return $profile === [] ? null : $profile;
+    if ($profile !== []) {
+        return $profile;
+    }
+
+    $master = (array)($db['master'] ?? []);
+    if ($master !== [] && ($master['type'] ?? '') !== '') {
+        return $master;
+    }
+
+    foreach ($db as $key => $candidate) {
+        if ($key === 'slaves' || $key === 'retry' || !\is_array($candidate)) {
+            continue;
+        }
+        if (\strtolower((string)($candidate['type'] ?? '')) === \strtolower($default)) {
+            return $candidate;
+        }
+    }
+
+    return null;
 }
 
 function createDbConnection(?array $profile): ?\PDO

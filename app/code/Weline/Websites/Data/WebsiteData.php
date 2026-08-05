@@ -5,6 +5,7 @@ namespace Weline\Websites\Data;
 use Weline\Currency\Api\CurrencyCatalogInterface;
 use Weline\Framework\App\Localization\LocalizationProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteCurrency;
@@ -16,30 +17,27 @@ use Weline\Websites\Model\WebsiteLanguage;
  */
 class WebsiteData
 {
-    /**
-     * @var Website|null 当前网站实例
-     */
-    private static ?Website $website = null;
+    private const STATE_KEY = 'websites.website_data.state.v1';
 
     /**
-     * @var array|null 当前网站的完整数据
+     * @return array{
+     *     website: Website|null,
+     *     data: array<string, mixed>|null,
+     *     currency_codes: array<int, string>|null,
+     *     language_codes: array<int, string>|null,
+     *     currencies: array<int, array<string, mixed>>|null
+     * }
      */
-    private static ?array $data = null;
-
-    /**
-     * @var array|null 关联货币代码列表
-     */
-    private static ?array $currencyCodes = null;
-
-    /**
-     * @var array|null 关联语言代码列表
-     */
-    private static ?array $languageCodes = null;
-
-    /**
-     * @var array|null 关联货币详细信息（包含format等）
-     */
-    private static ?array $currencies = null;
+    private static function emptyState(): array
+    {
+        return [
+            'website' => null,
+            'data' => null,
+            'currency_codes' => null,
+            'language_codes' => null,
+            'currencies' => null,
+        ];
+    }
 
     /**
      * 设置当前网站数据
@@ -49,20 +47,17 @@ class WebsiteData
      */
     public static function setWebsite(Website $website): void
     {
-        self::$website = $website;
-        self::$data = null;
-        self::$currencyCodes = null;
-        self::$languageCodes = null;
-        self::$currencies = null;
+        $state = self::emptyState();
+        // ORM models are mutable and may be reset/reused by ObjectManager. Keep
+        // an independent request snapshot so later mutations cannot rewrite the
+        // Website already selected for this request.
+        $state['website'] = clone $website;
+        self::writeState($state);
     }
 
     public static function resetRequestState(): void
     {
-        self::$website = null;
-        self::$data = null;
-        self::$currencyCodes = null;
-        self::$languageCodes = null;
-        self::$currencies = null;
+        RequestContext::remove(self::STATE_KEY);
     }
 
     /**
@@ -72,7 +67,7 @@ class WebsiteData
      */
     public static function getWebsite(): ?Website
     {
-        return self::$website;
+        return self::readState()['website'];
     }
 
     /**
@@ -82,7 +77,8 @@ class WebsiteData
      */
     public static function getWebsiteId(): ?int
     {
-        return self::$website ? self::$website->getWebsiteId() : null;
+        $website = self::getWebsite();
+        return $website ? $website->getWebsiteId() : null;
     }
 
     /**
@@ -92,7 +88,8 @@ class WebsiteData
      */
     public static function getCode(): ?string
     {
-        return self::$website ? self::$website->getCode() : null;
+        $website = self::getWebsite();
+        return $website ? $website->getCode() : null;
     }
 
     /**
@@ -102,7 +99,8 @@ class WebsiteData
      */
     public static function getName(): ?string
     {
-        return self::$website ? self::$website->getName() : null;
+        $website = self::getWebsite();
+        return $website ? $website->getName() : null;
     }
 
     /**
@@ -112,7 +110,8 @@ class WebsiteData
      */
     public static function getUrl(): ?string
     {
-        return self::$website ? self::$website->getUrl() : null;
+        $website = self::getWebsite();
+        return $website ? $website->getUrl() : null;
     }
 
     /**
@@ -122,7 +121,8 @@ class WebsiteData
      */
     public static function getDefaultCurrency(): ?string
     {
-        return self::$website ? self::$website->getDefaultCurrency() : null;
+        $website = self::getWebsite();
+        return $website ? $website->getDefaultCurrency() : null;
     }
 
     /**
@@ -132,7 +132,8 @@ class WebsiteData
      */
     public static function getDefaultLanguage(): ?string
     {
-        return self::$website ? self::$website->getDefaultLanguage() : null;
+        $website = self::getWebsite();
+        return $website ? $website->getDefaultLanguage() : null;
     }
 
     /**
@@ -142,7 +143,8 @@ class WebsiteData
      */
     public static function getDefaultTimezone(): ?string
     {
-        return self::$website ? self::$website->getDefaultTimezone() : null;
+        $website = self::getWebsite();
+        return $website ? $website->getDefaultTimezone() : null;
     }
 
     /**
@@ -152,18 +154,21 @@ class WebsiteData
      */
     public static function getCurrencyCodes(): array
     {
-        if (self::$currencyCodes !== null) {
-            return self::$currencyCodes;
+        $state = self::readState();
+        if ($state['currency_codes'] !== null) {
+            return $state['currency_codes'];
         }
 
-        if (!self::$website || !self::$website->hasData(Website::schema_fields_ID)) {
-            self::$currencyCodes = [];
-            return self::$currencyCodes;
+        $website = $state['website'];
+        if (!$website || !$website->hasData(Website::schema_fields_ID)) {
+            self::writeCache('currency_codes', []);
+            return [];
         }
         $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
-        self::$currencyCodes = $websiteCurrency->getWebsiteCurrencyCodes(self::$website->getWebsiteId());
-        
-        return self::$currencyCodes;
+        $currencyCodes = $websiteCurrency->getWebsiteCurrencyCodes($website->getWebsiteId());
+        self::writeCache('currency_codes', $currencyCodes);
+
+        return $currencyCodes;
     }
 
     /**
@@ -173,18 +178,21 @@ class WebsiteData
      */
     public static function getLanguageCodes(): array
     {
-        if (self::$languageCodes !== null) {
-            return self::$languageCodes;
+        $state = self::readState();
+        if ($state['language_codes'] !== null) {
+            return $state['language_codes'];
         }
 
-        if (!self::$website || !self::$website->hasData(Website::schema_fields_ID)) {
-            self::$languageCodes = [];
-            return self::$languageCodes;
+        $website = $state['website'];
+        if (!$website || !$website->hasData(Website::schema_fields_ID)) {
+            self::writeCache('language_codes', []);
+            return [];
         }
         $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
-        self::$languageCodes = $websiteLanguage->getWebsiteLanguageCodes(self::$website->getWebsiteId());
-        
-        return self::$languageCodes;
+        $languageCodes = $websiteLanguage->getWebsiteLanguageCodes($website->getWebsiteId());
+        self::writeCache('language_codes', $languageCodes);
+
+        return $languageCodes;
     }
 
     /**
@@ -282,8 +290,9 @@ class WebsiteData
      */
     public static function getCurrencies(): array
     {
-        if (self::$currencies !== null) {
-            return self::$currencies;
+        $state = self::readState();
+        if ($state['currencies'] !== null) {
+            return $state['currencies'];
         }
 
         $currencyCodes = self::getCurrencyCodes();
@@ -303,9 +312,9 @@ class WebsiteData
             }
         }
 
-        self::$currencies = [];
+        $currencies = [];
         foreach ($activeCurrencies as $currency) {
-            self::$currencies[] = [
+            $currencies[] = [
                 'code' => $currency->code,
                 'name' => $currency->name,
                 'format' => $currency->format,
@@ -316,7 +325,8 @@ class WebsiteData
             ];
         }
 
-        return self::$currencies;
+        self::writeCache('currencies', $currencies);
+        return $currencies;
     }
 
     /**
@@ -382,28 +392,31 @@ class WebsiteData
      */
     public static function getData(): ?array
     {
-        if (self::$data !== null) {
-            return self::$data;
+        $state = self::readState();
+        if ($state['data'] !== null) {
+            return $state['data'];
         }
 
-        if (!self::$website) {
+        $website = $state['website'];
+        if (!$website) {
             return null;
         }
 
-        self::$data = [
-            'website_id' => self::$website->getWebsiteId(),
-            'code' => self::$website->getCode(),
-            'name' => self::$website->getName(),
-            'url' => self::$website->getUrl(),
-            'default_currency' => self::$website->getDefaultCurrency(),
-            'default_language' => self::$website->getDefaultLanguage(),
-            'default_timezone' => self::$website->getDefaultTimezone(),
+        $data = [
+            'website_id' => $website->getWebsiteId(),
+            'code' => $website->getCode(),
+            'name' => $website->getName(),
+            'url' => $website->getUrl(),
+            'default_currency' => $website->getDefaultCurrency(),
+            'default_language' => $website->getDefaultLanguage(),
+            'default_timezone' => $website->getDefaultTimezone(),
             'currency_codes' => self::getCurrencyCodes(),
             'language_codes' => self::getLanguageCodes(),
             'currencies' => self::getCurrencies(),
         ];
 
-        return self::$data;
+        self::writeCache('data', $data);
+        return $data;
     }
 
     /**
@@ -413,10 +426,55 @@ class WebsiteData
      */
     public static function reset(): void
     {
-        self::$website = null;
-        self::$data = null;
-        self::$currencyCodes = null;
-        self::$languageCodes = null;
-        self::$currencies = null;
+        self::resetRequestState();
+    }
+
+    /**
+     * @return array{
+     *     website: Website|null,
+     *     data: array<string, mixed>|null,
+     *     currency_codes: array<int, string>|null,
+     *     language_codes: array<int, string>|null,
+     *     currencies: array<int, array<string, mixed>>|null
+     * }
+     */
+    private static function readState(): array
+    {
+        $state = RequestContext::get(self::STATE_KEY);
+        if (!\is_array($state)) {
+            return self::emptyState();
+        }
+
+        return [
+            'website' => ($state['website'] ?? null) instanceof Website ? $state['website'] : null,
+            'data' => \is_array($state['data'] ?? null) ? $state['data'] : null,
+            'currency_codes' => \is_array($state['currency_codes'] ?? null) ? $state['currency_codes'] : null,
+            'language_codes' => \is_array($state['language_codes'] ?? null) ? $state['language_codes'] : null,
+            'currencies' => \is_array($state['currencies'] ?? null) ? $state['currencies'] : null,
+        ];
+    }
+
+    /**
+     * @param array{
+     *     website: Website|null,
+     *     data: array<string, mixed>|null,
+     *     currency_codes: array<int, string>|null,
+     *     language_codes: array<int, string>|null,
+     *     currencies: array<int, array<string, mixed>>|null
+     * } $state
+     */
+    private static function writeState(array $state): void
+    {
+        RequestContext::set(self::STATE_KEY, $state);
+    }
+
+    private static function writeCache(string $key, array $value): void
+    {
+        $state = self::readState();
+        if (!\array_key_exists($key, $state) || $key === 'website') {
+            throw new \LogicException('Unknown WebsiteData request cache: ' . $key);
+        }
+        $state[$key] = $value;
+        self::writeState($state);
     }
 }

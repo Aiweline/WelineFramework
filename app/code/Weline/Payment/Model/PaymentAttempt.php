@@ -11,6 +11,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 
 #[Table(comment: 'Payment attempt table')]
 #[Index(name: 'uniq_payment_attempt_code', columns: ['attempt_code'], type: 'UNIQUE')]
+#[Index(name: 'uniq_payment_attempt_nonterminal', columns: ['intent_code', 'nonterminal_guard'], type: 'UNIQUE')]
+#[Index(name: 'uniq_payment_attempt_provider_ref_guard', columns: ['provider_reference_guard'], type: 'UNIQUE')]
+#[Index(name: 'uniq_payment_attempt_provider_ref', columns: ['merchant_account', 'environment', 'provider_reference'], type: 'UNIQUE')]
 #[Index(name: 'idx_payment_attempt_intent', columns: ['intent_code'])]
 #[Index(name: 'idx_payment_attempt_method_provider', columns: ['method_code', 'provider_code'])]
 #[Index(name: 'idx_payment_attempt_merchant', columns: ['merchant_account'])]
@@ -18,6 +21,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_payment_attempt_created_at', columns: ['created_at'])]
 class PaymentAttempt extends Model
 {
+    /** Nullable unique guard：非终态 = open，终态 NULL（MOD-P2F-002）。 */
+    public const NONTERMINAL_GUARD_VALUE = 'open';
+
     public const schema_table = 'weline_payment_attempt';
     public const schema_primary_key = 'attempt_id';
 
@@ -60,6 +66,12 @@ class PaymentAttempt extends Model
     public const schema_fields_PRECISION = 'precision';
     #[Col('varchar', 32, nullable: false, default: 'created', comment: 'Attempt status')]
     public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 16, nullable: true, comment: 'Nullable nonterminal guard (open|NULL)')]
+    public const schema_fields_NONTERMINAL_GUARD = 'nonterminal_guard';
+    #[Col('int', 11, nullable: false, default: 0, comment: 'Optimistic version for CAS')]
+    public const schema_fields_VERSION = 'version';
+    #[Col('varchar', 64, nullable: false, default: '', comment: 'Last successful CAS writer token')]
+    public const schema_fields_CAS_TOKEN = 'cas_token';
     #[Col('varchar', 96, nullable: true, comment: 'Failure reason code')]
     public const schema_fields_FAILURE_REASON_CODE = 'failure_reason_code';
     #[Col('smallint', 1, nullable: false, default: 0, comment: 'User confirmed flag')]
@@ -68,6 +80,14 @@ class PaymentAttempt extends Model
     public const schema_fields_IDEMPOTENCY_KEY = 'idempotency_key';
     #[Col('varchar', 160, nullable: true, comment: 'Provider reference')]
     public const schema_fields_PROVIDER_REFERENCE = 'provider_reference';
+    #[Col('varchar', 64, nullable: true, comment: 'Normalized provider reference ownership guard')]
+    public const schema_fields_PROVIDER_REFERENCE_GUARD = 'provider_reference_guard';
+    #[Col('varchar', 160, nullable: true, comment: 'Provider request key (attempt:submit:v1)')]
+    public const schema_fields_PROVIDER_REQUEST_KEY = 'provider_request_key';
+    #[Col('datetime', nullable: true, comment: 'Reservation lease expires at')]
+    public const schema_fields_RESERVATION_EXPIRES_AT = 'reservation_expires_at';
+    #[Col('datetime', nullable: true, comment: 'Attempt started at (lease hard ceiling base)')]
+    public const schema_fields_STARTED_AT = 'started_at';
     #[Col('text', nullable: true, comment: 'Provider request snapshot JSON')]
     public const schema_fields_REQUEST_SNAPSHOT = 'request_snapshot';
     #[Col('text', nullable: true, comment: 'Provider response snapshot JSON')]

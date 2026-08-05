@@ -3,13 +3,29 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
+    <menu source="Weline_Payment::payment_dashboard" name="payment_dashboard" title="支付诊断"
+          action="payment/backend/dashboard/index?target_scope=default.default.default" parent="Weline_Backend::payment_group"
+          icon="mdi mdi-view-dashboard-outline" order="5"/>
+
     <!-- 支付方式管理 - 归入业务运营 > 支付管理 -->
     <menu source="Weline_Payment::payment_method" name="payment_method" title="支付方式" 
-          action="payment/backend/method" parent="Weline_Backend::payment_group"
+          action="payment/backend/method?target_scope=default.default.default" parent="Weline_Backend::payment_group"
           icon="mdi mdi-credit-card-outline" order="10"/>
     
     <!-- 交易记录管理 -->
     <menu source="Weline_Payment::payment_transaction" name="payment_transaction" title="交易记录" 
           action="payment/backend/transaction" parent="Weline_Backend::payment_group"
           icon="mdi mdi-cash-multiple" order="20"/>
+
+    <menu source="Weline_Payment::payment_webhook" name="payment_webhook" title="Webhook诊断"
+          action="payment/backend/diagnostics/webhooks" parent="Weline_Backend::payment_group"
+          icon="mdi mdi-webhook" order="30"/>
+
+    <menu source="Weline_Payment::payment_reconciliation" name="payment_reconciliation" title="支付对账"
+          action="payment/backend/diagnostics/reconciliation" parent="Weline_Backend::payment_group"
+          icon="mdi mdi-scale-balance" order="40"/>
+
+    <menu source="Weline_Payment::payment_refund_reconciliation" name="payment_refund_reconciliation" title="退款对账"
+          action="payment/backend/diagnostics/refundreconciliation" parent="Weline_Backend::payment_group"
+          icon="mdi mdi-cash-refund" order="50"/>
 </menus>

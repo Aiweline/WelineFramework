@@ -24,6 +24,7 @@ use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\Runtime\WorkerRestartBatchPlanner;
+use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 
 /**
  * server:reload - 热重载 Worker 代码
@@ -70,6 +71,16 @@ class Reload extends CommandAbstract
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
         $instanceName = $manager->resolvePersistedInstanceName($requestedInstanceName) ?? $requestedInstanceName;
+
+        $lifecycleLock = new ServerLifecycleOperationLock();
+        if (!$lifecycleLock->acquire($instanceName, 'reload', 5.0)) {
+            $this->printer->warning(__(
+                '实例 [%{1}] 正在执行启动、停止或其他生命周期操作，已拒绝并发重载。',
+                [$instanceName],
+            ));
+            return 1;
+        }
+        try {
 
         if ($instanceName !== $requestedInstanceName) {
             $this->printer->note(__('实例 [%{1}] 自动匹配到 [%{2}]', [$requestedInstanceName, $instanceName]));
@@ -132,6 +143,9 @@ class Reload extends CommandAbstract
         
         echo "\n";
         return $exitCode;
+        } finally {
+            $lifecycleLock->release();
+        }
     }
     
     /**

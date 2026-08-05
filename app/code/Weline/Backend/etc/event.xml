@@ -40,4 +40,16 @@
     <event name="Weline_Backend::user::registered">
         <observer name="Weline_Backend::create_user_contacts" instance="Weline\Backend\Observer\UserRegisteredObserver" disabled="false" shared="true" sort="0"/>
     </event>
+    <!-- WLS normal backend HTML responses. FPM skips this observer at runtime. -->
+    <event name="Weline_Framework::App::run_after">
+        <observer name="Weline_Backend::worker_attestation_run_after"
+                  instance="Weline\Backend\Observer\BackendWorkerAttestationResponse"
+                  disabled="false" shared="true" sort="810"/>
+    </event>
+    <!-- FPM final backend HTML responses. Persistent runtimes skip this observer. -->
+    <event name="Weline_Framework_Http::response_ready">
+        <observer name="Weline_Backend::worker_attestation_response_ready"
+                  instance="Weline\Backend\Observer\BackendWorkerAttestationResponse"
+                  disabled="false" shared="true" sort="110"/>
+    </event>
 </config>

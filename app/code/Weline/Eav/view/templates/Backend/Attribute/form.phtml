@@ -1,3 +1,32 @@
+
+<script>
+(function(g){
+  if(g.__bqAdmin_eav_admin) return;
+  g.__bqAdmin_eav_admin=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['eav_admin']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('eav_admin').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <?php
 /**@var \Weline\Framework\View\Template $this */
 ?>
@@ -55,7 +84,7 @@
                     @click="changeNav('progress-attribute-details')" scope="attribute" name="progress"
                     value="progress-attribute-details">
                     <span class='step-number'>04</span>
-                    <span class='step-title'>创建属性</span>
+                    <span class='step-title'><lang>创建属性</lang></span>
                     <span v-if="params.name!=='' && params.code!==''" class='help-block'>
                                 <lang>你创建了</lang>
                                 <span class='text-primary' v-text="params.name+'('+params.code+')'"></span>
@@ -276,16 +305,16 @@
                         <div class='col-lg-4'>
                             <div class='mb-3'>
                                 <label class='form-label' for='validationVisible'>
-                                    <lang>鍓嶇鍙</lang>
+                                    <lang>前端可见</lang>
                                 </label>
                                 <select class='form-control' id='validationVisible'
                                         scope="attribute"
                                         v-model="params.frontend_is_visible" name='frontend_is_visible'>
                                     <option value='0' @if{attribute.frontend_is_visible==0=>'selected'}>
-                                        <lang>鍚?</lang>
+                                        <lang>否</lang>
                                     </option>
                                     <option value='1' @if{attribute.frontend_is_visible==1=>'selected'}>
-                                        <lang>鏄?</lang>
+                                        <lang>是</lang>
                                     </option>
                                 </select>
                             </div>
@@ -293,16 +322,16 @@
                         <div class='col-lg-4'>
                             <div class='mb-3'>
                                 <label class='form-label' for='validationFilterable'>
-                                    <lang>鍙瓫閫?</lang>
+                                    <lang>可筛选</lang>
                                 </label>
                                 <select class='form-control' id='validationFilterable'
                                         scope="attribute"
                                         v-model="params.frontend_is_filterable" name='frontend_is_filterable'>
                                     <option value='0' @if{attribute.frontend_is_filterable==0=>'selected'}>
-                                        <lang>鍚?</lang>
+                                        <lang>否</lang>
                                     </option>
                                     <option value='1' @if{attribute.frontend_is_filterable==1=>'selected'}>
-                                        <lang>鏄?</lang>
+                                        <lang>是</lang>
                                     </option>
                                 </select>
                             </div>
@@ -310,16 +339,16 @@
                         <div class='col-lg-4'>
                             <div class='mb-3'>
                                 <label class='form-label' for='validationSearchable'>
-                                    <lang>鍙悳绱?</lang>
+                                    <lang>可搜索</lang>
                                 </label>
                                 <select class='form-control' id='validationSearchable'
                                         scope="attribute"
                                         v-model="params.frontend_is_searchable" name='frontend_is_searchable'>
                                     <option value='0' @if{attribute.frontend_is_searchable==0=>'selected'}>
-                                        <lang>鍚?</lang>
+                                        <lang>否</lang>
                                     </option>
                                     <option value='1' @if{attribute.frontend_is_searchable==1=>'selected'}>
-                                        <lang>鏄?</lang>
+                                        <lang>是</lang>
                                     </option>
                                 </select>
                             </div>
@@ -569,7 +598,7 @@
                                                  alt="" v-if="addParams.swatch_image">
                                             <button type="button"
                                                     class="btn btn-primary btn-sm waves-effect waves-light"
-                                                    @click="chooseImgModel=true">选择图片
+                                                    @click="chooseImgModel=true"><lang>选择图片</lang>
                                             </button>
                                         </div>
 
@@ -820,7 +849,7 @@
                 console.log(this.params, '@lang{获取已填写数据}', this.tableData, '@lang{第5部分的数据}');
                 var saveUrl = "@backend-url('*/backend/attribute/save')";
                 var saveData = { base: this.params, option: this.tableData };
-                var req = window.Weline.Api.request(saveUrl, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(saveData) });
+                var req = bqAdmin['eav_admin'](saveUrl, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(saveData) });
                 req.then(function(res) {
                     var resData = (res && res.data) || res;
                     if (resData && resData.code == 0) {
@@ -885,7 +914,7 @@
                     return false;
                 }
                 var searchUrl = '@backend-url("*/backend/attribute/search")?field=code&limit=1&search=' + encodeURIComponent(code) + '&eav_entity_id=' + eav_entity_id + '&set_id=' + set_id + '&group_id=' + group_id;
-                var req2 = window.Weline.Api.get(searchUrl, { silent: true });
+                var req2 = bqAdmin['eav_admin'](searchUrl, { silent: true });
                 req2.then(function(res) {
                     var resData2 = (res && res.data) || res;
                     if (resData2 && resData2.items && resData2.items.length > 0) {
@@ -912,7 +941,7 @@
                 }
                 var udUrl = "@backend-url('backend/user-data')";
                 var udBody = 'scope=attribute&name=data_has_option&value=' + encodeURIComponent(data_has_option);
-                var req3 = window.Weline.Api.request(udUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: udBody, silent: true });
+                var req3 = bqAdmin['eav_admin'](udUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: udBody, silent: true });
                 req3.catch(function(res) { console.log(res, '保存失败'); });
             }, 500),
             checkCode: function(e) {
@@ -947,7 +976,7 @@
                         if (row.option_id) {
                             var delUrl = "@backend-url('*/backend/attribute/option/delete')";
                             var delBody = 'id=' + encodeURIComponent(row.option_id);
-                            var req4 = window.Weline.Api.request(delUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: delBody, silent: true });
+                            var req4 = bqAdmin['eav_admin'](delUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: delBody, silent: true });
                             req4.catch(function() {});
                         }
                     }
@@ -1079,7 +1108,7 @@
             renderSearchEntities: function(e) {
                 var self = this;
                 var url = '@backend-url("*/backend/entity/search")?search=' + encodeURIComponent(this.EntitiesVal);
-                var req = window.Weline.Api.get(url, { silent: true });
+                var req = bqAdmin['eav_admin'](url, { silent: true });
                 req.then(function(res) {
                     var data = (res && res.data) || res;
                     if (data && data.items) {
@@ -1091,7 +1120,7 @@
             renderSearchEntityAttributeSet: function(e) {
                 var self = this;
                 var url = '@backend-url("*/backend/attribute/set/search")?search=' + encodeURIComponent(this.entityGroup) + '&eav_entity_id=' + this.params.eav_entity_id;
-                var req = window.Weline.Api.get(url, { silent: true });
+                var req = bqAdmin['eav_admin'](url, { silent: true });
                 req.then(function(res) {
                     var data = (res && res.data) || res;
                     if (data && data.msg) {
@@ -1107,7 +1136,7 @@
             renderSearchEntityAttributeSetGroup: function(e) {
                 var self = this;
                 var url = '@backend-url("*/backend/attribute/group/search")?search=' + encodeURIComponent(this.entityNameGroup) + '&eav_entity_id=' + this.params.eav_entity_id + '&set_id=' + this.params.set_id;
-                var req = window.Weline.Api.get(url, { silent: true });
+                var req = bqAdmin['eav_admin'](url, { silent: true });
                 req.then(function(res) {
                     var data = (res && res.data) || res;
                     if (data && data.msg) {

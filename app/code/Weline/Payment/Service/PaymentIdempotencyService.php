@@ -66,6 +66,25 @@ class PaymentIdempotencyService
             $existing = $this->loadByScopeHash($scope['scope_hash']);
             if ($existing) {
                 $this->assertFingerprintMatches($existing, $fingerprint);
+                $status = (string) $existing->getData(PaymentIdempotency::schema_fields_STATUS);
+                if ($status === PaymentIdempotency::STATUS_SUCCEEDED) {
+                    return $this->beginResponse(
+                        self::STATE_REPLAY,
+                        false,
+                        $existing,
+                        $existing->getResultPayload(),
+                        null,
+                    );
+                }
+                if ($status === PaymentIdempotency::STATUS_FAILED) {
+                    return $this->beginResponse(
+                        self::STATE_FAILED,
+                        false,
+                        $existing,
+                        null,
+                        $existing->getFailurePayload(),
+                    );
+                }
 
                 return $this->beginResponse(self::STATE_IN_PROGRESS, false, $existing, null, null);
             }
@@ -106,6 +125,22 @@ class PaymentIdempotencyService
 
         $now = $this->now();
         $record->setData(PaymentIdempotency::schema_fields_STATUS, PaymentIdempotency::STATUS_SUCCEEDED)
+            ->setData(
+                PaymentIdempotency::schema_fields_INTENT_CODE,
+                $this->nullableCode($resultPayload['intent_code'] ?? null),
+            )
+            ->setData(
+                PaymentIdempotency::schema_fields_ATTEMPT_CODE,
+                $this->nullableCode($resultPayload['attempt_code'] ?? null),
+            )
+            ->setData(
+                PaymentIdempotency::schema_fields_RESULT_CODE,
+                $this->nullableCode($resultPayload['result_code'] ?? 'payment_start_accepted'),
+            )
+            ->setData(
+                PaymentIdempotency::schema_fields_REQUEST_HASH,
+                $this->nullableCode($resultPayload['request_hash'] ?? null),
+            )
             ->setData(PaymentIdempotency::schema_fields_FAILURE_PAYLOAD, null)
             ->setData(PaymentIdempotency::schema_fields_FAILURE_REASON_CODE, null)
             ->setData(PaymentIdempotency::schema_fields_FAILED_AT, null)
@@ -189,7 +224,7 @@ class PaymentIdempotencyService
     private function newIdempotencyModel(): PaymentIdempotency
     {
         /** @var PaymentIdempotency $record */
-        $record = $this->objectManager->getInstance(PaymentIdempotency::class);
+        $record = $this->objectManager->getInstance(PaymentIdempotency::class, [], false);
 
         return $record;
     }
@@ -197,7 +232,9 @@ class PaymentIdempotencyService
     private function loadByScopeHash(string $scopeHash): ?PaymentIdempotency
     {
         $record = $this->newIdempotencyModel();
-        $record->load(PaymentIdempotency::schema_fields_IDEMPOTENCY_SCOPE_HASH, $scopeHash);
+        $record->where(PaymentIdempotency::schema_fields_IDEMPOTENCY_SCOPE_HASH, $scopeHash)
+            ->find()
+            ->fetch();
 
         return $record->getId() ? $record : null;
     }
@@ -365,6 +402,13 @@ class PaymentIdempotencyService
     private function normalizeValue(string $value): string
     {
         return trim($value);
+    }
+
+    private function nullableCode(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function now(): string

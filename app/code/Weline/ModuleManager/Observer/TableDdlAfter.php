@@ -33,6 +33,9 @@ class TableDdlAfter implements ObserverInterface
         }
 
         $tableName = str_replace('`', '', $tableName);
+        $modelForRecord = $modelClass !== null && $modelClass !== ''
+            ? $modelClass
+            : 'Eav::' . $tableName;
 
         /** @var ModuleTable $existingByModel */
         $existingByModel = $this->tableModel->reset()->where(ModuleTable::schema_fields_model, $modelClass ?? '')->find()->fetch();
@@ -67,14 +70,25 @@ class TableDdlAfter implements ObserverInterface
         if ($existingByName->getId() && $existingByName->getModel() === (string) $modelClass) {
             return;
         }
-
-        $modelForRecord = $modelClass !== null && $modelClass !== ''
-            ? $modelClass
-            : 'Eav::' . $tableName;
+        if ($existingByName->getId() && $existingByName->getModuleName() === $moduleName) {
+            $previousModel = trim($existingByName->getModel());
+            if ($previousModel !== ''
+                && !str_starts_with($previousModel, 'Eav::')
+                && class_exists($previousModel)) {
+                throw new Exception(__('表 %{1} 在模块 %{2} 中仍由有效模型 %{3} 使用，不能自动改绑到 %{4}', [
+                    $tableName,
+                    $moduleName,
+                    $previousModel,
+                    $modelForRecord,
+                ]));
+            }
+            $existingByName->setModel($modelForRecord)->save(true);
+            return;
+        }
 
         $this->tableModel->reset()->clearData()
             ->setData(ModuleTable::schema_fields_module_name, $moduleName)
-            ->setData(ModuleTable::schema_fields_name, $tableName, true)
+            ->setData(ModuleTable::schema_fields_name, $tableName)
             ->setData(ModuleTable::schema_fields_model, $modelForRecord, true)
             ->save(true);
     }

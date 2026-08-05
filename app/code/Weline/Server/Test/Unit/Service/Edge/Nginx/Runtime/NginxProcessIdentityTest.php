@@ -47,7 +47,11 @@ final class NginxProcessIdentityTest extends TestCase
         $reused = $identity->inspect(32124, $command, true);
 
         self::assertFalse($reused['ok']);
-        self::assertStringContainsString('generation does not match', $reused['reason']);
+        self::assertTrue(
+            \str_contains($reused['reason'], 'generation does not match')
+            || \str_contains($reused['reason'], 'process_start_identity'),
+            $reused['reason'],
+        );
         self::assertSame(32123, $identity->recordedPid());
     }
 
@@ -85,6 +89,43 @@ final class NginxProcessIdentityTest extends TestCase
         self::assertNull($identity->recordedPid());
     }
 
+    public function testNormalizeProcessStartTimeRecoversBleedingNumericColumns(): void
+    {
+        [$identity] = $this->fixture('start-time');
+        $method = new \ReflectionMethod(NginxProcessIdentity::class, 'normalizeProcessStartTime');
+        $method->setAccessible(true);
+
+        self::assertSame(
+            'Tue Aug 4 18:59:13 2026',
+            $method->invoke($identity, '0.0 0.0 Tue Aug  4 18:59:13 2026'),
+        );
+        self::assertSame(
+            'Tue Aug 4 18:59:13 2026',
+            $method->invoke($identity, 'Tue Aug  4 18:59:13 2026'),
+        );
+        self::assertNull($method->invoke($identity, '0.0 0.0'));
+        self::assertNull($method->invoke($identity, ''));
+    }
+
+    public function testRepeatedInspectStaysStableWithDarwinIdentityResolver(): void
+    {
+        $calls = 0;
+        [$identity, $command] = $this->fixture(
+            'repeat-inspect',
+            static function (int $pid) use (&$calls): string {
+                ++$calls;
+
+                return 'darwin-start-timeval:1785841153:80586';
+            },
+        );
+
+        for ($i = 0; $i < 8; ++$i) {
+            $result = $identity->inspect(32123, $command, $i === 0);
+            self::assertTrue($result['ok'], $result['reason'] ?? 'missing reason');
+        }
+        self::assertGreaterThanOrEqual(8, $calls);
+    }
+
     public function testLegacyManifestIsAttestedOnceAndThenFenced(): void
     {
         $directory = $this->root . DIRECTORY_SEPARATOR . 'legacy';
@@ -99,12 +140,22 @@ final class NginxProcessIdentityTest extends TestCase
         self::assertTrue(\mkdir(\dirname($processManifest), 0700, true));
         self::assertSame(6, \file_put_contents($binary, 'legacy'));
         self::assertSame(8, \file_put_contents($config, 'events{}'));
-        self::assertNotFalse(\file_put_contents($manifest, \json_encode([
+        $payloadWithoutGeneration = [
+            'schema_version' => 2,
+            'role' => 'legacy-project-nginx',
+            'implementation_level' => 'nginx-runtime-v2',
             'version' => '1.26.3',
-            'source_sha256' => \hash('sha256', 'legacy-source'),
-            'platform' => \PHP_OS_FAMILY,
             'binary' => $binary,
-        ], JSON_THROW_ON_ERROR)));
+            'binary_sha256' => \hash_file('sha256', $binary),
+        ];
+        $generation = \hash(
+            'sha256',
+            \json_encode($this->canonicalize($payloadWithoutGeneration), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        );
+        self::assertNotFalse(\file_put_contents($manifest, \json_encode(
+            $payloadWithoutGeneration + ['runtime_generation' => $generation],
+            JSON_THROW_ON_ERROR,
+        )));
         $identity = new NginxProcessIdentity(
             role: 'legacy-project-nginx',
             binary: $binary,
@@ -112,6 +163,7 @@ final class NginxProcessIdentityTest extends TestCase
             config: $config,
             installManifest: $manifest,
             processManifest: $processManifest,
+            processStartIdentityResolver: static fn (int $pid): string => 'legacy-start:' . $pid,
         );
         $command = $this->quote($binary) . ' -p ' . $this->quote($prefix)
             . ' -c ' . $this->quote($config);
@@ -123,13 +175,13 @@ final class NginxProcessIdentityTest extends TestCase
 
         $changed = $identity->inspect(76543, $command, false);
         self::assertFalse($changed['ok']);
-        self::assertStringContainsString('field mismatch', $changed['reason']);
+        self::assertStringContainsString('binary digest', $changed['reason']);
     }
 
     /**
      * @return array{NginxProcessIdentity,string,string,string,string}
      */
-    private function fixture(string $name = 'first'): array
+    private function fixture(string $name = 'first', ?\Closure $processStartIdentityResolver = null): array
     {
         $directory = $this->root . DIRECTORY_SEPARATOR . $name;
         self::assertTrue(\mkdir($directory, 0700, true));
@@ -143,12 +195,19 @@ final class NginxProcessIdentityTest extends TestCase
         self::assertTrue(\mkdir(\dirname($processManifest), 0700, true));
         self::assertSame(6, \file_put_contents($binary, 'binary'));
         self::assertSame(8, \file_put_contents($config, 'events{}'));
-        $generation = \hash('sha256', 'runtime-' . $name);
-        $payload = [
+        $payloadWithoutGeneration = [
+            'schema_version' => 2,
+            'role' => 'test-nginx',
+            'implementation_level' => 'nginx-runtime-v2',
             'version' => '1.30.4',
+            'binary' => $binary,
             'binary_sha256' => \hash_file('sha256', $binary),
-            'runtime_generation' => $generation,
         ];
+        $generation = \hash(
+            'sha256',
+            \json_encode($this->canonicalize($payloadWithoutGeneration), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        );
+        $payload = $payloadWithoutGeneration + ['runtime_generation' => $generation];
         self::assertNotFalse(\file_put_contents(
             $manifest,
             \json_encode($payload, JSON_THROW_ON_ERROR),
@@ -160,11 +219,29 @@ final class NginxProcessIdentityTest extends TestCase
             config: $config,
             installManifest: $manifest,
             processManifest: $processManifest,
+            processStartIdentityResolver: $processStartIdentityResolver
+                ?? static fn (int $pid): string => 'test-start-identity:stable',
         );
         $command = $this->quote($binary) . ' -p ' . $this->quote($prefix)
             . ' -c ' . $this->quote($config);
 
         return [$identity, $command, $generation, $processManifest, $binary];
+    }
+
+    /**
+     * @param array<string, mixed> $value
+     * @return array<string, mixed>
+     */
+    private function canonicalize(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            if (\is_array($item)) {
+                $value[$key] = $this->canonicalize($item);
+            }
+        }
+        \ksort($value, SORT_STRING);
+
+        return $value;
     }
 
     private function quote(string $value): string

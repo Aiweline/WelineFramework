@@ -162,8 +162,56 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         $executionMarker = $this->inputs['wls-gateway-launcher'] . '.executed';
         self::assertFileExists($executionMarker);
         self::assertTrue(\unlink($executionMarker));
-        $signed = (new \WlsGatewayPackageSigner())->sign([
+        $auditReceipt = $this->root . DIRECTORY_SEPARATOR
+            . 'production-package-audit.json';
+        $signer = new \WlsGatewayPackageSigner();
+        $audit = $signer->audit([
             'package' => $output,
+            'receipt-output' => $auditReceipt,
+        ]);
+        self::assertTrue($audit['ok']);
+        $auditEnvironment = (string)$audit['audit_environment_sha256'];
+        self::assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/D', $auditEnvironment);
+        self::assertFileDoesNotExist(
+            $executionMarker,
+            'The dependency-audit phase must parse metadata without executing a package component.',
+        );
+        $receiptBytes = (string)\file_get_contents($auditReceipt);
+        $tamperedReceipt = \json_decode(
+            $receiptBytes,
+            true,
+            16,
+            JSON_THROW_ON_ERROR,
+        );
+        $tamperedReceipt['component_set_sha256'] = \str_repeat('0', 64);
+        self::assertNotFalse(\file_put_contents(
+            $auditReceipt,
+            \json_encode(
+                $tamperedReceipt,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL,
+        ));
+        try {
+            $signer->sign([
+                'package' => $output,
+                'audit-receipt' => $auditReceipt,
+                'expected-audit-environment-sha256' => $auditEnvironment,
+                'signing-key-id' => 'fixture-release-key',
+                'signing-key-file' => $secretFile,
+                'trusted-keys' => $trustedKeys,
+            ]);
+            self::fail('A forged dependency-audit receipt must not authorize signing.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'receipt does not match',
+                $exception->getMessage(),
+            );
+        }
+        self::assertNotFalse(\file_put_contents($auditReceipt, $receiptBytes));
+        $signed = $signer->sign([
+            'package' => $output,
+            'audit-receipt' => $auditReceipt,
+            'expected-audit-environment-sha256' => $auditEnvironment,
             'signing-key-id' => 'fixture-release-key',
             'signing-key-file' => $secretFile,
             'trusted-keys' => $trustedKeys,

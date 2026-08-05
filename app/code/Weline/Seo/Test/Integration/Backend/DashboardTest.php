@@ -11,8 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Test\Integration\Backend;
 
-use PHPUnit\Framework\TestCase;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\App\Controller\BackendPageController;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Test\TestCore;
 use Weline\Seo\Controller\Backend\Dashboard;
 
 /**
@@ -23,12 +24,15 @@ use Weline\Seo\Controller\Backend\Dashboard;
 class DashboardTest extends TestCore
 {
     /**
-     * 测试控制器实例化
+     * 后台控制器在无活动路由的测试进程中不应通过 ObjectManager 装配。
+     * 直接构造仅验证本控制器的依赖契约；真实路由由 HTTP/E2E 门禁覆盖。
      */
-    public function testControllerInstantiation(): void
+    public function testControllerCanBeConstructedWithoutActiveRouter(): void
     {
-        $controller = \Weline\Framework\Manager\ObjectManager::getInstance(Dashboard::class);
-        $this->assertInstanceOf(Dashboard::class, $controller);
+        $controller = new Dashboard(ObjectManager::getInstance());
+
+        self::assertInstanceOf(Dashboard::class, $controller);
+        self::assertInstanceOf(BackendPageController::class, $controller);
     }
 }
 

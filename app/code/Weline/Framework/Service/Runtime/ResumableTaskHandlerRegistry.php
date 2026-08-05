@@ -67,15 +67,30 @@ final class ResumableTaskHandlerRegistry
                 $typeCode = trim((string)$typeCode);
                 $handlerClass = is_string($entry) ? $entry : (string)($entry['handler'] ?? '');
                 $declaredModule = is_array($entry) ? trim((string)($entry['module'] ?? $module)) : $module;
+                $allowedAreas = is_array($entry) ? ($entry['areas'] ?? null) : null;
+                $backendAclSourceId = is_array($entry) && array_key_exists('backend_acl', $entry)
+                    ? $entry['backend_acl']
+                    : null;
+                $allowedKeys = ['areas', 'backend_acl', 'handler', 'module'];
                 if ($typeCode === '' || $handlerClass === '' || !class_exists($handlerClass)
-                    || !is_a($handlerClass, ResumableTaskHandlerInterface::class, true)) {
+                    || !is_a($handlerClass, ResumableTaskHandlerInterface::class, true)
+                    || !is_array($entry)
+                    || !is_array($allowedAreas)
+                    || ($backendAclSourceId !== null && !is_string($backendAclSourceId))
+                    || array_diff(array_keys($entry), $allowedKeys) !== []) {
                     throw new \RuntimeException("Invalid resumable task declaration: {$file}:{$typeCode}");
                 }
                 if (isset($definitions[$typeCode])) {
                     throw new \RuntimeException("Duplicate resumable task type declaration: {$typeCode}");
                 }
                 /** @var class-string<ResumableTaskHandlerInterface> $handlerClass */
-                $definitions[$typeCode] = new ResumableTaskTypeDefinition($typeCode, $declaredModule, $handlerClass);
+                $definitions[$typeCode] = new ResumableTaskTypeDefinition(
+                    $typeCode,
+                    $declaredModule,
+                    $handlerClass,
+                    $allowedAreas,
+                    $backendAclSourceId,
+                );
             }
         }
         ksort($definitions);

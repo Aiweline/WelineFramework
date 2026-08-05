@@ -317,12 +317,16 @@ app/code/Weline/MediaManager/extends/module/Weline_Ai/Adapter/MediaManagerAiDraw
 
 ### 6.1 ACL 建议
 
-| 权限 | 说明 |
-|------|------|
-| `Weline_MediaManager::file_manager` | 文件管理入口 |
-| `Weline_MediaManager::ai_draw` | 发起生成/修图/批量 |
-| `Weline_MediaManager::ai_draw_save` | 另存为新文件 |
-| `Weline_MediaManager::ai_draw_overwrite` | 覆盖原图（可单独收紧） |
+| 权限 | 说明 | 注册方式 |
+|------|------|----------|
+| `Weline_MediaManager::file_manager` | 文件管理入口 | `etc/backend/menu.xml` |
+| `Weline_MediaManager::ai_draw` | 发起生成/修图/批量、读配置、预览 | `Controller/Backend/AiDraw.php` 类级 `#[Acl]` |
+| `Weline_MediaManager::ai_draw_save` | 另存为新文件 | `AiDraw::postSave` 方法级 `#[Acl]` |
+| `Weline_MediaManager::ai_draw_overwrite` | 覆盖原图（可单独收紧） | 预留；当前 save 统一用 `ai_draw_save` |
+
+`media_manager` QueryProvider 的 `backend_acl.source_id` 必须与上表精确一致。
+`ResourceAuthorizationService` 要求资源先存在于 ACL 表（启用、后台）；超管 `role_id=1` 也**不会**对不存在的 source 放行。
+新增或改名 source 后必须 `php bin/w setup:upgrade --route`，再确认超管 `SetupUpgradeGrantSuperAdmin` 已授予。
 
 ### 6.2 安全红线
 

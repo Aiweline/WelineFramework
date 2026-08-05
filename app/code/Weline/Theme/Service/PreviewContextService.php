@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Session\Session;
 use Weline\Theme\Model\WelineTheme;
 
@@ -46,6 +48,7 @@ final class PreviewContextService
             'status' => self::DEFAULT_STATUS,
             'version_id' => null,
             'scope' => self::DEFAULT_SCOPE,
+            'store_mode' => ScopeIdentity::MODE_NORMAL,
             'target_type' => self::TARGET_TYPE_PATH,
             'target_value' => '/',
             'preview_token' => '',
@@ -255,7 +258,14 @@ final class PreviewContextService
         $normalized['version_id'] = ($versionId !== null && (int)$versionId > 0) ? (int)$versionId : null;
 
         $scope = \trim((string)($normalized['scope'] ?? ''));
-        $normalized['scope'] = $scope !== '' ? $scope : self::DEFAULT_SCOPE;
+        $storeMode = \strtolower(\trim((string)($normalized['store_mode'] ?? '')));
+        $layoutScope = $this->getLayoutScopeNormalizer()->normalize([
+            'scope' => $scope !== '' ? $scope : self::DEFAULT_SCOPE,
+            'store_mode' => $storeMode !== '' ? $storeMode : ScopeIdentity::MODE_NORMAL,
+        ]);
+        // 预览上下文保留规范三段 storage_scope；store_mode 独立字段，写入布局时再编码。
+        $normalized['scope'] = (string)$layoutScope['storage_scope'];
+        $normalized['store_mode'] = (string)$layoutScope['store_mode'];
 
         $normalized['locale'] = $this->normalizeLocale((string)($normalized['locale'] ?? ''));
 
@@ -321,6 +331,7 @@ final class PreviewContextService
             'status',
             'version_id',
             'scope',
+            'store_mode',
             'locale',
             'target_type',
             'target_value',
@@ -713,7 +724,12 @@ final class PreviewContextService
         }
 
         /** @var PreviewRequestInspector $service */
-        $service = \Weline\Framework\Manager\ObjectManager::getInstance(PreviewRequestInspector::class);
+        $service = ObjectManager::getInstance(PreviewRequestInspector::class);
         return $service;
+    }
+
+    private function getLayoutScopeNormalizer(): ThemeLayoutScopeNormalizer
+    {
+        return new ThemeLayoutScopeNormalizer(new \Weline\SystemConfig\Service\SystemConfigScopeResolver());
     }
 }

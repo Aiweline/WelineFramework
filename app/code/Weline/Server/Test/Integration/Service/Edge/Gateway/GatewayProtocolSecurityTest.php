@@ -64,7 +64,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         $run = $this->home . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . 'run';
         self::assertTrue(\mkdir($run, 0700, true));
         self::assertNotFalse(\file_put_contents(
-            $run . DIRECTORY_SEPARATOR . 'fencing-token',
+            $trust . DIRECTORY_SEPARATOR . 'broker-fencing-token',
             $this->fencing,
         ));
         if (!\defined('WLS_GATEWAY_CONTROLLER_EMBEDDED_TEST')) {
@@ -90,6 +90,34 @@ final class GatewayProtocolSecurityTest extends TestCase
             0750,
             (int)\fileperms($this->home . DIRECTORY_SEPARATOR . 'trust') & 0777,
         );
+    }
+
+    public function testControllerRejectsUnauthenticatedNativeBrokerProbe(): void
+    {
+        $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($sockets);
+        self::assertSame(
+            \strlen("WLS-BROKER-PROBE/1\tbad\tbad\n"),
+            \fwrite($sockets[0], "WLS-BROKER-PROBE/1\tbad\tbad\n"),
+        );
+        $this->serveClient->invoke($this->controller, $sockets[1], 0.05);
+        self::assertSame('', \stream_get_contents($sockets[0]));
+        \fclose($sockets[0]);
+    }
+
+    public function testUnauthenticatedBrokerCannotHoldControlLoopForRequestTimeout(): void
+    {
+        $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($sockets);
+        $started = \hrtime(true);
+        $this->serveClient->invoke($this->controller, $sockets[1], 2.0);
+        $elapsed = (\hrtime(true) - $started) / 1_000_000_000;
+        self::assertLessThan(
+            0.8,
+            $elapsed,
+            'Unauthenticated Broker handshake consumed the ordinary request timeout.',
+        );
+        \fclose($sockets[0]);
     }
 
     public function testPosixNginxIdentityRejectsUnverifiedSlotOrConfig(): void
@@ -2584,6 +2612,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             'fencing_token' => $this->fencing,
             'payload_length' => \strlen($encoded),
         ], JSON_THROW_ON_ERROR) . "\n";
+        $handshake = $this->brokerHandshake();
         $responseFile = $this->root . DIRECTORY_SEPARATOR . 'publication-control-response.json';
         $pid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $pid);
@@ -2599,7 +2628,15 @@ final class GatewayProtocolSecurityTest extends TestCase
                 exit(70);
             }
             \stream_set_timeout($client, 1);
-            @\fwrite($client, $broker . $encoded);
+            @\fwrite($client, $handshake['probe'] . $broker . $encoded);
+            $ready = @\fgets($client, 512);
+            if ($ready !== $handshake['ready']) {
+                @\fclose($client);
+                @\file_put_contents($responseFile, \json_encode([
+                    'error' => 'broker handshake failed',
+                ]));
+                exit(72);
+            }
             $response = @\fgets($client, 4 * 1024 * 1024);
             @\fclose($client);
             @\file_put_contents($responseFile, \json_encode([
@@ -2640,6 +2677,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         \stream_set_blocking($server, false);
         $controlServer = new \ReflectionProperty($this->controller, 'controlServer');
         $controlServer->setValue($this->controller, $server);
+        $handshake = $this->brokerHandshake();
 
         $pid = \pcntl_fork();
         self::assertGreaterThanOrEqual(0, $pid);
@@ -2654,8 +2692,13 @@ final class GatewayProtocolSecurityTest extends TestCase
             if (!\is_resource($client)) {
                 exit(70);
             }
-            // A readable but incomplete native envelope used to hold the
-            // Controller for the ordinary three-second client timeout.
+            // Authenticate the Broker boundary first, then leave its identity
+            // envelope incomplete to exercise the bounded second-stage read.
+            @\fwrite($client, $handshake['probe']);
+            if (@\fgets($client, 512) !== $handshake['ready']) {
+                @\fclose($client);
+                exit(71);
+            }
             @\fwrite($client, '{"broker_schema":1');
             \usleep(250000);
             @\fclose($client);
@@ -3143,7 +3186,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertTrue($stateProperty->getValue($this->controller)['h3_enabled']);
     }
 
-    public function testVerifiedPublicationRefreshesOnlySelectedActiveLease(): void
+    public function testPublicRouteProbeProofNeverRefreshesTenantLeases(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174035';
         $activeId = 'instance-published';
@@ -3188,25 +3231,194 @@ final class GatewayProtocolSecurityTest extends TestCase
         ];
         $stateProperty->setValue($this->controller, $state);
 
-        (new \ReflectionMethod($this->controller, 'refreshVerifiedPublishedLeases'))
-            ->invoke($this->controller);
-        $refreshed = $stateProperty->getValue($this->controller);
-        self::assertGreaterThan(
-            $active['last_heartbeat'],
-            $refreshed['instances'][$projectUuid][$activeId]['last_heartbeat'],
+        $recordProbe = new \ReflectionMethod(
+            $this->controller,
+            'recordPublicRouteProbeResult',
         );
-        self::assertGreaterThan(
+        $recordProbe->invoke(
+            $this->controller,
+            $state['routes'][\str_repeat('6', 32)],
+            true,
+            false,
+            '',
+        );
+        $recordProbe->invoke(
+            $this->controller,
+            $state['routes'][\str_repeat('7', 32)],
+            false,
+            false,
+            'backend_transport',
+        );
+        $afterProbe = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            $active['last_heartbeat'],
+            $afterProbe['instances'][$projectUuid][$activeId]['last_heartbeat'],
+        );
+        self::assertSame(
             $active['last_heartbeat_monotonic'],
-            $refreshed['routes'][\str_repeat('6', 32)]['instances'][$activeId]['last_heartbeat_monotonic'],
+            $afterProbe['routes'][\str_repeat('6', 32)]['instances'][$activeId]['last_heartbeat_monotonic'],
         );
         self::assertSame(
             $stale['last_heartbeat'],
-            $refreshed['instances'][$projectUuid][$staleId]['last_heartbeat'],
+            $afterProbe['instances'][$projectUuid][$staleId]['last_heartbeat'],
         );
         self::assertSame(
             $stale['last_heartbeat_monotonic'],
-            $refreshed['routes'][\str_repeat('7', 32)]['instances'][$staleId]['last_heartbeat_monotonic'],
+            $afterProbe['routes'][\str_repeat('7', 32)]['instances'][$staleId]['last_heartbeat_monotonic'],
         );
+        $probeResults = (new \ReflectionProperty(
+            $this->controller,
+            'publicRouteProbeResults',
+        ))->getValue($this->controller);
+        self::assertTrue($probeResults[\str_repeat('6', 32)]['success']);
+        self::assertFalse($probeResults[\str_repeat('7', 32)]['success']);
+    }
+
+    public function testRollbackIntentRejectsHmacValidNonCanonicalObservationDeadline(): void
+    {
+        $runtimeGeneration = \str_repeat('d', 64);
+        $manifest = $this->home . DIRECTORY_SEPARATOR . 'slots'
+            . DIRECTORY_SEPARATOR . 'A' . DIRECTORY_SEPARATOR . 'manifest.json';
+        $decoded = \json_decode(
+            (string)\file_get_contents($manifest),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $decoded['runtime_generation'] = $runtimeGeneration;
+        self::assertNotFalse(\file_put_contents(
+            $manifest,
+            \json_encode($decoded, JSON_THROW_ON_ERROR),
+        ));
+
+        $preparedAt = \time();
+        $payload = "WLS-UPGRADE/1\n"
+            . 'host_id=' . $this->hostId . "\n"
+            . "from=B\nto=A\n"
+            . 'prepared_at=' . $preparedAt . "\n"
+            . 'deadline=' . ($preparedAt + 299) . "\n"
+            . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'nonce=' . \str_repeat('a', 32) . "\n";
+        $key = \hex2bin($this->adminSecret);
+        self::assertIsString($key);
+        try {
+            $intent = $payload . 'signature='
+                . \hash_hmac('sha256', $payload, $key) . "\n";
+        } finally {
+            \sodium_memzero($key);
+        }
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'Signed upgrade intent does not match the active rollback transaction.',
+        );
+        (new \ReflectionMethod($this->controller, 'validateUpgradeIntentForRollback'))
+            ->invoke($this->controller, $intent, 'A', 'B');
+    }
+
+    public function testCorruptBinaryRetentionWindowRebuildsFullMonotonicDay(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $bootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
+        $monotonicNow = \hrtime(true) / 1_000_000_000;
+        $state = $stateProperty->getValue($this->controller);
+        $state['binary_transaction'] = [
+            'phase' => 'OBSERVING',
+            'started_at' => \time() - 10,
+            'started_at_monotonic' => $monotonicNow - 10.0,
+            'healthy_since' => 0,
+            'healthy_since_monotonic' => 0.0,
+            'observation_boot_id' => $bootId,
+            'retained_since_at' => \time() - 10,
+            'retained_since_monotonic' => $monotonicNow - 10.0,
+            'retain_previous_until' => \time() + 1,
+            'retain_previous_until_monotonic' => $monotonicNow + 1.0,
+            'retention_boot_id' => $bootId,
+        ];
+        $stateProperty->setValue($this->controller, $state);
+
+        self::assertTrue(
+            (new \ReflectionMethod($this->controller, 'reconcileBinaryObservationClock'))
+                ->invoke($this->controller, $monotonicNow),
+        );
+        $rebuilt = $stateProperty->getValue($this->controller)['binary_transaction'];
+        self::assertEqualsWithDelta(
+            $monotonicNow,
+            $rebuilt['retained_since_monotonic'],
+            0.000001,
+        );
+        self::assertEqualsWithDelta(
+            $monotonicNow + 86400.0,
+            $rebuilt['retain_previous_until_monotonic'],
+            0.000001,
+        );
+        self::assertSame($bootId, $rebuilt['retention_boot_id']);
+    }
+
+    public function testInitialRegistrationPublicationLeaseWindowIsIndependentAndBounded(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174093';
+        $instanceId = 'instance-slow-first-publication';
+        $routeId = \str_repeat('9', 32);
+        $lease = $this->instanceLease($instanceId, 29119, 'stateless');
+        $lease['last_heartbeat'] = \time() - 60;
+        $lease['last_heartbeat_monotonic'] -= 60.0;
+
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $publicationProperty = new \ReflectionProperty($this->controller, 'publication');
+        $state = $stateProperty->getValue($this->controller);
+        $state['projects'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'route_ids' => [$routeId],
+        ];
+        $state['instances'][$projectUuid][$instanceId] = $lease;
+        $state['routes'][$routeId] = [
+            'route_id' => $routeId,
+            'project_uuid' => $projectUuid,
+            'domain' => 'slow-publication.example.test',
+            'status' => 'ACTIVE',
+            'instances' => [$instanceId => $lease],
+            'certificate' => ['valid' => true],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+
+        (new \ReflectionMethod($this->controller, 'beginRoutingMutation'))
+            ->invoke($this->controller, 'register:' . $projectUuid . ':' . $instanceId);
+        (new \ReflectionMethod($this->controller, 'recordPublicationLeaseCandidate'))
+            ->invoke(
+                $this->controller,
+                $projectUuid,
+                $instanceId,
+                (int)$lease['generation'],
+                (string)$lease['digest'],
+                (int)$lease['master_epoch'],
+                (string)$lease['launch_id'],
+            );
+
+        (new \ReflectionMethod($this->controller, 'expireLeases'))
+            ->invoke($this->controller);
+        $pending = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            'ACTIVE',
+            $pending['instances'][$projectUuid][$instanceId]['status'],
+            'Only the exact pending registration may outlive the ordinary heartbeat TTL.',
+        );
+        self::assertSame('ACTIVE', $pending['routes'][$routeId]['status']);
+
+        $publication = $publicationProperty->getValue($this->controller);
+        $candidateKey = $projectUuid . ':' . $instanceId;
+        $publication['lease_candidates'][$candidateKey]['started_monotonic']
+            = (\hrtime(true) / 1_000_000_000) - 100.0;
+        $publication['lease_candidates'][$candidateKey]['deadline_monotonic']
+            = (\hrtime(true) / 1_000_000_000) - 1.0;
+        $publicationProperty->setValue($this->controller, $publication);
+
+        (new \ReflectionMethod($this->controller, 'expireLeases'))
+            ->invoke($this->controller);
+        $expired = $stateProperty->getValue($this->controller);
+        self::assertSame('STALE', $expired['instances'][$projectUuid][$instanceId]['status']);
+        self::assertSame('STALE', $expired['routes'][$routeId]['status']);
     }
 
     public function testHeartbeatCannotReactivateStaleOrDrainingRouting(): void
@@ -3529,14 +3741,43 @@ final class GatewayProtocolSecurityTest extends TestCase
             'fencing_token' => $this->fencing,
             'payload_length' => \strlen($encoded),
         ], JSON_THROW_ON_ERROR) . "\n";
+        $handshake = $this->brokerHandshake();
         $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
         self::assertIsArray($sockets);
-        self::assertSame(\strlen($broker . $encoded), \fwrite($sockets[0], $broker . $encoded));
+        $wire = $handshake['probe'] . $broker . $encoded;
+        self::assertSame(\strlen($wire), \fwrite($sockets[0], $wire));
         $this->serveClient->invoke($this->controller, $sockets[1]);
+        self::assertSame($handshake['ready'], \fgets($sockets[0], 512));
         $line = \fgets($sockets[0], 4 * 1024 * 1024);
         \fclose($sockets[0]);
         self::assertIsString($line);
         return \json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /** @return array{probe:string,ready:string} */
+    private function brokerHandshake(): array
+    {
+        $key = \hex2bin($this->fencing);
+        self::assertIsString($key);
+        try {
+            $nonce = \bin2hex(\random_bytes(32));
+            return [
+                'probe' => "WLS-BROKER-PROBE/1\t{$nonce}\t"
+                    . \hash_hmac(
+                        'sha256',
+                        "WLS-BROKER-PROBE/1\nnonce={$nonce}\n",
+                        $key,
+                    ) . "\n",
+                'ready' => "WLS-BROKER-READY/1\t"
+                    . \hash_hmac(
+                        'sha256',
+                        "WLS-BROKER-READY/1\nnonce={$nonce}\n",
+                        $key,
+                    ) . "\n",
+            ];
+        } finally {
+            \sodium_memzero($key);
+        }
     }
 
     /** @param array<string,mixed> $response */

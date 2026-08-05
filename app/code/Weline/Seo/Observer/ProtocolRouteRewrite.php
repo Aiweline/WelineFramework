@@ -24,11 +24,16 @@ class ProtocolRouteRewrite implements ObserverInterface
         }
 
         $path = strtolower(trim((string)$data->getData('path'), '/'));
-        if (!isset(self::ROUTES[$path])) {
+        if (isset(self::ROUTES[$path])) {
+            $data->setData('path', self::ROUTES[$path]);
+            $data->setData('rule', new DataObject());
             return;
         }
 
-        $data->setData('path', self::ROUTES[$path]);
-        $data->setData('rule', new DataObject());
+        if (preg_match('#^sitemaps/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/[A-Za-z0-9._-]+\.xml$#D', $path) === 1) {
+            $data->setData('seo_sitemap_file', $path);
+            $data->setData('path', 'seo/protocol/sitemapFile');
+            $data->setData('rule', new DataObject());
+        }
     }
 }

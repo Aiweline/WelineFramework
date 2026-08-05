@@ -2,9 +2,11 @@
 
 return [
     "name" => 'Weline_I18n',
-    "version" => '1.0.3',
+    "version" => '1.0.6',
     "requires" => [
         'Weline_Framework' => '*',
+        'Weline_SystemConfig' => '*',
+        'Weline_Captcha' => '*',
     ],
     "optional" => [
         'Weline_Acl' => '*',
@@ -12,7 +14,6 @@ return [
         'Weline_Backend' => '*',
         'Weline_CacheManager' => '*',
         'Weline_Queue' => '*',
-        'Weline_SystemConfig' => '*',
     ],
     "provides" => [
         \Weline\Framework\Runtime\DictionaryWarmupProviderInterface::class => \Weline\I18n\Api\Runtime\DictionaryWarmupProvider::class,
@@ -26,6 +27,9 @@ return [
         \Weline\I18n\Api\Translation\DictionaryRepositoryInterface::class => \Weline\I18n\Model\Locale\Dictionary::class,
         \Weline\I18n\Api\Translation\TranslationCollectorInterface::class => \Weline\I18n\Service\TranslationCollector::class,
         \Weline\I18n\Api\Translation\TranslationResolverInterface::class => \Weline\I18n\Service\TranslationResolver::class,
+        \Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface::class => \Weline\I18n\Service\Seo\LocalizedUrlBuilder::class,
+        \Weline\I18n\Api\LanguageRequest\LanguageSupportRequestDirectoryInterface::class => \Weline\I18n\Service\LanguageSupportRequestDirectory::class,
+        \Weline\I18n\Api\LanguageRequest\LanguageSupportRequestWorkflowInterface::class => \Weline\I18n\Service\LanguageSupportRequestDirectory::class,
         'localization_provider.Weline_I18n' => \Weline\I18n\Api\Localization\LocalizationProvider::class,
         'process_cache_resetter.Weline_I18n' => \Weline\I18n\Api\Runtime\ProcessCacheResetter::class,
         'template_cache_policy.Weline_I18n' => \Weline\I18n\Api\View\TemplateCachePolicyProvider::class,

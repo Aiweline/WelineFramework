@@ -256,6 +256,7 @@
 
     const accountManager = new AccountManager(getAccountConfig());
     const AccountModule = {
+        __full: true,
         _instance: accountManager,
         checkFrontendUserLogin: () => accountManager.checkFrontendUserLogin(),
         frontendUserLogin: (username, password, rememberDuration) => accountManager.frontendUserLogin(username, password, rememberDuration),

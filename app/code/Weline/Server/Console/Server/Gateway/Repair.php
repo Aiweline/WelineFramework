@@ -12,15 +12,6 @@ final class Repair extends AbstractGatewayCommand
     {
         $json = $this->isJson($args);
         try {
-            $resetSecurity = isset($args['reset-security-ledger'])
-                || isset($args['reset_security_ledger']);
-            if ($resetSecurity && !isset($args['confirm'])) {
-                return $this->failure(
-                    __('重置安全账本会撤销全部项目凭据；请同时传入 --confirm。'),
-                    $json,
-                    'confirmation_required',
-                );
-            }
             $payload = self::repairPayload($args);
             if (isset($payload['accept_clock']) && \count($payload) > 1) {
                 return $this->failure(
@@ -67,9 +58,6 @@ final class Repair extends AbstractGatewayCommand
         if (isset($args['accept-clock']) || isset($args['accept_clock'])) {
             $payload['accept_clock'] = true;
         }
-        if (isset($args['reset-security-ledger']) || isset($args['reset_security_ledger'])) {
-            $payload['accept_security_reset'] = true;
-        }
         if (isset($args['accept-storage']) || isset($args['accept_storage'])) {
             $payload['accept_storage_recovery'] = true;
         }
@@ -89,8 +77,6 @@ final class Repair extends AbstractGatewayCommand
                 '--accept-clock' => __('管理员确认宿主时钟已校准并清除 CLOCK_UNTRUSTED'),
                 '--accept-storage' => __('确认磁盘/配额已恢复并重新验证 journal、重建恢复预留'),
                 '--retry-h3' => __('清除当前运行时的 H3 隔离并执行一次显式重新探测'),
-                '--reset-security-ledger' => __('隔离损坏账本并撤销全部项目凭据（必须同时 --confirm）'),
-                '--confirm' => __('确认安全账本重置这一破坏性操作'),
                 '--json' => __('JSON 输出'),
             ],
             [],

@@ -5,10 +5,14 @@
     "license": "MIT",
     "require": {
         "php": "^8.4",
+        "weline/module-acl": "@dev",
         "weline/module-backend": "@dev",
         "weline/module-customer": "@dev",
         "weline/framework": "@dev",
-        "weline/module-payment": "@dev"
+        "weline/module-inventory": "@dev",
+        "weline/module-payment": "@dev",
+        "weline/module-queue": "@dev",
+        "weline/module-websites": "@dev"
     },
     "autoload": {
         "psr-4": {

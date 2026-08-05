@@ -84,9 +84,13 @@ class AclOrphanCleanupService
      *
      * @param string[] $activeModules
      * @param string[] $activeSourceIds
+     * @param string[]|null $touchedModules null = full; non-empty = only orphan-check those modules (D-11)
      */
-    public function cleanupByActiveModules(array $activeModules = [], array $activeSourceIds = []): int
-    {
+    public function cleanupByActiveModules(
+        array $activeModules = [],
+        array $activeSourceIds = [],
+        ?array $touchedModules = null,
+    ): int {
         if (empty($activeModules)) {
             $activeModules = array_keys(Env::getInstance()->getActiveModules());
         }
@@ -95,6 +99,10 @@ class AclOrphanCleanupService
         $activeSourceIds = array_values(array_filter(array_unique(array_map('strval', $activeSourceIds))));
         $activeModuleSet = array_flip($activeModules);
         $activeSourceIdSet = array_flip($activeSourceIds);
+        $touchedSet = null;
+        if ($touchedModules !== null && $touchedModules !== []) {
+            $touchedSet = array_flip(array_values(array_filter(array_unique(array_map('strval', $touchedModules)))));
+        }
 
         $rows = $this->buildNonUserAclQuery()
             ->fields(Acl::schema_fields_SOURCE_ID . ',' . Acl::schema_fields_MODULE)
@@ -114,12 +122,32 @@ class AclOrphanCleanupService
                 $parts = explode('::', $sourceId, 2);
                 if (isset($parts[0]) && isset($activeModuleSet[$parts[0]])) {
                     $belongsActiveModule = true;
+                    if ($module === '') {
+                        $module = $parts[0];
+                    }
                 }
             }
 
             if (!$belongsActiveModule) {
+                // Inactive modules are always cleaned on full runs; on partial, only if touched.
+                if ($touchedSet !== null) {
+                    $parts = explode('::', $sourceId, 2);
+                    $candidateModule = $module !== '' ? $module : (string)($parts[0] ?? '');
+                    if ($candidateModule === '' || !isset($touchedSet[$candidateModule])) {
+                        continue;
+                    }
+                }
                 $orphanRows[] = ['source_id' => $sourceId];
                 continue;
+            }
+
+            // D-11: partial upgrade must not orphan-check untouched modules' controller ACL.
+            if ($touchedSet !== null) {
+                $parts = explode('::', $sourceId, 2);
+                $candidateModule = $module !== '' ? $module : (string)($parts[0] ?? '');
+                if ($candidateModule === '' || !isset($touchedSet[$candidateModule])) {
+                    continue;
+                }
             }
 
             if (!isset($activeSourceIdSet[$sourceId])) {

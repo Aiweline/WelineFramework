@@ -27,6 +27,18 @@ final class MasterProcessDeferredSslPolicyTest extends TestCase
         ])->shouldRetryCertificate());
     }
 
+    public function testAutoFallbackStillTriggersFirstCertificateRetry(): void
+    {
+        self::assertTrue($this->probe(false, [
+            'gateway' => [
+                'requested_mode' => GatewayStartupDecision::MODE_AUTO,
+                'mode' => GatewayStartupDecision::MODE_WLS,
+                'protocol' => GatewayPaths::PROTOCOL,
+                'certificate_pending' => true,
+            ],
+        ])->shouldRetryCertificate());
+    }
+
     public function testUntrustedOrNonPendingHttpBackendCannotTriggerCertificateFlow(): void
     {
         self::assertFalse($this->probe(false, [
@@ -40,6 +52,14 @@ final class MasterProcessDeferredSslPolicyTest extends TestCase
             'gateway' => [
                 'mode' => GatewayStartupDecision::MODE_WLS,
                 'protocol' => GatewayPaths::PROTOCOL,
+                'certificate_pending' => true,
+            ],
+        ])->shouldRetryCertificate());
+        self::assertFalse($this->probe(false, [
+            'gateway' => [
+                'requested_mode' => GatewayStartupDecision::MODE_AUTO,
+                'mode' => GatewayStartupDecision::MODE_WLS,
+                'protocol' => 'wls-edge/1',
                 'certificate_pending' => true,
             ],
         ])->shouldRetryCertificate());

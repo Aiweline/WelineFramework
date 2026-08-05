@@ -99,43 +99,9 @@ if (!\function_exists('wlsEnsureRuntimeFileReadable')) {
     function wlsEnsureRuntimeFileReadable(string $path, int $mode = 0640): bool
     {
         $path = \trim($path);
-        if ($path === '' || !\is_file($path)) {
-            return false;
-        }
-
-        \clearstatcache(true, $path);
-        if (\is_readable($path)) {
-            return true;
-        }
-
-        @\chmod($path, $mode);
-        \clearstatcache(true, $path);
-        if (\is_readable($path)) {
-            return true;
-        }
-
-        static $sudoAttempted = [];
-        if (isset($sudoAttempted[$path]) || DIRECTORY_SEPARATOR === '\\') {
-            return false;
-        }
-        $sudoAttempted[$path] = true;
-
-        $user = wlsRuntimeEffectiveUserName();
-        if ($user === '') {
-            return false;
-        }
-
-        $group = wlsRuntimeEffectiveGroupName();
-        $owner = $group !== '' ? $user . ':' . $group : $user;
-        $script = 'chown -- "$2" "$1" && chmod u+r "$1"';
-        $command = 'sudo -n sh -c ' . \escapeshellarg($script)
-            . ' sh ' . \escapeshellarg($path)
-            . ' ' . \escapeshellarg($owner)
-            . ' 2>/dev/null';
-        @\exec($command);
-
-        \clearstatcache(true, $path);
-        return \is_readable($path);
+        // Runtime serving code must never mutate certificate ownership or
+        // permissions. Publication preflight owns those invariants.
+        return $path !== '' && !\is_link($path) && \is_file($path) && \is_readable($path);
     }
 }
 
@@ -175,8 +141,21 @@ $masterToken = '';
 $publicOrigin = '';
 $isMaintenanceWorker = false;
 $isGatewayFallbackWorker = false;
+$gatewayHostLeaseId = '';
 $wlsHttpPolicyEncoded = '';
 $wlsHttpPolicySha256 = '';
+$windowsListenerHandoffPath = '';
+$windowsListenerHandoffId = '';
+$windowsListenerIntentDigest = '';
+$windowsListenerLeaseInstance = '';
+$windowsListenerWlsInstance = '';
+$windowsListenerMasterLaunchId = '';
+$masterPid = 0;
+$servingManifestPath = '';
+$servingManifestGeneration = 0;
+$servingManifestDigest = '';
+$servingInstanceGeneration = 0;
+$gatewayInstanceGenerationArgument = 0;
 
 // 先提取位置参数（跳过以 -- 开头的参数）
 $positionalArgs = [];
@@ -216,8 +195,38 @@ foreach ($argv as $arg) {
         $isMaintenanceWorker = true;
     } elseif ($arg === '--gateway-fallback') {
         $isGatewayFallbackWorker = true;
+    } elseif (\str_starts_with($arg, '--gateway-host-lease-id=')) {
+        $gatewayHostLeaseId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--gateway-host-lease-id='),
+        )));
     } elseif (\str_starts_with($arg, '--master-pid=')) {
         $masterPid = (int)\substr($arg, 13);
+    } elseif (\str_starts_with($arg, '--serving-manifest=')) {
+        $servingManifestPath = \trim((string)\substr(
+            $arg,
+            \strlen('--serving-manifest='),
+        ));
+    } elseif (\str_starts_with($arg, '--serving-manifest-generation=')) {
+        $servingManifestGeneration = (int)\substr(
+            $arg,
+            \strlen('--serving-manifest-generation='),
+        );
+    } elseif (\str_starts_with($arg, '--serving-manifest-digest=')) {
+        $servingManifestDigest = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--serving-manifest-digest='),
+        )));
+    } elseif (\str_starts_with($arg, '--serving-instance-generation=')) {
+        $servingInstanceGeneration = (int)\substr(
+            $arg,
+            \strlen('--serving-instance-generation='),
+        );
+    } elseif (\str_starts_with($arg, '--gateway-instance-generation=')) {
+        $gatewayInstanceGenerationArgument = (int)\substr(
+            $arg,
+            \strlen('--gateway-instance-generation='),
+        );
     } elseif (\str_starts_with($arg, '--epoch=')) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
@@ -225,7 +234,8 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--master-lease-file=')) {
         $masterLeaseFile = (string)\substr($arg, 20);
     } elseif (\str_starts_with($arg, '--master-token=')) {
-        $masterToken = (string)\substr($arg, 15);
+        \fwrite(\STDERR, "SSL Worker --master-token is forbidden; use the protected child ledger.\n");
+        exit(1);
     } elseif (\str_starts_with($arg, '--ssl-cert=')) {
         $sslCert = \substr($arg, 11);
     } elseif (\str_starts_with($arg, '--ssl-key=')) {
@@ -289,6 +299,36 @@ foreach ($argv as $arg) {
         $wlsHttpPolicySha256 = \strtolower(\trim((string)\substr($arg, \strlen('--wls-http-policy-sha256='))));
     } elseif (\str_starts_with($arg, '--public-origin=')) {
         $publicOrigin = (string)\substr($arg, 16);
+    } elseif (\str_starts_with($arg, '--windows-listener-handoff=')) {
+        $windowsListenerHandoffPath = (string)\substr(
+            $arg,
+            \strlen('--windows-listener-handoff='),
+        );
+    } elseif (\str_starts_with($arg, '--windows-listener-handoff-id=')) {
+        $windowsListenerHandoffId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-handoff-id='),
+        )));
+    } elseif (\str_starts_with($arg, '--windows-listener-intent-digest=')) {
+        $windowsListenerIntentDigest = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-intent-digest='),
+        )));
+    } elseif (\str_starts_with($arg, '--windows-listener-lease-instance=')) {
+        $windowsListenerLeaseInstance = \trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-lease-instance='),
+        ));
+    } elseif (\str_starts_with($arg, '--windows-listener-wls-instance=')) {
+        $windowsListenerWlsInstance = \trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-wls-instance='),
+        ));
+    } elseif (\str_starts_with($arg, '--windows-listener-master-launch-id=')) {
+        $windowsListenerMasterLaunchId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--windows-listener-master-launch-id='),
+        )));
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -301,7 +341,7 @@ if (!\in_array($wlsListenerMode, ['single', 'reuseport', 'shared_fd'], true)) {
     \fwrite(\STDERR, "--wls-listener-mode must be single, reuseport, or shared_fd.\n");
     exit(1);
 }
-$privateListenerHost = \strtolower(\trim((string)$host));
+$privateListenerHost = \strtolower(\trim((string)$host, " \t\n\r\0\x0B[]"));
 if ($isMaintenanceWorker
     && ($wlsListenerMode !== 'single'
         || !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true))
@@ -311,12 +351,62 @@ if ($isMaintenanceWorker
 }
 if ($isGatewayFallbackWorker
     && (!\in_array($wlsListenerMode, ['single', 'shared_fd'], true)
-        || !\in_array($privateListenerHost, ['127.0.0.1', '::1'], true))
+        || \filter_var($privateListenerHost, FILTER_VALIDATE_IP) === false)
 ) {
     \fwrite(
         \STDERR,
-        "Gateway fallback requires a loopback single or Master-owned shared listener.\n",
+        "Gateway fallback requires a literal-IP single or Master-owned shared listener.\n",
     );
+    exit(1);
+}
+if ($isGatewayFallbackWorker
+    && \preg_match('/^[a-f0-9]{32}$/D', $gatewayHostLeaseId) !== 1
+) {
+    \fwrite(\STDERR, "Gateway fallback host lease identity is required.\n");
+    exit(1);
+}
+if ($gatewayHostLeaseId !== '') {
+    $_SERVER['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
+    $_ENV['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
+    @\putenv('WLS_GATEWAY_HOST_LEASE_ID=' . $gatewayHostLeaseId);
+}
+$windowsHandoffValues = [
+    $windowsListenerHandoffPath,
+    $windowsListenerHandoffId,
+    $windowsListenerIntentDigest,
+    $windowsListenerLeaseInstance,
+    $windowsListenerWlsInstance,
+    $windowsListenerMasterLaunchId,
+];
+$windowsListenerHandoffPresent = \count(\array_filter(
+    $windowsHandoffValues,
+    static fn (string $value): bool => $value !== '',
+)) > 0;
+if ($windowsListenerHandoffPresent
+    && (\PHP_OS_FAMILY !== 'Windows'
+        || \in_array('', $windowsHandoffValues, true)
+        || !$isGatewayFallbackWorker
+        || $listenFd !== 0
+        || !\hash_equals((string)$instanceName, $windowsListenerWlsInstance)
+        || !\hash_equals($orchestratorLaunchId, $orchestratorLeaseId)
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayHostLeaseId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerHandoffId) !== 1
+        || \preg_match('/\A[a-f0-9]{64}\z/D', $windowsListenerIntentDigest) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerMasterLaunchId) !== 1
+        || \preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLaunchId) !== 1
+        || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerLeaseInstance) !== 1
+        || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerWlsInstance) !== 1
+        || \preg_match('/\Agateway_fallback#[1-9][0-9]*\z/D', $orchestratorSlotId) !== 1
+        || $orchestratorGeneration <= 0)
+) {
+    \fwrite(\STDERR, "Windows gateway fallback listener handoff identity is invalid.\n");
+    exit(1);
+}
+if (\PHP_OS_FAMILY === 'Windows'
+    && $isGatewayFallbackWorker
+    && !$windowsListenerHandoffPresent
+) {
+    \fwrite(\STDERR, "Windows gateway fallback requires target-bound listener adoption.\n");
     exit(1);
 }
 $privateListenerRequired = $isMaintenanceWorker || $isGatewayFallbackWorker;
@@ -396,13 +486,19 @@ require_once __DIR__ . DS . 'windows_start_process_working_directory.php';
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'worker_http_message.php';
 
-$masterToken = (new \Weline\Server\Service\MasterLeaseManager())
-    ->resolveProtectedCredentialFromArguments(
+$masterLeaseManager = new \Weline\Server\Service\MasterLeaseManager();
+$masterToken = $masterLeaseManager->resolveProtectedCredentialFromArguments(
         $argv,
         $instanceName,
         (int)($masterPid ?? 0),
         $orchestratorEpoch,
     );
+$masterRuntimeCredential = $masterLeaseManager->resolveProtectedRuntimeCredentialFromArguments(
+    $argv,
+    $instanceName,
+    (int)($masterPid ?? 0),
+    $orchestratorEpoch,
+);
 
 $wlsEndpointEdge = '';
 $wlsEndpointHttpSelection = null;
@@ -586,9 +682,6 @@ if ($sslKey && !\preg_match('/^(?:[a-zA-Z]:[\\\\\\/]|[\\\\\\/]{2}|\/)/', $sslKey
 
 
 // 定义前端模式常量（供 WlsRuntime 使用）
-wlsEnsureRuntimeFileReadable($sslCert, 0644);
-wlsEnsureRuntimeFileReadable($sslKey, 0600);
-
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
     \define('WLS_FRONTEND_MODE', true);
 }
@@ -840,66 +933,382 @@ $hotPathLogsEnabled = (bool)($wlsEnv['debug']['hot_path_logs'] ?? false)
     || \Weline\Server\Log\LogConfig::isVerboseWlsLog();
 
 /**
- * 从 ssl_certificate_map.json 加载 SNI 证书映射。
- * 在 Worker 启动时调用一次，并在收到 ssl_cert_reload IPC 命令时再次调用以热更新。
+ * Load one exact immutable generation supplied by the launcher.
  *
- * @return array<string, array{local_cert: string, local_pk: string}>
+ * @return array{manifest:array<string,mixed>,certs:array<string,array{local_cert:string,local_pk:string}>,routes:array<string,array<string,mixed>>,http_routes:array<string,array<string,mixed>>,policies:array<string,array{force_https:int,force_root_to_www:int,root_to_www_target:string,root_to_www_target_ready:int}>}
  */
-function _loadSniCertsFromMap(): array
+function wlsLoadServingManifestSnapshot(
+    string $path,
+    int $generation,
+    string $digest,
+    string $instanceName,
+    int $instanceGeneration,
+    int $masterPid,
+    int $masterEpoch,
+): array {
+    $store = new \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore((string)BP);
+    $fence = [
+        'instance_id' => $instanceName,
+        'instance_generation' => $instanceGeneration,
+        'master_pid' => $masterPid,
+        'master_epoch' => $masterEpoch,
+    ];
+    $manifest = $store->readBound($path, $generation, $digest, $fence);
+    $current = $store->currentForFence($fence);
+    if ((int)$current['generation'] !== $generation
+        || !\hash_equals((string)$current['digest'], $digest)
+        || !\hash_equals((string)$current['path'], $path)
+    ) {
+        throw new \RuntimeException(
+            'WLS serving manifest is not the current generation for this instance fence.',
+        );
+    }
+    $payload = (array)$manifest['payload'];
+    $routes = [];
+    $httpRoutes = [];
+    $certs = [];
+    $policies = [];
+    foreach ((array)$payload['routes'] as $route) {
+        if (!\is_array($route)) {
+            throw new \RuntimeException('WLS serving manifest contains a malformed route.');
+        }
+        $domain = (string)$route['domain'];
+        $certificate = (array)$route['certificate'];
+        $privateKey = (array)$route['private_key'];
+        $policy = (array)$route['policy'];
+        $certs[$domain] = [
+            'local_cert' => (string)$certificate['path'],
+            'local_pk' => (string)$privateKey['path'],
+        ];
+        $policies[$domain] = [
+            'force_https' => ($policy['force_https'] ?? false) === true ? 1 : 0,
+            'force_root_to_www' => ($policy['force_root_to_www'] ?? false) === true ? 1 : 0,
+            'root_to_www_target' => (string)($policy['root_to_www_target'] ?? ''),
+            'root_to_www_target_ready' =>
+                ($policy['root_to_www_target_ready'] ?? false) === true ? 1 : 0,
+        ];
+        $routes[$domain] = $route;
+    }
+    foreach ((array)($payload['desired_routes'] ?? []) as $desiredRoute) {
+        if (!\is_array($desiredRoute)) {
+            throw new \RuntimeException(
+                'WLS serving manifest contains a malformed desired HTTP route.',
+            );
+        }
+        $domain = (string)($desiredRoute['domain'] ?? '');
+        $state = (string)($desiredRoute['certificate_state'] ?? '');
+        if ($domain === ''
+            || !\in_array($state, ['active', 'pending', 'disabled'], true)
+            || !\is_bool($desiredRoute['force_https'] ?? null)
+            || !\is_bool($desiredRoute['force_root_to_www'] ?? null)
+            || !\is_bool($desiredRoute['root_to_www_target_ready'] ?? null)
+            || isset($httpRoutes[$domain])
+        ) {
+            throw new \RuntimeException(
+                'WLS serving manifest desired HTTP route facts are inconsistent.',
+            );
+        }
+        $httpRoutes[$domain] = $desiredRoute;
+        $policies[$domain] = [
+            'force_https' => $desiredRoute['force_https'] ? 1 : 0,
+            'force_root_to_www' => $desiredRoute['force_root_to_www'] ? 1 : 0,
+            'root_to_www_target' => (string)(
+                $desiredRoute['root_to_www_target'] ?? ''
+            ),
+            'root_to_www_target_ready' => $desiredRoute[
+                'root_to_www_target_ready'
+            ] ? 1 : 0,
+        ];
+    }
+    if (\count($httpRoutes) !== (int)($payload['desired_route_count'] ?? -1)) {
+        throw new \RuntimeException(
+            'WLS serving manifest lacks the complete desired HTTP route set.',
+        );
+    }
+    return [
+        'manifest' => $manifest,
+        'certs' => $certs,
+        'routes' => $routes,
+        'http_routes' => $httpRoutes,
+        'policies' => $policies,
+    ];
+}
+
+/**
+ * Build the immutable TLS-context identity set used by the unload barrier.
+ * A same-domain certificate rotation is a retirement too: an established
+ * connection may still own the old SSL_CTX even though the route key remains.
+ *
+ * @param array<string,array<string,mixed>> $routes
+ * @return array<string,array{domain:string,generation:int,source_digest:string}>
+ */
+function wlsServingManifestContextIdentitySet(array $routes): array
 {
-    $mapFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
-    if (!\is_file($mapFile)) {
-        return [];
-    }
-    try {
-        \clearstatcache(true, $mapFile);
-        $raw = (string)@\file_get_contents($mapFile);
-        $map = \json_decode($raw, true);
-        if (!\is_array($map)) {
-            return [];
+    $identities = [];
+    foreach ($routes as $route) {
+        if (!\is_array($route)) {
+            throw new \RuntimeException('TLS serving route context identity is malformed.');
         }
-        $certs = [];
-        $policies = [];
-        foreach ($map as $domain => $pair) {
-            $certPath = (string)($pair['cert'] ?? '');
-            $keyPath = (string)($pair['key'] ?? '');
-            if (\PHP_OS_FAMILY === 'Windows') {
-                $certPath = \Weline\Framework\System\Process\Processer::resolveWindowsPersistentPath($certPath);
-                $keyPath = \Weline\Framework\System\Process\Processer::resolveWindowsPersistentPath($keyPath);
-            }
-            if ($domain !== '' && $certPath !== '' && $keyPath !== '') {
-                wlsEnsureRuntimeFileReadable($certPath, 0644);
-                wlsEnsureRuntimeFileReadable($keyPath, 0600);
-            }
-            if ($domain !== '' && $certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)
-                && \is_readable($certPath) && \is_readable($keyPath)) {
-                $certs[(string)$domain] = [
-                    'local_cert' => $certPath,
-                    'local_pk' => $keyPath,
-                ];
-            }
-            if ($domain !== '') {
-                $policies[(string)$domain] = [
-                    'force_https' => (int) ($pair['force_https'] ?? 1),
-                    'force_root_to_www' => (int) ($pair['force_root_to_www'] ?? 0),
-                ];
-            }
+        $domain = (string)($route['domain'] ?? '');
+        $generation = (int)($route['certificate_generation'] ?? 0);
+        $sourceDigest = \strtolower(\trim((string)(
+            $route['certificate_source_digest'] ?? ''
+        )));
+        if ($domain === ''
+            || $generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceDigest) !== 1
+        ) {
+            throw new \RuntimeException('TLS serving route context identity is incomplete.');
         }
-        \Weline\Server\Service\WlsWorkerGlobals::setDomainPolicies($policies);
-        return $certs;
-    } catch (\Throwable) {
-        return [];
+        $contextId = \hash(
+            'sha256',
+            $domain . "\0" . $generation . "\0" . $sourceDigest,
+        );
+        if (isset($identities[$contextId])) {
+            throw new \RuntimeException('TLS serving route context identity is duplicated.');
+        }
+        $identities[$contextId] = [
+            'domain' => $domain,
+            'generation' => $generation,
+            'source_digest' => $sourceDigest,
+        ];
     }
+    \ksort($identities, SORT_STRING);
+    return $identities;
+}
+
+/**
+ * @param array<string,array<string,mixed>> $oldRoutes
+ * @param array<string,array<string,mixed>> $nextRoutes
+ * @return array{count:int,digest:string,domains:array<string,true>}
+ */
+function wlsServingManifestRetirementFacts(array $oldRoutes, array $nextRoutes): array
+{
+    $old = wlsServingManifestContextIdentitySet($oldRoutes);
+    $next = wlsServingManifestContextIdentitySet($nextRoutes);
+    $retired = \array_diff_key($old, $next);
+    $retiredIds = \array_keys($retired);
+    \sort($retiredIds, SORT_STRING);
+    $domains = [];
+    foreach ($retired as $identity) {
+        $domains[(string)$identity['domain']] = true;
+    }
+    return [
+        'count' => \count($retiredIds),
+        'digest' => \hash(
+            'sha256',
+            \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson(
+                $retiredIds,
+            ),
+        ),
+        'domains' => $domains,
+    ];
 }
 
 /**
  * 获取指定域名的重定向策略。
  *
- * @return array{force_https: int, force_root_to_www: int}
+ * @return array{force_https:int,force_root_to_www:int,root_to_www_target:string,root_to_www_target_ready:int}
  */
-function _getDomainPolicy(string $domain): array
+function _getDomainPolicy(string $domain, array $servingRoutes): array
 {
-    return \Weline\Server\Service\WlsWorkerGlobals::getDomainPolicy($domain);
+    $route = wlsServingManifestRouteForHost($domain, $servingRoutes);
+    if (!\is_array($route)) {
+        return [
+            'force_https' => 1,
+            'force_root_to_www' => 0,
+            'root_to_www_target' => '',
+            'root_to_www_target_ready' => 1,
+        ];
+    }
+    // TLS-active routes keep policy in a nested envelope; desired HTTP route
+    // facts are already the digest-bound policy envelope themselves.
+    $policy = \is_array($route['policy'] ?? null)
+        ? (array)$route['policy']
+        : $route;
+    return [
+        'force_https' => ($policy['force_https'] ?? false) === true ? 1 : 0,
+        'force_root_to_www' => ($policy['force_root_to_www'] ?? false) === true ? 1 : 0,
+        'root_to_www_target' => (string)($policy['root_to_www_target'] ?? ''),
+        'root_to_www_target_ready' =>
+            ($policy['root_to_www_target_ready'] ?? false) === true ? 1 : 0,
+    ];
+}
+
+/**
+ * Re-authorize a cleartext keep-alive request against the current complete
+ * desired-route set. The Host observed during the initial non-consuming peek
+ * is an immutable connection authority, but it is never sufficient by itself:
+ * every parsed request must repeat that exact authority and resolve to the
+ * same digest-bound route identity.
+ *
+ * @return 'allow'|'redirect_https'|'not_found'|'misdirected'
+ */
+function wlsServingManifestPlaintextRequestAction(
+    array $frame,
+    string $connectionHost,
+    array $httpRoutes,
+): string {
+    $headers = \is_array($frame['headers'] ?? null) ? $frame['headers'] : [];
+    $host = wlsServingManifestNormalizeAuthority((string)($headers['host'] ?? ''));
+    $expectedHost = wlsServingManifestNormalizeAuthority($connectionHost);
+    if ($host === null
+        || $expectedHost === null
+        || !\hash_equals($expectedHost, $host)
+    ) {
+        return 'misdirected';
+    }
+    $route = wlsServingManifestRouteForHost($host, $httpRoutes);
+    $expectedRoute = wlsServingManifestRouteForHost($expectedHost, $httpRoutes);
+    $routeId = \is_array($route) ? (string)($route['route_id'] ?? '') : '';
+    $expectedRouteId = \is_array($expectedRoute)
+        ? (string)($expectedRoute['route_id'] ?? '')
+        : '';
+    if ($routeId === ''
+        || $expectedRouteId === ''
+        || !\hash_equals($expectedRouteId, $routeId)
+    ) {
+        return 'misdirected';
+    }
+
+    return match ((string)($route['certificate_state'] ?? '')) {
+        'active' => ($route['force_https'] ?? true) === true
+            ? 'redirect_https'
+            : 'allow',
+        'disabled' => 'allow',
+        'pending' => (string)($frame['method'] ?? '') === 'GET'
+            && \preg_match(
+                '#\A/\.well-known/acme-challenge/[A-Za-z0-9_-]+\z#D',
+                (string)($frame['target'] ?? ''),
+            ) === 1
+                ? 'allow'
+                : 'not_found',
+        default => 'misdirected',
+    };
+}
+
+function wlsServingManifestRedirectRequestTarget(string $target): string
+{
+    try {
+        $path = \parse_url($target, PHP_URL_PATH);
+        $query = \parse_url($target, PHP_URL_QUERY);
+    } catch (\ValueError) {
+        return '/';
+    }
+    if (!\is_string($path) || $path === '' || \preg_match('/[\r\n]/', $path) === 1) {
+        $path = '/';
+    }
+    if (!\is_string($query) || $query === '' || \preg_match('/[\r\n]/', $query) === 1) {
+        return $path;
+    }
+    return $path . '?' . $query;
+}
+
+function wlsServingManifestHttpsRedirectResponse(
+    string $host,
+    string $target,
+    int $publicTcpPort,
+): string {
+    $location = 'https://' . $host;
+    if ($publicTcpPort !== 443) {
+        $location .= ':' . $publicTcpPort;
+    }
+    $location .= wlsServingManifestRedirectRequestTarget($target);
+    return "HTTP/1.1 308 Permanent Redirect\r\n"
+        . 'Location: ' . $location . "\r\n"
+        . "Content-Length: 0\r\nConnection: close\r\n\r\n";
+}
+
+function wlsServingManifestNotFoundResponse(): string
+{
+    return "HTTP/1.1 404 Not Found\r\n"
+        . "Content-Length: 9\r\nConnection: close\r\n\r\nNot Found";
+}
+
+function wlsServingManifestNormalizeAuthority(string $authority): ?string
+{
+    $authority = \strtolower(\trim($authority));
+    if ($authority === '' || \str_contains($authority, "\0") || \str_contains($authority, '@')) {
+        return null;
+    }
+    if (\str_starts_with($authority, '[')) {
+        return null;
+    }
+    $colon = \strrpos($authority, ':');
+    if ($colon !== false) {
+        $port = \substr($authority, $colon + 1);
+        if ($port === '' || \preg_match('/\A[0-9]{1,5}\z/D', $port) !== 1) {
+            return null;
+        }
+        $portNumber = (int)$port;
+        if ($portNumber < 1 || $portNumber > 65535) {
+            return null;
+        }
+        $authority = \substr($authority, 0, $colon);
+    }
+    try {
+        return \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore::normalizeHost(
+            $authority,
+            false,
+        );
+    } catch (\Throwable) {
+        return null;
+    }
+}
+
+/** @return array<string,mixed>|null */
+function wlsServingManifestRouteForHost(string $host, array $routes): ?array
+{
+    $host = wlsServingManifestNormalizeAuthority($host);
+    if ($host === null) {
+        return null;
+    }
+    if (\is_array($routes[$host] ?? null)) {
+        return $routes[$host];
+    }
+    $dot = \strpos($host, '.');
+    if ($dot === false || $dot < 1) {
+        return null;
+    }
+    $wildcard = '*.' . \substr($host, $dot + 1);
+    return \is_array($routes[$wildcard] ?? null) ? $routes[$wildcard] : null;
+}
+
+function wlsServingManifestHostMatchesSni(
+    string $host,
+    string $sni,
+    array $routes,
+): bool {
+    $hostRoute = wlsServingManifestRouteForHost($host, $routes);
+    $sniRoute = wlsServingManifestRouteForHost($sni, $routes);
+    return \is_array($hostRoute)
+        && \is_array($sniRoute)
+        && \hash_equals(
+            (string)($hostRoute['route_id'] ?? ''),
+            (string)($sniRoute['route_id'] ?? ''),
+        );
+}
+
+function wlsServingManifestFramingErrorResponse(array $frame): string
+{
+    if ((string)($frame['error'] ?? '') === 'missing_host') {
+        return wlsServingManifestMisdirectedResponse();
+    }
+    return wlsHttpFramingErrorResponse((int)($frame['status_code'] ?? 400));
+}
+
+function wlsServingManifestMisdirectedResponse(): string
+{
+    return "HTTP/1.1 421 Misdirected Request\r\n"
+        . "Content-Type: text/plain; charset=utf-8\r\n"
+        . "Content-Length: 19\r\nConnection: close\r\n\r\nMisdirected Request";
+}
+
+function wlsServingManifestRedirectTargetUnavailableResponse(): string
+{
+    return "HTTP/1.1 503 Service Unavailable\r\n"
+        . "Content-Type: text/plain; charset=utf-8\r\n"
+        . "Content-Length: 19\r\nConnection: close\r\n\r\nService Unavailable";
 }
 
 /**
@@ -912,7 +1321,7 @@ function _getDomainPolicy(string $domain): array
  */
 function _parseSniHostFromClientHello(string $data): ?string
 {
-    // 与 Dispatcher\SniParser 对齐，避免两套解析不一致导致 SNI 取不到、选错默认证书进而触发 unrecognized_name
+    // 与 Dispatcher\SniParser 对齐；解析失败必须在选择任何租户证书前关闭连接。
     $sni = \Weline\Server\Dispatcher\SniParser::extractSNI($data);
     if ($sni === null || $sni === '') {
         return null;
@@ -965,136 +1374,123 @@ function wlsSslApplySniOptionsToContexts(
     array $sniServerCerts,
     string $sslCert,
     string $sslKey,
-    int $cryptoMethod
-): void {
-    if ($deferSslOptions !== null) {
-        $deferSslOptions['SNI_enabled'] = !empty($sniServerCerts);
-        $deferSslOptions['SNI_server_certs'] = $sniServerCerts;
-        $deferSslOptions['local_cert'] = $sslCert;
-        $deferSslOptions['local_pk'] = $sslKey;
-        $deferSslOptions['crypto_method'] = $cryptoMethod;
+    int $cryptoMethod,
+    ?bool &$rollbackSucceeded = null,
+): bool {
+    $rollbackSucceeded = true;
+    $previousOptions = $deferSslOptions;
+    $nextOptions = $deferSslOptions;
+    if ($nextOptions !== null) {
+        $nextOptions['SNI_enabled'] = !empty($sniServerCerts);
+        $nextOptions['SNI_server_certs'] = $sniServerCerts;
+        $nextOptions['local_cert'] = $sslCert;
+        $nextOptions['local_pk'] = $sslKey;
+        $nextOptions['crypto_method'] = $cryptoMethod;
     }
     if ($listenSocket && \is_resource($listenSocket)) {
-        @\stream_context_set_option($listenSocket, 'ssl', 'SNI_enabled', !empty($sniServerCerts));
-        @\stream_context_set_option($listenSocket, 'ssl', 'SNI_server_certs', $sniServerCerts);
-        @\stream_context_set_option($listenSocket, 'ssl', 'local_cert', $sslCert);
-        @\stream_context_set_option($listenSocket, 'ssl', 'local_pk', $sslKey);
-    }
-}
-
-/**
- * 非空 SNI 映射时 OpenSSL 要求 ClientHello 的 SNI 必须在映射中有精确键或通配模式，否则返回 unrecognized_name。
- *
- * 兜底：扫描 app/etc/ssl/ 下所有证书目录、解析 CN/SAN，把所有可握手的主机名（含托管本地通配模式）补进映射；
- * 另外把当前 Worker 的监听主机也补进去。
- * 这样即便 ssl_certificate_map.json（基于 DB）暂未同步，磁盘上有的证书都能直接握手。
- */
-function wlsSslMergeDefaultListenerHostnamesIntoSniMap(
-    array &$sniServerCerts,
-    string $sslCert,
-    string $sslKey,
-    string $defaultHost
-): void {
-    $sniServerCerts = \Weline\Server\Service\SslCertificateService::sanitizeSniCertificateMap($sniServerCerts);
-    $add = static function (string $h, string $cert, string $key) use (&$sniServerCerts): void {
-        $h = \strtolower(\trim($h));
-        if ($h === '' || \filter_var($h, FILTER_VALIDATE_IP)) {
-            return;
-        }
-        if (isset($sniServerCerts[$h])) {
-            return;
-        }
-        if ($cert === '' || $key === '' || !\is_file($cert) || !\is_file($key)) {
-            return;
-        }
-        if (!\Weline\Server\Service\SslCertificateService::sniCertificatePairIsValid($cert, $key, $h)) {
-            return;
-        }
-        $sniServerCerts[$h] = ['local_cert' => $cert, 'local_pk' => $key];
-    };
-    $extractHostnames = static function (string $certFile): array {
-        $names = [];
-        $pem = (string) @\file_get_contents($certFile);
-        if ($pem === '' || !\preg_match('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $pem, $m)) {
-            return $names;
-        }
-        $res = @\openssl_x509_read($m[0]);
-        if ($res === false) {
-            return $names;
-        }
-        $parsed = @\openssl_x509_parse($res, false);
-        if (!\is_array($parsed)) {
-            return $names;
-        }
-        $cn = $parsed['subject']['CN'] ?? '';
-        if (\is_string($cn) && $cn !== '') {
-            $names[] = \strtolower($cn);
-        }
-        $sanRaw = $parsed['extensions']['subjectAltName'] ?? '';
-        if (\is_string($sanRaw) && $sanRaw !== '') {
-            foreach (\preg_split('/,\s*/', $sanRaw) as $seg) {
-                $seg = \trim($seg);
-                if (\str_starts_with($seg, 'DNS:')) {
-                    $names[] = \strtolower(\substr($seg, 4));
-                }
-            }
-        }
-        return \array_values(\array_unique($names));
-    };
-
-    $defaultHost = \strtolower(\trim($defaultHost));
-    $instanceHost = $defaultHost;
-
-    if ($sslCert !== '' && $sslKey !== '' && \is_file($sslCert) && \is_file($sslKey)) {
-        if ($defaultHost !== '') {
-            $add($defaultHost, $sslCert, $sslKey);
-        }
-        foreach ($extractHostnames($sslCert) as $name) {
-            $add($name, $sslCert, $sslKey);
-        }
-    }
-
-    $sslDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR;
-    if (\is_dir($sslDir)) {
-        $entries = @\scandir($sslDir) ?: [];
-        foreach ($entries as $segment) {
-            if ($segment === '.' || $segment === '..') {
+        $replacement = [
+            'SNI_enabled' => !empty($sniServerCerts),
+            'SNI_server_certs' => $sniServerCerts,
+            'local_cert' => $sslCert,
+            'local_pk' => $sslKey,
+        ];
+        foreach ($replacement as $option => $value) {
+            if (@\stream_context_set_option($listenSocket, 'ssl', $option, $value)) {
                 continue;
             }
-            $dir = $sslDir . $segment . DIRECTORY_SEPARATOR;
-            if (!\is_dir($dir)) {
-                continue;
-            }
-            $certFile = $dir . 'fullchain.pem';
-            $keyFile = $dir . 'privkey.pem';
-            if (!\is_file($certFile) || !\is_file($keyFile)) {
-                continue;
-            }
-            $logical = \Weline\Server\Service\SslCertificateService::logicalDomainFromStorageSegment($segment);
-            $add($logical, $certFile, $keyFile);
-            foreach ($extractHostnames($certFile) as $name) {
-                $add($name, $certFile, $keyFile);
-                if (\str_starts_with($name, '*.') && $instanceHost !== '') {
-                    $root = \substr($name, 2);
-                    if ($root !== '' && \str_ends_with($instanceHost, '.' . $root)) {
-                        $add($instanceHost, $certFile, $keyFile);
+            $rollback = \is_array($previousOptions) ? [
+                'SNI_enabled' => (bool)($previousOptions['SNI_enabled'] ?? false),
+                'SNI_server_certs' => \is_array(
+                    $previousOptions['SNI_server_certs'] ?? null,
+                ) ? $previousOptions['SNI_server_certs'] : [],
+                'local_cert' => (string)($previousOptions['local_cert'] ?? ''),
+                'local_pk' => (string)($previousOptions['local_pk'] ?? ''),
+            ] : [];
+            if ($rollback === []) {
+                $rollbackSucceeded = false;
+            } else {
+                foreach ($rollback as $rollbackOption => $rollbackValue) {
+                    if (!@\stream_context_set_option(
+                        $listenSocket,
+                        'ssl',
+                        $rollbackOption,
+                        $rollbackValue,
+                    )) {
+                        $rollbackSucceeded = false;
                     }
                 }
             }
+            return false;
         }
     }
+
+    $deferSslOptions = $nextOptions;
+    return true;
 }
 
-// 域名策略缓存（force_https / force_root_to_www），由 _loadSniCertsFromMap() 填充
-$_domainPolicies = [];
-
-// 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
-// 使用 _loadSniCertsFromMap() 函数加载，后续收到 ssl_cert_reload IPC 命令时可热更新
-$wlsStartupTrace('sni_map_load_begin');
-$sniServerCerts = _loadSniCertsFromMap();
-wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $listenerHost);
-$wlsStartupTrace('sni_map_loaded', ['sni_count' => \count($sniServerCerts)]);
-WlsLogger::info_('[SSL] 初始化 SNI 映射，共 ' . \count($sniServerCerts) . ' 项：' . \implode(', ', \array_keys($sniServerCerts)));
+if ($servingInstanceGeneration === 0 && $gatewayInstanceGenerationArgument > 0) {
+    $servingInstanceGeneration = $gatewayInstanceGenerationArgument;
+}
+if ($gatewayInstanceGenerationArgument > 0
+    && $gatewayInstanceGenerationArgument !== $servingInstanceGeneration
+) {
+    throw new \RuntimeException('TLS Worker instance generation arguments disagree.');
+}
+if ($servingManifestPath === ''
+    || $servingManifestGeneration < 1
+    || $servingInstanceGeneration < 1
+    || \preg_match('/\A[a-f0-9]{64}\z/D', $servingManifestDigest) !== 1
+) {
+    throw new \RuntimeException(
+        'TLS Worker requires a serving manifest triple and --serving-instance-generation.',
+    );
+}
+if (!$deferSsl) {
+    throw new \RuntimeException(
+        'Manifest-bound TLS Worker requires defer-ssl for per-connection SNI enforcement.',
+    );
+}
+if ($wlsHttp3Enabled) {
+    // The current native H3 request ABI does not expose the connection SNI to
+    // PHP. Serving it would make an exact Host/SNI route equality check
+    // impossible, so degrade H3 only and retain H2/H1 TLS service.
+    $wlsHttp3Enabled = false;
+    $wlsHttp3Mode = 'disabled_manifest_sni_unavailable';
+}
+$wlsStartupTrace('serving_manifest_load_begin');
+$servingSnapshot = wlsLoadServingManifestSnapshot(
+    $servingManifestPath,
+    $servingManifestGeneration,
+    $servingManifestDigest,
+    $instanceName,
+    $servingInstanceGeneration,
+    $masterPid,
+    $orchestratorEpoch,
+);
+$sniServerCerts = $servingSnapshot['certs'];
+$servingManifestRoutes = $servingSnapshot['routes'];
+$servingManifestHttpRoutes = $servingSnapshot['http_routes'];
+\Weline\Server\Service\Runtime\WorkerReadinessState::markServingManifest(
+    $servingManifestGeneration,
+    $servingManifestDigest,
+    \count($servingManifestRoutes),
+);
+\Weline\Server\Service\WlsWorkerGlobals::setDomainPolicies(
+    $servingSnapshot['policies'],
+);
+$firstServingPair = \reset($sniServerCerts);
+$sslCert = \is_array($firstServingPair)
+    ? (string)$firstServingPair['local_cert']
+    : '';
+$sslKey = \is_array($firstServingPair)
+    ? (string)$firstServingPair['local_pk']
+    : '';
+$wlsStartupTrace('serving_manifest_loaded', [
+    'generation' => $servingManifestGeneration,
+    'route_count' => \count($servingManifestRoutes),
+]);
+WlsLogger::info_('[SSL] 已绑定不可变 serving manifest generation='
+    . $servingManifestGeneration . '，routes=' . \count($servingManifestRoutes));
 
 // ========== 日志系统：直接使用 WlsLogger ==========
 // 检测模式（只检测一次）
@@ -1256,82 +1652,12 @@ if ($envConfig !== null && isset(($envConfig['wls'] ?? [])['cache'])) {
 }
 
 /**
- * 检查 shell_exec 函数是否可用
- * @return bool
- */
-function isShellExecAvailable(): bool
-{
-    static $available = null;
-    if ($available === null) {
-        $available = \function_exists('shell_exec') 
-            && !\in_array('shell_exec', \array_map('trim', \explode(',', \ini_get('disable_functions') ?: '')), true);
-    }
-    return $available;
-}
-
-/**
  * 获取系统可用内存（字节）
  * @return int 可用内存字节数，获取失败返回 0
  */
 function getSystemFreeMemory(): int
 {
-    if (PHP_OS_FAMILY === 'Windows') {
-        return 0;
-        if (isShellExecAvailable()) {
-            $output = '';
-            if ($output && \preg_match('/FreePhysicalMemory=(\d+)/', $output, $matches)) {
-                return (int)$matches[1] * 1024; // KB 转 bytes
-            }
-        }
-        // 回退：返回 0（使用默认值）
-        return 0;
-    } else {
-        // Linux/Mac: 读取 /proc/meminfo 或使用 free 命令
-        if (\is_readable('/proc/meminfo')) {
-            $meminfo = @\file_get_contents('/proc/meminfo');
-            if ($meminfo && \preg_match('/MemAvailable:\s*(\d+)\s*kB/i', $meminfo, $matches)) {
-                return (int)$matches[1] * 1024; // KB 转 bytes
-            }
-            // 回退：MemFree + Cached + Buffers
-            if ($meminfo) {
-                $free = 0;
-                if (\preg_match('/MemFree:\s*(\d+)\s*kB/i', $meminfo, $m)) {
-                    $free += (int)$m[1];
-                }
-                if (\preg_match('/Cached:\s*(\d+)\s*kB/i', $meminfo, $m)) {
-                    $free += (int)$m[1];
-                }
-                if (\preg_match('/Buffers:\s*(\d+)\s*kB/i', $meminfo, $m)) {
-                    $free += (int)$m[1];
-                }
-                if ($free > 0) {
-                    return $free * 1024;
-                }
-            }
-        }
-        // Mac: vm_stat 仅 "Pages free" 偏小，需加上可回收的 inactive/speculative（与 Linux MemAvailable 语义一致）
-        // 注意：macOS 可能输出千位逗号（如 "1,234,567"），需去掉逗号再转 int，否则会误判为内存严重不足
-        if (isShellExecAvailable()) {
-            $output = @\shell_exec('vm_stat 2>/dev/null');
-            if ($output) {
-                $pageSize = 4096; // macOS 页面大小（Intel/Apple Silicon 均为 4KB）
-                $parse = static function (string $text, string $key): int {
-                    if (!\preg_match('/' . \preg_quote($key, '/') . ':\s*([\d,\.]+)/', $text, $m)) {
-                        return 0;
-                    }
-                    return (int)\str_replace([',', '.'], '', $m[1]);
-                };
-                $free = $parse($output, 'Pages free');
-                $inactive = $parse($output, 'Pages inactive');
-                $speculative = $parse($output, 'Pages speculative');
-                $availablePages = $free + $inactive + $speculative;
-                if ($availablePages > 0) {
-                    return $availablePages * $pageSize;
-                }
-            }
-        }
-    }
-    return 0;
+    return \Weline\Server\Service\Runtime\SystemMemoryProbe::freeBytes();
 }
 
 /**
@@ -1340,33 +1666,7 @@ function getSystemFreeMemory(): int
  */
 function getSystemTotalMemory(): int
 {
-    if (PHP_OS_FAMILY === 'Windows') {
-        return 4 * 1024 * 1024 * 1024;
-        if (isShellExecAvailable()) {
-            $output = '';
-            if ($output && \preg_match('/TotalPhysicalMemory=(\d+)/', $output, $matches)) {
-                return (int)$matches[1];
-            }
-        }
-        // 回退：返回默认值
-        return 4 * 1024 * 1024 * 1024; // 4GB
-    } else {
-        if (\is_readable('/proc/meminfo')) {
-            $meminfo = @\file_get_contents('/proc/meminfo');
-            if ($meminfo && \preg_match('/MemTotal:\s*(\d+)\s*kB/i', $meminfo, $matches)) {
-                return (int)$matches[1] * 1024;
-            }
-        }
-        // Mac（如果 shell_exec 可用）
-        if (isShellExecAvailable()) {
-            $output = @\shell_exec('sysctl -n hw.memsize 2>/dev/null');
-            if ($output) {
-                return (int)\trim($output);
-            }
-        }
-    }
-    // 默认返回 4GB
-    return 4 * 1024 * 1024 * 1024;
+    return \Weline\Server\Service\Runtime\SystemMemoryProbe::totalBytes();
 }
 
 /**
@@ -1560,6 +1860,8 @@ $socket = null;
 $reusePortBound = false;
 $sharedListenerBound = false;
 $sharedListenerSocket = null;
+$windowsListenerProof = [];
+$windowsListenerAdopted = false;
 try {
     $wlsHttpProtocolCapabilities =
         (new \Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe())->snapshot(
@@ -1645,10 +1947,12 @@ if ($wlsTlsSessionCacheConfig->enabled()) {
         );
         // Parse certificate/public-key identities before bind so the first ClientHello
         // cannot pay file parsing cost or discover an invalid context on the hot path.
-        $wlsTlsSessionCacheRuntime->streamContextOptions($listenerHost, [
-            'local_cert' => $sslCert,
-            'local_pk' => $sslKey,
-        ]);
+        if ($sslCert !== '' && $sslKey !== '') {
+            $wlsTlsSessionCacheRuntime->streamContextOptions($listenerHost, [
+                'local_cert' => $sslCert,
+                'local_pk' => $sslKey,
+            ]);
+        }
         foreach ($sniServerCerts as $tlsSessionSni => $tlsSessionPair) {
             if (\is_string($tlsSessionSni) && \is_array($tlsSessionPair)) {
                 $wlsTlsSessionCacheRuntime->streamContextOptions($tlsSessionSni, $tlsSessionPair);
@@ -1687,14 +1991,52 @@ if ($deferSsl) {
 if (\PHP_OS !== 'WINNT' && $port < 1024) {
     $euid = \function_exists('posix_geteuid') ? (int)\posix_geteuid() : -1;
     if ($euid !== 0 && $euid !== -1) {
-        WlsLogger::error_("错误：尝试绑定特权端口 {$port} 但当前进程不是 root (euid: {$euid})");
-        WlsLogger::error_("请使用 sudo php bin/w server:start 启动服务器");
+        WlsLogger::error_(
+            "拒绝绑定特权端口 {$port}：当前 WLS Worker 未获得平台服务授予的端口权限 "
+            . "(euid: {$euid})；请改用非特权端口或由已安装的平台服务提供公共入口。",
+        );
         exit(1);
     }
 }
 
+// Windows supplemental fallback consumes the exact target-PID duplicate. The
+// Master retains its source copy until drain/stop, so no numeric re-bind occurs.
+if ($windowsListenerHandoffPresent) {
+    try {
+        $importedListener = \Weline\Server\Service\Runtime\WindowsListenerHandoff::awaitChildSocket(
+            $windowsListenerHandoffPath,
+            [
+                'handoff_id' => $windowsListenerHandoffId,
+                'intent_digest' => $windowsListenerIntentDigest,
+                'lease_id' => $gatewayHostLeaseId,
+                'lease_instance' => $windowsListenerLeaseInstance,
+                'wls_instance' => $windowsListenerWlsInstance,
+                'bind_host' => $privateListenerHost,
+                'port' => $port,
+                'master_launch_id' => $windowsListenerMasterLaunchId,
+                'launch_id' => $orchestratorLaunchId,
+                'slot_id' => $orchestratorSlotId,
+                'generation' => $orchestratorGeneration,
+            ],
+        );
+        $sharedListenerSocket = $importedListener['socket'];
+        $windowsListenerProof = $importedListener['proof'];
+        $socket = @\socket_export_stream($sharedListenerSocket);
+        if (!\is_resource($socket)) {
+            @\socket_close($sharedListenerSocket);
+            throw new \RuntimeException(
+                'Windows adopted fallback listener could not be exported as a stream.'
+            );
+        }
+        $windowsListenerAdopted = true;
+        WlsLogger::info_("Using target-bound Windows fallback listener on {$host}:{$port}");
+    } catch (\Throwable $throwable) {
+        WlsLogger::error_('Windows fallback listener adoption failed: ' . $throwable->getMessage());
+        exit(1);
+    }
+
 // macOS direct 使用 Master 预绑定的单个共享 accept queue。TLS 仍由 Worker accept 后处理。
-if ($listenFd > 0) {
+} elseif ($listenFd > 0) {
     if (!$deferSsl) {
         WlsLogger::error_('Inherited direct listener requires --defer-ssl for per-connection TLS/SNI handling');
         exit(1);
@@ -2068,6 +2410,11 @@ $wlsStartupTrace('socket_listen_ready', ['port' => $port]);
     $sharedListenerBound ? 'shared_fd' : ($reusePortBound ? 'reuseport' : 'single'),
     $sharedListenerBound ? $listenFd : 0,
 );
+if ($windowsListenerAdopted) {
+    \Weline\Server\Service\Runtime\WorkerReadinessState::setWindowsListenerHandoffProof(
+        $windowsListenerProof,
+    );
+}
 
 // ========== 上报 READY 前跳过 Session/Memory 验证（按需连接） ==========
 // Session/Memory 是共享服务，连接在首次使用时自动建立，无需在启动时预验证
@@ -2322,6 +2669,7 @@ $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
     && $supervisorEnabledRaw !== ''
     && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
+$servingManifestReloadError = '';
 
 if ($controlPort > 0 || $supervisorEnabled) {
     $wlsStartupTrace('ipc_connect_begin', ['control_port' => $controlPort]);
@@ -2337,7 +2685,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, &$activeFibers, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, $sslCert, $sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -2349,6 +2697,13 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $stats = [
                         'active_fibers' => \count($activeFibers),
                         'memory_usage' => \memory_get_usage(true),
+                        'serving_manifest_generation' => $servingManifestGeneration,
+                        'serving_manifest_digest' => $servingManifestDigest,
+                        'serving_manifest_route_count' => \count($servingManifestRoutes),
+                        'tls_context_state' => $servingManifestRoutes === []
+                            ? 'disabled'
+                            : 'active',
+                        'serving_manifest_reload_error' => $servingManifestReloadError,
                     ];
                     if ($ipcClient !== null && $ipcClient->isConnected()) {
                         $ipcClient->send(\Weline\Server\IPC\ControlMessage::pong($pingTimestamp, $stats));
@@ -2775,37 +3130,376 @@ if ($controlPort > 0 || $supervisorEnabled) {
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
                     \clearstatcache(true);
-                    $reloadDomains = isset($msg['domains']) && \is_array($msg['domains'])
-                        ? \array_filter($msg['domains'], static fn($d) => \is_string($d) && $d !== '')
-                        : [];
-                    // 清除指定域名的内存正缓存（若无指定则全量替换）
-                    if (!empty($reloadDomains)) {
-                        foreach ($reloadDomains as $reloadDomain) {
-                            unset($sniServerCerts[$reloadDomain]);
+                    $reloadOperationId = \strtolower(\trim((string)($msg['operation_id'] ?? '')));
+                    $expectedManifestGeneration = (int)($msg['expected_manifest_generation'] ?? 0);
+                    $expectedManifestDigest = \strtolower(\trim((string)(
+                        $msg['expected_manifest_digest'] ?? ''
+                    )));
+                    $expectedTlsRouteCount = (int)(
+                        $msg['expected_tls_route_count'] ?? -1
+                    );
+                    $expectedRetiredContextCount = (int)(
+                        $msg['expected_retired_context_count'] ?? -1
+                    );
+                    $expectedRetiredContextDigest = \strtolower(\trim((string)(
+                        $msg['expected_retired_context_digest'] ?? ''
+                    )));
+                    $reloadListenerMutationStarted = false;
+                    $reloadStateCommitted = false;
+                    $emptyRetirementFacts = wlsServingManifestRetirementFacts([], []);
+                    $retiredContextCount = (int)$emptyRetirementFacts['count'];
+                    $retiredContextDigest = (string)$emptyRetirementFacts['digest'];
+                    try {
+                        if (\preg_match('/\A[a-f0-9]{32}\z/D', $reloadOperationId) !== 1
+                            || $expectedManifestGeneration < 1
+                            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedManifestDigest) !== 1
+                            || $expectedTlsRouteCount < 0
+                            || $expectedTlsRouteCount
+                                > \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore::MAX_ROUTES
+                            || $expectedRetiredContextCount < 0
+                            || $expectedRetiredContextCount
+                                > \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore::MAX_ROUTES
+                            || \preg_match(
+                                '/\A[a-f0-9]{64}\z/D',
+                                $expectedRetiredContextDigest,
+                            ) !== 1
+                        ) {
+                            throw new \RuntimeException(
+                                'SSL reload request is missing an exact operation/manifest fence.',
+                            );
                         }
-                    }
-                    $oldCount = \count($sniServerCerts);
-                    $newSniCerts = _loadSniCertsFromMap();
-                    // 合并：新 map 为主，手动清除的域名若已在磁盘则会被 map 重新加入
-                    $sniServerCerts = $newSniCerts;
-                    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $listenerHost);
-                    $newCount = \count($sniServerCerts);
-                    $domainsStr = $newCount > 0 ? \implode(', ', \array_keys($sniServerCerts)) : '(空)';
-                    $targetStr = empty($reloadDomains) ? '全量重载' : ('域名：' . \implode(', ', $reloadDomains));
-                    WlsLogger::info_("收到 ssl_cert_reload（{$targetStr}），已热更新 SNI 证书映射（{$oldCount} → {$newCount}）：{$domainsStr}");
-                    if ($wlsTlsSessionCacheRuntime !== null) {
-                        $wlsTlsSessionCacheRuntime->clearContextCache();
-                        $wlsTlsSessionCacheRuntime->streamContextOptions($listenerHost, [
-                            'local_cert' => $sslCert,
-                            'local_pk' => $sslKey,
+                        $currentManifest = (new \Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore(
+                            (string)BP,
+                        ))->currentForFence([
+                            'instance_id' => $instanceName,
+                            'instance_generation' => $servingInstanceGeneration,
+                            'master_pid' => $masterPid,
+                            'master_epoch' => $orchestratorEpoch,
                         ]);
-                        foreach ($sniServerCerts as $tlsSessionSni => $tlsSessionPair) {
-                            if (\is_string($tlsSessionSni) && \is_array($tlsSessionPair)) {
-                                $wlsTlsSessionCacheRuntime->streamContextOptions($tlsSessionSni, $tlsSessionPair);
+                        if ((int)$currentManifest['generation'] !== $expectedManifestGeneration
+                            || !\hash_equals(
+                                $expectedManifestDigest,
+                                (string)$currentManifest['digest'],
+                            )
+                        ) {
+                            throw new \RuntimeException(
+                                'Current serving manifest no longer matches the requested reload fence.',
+                            );
+                        }
+                        $nextSnapshot = wlsLoadServingManifestSnapshot(
+                            (string)$currentManifest['path'],
+                            $expectedManifestGeneration,
+                            $expectedManifestDigest,
+                            $instanceName,
+                            $servingInstanceGeneration,
+                            $masterPid,
+                            $orchestratorEpoch,
+                        );
+                        $nextCerts = $nextSnapshot['certs'];
+                        $nextRoutes = $nextSnapshot['routes'];
+                        $nextHttpRoutes = $nextSnapshot['http_routes'];
+                        if (\count($nextRoutes) !== $expectedTlsRouteCount) {
+                            throw new \RuntimeException(
+                                'Replacement serving manifest TLS route count changed.',
+                            );
+                        }
+                        $nextDefault = \reset($nextCerts);
+                        $nextSslCert = \is_array($nextDefault)
+                            ? (string)$nextDefault['local_cert']
+                            : '';
+                        $nextSslKey = \is_array($nextDefault)
+                            ? (string)$nextDefault['local_pk']
+                            : '';
+                        if (($nextSslCert === '') !== ($nextSslKey === '')
+                            || ($expectedTlsRouteCount > 0
+                                && ($nextSslCert === '' || $nextSslKey === ''))
+                        ) {
+                            throw new \RuntimeException(
+                                'Replacement serving manifest TLS context is incomplete.',
+                            );
+                        }
+                        $retirementFacts = wlsServingManifestRetirementFacts(
+                            $servingManifestRoutes,
+                            $nextRoutes,
+                        );
+                        $retiredContextCount = (int)$retirementFacts['count'];
+                        $retiredContextDigest = (string)$retirementFacts['digest'];
+                        if ($retiredContextCount !== $expectedRetiredContextCount
+                            || !\hash_equals(
+                                $expectedRetiredContextDigest,
+                                $retiredContextDigest,
+                            )
+                        ) {
+                            throw new \RuntimeException(
+                                'Replacement serving manifest retirement fence changed.',
+                            );
+                        }
+                        if ($wlsTlsSessionCacheRuntime !== null) {
+                            // Context keys bind SNI + certificate digest. Stage
+                            // the complete replacement without evicting the
+                            // live generation, so any preflight failure leaves
+                            // the old TLS/session context cache untouched.
+                            foreach ($nextCerts as $tlsSessionSni => $tlsSessionPair) {
+                                if (\is_string($tlsSessionSni) && \is_array($tlsSessionPair)) {
+                                    $wlsTlsSessionCacheRuntime->streamContextOptions(
+                                        $tlsSessionSni,
+                                        $tlsSessionPair,
+                                    );
+                                }
                             }
                         }
+                        // All disk/file/policy/TLS-context preflight above
+                        // completed before any live routing state changes. The
+                        // event loop is single-threaded, so this is one switch.
+                        // The copied listener context is updated first and its
+                        // return value is authoritative; a suppressed option
+                        // failure must never produce a successful reload ACK.
+                        $contextRollbackSucceeded = false;
+                        if (!wlsSslApplySniOptionsToContexts(
+                            $deferSslOptions,
+                            $socket,
+                            $nextCerts,
+                            $nextSslCert,
+                            $nextSslKey,
+                            $cryptoMethod,
+                            $contextRollbackSucceeded,
+                        )) {
+                            if (!$contextRollbackSucceeded) {
+                                // A partially changed listener which could not
+                                // restore its LKG is removed from service. IPC
+                                // remains alive long enough to return failure.
+                                if ($socket && \is_resource($socket)) {
+                                    @\fclose($socket);
+                                    $socket = null;
+                                    \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+                                }
+                                $shouldExit = true;
+                                $ipcDraining = true;
+                                $drainStartTime = \time();
+                            }
+                            throw new \RuntimeException(
+                                $contextRollbackSucceeded
+                                    ? 'TLS listener rejected the replacement context; LKG restored.'
+                                    : 'TLS listener rejected the replacement context and LKG rollback failed.',
+                            );
+                        }
+                        $reloadListenerMutationStarted = true;
+                        $retiredRouteDomains = $retirementFacts['domains'];
+                        if ($retiredRouteDomains !== []) {
+                            // A partial multi-domain revocation has the same
+                            // connection-level security boundary as an empty
+                            // tombstone. Resolve each live SNI through the old
+                            // manifest (including wildcard routes), then retire
+                            // only connections belonging to removed routes.
+                            $retiredConnectionIds = [];
+                            foreach ($connectionSniHosts as $connectionId => $sniHost) {
+                                $oldRoute = wlsServingManifestRouteForHost(
+                                    (string)$sniHost,
+                                    $servingManifestRoutes,
+                                );
+                                $oldDomain = \is_array($oldRoute)
+                                    ? (string)($oldRoute['domain'] ?? '')
+                                    : '';
+                                if ($oldDomain !== '' && isset($retiredRouteDomains[$oldDomain])) {
+                                    $retiredConnectionIds[(int)$connectionId] = true;
+                                }
+                            }
+                            // Every accepted or handshaking TLS stream which
+                            // could already own an SSL_CTX must have immutable
+                            // SNI provenance. Missing provenance makes a
+                            // selective revocation unverifiable and therefore
+                            // fail-stops this Worker before ACK.
+                            foreach (\array_keys($connections + $pendingHandshakes) as $connectionId) {
+                                if (!\array_key_exists((int)$connectionId, $connectionSniHosts)
+                                    && !\array_key_exists(
+                                        (int)$connectionId,
+                                        $connectionPlaintextHosts,
+                                    )
+                                ) {
+                                    throw new \RuntimeException(
+                                        'Selective TLS route retirement found a stream without SNI provenance.',
+                                    );
+                                }
+                            }
+                            foreach (\array_keys($retiredConnectionIds) as $retiredConnectionId) {
+                                wlsCancelActiveFibersForConnection(
+                                    $activeFibers,
+                                    (int)$retiredConnectionId,
+                                    $fiberScheduler,
+                                    $activeRequests,
+                                );
+                                $retiredConnection = $connections[$retiredConnectionId]
+                                    ?? ($pendingHandshakes[$retiredConnectionId]['conn'] ?? null)
+                                    ?? ($pendingPeek[$retiredConnectionId]['conn'] ?? null);
+                                if (\is_resource($retiredConnection)) {
+                                    safeCloseStream($retiredConnection);
+                                }
+                                unset(
+                                    $connections[$retiredConnectionId],
+                                    $connectionPeerIps[$retiredConnectionId],
+                                    $requestBuffers[$retiredConnectionId],
+                                    $connectionLastActivity[$retiredConnectionId],
+                                    $requestLogged[$retiredConnectionId],
+                                    $writeBuffers[$retiredConnectionId],
+                                    $writableConnections[$retiredConnectionId],
+                                    $writeZeroProgress[$retiredConnectionId],
+                                    $connectionProtocols[$retiredConnectionId],
+                                    $connectionSniHosts[$retiredConnectionId],
+                                    $http2ConnectionAdapters[$retiredConnectionId],
+                                    $http2PendingRequests[$retiredConnectionId],
+                                    $pendingPeek[$retiredConnectionId],
+                                    $pendingPeekStartTimes[$retiredConnectionId],
+                                    $pendingHandshakes[$retiredConnectionId],
+                                    $postHandshakeReadPending[$retiredConnectionId],
+                                    $pendingClose[$retiredConnectionId],
+                                    $handshakeStartTimes[$retiredConnectionId],
+                                    $longLivedConnections[$retiredConnectionId],
+                                );
+                                if (\Weline\Server\Protocol\Http2\MultiplexScheduler::keysForConnection(
+                                    $activeFibers,
+                                    (int)$retiredConnectionId,
+                                ) !== []) {
+                                    throw new \RuntimeException(
+                                        'Selective TLS route retirement left an active request Fiber.',
+                                    );
+                                }
+                            }
+                            foreach ($connectionSniHosts as $sniHost) {
+                                $oldRoute = wlsServingManifestRouteForHost(
+                                    (string)$sniHost,
+                                    $servingManifestRoutes,
+                                );
+                                if (\is_array($oldRoute)
+                                    && isset($retiredRouteDomains[(string)($oldRoute['domain'] ?? '')])
+                                ) {
+                                    throw new \RuntimeException(
+                                        'Selective TLS route retirement left an old SNI context reachable.',
+                                    );
+                                }
+                            }
+                        }
+                        if ($nextRoutes === []) {
+                            // Native H3 is currently disabled for manifest SNI
+                            // isolation. If it ever appears here without a
+                            // connection provenance map, fail-stop rather than
+                            // acknowledge an unverifiable retired QUIC context.
+                            if ($http3Runtime !== null) {
+                                throw new \RuntimeException(
+                                    'Neutral TLS manifest found an unverifiable active H3 runtime.',
+                                );
+                            }
+                            \Weline\Server\Protocol\Http3\AltSvcResponsePolicy::configure(false, 0);
+                            \Weline\Server\Protocol\Http3\WorkerQuicRuntime::shutdownActive();
+                            \Weline\Server\Service\Runtime\WorkerReadinessState::markHttp3Closed();
+                            $http3Runtime = null;
+                            $http3AvailabilityEnabled = false;
+                        }
+                        $sniServerCerts = $nextCerts;
+                        $servingManifestRoutes = $nextRoutes;
+                        $servingManifestHttpRoutes = $nextHttpRoutes;
+                        \Weline\Server\Service\WlsWorkerGlobals::setDomainPolicies(
+                            $nextSnapshot['policies'],
+                        );
+                        $sslCert = $nextSslCert;
+                        $sslKey = $nextSslKey;
+                        $servingManifestPath = (string)$currentManifest['path'];
+                        $servingManifestGeneration = (int)$currentManifest['generation'];
+                        $servingManifestDigest = (string)$currentManifest['digest'];
+                        \Weline\Server\Service\Runtime\WorkerReadinessState::markServingManifest(
+                            $servingManifestGeneration,
+                            $servingManifestDigest,
+                            \count($servingManifestRoutes),
+                        );
+                        $wlsTlsSessionCacheRuntime?->clearContextCache();
+                        $servingManifestReloadError = '';
+                        $reloadStateCommitted = true;
+                        $ipcClient?->send(\Weline\Server\IPC\ControlMessage::sslCertReloadAck(
+                            $reloadOperationId,
+                            true,
+                            $servingManifestGeneration,
+                            $servingManifestDigest,
+                            \count($servingManifestRoutes),
+                            $servingManifestRoutes === [] ? 'neutral' : 'routes',
+                            $servingManifestRoutes === [] ? 'disabled' : 'active',
+                            $retiredContextCount,
+                            $retiredContextDigest,
+                            $workerId,
+                        ));
+                        WlsLogger::info_('已原子切换 serving manifest generation='
+                            . $servingManifestGeneration . '，routes='
+                            . \count($servingManifestRoutes));
+                    } catch (\Throwable $throwable) {
+                        if ($reloadListenerMutationStarted && !$reloadStateCommitted) {
+                            // Once the listener SSL_CTX has changed there is no
+                            // safe in-process rollback for already accepted
+                            // streams, H3 state, policy globals, and the TLS
+                            // session cache as one unit. Remove this process
+                            // from service and let Master replace the exact
+                            // frozen identity instead of serving a mixed era.
+                            if ($socket && \is_resource($socket)) {
+                                @\fclose($socket);
+                                $socket = null;
+                            }
+                            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+                            $shouldExit = true;
+                            $ipcDraining = true;
+                            $drainStartTime = \time();
+                        }
+                        // Invalid new facts never replace the live in-memory LKG.
+                        $servingManifestReloadError = \substr(
+                            \str_replace(["\r", "\n"], ' ', $throwable->getMessage()),
+                            0,
+                            512,
+                        );
+                        if ($reloadStateCommitted) {
+                            // Delivery/logging failed after the exact in-memory
+                            // commit. Never lie with a rejection receipt; the
+                            // Master will timeout/retry and revalidate the same
+                            // immutable generation.
+                            try {
+                                $ipcClient?->send(\Weline\Server\IPC\ControlMessage::sslCertReloadAck(
+                                    $reloadOperationId,
+                                    true,
+                                    $servingManifestGeneration,
+                                    $servingManifestDigest,
+                                    \count($servingManifestRoutes),
+                                    $servingManifestRoutes === [] ? 'neutral' : 'routes',
+                                    $servingManifestRoutes === [] ? 'disabled' : 'active',
+                                    $retiredContextCount ?? 0,
+                                    $retiredContextDigest
+                                        ?? (string)$emptyRetirementFacts['digest'],
+                                    $workerId,
+                                ));
+                            } catch (\Throwable) {
+                                // The frozen Master transaction remains red
+                                // without a delivered success receipt.
+                            }
+                        } else {
+                            try {
+                                $ipcClient?->send(\Weline\Server\IPC\ControlMessage::sslCertReloadAck(
+                                    $reloadOperationId,
+                                    false,
+                                    $servingManifestGeneration,
+                                    $servingManifestDigest,
+                                    \count($servingManifestRoutes),
+                                    $servingManifestRoutes === [] ? 'neutral' : 'routes',
+                                    $servingManifestRoutes === [] ? 'disabled' : 'active',
+                                    $retiredContextCount,
+                                    $retiredContextDigest,
+                                    $workerId,
+                                    $reloadListenerMutationStarted
+                                        ? 'reload_partial_commit_fail_closed'
+                                        : 'reload_rejected',
+                                    $servingManifestReloadError,
+                                ));
+                            } catch (\Throwable) {
+                                // Master observes timeout/disconnect as a
+                                // terminal failure for the frozen identity.
+                            }
+                        }
+                        WlsLogger::error_('serving manifest 重载被拒绝，保留当前代：'
+                            . $throwable->getMessage());
                     }
-                    wlsSslApplySniOptionsToContexts($deferSslOptions, $socket, $sniServerCerts, $sslCert, $sslKey, $cryptoMethod);
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ROUTING_POLICY:
@@ -2958,11 +3652,11 @@ if ($controlPort > 0 || $supervisorEnabled) {
         ) {
             throw new \RuntimeException('HTTP/3 TLS ticket-ring metadata is missing or invalid.');
         }
-        if ($masterToken === '' || $orchestratorEpoch <= 0) {
+        if ($masterRuntimeCredential === '' || $orchestratorEpoch <= 0) {
             throw new \RuntimeException('HTTP/3 requires the authenticated Master generation secret.');
         }
         $http3RetrySecret = \Weline\Server\Protocol\Http3\DarwinHttp3RuntimeIdentity::retrySecret(
-            $masterToken,
+            $masterRuntimeCredential,
             $instanceName,
             $orchestratorEpoch,
         );
@@ -2980,7 +3674,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         try {
             if ($wlsHttp3Mode === 'datagram-router') {
                 $http3ChannelKey = \Weline\Server\Protocol\Http3\DarwinHttp3RuntimeIdentity::channelKey(
-                    $masterToken,
+                    $masterRuntimeCredential,
                     $instanceName,
                     $orchestratorEpoch,
                     $workerId,
@@ -3148,6 +3842,8 @@ $requestLogged = []; // 记录已输出日志的连接（前端模式使用）
 $writeBuffers = [];
 $writableConnections = [];
 $connectionProtocols = [];
+$connectionSniHosts = [];
+$connectionPlaintextHosts = [];
 $http2ConnectionAdapters = [];
 $http2PendingRequests = [];
 $http2ParsedAdmissionBudget = \max(16, \min(32, (int)(
@@ -3165,8 +3861,6 @@ $pendingHandshakes = [];
 $postHandshakeReadPending = [];
 $pendingClose = [];
 $handshakeStartTimes = [];
-/** SNI 解析失败或为空时，用当前监听主机再选证（避免默认 PEM 与浏览器访问主机不一致） */
-$deferSslPreferredHost = \filter_var($host, \FILTER_VALIDATE_IP) ? '' : (string) $host;
 $startTime = \time(); // 记录启动时间
 
 // Keep-Alive 连接超时配置（秒）
@@ -3389,6 +4083,46 @@ function wlsCancelActiveFibersForConnection(
 }
 }
 
+/**
+ * Exact TLS tombstones retire every suspended request before the old
+ * certificate context is released. HTTP/3 Fiber keys intentionally do not
+ * share the TCP connection-id namespace, so a connection-only sweep is not a
+ * complete revocation barrier.
+ *
+ * @param array<int|string,array<string,mixed>> $activeFibers
+ */
+if (!\function_exists('wlsCancelAllActiveFibersForTlsRetirement')) {
+function wlsCancelAllActiveFibersForTlsRetirement(
+    array &$activeFibers,
+    \Weline\Server\Scheduler\FiberScheduler $fiberScheduler,
+    int &$activeRequests,
+): int {
+    $cancelled = 0;
+    foreach (\array_keys($activeFibers) as $fiberKey) {
+        if (!\array_key_exists($fiberKey, $activeFibers)) {
+            continue;
+        }
+        $state = $activeFibers[$fiberKey];
+        unset($activeFibers[$fiberKey]);
+        $fiber = \is_array($state) ? ($state['fiber'] ?? null) : null;
+        if ($fiber instanceof \Fiber) {
+            $fiberScheduler->cancelTimersForFiber($fiber);
+            wlsUnwindRequestFiberForCancellation(
+                $fiber,
+                \is_array($state) ? ($state['context'] ?? null) : null,
+                'tls_manifest_retired',
+            );
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
+            $fiberScheduler->unregisterFiber();
+        }
+        $activeRequests = \max(0, $activeRequests - 1);
+        $cancelled++;
+    }
+
+    return $cancelled;
+}
+}
+
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
@@ -3479,8 +4213,13 @@ while (true) {
     // 连接池将在首次需要时由请求 Fiber 按需初始化
 
     if ($childMasterGuard->shouldExit()) {
-        WlsLogger::warning_('[Worker SSL] Master lease/PID 已失效，子进程自治退出: ' . $childMasterGuard->getLastExitReason());
-        $gracefulExit('Master lease/PID 自治退出');
+        $leaseExitReason = $childMasterGuard->getLastExitReason();
+        WlsLogger::warning_('[Worker SSL] Master lease/PID 已失效，子进程自治退出: ' . $leaseExitReason);
+        $gracefulExit(
+            $leaseExitReason !== ''
+                ? ('Master lease/PID 自治退出: ' . $leaseExitReason)
+                : 'Master lease/PID 自治退出'
+        );
     }
 
     if (!$childMasterGuard->isEnabled() && $masterPid > 0 && ($now - $lastMasterPidHardCheck) >= 5) {
@@ -4331,7 +5070,7 @@ while (true) {
                             $http3Runtime,
                             $http3Token,
                             $rawRequest,
-                            wlsHttpFramingErrorResponse((int)($frame['status_code'] ?? 400)),
+                            wlsServingManifestFramingErrorResponse($frame),
                             $policyStartedAt,
                             $activeRequests,
                         );
@@ -4360,13 +5099,41 @@ while (true) {
                     $uri = $policyDecision->path;
                     $method = $policyDecision->method;
                     $requestHost = \strtolower(\trim((string)($policyDecision->headers['host'] ?? '')));
-                    $hostOnly = \is_string(\parse_url('https://' . $requestHost, \PHP_URL_HOST))
-                        ? (string)\parse_url('https://' . $requestHost, \PHP_URL_HOST)
-                        : $requestHost;
-                    if ($hostOnly !== '' && \count(\explode('.', $hostOnly)) === 2) {
-                        $domainPolicy = _getDomainPolicy($hostOnly);
+                    $hostOnly = wlsServingManifestNormalizeAuthority($requestHost);
+                    if ($hostOnly === null
+                        || !\is_array(wlsServingManifestRouteForHost(
+                            $hostOnly,
+                            $servingManifestRoutes,
+                        ))
+                    ) {
+                        wlsHttp3SubmitResponse(
+                            $http3Runtime,
+                            $http3Token,
+                            $rawRequest,
+                            "HTTP/1.1 421 Misdirected Request\r\nContent-Length: 19\r\n\r\nMisdirected Request",
+                            $policyStartedAt,
+                            $activeRequests,
+                        );
+                        continue;
+                    }
+                    if ($hostOnly !== '') {
+                        $domainPolicy = _getDomainPolicy(
+                            (string)$hostOnly,
+                            $servingManifestRoutes,
+                        );
                         if (($domainPolicy['force_root_to_www'] ?? 0) === 1) {
-                            $redirectHost = 'www.' . $hostOnly;
+                            if (($domainPolicy['root_to_www_target_ready'] ?? 0) !== 1) {
+                                wlsHttp3SubmitResponse(
+                                    $http3Runtime,
+                                    $http3Token,
+                                    $rawRequest,
+                                    wlsServingManifestRedirectTargetUnavailableResponse(),
+                                    $policyStartedAt,
+                                    $activeRequests,
+                                );
+                                continue;
+                            }
+                            $redirectHost = (string)$domainPolicy['root_to_www_target'];
                             $redirectUrl = $port === 443
                                 ? 'https://' . $redirectHost . $uri
                                 : 'https://' . $redirectHost . ':' . $port . $uri;
@@ -5018,6 +5785,8 @@ while (true) {
         $connectionLastActivity,
         $hotPathLogsEnabled,
         $connectionPeerIps,
+        $connectionSniHosts,
+        $connectionPlaintextHosts,
         \Weline\Server\Service\WorkerResponseMemoryGuard::listenerAcceptBatchLimit(
             $sharedListenerBound,
             \PHP_OS_FAMILY,
@@ -5055,16 +5824,17 @@ while (true) {
         $sslHandshakeQueueHighWatermark,
         $hotPathLogsEnabled,
         $sniServerCerts,
-        $sslCert,
-        $sslKey,
+        $servingManifestRoutes,
+        $servingManifestHttpRoutes,
         $port,
-        $deferSslPreferredHost,
         $connectionPeerIps,
         $wlsRuntimeTopology,
-        $masterToken,
+        $masterRuntimeCredential,
         $connectionProtocols,
         $http2ConnectionAdapters,
         $wlsTlsSessionCacheRuntime,
+        $connectionSniHosts,
+        $connectionPlaintextHosts,
     );
 
     wlsSslAdvanceHandshakeState(
@@ -5083,6 +5853,20 @@ while (true) {
         $hotPathLogsEnabled,
         $wlsTlsSessionCacheRuntime,
     );
+    foreach (\array_keys($connectionSniHosts) as $sniConnectionId) {
+        if (!isset($connections[$sniConnectionId])
+            && !isset($pendingPeek[$sniConnectionId])
+            && !isset($pendingHandshakes[$sniConnectionId])
+            && !isset($postHandshakeReadPending[$sniConnectionId])
+        ) {
+            unset($connectionSniHosts[$sniConnectionId]);
+        }
+    }
+    foreach (\array_keys($connectionPlaintextHosts) as $plaintextConnectionId) {
+        if (!isset($connections[$plaintextConnectionId])) {
+            unset($connectionPlaintextHosts[$plaintextConnectionId]);
+        }
+    }
 
     if ($wlsTlsSessionCacheRuntime !== null && $wlsTlsSessionCacheRuntime->needsMaintenance()) {
         // new/remove callbacks only enqueue. Send on the dedicated writer channel
@@ -5491,11 +6275,47 @@ while (true) {
             if (($frame['status'] ?? '') !== 'complete'
                 || (int)($frame['consumed'] ?? 0) !== \strlen($rawRequest)
             ) {
-                $frame = [
-                    'status' => 'complete',
-                    'request' => $rawRequest,
-                    'consumed' => 0,
-                ];
+                // A decoded H2 stream is already one complete request unit.
+                // If the shared HTTP frame parser cannot prove that exact
+                // unit complete, answer only this stream with a fixed framing
+                // error (missing authority is 421). Never manufacture a
+                // complete frame or let unparsed bytes reach application code.
+                unset($postHandshakeReadPending[$connId]);
+                \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->markRequestComplete(
+                    (string)$connId,
+                );
+                if (!isset($requestLogged[$connId])) {
+                    $requestCount++;
+                }
+                unset($requestLogged[$connId]);
+                $activeRequests++;
+                sslFinalizeHttpResponseAfterHandle(
+                    $conn,
+                    $connId,
+                    $rawRequest,
+                    wlsServingManifestFramingErrorResponse($frame),
+                    \microtime(true),
+                    false,
+                    $ipcDraining,
+                    $connections,
+                    $requestBuffers,
+                    $connectionLastActivity,
+                    $requestLogged,
+                    $writeBuffers,
+                    $writableConnections,
+                    $pendingClose,
+                    $longLivedConnections,
+                    $ipcClient,
+                    $instanceName,
+                    $activeRequests,
+                    true,
+                    null,
+                    null,
+                    false,
+                    $http2Adapter,
+                    $http2StreamId,
+                );
+                continue;
             }
             $frame['protocol'] = 'h2';
             $frame['stream_id'] = $http2StreamId;
@@ -5569,7 +6389,7 @@ while (true) {
                 'Invalid SSL HTTP request framing, reject connection (connId=' . $connId
                 . ', reason=' . (string)($frame['error'] ?? 'invalid_framing') . ')'
             );
-            @\fwrite($conn, wlsHttpFramingErrorResponse((int)($frame['status_code'] ?? 400)));
+            @\fwrite($conn, wlsServingManifestFramingErrorResponse($frame));
             safeCloseStream($conn);
             unset(
                 $postHandshakeReadPending[$connId],
@@ -5620,6 +6440,120 @@ while (true) {
         $transportPeer = $connectionPeerIps[$connId]
             ?? (\is_string($transportPeerRaw) ? $transportPeerRaw : '');
         $policyStartedAt = \microtime(true);
+        $frameHasHeaders = \is_array($frame['headers'] ?? null);
+        $frameHeaders = $frameHasHeaders
+            ? $frame['headers']
+            : [];
+        $plaintextHost = $connectionPlaintextHosts[$connId] ?? null;
+        $plaintextAction = \is_string($plaintextHost)
+            ? wlsServingManifestPlaintextRequestAction(
+                $frame,
+                $plaintextHost,
+                $servingManifestHttpRoutes,
+            )
+            : null;
+        $mustRejectMisdirected = !$frameHasHeaders
+            || ($plaintextAction === null
+                ? !wlsServingManifestHostMatchesSni(
+                    (string)($frameHeaders['host'] ?? ''),
+                    (string)($connectionSniHosts[$connId] ?? ''),
+                    $servingManifestRoutes,
+                )
+                : $plaintextAction === 'misdirected');
+        if ($mustRejectMisdirected) {
+            sslFinalizeHttpResponseAfterHandle(
+                $conn,
+                $connId,
+                $rawRequest,
+                wlsServingManifestMisdirectedResponse(),
+                $policyStartedAt,
+                false,
+                $ipcDraining,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $ipcClient,
+                $instanceName,
+                $activeRequests,
+                true,
+                null,
+                null,
+                false,
+                $http2ResponseAdapter,
+                $http2ResponseStreamId,
+            );
+            continue;
+        }
+        if ($plaintextAction === 'redirect_https') {
+            $redirectHost = wlsServingManifestNormalizeAuthority(
+                (string)($frameHeaders['host'] ?? ''),
+            );
+            sslFinalizeHttpResponseAfterHandle(
+                $conn,
+                $connId,
+                $rawRequest,
+                wlsServingManifestHttpsRedirectResponse(
+                    (string)$redirectHost,
+                    (string)($frame['target'] ?? '/'),
+                    (int)$port,
+                ),
+                $policyStartedAt,
+                false,
+                $ipcDraining,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $ipcClient,
+                $instanceName,
+                $activeRequests,
+                true,
+                (string)$redirectHost,
+                null,
+                false,
+                $http2ResponseAdapter,
+                $http2ResponseStreamId,
+            );
+            continue;
+        }
+        if ($plaintextAction === 'not_found') {
+            sslFinalizeHttpResponseAfterHandle(
+                $conn,
+                $connId,
+                $rawRequest,
+                wlsServingManifestNotFoundResponse(),
+                $policyStartedAt,
+                false,
+                $ipcDraining,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $ipcClient,
+                $instanceName,
+                $activeRequests,
+                true,
+                null,
+                null,
+                false,
+                $http2ResponseAdapter,
+                $http2ResponseStreamId,
+            );
+            continue;
+        }
         $policyDecision = \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate(
             $rawRequest,
             $transportPeer,
@@ -5658,15 +6592,42 @@ while (true) {
         $method = $policyDecision->method;
 
         // force_root_to_www：HTTPS 下根域 301 到 www 子域（在框架处理前拦截）
-        $_reqHost = \strtolower(\trim((string)($policyDecision->headers['host'] ?? '')));
-        if ($_reqHost !== '') {
-            $_hostOnly = \explode(':', $_reqHost)[0];
-            $_hostParts = \explode('.', $_hostOnly);
-            if (\count($_hostParts) === 2) {
-                $_p = _getDomainPolicy($_hostOnly);
+        $_reqHost = (string)($policyDecision->headers['host'] ?? '');
+        $_hostOnly = wlsServingManifestNormalizeAuthority($_reqHost);
+        if ($_hostOnly !== null && $plaintextAction === null) {
+                $_p = _getDomainPolicy((string)$_hostOnly, $servingManifestRoutes);
                 if ($_p['force_root_to_www'] === 1) {
+                    if ($_p['root_to_www_target_ready'] !== 1) {
+                        sslFinalizeHttpResponseAfterHandle(
+                            $conn,
+                            $connId,
+                            $rawRequest,
+                            wlsServingManifestRedirectTargetUnavailableResponse(),
+                            $policyStartedAt,
+                            false,
+                            $ipcDraining,
+                            $connections,
+                            $requestBuffers,
+                            $connectionLastActivity,
+                            $requestLogged,
+                            $writeBuffers,
+                            $writableConnections,
+                            $pendingClose,
+                            $longLivedConnections,
+                            $ipcClient,
+                            $instanceName,
+                            $activeRequests,
+                            true,
+                            $_hostOnly,
+                            null,
+                            false,
+                            $http2ResponseAdapter,
+                            $http2ResponseStreamId,
+                        );
+                        continue;
+                    }
                     $_reqPath = $policyDecision->path !== '' ? $policyDecision->path : '/';
-                    $_wwwHost = 'www.' . $_hostOnly;
+                    $_wwwHost = (string)$_p['root_to_www_target'];
                     $_redirectPort = (int)$port;
                     $_wwwUrl = ($_redirectPort === 443)
                         ? "https://{$_wwwHost}{$_reqPath}"
@@ -5700,7 +6661,6 @@ while (true) {
                     );
                     continue;
                 }
-            }
         }
 
         // The mandatory policy kernel and canonical-host redirect have already
@@ -6442,6 +7402,8 @@ function wlsSslAcceptNewConnections(
     array &$connectionLastActivity,
     bool $isDev,
     array &$connectionPeerIps,
+    array &$connectionSniHosts,
+    array &$connectionPlaintextHosts,
     int $maxAcceptPerLoop = 64,
     bool $applicationAdmissionOpen = true,
     mixed $nativeListenerSocket = null,
@@ -6483,7 +7445,14 @@ function wlsSslAcceptNewConnections(
             $accepted++;
         }
         $connId = \get_resource_id($conn);
-        unset($connectionPeerIps[$connId]);
+        // PHP may reuse a closed stream resource id before the next event-loop
+        // cleanup sweep. Never let the previous connection's transport
+        // authority classify a newly accepted socket.
+        unset(
+            $connectionPeerIps[$connId],
+            $connectionSniHosts[$connId],
+            $connectionPlaintextHosts[$connId],
+        );
         $peerNameRaw = @\stream_socket_get_name($conn, true);
         $peerName = \is_string($peerNameRaw) ? $peerNameRaw : 'unknown-peer';
         $acceptGates = \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull();
@@ -6574,23 +7543,26 @@ function wlsSslListenerHasPendingAccept(mixed $socket): bool
 }
 
 /**
- * defer-ssl：按 ClientHello 中的 SNI 选择证书（内存映射 / 通配 / 默认 PEM）。
+ * defer-ssl：只按当前 manifest 中的 SNI 路由选择证书。
  *
  * @param array<string, array{local_cert: string, local_pk: string}> $sniServerCerts
- * @return array{local_cert: string, local_pk: string}
+ * @return array{local_cert:string,local_pk:string}|null
  */
 function wlsSslPickCertificatePairForDeferSni(
     ?string $sniHost,
     array $sniServerCerts,
-    string $defaultCert,
-    string $defaultKey
-): array {
-    return \Weline\Server\Service\SslCertificateService::selectSniCertificatePair(
-        $sniHost,
-        $sniServerCerts,
-        $defaultCert,
-        $defaultKey,
-    );
+    array $servingRoutes,
+): ?array {
+    if ($sniHost === null || $sniHost === '') {
+        return null;
+    }
+    $route = wlsServingManifestRouteForHost($sniHost, $servingRoutes);
+    if (!\is_array($route)) {
+        return null;
+    }
+    $domain = (string)($route['domain'] ?? '');
+    $pair = $sniServerCerts[$domain] ?? null;
+    return \is_array($pair) ? $pair : null;
 }
 
 /**
@@ -6675,16 +7647,17 @@ function wlsSslAdvancePeekState(
     int $handshakeQueueHighWatermark,
     bool $isDev,
     array $sniServerCerts,
-    string $sslCert,
-    string $sslKey,
+    array $servingRoutes,
+    array $servingHttpRoutes,
     int $publicTcpPort,
-    string $deferSslPreferredHost = '',
     array &$connectionPeerIps = [],
     string $runtimeTopology = 'direct',
     string $proxyAuthenticationSecret = '',
     array &$connectionProtocols = [],
     array &$http2ConnectionAdapters = [],
-    ?\Weline\Server\Service\Runtime\TlsSessionCacheRuntime $tlsSessionCacheRuntime = null
+    ?\Weline\Server\Service\Runtime\TlsSessionCacheRuntime $tlsSessionCacheRuntime = null,
+    array &$connectionSniHosts = [],
+    array &$connectionPlaintextHosts = [],
 ): void {
     if ($pendingPeek === []) {
         return;
@@ -6758,29 +7731,72 @@ function wlsSslAdvancePeekState(
             continue;
         }
 
-        // 同端口 HTTP→HTTPS：首包非 TLS 时发 301（不解 peek，数据仍留给对端关闭后重试）
+        // Same-port cleartext admission is governed by the complete desired
+        // HTTP route set, never by the TLS-active certificate subset.
         if (\ord($peeked[0]) !== 0x16) {
-            if (\preg_match('/^[A-Z][A-Z0-9-]*\s/', $peeked) === 1) {
-                $_host = '127.0.0.1';
-                if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $peeked, $_hm)) {
-                    $_host = \strtolower(\trim(\explode(':', $_hm[1], 2)[0]));
+            // A non-consuming peek may contain only one byte of an HTTP
+            // method. Keep the connection pending until the complete request
+            // head is available; admission from a partial Host would make
+            // normal TCP segmentation observable as a 421/close.
+            $_looksLikeHttpPrefix = \preg_match(
+                '/\A[A-Z][A-Z0-9-]{0,31}(?:[ \t]|$)/D',
+                $peeked,
+            ) === 1;
+            $_headerEnd = \strpos($peeked, "\r\n\r\n");
+            if ($_looksLikeHttpPrefix && $_headerEnd === false && \strlen($peeked) < 65536) {
+                continue;
+            }
+            $_requestLineValid = $_headerEnd !== false
+                && \preg_match(
+                    '/\A([A-Z][A-Z0-9-]{0,31})\s+(\S{1,65535})\s+HTTP\/(1\.0|1\.1)\r\n/D',
+                    $peeked,
+                    $_requestLine,
+                ) === 1;
+            $_hostMatches = [];
+            $_hostCount = $_requestLineValid
+                ? \preg_match_all(
+                    '/(?:\A|\r\n)Host:[ \t]*([^\r\n]*)/i',
+                    \substr($peeked, 0, (int)$_headerEnd),
+                    $_hostMatches,
+                )
+                : 0;
+            $_host = $_hostCount === 1
+                ? wlsServingManifestNormalizeAuthority(
+                    (string)($_hostMatches[1][0] ?? ''),
+                )
+                : null;
+            if ($_requestLineValid && $_host !== null) {
+                $_preflightFrame = [
+                    'headers' => ['host' => $_host],
+                    'method' => (string)$_requestLine[1],
+                    'target' => (string)$_requestLine[2],
+                ];
+                $_plaintextAction = wlsServingManifestPlaintextRequestAction(
+                    $_preflightFrame,
+                    $_host,
+                    $servingHttpRoutes,
+                );
+                if ($_plaintextAction === 'allow') {
+                    $connections[$connId] = $conn;
+                    $requestBuffers[$connId] = '';
+                    $connectionLastActivity[$connId] = \time();
+                    $connectionProtocols[$connId] = 'http/1.1';
+                    $connectionPlaintextHosts[$connId] = (string)$_host;
+                    unset($connectionSniHosts[$connId]);
+                    $completedPeeks[] = $connId;
+                    continue;
                 }
-                $_loc = 'https://' . $_host;
-                if ($publicTcpPort !== 443) {
-                    $_loc .= ':' . $publicTcpPort;
+                if ($_plaintextAction === 'redirect_https') {
+                    $_resp = wlsServingManifestHttpsRedirectResponse(
+                        $_host,
+                        (string)$_requestLine[2],
+                        $publicTcpPort,
+                    );
+                } elseif ($_plaintextAction === 'not_found') {
+                    $_resp = wlsServingManifestNotFoundResponse();
+                } else {
+                    $_resp = wlsServingManifestMisdirectedResponse();
                 }
-                $_path = '/';
-                if (\preg_match('/^[A-Z][A-Z0-9-]*\s+(\S+)/', $peeked, $_pm)) {
-                    $_pu = \parse_url($_pm[1], \PHP_URL_PATH);
-                    if (\is_string($_pu) && $_pu !== '') {
-                        $_path = $_pu;
-                    }
-                }
-                $_loc .= $_path;
-                $_resp = 'HTTP/1.1 301 Moved Permanently' . "\r\n"
-                    . 'Location: ' . $_loc . "\r\n"
-                    . 'Content-Length: 0' . "\r\n"
-                    . 'Connection: close' . "\r\n\r\n";
                 @\fwrite($conn, $_resp);
             }
             safeCloseStream($conn);
@@ -6788,17 +7804,19 @@ function wlsSslAdvancePeekState(
             continue;
         }
 
-        if (\strlen($peeked) < 5) {
+        $clientHelloInspection =
+            \Weline\Server\Dispatcher\SniParser::inspectClientHelloFlight($peeked);
+        $clientHelloStatus = (string)($clientHelloInspection['status'] ?? 'invalid');
+        if ($clientHelloStatus === 'incomplete') {
             continue;
         }
-        $tlsPayloadLen = (\ord($peeked[3]) << 8) | \ord($peeked[4]);
-        $recordNeed = 5 + $tlsPayloadLen;
-        if ($recordNeed > 65536 || $tlsPayloadLen < 0) {
+        if ($clientHelloStatus !== 'complete') {
             $failedPeeks[] = $connId;
-            WlsLogger::warning_("Peek TLS 记录长度异常: {$peerName} (connId: {$connId})");
-            continue;
-        }
-        if (\strlen($peeked) < $recordNeed) {
+            WlsLogger::warning_(
+                'Peek TLS ClientHello flight invalid: '
+                . (string)($clientHelloInspection['reason'] ?? 'unknown')
+                . " ({$peerName}, connId: {$connId})"
+            );
             continue;
         }
 
@@ -6807,20 +7825,24 @@ function wlsSslAdvancePeekState(
         // negotiated protocol. Classify after TLS from the decrypted H2 preface.
         $connectionProtocols[$connId] = 'pending';
         unset($http2ConnectionAdapters[$connId]);
-        $sniHostNorm = $sniRaw !== null && $sniRaw !== '' ? \strtolower(\trim((string) $sniRaw)) : null;
+        $sniHostNorm = $sniRaw !== null
+            ? wlsServingManifestNormalizeAuthority((string)$sniRaw)
+            : null;
         $effectiveHost = $sniHostNorm;
-        if ($effectiveHost === null || $effectiveHost === '') {
-            $ph = \strtolower(\trim($deferSslPreferredHost));
-            if ($ph !== '' && !\filter_var($ph, \FILTER_VALIDATE_IP)) {
-                $effectiveHost = $ph;
-            }
-        }
         $pair = wlsSslPickCertificatePairForDeferSni(
             $effectiveHost,
             $sniServerCerts,
-            $sslCert,
-            $sslKey
+            $servingRoutes,
         );
+        if (!\is_array($pair)) {
+            // Empty or unknown SNI must not receive a default tenant
+            // certificate. Close before OpenSSL sees any private-key context.
+            safeCloseStream($conn);
+            unset($connectionSniHosts[$connId]);
+            $completedPeeks[] = $connId;
+            continue;
+        }
+        $connectionSniHosts[$connId] = (string)$effectiveHost;
         wlsSslApplyPerConnectionSslForDeferHandshake(
             $conn,
             $pair,
@@ -7998,32 +9020,31 @@ function handleRequest(
     }
     // ========== 健康检查接口结束 ==========
 
-    // ========== ACME HTTP-01 校验（WLS 虚拟：从 generated/acme-http01 按域名返回 keyAuth，验证完由证书流程删除） ==========
+    // ========== ACME HTTP-01 校验（仅读取项目权威事实包） ==========
     if ($method === 'GET' && \preg_match('#^/\.well-known/acme-challenge/([^/]+)/?$#', $uri, $acmeMatches)) {
         $requestToken = $acmeMatches[1];
-        $hostHeader = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
-        if (\strpos($hostHeader, ':') !== false) {
-            $hostHeader = \trim((string)\explode(':', $hostHeader, 2)[0]);
+        $hostAuthority = \trim((string)($policyDecision->headers['host'] ?? ''));
+        try {
+            $parsedHost = \parse_url('https://' . $hostAuthority, PHP_URL_HOST);
+        } catch (\ValueError) {
+            $parsedHost = false;
         }
-        $safeDomain = \preg_replace('/[^a-z0-9_]/', '', \str_replace('.', '_', \strtolower($hostHeader)));
-        $safeDomain = $safeDomain !== '' ? $safeDomain : 'default';
+        $hostHeader = \is_string($parsedHost) ? $parsedHost : '';
         if (\defined('BP')) {
-            $acmeFile = \rtrim(BP, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR . 'generated' . \DIRECTORY_SEPARATOR . 'acme-http01' . \DIRECTORY_SEPARATOR . $safeDomain . '.json';
-            if (\is_file($acmeFile)) {
-                $json = \Weline\Server\Runtime\Async\AsyncBizAdapters::fileGetContentsWithYield($acmeFile);
-                if ($json !== false) {
-                    $data = \json_decode($json, true);
-                    if (\is_array($data) && isset($data['keyAuth']) && \is_string($data['keyAuth'])
-                        && (string)($data['token'] ?? '') === (string)$requestToken
-                        && (int)($data['expires_at'] ?? ((int)@\filemtime($acmeFile) + 900)) > \time()) {
-                        $body = $data['keyAuth'];
-                        $len = \strlen($body);
-                        $keepAlive = $policyDecision->keepAlive();
-                        return $keepAlive
-                            ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
-                            : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
-                    }
-                }
+            $acmeDirectory = \rtrim(BP, \DIRECTORY_SEPARATOR)
+                . \DIRECTORY_SEPARATOR . 'generated'
+                . \DIRECTORY_SEPARATOR . 'acme-http01';
+            $body = \Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore::resolvePublishedChallenge(
+                $acmeDirectory,
+                $hostHeader,
+                (string)$requestToken,
+            );
+            if ($body !== null) {
+                $len = \strlen($body);
+                $keepAlive = $policyDecision->keepAlive();
+                return $keepAlive
+                    ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
+                    : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
             }
         }
         $notFoundBody = 'ACME challenge not found';
