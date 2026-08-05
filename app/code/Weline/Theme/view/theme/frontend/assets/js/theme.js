@@ -24,8 +24,7 @@
     'use strict';
 
     window.WelineSmartDropdown = (function () {
-        const VERSION = '2.1.0';
-        const HOVER_BRIDGE_ATTR = 'data-weline-dropdown-hover-bridge';
+        const VERSION = '2.0.0';
 
         function numberOr(value, fallback) {
             const parsed = Number(value);
@@ -61,88 +60,6 @@
                 return panel.querySelector(value);
             }
             return value;
-        }
-
-        function shouldHoverBridge(anchor, panel, config) {
-            if (config.hoverBridge === false) {
-                return false;
-            }
-            if (config.hoverBridge === true) {
-                return true;
-            }
-            // 默认：面板仍在锚点子树内（place / portal:false）时桥接 gap，保住 CSS :hover。
-            return !!(anchor && panel && typeof anchor.contains === 'function' && anchor.contains(panel));
-        }
-
-        function clearHoverBridge(anchor) {
-            if (!anchor || !anchor.querySelectorAll) {
-                return;
-            }
-            const bridges = anchor.querySelectorAll('[' + HOVER_BRIDGE_ATTR + ']');
-            for (let i = 0; i < bridges.length; i++) {
-                bridges[i].remove();
-            }
-        }
-
-        function ensureHoverBridge(anchor, panel, placement, gap) {
-            if (!anchor) {
-                return;
-            }
-            const size = Math.max(0, Math.ceil(numberOr(gap, 0)));
-            if (size <= 0) {
-                clearHoverBridge(anchor);
-                return;
-            }
-
-            const anchorStyle = window.getComputedStyle(anchor);
-            if (anchorStyle.position === 'static') {
-                anchor.style.position = 'relative';
-            }
-
-            let bridge = null;
-            const existing = anchor.querySelectorAll(':scope > [' + HOVER_BRIDGE_ATTR + ']');
-            if (existing.length) {
-                bridge = existing[0];
-                for (let i = 1; i < existing.length; i++) {
-                    existing[i].remove();
-                }
-            } else {
-                bridge = document.createElement('div');
-                bridge.setAttribute(HOVER_BRIDGE_ATTR, '');
-                bridge.setAttribute('aria-hidden', 'true');
-                if (panel && panel.parentNode === anchor) {
-                    anchor.insertBefore(bridge, panel);
-                } else {
-                    anchor.appendChild(bridge);
-                }
-            }
-
-            let leftPx = 0;
-            let rightPx = 0;
-            if (panel && typeof panel.getBoundingClientRect === 'function') {
-                const anchorRect = anchor.getBoundingClientRect();
-                const panelRect = panel.getBoundingClientRect();
-                const unionLeft = Math.min(anchorRect.left, panelRect.left);
-                const unionRight = Math.max(anchorRect.right, panelRect.right);
-                leftPx = Math.round(unionLeft - anchorRect.left);
-                rightPx = Math.round(anchorRect.right - unionRight);
-            }
-
-            bridge.style.position = 'absolute';
-            bridge.style.left = leftPx + 'px';
-            bridge.style.right = rightPx + 'px';
-            bridge.style.width = 'auto';
-            bridge.style.height = size + 'px';
-            bridge.style.pointerEvents = 'auto';
-            bridge.style.background = 'transparent';
-            bridge.style.zIndex = '1';
-            if (placement === 'top') {
-                bridge.style.top = 'auto';
-                bridge.style.bottom = '100%';
-            } else {
-                bridge.style.bottom = 'auto';
-                bridge.style.top = '100%';
-            }
         }
 
         function compute(anchorRect, panelRect, panel, config = {}) {
@@ -217,7 +134,6 @@
                 width,
                 maxHeight,
                 placement: openUp ? 'top' : 'bottom',
-                gap,
                 viewport
             };
         }
@@ -267,12 +183,6 @@
                 panel.style.overflowY = config.overflowY;
             }
 
-            if (shouldHoverBridge(anchor, panel, config)) {
-                ensureHoverBridge(anchor, panel, next.placement, next.gap);
-            } else {
-                clearHoverBridge(anchor);
-            }
-
             return next;
         }
 
@@ -316,10 +226,6 @@
             }
             panel.hidden = true;
             panel.removeAttribute('data-weline-dropdown-placement');
-            clearHoverBridge(parent);
-            if (panel.parentNode && panel.parentNode !== parent) {
-                clearHoverBridge(panel.parentNode);
-            }
         }
 
         return { version: VERSION, compute, place, mount, unmount };
