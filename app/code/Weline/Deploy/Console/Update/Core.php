@@ -31,23 +31,36 @@ class Core extends CommandAbstract
     /** 默认备用仓库（Gitee），GitHub 不可达时使用 */
     private const DEFAULT_REPO_GITEE = 'https://gitee.com/aiweline/WelineFramework.git';
 
-    /** 核心更新会同步的根目录（增量模式基于 git diff，并补缺本地缺失文件） */
+    /**
+     * 核心更新允许同步的路径（目录或文件）。
+     *
+     * 业务仓（如 GuoLaiRen/*）不在范围内：不参与脏工作区拦截，也不会被拷贝覆盖。
+     */
     private const CORE_UPDATE_PATHS = [
-        'app',
+        'app/code/Weline',
+        'app/code/config.php',
+        'app/autoload.php',
+        'app/bootstrap.php',
+        'app/bootstrap_phpunit.php',
+        'app/etc/env.sample.php',
         'bin',
+        'dev',
         'pub',
         'setup',
-        'dev',
     ];
 
+    /** 显式排除：即使误落在允许前缀下也绝不覆盖 */
     private const CORE_UPDATE_EXCLUDED_PATHS = [
         'app/code/Aiweline',
+        'app/code/GuoLaiRen',
         'app/code/WeShop',
     ];
 
-    /** 已存在时绝不覆盖的项目级配置文件 */
+    /** 已存在时绝不覆盖的项目级配置文件（含业务仓模块清单） */
     private const CORE_UPDATE_PROTECTED_PATHS = [
         'app/etc/env.php',
+        'app/etc/modules.php',
+        'app/etc/module_dependencies.php',
         'app/.env',
         '.env',
         'dev/deploy/.config',
@@ -96,7 +109,7 @@ class Core extends CommandAbstract
 
     public function tip(): string
     {
-        return __('从 Git 仓库增量更新框架核心代码（只更新变化的文件）');
+        return __('从核心仓库增量更新框架代码（仅 Weline 模块与必要核心路径；不触碰业务代码）');
     }
 
     public function help(): array|string
@@ -116,13 +129,13 @@ class Core extends CommandAbstract
                 '双仓库策略' => __('未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
                 '增量更新' => '默认使用 git fetch 增量拉取；Git 有变更的文件直接覆盖，其余文件按大小/hash 与源不一致则覆盖',
-                '同步目录' => 'app、bin、pub、setup、dev（vendor 不更新；缺失或内容不一致的核心文件会自动同步）',
-                '工作区保护' => __('默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新'),
-                '强制更新' => __('仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录'),
+                '同步范围' => __('仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内'),
+                '本地冲突检测' => __('与「上次已更新到本地的核心 commit」对比：仅当本地私自改过核心文件时拒绝并列出文件；业务仓改动不参与'),
+                '强制更新' => __('仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件'),
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
-                '排除目录' => __('核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理'),
-                '保护文件' => 'app/etc/env.php、.env、dev/deploy/.config 等已存在时不覆盖',
+                '排除目录' => __('不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理'),
+                '保护文件' => 'app/etc/env.php、modules.php、module_dependencies.php、.env、dev/deploy/.config 等已存在时不覆盖',
             ],
             [
                 '增量更新到最新' => 'php bin/w core:update master  （或 update:core -b master）',
@@ -150,12 +163,11 @@ class Core extends CommandAbstract
         $this->printer->note('');
 
         // 1. 检查 Git
-        $this->printer->setup(__('步骤 1/6：检查 Git...'));
+        $this->printer->setup(__('步骤 1/7：检查 Git...'));
         $this->checkGit();
-        $this->assertCleanWorkingTreeUnlessForced();
 
         // 2. 验证参数
-        $this->printer->setup(__('步骤 2/6：验证参数...'));
+        $this->printer->setup(__('步骤 2/7：验证参数...'));
         $config = $this->getCoreUpdateConfig();
         $branch = $this->getBranch($args, $config);
         $tag = $args['tag'] ?? $args['t'] ?? null;
@@ -173,21 +185,25 @@ class Core extends CommandAbstract
         $this->printer->note(__('更新模式：%{1}', [$this->forceUpdate ? '强制完整更新（覆盖所有文件）' : '增量更新（只更新 Git 变化的文件）']));
         $this->printer->note('');
 
-        // 3. 创建/准备临时目录
-        $this->printer->setup(__('步骤 3/6：准备临时目录...'));
+        // 3. 创建/准备临时目录（缓存仓 HEAD = 上次已更新到本地的核心 commit）
+        $this->printer->setup(__('步骤 3/7：准备临时目录...'));
         $tmpDir = $this->prepareTempDirectory();
 
-        // 4. 克隆/拉取仓库（增量模式会获取变化文件列表）
-        $this->printer->setup(__('步骤 4/6：下载框架代码...'));
+        // 4. 仅当本地核心相对上次同步 commit 有私自改动时拦截
+        $this->printer->setup(__('步骤 4/7：检查本地核心是否相对上次同步有改动...'));
+        $this->assertLocalCoreUnmodifiedSinceLastSyncUnlessForced($tmpDir);
+
+        // 5. 克隆/拉取仓库（增量模式会获取变化文件列表）
+        $this->printer->setup(__('步骤 5/7：下载框架代码...'));
         $this->downloadFramework($tmpDir, $branch, $tag);
 
-        // 5. 拷贝核心文件
-        $this->printer->setup(__('步骤 5/6：更新核心文件...'));
+        // 6. 拷贝核心文件
+        $this->printer->setup(__('步骤 6/7：更新核心文件...'));
         $this->copyCoreFiles($tmpDir);
         $this->refreshReflectionFactoriesAfterUpdate();
 
-        // 6. 保留临时目录（用于下次增量更新）
-        $this->printer->setup(__('步骤 6/6：完成处理...'));
+        // 7. 保留临时目录（用于下次增量更新）
+        $this->printer->setup(__('步骤 7/7：完成处理...'));
         $this->printer->note(__('保留缓存目录用于下次增量更新'));
         $this->printer->success(__('✓ 缓存目录：%{1}', [$tmpDir]));
 
@@ -216,56 +232,195 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 默认拒绝在存在未提交变更的项目中更新核心。
+     * 默认拒绝「本地私自改过核心文件」时的更新。
      *
-     * 检查发生在任何下载、缓存清理和文件复制之前。只有显式 -f/--force
-     * 才能绕过；非 Git 安装没有“未提交变更”的语义，因此保持兼容。
+     * 对比基准：核心更新缓存仓当前 HEAD（即上次已更新到本地的核心 commit）。
+     * 只检查 CORE_UPDATE_PATHS 内、且存在于该次同步树中的文件；业务路径不在范围内。
+     * 显式 -f/--force 可跳过；首次尚无缓存时跳过。
      */
-    private function assertCleanWorkingTreeUnlessForced(): void
+    private function assertLocalCoreUnmodifiedSinceLastSyncUnlessForced(string $tmpDir): void
     {
         if ($this->forceUpdate) {
-            $this->printer->warning(__('⚠ 已显式启用 -f/--force，跳过本地未提交变更保护'));
+            $this->printer->warning(__('⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）'));
             return;
         }
 
-        $insideOutput = [];
-        $insideCode = $this->runGitCommand(BP, ['rev-parse', '--is-inside-work-tree'], $insideOutput);
-        $insideWorkTree = strtolower(trim(implode("\n", $insideOutput))) === 'true';
-        if ($insideCode !== 0 || !$insideWorkTree) {
-            $this->printer->note(__('当前项目不是 Git 工作区，跳过未提交变更检查'));
+        $gitDir = $tmpDir . DS . '.git';
+        if (!is_dir($gitDir)) {
+            $this->printer->note(__('首次核心更新（尚无上次同步 commit），跳过本地核心冲突检查'));
             return;
         }
 
-        $statusOutput = [];
-        $statusCode = $this->runGitCommand(
-            BP,
-            ['status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none'],
-            $statusOutput
-        );
-        if ($statusCode !== 0) {
-            $this->printer->error(__('错误：无法确认当前项目工作区是否干净，已安全取消核心更新'));
-            $this->printer->note(__('如确认允许覆盖本地变更，请显式使用 -f/--force'));
-            exit(1);
+        $headOutput = [];
+        $headCode = $this->runGitCommand($tmpDir, ['rev-parse', '--short', 'HEAD'], $headOutput);
+        $lastSyncedCommit = ($headCode === 0 && $headOutput !== [])
+            ? trim((string)$headOutput[0])
+            : '';
+
+        $drifted = $this->collectLocalCoreDriftAgainstLastSynced($tmpDir);
+        if ($drifted === []) {
+            if ($lastSyncedCommit !== '') {
+                $this->printer->success(__(
+                    '✓ 本地核心与上次同步 commit %{1} 一致，可直接更新',
+                    [$lastSyncedCommit]
+                ));
+            } else {
+                $this->printer->success(__('✓ 本地核心与上次同步内容一致，可直接更新'));
+            }
+            return;
         }
 
-        $changes = array_values(array_filter(
-            array_map(static fn (mixed $line): string => trim((string)$line), $statusOutput),
-            static fn (string $line): bool => $line !== ''
+        $this->printer->error(__(
+            '检测到 %{1} 个核心文件相对上次同步 commit%{2} 有本地私自修改，已拒绝更新',
+            [
+                count($drifted),
+                $lastSyncedCommit !== '' ? (' ' . $lastSyncedCommit) : '',
+            ]
         ));
-        if ($changes === []) {
-            $this->printer->success(__('✓ 当前项目工作区干净'));
-            return;
+        foreach (array_slice($drifted, 0, 30) as $path) {
+            $this->printer->note('  ' . $path);
+        }
+        if (count($drifted) > 30) {
+            $this->printer->note(__('  ……另有 %{1} 项未显示', [count($drifted) - 30]));
+        }
+        $this->printer->note(__('请先自行处理这些核心改动；确需用仓库版本强制覆盖时执行：php bin/w core:update <分支名> -f'));
+        exit(1);
+    }
+
+    /**
+     * 收集「上次同步核心树」中相对本地已漂移的核心文件。
+     *
+     * @return list<string>
+     */
+    private function collectLocalCoreDriftAgainstLastSynced(string $tmpDir): array
+    {
+        $drifted = [];
+
+        foreach (self::CORE_UPDATE_PATHS as $rootPath) {
+            $normalizedRoot = $this->normalizeCoreUpdateRelativePath($rootPath);
+            if ($normalizedRoot === '' || $this->isExcludedCoreUpdatePath($normalizedRoot)) {
+                continue;
+            }
+
+            $cacheRoot = $tmpDir . DS . str_replace('/', DS, $normalizedRoot);
+            $localRoot = BP . str_replace('/', DS, $normalizedRoot);
+
+            if (is_file($cacheRoot)) {
+                if ($this->shouldSkipCoreDriftPath($normalizedRoot)) {
+                    continue;
+                }
+                if ($this->isLocalCoreFileDrifted($cacheRoot, $localRoot)) {
+                    $drifted[] = $normalizedRoot;
+                }
+                continue;
+            }
+
+            if (!is_dir($cacheRoot)) {
+                continue;
+            }
+
+            foreach ($this->listCoreUpdateRelativeFiles($cacheRoot, $normalizedRoot) as $relativePath) {
+                if ($this->shouldSkipCoreDriftPath($relativePath)) {
+                    continue;
+                }
+                $cacheFile = $tmpDir . DS . str_replace('/', DS, $relativePath);
+                $localFile = BP . str_replace('/', DS, $relativePath);
+                if ($this->isLocalCoreFileDrifted($cacheFile, $localFile)) {
+                    $drifted[] = $relativePath;
+                }
+            }
         }
 
-        $this->printer->error(__('检测到 %{1} 项未提交的本地变更，已拒绝更新核心', [count($changes)]));
-        foreach (array_slice($changes, 0, 20) as $change) {
-            $this->printer->note('  ' . $change);
+        sort($drifted);
+
+        return array_values(array_unique($drifted));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function listCoreUpdateRelativeFiles(string $absoluteDir, string $relativeRoot): array
+    {
+        if (!is_dir($absoluteDir)) {
+            return [];
         }
-        if (count($changes) > 20) {
-            $this->printer->note(__('  ……另有 %{1} 项未显示', [count($changes) - 20]));
+
+        $files = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($absoluteDir, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $item) {
+            if (!$item->isFile()) {
+                continue;
+            }
+            $absolutePath = $item->getPathname();
+            $suffix = substr($absolutePath, strlen($absoluteDir));
+            $suffix = $this->normalizeCoreUpdateRelativePath(str_replace('\\', '/', (string)$suffix));
+            $relativePath = $suffix === ''
+                ? $relativeRoot
+                : $this->normalizeCoreUpdateRelativePath($relativeRoot . '/' . $suffix);
+            if ($relativePath !== '') {
+                $files[] = $relativePath;
+            }
         }
-        $this->printer->note(__('请先提交或自行处理这些变更；确需覆盖时显式执行：php bin/w core:update <分支名> -f'));
-        exit(1);
+
+        return $files;
+    }
+
+    private function shouldSkipCoreDriftPath(string $relativePath): bool
+    {
+        $normalizedPath = $this->normalizeCoreUpdateRelativePath($relativePath);
+        if ($normalizedPath === '') {
+            return true;
+        }
+        if ($this->isExcludedCoreUpdatePath($normalizedPath) || $this->isProtectedCoreUpdatePath($normalizedPath)) {
+            return true;
+        }
+        if ($this->isIgnorableWorkingTreeNoise($normalizedPath)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function isLocalCoreFileDrifted(string $cacheFile, string $localFile): bool
+    {
+        if (!is_file($cacheFile)) {
+            return false;
+        }
+        if (!is_file($localFile)) {
+            return true;
+        }
+
+        return $this->shouldSyncIncrementalFile($cacheFile, $localFile);
+    }
+
+    /**
+     * 本地噪音：不参与核心冲突检测。
+     */
+    private function isIgnorableWorkingTreeNoise(string $relativePath): bool
+    {
+        $normalizedPath = $this->normalizeCoreUpdateRelativePath($relativePath);
+        if ($normalizedPath === '' || $normalizedPath === '.DS_Store') {
+            return true;
+        }
+        if (\str_ends_with($normalizedPath, '/.DS_Store') || \basename($normalizedPath) === '.DS_Store') {
+            return true;
+        }
+        if (\str_contains($normalizedPath, '/__pycache__/') || \str_starts_with($normalizedPath, '__pycache__/')) {
+            return true;
+        }
+        if (\str_ends_with($normalizedPath, '.pyc') || \str_ends_with($normalizedPath, '.pyo')) {
+            return true;
+        }
+        if (\str_starts_with($normalizedPath, 'node_modules/') || \str_contains($normalizedPath, '/node_modules/')) {
+            return true;
+        }
+        if (\str_starts_with($normalizedPath, '.vite/') || \str_contains($normalizedPath, '/.vite/')) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -877,9 +1032,39 @@ class Core extends CommandAbstract
         $staleCount = 0;
 
         foreach (self::CORE_UPDATE_PATHS as $path) {
-            $source = $tmpDir . DS . $path;
+            $source = $tmpDir . DS . \str_replace('/', DS, $path);
 
-            if (!is_dir($source)) {
+            if (\is_file($source)) {
+                $relativePath = $this->normalizeCoreUpdateRelativePath($path);
+                if ($this->isExcludedCoreUpdatePath($relativePath)) {
+                    continue;
+                }
+
+                $targetPath = BP . \str_replace('/', DS, $relativePath);
+                $targetExists = \file_exists($targetPath);
+                if ($this->isProtectedCoreUpdatePath($relativePath) && $targetExists) {
+                    continue;
+                }
+
+                if (!$targetExists) {
+                    $this->ensureDirectoryExists(\dirname($targetPath));
+                    \copy($source, $targetPath);
+                    $this->newFiles++;
+                    $missingCount++;
+                    continue;
+                }
+
+                if (!$this->shouldSyncIncrementalFile($source, $targetPath)) {
+                    continue;
+                }
+
+                \copy($source, $targetPath);
+                $this->updatedFiles++;
+                $staleCount++;
+                continue;
+            }
+
+            if (!\is_dir($source)) {
                 continue;
             }
 
@@ -900,16 +1085,16 @@ class Core extends CommandAbstract
                 }
 
                 $sourcePath = $item->getPathname();
-                $targetPath = BP . str_replace('/', DS, $relativePath);
-                $targetExists = file_exists($targetPath);
+                $targetPath = BP . \str_replace('/', DS, $relativePath);
+                $targetExists = \file_exists($targetPath);
 
                 if ($this->isProtectedCoreUpdatePath($relativePath) && $targetExists) {
                     continue;
                 }
 
                 if (!$targetExists) {
-                    $this->ensureDirectoryExists(dirname($targetPath));
-                    copy($sourcePath, $targetPath);
+                    $this->ensureDirectoryExists(\dirname($targetPath));
+                    \copy($sourcePath, $targetPath);
                     $this->newFiles++;
                     $missingCount++;
                     continue;
@@ -919,7 +1104,7 @@ class Core extends CommandAbstract
                     continue;
                 }
 
-                copy($sourcePath, $targetPath);
+                \copy($sourcePath, $targetPath);
                 $this->updatedFiles++;
                 $staleCount++;
             }
@@ -982,23 +1167,54 @@ class Core extends CommandAbstract
         $failedPaths = 0;
         
         foreach ($allPaths as $path) {
-            $source = $tmpDir . DS . $path;
-            $target = BP . $path;
+            $normalizedPath = $this->normalizeCoreUpdateRelativePath($path);
+            $source = $tmpDir . DS . \str_replace('/', DS, $normalizedPath);
+            $target = BP . \str_replace('/', DS, $normalizedPath);
+
+            if ($this->isExcludedCoreUpdatePath($normalizedPath)) {
+                $this->skippedFiles++;
+                $failedPaths++;
+                continue;
+            }
+
+            if (\is_file($source)) {
+                $this->printer->note(__('拷贝 %{1}...', [$normalizedPath]));
+                if ($this->isProtectedCoreUpdatePath($normalizedPath) && \file_exists($target)) {
+                    $this->skippedFiles++;
+                    $this->printer->note(__('跳过受保护文件：%{1}', [$normalizedPath]));
+                    $failedPaths++;
+                    continue;
+                }
+                $this->ensureDirectoryExists(\dirname($target));
+                if (\copy($source, $target)) {
+                    if (\file_exists($target)) {
+                        $this->updatedFiles++;
+                    } else {
+                        $this->newFiles++;
+                    }
+                    $this->printer->success(__('✓ %{1}', [$normalizedPath]));
+                    $processedPaths++;
+                } else {
+                    $this->printer->warning(__('⚠ %{1} 处理失败', [$normalizedPath]));
+                    $failedPaths++;
+                }
+                continue;
+            }
             
-            if (!is_dir($source)) {
-                $this->printer->warning(__('⚠ 源路径不存在: %{1}', [$path]));
+            if (!\is_dir($source)) {
+                $this->printer->warning(__('⚠ 源路径不存在: %{1}', [$normalizedPath]));
                 $failedPaths++;
                 continue;
             }
             
-            $this->printer->note(__('拷贝 %{1}...', [$path]));
+            $this->printer->note(__('拷贝 %{1}...', [$normalizedPath]));
             
             // 完全覆盖：拷贝所有文件
-            if ($this->copyDirectoryFull($source, $target, $path)) {
-                $this->printer->success(__('✓ %{1}', [$path]));
+            if ($this->copyDirectoryFull($source, $target, $normalizedPath)) {
+                $this->printer->success(__('✓ %{1}', [$normalizedPath]));
                 $processedPaths++;
             } else {
-                $this->printer->warning(__('⚠ %{1} 处理失败', [$path]));
+                $this->printer->warning(__('⚠ %{1} 处理失败', [$normalizedPath]));
                 $failedPaths++;
             }
         }
