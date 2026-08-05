@@ -320,6 +320,10 @@ final class ProjectServingManifestStore
                 $body = \strtolower($ascii);
             }
         }
+        // Local loopback fact keys remain valid without a public TLD.
+        if ($body === 'localhost') {
+            return $wildcard ? '*.' . $body : $body;
+        }
         if (\filter_var($body, FILTER_VALIDATE_IP) !== false
             || \strlen($body) > 253
             || \preg_match(

@@ -917,6 +917,9 @@ class Upgrade extends CommandAbstract
 
     /**
      * Skip test harness files before include so runtime command refresh does not require dev PHPUnit classes.
+     *
+     * Heuristic must not false-positive on production commands that merely mention
+     * paths like app/bootstrap_phpunit.php in sync/allow lists (e.g. update:core).
      */
     private function shouldSkipCommandScanFile(string $filePath): bool
     {
@@ -924,14 +927,23 @@ class Upgrade extends CommandAbstract
             return false;
         }
 
+        $normalized = str_replace('\\', '/', $filePath);
+        $baseName = basename($normalized);
+        if (preg_match('/Test\.php$/D', $baseName) === 1
+            || preg_match('#/(tests?|Test)/#', $normalized) === 1
+        ) {
+            return true;
+        }
+
         $source = @file_get_contents($filePath);
         if (!is_string($source)) {
             return false;
         }
 
-        return str_contains($source, 'PHPUnit\\Framework\\TestCase')
-            || str_contains($source, 'Weline\\Framework\\Test\\TestCore')
-            || str_contains($source, 'app/bootstrap_phpunit.php')
-            || preg_match('/extends\s+\\\\?TestCore\b/', $source) === 1;
+        return preg_match('/\bextends\s+\\\\?PHPUnit\\\\Framework\\\\TestCase\b/', $source) === 1
+            || preg_match('/\bextends\s+\\\\?TestCore\b/', $source) === 1
+            || preg_match('/\buse\s+PHPUnit\\\\Framework\\\\TestCase\b/', $source) === 1
+            || preg_match('/\buse\s+Weline\\\\Framework\\\\Test\\\\TestCore\b/', $source) === 1
+            || preg_match('/\b(require|include)(_once)?\s*\(?\s*[\'"].*bootstrap_phpunit\.php[\'"]/', $source) === 1;
     }
 }
