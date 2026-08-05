@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Ai\Extends\Module\Weline_Framework\Query;
+namespace Weline\Ai\Service\Query;
 
 use Weline\Framework\Service\Query\AdminControllerBridge;
 

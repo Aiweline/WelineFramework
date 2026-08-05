@@ -106,6 +106,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'f',
         'skip-reflection-compile',
         'skip-reflect',
+        'skip-framework-compile',
         'background-optimize',
         'skip-background-optimize',
         'sync',
@@ -132,6 +133,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--skip-env-check, -s',
         '--force, -f',
         '--skip-reflection-compile, --skip-reflect',
+        '--skip-framework-compile',
         '--background-optimize',
         '--skip-background-optimize, --sync',
         '--dev-rerun-install',
@@ -1018,6 +1020,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $cmd .= ' --skip-reflection-compile';
         }
 
+        // 传递跳过框架运行时编译参数
+        if (isset($args['skip-framework-compile'])) {
+            $cmd .= ' --skip-framework-compile';
+        }
+
         // 传递跳过 classmap 参数
         if (isset($args['skip-classmap'])) {
             $cmd .= ' --skip-classmap';
@@ -1033,7 +1040,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             
             if ($pid > 0) {
                 $this->printing->success(__('✓ 后台优化任务已启动 (PID: %{1})', [$pid]));
-                $this->printing->note(__('  优化内容：类映射缓存、PSR-4 映射、反射编译'));
+                $this->printing->note(__('  优化内容：类映射缓存、PSR-4 映射、framework:compile、反射编译'));
                 $this->printing->note(__('  日志文件：var/log/setup_background_optimize.log'));
             } else {
                 // 启动失败，回退到同步执行
@@ -1067,8 +1074,24 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 2. 生成 PSR-4 映射缓存
         $this->generatePsr4Cache();
+
+        // 3. 重建扩展注册表（generated/extends.php），再编译框架运行时索引
+        $skipExtendsRebuild = isset($args['skip-extends-rebuild']);
+        if ($skipExtendsRebuild) {
+            $this->printing->note(__('已跳过扩展注册表重建，需要时可执行：php bin/w extends:rebuild'));
+        } else {
+            $this->rebuildExtendsRegistry();
+        }
+
+        // 4. 编译框架运行时索引（modules provides / container / query providers）
+        $skipFrameworkCompile = isset($args['skip-framework-compile']);
+        if ($skipFrameworkCompile) {
+            $this->printing->note(__('已跳过框架运行时编译，需要时可执行：php bin/w framework:compile'));
+        } else {
+            $this->compileFrameworkRuntimeRegistries();
+        }
         
-        // 3. 编译反射元数据与编译型工厂（reflection_metadata.php + compiled_factories.php）
+        // 5. 编译反射元数据与编译型工厂（reflection_metadata.php + compiled_factories.php）
         $skipReflectionCompile = isset($args['skip-reflection-compile']) || isset($args['skip-reflect']);
         if ($skipReflectionCompile) {
             $this->printing->note(__('已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile'));
@@ -1078,6 +1101,33 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         $this->printing->success(__('✓ 优化缓存生成完成。'));
     }
+
+    /**
+     * 重建 generated/extends.php，确保 Query/Provider 等扩展点与磁盘一致。
+     */
+    private function rebuildExtendsRegistry(): void
+    {
+        $this->runOptimizeSubcommand(
+            'extends:rebuild',
+            '正在重建扩展注册表（extends:rebuild）...',
+            '扩展注册表重建出现警告（exit=%{1}）。可手动执行：php bin/w extends:rebuild',
+            '扩展注册表重建跳过：%{1}'
+        );
+    }
+
+    /**
+     * 执行 framework:compile，重建 provides / container / QueryProvider 等运行时索引。
+     * module.php provides 变更后必须刷新，否则接口无法解析。
+     */
+    private function compileFrameworkRuntimeRegistries(): void
+    {
+        $this->runOptimizeSubcommand(
+            'framework:compile',
+            '正在编译框架运行时索引（framework:compile）...',
+            '框架运行时编译出现警告（exit=%{1}）。可手动执行：php bin/w framework:compile',
+            '框架运行时编译跳过：%{1}'
+        );
+    }
     
     /**
      * 执行 reflection:compile，生成反射元数据和编译型工厂容器
@@ -1085,23 +1135,39 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function compileReflectionAndFactories(): void
     {
+        $this->runOptimizeSubcommand(
+            'reflection:compile',
+            '正在预编译反射元数据与工厂（reflection:compile，首次可能需数分钟，请等待进度）...',
+            '反射/工厂编译出现警告（exit=%{1}），不影响系统功能。',
+            '反射/工厂编译跳过：%{1}'
+        );
+    }
+
+    /**
+     * 优化阶段子命令：实时透传输出，避免 exec() 缓冲到结束才打印造成“卡住”观感。
+     */
+    private function runOptimizeSubcommand(
+        string $command,
+        string $startNote,
+        string $exitWarningTemplate,
+        string $skipWarningTemplate
+    ): void {
         try {
+            $this->printing->note(__($startNote));
+            if (\function_exists('flush')) {
+                @\ob_flush();
+                @\flush();
+            }
             $phpBin = PHP_BINARY ?: 'php';
             $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
-            $cmd = '"' . $phpBin . '" "' . $binW . '" reflection:compile 2>&1';
-            $output = [];
+            $cmd = '"' . $phpBin . '" "' . $binW . '" ' . $command . ' 2>&1';
             $exitCode = 0;
-            exec($cmd, $output, $exitCode);
-            $outputStr = implode("\n", $output);
-            // 输出编译结果
-            if ($outputStr) {
-                echo $outputStr . "\n";
-            }
+            \passthru($cmd, $exitCode);
             if ($exitCode !== 0) {
-                $this->printing->warning(__('反射/工厂编译出现警告（exit=%{1}），不影响系统功能。', [$exitCode]));
+                $this->printing->warning(__($exitWarningTemplate, [$exitCode]));
             }
         } catch (\Throwable $e) {
-            $this->printing->warning(__('反射/工厂编译跳过：%{1}', [$e->getMessage()]));
+            $this->printing->warning(__($skipWarningTemplate, [$e->getMessage()]));
         }
     }
     
@@ -3230,6 +3296,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-s, --skip-env-check' => '跳过环境依赖检测',
                 '-f, --force' => '强制升级（跳过环境依赖检测）',
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）'),
+                '--skip-framework-compile' => __('跳过 framework:compile（modules provides / container 等运行时索引；可事后执行 framework:compile）'),
                 '--background-optimize' => __('显式在后台执行优化；主命令不会等待类映射与反射编译完成'),
                 '--skip-background-optimize' => __('兼容选项：保持同步执行优化（现在已是默认行为）'),
                 '--sync' => __('兼容选项：保持同步执行优化（现在已是默认行为）'),
@@ -3254,6 +3321,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 __('跳过 classmap 生成（未新增/删除文件时）') => 'php bin/w setup:upgrade --skip-classmap',
                 __('跳过 composer dump-autoload') => 'php bin/w setup:upgrade --skip-composer-dump',
                 __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
+                __('跳过框架运行时编译') => 'php bin/w setup:upgrade --skip-framework-compile',
                 __('显式在后台执行优化') => 'php bin/w setup:upgrade --background-optimize',
                 __('兼容旧脚本的同步参数') => 'php bin/w setup:upgrade --sync',
                 __('DEV 同版本 Schema 重绑') => 'php bin/w setup:upgrade --force-schema-rebind',
