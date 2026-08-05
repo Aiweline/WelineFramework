@@ -211,7 +211,10 @@ class BackupServiceTest extends TestCase
         // 清空列数据
         $connector = $this->connectionFactory->getConnector();
         $query = $connector->getQuery();
-        $query->table($this->testTable)->update(['description' => null])->fetch();
+        $query->table($this->testTable)
+            ->where('id', 0, '>')
+            ->update(['description' => null])
+            ->fetch();
 
         // 恢复列数据
         $result = $this->service->restoreColumnData(
@@ -252,7 +255,10 @@ class BackupServiceTest extends TestCase
         // 清空列数据
         $connector = $this->connectionFactory->getConnector();
         $query = $connector->getQuery();
-        $query->table($this->testTable)->update(['description' => null])->fetch();
+        $query->table($this->testTable)
+            ->where('id', 0, '>')
+            ->update(['description' => null])
+            ->fetch();
 
         // 恢复列数据
         $this->service->restoreColumnData(
@@ -394,6 +400,7 @@ class BackupServiceTest extends TestCase
     private function createNoPrimaryKeyTable(string $tableName): void
     {
         $connector = $this->connectionFactory->getConnector();
+        $connector->dropTableIfExists($tableName);
 
         $create = $connector->createTable();
         $create->createTable($tableName, 'Test table without primary key');

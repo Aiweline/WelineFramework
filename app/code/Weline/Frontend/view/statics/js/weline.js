@@ -652,5 +652,35 @@
         }
     })();
 
-})(window, document);
+    /**
+     * A server-issued Scope bootstrap is short-lived and one-time. Load the
+     * official API module as soon as the complete document (including the
+     * response-injected meta marker) is available, even on pages that do not
+     * otherwise preload business APIs.
+     */
+    (function preLoadScopeBootstrapApi() {
+        const preload = () => {
+            if (!document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
+                return;
+            }
+            Weline.preLoad('api').then((apiModule) => {
+                if (apiModule && typeof apiModule.bootstrapScope === 'function') {
+                    return apiModule.bootstrapScope();
+                }
+                return null;
+            }).catch(() => {
+                // The API module emits a structured scope-bootstrap failure
+                // event; the loader must not replace the page with a fallback.
+            });
+        };
 
+        if (document.querySelector('meta[name="weline-worker-scope-bootstrap"]')) {
+            preload();
+        } else if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', preload, { once: true });
+        } else {
+            setTimeout(preload, 0);
+        }
+    })();
+
+})(window, document);

@@ -521,7 +521,7 @@ $providerAccountEndpoints = [
             }
             var action = trigger.getAttribute('data-provider-action');
             var accountId = parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0;
-            if (action !== 'page' && action !== 'usage-page') {
+            if (action !== 'page' && action !== 'usage-page' && action !== 'toggle-active') {
                 event.preventDefault();
             }
             if (action === 'refresh') {
@@ -555,7 +555,7 @@ $providerAccountEndpoints = [
         document.addEventListener('change', function(event) {
             var trigger = event.target;
             if (trigger && trigger.getAttribute('data-provider-action') === 'toggle-active') {
-                toggleActive(parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0);
+                toggleActive(parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0, trigger);
             }
         });
         
@@ -845,20 +845,34 @@ $providerAccountEndpoints = [
         var providerSelect = document.getElementById('provider_code');
         var accountNameInput = document.getElementById('account_name');
         var baseUrlInput = document.getElementById('base_url');
-        
+        var apiKeyInput = document.getElementById('api_key');
         var selectedOption = providerSelect.options[providerSelect.selectedIndex];
-        
+        var nameDefaults = {};
+        var urlDefaults = {};
+        Array.prototype.forEach.call(providerSelect.options, function(option) {
+            var name = String(option.getAttribute('data-name') || '').trim();
+            var url = String(option.getAttribute('data-base-url') || '').trim();
+            if (name) nameDefaults[name] = true;
+            if (url) urlDefaults[url] = true;
+        });
+
+        function shouldFollow(current, defaults) {
+            var value = String(current || '').trim();
+            return value === '' || !!defaults[value];
+        }
+
         if (selectedOption.value) {
-            // 自动填充供应商名称到账户名称
             var providerName = selectedOption.getAttribute('data-name');
-            if (providerName && !accountNameInput.value) {
+            if (providerName && shouldFollow(accountNameInput.value, nameDefaults)) {
                 accountNameInput.value = providerName;
             }
-            
-            // 自动填充基础URL
             var baseUrl = selectedOption.getAttribute('data-base-url');
-            if (baseUrl && !baseUrlInput.value) {
+            if (baseUrl && shouldFollow(baseUrlInput.value, urlDefaults)) {
                 baseUrlInput.value = baseUrl;
+            }
+            // 新建（accountId=0）切换供应商时清空旧密钥
+            if (apiKeyInput && String(document.getElementById('accountId').value || '0') === '0') {
+                apiKeyInput.value = '';
             }
         }
     };
@@ -1350,11 +1364,23 @@ $providerAccountEndpoints = [
     }
 
     // 切换激活状态
-    window.toggleActive = function(id) {
+    window.toggleActive = function(id, trigger) {
+        if (!id) {
+            if (trigger) trigger.checked = !trigger.checked;
+            return;
+        }
+        if (trigger) trigger.disabled = true;
         var taReq = providerAccountCall('toggleActive', { id: parseInt(id, 10) || 0 });
         taReq.then(function(res) {
             var data = res || {};
-            if (!data || !data.success) {
+            if (data && data.success) {
+                if (trigger && data.is_active !== undefined) {
+                    trigger.checked = !!data.is_active;
+                }
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success(data.message || '<?= __('状态更新成功') ?>');
+                }
+            } else {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
@@ -1364,6 +1390,9 @@ $providerAccountEndpoints = [
                     });
                 }
                 loadAccounts(currentPage);
+            }
+            if (trigger && data && data.success) {
+                trigger.disabled = false;
             }
         })
         .catch(function(error) {

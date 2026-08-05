@@ -7,7 +7,7 @@ use Weline\Shipping\Model\ShippingAddress;
 
 $address = $this->getData('address');
 $isEdit = !empty($address);
-$id = $address[ShippingAddress::fields_ID] ?? null;
+$id = $address[ShippingAddress::schema_fields_ID] ?? null;
 
 $backendBase = $this->getBackendUrl('shipping/backend/shippingaddress');
 $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
@@ -34,7 +34,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                 <h5 class="card-title mb-0"><?= $isEdit ? __('编辑发货地址') : __('新增发货地址') ?></h5>
                             </div>
                             <div class="card-body">
-                                <w:form method="post" action="@var($saveUrl)">
+                                <w:form method="post" action="@var($saveUrl)" data-testid="shipping-address-editor-form">
                                     <?php if ($id): ?>
                                         <input type="hidden" name="shipping_address_id" value="<?= $id ?>">
                                     <?php endif; ?>
@@ -43,7 +43,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('地址名称') ?> <span class="text-danger">*</span></label>
                                         <div class="col-md-10">
                                             <input type="text" name="name" class="form-control" required
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_NAME] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_NAME] ?? '') ?>"
                                                    placeholder="<?= __('请输入地址名称/标签') ?>">
                                         </div>
                                     </div>
@@ -52,7 +52,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('联系人姓名') ?> <span class="text-danger">*</span></label>
                                         <div class="col-md-10">
                                             <input type="text" name="contact_name" class="form-control" required
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_CONTACT_NAME] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_CONTACT_NAME] ?? '') ?>"
                                                    placeholder="<?= __('请输入联系人姓名') ?>">
                                         </div>
                                     </div>
@@ -61,7 +61,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('联系电话') ?> <span class="text-danger">*</span></label>
                                         <div class="col-md-10">
                                             <input type="text" name="contact_phone" class="form-control" required
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_CONTACT_PHONE] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_CONTACT_PHONE] ?? '') ?>"
                                                    placeholder="<?= __('请输入联系电话') ?>">
                                         </div>
                                     </div>
@@ -70,7 +70,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('国家') ?></label>
                                         <div class="col-md-10">
                                             <input type="text" name="country" class="form-control"
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_COUNTRY] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_COUNTRY] ?? '') ?>"
                                                    placeholder="<?= __('请输入国家') ?>">
                                         </div>
                                     </div>
@@ -79,7 +79,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('省份') ?></label>
                                         <div class="col-md-10">
                                             <input type="text" name="province" class="form-control"
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_PROVINCE] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_PROVINCE] ?? '') ?>"
                                                    placeholder="<?= __('请输入省份') ?>">
                                         </div>
                                     </div>
@@ -88,7 +88,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('城市') ?></label>
                                         <div class="col-md-10">
                                             <input type="text" name="city" class="form-control"
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_CITY] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_CITY] ?? '') ?>"
                                                    placeholder="<?= __('请输入城市') ?>">
                                         </div>
                                     </div>
@@ -97,7 +97,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('区县') ?></label>
                                         <div class="col-md-10">
                                             <input type="text" name="district" class="form-control"
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_DISTRICT] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_DISTRICT] ?? '') ?>"
                                                    placeholder="<?= __('请输入区县') ?>">
                                         </div>
                                     </div>
@@ -106,7 +106,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('街道地址') ?></label>
                                         <div class="col-md-10">
                                             <textarea name="street" class="form-control" rows="3"
-                                                      placeholder="<?= __('请输入街道地址') ?>"><?= htmlspecialchars($address[ShippingAddress::fields_STREET] ?? '') ?></textarea>
+                                                      placeholder="<?= __('请输入街道地址') ?>"><?= htmlspecialchars($address[ShippingAddress::schema_fields_STREET] ?? '') ?></textarea>
                                         </div>
                                     </div>
 
@@ -114,7 +114,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <label class="col-md-2 col-form-label"><?= __('邮政编码') ?></label>
                                         <div class="col-md-10">
                                             <input type="text" name="postal_code" class="form-control"
-                                                   value="<?= htmlspecialchars($address[ShippingAddress::fields_POSTAL_CODE] ?? '') ?>"
+                                                   value="<?= htmlspecialchars($address[ShippingAddress::schema_fields_POSTAL_CODE] ?? '') ?>"
                                                    placeholder="<?= __('请输入邮政编码') ?>">
                                         </div>
                                     </div>
@@ -124,14 +124,14 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                         <div class="col-md-10">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" name="is_default" value="1" id="is_default"
-                                                       <?= !empty($address[ShippingAddress::fields_IS_DEFAULT]) ? 'checked' : '' ?>>
+                                                       <?= !empty($address[ShippingAddress::schema_fields_IS_DEFAULT]) ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="is_default">
                                                     <?= __('设为默认地址') ?>
                                                 </label>
                                             </div>
                                             <div class="form-check mt-2">
                                                 <input class="form-check-input" type="checkbox" name="is_enabled" value="1" id="is_enabled"
-                                                       <?= empty($address) || !empty($address[ShippingAddress::fields_IS_ENABLED]) ? 'checked' : '' ?>>
+                                                       <?= empty($address) || !empty($address[ShippingAddress::schema_fields_IS_ENABLED]) ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="is_enabled">
                                                     <?= __('启用') ?>
                                                 </label>
@@ -141,11 +141,11 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
 
                                     <div class="row">
                                         <div class="col-md-10 offset-md-2">
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                                            <button type="submit" class="btn btn-primary" data-testid="shipping-address-editor-submit">
+                                                <i class="mdi mdi-content-save" aria-hidden="true"></i> <?= __('保存') ?>
                                             </button>
                                             <a href="<?= $backendBase ?>" class="btn btn-secondary">
-                                                <i class="mdi mdi-arrow-left"></i> <?= __('返回') ?>
+                                                <i class="mdi mdi-arrow-left" aria-hidden="true"></i> <?= __('返回') ?>
                                             </a>
                                         </div>
                                     </div>

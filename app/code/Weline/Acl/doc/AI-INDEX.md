@@ -28,31 +28,35 @@
 - `app/code/Weline/Acl/etc/backend/menu.xml`
 - `app/code/Weline/Acl/composer.json`
 
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：4
-- `Api`：公开接口与只读 DTO。跨模块角色、授权和资源读取只能依赖这里发布的契约。 文件数：23
-- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：7
-- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：6
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：36
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：5
+- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：10
+- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：7
 - `Plugin`：插件扩展点。变更前确认被拦截对象和执行顺序。 文件数：1
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：9
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：28
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1
-- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：2
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
+- `Taglib`：模板标签扩展。改前读 Weline_Taglib 与 Theme 文档。 文件数：3
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：5
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：1
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：20
-- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：7
+- `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：8
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
 - 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
+- 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
+- 识别到 QueryProvider 相关 PHP 文件：Api/Authorization/BackendObjectAuthorizationGuardInterface.php、Observer/CollectFrameworkAuthorizationCatalog.php、Service/ResourceAuthorizationService.php、extends/module/Weline_Framework/Query/AclAdminQueryProvider.php；前端/跨模块读数据先查 query 帮助。
 
 ## doc 目录
 
 - `app/code/Weline/Acl/doc/README.md`
 - `app/code/Weline/Acl/doc/event/无权限访问重定向前.md`
 - `app/code/Weline/Acl/doc/event/角色检查.md`
+- `app/code/Weline/Acl/doc/multi-resource-catalog.md`
 
 ## 开发前门禁
 

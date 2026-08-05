@@ -70,9 +70,9 @@ class Region extends AbstractModel
      * 获取子地区列表
      *
      * @param int|null $parentRegionId 父级地区ID，null表示获取顶级地区
-     * @return \Weline\Framework\Database\Model 含 getItems() 的模型实例
+     * @return self 含 getItems() 的模型实例
      */
-    public function getChildren(?int $parentRegionId = null): \Weline\Framework\Database\Model
+    public function getChildren(?int $parentRegionId = null): self
     {
         $model = $this->reset();
         if ($parentRegionId === null) {
@@ -90,9 +90,9 @@ class Region extends AbstractModel
      *
      * @param string $countryCode ISO国家代码
      * @param string|null $regionType 地区类型筛选
-     * @return \Weline\Framework\Database\Model 含 getItems() 的模型实例
+     * @return self 含 getItems() 的模型实例
      */
-    public function getByCountryCode(string $countryCode, ?string $regionType = null): \Weline\Framework\Database\Model
+    public function getByCountryCode(string $countryCode, ?string $regionType = null): self
     {
         $model = $this->reset()
             ->where(self::schema_fields_COUNTRY_CODE, $countryCode);

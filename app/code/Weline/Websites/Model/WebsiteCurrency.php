@@ -4,6 +4,8 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\WebsiteCacheInvalidationService;
 #[Table(comment: '网站-货币关联表')]
 #[Index(name: 'idx_website_id', columns: ['website_id'], comment: '网站ID索引')]
 #[Index(name: 'idx_currency_code', columns: ['currency_code'], comment: '货币代码索引')]
@@ -12,6 +14,9 @@ class WebsiteCurrency extends Model
 {
     public const schema_table = 'weline_websites_website_currency';
     public const schema_primary_key = 'website_currency_id';
+
+    private ?int $invalidationPreviousWebsiteId = null;
+    private ?int $invalidationDeletedWebsiteId = null;
 
     #[Col(type: 'int', nullable: false, primaryKey: true, autoIncrement: true, comment: '关联ID')]
     public const schema_fields_ID = 'website_currency_id';
@@ -104,19 +109,72 @@ class WebsiteCurrency extends Model
             }
         }
 
-        $this->clearWebsiteCurrencyCaches();
+        $this->invalidateWebsiteCurrency($websiteId);
 
         return $this;
     }
 
-    private function clearWebsiteCurrencyCaches(): void
+    public function save_before(): void
     {
-        try {
-            w_cache('website')->clear();
-            w_cache('currency')->clear();
-            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
-            \Weline\Websites\Observer\DetectWebsite::clearProcessCache();
-        } catch (\Throwable) {
+        parent::save_before();
+        $this->invalidationPreviousWebsiteId = null;
+        $id = (int)$this->getData(self::schema_fields_ID);
+        if ($id > 0) {
+            $existing = clone $this;
+            $row = $existing->clearData()->clearQuery()
+                ->where(self::schema_fields_ID, $id)
+                ->find()
+                ->fetchArray();
+            if (is_array($row) && array_is_list($row)) {
+                $row = $row[0] ?? null;
+            }
+            if (is_array($row) && array_key_exists(self::schema_fields_WEBSITE_ID, $row)) {
+                $this->invalidationPreviousWebsiteId = (int)$row[self::schema_fields_WEBSITE_ID];
+            }
         }
+    }
+
+    public function save_after(): void
+    {
+        parent::save_after();
+        try {
+            $websiteId = $this->getWebsiteId();
+            $this->invalidateWebsiteCurrency($websiteId);
+            if ($this->invalidationPreviousWebsiteId !== null
+                && $this->invalidationPreviousWebsiteId !== $websiteId) {
+                $this->invalidateWebsiteCurrency($this->invalidationPreviousWebsiteId);
+            }
+        } finally {
+            $this->invalidationPreviousWebsiteId = null;
+        }
+    }
+
+    public function delete_before(): void
+    {
+        parent::delete_before();
+        $this->invalidationDeletedWebsiteId = $this->hasData(self::schema_fields_WEBSITE_ID)
+            ? (int)$this->getData(self::schema_fields_WEBSITE_ID)
+            : null;
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        try {
+            if ($this->invalidationDeletedWebsiteId !== null) {
+                $this->invalidateWebsiteCurrency($this->invalidationDeletedWebsiteId);
+            }
+        } finally {
+            $this->invalidationDeletedWebsiteId = null;
+        }
+    }
+
+    private function invalidateWebsiteCurrency(int $websiteId): void
+    {
+        ObjectManager::getInstance(WebsiteCacheInvalidationService::class)->invalidateWebsite(
+            $this->getConnection(),
+            $websiteId,
+            ['currency'],
+        );
     }
 }

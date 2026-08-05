@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Websites\Service;
 
 use Weline\Framework\Database\Connection\ConnectionInterface;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteCurrency;
@@ -20,6 +22,7 @@ class DefaultWebsiteService
         private readonly WebsiteDomain $websiteDomain,
         private readonly WebsiteCurrency $websiteCurrency,
         private readonly WebsiteLanguage $websiteLanguage,
+        private readonly StoreChannelSeedService $scopeSeeder,
     ) {
     }
 
@@ -29,6 +32,33 @@ class DefaultWebsiteService
      * @return array<string, mixed>
      */
     public function ensureDefaultWebsite(bool $withLocalDomains = true): array
+    {
+        $connection = $this->connectionFactory();
+        $this->website->setConnection($connection);
+        $this->websiteDomain->setConnection($connection);
+        $this->websiteCurrency->setConnection($connection);
+        $this->websiteLanguage->setConnection($connection);
+
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        if ($transactions->isActive($connection)) {
+            try {
+                if ($this->isSqlite($connection) && !$transactions->isWriteIntent($connection)) {
+                    throw new \LogicException('websites_default_sqlite_write_intent_required');
+                }
+                return $this->ensureDefaultWebsiteInTransaction($withLocalDomains);
+            } catch (\Throwable $exception) {
+                $transactions->markRollbackOnly($connection, $exception);
+                throw $exception;
+            }
+        }
+        return $transactions->runWrite(
+            $connection,
+            fn(): array => $this->ensureDefaultWebsiteInTransaction($withLocalDomains),
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function ensureDefaultWebsiteInTransaction(bool $withLocalDomains): array
     {
         $changed = false;
         $existing = $this->findDefaultByCode();
@@ -60,11 +90,21 @@ class DefaultWebsiteService
         if ($withLocalDomains) {
             $changed = $this->ensureLocalDomains() || $changed;
         }
+        $seeded = $this->scopeSeeder->ensureDefaultsForWebsite(
+            Website::ID_DEFAULT,
+            (string)$this->defaultRow()[Website::schema_fields_NAME],
+            $this->connectionFactory(),
+        );
+        $changed = ((int)$seeded['stores_created'] + (int)$seeded['channels_created']) > 0 || $changed;
         if ($changed) {
             $this->clearWebsiteCaches();
         }
 
-        return $this->findDefaultByCode() ?? $this->defaultRow();
+        $result = $this->findDefaultByCode();
+        if ($result === null) {
+            throw new \RuntimeException(__('默认网站初始化后无法回读'));
+        }
+        return $result;
     }
 
     /**
@@ -89,14 +129,10 @@ class DefaultWebsiteService
      */
     private function findDefaultByCode(): ?array
     {
-        try {
-            $row = $this->website->clearQuery()->clearData()
-                ->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)
-                ->find()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return null;
-        }
+        $row = $this->website->clearQuery()->clearData()
+            ->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)
+            ->find()
+            ->fetchArray();
 
         return \is_array($row) && \array_key_exists(Website::schema_fields_ID, $row) ? $row : null;
     }
@@ -106,14 +142,10 @@ class DefaultWebsiteService
      */
     private function findById(int $websiteId): ?array
     {
-        try {
-            $row = $this->website->clearQuery()->clearData()
-                ->where(Website::schema_fields_ID, $websiteId)
-                ->find()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return null;
-        }
+        $row = $this->website->clearQuery()->clearData()
+            ->where(Website::schema_fields_ID, $websiteId)
+            ->find()
+            ->fetchArray();
 
         return \is_array($row) && \array_key_exists(Website::schema_fields_ID, $row) ? $row : null;
     }
@@ -138,7 +170,7 @@ class DefaultWebsiteService
         $columns = \array_keys($data);
         $connection = $this->connection();
         $driver = $connection->getDriverType();
-        $table = $this->quoteIdentifier($this->website->getOriginTableName(), $driver);
+        $table = $this->quoteIdentifier($this->website->getTable(), $driver);
         $quotedColumns = \array_map(fn(string $column): string => $this->quoteIdentifier($column, $driver), $columns);
         $placeholders = \array_map(fn(string $column): string => ':' . $column, $columns);
         $sql = 'INSERT INTO ' . $table
@@ -164,7 +196,7 @@ class DefaultWebsiteService
         $data = $this->defaultRow();
         unset($data[Website::schema_fields_ID]);
         $driver = $this->connection()->getDriverType();
-        $table = $this->quoteIdentifier($this->website->getOriginTableName(), $driver);
+        $table = $this->quoteIdentifier($this->website->getTable(), $driver);
         $sets = [];
         foreach (\array_keys($data) as $column) {
             $sets[] = $this->quoteIdentifier($column, $driver) . ' = :' . $column;
@@ -192,7 +224,7 @@ class DefaultWebsiteService
         }
 
         if ($rowAtDefaultId === null) {
-            $this->updateWebsiteId($this->website->getOriginTableName(), Website::schema_fields_ID, $oldId, Website::ID_DEFAULT);
+            $this->updateWebsiteId($this->website->getTable(), Website::schema_fields_ID, $oldId, Website::ID_DEFAULT);
         }
 
         foreach ($this->tablesWithWebsiteIdColumn() as $table) {
@@ -228,6 +260,14 @@ class DefaultWebsiteService
             ]], WebsiteLanguage::schema_fields_WEBSITE_ID . ',' . WebsiteLanguage::schema_fields_LANGUAGE_CODE)->fetch();
             $changed = true;
         }
+        // 官方默认站至少提供中英双语，供 Index 官网首页语言切换器使用。
+        if (!\in_array('en_US', $this->websiteLanguage->getWebsiteLanguageCodes(Website::ID_DEFAULT), true)) {
+            $this->websiteLanguage->clearQuery()->clearData(true)->insert([[
+                WebsiteLanguage::schema_fields_WEBSITE_ID => Website::ID_DEFAULT,
+                WebsiteLanguage::schema_fields_LANGUAGE_CODE => 'en_US',
+            ]], WebsiteLanguage::schema_fields_WEBSITE_ID . ',' . WebsiteLanguage::schema_fields_LANGUAGE_CODE)->fetch();
+            $changed = true;
+        }
 
         return $changed;
     }
@@ -256,6 +296,7 @@ class DefaultWebsiteService
 
             /** @var WebsiteDomain $newDomain */
             $newDomain = ObjectManager::getInstance(WebsiteDomain::class, [], false);
+            $newDomain->setConnection($this->connectionFactory());
             $newDomain->setWebsiteId(Website::ID_DEFAULT);
             $newDomain->setDomain($domain);
             $newDomain->setSubPath('');
@@ -272,17 +313,21 @@ class DefaultWebsiteService
 
     private function clearWebsiteCaches(): void
     {
-        try {
-            w_cache('website')->clear();
-            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
-            \Weline\Websites\Observer\DetectWebsite::clearProcessCache();
-        } catch (\Throwable) {
-        }
+        ObjectManager::getInstance(WebsiteCacheInvalidationService::class)->invalidateWebsite(
+            $this->connectionFactory(),
+            Website::ID_DEFAULT,
+            ['website', 'domain', 'currency', 'language', 'config/start-page'],
+        );
     }
 
     private function connection(): ConnectionInterface
     {
-        return $this->website->getQuery(false)->getConnectionInterface();
+        return $this->connectionFactory()->getConnector()->getWrappedConnection();
+    }
+
+    private function connectionFactory(): ConnectionFactory
+    {
+        return $this->website->getConnection();
     }
 
     /**
@@ -291,22 +336,16 @@ class DefaultWebsiteService
     private function tablesWithWebsiteIdColumn(): array
     {
         $driver = $this->connection()->getDriverType();
-        try {
-            return match ($driver) {
-                'mysql' => $this->mysqlTablesWithWebsiteIdColumn(),
-                'pgsql' => $this->pgsqlTablesWithWebsiteIdColumn(),
-                default => $this->sqliteTablesWithWebsiteIdColumn(),
-            };
-        } catch (\Throwable $throwable) {
-            if (\function_exists('w_log_warning')) {
-                \w_log_warning('[DefaultWebsiteService] website_id reference scan failed: ' . $throwable->getMessage());
-            }
-            return [
-                $this->websiteDomain->getOriginTableName(),
-                $this->websiteCurrency->getOriginTableName(),
-                $this->websiteLanguage->getOriginTableName(),
-            ];
-        }
+        return match ($driver) {
+            'mysql' => $this->mysqlTablesWithWebsiteIdColumn(),
+            'pgsql' => $this->pgsqlTablesWithWebsiteIdColumn(),
+            default => $this->sqliteTablesWithWebsiteIdColumn(),
+        };
+    }
+
+    private function isSqlite(ConnectionFactory $connection): bool
+    {
+        return strtolower((string)$connection->getConnector()->getConfigProvider()->getDbType()) === 'sqlite';
     }
 
     /**
@@ -402,6 +441,7 @@ class DefaultWebsiteService
 
     private function quoteIdentifier(string $identifier, string $driver): string
     {
+        $identifier = \str_replace(['`', '"'], '', \trim($identifier));
         $quote = $driver === 'mysql' ? '`' : '"';
         $escapedQuote = $quote . $quote;
         $parts = \explode('.', $identifier);

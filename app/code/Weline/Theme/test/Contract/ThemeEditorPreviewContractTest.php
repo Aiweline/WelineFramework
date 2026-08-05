@@ -8,7 +8,7 @@ use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Meta\Model\Meta;
 use Weline\Theme\Controller\Backend\ThemeEditor;
 use Weline\Theme\Model\ThemeLayout;

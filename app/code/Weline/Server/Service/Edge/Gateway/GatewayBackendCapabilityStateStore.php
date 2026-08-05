@@ -11,13 +11,15 @@ use Weline\Framework\App\Env;
  */
 final class GatewayBackendCapabilityStateStore
 {
-    private const SCHEMA_VERSION = 1;
+    private const SCHEMA_VERSION = 2;
     private const DEFAULT_RECOVERY_SECONDS = 30;
 
     public function __construct(
         private readonly ?string $stateFile = null,
         private readonly ?\Closure $clock = null,
         private readonly int $recoverySeconds = self::DEFAULT_RECOVERY_SECONDS,
+        private readonly ?string $hostBootId = null,
+        private readonly ?\Closure $wallClock = null,
     ) {
     }
 
@@ -40,34 +42,32 @@ final class GatewayBackendCapabilityStateStore
         try {
             if (\is_link($directory)
                 || (!\is_dir($directory)
-                    && !@\mkdir($directory, 0700, true)
+                    && !@\mkdir($directory, 0700)
                     && !\is_dir($directory))
-                || !\is_writable($directory)
             ) {
                 return $this->failClosed($observation, 'capability_state_unavailable');
             }
-            $this->assertSafeTarget($file);
-            $lockFile = $file . '.lock';
-            $this->assertSafeTarget($lockFile);
-            $lock = @\fopen($lockFile, 'c+b');
-            if (!\is_resource($lock) || !@\flock($lock, LOCK_EX)) {
-                if (\is_resource($lock)) {
-                    @\fclose($lock);
-                }
+            $directoryStatus = @\lstat($directory);
+            if (!\is_array($directoryStatus)
+                || \is_link($directory)
+                || ((((int)($directoryStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+                || !\is_writable($directory)
+                || (\PHP_OS_FAMILY !== 'Windows' && !@\chmod($directory, 0700))
+            ) {
                 return $this->failClosed($observation, 'capability_state_unavailable');
             }
-            @\chmod($lockFile, 0600);
-            try {
-                $state = $this->readState($file);
-                [$next, $result] = $this->transition($state, $observation);
-                if ($state !== $next || !\is_file($file)) {
-                    $this->publishState($file, $next);
-                }
-                return $result;
-            } finally {
-                @\flock($lock, LOCK_UN);
-                @\fclose($lock);
-            }
+            $lockFile = $file . '.lock';
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $lockFile,
+                function () use ($file, $observation): array {
+                    $state = $this->readState($file);
+                    [$next, $result] = $this->transition($state, $observation);
+                    if ($state !== $next) {
+                        $this->publishState($file, $next);
+                    }
+                    return $result;
+                },
+            );
         } catch (\Throwable) {
             return $this->failClosed($observation, 'capability_state_unavailable');
         }
@@ -80,12 +80,18 @@ final class GatewayBackendCapabilityStateStore
      */
     private function transition(array $state, array $observation): array
     {
-        $now = $this->now();
+        $now = $this->monotonicNow();
+        $wallNow = $this->wallNow();
+        $bootId = $this->resolvedHostBootId();
         $rawMode = (string)$observation['mode'];
         $rawDigest = (string)$observation['evidence_digest'];
         if ($rawMode !== 'shared_session') {
             if (($state['mode'] ?? '') === 'isolated'
-                && (int)($state['healthy_since_unix'] ?? -1) === 0
+                && (float)($state['healthy_since_monotonic'] ?? -1.0) === 0.0
+                && \hash_equals(
+                    $bootId,
+                    (string)($state['host_boot_id'] ?? ''),
+                )
                 && \hash_equals(
                     (string)($state['raw_evidence_digest'] ?? ''),
                     $rawDigest,
@@ -97,8 +103,10 @@ final class GatewayBackendCapabilityStateStore
                 'schema_version' => self::SCHEMA_VERSION,
                 'mode' => 'isolated',
                 'raw_evidence_digest' => $rawDigest,
-                'healthy_since_unix' => 0,
-                'updated_unix' => $now,
+                'host_boot_id' => $bootId,
+                'healthy_since_monotonic' => 0.0,
+                'updated_monotonic' => $now,
+                'updated_unix' => $wallNow,
             ], $observation];
         }
 
@@ -106,22 +114,42 @@ final class GatewayBackendCapabilityStateStore
             (string)($state['raw_evidence_digest'] ?? ''),
             $rawDigest,
         );
-        if (($state['mode'] ?? '') === 'shared_session' && $sameEvidence) {
+        $sameBoot = \hash_equals(
+            $bootId,
+            (string)($state['host_boot_id'] ?? ''),
+        );
+        $healthySince = $sameBoot && $sameEvidence
+            ? (float)($state['healthy_since_monotonic'] ?? 0.0)
+            : 0.0;
+        $age = $now - $healthySince;
+        if (($state['mode'] ?? '') === 'shared_session'
+            && $sameBoot
+            && $sameEvidence
+            && $healthySince > 0.0
+            && \is_finite($age)
+            && $age >= \max(1, $this->recoverySeconds)
+        ) {
             return [$state, $observation];
         }
-        $healthySince = $sameEvidence ? (int)($state['healthy_since_unix'] ?? 0) : 0;
-        if ($healthySince <= 0 || $now < $healthySince) {
+
+        $windowReset = $healthySince <= 0.0 || !\is_finite($age) || $age < 0.0;
+        if ($windowReset) {
             $healthySince = $now;
+            $age = 0.0;
         }
-        $qualified = $now - $healthySince >= \max(1, $this->recoverySeconds);
+        $qualified = $age >= \max(1, $this->recoverySeconds);
         $next = [
             'schema_version' => self::SCHEMA_VERSION,
             'mode' => $qualified ? 'shared_session' : 'isolated',
             'raw_evidence_digest' => $rawDigest,
-            'healthy_since_unix' => $healthySince,
-            'updated_unix' => $qualified || !$sameEvidence
+            'host_boot_id' => $bootId,
+            'healthy_since_monotonic' => $healthySince,
+            'updated_monotonic' => $qualified || $windowReset || !$sameBoot || !$sameEvidence
                 ? $now
-                : (int)($state['updated_unix'] ?? $now),
+                : (float)($state['updated_monotonic'] ?? $now),
+            'updated_unix' => $qualified || $windowReset || !$sameBoot || !$sameEvidence
+                ? $wallNow
+                : (int)($state['updated_unix'] ?? $wallNow),
         ];
         return [
             $next,
@@ -134,11 +162,15 @@ final class GatewayBackendCapabilityStateStore
     /** @return array<string,mixed> */
     private function readState(string $file): array
     {
-        if (!\is_file($file)) {
+        $raw = GatewayProjectStateFilesystem::readOptional(
+            $file,
+            65_536,
+            'gateway backend capability state',
+        );
+        if ($raw === null) {
             return [];
         }
-        $raw = @\file_get_contents($file);
-        $state = \is_string($raw) ? \json_decode($raw, true) : null;
+        $state = \json_decode($raw, true);
         if (\is_array($state)
             && (int)($state['schema_version'] ?? 0) === self::SCHEMA_VERSION
             && \in_array((string)($state['mode'] ?? ''), ['isolated', 'stateless', 'shared_session'], true)
@@ -146,15 +178,27 @@ final class GatewayBackendCapabilityStateStore
                 '/\A[a-f0-9]{64}\z/D',
                 (string)($state['raw_evidence_digest'] ?? ''),
             ) === 1
-            && (int)($state['healthy_since_unix'] ?? -1) >= 0
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($state['host_boot_id'] ?? ''),
+            ) === 1
+            && \is_int($state['updated_unix'] ?? null)
             && (int)($state['updated_unix'] ?? -1) >= 0
+            && \is_numeric($state['healthy_since_monotonic'] ?? null)
+            && \is_finite((float)$state['healthy_since_monotonic'])
+            && (float)$state['healthy_since_monotonic'] >= 0.0
+            && \is_numeric($state['updated_monotonic'] ?? null)
+            && \is_finite((float)$state['updated_monotonic'])
+            && (float)$state['updated_monotonic'] >= 0.0
         ) {
             return $state;
         }
-        $quarantine = $file . '.corrupt-' . $this->now() . '-' . \bin2hex(\random_bytes(4));
-        if (!@\rename($file, $quarantine) && \is_file($file)) {
-            throw new \RuntimeException('Unable to quarantine corrupt gateway capability state.');
-        }
+        $quarantine = $file . '.corrupt-' . $this->wallNow() . '-' . \bin2hex(\random_bytes(4));
+        GatewayProjectStateFilesystem::atomicWrite($quarantine, $raw, 0600);
+        GatewayProjectStateFilesystem::removeRegular(
+            $file,
+            'corrupt gateway backend capability state',
+        );
         return [];
     }
 
@@ -165,63 +209,7 @@ final class GatewayBackendCapabilityStateStore
             $state,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
         ) . PHP_EOL;
-        $temporary = $file . '.tmp.' . \bin2hex(\random_bytes(6));
-        $handle = @\fopen($temporary, 'xb');
-        if (!\is_resource($handle)) {
-            throw new \RuntimeException('Unable to stage gateway capability state.');
-        }
-        try {
-            $remaining = $payload;
-            while ($remaining !== '') {
-                $written = @\fwrite($handle, $remaining);
-                if (!\is_int($written) || $written < 1) {
-                    throw new \RuntimeException('Unable to write gateway capability state.');
-                }
-                $remaining = (string)\substr($remaining, $written);
-            }
-            if (!@\fflush($handle) || (\function_exists('fsync') && !@\fsync($handle))) {
-                throw new \RuntimeException('Unable to synchronize gateway capability state.');
-            }
-            if (\function_exists('fchmod')) {
-                @\fchmod($handle, 0600);
-            }
-        } catch (\Throwable $throwable) {
-            @\fclose($handle);
-            @\unlink($temporary);
-            throw $throwable;
-        }
-        @\fclose($handle);
-        if (@\rename($temporary, $file)) {
-            @\chmod($file, 0600);
-            return;
-        }
-
-        $target = @\fopen($file, 'c+b');
-        if (!\is_resource($target) || !@\flock($target, LOCK_EX)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to replace gateway capability state.');
-        }
-        try {
-            if (!@\ftruncate($target, 0) || !@\rewind($target)) {
-                throw new \RuntimeException('Unable to reset gateway capability state.');
-            }
-            $remaining = $payload;
-            while ($remaining !== '') {
-                $written = @\fwrite($target, $remaining);
-                if (!\is_int($written) || $written < 1) {
-                    throw new \RuntimeException('Unable to replace gateway capability state.');
-                }
-                $remaining = (string)\substr($remaining, $written);
-            }
-            if (!@\fflush($target)) {
-                throw new \RuntimeException('Unable to flush gateway capability state.');
-            }
-            @\chmod($file, 0600);
-        } finally {
-            @\flock($target, LOCK_UN);
-            @\fclose($target);
-            @\unlink($temporary);
-        }
+        GatewayProjectStateFilesystem::atomicWrite($file, $payload, 0600);
     }
 
     /** @param array<string,mixed> $observation */
@@ -277,17 +265,31 @@ final class GatewayBackendCapabilityStateStore
             . 'gateway-v2' . DIRECTORY_SEPARATOR . 'backend-capability.json';
     }
 
-    private function now(): int
+    private function monotonicNow(): float
     {
-        return $this->clock !== null ? (int)($this->clock)() : \time();
+        $now = $this->clock !== null
+            ? (float)($this->clock)()
+            : \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException('Gateway capability monotonic clock is invalid.');
+        }
+        return $now;
     }
 
-    private function assertSafeTarget(string $file): void
+    private function wallNow(): int
     {
-        if (\is_link($file) || (\file_exists($file) && !\is_file($file))) {
-            throw new \RuntimeException(
-                'Gateway capability state target must be a regular non-symlink file.'
-            );
+        $now = $this->wallClock !== null ? (int)($this->wallClock)() : \time();
+        if ($now <= 0) {
+            throw new \RuntimeException('Gateway capability wall clock is invalid.');
         }
+        return $now;
     }
+
+    private function resolvedHostBootId(): string
+    {
+        return GatewayHostBootIdentity::validate(
+            $this->hostBootId ?? GatewayHostBootIdentity::current(),
+        );
+    }
+
 }

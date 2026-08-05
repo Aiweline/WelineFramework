@@ -154,10 +154,10 @@ class DeliveryAddress extends BackendController
             }
             
             $this->getMessageManager()->addSuccess($message);
-            $this->redirect('*/index');
+            $this->redirect('shipping/backend/deliveryaddress');
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/edit' . ($id ? '?id=' . $id : ''));
+            $this->redirect('shipping/backend/deliveryaddress/edit' . ($id ? '?id=' . $id : ''));
         }
     }
 

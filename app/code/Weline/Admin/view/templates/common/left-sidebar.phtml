@@ -496,9 +496,7 @@ if ($dataLayout !== 'horizontal'):
             white-space: nowrap;
         }
 
-        body.vertical-collpsed #sidebar-menu > ul > li > ul.sub-menu,
-        body.vertical-collpsed .menu-search-submenu,
-        body.vertical-collpsed .menu-frequent-submenu {
+        body.vertical-collpsed #sidebar-menu > ul > li > ul.sub-menu {
             display: none;
             position: absolute !important;
             /* 紧贴展开标题下方，避免空隙导致移入二级时丢失 :hover */
@@ -523,6 +521,35 @@ if ($dataLayout !== 'horizontal'):
             pointer-events: none;
             z-index: 1007 !important;
             transition: opacity 0.18s ease, visibility 0s linear 0.2s;
+        }
+
+        /* 搜索/常用菜单浮层：比普通二级更宽，避免中文菜单名被裁切 */
+        body.vertical-collpsed .menu-search-submenu,
+        body.vertical-collpsed .menu-frequent-submenu {
+            display: none;
+            position: absolute !important;
+            top: 100% !important;
+            left: 70px !important;
+            right: auto !important;
+            width: 300px !important;
+            min-width: 300px !important;
+            max-width: min(360px, calc(100vw - 90px)) !important;
+            margin: 0 !important;
+            padding: 0.55rem;
+            max-height: none !important;
+            border: 1px solid var(--backend-color-card-border);
+            border-radius: 0 var(--backend-border-radius-xl) var(--backend-border-radius-xl) var(--backend-border-radius-xl);
+            background: var(--backend-color-card-bg) !important;
+            box-shadow: var(--backend-dropdown-shadow);
+            opacity: 0;
+            visibility: hidden;
+            overflow: visible !important;
+            transform: none;
+            transform-origin: left top;
+            pointer-events: none;
+            z-index: 1007 !important;
+            transition: opacity 0.18s ease, visibility 0s linear 0.2s;
+            box-sizing: border-box;
         }
 
         /* 标题与二级之间的隐形桥接，防止斜向移动时穿过空隙丢 hover */
@@ -626,9 +653,9 @@ if ($dataLayout !== 'horizontal'):
         /* 折叠状态下，菜单形式的搜索和常用菜单子菜单样式 - 与普通菜单 hover 展开一致（LTR: left） */
         body.vertical-collpsed .menu-search-submenu,
         body.vertical-collpsed .menu-frequent-submenu {
-            width: 190px !important;
-            min-width: 190px !important;
-            max-width: 190px !important;
+            width: 300px !important;
+            min-width: 300px !important;
+            max-width: min(360px, calc(100vw - 90px)) !important;
             position: absolute !important;
             left: 70px !important;
             right: auto !important;
@@ -636,6 +663,38 @@ if ($dataLayout !== 'horizontal'):
             box-shadow: 3px 5px 12px -4px rgba(18, 19, 21, 0.1);
             height: auto !important;
             z-index: 1007;
+            box-sizing: border-box;
+        }
+
+        /* hover 标题宽度与搜索/常用浮层对齐 */
+        body.vertical-collpsed #sidebar-menu > ul > li.menu-search-item:hover > a,
+        body.vertical-collpsed #sidebar-menu > ul > li.menu-frequent-item:hover > a {
+            width: calc(300px + 70px);
+        }
+
+        /* 搜索结果文字完整展示，不被裁切 */
+        body.vertical-collpsed .menu-search-submenu .search-result-item a,
+        body.vertical-collpsed .menu-search-submenu .search-result-item .search-result-group,
+        body.vertical-collpsed .menu-search-submenu .search-result-item span {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            word-break: break-word;
+        }
+
+        body.vertical-collpsed .menu-search-submenu .search-result-item a i,
+        body.vertical-collpsed .menu-search-submenu .search-result-item .search-result-group i {
+            flex-shrink: 0;
+        }
+
+        /* 覆盖 app.css 对折叠态子菜单 a 的 width:190px，避免搜索结果被二次裁切 */
+        body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li.menu-search-item:hover > ul a,
+        body.vertical-collpsed .vertical-menu #sidebar-menu > ul > li.menu-frequent-item:hover > ul a,
+        body.vertical-collpsed .menu-search-submenu a,
+        body.vertical-collpsed .menu-frequent-submenu a {
+            width: auto !important;
+            max-width: 100% !important;
+            box-sizing: border-box;
         }
         
         /* 折叠状态下，默认隐藏搜索子菜单，只在hover时显示（CSS控制） */
@@ -2008,11 +2067,30 @@ if ($dataLayout !== 'horizontal'):
             }
         }
 
+        function persistVerticalMenuCollapsedState() {
+            if ($(window).width() < 992) {
+                return;
+            }
+            if (typeof window.setThemeConfig !== 'function') {
+                return;
+            }
+            var collapsed = isCollapsed();
+            // Remember sidebar collapse/expand in the current user's backend theme config.
+            window.setThemeConfig({
+                layouts: {
+                    'data-keep-enlarged': collapsed ? 'true' : '',
+                    'class': collapsed ? 'vertical-collpsed' : ''
+                },
+                'icon-sidebar': collapsed
+            }, false);
+        }
+
         function initLeftMenuCollapse() {
             $(document).off('click.leftSidebarToggle', '#vertical-menu-btn').on('click.leftSidebarToggle', '#vertical-menu-btn', function() {
                 setTimeout(function() {
                     cacheDOM();
                     handleCollapseStateChange();
+                    persistVerticalMenuCollapsedState();
                 }, 140);
             });
 

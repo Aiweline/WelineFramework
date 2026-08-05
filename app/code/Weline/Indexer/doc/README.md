@@ -35,6 +35,12 @@
 - 存在 `i18n`，用户可见文案改动要同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
 - 存在测试目录，但默认不要新增测试产物；只有用户明确要求时才进入测试修改。
 
+## Setup 索引收集契约
+
+- `ReindexCollector` 扫描模块 `Model/` 目录时，必须先用反射确认类继承 `AbstractModel` 且 `indexer` 常量非空，才允许通过 ObjectManager 构造实例。
+- `Model/` 可包含 UI、HTML 或数据辅助类；索引扫描不得为判断类型而先构造这些无关对象，否则冷 `setup:upgrade` 可在 QueryProvider/会话/UI 运行时产物尚未编译时被意外触发。
+- 反射筛选只优化实例化边界；真正声明 `indexer` 的 ORM 仍必须完成实例化、物理表解析和幂等登记。
+
 ## 本模块文档资产
 
 - 当前除 `AI-INDEX.md` 外没有其他模块文档。后续一旦涉及稳定行为、接口或配置约定，请把长期说明补到本目录。

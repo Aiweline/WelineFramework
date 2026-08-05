@@ -65,7 +65,7 @@ $meta['showFooter'] = $meta['showFooter'] ?? true;
                 </if>
                 <w:hook>Weline_Theme::frontend::layouts::checkout::content-after</w:hook>
             </w:slot>
-            <w:slot id="checkout-trust"
+            <w:slot id="checkout-trust" weline-code="theme.checkout.trust"
                     name="结算保障说明"
                     accept="layout-checkout-trust,trust-badges,content"
                     multiple="true"

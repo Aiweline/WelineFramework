@@ -26,28 +26,42 @@
 入口/配置文件：
 - `app/code/Weline/Order/etc/module.xml`
 - `app/code/Weline/Order/etc/backend/menu.xml`
+- `app/code/Weline/Order/composer.json`
 
-- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：7
+- `Api`：公开接口契约。跨模块调用优先找已发布 Interface 或 QueryProvider，不要直接依赖对方内部 Service/Model。 文件数：16
+- `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：1
+- `Controller`：HTTP/后台/前台控制器入口。新增控制器后运行 setup:upgrade --route，同步路由。 文件数：8
 - `Helper`：模块内辅助能力。跨模块不要直接调用未发布 Helper。 文件数：1
-- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：9
-- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：12
-- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：8
+- `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：16
+- `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：13
+- `Queue`：队列生产/消费入口。读 Queue 技能和模块文档后再改。 文件数：2
+- `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：31
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：5
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：3
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
+- `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：0
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：5
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 
 ## 从源码识别到的开发提示
 
+- P4D-002：`OrderAssetAllocationSnapshotService` 冻结支付原分配；
+  `OrderRefundCoordinator` 只从该快照计算 cash/asset 退款并以独立 outbox
+  返还资产，详见 `doc/refund.md`。
+
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
 - 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
+- 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
+- 识别到 QueryProvider 相关 PHP 文件：Test/Unit/Query/OrderAdminQueryProviderAuthorizationTest.php、Test/Unit/Query/OrderRefundQueryProviderAuthorizationTest.php、extends/module/Weline_Framework/Query/OrderAdminQueryProvider.php、extends/module/Weline_Framework/Query/OrderRefundQueryProvider.php；前端/跨模块读数据先查 query 帮助。
 
 ## doc 目录
 
 - `app/code/Weline/Order/doc/API文档.md`
 - `app/code/Weline/Order/doc/README.md`
+- `app/code/Weline/Order/doc/cutover.md`
+- `app/code/Weline/Order/doc/display-number.md`
 - `app/code/Weline/Order/doc/event/domain_resolve_status_info.md`
 - `app/code/Weline/Order/doc/event/order_cancelled.md`
 - `app/code/Weline/Order/doc/event/order_completed.md`
@@ -67,6 +81,7 @@
 - `app/code/Weline/Order/doc/event/query_get_payment_status_label.md`
 - `app/code/Weline/Order/doc/event/query_get_status_class.md`
 - `app/code/Weline/Order/doc/event/query_get_status_label.md`
+- `app/code/Weline/Order/doc/facade-api.md`
 - `app/code/Weline/Order/doc/hook/backend/order/list/filters.md`
 - `app/code/Weline/Order/doc/hook/backend/order/view/after.md`
 - `app/code/Weline/Order/doc/hook/backend/order/view/before.md`
@@ -74,6 +89,11 @@
 - `app/code/Weline/Order/doc/hook/frontend/order/create/after.md`
 - `app/code/Weline/Order/doc/hook/frontend/order/create/before.md`
 - `app/code/Weline/Order/doc/i18n国际化使用指南.md`
+- `app/code/Weline/Order/doc/invoice-fulfillment-tombstone.md`
+- `app/code/Weline/Order/doc/model-topology.md`
+- `app/code/Weline/Order/doc/payable-resolver.md`
+- `app/code/Weline/Order/doc/refund.md`
+- `app/code/Weline/Order/doc/warehouse-fulfillment.md`
 - `app/code/Weline/Order/doc/订单状态机说明.md`
 - `app/code/Weline/Order/doc/订单状态翻译功能说明.md`
 

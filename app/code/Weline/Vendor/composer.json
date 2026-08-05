@@ -1,0 +1,29 @@
+{
+    "name": "weline/module-vendor",
+    "description": "WelineFramework durable Vendor identity, authorization and settlement",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-acl": "@dev",
+        "weline/module-product": "@dev",
+        "weline/module-system-config": "@dev",
+        "weline/module-websites": "@dev"
+    },
+    "suggest": {
+        "weline/module-order": "Supplies stable Checkout group and child Order references for Vendor split snapshots.",
+        "weline/module-payment": "Consumes Store-scoped provider account bindings for settlement."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Vendor\\": ""
+        }
+    },
+    "license": "MIT"
+}

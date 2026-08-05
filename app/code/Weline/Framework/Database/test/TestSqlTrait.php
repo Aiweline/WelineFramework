@@ -3,7 +3,7 @@
 namespace Weline\Framework\Database\test;
 
 use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class TestSqlTrait extends TestCore
 {

@@ -292,7 +292,7 @@ $mailHref = 'mailto:' . $contactEmail;
                         <w:hook>
                             Weline_Theme::frontend::layouts::contact::hero
                             <else/>
-                            <section class="contact-layout__section" aria-labelledby="contact-layout-title">
+                            <section class="contact-layout__section" aria-labelledby="contact-layout-title" weline-code="theme.contact.contact_layout_title">
                                 <span class="contact-layout__eyebrow"><?= __('客户支持') ?></span>
                                 <h1 id="contact-layout-title"><?= $escape($title) ?></h1>
                                 <p class="contact-layout__lead"><?= $escape($subtitle) ?></p>
@@ -343,7 +343,7 @@ $mailHref = 'mailto:' . $contactEmail;
                             <w:hook>
                                 Weline_Theme::frontend::layouts::contact::methods
                                 <else/>
-                                <section class="contact-layout__panel" aria-labelledby="contact-methods-title">
+                                <section class="contact-layout__panel" aria-labelledby="contact-methods-title" weline-code="theme.contact.contact_methods_title">
                                     <h2 id="contact-methods-title"><?= __('联系方式') ?></h2>
                                     <div class="contact-layout__method-list contact-layout__stack-list">
                                         <article class="contact-layout__method">
@@ -373,7 +373,7 @@ $mailHref = 'mailto:' . $contactEmail;
                             <w:hook>
                                 Weline_Theme::frontend::layouts::contact::faq
                                 <else/>
-                                <section class="contact-layout__panel" aria-labelledby="contact-faq-title">
+                                <section class="contact-layout__panel" aria-labelledby="contact-faq-title" weline-code="theme.contact.contact_faq_title">
                                     <h2 id="contact-faq-title"><?= __('提交前请确认') ?></h2>
                                     <div class="contact-layout__faq-list contact-layout__stack-list">
                                         <article class="contact-layout__faq-item">
@@ -403,7 +403,7 @@ $mailHref = 'mailto:' . $contactEmail;
                             <section class="contact-layout__section" aria-labelledby="contact-form-title" weline-code="theme.contact.contact_form_title">
                                 <h2 id="contact-form-title"><?= __('发送消息') ?></h2>
                                 <p class="contact-layout__note"><?= __('请尽量提供完整背景，减少客服再次确认基础信息的等待时间。') ?></p>
-                                <w:form class="contact-layout__form contact-layout__form--spaced" action="@var($contactUrl)" method="post">
+                                <w:form class="contact-layout__form contact-layout__form--spaced" action="@var($escape($contactUrl))" method="post">
                                     <div class="contact-layout__field">
                                         <label for="contact-name"><?= __('姓名') ?></label>
                                         <input id="contact-name" name="name" type="text" autocomplete="name">

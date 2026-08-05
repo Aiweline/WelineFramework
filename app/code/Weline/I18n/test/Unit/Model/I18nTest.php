@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Test\Unit\Model;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\I18n\Model\I18n;
 
 use function PHPUnit\Framework\assertIsArray;

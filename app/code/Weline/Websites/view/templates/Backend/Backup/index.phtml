@@ -110,7 +110,7 @@ $downloadUrl = $createUrl;
     }
 </style>
 
-<div class="row">
+<div class="row" data-testid="website-backup-management">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18"><lang>网站备份</lang></h4>
@@ -293,6 +293,7 @@ $downloadUrl = $createUrl;
     </div>
 </div>
 
+
 <script>
 (function() {
     'use strict';
@@ -323,6 +324,10 @@ $downloadUrl = $createUrl;
     }
 
     function unwrapResponse(response) {
+        var _biz = window.WelineApiBusiness || (window.Weline && window.Weline.ApiBusiness);
+        if (_biz && typeof _biz.unwrapBusiness === 'function') {
+            return _biz.unwrapBusiness(response) || {};
+        }
         if (response && typeof response === 'object' && response.data && typeof response.data.success !== 'undefined') {
             return response.data;
         }
@@ -330,7 +335,35 @@ $downloadUrl = $createUrl;
     }
 
     function ensureApi() {
-        return !!(window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function');
+        return !!(
+            window.Weline
+            && (
+                typeof window.Weline.load === 'function'
+                || (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
+            )
+        );
+    }
+
+    function manageBackup(action, payload) {
+        payload = payload || {};
+        payload.action = action;
+        var invoke = function(api) {
+            return api.resource('websites').manageWebsiteBackup(
+                payload,
+                { requestTimeoutMs: 300000 }
+            );
+        };
+        return window.Weline.load
+            ? window.Weline.load('api').then(invoke)
+            : Promise.resolve(invoke(window.Weline.Api));
+    }
+
+    function markBackupFailure(submit, message) {
+        if (!submit) {
+            return;
+        }
+        submit.setAttribute('data-backup-state', 'failed');
+        submit.setAttribute('data-backup-error', String(message || config.text.createFail));
     }
 
     function appendQuery(url, key, value) {
@@ -351,26 +384,40 @@ $downloadUrl = $createUrl;
             var submitLabel = submit ? submit.querySelector('span') : null;
             if (submit) {
                 submit.disabled = true;
+                submit.setAttribute('data-backup-state', 'pending');
+                submit.removeAttribute('data-backup-error');
+                submit.removeAttribute('data-backup-filename');
             }
             if (submitLabel) {
                 submitLabel.textContent = config.text.creating;
             }
 
-            window.Weline.Api.request(config.createUrl, {
-                method: 'POST',
-                body: new FormData(form)
+            manageBackup('create', {
+                website_id: form.querySelector('#website_id').value,
+                backup_type: form.querySelector('#backup_type').value
             }).then(function(response) {
                 var data = unwrapResponse(response);
                 if (data.success) {
+                    if (submit) {
+                        submit.setAttribute('data-backup-state', 'created');
+                        submit.setAttribute(
+                            'data-backup-filename',
+                            String(data.data && data.data.backup && data.data.backup.filename || '')
+                        );
+                    }
                     toast('success', data.message || config.text.createDefault);
                     window.setTimeout(function() {
                         window.location.reload();
                     }, 800);
                     return;
                 }
-                toast('error', data.message || config.text.createFail);
+                var message = data.message || config.text.createFail;
+                markBackupFailure(submit, message);
+                toast('error', message);
             }).catch(function(error) {
-                toast('error', (error && error.message) || config.text.createFail);
+                var message = (error && error.message) || config.text.createFail;
+                markBackupFailure(submit, message);
+                toast('error', message);
             }).finally(function() {
                 if (submit) {
                     submit.disabled = false;
@@ -419,13 +466,7 @@ $downloadUrl = $createUrl;
                 return;
             }
 
-            var formData = new FormData();
-            formData.append('backup_action', 'delete');
-            formData.append('filename', filename);
-            window.Weline.Api.request(config.deleteUrl, {
-                method: 'POST',
-                body: formData
-            }).then(function(response) {
+            manageBackup('delete', { filename: filename }).then(function(response) {
                 var data = unwrapResponse(response);
                 if (data.success) {
                     toast('success', data.message || '');

@@ -42,7 +42,7 @@ final class LocalImageCaptcha implements VerificationProviderInterface
             . '<label class="form-label">' . $label . '</label>'
             . '<div class="weline-captcha-row">'
             . $image
-            . '<input class="form-control" type="text" name="captcha_response" required maxlength="8" '
+            . '<input class="form-control" type="text" name="captcha_response" required maxlength="6" '
             . 'autocomplete="off" autocapitalize="characters" aria-label="' . $label . '">'
             . '</div></div>'
             . '<style>.weline-captcha{margin-top:1rem}.weline-captcha-row{display:flex;align-items:center;gap:.75rem}.weline-captcha-image{display:block;flex:0 0 168px;border:1px solid #cbd5e1;border-radius:.5rem;background:#f8fafc}.weline-captcha-row input{min-width:0;flex:1}</style>';
@@ -79,7 +79,9 @@ final class LocalImageCaptcha implements VerificationProviderInterface
 
     private function randomCode(): string
     {
-        $alphabet = '23456789';
+        // Avoid look-alike characters while keeping the challenge mixed-case
+        // enough to defeat the old seven-segment digit template matching.
+        $alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
         $code = '';
         for ($index = 0; $index < 6; $index++) {
             $code .= $alphabet[\random_int(0, \strlen($alphabet) - 1)];

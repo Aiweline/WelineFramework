@@ -10,7 +10,6 @@ use Weline\Cdn\Service\CachePurger;
 use Weline\Cdn\Service\RuleManager;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
  * CDN 统一请求处理器
@@ -43,8 +42,17 @@ class CdnRequest implements ObserverInterface
 
     public function execute(Event &$event): void
     {
+        $eventData = $event->getData();
         $action = $event->getData('action');
-        $websiteId = $event->getData('website_id');
+        $siteIdProvided = array_key_exists('site_id', $eventData)
+            || array_key_exists('website_id', $eventData);
+        $siteIdValue = array_key_exists('site_id', $eventData)
+            ? $eventData['site_id']
+            : ($eventData['website_id'] ?? null);
+        $siteId = $this->normalizeSiteId(
+            $siteIdProvided ? $siteIdValue : w_env_website_id(),
+            $siteIdProvided
+        );
         $domain = $event->getData('domain');
         $data = $event->getData('data') ?? [];
 
@@ -57,7 +65,7 @@ class CdnRequest implements ObserverInterface
 
         try {
             // 获取域名配置
-            $domainConfig = $this->resolveDomain($websiteId, $domain);
+            $domainConfig = $this->resolveDomain($siteId, is_string($domain) ? $domain : null);
             
             if (!$domainConfig && $action !== 'check_capability') {
                 $response['message'] = __('未找到 CDN 域名配置');
@@ -96,52 +104,66 @@ class CdnRequest implements ObserverInterface
     /**
      * 解析域名配置
      * 
-     * @param int|null $websiteId 网站ID
+     * @param int|null $siteId 网站ID；null 表示当前上下文也缺失
      * @param string|null $domain 域名
      * @return Domain|null
      */
-    private function resolveDomain(?int $websiteId, ?string $domain): ?Domain
+    private function resolveDomain(?int $siteId, ?string $domain): ?Domain
     {
-        // 如果直接指定了域名
-        if ($domain) {
+        // 没有站点上下文时不得以域名或“第一个启用域名”跨站解析。
+        if ($siteId === null) {
+            return null;
+        }
+
+        $domain = trim((string)$domain);
+        if ($domain !== '') {
             $domainModel = clone $this->domainModel;
             $domainModel->reset()
                 ->where(Domain::schema_fields_DOMAIN_NAME, $domain)
-                ->where(Domain::schema_fields_IS_ENABLED, 1)
-                ->find()
-                ->fetch();
+                ->where(Domain::schema_fields_ENABLED, 1)
+                ->where(Domain::schema_fields_SITE_ID, $siteId);
+            $domainModel->find()->fetch();
             
             if ($domainModel->getData(Domain::schema_fields_DOMAIN_ID)) {
                 return $domainModel;
             }
+
+            // 调用方显式指定了域名时，未命中就是未命中，不能退回同站其他域名。
+            return null;
         }
 
-        // 如果指定了网站ID，获取网站关联的域名
-        if ($websiteId) {
-            // 这里需要通过网站ID获取关联的CDN域名
-            // 假设有 website_id 字段关联
-            $domainModel = clone $this->domainModel;
-            $domainModel->reset()
-                ->where('website_id', $websiteId)
-                ->where(Domain::schema_fields_IS_ENABLED, 1)
-                ->find()
-                ->fetch();
-            
-            if ($domainModel->getData(Domain::schema_fields_DOMAIN_ID)) {
-                return $domainModel;
-            }
-        }
-
-        // 尝试获取默认域名
         $domainModel = clone $this->domainModel;
         $domainModel->reset()
-            ->where(Domain::schema_fields_IS_ENABLED, 1)
-            ->order(Domain::schema_fields_DOMAIN_ID, 'ASC')
-            ->limit(1)
+            ->where(Domain::schema_fields_SITE_ID, $siteId)
+            ->where(Domain::schema_fields_ENABLED, 1)
             ->find()
             ->fetch();
-        
-        return $domainModel->getData(Domain::schema_fields_DOMAIN_ID) ? $domainModel : null;
+
+        if ($domainModel->getData(Domain::schema_fields_DOMAIN_ID)) {
+            return $domainModel;
+        }
+
+        return null;
+    }
+
+    private function normalizeSiteId(mixed $value, bool $explicit): ?int
+    {
+        if ($value === null || (!$explicit && ($value === '' || $value === false))) {
+            return null;
+        }
+        if (is_int($value)) {
+            $siteId = $value;
+        } elseif (is_string($value) && preg_match('/^\d+$/D', $value) === 1) {
+            $siteId = (int)$value;
+        } else {
+            throw new \InvalidArgumentException(
+                $explicit ? __('site_id 必须是非负整数') : __('当前网站 ID 无效')
+            );
+        }
+        if ($siteId < 0) {
+            throw new \InvalidArgumentException(__('site_id 不能为负数'));
+        }
+        return $siteId;
     }
 
     /**

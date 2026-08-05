@@ -724,7 +724,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
                 'instanceId' => 1,
                 'maxRestarts' => 10,
                 'restartDelay' => 0.0,
-                'scheduledAt' => \microtime(true) - 1.0,
+                'scheduledAt' => (\hrtime(true) / 1_000_000_000) - 1.0,
                 'delayed' => false,
                 'pid' => 0,
                 'port' => 16895,

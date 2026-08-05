@@ -9,7 +9,9 @@
 "Load latest pixel marker audit report.","Load latest pixel marker audit report."
 "Load Weline↔Google event dictionary.","Load Weline↔Google event dictionary."
 "Load GTM/GA4 channel and last audit status.","Load GTM/GA4 channel and last audit status."
+读取优化闭环的只读访客证据。,读取优化闭环的只读访客证据。
 "Create visitor A/B test config.","Create visitor A/B test config."
+"Seed or clean auditable AI/SEO acceptance pixel events.","Seed or clean auditable AI/SEO acceptance pixel events."
 "Export visitor analytics data.","Export visitor analytics data."
 加载流量渠道列表失败：%{1},加载流量渠道列表失败：%{1}
 流量渠道,流量渠道
@@ -116,8 +118,7 @@
 渠道名称,渠道名称
 渠道码创建后不可修改。,渠道码创建后不可修改。
 "2-32 位，小写字母或数字开头，仅 a-z 0-9 _ -；创建后不可改。","2-32 位，小写字母或数字开头，仅 a-z 0-9 _ -；创建后不可改。"
-站点ID,站点ID
-"0 表示全局渠道。","0 表示全局渠道。"
+选择系统默认站表示全局渠道（website_id=0）。,选择系统默认站表示全局渠道（website_id=0）。
 描述,描述
 取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。,取消勾选即停用；停用后旧投放链接仍可归因，但链接助手不再展示。
 "自动 UTM 包","自动 UTM 包"
@@ -164,7 +165,7 @@
 刷新,刷新
 "冷归档查询必须指定站点（website_id=0 为系统默认站），时间范围不超过","冷归档查询必须指定站点（website_id=0 为系统默认站），时间范围不超过"
 天，且始终分页；不会静默扫描热表。,天，且始终分页；不会静默扫描热表。
-"站点 ID（必填）","站点 ID（必填）"
+站点（必填）,站点（必填）
 事件,事件
 时间范围,时间范围
 开始日期,开始日期
@@ -194,7 +195,6 @@ URL,URL
 事件列表,事件列表
 详情报表,详情报表
 "导出 CSV","导出 CSV"
-全部站点,全部站点
 事件总数,事件总数
 较上一周期,较上一周期
 活跃用户,活跃用户
@@ -234,12 +234,12 @@ IP,IP
 直接访问,直接访问
 热表明细列表,热表明细列表
 "按当前筛选导出 CSV","按当前筛选导出 CSV"
-"站点 ID","站点 ID"
 事件列表查询失败（扁平列未就绪或数据库异常）。,事件列表查询失败（扁平列未就绪或数据库异常）。
 当前筛选条件下暂无事件。,当前筛选条件下暂无事件。
 像素详情报表,像素详情报表
 "对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源","对齐 GA4：会话 / 停留 / 跳出 / 页面 / 设备 / 屏幕 / 来源"
 返回事件看板,返回事件看板
+切换站点,切换站点
 Sessions,Sessions
 参与率,参与率
 "Engaged sessions","Engaged sessions"
@@ -345,6 +345,7 @@ Events,Events
 当前范围暂无付费广告数据,当前范围暂无付费广告数据
 广告系列,广告系列
 "站点 #%{1}","站点 #%{1}"
+全部站点,全部站点
 "按 IP 去重","按 IP 去重"
 事件种类,事件种类
 处理率,处理率
@@ -482,3 +483,7 @@ Events,Events
 "rule 匹配模式无效：%{1}","rule 匹配模式无效：%{1}"
 "rule 匹配值必填","rule 匹配值必填"
 "campaign 渠道不接受匹配模式/匹配值","campaign 渠道不接受匹配模式/匹配值"
+站点ID,站点ID
+"0 表示全局渠道。","0 表示全局渠道。"
+"站点 ID（必填）","站点 ID（必填）"
+"站点 ID","站点 ID"

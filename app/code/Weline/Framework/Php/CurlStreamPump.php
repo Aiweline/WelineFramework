@@ -45,6 +45,9 @@ final class CurlStreamPump
     /** @var array<int, bool> */
     private array $finalized = [];
 
+    /** @var array<int, float> */
+    private array $deadlines = [];
+
     /**
      * 把一个 cURL 句柄注册进多路调度器。
      * 句柄的 `WRITEFUNCTION` 会被覆盖为内部分发器；调用方设置的其它选项保持不变。
@@ -52,7 +55,7 @@ final class CurlStreamPump
      * @return int handleId（基于 spl_object_id），同一 pump 内唯一
      * @throws \InvalidArgumentException 重复注册
      */
-    public function register(\CurlHandle $ch): int
+    public function register(\CurlHandle $ch, ?float $timeoutSeconds = null): int
     {
         $id = \spl_object_id($ch);
         if (isset($this->handles[$id])) {
@@ -67,6 +70,9 @@ final class CurlStreamPump
         $this->results[$id] = ['ok' => false, 'errno' => 0, 'error' => ''];
         $this->finalized[$id] = false;
         $this->handles[$id] = $ch;
+        if ($timeoutSeconds !== null && $timeoutSeconds > 0.0) {
+            $this->deadlines[$id] = \microtime(true) + $timeoutSeconds;
+        }
 
         \curl_setopt($ch, \CURLOPT_RETURNTRANSFER, true);
         \curl_setopt($ch, \CURLOPT_HEADER, false);
@@ -135,6 +141,7 @@ final class CurlStreamPump
         $beforeQueueLen = $this->totalQueuedChunks();
 
         if ($timeoutSeconds > 0) {
+            $timeoutSeconds = $this->clampSelectTimeoutToNearestDeadline($timeoutSeconds);
             $select = @\curl_multi_select($this->multi, \max(0.0, $timeoutSeconds));
             // -1 表示无 fd 可等（windows 偶发），不阻断；继续 exec 一次。
             if ($select === -1) {
@@ -157,11 +164,16 @@ final class CurlStreamPump
             }
             $errno = (int)($info['result'] ?? \CURLE_OK);
             $this->finished[$id] = true;
+            unset($this->deadlines[$id]);
             $this->results[$id] = [
                 'ok' => $errno === \CURLE_OK,
                 'errno' => $errno,
                 'error' => $errno === \CURLE_OK ? '' : (string)\curl_strerror($errno),
             ];
+            $hadProgress = true;
+        }
+
+        if ($this->expireOverdueHandles()) {
             $hadProgress = true;
         }
 
@@ -218,7 +230,7 @@ final class CurlStreamPump
                 @\curl_multi_remove_handle($this->multi, $ch);
             }
         }
-        unset($this->handles[$handleId], $this->queues[$handleId]);
+        unset($this->handles[$handleId], $this->queues[$handleId], $this->deadlines[$handleId]);
         $this->finalized[$handleId] = true;
 
         $this->releaseMultiIfEmpty();
@@ -276,6 +288,47 @@ final class CurlStreamPump
         }
 
         return $total;
+    }
+
+    private function clampSelectTimeoutToNearestDeadline(float $timeoutSeconds): float
+    {
+        if ($this->deadlines === []) {
+            return $timeoutSeconds;
+        }
+
+        $remaining = \min($this->deadlines) - \microtime(true);
+
+        return \max(0.0, \min($timeoutSeconds, $remaining));
+    }
+
+    private function expireOverdueHandles(): bool
+    {
+        if ($this->deadlines === []) {
+            return false;
+        }
+
+        $now = \microtime(true);
+        $expired = false;
+        foreach ($this->deadlines as $id => $deadline) {
+            if ($deadline > $now || ($this->finished[$id] ?? true)) {
+                continue;
+            }
+
+            $handle = $this->handles[$id] ?? null;
+            if ($handle instanceof \CurlHandle && $this->multi !== null) {
+                @\curl_multi_remove_handle($this->multi, $handle);
+            }
+            $this->finished[$id] = true;
+            $this->results[$id] = [
+                'ok' => false,
+                'errno' => \CURLE_OPERATION_TIMEDOUT,
+                'error' => 'Operation timed out at the cooperative cURL deadline',
+            ];
+            unset($this->deadlines[$id]);
+            $expired = true;
+        }
+
+        return $expired;
     }
 
     private function assertKnownHandle(int $handleId): void

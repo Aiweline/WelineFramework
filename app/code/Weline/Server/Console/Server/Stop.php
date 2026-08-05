@@ -24,8 +24,16 @@ use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Runtime\RuntimeSelection;
+use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
+use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
+use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SharedStateServiceManager;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Provider\GatewayFallbackProvider;
+use Weline\Server\Service\Provider\GatewayJoinBackendProvider;
+use Weline\Server\Service\Provider\GatewayProvider;
+use Weline\Server\Service\Provider\RuntimeTaskWatchdogProvider;
 
 /**
  * server:stop - 停止常驻内存服务器
@@ -38,6 +46,7 @@ class Stop extends CommandAbstract
 
     private $stopLockHandle = null;
     private string $stopLockFile = '';
+    private ?ServerLifecycleOperationLock $lifecycleOperationLock = null;
     /** @var array<int, bool> */
     private array $stopPidRunningCache = [];
     /** @var array<int, string> */
@@ -67,6 +76,7 @@ class Stop extends CommandAbstract
     private bool $lastResidualCleanupComplete = true;
     private bool $lastIpcStopFlowStillActive = false;
     private bool $managedNginxStopFailed = false;
+    private bool $allowUnsafeGatewayStop = false;
 
     /**
      * Keep the historical one-argument protected extension point compatible;
@@ -80,6 +90,14 @@ class Stop extends CommandAbstract
 
     private const RESIDUAL_CLEANUP_MAX_ATTEMPTS = 3;
     private const RESIDUAL_CLEANUP_RETRY_USEC = 300000;
+    private const MAX_RECOVERY_CONFIG_DIRECTORY_ENTRIES = 256;
+    private const MAX_RECOVERY_CONFIG_BYTES = 4 * 1024 * 1024;
+    private const MAX_RECOVERY_PID_DIRECTORY_ENTRIES = 4096;
+    private const MAX_RECOVERY_PID_RECORD_BYTES = 1024 * 1024;
+    private const MAX_RECOVERY_PORT_INDEX_BYTES = 4 * 1024 * 1024;
+    private const MAX_RECOVERY_WORKER_SLOTS = 1024;
+    private const MAX_STOP_TRACE_BYTES = 64 * 1024 * 1024;
+    private const MAX_STOP_TRACE_TAIL_BYTES = 4096;
 
     /** IPC 硬超时（秒）- 避免进度持续刷新时无限等待 */
     private const IPC_HARD_TIMEOUT_WIN = 12;
@@ -144,7 +162,7 @@ class Stop extends CommandAbstract
 
         $instanceName = $instanceNames[0];
         if (!$this->acquireStopLock($instanceName)) {
-            $this->printer->warning(__('另一个 server:stop 任务正在处理中，请稍后再试。'));
+            $this->printer->warning(__('该实例的启动、停止、重载或清理任务正在处理中，请稍后再试。'));
             $this->printer->note(__('若锁文件长期存在，请确认停止任务是否已结束后再重试。'));
             return;
         }
@@ -167,19 +185,37 @@ class Stop extends CommandAbstract
         bool $force = false,
     ): bool
     {
-        $edgeAdapter = \strtolower(\trim((string)($instanceData['edge_adapter'] ?? '')));
-        if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
-            return true;
-        }
         $gatewayRuntime = \is_array($instanceData['gateway'] ?? null)
             ? $instanceData['gateway']
             : [];
-        if ((string)($gatewayRuntime['mode'] ?? '')
-            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
-        ) {
+        if (\Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection::participatesInGateway(
+            $instanceData,
+        )) {
             try {
-                $drain = (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
-                    ->drain($instanceName, $force ? 1 : 300, true);
+                $retirement = (
+                    new \Weline\Server\Service\Edge\Gateway\GatewayRegistrationRetirementCoordinator()
+                )->retire(
+                    $instanceName,
+                    $force ? 1 : 300,
+                    true,
+                    // An ordinary Stop keeps the backend alive on failure and
+                    // therefore restores REGISTERED/UNCERTAIN for Agent replay.
+                    // Explicit unsafe force retains RETIRING and lets the host
+                    // lease expire after local teardown.
+                    !$this->allowUnsafeGatewayStop,
+                );
+                $stopAction = (string)($retirement['action'] ?? '');
+                if ($stopAction
+                    === \Weline\Server\Service\Edge\Gateway\GatewayStopRegistrationPolicy::ACTION_LOCAL_ONLY
+                ) {
+                    $this->printer->note(__(
+                        '共享网关：经本地退休栅栏和控制面状态确认，当前启动代没有待注销路由；继续停止本地 WLS。'
+                    ));
+                    return true;
+                }
+                $drain = \is_array($retirement['drain'] ?? null)
+                    ? $retirement['drain']
+                    : [];
                 if (($drain['drain_complete'] ?? false) === true) {
                     $this->printer->note(__(
                         '共享网关：当前实例连接已自然排空并注销；网关本身与其他项目保持运行。'
@@ -198,13 +234,36 @@ class Stop extends CommandAbstract
                 }
                 return true;
             } catch (\Throwable $throwable) {
-                $this->printer->warning(__('共享网关路由注销失败：%{1}', [$throwable->getMessage()]));
+                $this->managedNginxStopFailed = true;
+                $this->printer->warning(__('共享网关路由未完成签名排空/注销：%{1}', [$throwable->getMessage()]));
+                if (!$this->allowUnsafeGatewayStop) {
+                    $this->printer->warning(__(
+                        '已中止当前实例的本地停止：先修复网关控制面后重试，或显式使用 --force。'
+                        . '共享网关本身与其他项目均保持运行。'
+                    ));
+                    return false;
+                }
                 $this->printer->warning(__(
-                    '继续停止当前项目；共享网关将在租约过期后把该路由标记为 STALE 并返回 503，'
-                    . '不会停止网关或影响其他项目。'
+                    '显式 --force 已确认继续本地停止；该实例路由将在租约过期后进入 STALE/503。'
+                    . '共享网关本身与其他项目保持运行。'
                 ));
                 return true;
             }
+        }
+
+        $edgeAdapter = \strtolower(\trim((string)($instanceData['edge_adapter'] ?? '')));
+        if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
+            // Native/fallback WLS without a CAS-published active gateway
+            // observation owns no shared route for server:stop to mutate.
+            return true;
+        }
+        if ((string)($gatewayRuntime['mode'] ?? '')
+            === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_GATEWAY
+        ) {
+            // The host gateway is shared infrastructure and is never a
+            // project-managed Nginx instance. Without an active registration
+            // fence there is nothing safe to unregister here.
+            return true;
         }
 
         try {
@@ -267,36 +326,43 @@ class Stop extends CommandAbstract
 
     protected function acquireStopLock(string $instanceName, int $timeout = self::STOP_LOCK_TIMEOUT): bool
     {
-        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
-        if (!\is_dir($lockDir)) {
-            @\mkdir($lockDir, 0755, true);
-        }
-
-        $this->stopLockFile = $lockDir . 'stop_' . $instanceName . '.lock';
-        $fp = @\fopen($this->stopLockFile, 'c');
-        if ($fp === false) {
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceName) !== 1) {
             return false;
         }
-
-        $startTime = \time();
-        while (\time() - $startTime < $timeout) {
-            if (\flock($fp, \LOCK_EX | \LOCK_NB)) {
-                $this->stopLockHandle = $fp;
-                @\ftruncate($fp, 0);
-                @\fwrite($fp, \json_encode([
-                    'pid' => \getmypid(),
-                    'instance' => $instanceName,
-                    'started_at' => \date('Y-m-d H:i:s'),
-                    'command' => \implode(' ', $_SERVER['argv'] ?? []),
-                ], JSON_PRETTY_PRINT));
-                @\fflush($fp);
-                return true;
-            }
-            SchedulerSystem::usleep(100000);
+        if ($this->lifecycleOperationLock !== null) {
+            return false;
         }
+        $lifecycleLock = new ServerLifecycleOperationLock();
+        if (!$lifecycleLock->acquire($instanceName, 'stop', (float)$timeout)) {
+            return false;
+        }
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $this->stopLockFile = $lockDir . 'stop_' . $instanceName . '.lock';
+        $handle = VerifiedPersistentFileLock::acquire(
+            $this->stopLockFile,
+            (float)$timeout,
+            static fn(): array => [
+                'pid' => \getmypid(),
+                'instance' => $instanceName,
+                'started_at' => \date('Y-m-d H:i:s'),
+                'command' => \substr(
+                    \implode(' ', \array_map(
+                        static fn(mixed $argument): string => (string)$argument,
+                        (array)($_SERVER['argv'] ?? []),
+                    )),
+                    0,
+                    4096,
+                ),
+            ],
+        );
+        if (!\is_resource($handle)) {
+            $lifecycleLock->release();
+            return false;
+        }
+        $this->lifecycleOperationLock = $lifecycleLock;
+        $this->stopLockHandle = $handle;
 
-        @\fclose($fp);
-        return false;
+        return true;
     }
 
     protected function releaseStopLock(): void
@@ -307,9 +373,12 @@ class Stop extends CommandAbstract
             $this->stopLockHandle = null;
         }
 
-        if ($this->stopLockFile !== '' && \is_file($this->stopLockFile)) {
-            @\unlink($this->stopLockFile);
-        }
+        $this->lifecycleOperationLock?->release();
+        $this->lifecycleOperationLock = null;
+
+        // Keep the inode persistent. Deleting it after unlock can race a new
+        // Stop owner and let a third process lock a different inode.
+        $this->stopLockFile = '';
     }
 
     private function resetStopRuntimeCaches(): void
@@ -329,6 +398,7 @@ class Stop extends CommandAbstract
         $this->loadedControlTokens = [];
         $this->lastResidualCleanupComplete = true;
         $this->lastIpcStopFlowStillActive = false;
+        $this->allowUnsafeGatewayStop = false;
     }
 
     private function invalidateStopRuntimeState(): void
@@ -520,8 +590,19 @@ class Stop extends CommandAbstract
 
         $startupPhase = $this->resolveInstanceStartupPhase($instanceData);
         $forceGatewayDrain = $force || $this->shouldBypassGracefulStopDuringBootstrap($startupPhase);
-        if (!$this->maybeStopManagedNginx($name, $instanceData, $forceGatewayDrain) && !$force) {
-            $this->printer->warning(__('已中止 WLS 停止：请先修复托管 Nginx 停止故障，或显式使用强制停止。'));
+        $previousUnsafeGatewayStop = $this->allowUnsafeGatewayStop;
+        $this->allowUnsafeGatewayStop = $force;
+        try {
+            $edgeStopped = $this->maybeStopManagedNginx(
+                $name,
+                $instanceData,
+                $forceGatewayDrain,
+            );
+        } finally {
+            $this->allowUnsafeGatewayStop = $previousUnsafeGatewayStop;
+        }
+        if (!$edgeStopped && !$force) {
+            $this->printer->warning(__('已中止 WLS 停止：请先修复边缘路由/托管 Nginx 故障，或显式使用强制停止。'));
             return;
         }
         
@@ -1511,11 +1592,41 @@ class Stop extends CommandAbstract
                     $includeSharedState ? $this->collectResidualPidsByInfo($info, true) : [],
                     $includeSharedState ? $this->collectIndexedResidualPids($name, true) : [],
                     $this->collectRecoverablePortResidualPids($recoverablePorts),
-                    $this->collectRecoverableManagedPids($name)
+                    $this->collectRecoverableManagedPids($name),
+                    $this->collectGatewayJoinBackendPids($name, $info->workerCount),
                 )
             ),
             static fn (int $pid): bool => $pid > 0
         )));
+    }
+
+    /** @return list<int> */
+    private function collectGatewayJoinBackendPids(string $name, int $workerCount): array
+    {
+        if ($workerCount < 1) {
+            return [];
+        }
+        if ($workerCount > self::MAX_RECOVERY_WORKER_SLOTS) {
+            throw new \RuntimeException('WLS worker count exceeds the fixed recovery slot limit.');
+        }
+        $pids = [];
+        for ($slot = 1; $slot <= $workerCount; ++$slot) {
+            $processName = MasterProcess::buildScopedProcessName(
+                GatewayJoinBackendProvider::PROCESS_NAME_PREFIX . '-' . $slot,
+                $name,
+            );
+            $pname = '--name=' . $processName;
+            foreach (Processer::getProcessIdsByName($processName) as $pid) {
+                $pid = (int)$pid;
+                if ($pid > 0
+                    && Processer::isManagedProcessRunning($pid, $processName, '', $pname)
+                ) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
     }
 
     /**
@@ -1731,7 +1842,7 @@ class Stop extends CommandAbstract
         // force 模式用于“更快进入停止流程”，不应把 IPC 等待缩短到低于 Orchestrator 的正常停机时长，
         // 否则会频繁误判超时并走强杀 Master，造成状态抖动。
         $timeout = $force ? self::IPC_FORCE_TIMEOUT : self::IPC_TIMEOUT;
-        $startedAt = \microtime(true);
+        $startedAt = self::monotonicSeconds();
         $hardTimeout = $this->getIpcHardTimeout($force);
         $hardDeadline = $startedAt + $hardTimeout;
         $lastActivityAt = $startedAt;
@@ -1746,8 +1857,8 @@ class Stop extends CommandAbstract
         $stopAccepted = false;
         $ackDeadline = $startedAt + ($force ? 1.0 : 2.0);
 
-        while (\microtime(true) < $hardDeadline) {
-            if (!$stopAccepted && \microtime(true) >= $ackDeadline) {
+        while (self::monotonicSeconds() < $hardDeadline) {
+            if (!$stopAccepted && self::monotonicSeconds() >= $ackDeadline) {
                 $this->ipcMsg(__('STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。'), 'error');
                 $this->ipcAppendStopTraceHint($instanceName);
                 @\fclose($conn);
@@ -1801,7 +1912,7 @@ class Stop extends CommandAbstract
                     );
                 }
 
-                $lastActivityAt = \microtime(true);
+                $lastActivityAt = self::monotonicSeconds();
                 $readBuffer .= $data;
                 foreach ($this->extractCompleteIpcLines($readBuffer) as $line) {
                     $this->processStopProgressLine(
@@ -1833,7 +1944,7 @@ class Stop extends CommandAbstract
                 );
             }
             // 空闲超时仅作提示，不立即判定失败，避免长排水阶段误杀 Master
-            $now = \microtime(true);
+            $now = self::monotonicSeconds();
             if (($now - $lastActivityAt) >= $timeout) {
                 if ($masterPid <= 0 && $observedStopStage === 0 && !$childrenFullyExited && !$masterAboutToExit) {
                     $this->ipcMsg("No STOP progress from control port after {$timeout}s; switch to local cleanup.", 'error');
@@ -1949,13 +2060,13 @@ class Stop extends CommandAbstract
             return true;
         }
 
-        $deadline = \microtime(true) + 0.4;
+        $deadline = self::monotonicSeconds() + 0.4;
         do {
             if ($this->isMasterPidMissingFromIndex($masterPid)) {
                 return true;
             }
             SchedulerSystem::usleep(50000);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         return false;
     }
@@ -2130,10 +2241,10 @@ class Stop extends CommandAbstract
         $timeout = (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN')
             ? self::MASTER_EXIT_TIMEOUT_WIN
             : self::MASTER_EXIT_TIMEOUT_LINUX;
-        $deadline = \microtime(true) + $timeout;
+        $deadline = self::monotonicSeconds() + $timeout;
         $confirmed = 0;
         
-        while (\microtime(true) < $deadline) {
+        while (self::monotonicSeconds() < $deadline) {
             SchedulerSystem::usleep(200000); // 200ms
             echo $this->printer->colorize('.', self::IPC_COLOR_INFO);
             // 快速路径 + 真实进程校验双确认，避免“索引先删、进程未退”的假退出。
@@ -2531,42 +2642,48 @@ class Stop extends CommandAbstract
         for ($i = 1; $i <= $count; $i++) {
             Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $name, $i));
             Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name, $i));
+            Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(
+                GatewayJoinBackendProvider::PROCESS_NAME_PREFIX . '-' . $i,
+                $name,
+            ));
         }
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-session', $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name));
         Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-memory', $name));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(GatewayProvider::PROCESS_NAME_PREFIX, $name));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(GatewayFallbackProvider::PROCESS_NAME_PREFIX, $name));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $name));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(RuntimeTaskWatchdogProvider::PROCESS_NAME_PREFIX, $name));
         
         // Global stale pid pruning is intentionally excluded from the stop hot path.
     }
     
     /**
-     * 释放启动锁
-     * 
-     * 服务器停止后删除启动锁文件，允许重新启动实例
+     * 启动锁文件使用持久 inode；Stop 不持有 Start 的 flock 句柄，
+     * 因此绝不按路径删除，避免删掉并发新启动者正在持有的锁。
      */
     protected function releaseStartLock(string $instanceName): void
     {
-        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
-        $lockFile = $lockDir . 'start_' . $instanceName . '.lock';
-        
-        if (\is_file($lockFile)) {
-            @\unlink($lockFile);
-            $this->printer->note(__('启动锁已释放 ✓'));
-        }
+        unset($instanceName);
     }
     
 
     private function findConfiguredRunningInstanceNameByPort(int $port): ?string
     {
         $configDir = Env::VAR_DIR . 'server' . DS . 'config' . DS;
-        if (!\is_dir($configDir)) {
-            return null;
-        }
-
-        foreach (\glob($configDir . '*.json') ?: [] as $file) {
+        foreach ($this->enumerateBoundedRecoveryFiles(
+            $configDir,
+            '.json',
+            self::MAX_RECOVERY_CONFIG_DIRECTORY_ENTRIES,
+            'saved instance configuration directory',
+        ) as $file) {
             $name = \basename($file, '.json');
-            $data = \json_decode((string) @\file_get_contents($file), true);
+            $data = $this->readBoundedRecoveryJson(
+                $file,
+                self::MAX_RECOVERY_CONFIG_BYTES,
+                'saved instance configuration',
+            );
             if (!\is_array($data)) {
                 continue;
             }
@@ -2583,6 +2700,146 @@ class Stop extends CommandAbstract
         }
 
         return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function enumerateBoundedRecoveryFiles(
+        string $directory,
+        string $suffix,
+        int $maximumEntries,
+        string $label,
+    ): array
+    {
+        $before = @\lstat($directory);
+        if (!\is_array($before)) {
+            if (\file_exists($directory) || \is_link($directory)) {
+                throw new \RuntimeException($label . ' is indeterminate or unsafe.');
+            }
+            return [];
+        }
+        if (\is_link($directory)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException($label . ' is linked or special.');
+        }
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to enumerate ' . $label . '.');
+        }
+        $files = [];
+        $rawEntries = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                if (++$rawEntries > $maximumEntries) {
+                    throw new \RuntimeException($label . ' exceeds its fixed entry limit.');
+                }
+                if ($leaf === '' || !\str_ends_with($leaf, $suffix)) {
+                    continue;
+                }
+                $files[] = \rtrim($directory, '/\\') . DS . $leaf;
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $after = @\lstat($directory);
+        if (!\is_array($after) || !$this->sameRecoveryFileState($before, $after)) {
+            throw new \RuntimeException($label . ' changed while being enumerated.');
+        }
+        \sort($files, SORT_STRING);
+
+        return $files;
+    }
+
+    /** @return array<string,mixed>|null */
+    private function readBoundedRecoveryJson(
+        string $file,
+        int $maximumBytes,
+        string $label,
+        bool $optional = false,
+    ): ?array
+    {
+        try {
+            $encoded = $optional
+                ? GatewayProjectStateFilesystem::readOptional($file, $maximumBytes, $label)
+                : GatewayProjectStateFilesystem::read($file, $maximumBytes, $label);
+            if ($encoded === null) {
+                return null;
+            }
+            $decoded = \json_decode($encoded, true, 64, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            // Recovery metadata is only ownership evidence when it is complete,
+            // stable, regular, and valid JSON. Unsafe records are ignored.
+            return null;
+        }
+
+        return \is_array($decoded) ? $decoded : null;
+    }
+
+    private function readBoundedRecoveryFileTail(
+        string $file,
+        int $maximumFileBytes,
+        int $maximumTailBytes,
+    ): ?string
+    {
+        $before = @\lstat($file);
+        if (!\is_array($before)
+            || \is_link($file)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($before['nlink'] ?? 0) !== 1
+        ) {
+            return null;
+        }
+        $size = (int)($before['size'] ?? -1);
+        if ($size < 1 || $size > $maximumFileBytes || $maximumTailBytes < 1) {
+            return null;
+        }
+        $handle = @\fopen($file, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened) || !$this->sameRecoveryFileState($before, $opened)) {
+                return null;
+            }
+            $offset = \max(0, $size - $maximumTailBytes);
+            if (@\fseek($handle, $offset, SEEK_SET) !== 0) {
+                return null;
+            }
+            $tail = @\stream_get_contents($handle, $maximumTailBytes + 1);
+            $after = @\fstat($handle);
+            $pathAfter = @\lstat($file);
+            if (!\is_string($tail)
+                || \strlen($tail) > $maximumTailBytes
+                || !\is_array($after)
+                || !\is_array($pathAfter)
+                || !$this->sameRecoveryFileState($opened, $after)
+                || !$this->sameRecoveryFileState($after, $pathAfter)
+                || (int)($after['size'] ?? -1) !== $size
+            ) {
+                return null;
+            }
+            return $tail;
+        } finally {
+            @\fclose($handle);
+        }
+    }
+
+    /** @param array<string|int,mixed> $before @param array<string|int,mixed> $after */
+    private function sameRecoveryFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function findPersistedRecoverableInstanceNameByPort(int $port): ?string
@@ -2612,7 +2869,12 @@ class Stop extends CommandAbstract
             return false;
         }
 
-        $portIndex = Processer::readPortIndex();
+        $portIndex = $this->readBoundedRecoveryJson(
+            Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'port_index.json',
+            self::MAX_RECOVERY_PORT_INDEX_BYTES,
+            'WLS process port index',
+            true,
+        ) ?? [];
         $processName = (string) ($portIndex[(string) $port] ?? $portIndex[$port] ?? '');
 
         return $processName !== '' && $this->isSharedStateProcessName($processName);
@@ -2626,6 +2888,10 @@ class Stop extends CommandAbstract
             MasterProcess::buildScopedProcessName('weline-wls-session', $name),
             MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
+            MasterProcess::buildScopedProcessName(GatewayProvider::PROCESS_NAME_PREFIX, $name),
+            MasterProcess::buildScopedProcessName(GatewayFallbackProvider::PROCESS_NAME_PREFIX, $name),
+            MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $name),
+            MasterProcess::buildScopedProcessName(RuntimeTaskWatchdogProvider::PROCESS_NAME_PREFIX, $name),
         ];
 
         foreach ($processNames as $processName) {
@@ -2670,6 +2936,10 @@ class Stop extends CommandAbstract
         return [
             MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
+            MasterProcess::buildScopedProcessName(GatewayProvider::PROCESS_NAME_PREFIX, $name),
+            MasterProcess::buildScopedProcessName(GatewayFallbackProvider::PROCESS_NAME_PREFIX, $name),
+            MasterProcess::buildScopedProcessName(ProtocolEdgeRuntime::PROCESS_NAME_PREFIX, $name),
+            MasterProcess::buildScopedProcessName(RuntimeTaskWatchdogProvider::PROCESS_NAME_PREFIX, $name),
             'weline-wls-worker-http-' . $scopedInstance . '-',
             'weline-wls-worker-ssl-' . $scopedInstance . '-',
             'weline-wls-maintenance-http-' . $scopedInstance . '-',
@@ -2709,45 +2979,54 @@ class Stop extends CommandAbstract
     protected function queryRecoverableConfiguredPorts(string $name): array
     {
         $ports = [];
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $name) !== 1) {
+            return [];
+        }
         $configFile = Env::VAR_DIR . 'server' . DS . 'config' . DS . $name . '.json';
-        if (\is_file($configFile)) {
-            $data = \json_decode((string) @\file_get_contents($configFile), true);
-            if (\is_array($data)) {
-                $mainPort = (int) ($data['port'] ?? 0);
-                if ($mainPort > 0) {
-                    $ports[] = $mainPort;
-                }
+        $data = $this->readBoundedRecoveryJson(
+            $configFile,
+            self::MAX_RECOVERY_CONFIG_BYTES,
+            'saved instance configuration',
+            true,
+        );
+        if (\is_array($data)) {
+            $mainPort = (int) ($data['port'] ?? 0);
+            if ($mainPort > 0) {
+                $ports[] = $mainPort;
+            }
 
-                $httpRedirectPort = $this->resolveConfiguredHttpRedirectPort($data);
-                if ($httpRedirectPort > 0) {
-                    $ports[] = $httpRedirectPort;
-                }
+            $httpRedirectPort = $this->resolveConfiguredHttpRedirectPort($data);
+            if ($httpRedirectPort > 0) {
+                $ports[] = $httpRedirectPort;
             }
         }
 
         $portIndexFile = Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'port_index.json';
-        if (\is_file($portIndexFile)) {
-            $portIndex = \json_decode((string) @\file_get_contents($portIndexFile), true);
-            if (\is_array($portIndex)) {
-                $needle = '-' . $name . '-';
-                $needleSuffix = '-' . $name;
-                foreach ($portIndex as $portKey => $processName) {
-                    $port = (int) $portKey;
-                    if ($port <= 0 || !\is_string($processName)) {
-                        continue;
-                    }
-                    if (!\str_contains($processName, 'weline-wls-')) {
-                        continue;
-                    }
-                    if ($this->isSharedStateProcessName($processName)) {
-                        continue;
-                    }
-                    if (!\str_contains($processName, $needle) && !\str_ends_with($processName, $needleSuffix)) {
-                        continue;
-                    }
-
-                    $ports[] = $port;
+        $portIndex = $this->readBoundedRecoveryJson(
+            $portIndexFile,
+            self::MAX_RECOVERY_PORT_INDEX_BYTES,
+            'WLS process port index',
+            true,
+        );
+        if (\is_array($portIndex)) {
+            $needle = '-' . $name . '-';
+            $needleSuffix = '-' . $name;
+            foreach ($portIndex as $portKey => $processName) {
+                $port = (int) $portKey;
+                if ($port <= 0 || !\is_string($processName)) {
+                    continue;
                 }
+                if (!\str_contains($processName, 'weline-wls-')) {
+                    continue;
+                }
+                if ($this->isSharedStateProcessName($processName)) {
+                    continue;
+                }
+                if (!\str_contains($processName, $needle) && !\str_ends_with($processName, $needleSuffix)) {
+                    continue;
+                }
+
+                $ports[] = $port;
             }
         }
 
@@ -2788,12 +3067,12 @@ class Stop extends CommandAbstract
     protected function ipcAppendStopTraceHint(string $instanceName): void
     {
         $file = Env::VAR_DIR . 'server' . DS . 'control' . DS . $instanceName . '.stop.trace.jsonl';
-        if (!\is_file($file)) {
-            return;
-        }
-
-        $tail = @\file_get_contents($file, false, null, \max(0, \filesize($file) - 4096));
-        if ($tail === false || $tail === '') {
+        $tail = $this->readBoundedRecoveryFileTail(
+            $file,
+            self::MAX_STOP_TRACE_BYTES,
+            self::MAX_STOP_TRACE_TAIL_BYTES,
+        );
+        if ($tail === null || $tail === '') {
             return;
         }
 
@@ -3090,15 +3369,20 @@ class Stop extends CommandAbstract
     protected function queryRecoverableManagedPids(string $name): array
     {
         $pidDir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
-        if (!\is_dir($pidDir)) {
-            return [];
-        }
-
         $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($name);
         $pids = [];
 
-        foreach (\glob($pidDir . '*-pid.json') ?: [] as $file) {
-            $record = \json_decode((string) @\file_get_contents($file), true);
+        foreach ($this->enumerateBoundedRecoveryFiles(
+            $pidDir,
+            '-pid.json',
+            self::MAX_RECOVERY_PID_DIRECTORY_ENTRIES,
+            'WLS process metadata directory',
+        ) as $file) {
+            $record = $this->readBoundedRecoveryJson(
+                $file,
+                self::MAX_RECOVERY_PID_RECORD_BYTES,
+                'WLS process metadata record',
+            );
             if (!\is_array($record)) {
                 continue;
             }
@@ -3443,7 +3727,7 @@ class Stop extends CommandAbstract
             foreach ($instances as $name) {
                 $this->printer->note(__('正在停止实例 [%{1}]...', [$name]));
                 if (!$this->acquireStopLock($name)) {
-                    $this->printer->warning(__('实例 [%{1}] 正在被其他 stop 任务处理，已跳过。', [$name]));
+                    $this->printer->warning(__('实例 [%{1}] 正在被其他生命周期任务处理，已跳过。', [$name]));
                     continue;
                 }
                 try {
@@ -3482,7 +3766,7 @@ class Stop extends CommandAbstract
         foreach ($instanceNames as $index => $name) {
             $this->printer->note(__('进度 [%{1}/%{2}] 正在停止实例 [%{3}]...', [$index + 1, $totalInstances, $name]));
             if (!$this->acquireStopLock($name)) {
-                $this->printer->warning(__('实例 [%{1}] 正在被其他 stop 任务处理，已跳过。', [$name]));
+                $this->printer->warning(__('实例 [%{1}] 正在被其他生命周期任务处理，已跳过。', [$name]));
                 continue;
             }
             try {
@@ -3521,7 +3805,7 @@ class Stop extends CommandAbstract
         foreach ($instances as $index => $name) {
             $this->printer->note(__('进度 [%{1}/%{2}] 正在停止实例 [%{3}]...', [$index + 1, $totalInstances, $name]));
             if (!$this->acquireStopLock($name)) {
-                $this->printer->warning(__('实例 [%{1}] 正在被其他 stop 任务处理，已跳过。', [$name]));
+                $this->printer->warning(__('实例 [%{1}] 正在被其他生命周期任务处理，已跳过。', [$name]));
                 continue;
             }
             try {
@@ -3768,5 +4052,15 @@ class Stop extends CommandAbstract
 
         $code = $colors[$color] ?? '33';
         return "\033[{$code}m{$text}\033[0m";
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException('WLS stop monotonic clock is invalid.');
+        }
+
+        return $now;
     }
 }

@@ -5,17 +5,245 @@ namespace Weline\Visitor\Service;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Visitor\Model\Pixel;
 
 class PixelEventService
 {
+    private const ACCEPTANCE_DEFAULT_WEBSITE_IDS = [0, 87];
+    private const ACCEPTANCE_WEBSITE_IDS_ENV = 'WELINE_VISITOR_AI_SEO_ACCEPTANCE_WEBSITE_IDS';
+
     public function __construct(
         private readonly Request $request,
         private ?PixelEventPersistenceService $persistenceService = null,
         private ?PixelHotBufferService $hotBufferService = null,
         private ?PixelTrafficAttributionService $attributionService = null,
         private ?PixelSessionFirstTouchBackfillService $sessionFirstTouchBackfillService = null,
-        private ?PixelChannelLookupService $channelLookupService = null
+        private ?PixelChannelLookupService $channelLookupService = null,
+        private ?PageBuilderOptimizationAttributionService $optimizationAttributionService = null
     ) {
+    }
+
+    public static function acceptanceWebsiteId(mixed $rawWebsiteId): int
+    {
+        if (\is_int($rawWebsiteId)) {
+            if ($rawWebsiteId < 0) {
+                throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_WEBSITE_INVALID');
+            }
+            $websiteId = $rawWebsiteId;
+        } elseif (\is_string($rawWebsiteId) && \preg_match('/^\d+$/D', $rawWebsiteId)) {
+            $canonical = \ltrim($rawWebsiteId, '0');
+            $canonical = $canonical === '' ? '0' : $canonical;
+            $maximum = (string)PHP_INT_MAX;
+            if (\strlen($canonical) > \strlen($maximum)
+                || (\strlen($canonical) === \strlen($maximum)
+                    && \strcmp($canonical, $maximum) > 0)) {
+                throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_WEBSITE_INVALID');
+            }
+            $websiteId = (int)$canonical;
+        } else {
+            throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_WEBSITE_INVALID');
+        }
+
+        if (\in_array($websiteId, self::ACCEPTANCE_DEFAULT_WEBSITE_IDS, true)) {
+            return $websiteId;
+        }
+
+        $configured = \getenv(self::ACCEPTANCE_WEBSITE_IDS_ENV);
+        if (!\is_string($configured) || $configured === '') {
+            throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_WEBSITE_NOT_ALLOWED');
+        }
+
+        $allowed = [];
+        foreach (\explode(',', $configured) as $candidate) {
+            if (!\preg_match('/^(?:0|[1-9]\d*)$/D', $candidate)) {
+                throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_WEBSITE_NOT_ALLOWED');
+            }
+            $maximum = (string)PHP_INT_MAX;
+            if (\strlen($candidate) > \strlen($maximum)
+                || (\strlen($candidate) === \strlen($maximum)
+                    && \strcmp($candidate, $maximum) > 0)) {
+                throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_WEBSITE_NOT_ALLOWED');
+            }
+            $allowed[(int)$candidate] = true;
+        }
+
+        if (!isset($allowed[$websiteId])) {
+            throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_WEBSITE_NOT_ALLOWED');
+        }
+        return $websiteId;
+    }
+
+    private static function assertAcceptanceFixtureEnabled(): void
+    {
+        if ((string)\getenv('WELINE_ACCEPTANCE_FIXTURES') !== '1'
+            || (string)\getenv('WELINE_VISITOR_AI_SEO_ACCEPTANCE') !== '1') {
+            throw new \RuntimeException('VISITOR_ACCEPTANCE_FIXTURE_DISABLED');
+        }
+    }
+
+    /**
+     * Delete only acceptance rows owned by an auditable receipt.
+     *
+     * @param list<array<string, mixed>> $ownedEvents
+     * @return array<string, mixed>
+     */
+    public function cleanupAcceptanceFixtureEvents(int $websiteId, array $ownedEvents, string $requestKey): array
+    {
+        self::assertAcceptanceFixtureEnabled();
+        $websiteId = self::acceptanceWebsiteId($websiteId);
+        if (!\preg_match('/^[A-Za-z0-9._:-]{8,128}$/D', $requestKey)) {
+            throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_REQUEST_KEY_INVALID');
+        }
+
+        $owners = [];
+        $sessions = [];
+        foreach ($ownedEvents as $ownedEvent) {
+            if (!\is_array($ownedEvent)) {
+                throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_RECEIPT_INVALID');
+            }
+            $sessionId = (string)($ownedEvent['session_id'] ?? '');
+            $event = (string)($ownedEvent['event'] ?? '');
+            $fixtureEventId = (string)($ownedEvent['fixture_event_id'] ?? '');
+            $ordinal = $ownedEvent['ordinal'] ?? null;
+            if ($sessionId === ''
+                || $event === ''
+                || $fixtureEventId === ''
+                || !\is_int($ordinal)
+                || $ordinal < 0) {
+                throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_RECEIPT_INVALID');
+            }
+            $ownerKey = $sessionId . "\0" . $ordinal . "\0" . $event;
+            $owners[$ownerKey] = $fixtureEventId;
+            $sessions[$sessionId] = true;
+        }
+
+        /** @var Pixel $pixel */
+        $pixel = ObjectManager::getInstance(Pixel::class);
+        $deletedPixelIds = [];
+        $matchedOwners = [];
+        foreach (\array_keys($sessions) as $sessionId) {
+            $rows = $pixel->clear()->getPixelsByWebsiteId(
+                $websiteId,
+                ['session_id' => $sessionId],
+                10000,
+                0
+            );
+            foreach ($rows as $row) {
+                if (!$row instanceof Pixel
+                    || (int)$row->getWebsiteId() !== $websiteId
+                    || (string)$row->getSessionId() !== $sessionId) {
+                    continue;
+                }
+                $marker = $this->acceptanceFixtureMarker($row->getBrowserInfo());
+                if ((string)($marker['contract'] ?? '') !== 'visitor.acceptance_fixture_marker.v1'
+                    || (string)($marker['case_id'] ?? '') !== 'ai-seo-v2-closed-loop'
+                    || (string)($marker['request_key'] ?? '') !== $requestKey) {
+                    continue;
+                }
+                $ordinal = $marker['ordinal'] ?? null;
+                $event = (string)$row->getEvent();
+                if (!\is_int($ordinal)) {
+                    $ordinal = \filter_var($ordinal, FILTER_VALIDATE_INT);
+                }
+                if ($ordinal === false || $ordinal === null || $ordinal < 0) {
+                    continue;
+                }
+                $ownerKey = $sessionId . "\0" . $ordinal . "\0" . $event;
+                $expectedFixtureEventId = $owners[$ownerKey] ?? '';
+                $actualFixtureEventId = (string)($marker['fixture_event_id'] ?? '');
+                if ($expectedFixtureEventId === ''
+                    || $actualFixtureEventId === ''
+                    || !\hash_equals($expectedFixtureEventId, $actualFixtureEventId)) {
+                    continue;
+                }
+
+                $pixelId = (int)$row->getPixelId();
+                $row->delete();
+                $matchedOwners[$ownerKey] = true;
+                if ($pixelId > 0) {
+                    $deletedPixelIds[] = $pixelId;
+                }
+            }
+        }
+
+        $expectedCount = \count($owners);
+        $matchedCount = \count($matchedOwners);
+        return [
+            'contract' => 'visitor.acceptance_fixture_cleanup.v1',
+            'request_key' => $requestKey,
+            'website_id' => $websiteId,
+            'expected_event_count' => $expectedCount,
+            'matched_event_count' => $matchedCount,
+            'deleted_event_count' => \count($deletedPixelIds),
+            'deleted_pixel_ids' => $deletedPixelIds,
+            'missing_event_count' => \max(0, $expectedCount - $matchedCount),
+            'complete' => $matchedCount === $expectedCount,
+        ];
+    }
+
+    /**
+     * Persist one acceptance event through the production prepare, attribution,
+     * and Pixel persistence path while deliberately bypassing the WLS hot buffer.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    public function persistAcceptanceFixtureEvent(array $payload): array
+    {
+        self::assertAcceptanceFixtureEnabled();
+
+        $prepared = $this->prepare($payload);
+        $post = $prepared['post'];
+        $data = $prepared['data'];
+        $additional = \is_array($post['additionalInfo'] ?? null) ? $post['additionalInfo'] : [];
+        $marker = \is_array($additional['meta']['acceptance_fixture'] ?? null)
+            ? $additional['meta']['acceptance_fixture']
+            : [];
+        $websiteId = self::acceptanceWebsiteId($post['websiteId'] ?? $post['website_id'] ?? null);
+        $event = (string)($data[Pixel::schema_fields_EVENT] ?? '');
+        $isPageView = $event === 'page_view';
+        if ((string)($post['source'] ?? '') !== 'worker'
+            || (string)($post['module'] ?? '') !== 'pagebuilder_ai_acceptance'
+            || (string)($marker['contract'] ?? '') !== 'visitor.acceptance_fixture_marker.v1'
+            || (string)($marker['case_id'] ?? '') !== 'ai-seo-v2-closed-loop'
+            || !\preg_match('/^[A-Za-z0-9._:-]{8,128}$/D', (string)($marker['request_key'] ?? ''))
+            || !\preg_match('/^af_evt_[a-f0-9]{32}$/D', (string)($marker['fixture_event_id'] ?? ''))
+            || !\is_int($marker['ordinal'] ?? null)
+            || (int)$marker['ordinal'] < 0
+            || (int)($data[Pixel::schema_fields_WEBSITE_ID] ?? -1) !== $websiteId
+            || (string)($data[Pixel::schema_fields_ATTRIBUTION_VERSION] ?? '') !== 'pagebuilder_ai_v1'
+            || (string)($data[Pixel::schema_fields_PAGE_TYPE] ?? '') === ''
+            || (int)($data[Pixel::schema_fields_PLAN_REVISION] ?? -1) < 0
+            || (!$isPageView
+                && ((string)($data[Pixel::schema_fields_BLOCK_KEY] ?? '') === ''
+                    || (string)($data[Pixel::schema_fields_CONTENT_FINGERPRINT] ?? '') === ''))) {
+            throw new \InvalidArgumentException('VISITOR_ACCEPTANCE_PAYLOAD_INVALID');
+        }
+
+        $responseData = $this->persistence()->persistPrepared($post, $data);
+        $pixelId = (int)($responseData['pixel_id'] ?? 0);
+        if ($pixelId <= 0) {
+            throw new \RuntimeException('VISITOR_ACCEPTANCE_PERSISTENCE_UNCONFIRMED');
+        }
+        $responseData['pixel_id'] = $pixelId;
+        $responseData['buffered'] = false;
+        $responseData['event_id'] = $prepared['event_id'];
+
+        return $this->successResponse($responseData);
+    }
+
+    /** @return array<string, mixed> */
+    private function acceptanceFixtureMarker(mixed $browserInfo): array
+    {
+        if (!\is_string($browserInfo) || $browserInfo === '') {
+            return [];
+        }
+        $decoded = \json_decode($browserInfo, true);
+        if (!\is_array($decoded)) {
+            return [];
+        }
+        $marker = $decoded['additionalInfo']['meta']['acceptance_fixture'] ?? null;
+        return \is_array($marker) ? $marker : [];
     }
 
     /**
@@ -87,6 +315,9 @@ class PixelEventService
         $engagement = \is_array($info['engagement'] ?? null) ? $info['engagement'] : [];
         $meta = \is_array($info['meta'] ?? null) ? $info['meta'] : [];
         $source = \is_array($info['source'] ?? null) ? $info['source'] : [];
+        $pageBuilderAttribution = \is_array($info['pagebuilder_attribution'] ?? null)
+            ? $info['pagebuilder_attribution']
+            : [];
 
         return [
             'schema' => $this->truncateScalar($info['schema'] ?? 'weline_behavior_timing_v2', 64),
@@ -148,6 +379,23 @@ class PixelEventService
                 'section_code' => $this->truncateScalar($source['section_code'] ?? '', 128),
                 'section_event_key' => $this->truncateScalar($source['section_event_key'] ?? '', 160),
                 'section_source_status' => $this->truncateScalar($source['section_source_status'] ?? 'n/a', 32),
+            ],
+            'pagebuilder_attribution' => [
+                'attribution_version' => $this->truncateScalar($pageBuilderAttribution['attribution_version'] ?? '', 32),
+                'source' => $this->truncateScalar($pageBuilderAttribution['source'] ?? '', 64),
+                'surface' => $this->truncateScalar($pageBuilderAttribution['surface'] ?? '', 32),
+                'analytics_consent' => $this->truncateScalar($pageBuilderAttribution['analytics_consent'] ?? '', 16),
+                'preview' => !empty($pageBuilderAttribution['preview']),
+                'website_id' => $this->truncateScalar($pageBuilderAttribution['website_id'] ?? '', 32),
+                'page_type' => $this->truncateScalar($pageBuilderAttribution['page_type'] ?? '', 64),
+                'block_key' => $this->truncateScalar($pageBuilderAttribution['block_key'] ?? '', 128),
+                'plan_revision' => (int)($pageBuilderAttribution['plan_revision'] ?? 0),
+                'content_fingerprint' => $this->truncateScalar($pageBuilderAttribution['content_fingerprint'] ?? '', 64),
+                'experiment_id' => $this->truncateScalar($pageBuilderAttribution['experiment_id'] ?? '', 96),
+                'variant' => $this->truncateScalar($pageBuilderAttribution['variant'] ?? '', 32),
+                'page_experiment_id' => $this->truncateScalar($pageBuilderAttribution['page_experiment_id'] ?? '', 96),
+                'page_variant' => $this->truncateScalar($pageBuilderAttribution['page_variant'] ?? '', 32),
+                'canonical_path' => $this->truncateScalar($pageBuilderAttribution['canonical_path'] ?? '', 255),
             ],
             'viewport' => \is_array($info['viewport'] ?? null) ? $this->compactLooseArray($info['viewport'], 1) : [],
             'meta' => $this->compactLooseArray($meta, 3),
@@ -530,7 +778,10 @@ class PixelEventService
         $data['utm_medium'] = substr((string)($attribution['utm_medium'] ?? ''), 0, 255);
         $data['utm_campaign'] = substr((string)($attribution['utm_campaign'] ?? ''), 0, 255);
 
-        return $this->sessionFirstTouch()->backfill($data);
+        return $this->optimizationAttribution()->hydrate(
+            $post,
+            $this->sessionFirstTouch()->backfill($data)
+        );
     }
 
     /**
@@ -743,6 +994,11 @@ class PixelEventService
         }
 
         return $this->channelLookupService;
+    }
+
+    private function optimizationAttribution(): PageBuilderOptimizationAttributionService
+    {
+        return $this->optimizationAttributionService ??= ObjectManager::getInstance(PageBuilderOptimizationAttributionService::class);
     }
 
     private function firstNonEmptyString(string ...$candidates): string

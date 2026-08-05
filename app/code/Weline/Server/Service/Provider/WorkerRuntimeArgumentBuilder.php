@@ -6,6 +6,7 @@ namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
+use Weline\Server\Service\Edge\Gateway\GatewayBackendCapabilityResolver;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedStateRuntimeOptions;
 use Weline\Server\Service\SharedStateRuntimeScope;
@@ -13,6 +14,40 @@ use Weline\Server\Service\SharedStateRuntimeScope;
 /** Shared argv identity for normal and maintenance Workers. */
 final class WorkerRuntimeArgumentBuilder
 {
+    /**
+     * Return the non-secret, generation-bound capability fact a gateway
+     * backend must attest. Values come exclusively from the launch snapshot
+     * frozen before Master starts; request headers can never supply them.
+     *
+     * @return string[]
+     */
+    public static function gatewayBackendCapability(ServiceContext $context): array
+    {
+        $gateway = $context->getConfig('wls.gateway', []);
+        $resolver = new GatewayBackendCapabilityResolver();
+        $capability = $resolver->capabilityFromLaunchSnapshot([
+            'gateway' => \is_array($gateway) ? $gateway : [],
+        ]);
+        $identity = $resolver->instanceIdentityState($capability);
+        $mode = (string)$identity['session_capability'];
+        $evidenceDigest = $mode === 'isolated'
+            ? \str_repeat('0', 64)
+            : (string)($identity['session_capability_evidence_digest'] ?? '');
+
+        if (!\in_array($mode, ['isolated', 'stateless', 'shared_session'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $evidenceDigest) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway backend capability launch arguments are invalid.'
+            );
+        }
+
+        return [
+            '--gateway-session-capability=' . $mode,
+            '--gateway-session-capability-evidence-digest=' . $evidenceDigest,
+        ];
+    }
+
     /** @return string[] */
     public static function sharedState(ServiceContext $context): array
     {

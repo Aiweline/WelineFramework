@@ -10,6 +10,7 @@ use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\StateManager;
 
@@ -19,12 +20,7 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
     private RoleAccess $roleAccessModel;
     private Acl $aclModel;
 
-    /** 请求级缓存：路由是否受 ACL 保护，同请求内避免重复查库，WLS 下由 StateManager 重置 */
-    private static array $routeProtectedCache = [];
-    /** @var array<string, array<int, string>> */
-    private static array $routeEquivalentPathsCache = [];
-    /** 请求级缓存：角色 ACL 条目列表，同请求内避免重复查库，WLS 下由 StateManager 重置 */
-    private static array $roleAclEntriesCache = [];
+    private const REQUEST_STATE_KEY = 'acl.service.request_cache.v1';
     private static bool $stateManagerRegistered = false;
 
     public function __construct(
@@ -51,9 +47,39 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
     /** WLS 请求结束后清空请求级缓存 */
     public static function resetRequestCache(): void
     {
-        self::$routeProtectedCache = [];
-        self::$routeEquivalentPathsCache = [];
-        self::$roleAclEntriesCache = [];
+        RequestContext::remove(self::REQUEST_STATE_KEY);
+    }
+
+    /**
+     * @return array{
+     *     route_protected: array<string, bool>,
+     *     route_equivalent_paths: array<string, array<int, string>>,
+     *     role_acl_entries: array<int, array>
+     * }
+     */
+    private static function requestState(): array
+    {
+        $state = RequestContext::get(self::REQUEST_STATE_KEY, []);
+        if (!is_array($state)) {
+            $state = [];
+        }
+
+        return [
+            'route_protected' => is_array($state['route_protected'] ?? null)
+                ? $state['route_protected']
+                : [],
+            'route_equivalent_paths' => is_array($state['route_equivalent_paths'] ?? null)
+                ? $state['route_equivalent_paths']
+                : [],
+            'role_acl_entries' => is_array($state['role_acl_entries'] ?? null)
+                ? $state['role_acl_entries']
+                : [],
+        ];
+    }
+
+    private static function storeRequestState(array $state): void
+    {
+        RequestContext::set(self::REQUEST_STATE_KEY, $state);
     }
 
     /**
@@ -90,15 +116,18 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             return [];
         }
         self::registerStateManager();
-        if (isset(self::$roleAclEntriesCache[$roleId])) {
-            return self::$roleAclEntriesCache[$roleId];
+        $state = self::requestState();
+        if (isset($state['role_acl_entries'][$roleId])) {
+            return $state['role_acl_entries'][$roleId];
         }
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $entries = $this->roleAccessModel->getRoleAccessListArrayByRoleId($roleId);
         if ($t0 > 0) {
             RequestLifecycleTrace::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
         }
-        self::$roleAclEntriesCache[$roleId] = $entries;
+        $state = self::requestState();
+        $state['role_acl_entries'][$roleId] = $entries;
+        self::storeRequestState($state);
         return $entries;
     }
 
@@ -201,36 +230,41 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             return false;
         }
         self::registerStateManager();
-        if (array_key_exists($routePath, self::$routeProtectedCache)) {
-            return self::$routeProtectedCache[$routePath];
+        $state = self::requestState();
+        if (array_key_exists($routePath, $state['route_protected'])) {
+            return $state['route_protected'][$routePath];
         }
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-        // WLS 模式下使用新实例避免状态污染（WHERE 条件残留）
-        /** @var Acl $freshAcl */
-        $freshAcl = ObjectManager::getInstance(Acl::class, [], false);
-        $row = $freshAcl
-            ->where(Acl::schema_fields_ROUTE, $routePath)
-            ->limit(1)
-            ->find()
-            ->fetch();
-        $protected = (bool)$row->getId();
-        if (!$protected) {
-            $routeCandidates = array_values(array_diff($this->getEquivalentRoutePaths($routePath), [$routePath]));
-            if (!empty($routeCandidates)) {
+        $protected = false;
+        foreach ($this->getEquivalentRoutePaths($routePath) as $candidate) {
+            // Menu links may carry a deterministic query string (for example a
+            // default website scope), while the router authorizes only the path.
+            // Check both representations so a query-bearing menu row cannot turn
+            // the underlying controller action into an implicit white route.
+            foreach ([$candidate, $candidate . '?%'] as $storedRoute) {
                 /** @var Acl $freshAcl */
                 $freshAcl = ObjectManager::getInstance(Acl::class, [], false);
                 $row = $freshAcl
-                    ->where(Acl::schema_fields_ROUTE, $routeCandidates, 'in')
+                    ->where(
+                        Acl::schema_fields_ROUTE,
+                        $storedRoute,
+                        str_ends_with($storedRoute, '?%') ? 'like' : '=',
+                    )
                     ->limit(1)
                     ->find()
                     ->fetch();
-                $protected = (bool)$row->getId();
+                if ($row->getId()) {
+                    $protected = true;
+                    break 2;
+                }
             }
         }
         if ($t0 > 0) {
             RequestLifecycleTrace::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
         }
-        self::$routeProtectedCache[$routePath] = $protected;
+        $state = self::requestState();
+        $state['route_protected'][$routePath] = $protected;
+        self::storeRequestState($state);
         return $protected;
     }
 
@@ -247,8 +281,9 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
             return [];
         }
         self::registerStateManager();
-        if (isset(self::$routeEquivalentPathsCache[$routePath])) {
-            return self::$routeEquivalentPathsCache[$routePath];
+        $state = self::requestState();
+        if (isset($state['route_equivalent_paths'][$routePath])) {
+            return $state['route_equivalent_paths'][$routePath];
         }
 
         $routes = $this->loadRouteRegistryEntries();
@@ -278,7 +313,9 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         }
 
         $equivalentPaths = array_keys($paths);
-        self::$routeEquivalentPathsCache[$routePath] = $equivalentPaths;
+        $state = self::requestState();
+        $state['route_equivalent_paths'][$routePath] = $equivalentPaths;
+        self::storeRequestState($state);
         return $equivalentPaths;
     }
 
@@ -317,7 +354,9 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
 
     private static function normalizeRoutePath(string $routePath): string
     {
-        return strtolower(trim($routePath, '/'));
+        $routePath = trim($routePath);
+        $path = preg_split('/[?#]/', $routePath, 2)[0] ?? '';
+        return strtolower(trim($path, '/'));
     }
 
     private static function normalizeRouteKeyPath(string $routeKey): string
@@ -463,5 +502,46 @@ class AclService implements AclServiceInterface, AuthorizationServiceInterface
         }
 
         return null;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function isObjectActionAllowed(int $roleId, string $action, array $objectScope): bool
+    {
+        try {
+            $identity = \Weline\Framework\Runtime\ScopeIdentity::fromArray($objectScope);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $this->objectAuthorization()->isObjectActionAllowed($roleId, $action, $identity);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function isObjectActionAllowedForSubmit(
+        int $roleId,
+        string $action,
+        array $objectScope,
+        int $expectedGrantVersion,
+    ): bool {
+        try {
+            $identity = \Weline\Framework\Runtime\ScopeIdentity::fromArray($objectScope);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $this->objectAuthorization()
+            ->authorizeForSubmit($roleId, $action, $identity, $expectedGrantVersion)
+            ->allowed;
+    }
+
+    private function objectAuthorization(): \Weline\Acl\Api\Authorization\ObjectAuthorizationServiceInterface
+    {
+        return ObjectManager::getInstance(
+            \Weline\Acl\Api\Authorization\ObjectAuthorizationServiceInterface::class
+        );
     }
 }

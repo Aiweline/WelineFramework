@@ -49,6 +49,8 @@
 ## 维护规则
 
 - 跨模块只通过 `StorageCatalogInterface` 获取数据化存储源清单；`StorageManager` 和驱动实例不跨模块暴露。
+- `StorageCatalog::all(?ScopeIdentity $scope)`：目录 `info` 脱敏（去掉 credentials/secret 等）；传入 Scope 时附加 COW `media_base_url`（软依赖 `Weline_Cdn`）。
+- 凭据密封全局约定：`app/code/Weline/Framework/doc/3-开发/secret_ref凭据密封.md`。
 
 - 不直接修改 `generated/`、`view/tpl/`、`routes.xml`。
 - 涉及浏览器业务请求时，只使用 `Weline.Api.*` / QueryProvider 链路。

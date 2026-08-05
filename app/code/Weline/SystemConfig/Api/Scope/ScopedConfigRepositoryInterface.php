@@ -38,6 +38,18 @@ interface ScopedConfigRepositoryInterface
         mixed $default = null,
     ): array;
 
+    /**
+     * TASK-P1C-001：typed Scope 解析与来源 DTO。
+     */
+    public function resolveTypedConfig(
+        string $key,
+        string $module,
+        string $area,
+        \Weline\Framework\Runtime\ScopeIdentity $identity,
+        ?string $locale = null,
+        mixed $default = null,
+    ): ConfigScopeValue;
+
     /** @return array<int, array<string, mixed>> */
     public function getConfigVersions(
         string $module,

@@ -443,13 +443,19 @@ class ModelSetup
         $primaryKey = $this->model->getPrimaryKey() ?: 'id';
         
         // 备份字段数据
-        $this->getFieldBackupService()->backupFieldData(
+        $backedUp = $this->getFieldBackupService()->backupFieldData(
             $this->getTable(),
             $fieldName,
             $primaryKey,
             $moduleName,
             $version
         );
+        if ($backedUp !== true) {
+            throw new \Weline\Framework\App\Exception(__(
+                '字段 %{1}.%{2} 备份失败，已中止删除列以避免数据丢失',
+                [$this->getTable(), $fieldName]
+            ));
+        }
         
         // 删除字段
         return $this->alterTable()->deleteColumn($fieldName);

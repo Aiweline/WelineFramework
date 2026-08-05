@@ -31,7 +31,20 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('data-account-section="orders"', $content);
         $this->assertStringContainsString('id="orders-section"', $content);
         $this->assertStringContainsString('Weline_Order::frontend::account::index::orders', $content);
+        $this->assertStringContainsString('AccountCheckoutGroupLoader', $content);
+        $this->assertStringContainsString('AccountSidebarProjectionProviderInterface', $content);
+        $this->assertStringContainsString("assign('accountCheckoutGroups'", $content);
         $this->assertStringNotContainsString('Weline_Customer::frontend::account::index::orders', $content);
+
+        $ordersPanel = $moduleRoot . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
+        $this->assertFileExists($ordersPanel);
+        $orders = (string) file_get_contents($ordersPanel);
+        $this->assertStringContainsString('data-account-layout="customer-sidebar"', $orders);
+        $this->assertStringContainsString('data-group-summary="true"', $orders);
+        $this->assertStringContainsString('data-partial-expanded="true"', $orders);
+        $this->assertStringContainsString('AccountCheckoutGroupPresenter', $orders);
+        $this->assertStringNotContainsString('fetch(', $orders);
+        $this->assertStringNotContainsString('axios', $orders);
 
         $this->assertStringContainsString('Hook: header-orders', $header);
         $this->assertStringContainsString('customer/account/index', $header);

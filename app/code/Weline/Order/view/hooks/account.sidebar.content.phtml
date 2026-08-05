@@ -4,18 +4,43 @@
  *
  * Hook: account.sidebar.content
  *
+ * 注入 `$accountCheckoutGroups`（按当前登录顾客 + website Scope 聚合），
+ * 再渲染 orders 子 Hook。禁止独立个人中心页。
+ *
  * @hook-priority 160
  * @hook-sort-order 10
  * @hook-solo false
  */
+use Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface;
 use Weline\Customer\Service\AccountSidebarContentGate;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Order\Service\AccountCheckoutGroupLoader;
 
 if (!AccountSidebarContentGate::accepts('orders')) {
     return;
 }
 
+$projectionProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+    ->resolve(AccountSidebarProjectionProviderInterface::class);
+if (!$projectionProvider instanceof AccountSidebarProjectionProviderInterface) {
+    throw new \LogicException('Required Customer account sidebar projection provider is unavailable.');
+}
+
+$projection = $projectionProvider->forSections('orders');
+$accountCheckoutGroups = [];
+if ($projection !== null && $projection->getCustomerId() !== null) {
+    /** @var AccountCheckoutGroupLoader $loader */
+    $loader = ObjectManager::getInstance(AccountCheckoutGroupLoader::class);
+    $accountCheckoutGroups = $loader->loadForCustomer(
+        (int) $projection->getCustomerId(),
+        (int) $projection->getWebsiteId(),
+    );
+}
+$this->assign('accountCheckoutGroups', $accountCheckoutGroups);
+
 $GLOBALS['__weline_order_account_sidebar_content_rendered'] = true;
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section" id="orders-section" data-account-section="orders" hidden>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="orders-section" data-account-section="orders" hidden weline-code="order.hook.account_sidebar_content.orders_section">
     <w:hook name="Weline_Order::frontend::account::index::orders"/>
 </section>

@@ -19,7 +19,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * 货币管理控制器
  */
-#[\Weline\Framework\Acl\Acl('Weline_Currency::currency_list', '货币管理', 'mdi mdi-currency-usd', '货币管理功能')]
+#[\Weline\Framework\Acl\Acl('Weline_Currency::currency_list', '货币管理', 'mdi mdi-currency-usd', '货币管理功能', 'Weline_Backend::currency_group')]
 class Currency extends BackendController
 {
     /**
@@ -43,26 +43,24 @@ class Currency extends BackendController
      */
     public function index()
     {
+        /** @var CurrencyModel $currencyModel */
+        $currencyModel = ObjectManager::getInstance(CurrencyModel::class, [], false);
         if ($search = $this->request->getGet('search')) {
-            $this->currencyModel->concat_like('code,name,symbol', "%$search%");
+            $currencyModel->concat_like('code,name,symbol', "%$search%");
         }
         
-        $currencies = $this->currencyModel->order('currency_id', 'desc')
+        $currencies = $currencyModel->order('currency_id', 'desc')
             ->pagination()
             ->select()
             ->fetch();
         
         // 处理货币数据，添加格式化示例
         $currencyItems = $currencies->getItems();
-        $currencyData = [];
         foreach ($currencyItems as $currency) {
-            $data = $currency->getData();
-            // 添加格式化示例
-            $data['formatted_example'] = $currency->formatAmount(1234.56);
-            $currencyData[] = $data;
+            $currency->setData('formatted_example', $currency->formatAmount(1234.56));
         }
         
-        $this->assign('currencies', $currencyData);
+        $this->assign('currencies', $currencyItems);
         $this->assign('pagination', $currencies->getPagination());
         return $this->fetch();
     }
@@ -72,6 +70,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add', '添加货币', '', '添加货币界面')]
      */
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add', '添加货币', 'mdi mdi-plus-circle-outline', '添加货币界面', 'Weline_Backend::currency_group')]
     public function getAdd()
     {
         $currency = clone $this->currencyModel->clear();
@@ -86,6 +85,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit', '编辑货币', '', '编辑货币界面')]
      */
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit', '编辑货币', 'mdi mdi-pencil', '编辑货币界面')]
     public function getEdit()
     {
         $currency = clone $this->currencyModel->clear()->load($this->request->getGet('id'));
@@ -104,6 +104,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add_post', '添加货币请求', '', '请求添加货币')]
      */
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_add_post', '添加货币请求', 'mdi mdi-content-save', '请求添加货币')]
     public function postAdd()
     {
         return $this->postSave();
@@ -114,6 +115,7 @@ class Currency extends BackendController
      * 
      * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit_post', '编辑货币请求', '', '请求编辑货币')]
      */
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_edit_post', '编辑货币请求', 'mdi mdi-content-save-edit', '请求编辑货币')]
     public function postEdit()
     {
         return $this->postSave();
@@ -163,9 +165,8 @@ class Currency extends BackendController
 
     /**
      * 删除货币
-     * 
-     * #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_delete', '删除货币', '', '删除货币')]
      */
+    #[\Weline\Framework\Acl\Acl('Weline_Currency::currency_delete', '删除货币', '', '删除货币')]
     public function postDelete()
     {
         try {
@@ -229,4 +230,3 @@ class Currency extends BackendController
         return $this->localDescriptionService;
     }
 }
-

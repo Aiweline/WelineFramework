@@ -11,7 +11,7 @@ use Weline\Framework\Database\Connection\Api\ConnectorInterface;
  * 禁止在此类中写 SQL 方言；所有表/列/索引/外键读取均通过 ConnectorInterface 的
  * getTableComment / getTableColumns / getTableIndexes / getTableForeignKeys，由各适配器自行实现方言。
  */
-final class DbSchemaReader
+final class DbSchemaReader implements SchemaReaderInterface
 {
     /**
      * 读取单表结构；表不存在时返回 null。
@@ -52,9 +52,9 @@ final class DbSchemaReader
             $indexes[] = new IndexDefinition(
                 name: (string) ($row['name'] ?? ''),
                 columns: array_values($row['columns'] ?? []),
-                type: !empty($row['unique']) ? 'UNIQUE' : 'DEFAULT',
+                type: (string)($row['type'] ?? (!empty($row['unique']) ? 'UNIQUE' : 'DEFAULT')),
                 comment: '',
-                method: 'BTREE'
+                method: (string)($row['method'] ?? 'BTREE')
             );
         }
 
@@ -145,9 +145,9 @@ final class DbSchemaReader
                 $indexes[] = new IndexDefinition(
                     name: (string) ($row['name'] ?? ''),
                     columns: array_values($row['columns'] ?? []),
-                    type: !empty($row['unique']) ? 'UNIQUE' : 'DEFAULT',
+                    type: (string)($row['type'] ?? (!empty($row['unique']) ? 'UNIQUE' : 'DEFAULT')),
                     comment: '',
-                    method: 'BTREE'
+                    method: (string)($row['method'] ?? 'BTREE')
                 );
             }
 

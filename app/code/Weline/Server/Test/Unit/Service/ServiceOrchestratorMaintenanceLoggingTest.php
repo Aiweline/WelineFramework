@@ -146,7 +146,7 @@ final class ServiceOrchestratorMaintenanceLoggingTest extends TestCase
             state: ServiceInstance::STATE_READY,
             ipcClientId: 11
         );
-        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $worker->setMeta('dispatcher_pool_confirmed_at', (\hrtime(true) / 1_000_000_000));
         $registry->addInstance($worker);
         $registry->addInstance(new ServiceInstance(
             role: ControlMessage::ROLE_DISPATCHER,

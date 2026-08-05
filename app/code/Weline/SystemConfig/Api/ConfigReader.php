@@ -74,6 +74,24 @@ final class ConfigReader
         return $this->config->getFallbackScopes($scope);
     }
 
+    /**
+     * TASK-P1C-001：typed Scope 解析。
+     */
+    public function resolveTypedConfig(
+        string $key,
+        string $module,
+        string $area,
+        \Weline\Framework\Runtime\ScopeIdentity $identity,
+        ?string $locale = null,
+        mixed $default = null,
+    ): \Weline\SystemConfig\Api\Scope\ConfigScopeValue {
+        if (\func_num_args() >= 6) {
+            return $this->config->resolveTypedConfig($key, $module, $area, $identity, $locale, $default);
+        }
+
+        return $this->config->resolveTypedConfig($key, $module, $area, $identity, $locale);
+    }
+
     public function globalScope(): string
     {
         return self::SCOPE_GLOBAL;

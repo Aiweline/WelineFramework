@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Dto\ThemeComponentDefinition;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
@@ -13,6 +14,17 @@ use Weline\Theme\Model\WelineTheme;
 
 class WidgetDefaultInjectionService
 {
+    public const SOURCE_AUTO = 'auto';
+    public const SOURCE_EXISTING = 'existing';
+    public const SOURCE_MANUAL_APPLY = 'manual_apply';
+    public const SOURCE_MANUAL_APPLY_ALL = 'manual_apply_all';
+    public const SOURCE_USER_DELETED = 'user_deleted';
+
+    private const DASHBOARD_PAGE_TYPE = 'dashboard';
+    private const NO_PLACEMENTS_WIDGET_MODULE = 'Weline_Theme';
+    private const NO_PLACEMENTS_WIDGET_TYPE = 'layout_state';
+    private const NO_PLACEMENTS_WIDGET_CODE = '__no_widget_placements__';
+
     private const EXCLUSIVE_SLOTS = [
         'header',
         'logo',
@@ -65,6 +77,9 @@ class WidgetDefaultInjectionService
             if ($keyword !== '' && !$this->matchesKeyword($item, $keyword)) {
                 continue;
             }
+            if (!$this->matchesDashboardDefaultViewFilter($item, $identity)) {
+                continue;
+            }
             if ($this->widgetExists($themeId, $item['page_type'], $item['identity'], $status, $item)) {
                 continue;
             }
@@ -101,7 +116,7 @@ class WidgetDefaultInjectionService
                 return null;
             }
             $layoutId = $this->saveInjection($themeId, $item, $status);
-            $this->markInitialHandled($themeId, $item, 'manual_apply');
+            $this->markInitialHandled($themeId, $item, self::SOURCE_MANUAL_APPLY, true);
             $item['layout_id'] = $layoutId;
             $item['status'] = $status;
             return $item;
@@ -151,7 +166,7 @@ class WidgetDefaultInjectionService
                 }
 
                 $layoutId = $this->saveInjection($themeId, $expandedItem, $status);
-                $this->markInitialHandled($themeId, $expandedItem, 'manual_apply_all');
+                $this->markInitialHandled($themeId, $expandedItem, self::SOURCE_MANUAL_APPLY_ALL, true);
                 $expandedItem['layout_id'] = $layoutId;
                 $expandedItem['status'] = $status;
                 $result['items'][] = $expandedItem;
@@ -195,8 +210,12 @@ class WidgetDefaultInjectionService
 
             foreach ([PreviewContextService::AREA_FRONTEND, PreviewContextService::AREA_BACKEND] as $componentArea) {
                 foreach ($this->collectDeclarations($theme, $componentArea, null, [], $widgetFilter) as $item) {
+                    // Dashboard injections only auto-enter via view-ready + default_view.
+                    if ((string)($item['page_type'] ?? '') === self::DASHBOARD_PAGE_TYPE) {
+                        continue;
+                    }
                     foreach ($this->expandItemForExistingIdentities($themeId, $item, $componentArea) as $expandedItem) {
-                        if ($this->hasInitialHandled($themeId, $expandedItem)) {
+                        if ($this->hasWidgetDecision($themeId, $expandedItem)) {
                             continue;
                         }
 
@@ -234,6 +253,130 @@ class WidgetDefaultInjectionService
         }
 
         return $applied;
+    }
+
+    /**
+     * Apply Dashboard default injections that declare default_view matching the ready view code.
+     *
+     * @param array<string,mixed> $identity
+     */
+    public function applyDashboardViewDefaultInjections(
+        int $themeId,
+        string $viewCode,
+        array $identity = [],
+        string $componentArea = PreviewContextService::AREA_BACKEND
+    ): int {
+        $viewCode = trim($viewCode);
+        if ($themeId <= 0 || $viewCode === '') {
+            return 0;
+        }
+
+        $theme = $this->loadTheme($themeId);
+        if (!$theme) {
+            return 0;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        if ($this->hasNoWidgetPlacementsMarker($themeId, self::DASHBOARD_PAGE_TYPE, $identity)) {
+            return 0;
+        }
+
+        $applied = 0;
+        foreach ($this->collectDeclarations($theme, $componentArea, self::DASHBOARD_PAGE_TYPE, $identity) as $item) {
+            $defaultView = trim((string)($item['default_view'] ?? ''));
+            if ($defaultView === '' || $defaultView !== $viewCode) {
+                continue;
+            }
+            if ($this->hasUserDeletedDecision($themeId, $item)) {
+                continue;
+            }
+            if ($this->shouldSkipAutoForExistingDecision($themeId, $item)) {
+                continue;
+            }
+
+            $applied += $this->applyInitialItem($themeId, $item);
+        }
+
+        return $applied;
+    }
+
+    /**
+     * Keep prior auto/existing/manual decisions when the widget is still present.
+     * Stale decisions whose widgets disappeared (without user_deleted) may refill.
+     */
+    private function shouldSkipAutoForExistingDecision(int $themeId, array $item): bool
+    {
+        $row = $this->findWidgetDecisionRow($themeId, $item);
+        if ($row === null) {
+            return false;
+        }
+
+        $source = (string)($row[ThemeWidgetDefaultInjection::schema_fields_SOURCE] ?? '');
+        if ($source === self::SOURCE_USER_DELETED) {
+            return true;
+        }
+
+        $identity = $this->normalizeIdentity((array)($item['identity'] ?? []));
+        $pageType = (string)($item['page_type'] ?? '');
+        if ($this->widgetExists($themeId, $pageType, $identity, ThemeLayout::STATUS_DRAFT, $item)
+            || $this->widgetExists($themeId, $pageType, $identity, ThemeLayout::STATUS_PUBLISHED, $item)
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Record that a user removed a widget from the layout editor so auto-injection stays suppressed.
+     *
+     * @param array<string,mixed> $identity
+     * @param array<string,mixed> $widget
+     */
+    public function markUserDeleted(
+        int $themeId,
+        string $pageType,
+        array $identity,
+        array $widget,
+        string $componentArea = PreviewContextService::AREA_FRONTEND
+    ): void {
+        if ($themeId <= 0 || trim($pageType) === '') {
+            return;
+        }
+
+        $module = trim((string)($widget['module'] ?? $widget['widget_module'] ?? ''));
+        $type = trim((string)($widget['type'] ?? $widget['widget_type'] ?? ''));
+        $code = trim((string)($widget['code'] ?? $widget['widget_code'] ?? ''));
+        if ($module === '' || $type === '' || $code === '') {
+            return;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        $componentArea = $this->normalizeComponentArea($componentArea);
+        $slotId = trim((string)($widget['slot_id'] ?? $widget['slot'] ?? ''));
+        $area = trim((string)($widget['area'] ?? ThemeLayout::AREA_CONTENT));
+        if ($area === '') {
+            $area = ThemeLayout::AREA_CONTENT;
+        }
+
+        $item = [
+            'module' => $module,
+            'type' => $type,
+            'code' => $code,
+            'page_type' => trim($pageType),
+            'layout_option' => $identity['layout_option'],
+            'scope' => $identity['scope'],
+            'target_type' => $identity['target_type'],
+            'target_id' => $identity['target_id'],
+            'identity' => $identity,
+            'slot_id' => $slotId,
+            'area' => $area,
+            'sort_order' => max(0, (int)($widget['sort_order'] ?? 0)),
+            'component_area' => $componentArea,
+        ];
+        $item['injection_key'] = $this->buildInjectionKey($item);
+        $this->markInitialHandled($themeId, $item, self::SOURCE_USER_DELETED, true);
     }
 
     private function saveInjection(int $themeId, array $item, string $status): int
@@ -310,12 +453,156 @@ class WidgetDefaultInjectionService
                 $this->saveInjection($themeId, $item, $status);
                 $applied++;
             }
-            $this->markInitialHandled($themeId, $item, $applied > 0 ? 'auto' : 'existing');
+            $this->markInitialHandled(
+                $themeId,
+                $item,
+                $applied > 0 ? self::SOURCE_AUTO : self::SOURCE_EXISTING
+            );
         } catch (\Throwable) {
             return $applied;
         }
 
         return $applied;
+    }
+
+    /**
+     * Any prior decision for the same layout identity + widget identity suppresses auto injection.
+     */
+    private function hasWidgetDecision(int $themeId, array $item): bool
+    {
+        return $this->findWidgetDecisionRow($themeId, $item) !== null;
+    }
+
+    private function hasUserDeletedDecision(int $themeId, array $item): bool
+    {
+        $row = $this->findWidgetDecisionRow($themeId, $item);
+        if ($row === null) {
+            return false;
+        }
+
+        return (string)($row[ThemeWidgetDefaultInjection::schema_fields_SOURCE] ?? '') === self::SOURCE_USER_DELETED;
+    }
+
+    /**
+     * Dashboard 视图 identity 下：只展示 default_view 匹配当前视图 code 的声明；
+     * 未声明 default_view 的仍可作为「应用默认」候选项。
+     *
+     * @param array<string,mixed> $item
+     * @param array<string,mixed> $identity
+     */
+    private function matchesDashboardDefaultViewFilter(array $item, array $identity): bool
+    {
+        $defaultView = trim((string)($item['default_view'] ?? ''));
+        if ($defaultView === '') {
+            return true;
+        }
+
+        $scope = trim((string)($identity['scope'] ?? ($item['scope'] ?? '')));
+        if (!preg_match('/^dashboard_view:(\d+)$/', $scope, $matches)) {
+            return true;
+        }
+
+        $viewCode = $this->resolveDashboardViewCode((int)$matches[1]);
+        if ($viewCode === '') {
+            return true;
+        }
+
+        return $defaultView === $viewCode;
+    }
+
+    private function resolveDashboardViewCode(int $viewId): string
+    {
+        if ($viewId <= 0 || !class_exists(\Weline\Dashboard\Model\DashboardView::class)) {
+            return '';
+        }
+
+        try {
+            /** @var \Weline\Dashboard\Model\DashboardView $view */
+            $view = ObjectManager::getInstance(\Weline\Dashboard\Model\DashboardView::class);
+            $view->clearQuery()->clearData()->load($viewId);
+            if ((int)$view->getViewId() !== $viewId) {
+                return '';
+            }
+
+            return trim((string)$view->getCode());
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function findWidgetDecisionRow(int $themeId, array $item): ?array
+    {
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        $module = trim((string)($item['module'] ?? ''));
+        $type = trim((string)($item['type'] ?? ''));
+        $code = trim((string)($item['code'] ?? ''));
+        $pageType = trim((string)($item['page_type'] ?? ''));
+        if ($module === '' || $type === '' || $code === '' || $pageType === '') {
+            return null;
+        }
+
+        try {
+            $identity = $this->normalizeIdentity((array)($item['identity'] ?? []));
+            $row = (clone $this->defaultInjectionRecord)->clearQuery()->clearData()
+                ->where(ThemeWidgetDefaultInjection::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_COMPONENT_AREA, $this->normalizeComponentArea((string)($item['component_area'] ?? PreviewContextService::AREA_FRONTEND)))
+                ->where(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, $pageType)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_SCOPE, $identity['scope'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_TYPE, $identity['target_type'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_TARGET_ID, $identity['target_id'])
+                ->where(ThemeWidgetDefaultInjection::schema_fields_WIDGET_MODULE, $module)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_WIDGET_TYPE, $type)
+                ->where(ThemeWidgetDefaultInjection::schema_fields_WIDGET_CODE, $code)
+                ->find()
+                ->fetchArray();
+
+            return is_array($row) && (int)($row[ThemeWidgetDefaultInjection::schema_fields_ID] ?? 0) > 0
+                ? $row
+                : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function hasNoWidgetPlacementsMarker(int $themeId, string $pageType, array $identity): bool
+    {
+        if ($themeId <= 0 || $pageType === '') {
+            return false;
+        }
+
+        $identity = $this->normalizeIdentity($identity);
+        try {
+            foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
+                $rows = (clone $this->themeLayout)->reset()
+                    ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
+                    ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                    ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+                    ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+                    ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
+                    ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
+                    ->where(ThemeLayout::schema_fields_STATUS, $status)
+                    ->where(ThemeLayout::schema_fields_WIDGET_MODULE, self::NO_PLACEMENTS_WIDGET_MODULE)
+                    ->where(ThemeLayout::schema_fields_WIDGET_TYPE, self::NO_PLACEMENTS_WIDGET_TYPE)
+                    ->where(ThemeLayout::schema_fields_WIDGET_CODE, self::NO_PLACEMENTS_WIDGET_CODE)
+                    ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1)
+                    ->select()
+                    ->fetchArray();
+                if (is_array($rows) && count($rows) > 0) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
 
     private function hasInitialHandled(int $themeId, array $item): bool
@@ -344,16 +631,33 @@ class WidgetDefaultInjectionService
         }
     }
 
-    private function markInitialHandled(int $themeId, array $item, string $source = 'auto'): void
+    private function markInitialHandled(int $themeId, array $item, string $source = self::SOURCE_AUTO, bool $force = false): void
     {
-        if ($themeId <= 0 || empty($item['injection_key']) || $this->hasInitialHandled($themeId, $item)) {
+        if ($themeId <= 0 || empty($item['injection_key'])) {
+            return;
+        }
+
+        $source = trim($source) !== '' ? trim($source) : self::SOURCE_AUTO;
+        $existing = $this->findWidgetDecisionRow($themeId, $item);
+        if ($existing !== null && !$force) {
+            return;
+        }
+        if ($existing === null && !$force && $this->hasInitialHandled($themeId, $item)) {
             return;
         }
 
         try {
             $identity = $this->normalizeIdentity((array)($item['identity'] ?? []));
             $record = clone $this->defaultInjectionRecord;
-            $record->clearQuery()->clearData()
+            $record->clearQuery()->clearData();
+            if ($existing !== null) {
+                $recordId = (int)($existing[ThemeWidgetDefaultInjection::schema_fields_ID] ?? 0);
+                if ($recordId > 0) {
+                    $record->load($recordId);
+                }
+            }
+
+            $record
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_THEME_ID, $themeId)
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_COMPONENT_AREA, $this->normalizeComponentArea((string)($item['component_area'] ?? PreviewContextService::AREA_FRONTEND)))
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_PAGE_TYPE, (string)($item['page_type'] ?? ''))
@@ -368,7 +672,7 @@ class WidgetDefaultInjectionService
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_SLOT_ID, (string)($item['slot_id'] ?? '') ?: null)
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_AREA, (string)($item['area'] ?? ThemeLayout::AREA_CONTENT))
                 ->setData(ThemeWidgetDefaultInjection::schema_fields_SORT_ORDER, (int)($item['sort_order'] ?? 0))
-                ->setData(ThemeWidgetDefaultInjection::schema_fields_SOURCE, trim($source) !== '' ? trim($source) : 'auto')
+                ->setData(ThemeWidgetDefaultInjection::schema_fields_SOURCE, $source)
                 ->save();
         } catch (\Throwable) {
             // Missing schema or a concurrent insert must not block widget collection.
@@ -446,6 +750,7 @@ class WidgetDefaultInjectionService
         $exclusive = array_key_exists('exclusive', $injection)
             ? (bool)$injection['exclusive']
             : ($definition->exclusive || ($slotId !== '' && in_array($slotId, self::EXCLUSIVE_SLOTS, true)));
+        $defaultView = trim((string)($injection['default_view'] ?? ''));
 
         $item = [
             'module' => $definition->module,
@@ -469,6 +774,7 @@ class WidgetDefaultInjectionService
             'reason' => trim((string)($injection['reason'] ?? '')),
             'config' => $config,
             'exclusive' => $exclusive,
+            'default_view' => $defaultView,
             'component_area' => $definition->area,
             'identity_scope_declared' => array_key_exists('scope', $injection),
             'identity_target_id_declared' => array_key_exists('target_id', $injection),

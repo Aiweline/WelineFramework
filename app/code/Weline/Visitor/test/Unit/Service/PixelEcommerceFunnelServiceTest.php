@@ -190,4 +190,34 @@ final class PixelEcommerceFunnelServiceTest extends TestCase
             \Weline\Visitor\Service\PixelChannelEcommerceFunnelService::STEP_ORDER
         );
     }
+
+    public function testBuildForWebsiteSurfacesInvalidWebsiteId(): void
+    {
+        $result = $this->service->buildForWebsite(
+            -1,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static fn(): array => [['session_id' => 's1', 'step_view_item' => 1]]
+        );
+
+        self::assertSame('invalid website_id', $result['error']);
+        self::assertSame(0, $result['step1_sessions']);
+        self::assertCount(4, $result['steps']);
+    }
+
+    public function testBuildForWebsiteSwallowsQueryErrorsWithoutThrowing(): void
+    {
+        $result = $this->service->buildForWebsite(
+            1,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static function (): array {
+                throw new \RuntimeException('flat column missing');
+            }
+        );
+
+        self::assertSame('flat column missing', $result['error']);
+        self::assertSame(0, $result['step1_sessions']);
+        self::assertCount(4, $result['steps']);
+    }
 }

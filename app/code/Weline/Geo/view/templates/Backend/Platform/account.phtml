@@ -170,7 +170,7 @@ function testConnection(accountId) {
     
     var testUrl = '<?= $this->getUrl('geo/backend/platform/testConnection') ?>';
     var testOpts = { method: 'POST', body: formData };
-    window.Weline.Api.request(testUrl, testOpts)
+    bqAdmin['geo'](testUrl, testOpts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (typeof Swal !== 'undefined') {
@@ -210,7 +210,7 @@ document.getElementById('account-form').addEventListener('submit', function(e) {
     
     var saveUrl = '<?= $this->getUrl('geo/backend/platform/saveAccount') ?>';
     var saveOpts = { method: 'POST', body: formData };
-    window.Weline.Api.request(saveUrl, saveOpts)
+    bqAdmin['geo'](saveUrl, saveOpts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (data.success) {

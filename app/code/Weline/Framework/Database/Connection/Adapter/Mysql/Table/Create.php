@@ -162,14 +162,18 @@ class Create extends AbstractTable implements CreateInterface
         return $this;
     }
 
-    public function create(): mixed
+    public function create(bool $withImplicitTimestampColumns = true): mixed
     {
         // 字段
-        if (!array_key_exists('`create_time`', $this->fields) && !array_key_exists('create_time', $this->fields)) {
+        if ($withImplicitTimestampColumns
+            && !array_key_exists('`create_time`', $this->fields)
+            && !array_key_exists('create_time', $this->fields)) {
             $create_time_comment_words = __('创建时间');
             $this->fields['`create_time`'] = "`create_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '{$create_time_comment_words}'";
         }
-        if (!array_key_exists('`update_time`', $this->fields) && !array_key_exists('update_time', $this->fields)) {
+        if ($withImplicitTimestampColumns
+            && !array_key_exists('`update_time`', $this->fields)
+            && !array_key_exists('update_time', $this->fields)) {
             $update_time_comment_words = __('更新时间');
             $this->fields['`update_time`'] = "`update_time` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '{$update_time_comment_words}'";
         }

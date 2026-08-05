@@ -141,8 +141,39 @@ small.text-muted {
 }
 </style>
 
+<?= \Weline\Framework\View\Form\FormRenderer::runtimeBootstrap() ?>
+
 <!-- jstree 树形插件 -->
 <link rel="stylesheet" href="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/themes/default/style.min.css)" />
+
+<script>
+(function(g){
+  if(g.__bqAdmin_developer_workspace) return;
+  g.__bqAdmin_developer_workspace=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['developer_workspace']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('developer_workspace').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script src="@static(Weline_Acl::libs/vakata-jstree-3.3.14-0/dist/jstree.min.js)"></script>
 
 <!-- 国际化字符串 -->
@@ -390,7 +421,7 @@ small.text-muted {
     }
     
     function loadCatalogTree() {
-        $.get({
+        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: '@admin-url("dev/tool/admin/document/catalog/tree")',
             dataType: 'json'
         }).done(function(data) {
@@ -635,7 +666,7 @@ small.text-muted {
         
         $('#catalog-edit-container').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">' + i18n.loading + '</span></div></div>');
         
-        $.ajax({
+        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: '@admin-url("dev/tool/admin/document/catalog/view")',
             method: 'GET',
             data: { id: catalogId },
@@ -734,7 +765,7 @@ small.text-muted {
             return;
         }
         
-        $.ajax({
+        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: '@admin-url("dev/tool/admin/document/catalog/post")',
             method: 'POST',
             data: formData,
@@ -919,7 +950,7 @@ small.text-muted {
     window.handleDeleteCatalog = handleDeleteCatalog;
     
     function performDelete(id) {
-        $.ajax({
+        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: '@admin-url("dev/tool/admin/document/catalog/delete")',
             method: 'POST',
             data: { id: id },
@@ -1071,7 +1102,7 @@ small.text-muted {
             position: newPosition
         };
         
-        $.ajax({
+        bqAdmin['developer_workspace']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})({
             url: '@admin-url("dev/tool/admin/document/catalog/update-order")',
             method: 'POST',
             data: saveData,

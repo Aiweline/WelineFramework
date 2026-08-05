@@ -229,7 +229,7 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
             pid: 999999,
             port: 18081,
             state: ServiceInstance::STATE_REGISTERED,
-            startedAt: \microtime(true) - 10.0,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 10.0,
         );
         $worker->setProcessTreePids(999999, 999999, 999999);
         $worker->setMeta('slot_id', 'worker#1');
@@ -505,27 +505,53 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
 
     public function testNativeDrainTransitionKeepsOriginalDeadlineAndFinalizesOnce(): void
     {
+        $launch = \str_repeat('a', 64);
         self::assertSame('START', ServiceOrchestrator::classifyGatewayNativeDrainTransition(
             ['state' => 'ACTIVE'],
-            1000,
+            1000.0,
+            $launch,
         ));
         self::assertSame('DRAINING', ServiceOrchestrator::classifyGatewayNativeDrainTransition(
-            ['state' => 'DRAINING', 'drain_until' => 1300],
-            1299,
+            [
+                'state' => 'DRAINING',
+                'master_launch_id' => $launch,
+                'drain_until_monotonic' => 1300.0,
+            ],
+            1299.0,
+            $launch,
         ));
         self::assertSame('FINALIZE', ServiceOrchestrator::classifyGatewayNativeDrainTransition(
-            ['state' => 'DRAINING', 'drain_until' => 1300],
-            1300,
+            [
+                'state' => 'DRAINING',
+                'master_launch_id' => $launch,
+                'drain_until_monotonic' => 1300.0,
+            ],
+            1300.0,
+            $launch,
         ));
         self::assertSame('DRAINED', ServiceOrchestrator::classifyGatewayNativeDrainTransition(
-            ['state' => 'DRAINED', 'drain_until' => 0],
-            9999,
+            [
+                'state' => 'DRAINED',
+                'master_launch_id' => $launch,
+                'drain_until_monotonic' => 0.0,
+            ],
+            9999.0,
+            $launch,
+        ));
+        self::assertSame('START', ServiceOrchestrator::classifyGatewayNativeDrainTransition(
+            [
+                'state' => 'DRAINED',
+                'master_launch_id' => \str_repeat('b', 64),
+            ],
+            9999.0,
+            $launch,
         ));
     }
 
     public function testDrainingOrDrainedNativeEdgeSuppressesEveryNativeRoleOnly(): void
     {
         $orchestrator = new ServiceOrchestrator();
+        $launch = \str_repeat('c', 64);
         $nativeRoles = (new \ReflectionClass(ServiceOrchestrator::class))
             ->getConstant('GATEWAY_NATIVE_EDGE_ROLES');
         self::assertIsArray($nativeRoles);
@@ -534,24 +560,41 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
             self::assertTrue($this->invokePrivate(
                 $orchestrator,
                 'gatewayNativeEdgeStateSuppressesRole',
-                [['state' => 'DRAINING'], $role],
+                [[
+                    'state' => 'DRAINING',
+                    'master_launch_id' => $launch,
+                ], $role, $launch],
             ));
             self::assertTrue($this->invokePrivate(
                 $orchestrator,
                 'gatewayNativeEdgeStateSuppressesRole',
-                [['state' => 'DRAINED'], $role],
+                [[
+                    'state' => 'DRAINED',
+                    'master_launch_id' => $launch,
+                ], $role, $launch],
             ));
             self::assertFalse($this->invokePrivate(
                 $orchestrator,
                 'gatewayNativeEdgeStateSuppressesRole',
-                [['state' => 'ACTIVE'], $role],
+                [[
+                    'state' => 'ACTIVE',
+                    'master_launch_id' => $launch,
+                ], $role, $launch],
+            ));
+            self::assertFalse($this->invokePrivate(
+                $orchestrator,
+                'gatewayNativeEdgeStateSuppressesRole',
+                [[
+                    'state' => 'DRAINED',
+                    'master_launch_id' => \str_repeat('d', 64),
+                ], $role, $launch],
             ));
         }
 
         self::assertFalse($this->invokePrivate(
             $orchestrator,
             'gatewayNativeEdgeStateSuppressesRole',
-            [['state' => 'DRAINED'], ControlMessage::ROLE_GATEWAY_BACKEND],
+            [['state' => 'DRAINED'], ControlMessage::ROLE_GATEWAY_BACKEND, $launch],
         ));
     }
 
@@ -563,7 +606,8 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
             $key => [
                 'reason' => 'resurrect_launch_attempts_exhausted:'
                     . ControlMessage::ROLE_GATEWAY_FALLBACK,
-                'quarantined_at' => \microtime(true) - 31.0,
+                'quarantined_monotonic' => (\hrtime(true) / 1_000_000_000) - 31.0,
+                'quarantined_at' => (\hrtime(true) / 1_000_000_000) - 31.0,
             ],
         ]);
         $this->writePrivate($orchestrator, 'resurrectQueue', [
@@ -640,10 +684,10 @@ final class ServiceOrchestratorWorkerHealthRecoveryTest extends TestCase
             launcherPid: 41000,
         );
         $this->writePrivate($orchestrator, 'processRunningCache', [
-            41000 => ['running' => true, 'checkedAt' => \microtime(true)],
-            41001 => ['running' => true, 'checkedAt' => \microtime(true)],
-            41002 => ['running' => true, 'checkedAt' => \microtime(true)],
-            42000 => ['running' => true, 'checkedAt' => \microtime(true)],
+            41000 => ['running' => true, 'checkedAt' => (\hrtime(true) / 1_000_000_000)],
+            41001 => ['running' => true, 'checkedAt' => (\hrtime(true) / 1_000_000_000)],
+            41002 => ['running' => true, 'checkedAt' => (\hrtime(true) / 1_000_000_000)],
+            42000 => ['running' => true, 'checkedAt' => (\hrtime(true) / 1_000_000_000)],
         ]);
 
         $this->invokePrivate(

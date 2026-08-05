@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Auth;
 
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionInterface;
 
 /**
@@ -327,19 +329,33 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
             return true;
         }
 
-        $cookieHeader = '';
-        if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
-            $cookieHeader = (string)(
-                \Weline\Framework\Env\WelineEnv::server('HTTP_COOKIE', '')
-                ?: \Weline\Framework\Env\WelineEnv::get('server.http_cookie', '')
-            );
-        }
-        if ($cookieHeader !== '' && \stripos($cookieHeader, 'WELINE_SESSID=') !== false) {
+        $cookieName = SessionCookieNameResolver::resolve();
+        $cookieValue = WelineEnv::getCookie($cookieName, null);
+        if (\is_string($cookieValue) && \trim($cookieValue) !== '') {
             return true;
         }
 
-        return isset($_COOKIE['WELINE_SESSID'])
-            && \trim((string)$_COOKIE['WELINE_SESSID']) !== '';
+        $cookieHeader = '';
+        if (\class_exists(WelineEnv::class, false)) {
+            $cookieHeader = (string)(
+                WelineEnv::server('HTTP_COOKIE', '')
+                ?: WelineEnv::get('server.http_cookie', '')
+            );
+        }
+        return $this->cookieHeaderContains($cookieHeader, $cookieName);
+    }
+
+    private function cookieHeaderContains(string $cookieHeader, string $cookieName): bool
+    {
+        foreach (\explode(';', $cookieHeader) as $pair) {
+            $parts = \explode('=', \trim($pair), 2);
+            if (\count($parts) !== 2 || \rawurldecode($parts[0]) !== $cookieName) {
+                continue;
+            }
+            return \trim(\rawurldecode($parts[1])) !== '';
+        }
+
+        return false;
     }
 
     /**

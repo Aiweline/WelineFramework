@@ -5,7 +5,7 @@
 
 namespace Weline\Theme\Test\Unit;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Theme\Taglib\ThemeCss;
 use Weline\Theme\Taglib\ThemeJs;
 use Weline\Framework\Manager\ObjectManager;

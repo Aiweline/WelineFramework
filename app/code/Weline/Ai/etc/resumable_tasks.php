@@ -7,5 +7,6 @@ use Weline\Ai\Service\Resumable\ChatGenerationTaskHandler;
 return [
     'ai.chat_generation' => [
         'handler' => ChatGenerationTaskHandler::class,
+        'areas' => ['frontend'],
     ],
 ];

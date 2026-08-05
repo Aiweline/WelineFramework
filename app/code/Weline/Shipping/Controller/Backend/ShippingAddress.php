@@ -107,10 +107,10 @@ class ShippingAddress extends BackendController
             }
             
             $this->getMessageManager()->addSuccess($message);
-            $this->redirect('*/index');
+            $this->redirect('shipping/backend/shippingaddress');
         } catch (\Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('*/edit' . ($id ? '?id=' . $id : ''));
+            $this->redirect('shipping/backend/shippingaddress/edit' . ($id ? '?id=' . $id : ''));
         }
     }
 
@@ -210,4 +210,3 @@ class ShippingAddress extends BackendController
         $this->redirect('*/index');
     }
 }
-

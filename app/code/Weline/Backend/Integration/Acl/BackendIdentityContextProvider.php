@@ -16,6 +16,24 @@ final class BackendIdentityContextProvider implements BackendIdentityContextProv
         return BackendUser::getAclContext($userId);
     }
 
+    public function currentAclContext(): ?array
+    {
+        $userId = BackendWarmupContext::isActive()
+            ? BackendWarmupContext::currentUserId()
+            : 0;
+        if ($userId <= 0) {
+            try {
+                $userId = (int)(\Weline\Framework\Session\SessionFactory::getInstance()
+                    ->createBackendSession()
+                    ->getUserId() ?? 0);
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return $userId > 0 ? $this->getAclContext($userId) : null;
+    }
+
     public function currentWarmupUserId(Request $request): int
     {
         if (!BackendWarmupContext::isInternalWarmupRequest($request)

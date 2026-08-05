@@ -13,13 +13,20 @@ Weline I18n 是系统的国际化翻译模块，提供了完整的多语言支�
 |---|---|
 | `Api\Translation\DictionaryRepositoryInterface` | 按词和 locale 读取、批量读取、前缀枚举、写入与精确删除；返回不可变 `DictionaryEntry` |
 | `Api\Translation\TranslationCollectorInterface` | 从模块目录收集翻译源串 |
-| `Api\Translation\TranslationResolverInterface` | 按 locale 和首选模块语言包解析显示文案 |
+| `Api\Translation\TranslationResolverInterface` | 按 locale / 首选模块解析；`translateForScope()` 提供 typed Scope + locale 回落（TASK-P1C-005-I18N） |
+| `Api\Scope\PhraseScopeValue` / `PhraseScopeSource` | scoped phrase 解析结果与来源徽章 DTO |
 | `Api\Localization\LocaleCatalogInterface` | 获取全部 locale 或已安装且启用的 locale/名称/国旗 |
 | `Api\Localization\LocaleNameCatalogInterface` | 以不可变 `LocaleNameRecord` 读取 locale 展示名称行、首条匹配和存在性 |
 | `Api\Localization\LocaleRepositoryInterface` | 以不可变 `LocaleRecord` 读取已安装启用语言，并规范化 locale 别名 |
 | `Api\Localization\CountryRepositoryInterface` | 以不可变 `CountryRecord` 读取已安装国家或已安装启用国家 |
 | `Api\Localization\LanguageCodeConverter` | ISO 639-1/639-2/BCP 47 语言代码的无状态转换 |
 | `Api\Javascript\JavascriptModuleConfigProviderInterface` | 模块提交 `weline.modules.js` 数据源，不把主题实现反向注入 I18n |
+| `Api\Seo\LocalizedUrlBuilderInterface` | 唯一 canonical 本地化 URL 生成器：按调用方传入的 `defaultLocale`/`defaultCurrency` 抑制默认段，不读请求全局状态，可在队列/发布等无请求上下文中使用 |
+
+`LocalizedUrlBuilderInterface` 的默认段抑制以**调用方传入的默认值**为准，而不是实现内部的
+`FALLBACK_LOCALE`/`FALLBACK_CURRENCY` 常量；后者只在调用方未提供默认值时兜底。发布链路（例如
+PageBuilder 物化多语言页面）必须用它生成 canonical/hreflang URL，不得自己拼语言前缀，
+`website_id=0` 同样按站点默认语言正确抑制前缀。
 
 Repository 只返回不可变 DTO，不暴露 I18n ORM Model、Query Builder、字段常量或分页对象。实现由
 `etc/module.php` 的 `provides` 和 `framework:compile` 注册。调用方必须在自己的
@@ -27,6 +34,12 @@ Repository 只返回不可变 DTO，不暴露 I18n ORM Model、Query Builder、�
 `CountryRepositoryInterface::installedActive($displayLocale)` 固定按国家码升序返回已安装且启用的
 国家；`displayName` 使用指定 locale 的国家名，缺失时回退国家码。地区、配送等模块应直接消费
 该 DTO，不得再次查询 `Countries` 或 `Countries\Locale\Name`。
+
+前台只读操作 `i18n.resolveCurrentScopeTranslation(source, locale_code?)`
+只从 `RequestContext::scopeIdentity()` 读取当前可信 Website/Store/Channel，
+调用方不能传入或替换 Scope。缺少可信商城 Scope 时返回
+`i18n_request_scope_unavailable`；成功结果保留翻译值及实际来源 Scope，
+用于双站点串扰验收。
 
 JS 翻译配置采用单向 Provider：Theme 实现 I18n 的 `JavascriptModuleConfigProviderInterface`，I18n 只读取编译后的
 Provider 注册表，不再引用 Theme Reader。这样依赖方向固定为 `Theme -> I18n -> Framework`。
@@ -41,6 +54,10 @@ WLS 的翻译所有权统一在 `Weline\Framework\Phrase\Parser`，`Weline\I18n\
 2. 最终词查询：先查 Worker 的 `locale + 模块集合 + word` 常驻哈希；模块 CSV miss 后，再按 `Worker 全局单词 L1 -> Shared Memory 单词记录 -> md5(word + locale) 精确数据库查询` 回源。
 
 因此 Worker 只会把自己实际遇到的词不断加入常驻内存，不会一次装载 21,055 条全 locale 数据。最终词哈希最多 32,768 项并有界裁剪；普通请求清理不影响它，翻译发布/cache epoch 才统一失效。失效后的首次读取才重新计算文件版本并访问 Shared Memory，后续请求恢复为纯进程数组查询。新增词条仍建议保存正确 `source_module` 以便维护、导出和模块归属，但无归属的历史词条也能通过精确单词回源生效，不会迫使 WLS 加载整张词典。
+
+全局基础词典 `i18n_dictionary.word` 的可移植上限为 512 个 Unicode 字符，并由完整字段主键承担去重，不使用 TEXT 前缀索引或冗余 UNIQUE。该上限在 utf8mb4 最坏情况下为 2048 字节，兼容 MySQL 8 InnoDB 与 PostgreSQL btree；当前仓库全部模块及全局 i18n CSV 的 source 扫描最大为 431 字符。所有基础词典写入入口统一通过 `Dictionary::assertWord()` 校验：只接受字符串或整数，空字符串、非法 UTF-8 和超过 512 字符的数据会在首个批量写入之前明确失败；校验不做 trim、大小写折叠或 Unicode 归一化，也禁止截断后写入。地区译文表继续使用指纹主键，`word` 与 `translate` 保持 TEXT。
+
+`Countries` / `Locale` / `Locals` 会保存完整内联 SVG 国旗，不是资源键或国家码；三张表的 `flag` 统一声明为 `MEDIUMTEXT`。MySQL `TEXT` 的 65,535 字节上限不足以容纳部分 `flag-icons` SVG（例如 ES 资源超过 80 KB）；不允许静默截断或把安装失败降级成每轮重复警告。PostgreSQL/SQLite 按各自方言映射为无小容量上限的 TEXT 语义。
 
 ```php
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -108,8 +125,27 @@ Weline.Api.resource('i18n_admin').action({
 - Cookie 语言设置
 - 动态语言切换
 - 语言检测
+- `<w:i18n:language:switcher />` 会自带加载公共 `i18n.js` 运行时。服务端输出的 option `href` 是唯一权威导航结果；点击统一委托给 `WelineI18n.switchLang(locale, href)`，公共对象不可用时由浏览器直接跟随该 href 渐进降级。公共 JS 和标签内脚本不得重算或覆盖权威 href
+- `WelineI18n.switchLang(locale, href)`：写入语言 Cookie 后原样导航同源服务端 href；目标与当前 `pathname+search+hash` 相同时强制 `location.reload()`。仅无 href 的旧编程调用保留兼容 URL builder。后台路径始终保留 locale（含默认语言），默认货币段省略，非默认货币保留；随机后台 key 与 query 不丢失
+- 普通响应仍会回写语言/货币 Cookie（非 HttpOnly），作为无路径段导航时的偏好回落；不得压过当前 URL 语言段
+- `WelineI18n.buildLanguageUrl()` 统一重建前后台语言路径：已识别后台前缀时直接在前缀后插入语言段，不再把模块路由段误判为第二个后台前缀
 - 后台顶栏 `<w:i18n:language:switcher />` 的可选语言集合由 `ActiveLocaleCodeProvider` 提供：合并 `Locals`（翻译行）与 `Locale`（安装态）中「已安装 + 已激活」的代码，与表单侧 `<w:i18n:language:select />` 对齐；避免仅读 `Locals` 时漏掉已安装语言
 - `<w:i18n:language:switcher />` **必须运行时渲染**（编译期只输出 `LanguageSwitcher::render()` 调用），禁止把语言列表 HTML 烘焙进 `com_*.phtml`；否则 Worker chrome 预热/非后台编译上下文会把「仅中文」冻进模板
+- `<w:i18n:language:select />` 与 `<w:i18n:language:switcher />` 共享 `LanguageSelect::getLanguageItems()` 作为唯一语言目录：统一按国家分组，组内展示地区语言、参考名称与 Locale 代码，搜索同时覆盖国家、语言和代码。PageBuilder、网站表单、SystemConfig、字典和后台顶栏只需使用官方 Taglib，不再各自维护语言 option
+- `LanguageSelect catalog="installed|global"`：管理表单默认只显示已安装语言；语言支持申请使用
+  Symfony Intl 全球目录。`disabled-values` 会保留站点已支持语言但禁止再次选择。全球目录
+  不重复内嵌 SVG 国旗，浏览器按 `country_code` 生成 Unicode 国旗，以保持 QueryBin 响应在
+  单字段 2MB 上限内。
+- 前台 `LanguageSwitcher` 在网站 Scope 的 `i18n/language_request/enabled` 开启时显示
+  “申请支持其他语言”。初始 HTML 只有入口和弹层壳；首次点击才通过
+  `i18n_language_requests.getLanguageSupportRequestForm` 加载全球目录、`<w:form>` 与 Captcha；
+  使用本地图形验证码时，该写操作会签发一次性短效挑战。
+- 游客姓名/邮箱必填，登录客户自动记录 `customer_id`；一次最多 20 个 locale。服务端从
+  `RequestContext` 重新解析网站，执行 locale、频率、重复申请和 Captcha 复验。
+- I18n 后台 `/i18n/backend/language-requests` 负责 `pending → accepted → ready/rejected`。
+  `accepted` 不等于语言可用；只有安装、启用且运行时语言包存在时才进入 `ready`。资源变更事件
+  会异步重算。跨模块只能通过 `LanguageSupportRequestDirectoryInterface` /
+  `LanguageSupportRequestWorkflowInterface` 消费。
 - 后台 Topbar 语言目录 provider（`BackendLocaleCatalogProvider`）使用 `LocaleCatalogInterface::installed()`，不以语言包目录为准
 
 ## 使用方法
@@ -243,6 +279,13 @@ class Product implements LocalModelInterface
 ```
 
 ### 语言切换功能
+
+前台头部语言切换器（`header-language-switcher`）只展示当前站点 `WebsiteLanguage` 允许的语言。若 Cookie / 路径残留了站点未启用的语言码，服务端 `State::getLang()` 会回落到网站默认语言，切换器也会把当前项强制对齐到列表内首个可用语言，避免头部出现「语言 AR」这类幽灵短码，以及选项名称被错误 locale 渲染成阿拉伯文。
+
+切回默认语言时会写入 `WELINE_USER_LANG`（非 HttpOnly，供 JS 读写）；服务端 `App::syncCookieRouteStateFromServer()` 也会用 `State::getLang()` 纠正无效残留 Cookie。
+
+页头语言与货币选择器的搜索、选项和跳转逻辑仍由 `Frontend/header-choice-selector-assets.phtml` 负责，浮层定位统一委托给 Theme.js 的 `window.WelineSmartDropdown` 基座。基座在打开、悬停以及视口 resize/scroll 时重新检测可视区域：四边保留至少 8px 安全边距并夹取到视口内；下方空间不足且上方更宽裕时自动向上翻转；列表高度按剩余空间收敛，避免窄屏产生横向滚动或被上下边缘截断。`place({ portal: false, hoverBridge: true })` 时由基座桥接触发器与面板间距，语言/货币等继承该基础选择器的控件无需各自再写 hover 保活逻辑。
+
 ```php
 use Weline\Framework\Http\Cookie;
 use Weline\I18n\Model\I18n;

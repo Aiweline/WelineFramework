@@ -7,8 +7,10 @@ namespace Weline\Framework\Test\Unit\Service\Runtime;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Extends\Module\Weline_Framework\Query\ResumableTaskQueryProvider;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Resumable\ResumableTaskEventStreamInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskRuntimeInterface;
+use Weline\Framework\Runtime\Resumable\ResumableTaskStarterInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskStatus;
 use Weline\Framework\Runtime\Resumable\TaskEvent;
 use Weline\Framework\Runtime\Resumable\TaskEventReplay;
@@ -19,6 +21,9 @@ use Weline\Framework\Runtime\Resumable\TaskPolicy;
 use Weline\Framework\Runtime\Resumable\TaskResult;
 use Weline\Framework\Runtime\Resumable\TaskSnapshot;
 use Weline\Framework\Service\Query\FrontendQueryException;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
+use Weline\Framework\Service\Runtime\ResumableTaskAccessPolicy;
+use Weline\Framework\Service\Runtime\ResumableTaskHandlerRegistry;
 use Weline\Framework\Service\Runtime\ResumableTaskOwnerResolver;
 
 final class ResumableTaskQueryProviderTestRuntime implements ResumableTaskRuntimeInterface, ResumableTaskEventStreamInterface
@@ -82,8 +87,29 @@ final class ResumableTaskQueryProviderTestOwnerResolver extends ResumableTaskOwn
     }
 }
 
+final class ResumableTaskQueryProviderTestStarter implements ResumableTaskStarterInterface
+{
+    public function startForOwner(string $typeCode, array $input, TaskOwner $owner): TaskHandle
+    {
+        unset($typeCode, $input, $owner);
+
+        return new TaskHandle(
+            taskId: 'task-00000001',
+            leaseId: 'lease-00000001',
+            status: ResumableTaskStatus::STARTING,
+            leaseExpiresAt: 1_700_000_100,
+        );
+    }
+}
+
 final class ResumableTaskQueryProviderTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        RequestContext::remove(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY);
+        parent::tearDown();
+    }
+
     public function testStatusAndTouchExposeOnlySafeOwnerScopedFields(): void
     {
         $owner = new TaskOwner('frontend', 'frontend:42', 'session-42', 0);
@@ -115,6 +141,39 @@ final class ResumableTaskQueryProviderTest extends TestCase
             'last_seen_at' => 1_700_000_001,
             'expires_at' => 1_700_000_601,
         ], $touch);
+    }
+
+    public function testStatusExposesCheckpointStateForBackendPolling(): void
+    {
+        $owner = new TaskOwner('frontend', 'frontend:42', 'session-42', 0);
+        $runtime = new ResumableTaskQueryProviderTestRuntime();
+        $runtime->snapshot = $this->snapshot(
+            $owner,
+            ResumableTaskStatus::RUNNING,
+            4,
+            new \Weline\Framework\Runtime\Resumable\TaskCheckpoint(
+                taskId: 'task-00000001',
+                version: 2,
+                cursor: 'preview_saved',
+                state: [
+                    'next_index' => 1,
+                    'total' => 3,
+                    'results' => [
+                        '1:frontend' => ['key' => '1:frontend', 'success' => true],
+                    ],
+                ],
+            ),
+        );
+        $provider = $this->provider($runtime, $owner);
+
+        $status = $provider->execute('status', ['task_id' => 'task-00000001']);
+        self::assertSame('running', $status['status']);
+        self::assertIsArray($status['checkpoint']);
+        self::assertSame(2, $status['checkpoint']['version']);
+        self::assertSame('preview_saved', $status['checkpoint']['cursor']);
+        self::assertSame(1, $status['checkpoint']['state']['next_index']);
+        self::assertSame(3, $status['checkpoint']['state']['total']);
+        self::assertTrue($status['checkpoint']['state']['results']['1:frontend']['success']);
     }
 
     public function testEventsUsePersistentSequenceAndDoNotExecuteWork(): void
@@ -338,29 +397,44 @@ final class ResumableTaskQueryProviderTest extends TestCase
         ResumableTaskQueryProviderTestRuntime $runtime,
         TaskOwner $owner,
     ): ResumableTaskQueryProvider {
+        RequestContext::set(
+            FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY,
+            FrontendWorkerExecutionContext::frontend(),
+        );
+
         return new ResumableTaskQueryProvider(
             runtime: $runtime,
+            starter: new ResumableTaskQueryProviderTestStarter(),
             ownerResolver: new ResumableTaskQueryProviderTestOwnerResolver($owner),
             request: new Request(),
             pollIntervalMilliseconds: 1,
             subscriptionSeconds: 1,
+            accessPolicy: new ResumableTaskAccessPolicy(
+                new ResumableTaskHandlerRegistry([
+                    BP . 'app/code/Weline/Ai/etc/resumable_tasks.php',
+                ]),
+            ),
         );
     }
 
-    private function snapshot(TaskOwner $owner, ResumableTaskStatus $status, int $latestEventId): TaskSnapshot
-    {
+    private function snapshot(
+        TaskOwner $owner,
+        ResumableTaskStatus $status,
+        int $latestEventId,
+        ?\Weline\Framework\Runtime\Resumable\TaskCheckpoint $checkpoint = null,
+    ): TaskSnapshot {
         $terminal = $status->isTerminal();
 
         return new TaskSnapshot(
             taskId: 'task-00000001',
-            typeCode: 'websites.site_build',
+            typeCode: 'ai.chat_generation',
             status: $status,
             owner: $owner,
             policy: TaskPolicy::defaults(),
             attempt: $status === ResumableTaskStatus::STARTING ? 0 : 1,
             maxAttempts: 4,
             fencingGeneration: $status === ResumableTaskStatus::STARTING ? 0 : 1,
-            checkpoint: null,
+            checkpoint: $checkpoint,
             latestEventSequence: $latestEventId,
             result: $terminal ? TaskResult::completed(['website_id' => 0]) : null,
             errorCode: null,

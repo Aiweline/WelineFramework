@@ -8,10 +8,10 @@ $selectedProviderContext = \is_array($selectedProviderContext) ? $selectedProvid
 $fakeMode = (bool)($this->getData('fake_mode') ?? false);
 ?>
 <style>
-.sbv1{display:grid;gap:20px}.sbv1-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px}.sbv1-card{border:1px solid #e2e8f0;border-radius:18px;background:#fff;box-shadow:0 10px 28px rgba(15,23,42,.08)}.sbv1-card .body{padding:22px}.sbv1-hero{padding:24px;border-radius:18px;background:linear-gradient(135deg,#f8fafc,#eff6ff)}.sbv1 label{display:block;font-weight:600;margin-bottom:8px}.sbv1 textarea,.sbv1 input,.sbv1 select{width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px}.sbv1-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.sbv1-status{display:inline-flex;align-items:center;padding:6px 10px;border-radius:10px;background:#f8fafc;color:#334155;font-size:13px}.sbv1-status.ok{background:#f0fdf4;color:#15803d}.sbv1-status.err{background:#fef2f2;color:#b91c1c}.sbv1-status.info{background:#eff6ff;color:#1d4ed8}.sbv1-list{display:grid;gap:10px}.sbv1-item{padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}.sbv1-item.pick{border-color:#2563eb;background:#eff6ff}.sbv1-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.56);z-index:1055}.sbv1-modal.open{display:flex}.sbv1-panel{width:min(1080px,100%);max-height:92vh;display:grid;grid-template-rows:auto 1fr auto;border-radius:20px;overflow:hidden;background:#fff}.sbv1-head,.sbv1-foot{padding:16px 20px;border-bottom:1px solid #e2e8f0}.sbv1-foot{border-bottom:none;border-top:1px solid #e2e8f0}.sbv1-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:0}.sbv1-plan{min-height:0;overflow:auto;padding:20px;background:#fafcff;border-right:1px solid #e2e8f0}.sbv1-plan pre{white-space:pre-wrap;margin:0}.sbv1-side{display:grid;grid-template-rows:auto 1fr auto;min-height:0}.sbv1-log{min-height:0;overflow:auto;background:#0f172a;color:#e2e8f0;padding:14px;font-size:13px}.sbv1-log div{margin:0 0 8px}.sbv1-sidebox{padding:14px;border-top:1px solid #e2e8f0}.sbv1-domain{display:grid;grid-template-columns:210px minmax(0,1fr);min-height:0}.sbv1-tabs{padding:16px;background:#f8fafc;border-right:1px solid #e2e8f0;display:grid;gap:8px;align-content:start}.sbv1-tab{padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;text-align:left;font-weight:600}.sbv1-tab.on{background:#0f172a;color:#fff;border-color:#0f172a}.sbv1-pane-wrap{min-height:0;overflow:auto;padding:20px}.sbv1-pane{display:none}.sbv1-pane.on{display:block}@media(max-width:1024px){.sbv1-grid,.sbv1-body,.sbv1-domain{grid-template-columns:1fr}.sbv1-plan,.sbv1-tabs{border-right:none;border-bottom:1px solid #e2e8f0}}
+.sbv1{display:grid;gap:20px}.sbv1-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px}.sbv1-card{border:1px solid #e2e8f0;border-radius:18px;background:#fff;box-shadow:0 10px 28px rgba(15,23,42,.08)}.sbv1-card .body{padding:22px}.sbv1-hero{padding:24px;border-radius:18px;background:linear-gradient(135deg,#f8fafc,#eff6ff)}.sbv1 label{display:block;font-weight:600;margin-bottom:8px}.sbv1 textarea,.sbv1 input,.sbv1 select,.sbv1-modal textarea,.sbv1-modal input,.sbv1-modal select{width:100%;max-width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px}.sbv1-sidebox .sbv1-actions{width:100%}.sbv1-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.sbv1-status{display:inline-flex;align-items:center;padding:6px 10px;border-radius:10px;background:#f8fafc;color:#334155;font-size:13px}.sbv1-status.ok{background:#f0fdf4;color:#15803d}.sbv1-status.err{background:#fef2f2;color:#b91c1c}.sbv1-status.info{background:#eff6ff;color:#1d4ed8}.sbv1-list{display:grid;gap:10px}.sbv1-item{padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}.sbv1-item.pick{border-color:#2563eb;background:#eff6ff}.sbv1-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.56);z-index:1055}.sbv1-modal.open{display:flex}.sbv1-panel{width:min(1080px,100%);max-height:92vh;display:grid;grid-template-rows:auto 1fr auto;border-radius:20px;overflow:hidden;background:#fff}.sbv1-head,.sbv1-foot{padding:16px 20px;border-bottom:1px solid #e2e8f0}.sbv1-foot{border-bottom:none;border-top:1px solid #e2e8f0}.sbv1-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:0}.sbv1-plan{min-height:0;overflow:auto;padding:20px;background:#fafcff;border-right:1px solid #e2e8f0}.sbv1-plan pre{white-space:pre-wrap;margin:0}.sbv1-side{display:grid;grid-template-rows:auto 1fr auto;min-height:0}.sbv1-log{min-height:0;overflow:auto;background:#0f172a;color:#e2e8f0;padding:14px;font-size:13px}.sbv1-log div{margin:0 0 8px}.sbv1-sidebox{padding:14px;border-top:1px solid #e2e8f0}.sbv1-domain{display:grid;grid-template-columns:210px minmax(0,1fr);min-height:0}.sbv1-tabs{padding:16px;background:#f8fafc;border-right:1px solid #e2e8f0;display:grid;gap:8px;align-content:start}.sbv1-tab{padding:10px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;text-align:left;font-weight:600}.sbv1-tab.on{background:#0f172a;color:#fff;border-color:#0f172a}.sbv1-pane-wrap{min-height:0;overflow:auto;padding:20px}.sbv1-pane{display:none}.sbv1-pane.on{display:block}.sbv1-modal[data-plan-busy="1"] .sbv1-panel{pointer-events:auto}.sbv1-modal[data-plan-busy="1"] [data-close="sbv1-plan-modal"],.sbv1-modal[data-plan-busy="1"] #sbv1-revise,.sbv1-modal[data-plan-busy="1"] #sbv1-confirm-plan,.sbv1-modal[data-plan-busy="1"] #sbv1-revise-msg{opacity:.55;cursor:not-allowed}@media(max-width:1024px){.sbv1-grid,.sbv1-body,.sbv1-domain{grid-template-columns:1fr}.sbv1-plan,.sbv1-tabs{border-right:none;border-bottom:1px solid #e2e8f0}}
 </style>
 
-<div class="sbv1">
+<div class="sbv1" data-testid="site-builder-management">
     <div class="sbv1-hero">
         <div class="d-flex justify-content-between gap-3 flex-wrap">
             <div>
@@ -29,8 +29,56 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
         <div class="sbv1-card">
             <div class="body">
                 <div class="mb-3">
-                    <label for="sbv1-desc">一句话需求</label>
-                    <textarea id="sbv1-desc" rows="5" placeholder="例如：做一个品牌下载站，突出信任感、下载入口、SEO 和联系页。"></textarea>
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                        <label class="mb-0" for="sbv1-desc">一句话需求</label>
+                        <div class="sbv1-actions">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="sbv1-clear-desc">清空需求</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="sbv1-polish-desc">需求润色</button>
+                        </div>
+                    </div>
+                    <textarea id="sbv1-desc" rows="12" placeholder="例如：做一个品牌下载站，突出信任感、下载入口、SEO 和联系页。点击「需求润色」将展开为 Role / Project Context / Architecture / Interactive / Constraints 结构化建站需求。"></textarea>
+                    <small class="text-muted d-block mt-2" id="sbv1-draft-status">浏览器本地草稿：尚未保存</small>
+                </div>
+                <div class="mb-3" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;">
+                    <div>
+                        <label for="sbv1-content-locale">网站语言</label>
+                        <w:i18n:language:select
+                            id="sbv1-content-locale-select"
+                            name="content_locale"
+                            input-id="sbv1-content-locale"
+                            value="zh_Hans_CN"
+                            required="true"
+                            allow-empty="false"
+                            inline-dropdown="true"
+                        />
+                        <small class="text-muted d-block mt-1">默认访客语言：标题、正文、按钮、SEO 与图片替代文本。</small>
+                    </div>
+                    <div>
+                        <label for="sbv1-language-codes">关联语言</label>
+                        <w:i18n:language:select
+                            id="sbv1-language-codes-select"
+                            name="language_codes[]"
+                            input-id="sbv1-language-codes"
+                            value="zh_Hans_CN"
+                            multiple="true"
+                            allow-empty="false"
+                            inline-dropdown="true"
+                        />
+                        <small class="text-muted d-block mt-1">可多选附加语言（如英语站再关联印地语）；默认语言会自动保留。</small>
+                    </div>
+                    <div>
+                        <label for="sbv1-plan-locale">方案语言</label>
+                        <w:i18n:language:select
+                            id="sbv1-plan-locale-select"
+                            name="plan_locale"
+                            input-id="sbv1-plan-locale"
+                            value="zh_Hans_CN"
+                            required="true"
+                            allow-empty="false"
+                            inline-dropdown="true"
+                        />
+                        <small class="text-muted d-block mt-1">只控制方案说明与规划推理语言，不会覆盖网站访客内容语言。</small>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="sbv1-refs">参考图片 URL / 网页 URL</label>
@@ -68,7 +116,7 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
     <div class="sbv1-panel">
         <div class="sbv1-head d-flex justify-content-between gap-3">
             <div><h4 class="mb-1">建站方案</h4><div class="text-muted small" id="sbv1-plan-meta">尚未生成</div></div>
-            <button type="button" class="btn btn-outline-secondary" data-close="sbv1-plan-modal">关闭</button>
+            <button type="button" class="btn btn-outline-secondary" id="sbv1-plan-close" data-close="sbv1-plan-modal">关闭</button>
         </div>
         <div class="sbv1-body">
             <div class="sbv1-plan"><pre id="sbv1-plan-content">等待生成方案...</pre></div>
@@ -138,47 +186,460 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
     </div>
 </div>
 
+
+<script>
+(function(g){
+  if(g.siteBuilderWorkbenchRequest) return;
+  var routes=[
+    ['/site-builder-plan/stream-sse','completePlan'],
+    ['/site-builder-plan/stream','completePlan'],
+    ['/site-builder-agent/recommend-domain-sse','recommendDomain'],
+    ['/site-builder-agent/generate-virtual-theme-sse','generateVirtualTheme'],
+    ['/site-builder-agent/domain-purchase-sse','domainPurchaseStatus'],
+    ['/site-builder-agent/stream-sse','workspaceEvents'],
+    ['/site-builder-plan/generate','preparePlan'],
+    ['/site-builder-plan/revise','preparePlanRevision'],
+    ['/site-builder-plan/confirm','confirmPlan'],
+    ['/site-builder-plan/local-pool','listLocalPool'],
+    ['/site-builder-plan/reserve-local-pool','reserveLocalPool'],
+    ['/site-builder-plan/select-domain','selectDomain'],
+    ['/site-builder-plan/create-session','createSession'],
+    ['/site-builder-agent/recommend-domain','recommendDomain'],
+    ['/site-builder-agent/check-domain','checkDomain'],
+    ['/site-builder-agent/merge-scope','mergeScope'],
+    ['/site-builder-agent/replace-scope','replaceScope'],
+    ['/site-builder-agent/set-stage','setStage'],
+    ['/site-builder-agent/delete-session','deleteSession'],
+    ['/site-builder-agent/save-virtual-theme','saveVirtualTheme'],
+    ['/site-builder-agent/save-page-type-layout','savePageTypeLayout'],
+    ['/site-builder-agent/save-virtual-component','saveVirtualComponent'],
+    ['/site-builder-agent/append-message','appendMessage'],
+    ['/site-builder-agent/start-domain-purchase','startDomainPurchase']
+  ];
+  function commandFor(route){
+    var path='';
+    try{path=new URL(String(route||''),window.location.href).pathname.toLowerCase();}catch(_){path=String(route||'').toLowerCase();}
+    for(var i=0;i<routes.length;i++){if(path.indexOf(routes[i][0])!==-1)return routes[i][1];}
+    throw new Error('Unsupported Site Builder command route');
+  }
+  function payloadFor(route,request){
+    var payload={};
+    try{new URL(String(route||''),window.location.href).searchParams.forEach(function(v,k){payload[k]=v;});}catch(_){}
+    var body=request&&request.body;
+    if(body&&typeof FormData!=='undefined'&&body instanceof FormData){
+      body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))payload[k]=String(v);});
+    }else if(typeof body==='string'&&body!==''){
+      try{new URLSearchParams(body).forEach(function(v,k){payload[k]=v;});}catch(_){}
+    }else if(body&&typeof body==='object'){
+      Object.keys(body).forEach(function(k){payload[k]=body[k];});
+    }
+    return payload;
+  }
+  function unwrap(result){
+    if(result&&result.data&&typeof result.data==='object'&&!Array.isArray(result.data)
+      &&(result.data.success!==undefined||result.data.events!==undefined)){return result.data;}
+    return result&&typeof result==='object'?result:{success:true,data:result};
+  }
+  function eventsFor(command,data){
+    if(Array.isArray(data&&data.events))return data.events;
+    if(command==='recommendDomain'){
+      return [
+        {event:'batch',data:data},
+        {event:data&&data.success===false?'error':'success',data:data},
+        {event:'done',data:{success:!(data&&data.success===false)}}
+      ];
+    }
+    return [{event:data&&data.success===false?'error':'done',data:data||{}}];
+  }
+  function responseFor(command,data,request){
+    var ok=!(data&&data.success===false);
+    var text=JSON.stringify(data==null?{}:data);
+    var response={
+      ok:ok,
+      status:ok?200:400,
+      headers:{get:function(name){return String(name||'').toLowerCase()==='content-type'?'application/json':'';}},
+      json:function(){return Promise.resolve(data);},
+      text:function(){return Promise.resolve(text);}
+    };
+    var accept=String(request&&request.headers&&(request.headers.Accept||request.headers.accept)||'');
+    if(accept.indexOf('text/event-stream')>=0){
+      var raw=eventsFor(command,data).map(function(ev){
+        return 'event: '+String(ev&&ev.event||'message')+'\n'+'data: '+JSON.stringify(ev&&ev.data!==undefined?ev.data:{})+'\n\n';
+      }).join('');
+      response.headers={get:function(){return 'text/event-stream';}};
+      response.body=new ReadableStream({start:function(controller){
+        controller.enqueue(new TextEncoder().encode(raw));
+        controller.close();
+      }});
+    }
+    Object.keys(data||{}).forEach(function(k){if(response[k]===undefined)response[k]=data[k];});
+    if(!ok&&accept.indexOf('text/event-stream')<0){
+      var error=new Error(String(data&&data.message||'Site Builder command failed'));
+      error.response=response;
+      error.payload=data;
+      return Promise.reject(error);
+    }
+    return Promise.resolve(response);
+  }
+  g.siteBuilderWorkbenchRequest=function(route,request){
+    request=request||{};
+    var command=commandFor(route);
+    var payload=payloadFor(route,request);
+    var invoke=function(api){
+      return api.resource('websites').siteBuilderWorkbench(
+        {command:command,payload:payload},
+        {requestTimeoutMs:300000}
+      );
+    };
+    var pending=(g.Weline&&g.Weline.load)
+      ?g.Weline.load('api').then(invoke)
+      :Promise.resolve(invoke(g.Weline.Api));
+    return pending.then(unwrap).then(function(data){return responseFor(command,data,request);});
+  };
+})(window);
+</script>
 <script>
 (function(){
     var cfg={
         gen:<?= json_encode((string)$this->getData('plan_generate_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         revise:<?= json_encode((string)$this->getData('plan_revise_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
+        polish:<?= json_encode((string)$this->getData('plan_polish_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         confirm:<?= json_encode((string)$this->getData('plan_confirm_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         pool:<?= json_encode((string)$this->getData('plan_local_pool_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         reservePool:<?= json_encode((string)$this->getData('plan_reserve_local_pool_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         selectDomain:<?= json_encode((string)$this->getData('plan_select_domain_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         createSession:<?= json_encode((string)$this->getData('plan_create_session_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         recSse:<?= json_encode((string)$this->getData('recommend_domain_sse_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
+        rec:<?= json_encode((string)$this->getData('recommend_domain_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         check:<?= json_encode((string)$this->getData('check_domain_url'), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR) ?>,
         fake:<?= $fakeMode ? 'true' : 'false' ?>
     };
-    var st={draftId:'',planSse:null,recSse:null,recDomain:'',poolId:0,poolDomain:'',selectedDomain:'',selectedSource:''};
+    var DRAFT_KEY='websites.site_builder.v1.intake_draft';
+    var draftTimer=null;
+    var st={draftId:'',planConfirmed:false,planBusy:false,planSse:null,recSse:null,recDomain:'',poolId:0,poolDomain:'',selectedDomain:'',selectedSource:''};
     function toast(t,m){if(window.BackendToast&&typeof window.BackendToast[t]==='function'){window.BackendToast[t](String(m||''));return;}console[t==='error'?'error':'log'](m);}
     function $(id){return document.getElementById(id);}
     function setStatus(id,text,kind){var n=$(id);if(!n)return;n.textContent=String(text||'');n.className='sbv1-status'+(kind?(' '+kind):'');}
     function setDisabled(id,disabled){var n=$(id);if(!n)return;n.disabled=!!disabled;}
-    function post(url,p){var body=new URLSearchParams();Object.keys(p||{}).forEach(function(k){if(p[k]!==undefined&&p[k]!==null){body.append(k,String(p[k]));}});return fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:body.toString()}).then(function(r){return r.json();});}
-    function get(url){return fetch(url,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();});}
+    function setPlanModalBusy(busy){
+        st.planBusy=!!busy;
+        var modal=$('sbv1-plan-modal');
+        if(modal){
+            modal.setAttribute('data-plan-busy',st.planBusy?'1':'0');
+            modal.setAttribute('aria-busy',st.planBusy?'true':'false');
+        }
+        setDisabled('sbv1-plan-close',st.planBusy);
+        setDisabled('sbv1-revise',st.planBusy);
+        setDisabled('sbv1-confirm-plan',st.planBusy);
+        setDisabled('sbv1-revise-msg',st.planBusy);
+        setDisabled('sbv1-generate',st.planBusy);
+    }
+    function post(url,p){var body=new URLSearchParams();Object.keys(p||{}).forEach(function(k){if(p[k]!==undefined&&p[k]!==null){body.append(k,String(p[k]));}});return siteBuilderWorkbenchRequest(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:body.toString()}).then(function(r){return r.json();}).catch(function(err){var msg=(err&&err.payload&&err.payload.message)?String(err.payload.message):((err&&err.message)?String(err.message):'网络错误，请稍后重试。');return {success:false,message:msg,_network:true,error:err};});}
+    function get(url){return siteBuilderWorkbenchRequest(url,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r){return r.json();}).catch(function(err){var msg=(err&&err.payload&&err.payload.message)?String(err.payload.message):((err&&err.message)?String(err.message):'网络错误，请稍后重试。');return {success:false,message:msg,_network:true,error:err};});}
     function parse(e){if(!e||typeof e.data!=='string'||e.data===''){return {};}try{return JSON.parse(e.data);}catch(_){return {};}}
     function open(id){var m=$(id);if(m)m.classList.add('open');}
-    function close(id){var m=$(id);if(m)m.classList.remove('open');}
+    function close(id){
+        if(id==='sbv1-plan-modal'&&st.planBusy){
+            toast('warning','方案生成中，请等待完成后再关闭。');
+            return;
+        }
+        var m=$(id);if(m)m.classList.remove('open');
+    }
     function refs(){return String(($('sbv1-refs')||{}).value||'').trim();}
     function desc(){return String(($('sbv1-desc')||{}).value||'').trim();}
     function account(){return String(($('sbv1-account')||{}).value||'').trim();}
+    // WLS 拒绝 request-line 中的 %0A/%0D；GET SSE 只能传压缩后的种子，完整文案走 draft_public_id。
+    function domainRecommendSeed(raw){
+        var text=String(raw||'');
+        var m=text.match(/\*\*项目名称\*\*\s*[:：]\s*([^\n*]+)/);
+        if(!m){m=text.match(/\*\*Project name\*\*\s*[:：]\s*([^\n*]+)/i);}
+        if(m&&m[1]){text=m[1];}
+        text=text.replace(/[\u0000-\u001F\u007F]+/g,' ').replace(/\s+/g,' ').trim();
+        if(text.length>400){text=text.slice(0,400);}
+        return text;
+    }
+    function readLocale(selectorId,inputId){
+        try{
+            var sel=window.WelineLanguageSelect&&window.WelineLanguageSelect[selectorId];
+            if(sel&&typeof sel.getValue==='function'){
+                var v=String(sel.getValue()||'').trim();
+                if(v){return v;}
+            }
+        }catch(_){}
+        var el=$(inputId);
+        return el?String(el.value||'').trim():'';
+    }
+    function readLocales(selectorId,inputId){
+        try{
+            var sel=window.WelineLanguageSelect&&window.WelineLanguageSelect[selectorId];
+            if(sel&&typeof sel.getValues==='function'){
+                var vals=sel.getValues();
+                if(Array.isArray(vals)&&vals.length){
+                    return vals.map(function(v){return String(v||'').trim();}).filter(Boolean);
+                }
+            }
+        }catch(_){}
+        var el=$(inputId);
+        var raw=el?String(el.value||'').trim():'';
+        if(!raw){return [];}
+        return raw.split(/[\s,]+/).map(function(v){return String(v||'').trim();}).filter(Boolean);
+    }
+    function setLocale(selectorId,inputId,value){
+        var code=String(value||'').trim();
+        if(!code){return;}
+        try{
+            var sel=window.WelineLanguageSelect&&window.WelineLanguageSelect[selectorId];
+            if(sel&&typeof sel.setValue==='function'){sel.setValue(code);return;}
+        }catch(_){}
+        var el=$(inputId);
+        if(el){el.value=code;}
+    }
+    function setLocales(selectorId,inputId,values){
+        var list=Array.isArray(values)?values.map(function(v){return String(v||'').trim();}).filter(Boolean):[];
+        try{
+            var sel=window.WelineLanguageSelect&&window.WelineLanguageSelect[selectorId];
+            if(sel&&typeof sel.setValues==='function'){sel.setValues(list);return;}
+        }catch(_){}
+        var el=$(inputId);
+        if(el){el.value=list.join(',');}
+    }
+    function currentLanguagePayload(){
+        var content=readLocale('sbv1-content-locale-select','sbv1-content-locale');
+        var plan=readLocale('sbv1-plan-locale-select','sbv1-plan-locale');
+        var codes=readLocales('sbv1-language-codes-select','sbv1-language-codes');
+        if(content&&codes.indexOf(content)<0){codes=[content].concat(codes);}
+        return {
+            content_locale:content,
+            default_locale:content,
+            plan_locale:plan,
+            language_codes:codes
+        };
+    }
+    function setDraftStatus(text){var n=$('sbv1-draft-status');if(n)n.textContent=String(text||'');}
+    function formatDraftTime(ts){try{var d=new Date(ts||Date.now());if(isNaN(d.getTime()))return '';return d.toLocaleString();}catch(_){return '';}}
+    function saveIntakeDraft(immediate){
+        var langs=currentLanguagePayload();
+        var payload={
+            description:String(($('sbv1-desc')||{}).value||''),
+            reference_urls:String(($('sbv1-refs')||{}).value||''),
+            content_locale:langs.content_locale,
+            plan_locale:langs.plan_locale,
+            language_codes:langs.language_codes,
+            draft_public_id:String(st.draftId||''),
+            plan_confirmed:!!st.planConfirmed,
+            saved_at:Date.now()
+        };
+        var write=function(){try{localStorage.setItem(DRAFT_KEY,JSON.stringify(payload));setDraftStatus('浏览器本地草稿已保存 · '+formatDraftTime(payload.saved_at));}catch(_){setDraftStatus('浏览器本地草稿保存失败（存储不可用）');}};
+        if(immediate){if(draftTimer){clearTimeout(draftTimer);draftTimer=null;}write();return;}
+        if(draftTimer)clearTimeout(draftTimer);
+        setDraftStatus('浏览器本地草稿保存中…');
+        draftTimer=setTimeout(function(){draftTimer=null;write();},250);
+    }
+    function restoreIntakeDraft(){
+        try{
+            var raw=localStorage.getItem(DRAFT_KEY);
+            if(!raw){setDraftStatus('浏览器本地草稿：尚未保存');return;}
+            var data=JSON.parse(raw);
+            if(!data||typeof data!=='object')return;
+            if($('sbv1-desc')&&typeof data.description==='string'){$('sbv1-desc').value=data.description;}
+            if($('sbv1-refs')&&typeof data.reference_urls==='string'){$('sbv1-refs').value=data.reference_urls;}
+            if(typeof data.content_locale==='string'&&data.content_locale){setLocale('sbv1-content-locale-select','sbv1-content-locale',data.content_locale);}
+            if(typeof data.plan_locale==='string'&&data.plan_locale){setLocale('sbv1-plan-locale-select','sbv1-plan-locale',data.plan_locale);}
+            if(Array.isArray(data.language_codes)&&data.language_codes.length){setLocales('sbv1-language-codes-select','sbv1-language-codes',data.language_codes);}
+            if(typeof data.draft_public_id==='string'&&data.draft_public_id){st.draftId=String(data.draft_public_id);}
+            st.planConfirmed=!!data.plan_confirmed&&!!st.draftId;
+            // 已确认方案后刷新页面：自动回到选域名步骤，避免“都到这里了却说没确认”
+            if(st.planConfirmed){open('sbv1-domain-modal');}
+            setDraftStatus((desc()||refs()||st.draftId)?'已恢复浏览器本地草稿 · '+formatDraftTime(data.saved_at):'浏览器本地草稿：尚未保存');
+        }catch(_){setDraftStatus('浏览器本地草稿读取失败');}
+    }
+    function clearRequirement(){
+        if($('sbv1-desc')){$('sbv1-desc').value='';}
+        saveIntakeDraft(true);
+        setStatus('sbv1-main-status','需求已清空','');
+        toast('success','已清空一句话需求，并同步到浏览器本地草稿。');
+        if($('sbv1-desc')){$('sbv1-desc').focus();}
+    }
+    function polishRequirement(){
+        var text=desc();
+        if(!text){toast('warning','请先输入一句话需求。');return;}
+        setDisabled('sbv1-polish-desc',true);
+        setDisabled('sbv1-clear-desc',true);
+        setStatus('sbv1-main-status','正在润色需求','info');
+        var done=function(){setDisabled('sbv1-polish-desc',false);setDisabled('sbv1-clear-desc',false);};
+        var langs=currentLanguagePayload();
+        var params={
+            description:text,
+            content_locale:langs.content_locale,
+            plan_locale:langs.plan_locale,
+            language_codes:langs.language_codes
+        };
+        if(cfg.fake){params.fake_mode='1';}
+        var run=function(api){return api.resource('websites').polishSiteBrief(params,{requestTimeoutMs:180000});};
+        var p=(window.Weline&&window.Weline.load)?window.Weline.load('api').then(run):Promise.resolve(run(window.Weline.Api));
+        p.then(function(res){
+            done();
+            var body=res&&res.data&&typeof res.data.description==='string'?res.data:(res&&typeof res.description==='string'?res:null);
+            var polished=body&&typeof body.description==='string'?String(body.description).trim():'';
+            var ok=!!(res&&res.success!==false&&polished);
+            if(!ok){var m=(res&&res.message)?String(res.message):'润色失败';setStatus('sbv1-main-status',m,'err');toast('error',m);return;}
+            if($('sbv1-desc')){$('sbv1-desc').value=polished;}
+            saveIntakeDraft(true);
+            setStatus('sbv1-main-status','需求已润色','ok');
+            toast('success',(res&&res.message)?String(res.message):'润色完成');
+        }).catch(function(err){
+            done();
+            var msg='网络错误，请稍后重试。';
+            var biz=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness);
+            if(biz&&typeof biz.formatApiError==='function'){msg=biz.formatApiError(err,msg);}
+            else if(err&&err.message){msg=String(err.message);}
+            setStatus('sbv1-main-status',msg,'err');
+            toast('error',msg);
+        });
+    }
     function addLog(text){var box=$('sbv1-plan-log');if(!box||!text)return;var div=document.createElement('div');div.textContent=String(text);box.appendChild(div);box.scrollTop=box.scrollHeight;}
     function renderPlan(plan){if(!plan||typeof plan!=='object')return;$('sbv1-plan-content').textContent=String(plan.plan_markdown||'');$('sbv1-plan-meta').textContent='模式：'+String(plan.build_mode||'')+' | 页面：'+(Array.isArray(plan.page_types)?plan.page_types.join('、'):'');}
-    function closeSse(key){if(st[key]){try{st[key].close();}catch(_){ }st[key]=null;}}
-    function runPlan(action){var url=action==='revise'?cfg.revise:cfg.gen;var msg=action==='revise'?String(($('sbv1-revise-msg')||{}).value||'').trim():desc();if(action!=='revise'&&!msg){toast('warning','请先输入一句话需求。');return;}open('sbv1-plan-modal');setStatus('sbv1-main-status',action==='revise'?'正在修订方案':'正在生成方案','info');post(url,{provider_code:'websites_default',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案初始化失败');return;}st.draftId=String(d.draft_public_id||st.draftId||'');if(d.draft&&d.draft.payload&&d.draft.payload.current_plan){renderPlan(d.draft.payload.current_plan);}$('sbv1-plan-log').innerHTML='';closeSse('planSse');setStatus('sbv1-plan-stream-status','连接中','info');var s=new EventSource(String(d.stream_url||''));st.planSse=s;s.addEventListener('start',function(ev){var p=parse(ev);addLog(p.message||'已开始');setStatus('sbv1-plan-stream-status','生成中','info');});s.addEventListener('status',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('chunk',function(ev){var p=parse(ev);addLog(p.chunk||p.message||'');});s.addEventListener('warning',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('plan_completed',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}});s.addEventListener('done',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}setStatus('sbv1-plan-stream-status',p.success===false?'失败':'已完成',p.success===false?'err':'ok');closeSse('planSse');});s.addEventListener('error',function(){setStatus('sbv1-plan-stream-status','连接重试中','info');});}).catch(function(){toast('error','网络错误，请稍后重试。');});
+
+    // 后台页无 backend worker（HTTP/无安全上下文）时，用同域 fetch + ReadableStream 逐帧读取
+    // 控制器 SSE，实现真正的边生成边显示；不再用 collect=1 缓冲整条流（否则长耗时会一直"连接中"）。
+    // 若浏览器不支持流式读取，则回退到 collect 一次性拉取。
+    function bqCollectSse(url, handlers){
+        handlers=handlers||{};
+        var base=String(url||'');
+        var closed=false;
+        var api={close:function(){closed=true;}};
+
+        var dispatch=function(name,dataStr){
+            if(closed) return;
+            var fake={data: typeof dataStr==='string'?dataStr:JSON.stringify(dataStr==null?{}:dataStr)};
+            if(typeof handlers[name]==='function'){ handlers[name](fake); }
+            if(name==='error'&&typeof handlers.error==='function'){ handlers.error(fake); }
+        };
+        var emitFrame=function(frame){
+            if(!frame) return;
+            var name='message', dataLines=[];
+            frame.split(/\r?\n/).forEach(function(line){
+                if(line.indexOf('event:')===0){ name=line.slice(6).trim(); }
+                else if(line.indexOf('data:')===0){ dataLines.push(line.slice(5).replace(/^ /,'')); }
+            });
+            dispatch(name, dataLines.join('\n'));
+        };
+
+        var runCollectFallback=function(){
+            var u=base+(base.indexOf('?')>=0?'&':'?')+'collect=1&_ts='+Date.now();
+            siteBuilderWorkbenchRequest(u,{method:'GET',credentials:'same-origin',headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}})
+                .then(function(r){
+                    return r.text().then(function(t){
+                        var payload=null;
+                        try{payload=t?JSON.parse(t):null;}catch(_){payload=null;}
+                        if(!r.ok){
+                            var msg=(payload&&payload.message)?String(payload.message):(t&&String(t).length<200?String(t).trim():('HTTP '+r.status));
+                            throw new Error(msg||('HTTP '+r.status));
+                        }
+                        if(!payload){throw new Error((t&&String(t).length<200?String(t).trim():'')||'SSE collect returned non-JSON');}
+                        return payload;
+                    });
+                })
+                .then(function(payload){
+                    if(closed) return;
+                    ((payload&&payload.events)||[]).forEach(function(ev){
+                        emitFrameData(String(ev&&ev.event||'message'), ev&&ev.data);
+                    });
+                    if(typeof handlers._done==='function'){ handlers._done(payload); }
+                }).catch(function(err){
+                    if(closed) return;
+                    var msg=(err&&err.message)||'SSE collect failed';
+                    if(/^Bad Request$/i.test(String(msg).trim())){msg='请求参数含非法字符或过长，请缩短需求描述后重试。';}
+                    dispatch('error', JSON.stringify({message:msg}));
+                });
+        };
+        var emitFrameData=function(name,data){
+            dispatch(name, typeof data==='string'?data:JSON.stringify(data==null?{}:data));
+        };
+
+        var supportsStream=(typeof fetch==='function') && (typeof ReadableStream!=='undefined');
+        if(!supportsStream){ runCollectFallback(); return api; }
+
+        var u=base+(base.indexOf('?')>=0?'&':'?')+'_ts='+Date.now();
+        siteBuilderWorkbenchRequest(u,{method:'GET',credentials:'same-origin',headers:{'Accept':'text/event-stream','X-Requested-With':'XMLHttpRequest'}})
+            .then(function(r){
+                if(!r.ok){
+                    return r.text().then(function(t){
+                        var msg=(t&&String(t).length<200&&String(t).indexOf('{')<0)?String(t).trim():('HTTP '+r.status);
+                        throw new Error(msg||('HTTP '+r.status));
+                    });
+                }
+                if(!r.body||typeof r.body.getReader!=='function'){ runCollectFallback(); return null; }
+                var reader=r.body.getReader();
+                var dec=new TextDecoder();
+                var buf='';
+                var pump=function(){
+                    return reader.read().then(function(res){
+                        if(closed){ try{reader.cancel();}catch(_){ } return; }
+                        if(res.done){
+                            buf+=dec.decode();
+                            if(buf.trim()!==''){ buf.split(/\r?\n\r?\n/).forEach(emitFrame); }
+                            if(typeof handlers._done==='function'){ handlers._done({}); }
+                            return;
+                        }
+                        buf+=dec.decode(res.value,{stream:true});
+                        var parts=buf.split(/\r?\n\r?\n/);
+                        buf=parts.pop();
+                        parts.forEach(emitFrame);
+                        return pump();
+                    });
+                };
+                return pump();
+            })
+            .catch(function(err){
+                if(closed) return;
+                var msg=String((err&&err.message)||'');
+                // 400 Bad Request（如 query 含 %0A）再走 collect 仍会失败，直接报错
+                if(/^Bad Request$/i.test(msg.trim()) || /^HTTP 400\b/.test(msg)){
+                    dispatch('error', JSON.stringify({message:/^Bad Request$/i.test(msg.trim())?'请求参数含非法字符或过长，请缩短需求描述后重试。':msg}));
+                    return;
+                }
+                // 流式失败时回退到 collect 再试一次
+                runCollectFallback();
+            });
+        return api;
     }
-    function confirmPlan(){if(!st.draftId){toast('warning','请先生成方案。');return;}post(cfg.confirm,{draft_public_id:st.draftId}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案确认失败');return;}setStatus('sbv1-main-status','方案已确认','ok');close('sbv1-plan-modal');open('sbv1-domain-modal');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
+
+    function closeSse(key){if(st[key]){try{st[key].close();}catch(_){ }st[key]=null;}}
+    function runPlan(action){var langs=currentLanguagePayload();var url=action==='revise'?cfg.revise:cfg.gen;var msg=action==='revise'?String(($('sbv1-revise-msg')||{}).value||'').trim():desc();if(action!=='revise'&&!msg){toast('warning','请先输入一句话需求。');return;}open('sbv1-plan-modal');setStatus('sbv1-main-status',action==='revise'?'正在修订方案':'正在生成方案','info');post(url,{provider_code:'websites_default',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs(),content_locale:langs.content_locale,plan_locale:langs.plan_locale,language_codes:(langs.language_codes||[]).join(',')}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案初始化失败');return;}st.draftId=String(d.draft_public_id||st.draftId||'');st.planConfirmed=false;saveIntakeDraft(true);if(d.draft&&d.draft.payload&&d.draft.payload.current_plan){renderPlan(d.draft.payload.current_plan);}$('sbv1-plan-log').innerHTML='';closeSse('planSse');setStatus('sbv1-plan-stream-status','连接中','info');var s=(function(u){ var L={}; var api={close:function(){if(api._h)api._h.close();}, addEventListener:function(n,f){L[n]=f;}}; setTimeout(function(){ api._h=bqCollectSse(u, Object.assign({}, L, {_done:function(){}})); },0); return api; })(String(d.stream_url||''));st.planSse=s;s.addEventListener('start',function(ev){var p=parse(ev);addLog(p.message||'已开始');setStatus('sbv1-plan-stream-status','生成中','info');});s.addEventListener('status',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('chunk',function(ev){var p=parse(ev);addLog(p.chunk||p.message||'');});s.addEventListener('warning',function(ev){var p=parse(ev);addLog(p.message||'');});s.addEventListener('plan_completed',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}});s.addEventListener('done',function(ev){var p=parse(ev);if(p.plan){renderPlan(p.plan);}setStatus('sbv1-plan-stream-status',p.success===false?'失败':'已完成',p.success===false?'err':'ok');closeSse('planSse');});s.addEventListener('error',function(){setStatus('sbv1-plan-stream-status','连接重试中','info');});}).catch(function(){toast('error','网络错误，请稍后重试。');});
+    }
+    function confirmPlan(){if(st.planBusy){toast('warning','方案生成中，请等待完成后再确认。');return;}if(!st.draftId){toast('warning','请先生成方案。');return;}post(cfg.confirm,{draft_public_id:st.draftId}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案确认失败');return;}st.planConfirmed=true;saveIntakeDraft(true);setStatus('sbv1-main-status','方案已确认','ok');close('sbv1-plan-modal');open('sbv1-domain-modal');}).catch(function(err){toast('error',(err&&err.message)?String(err.message):'网络错误，请稍后重试。');});}
     function renderRec(list){var box=$('sbv1-rec-list');if(!box)return;box.innerHTML='';(list||[]).forEach(function(domain){var btn=document.createElement('button');btn.type='button';btn.className='sbv1-item';btn.setAttribute('data-rec',String(domain));btn.textContent=String(domain);btn.onclick=function(){st.recDomain=String(domain);document.querySelectorAll('[data-rec]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-rec')||'')===st.recDomain);});};box.appendChild(btn);});}
-    function recommendDomain(){if(!st.draftId){toast('warning','请先确认方案。');return;}closeSse('recSse');renderRec([]);setStatus('sbv1-rec-status','推荐中','info');var params=new URLSearchParams();params.set('description',desc());params.set('account_id',account());if(cfg.fake){params.set('fake_mode','1');}var url=cfg.recSse+(cfg.recSse.indexOf('?')>=0?'&':'?')+params.toString();var s=new EventSource(url);st.recSse=s;s.addEventListener('batch',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}setStatus('sbv1-rec-status',p.message||'推荐中','info');});s.addEventListener('success',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}if(p.domain){st.recDomain=String(p.domain);document.querySelectorAll('[data-rec]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-rec')||'')===st.recDomain);});}setStatus('sbv1-rec-status',p.message||'推荐完成','ok');});s.addEventListener('done',function(){closeSse('recSse');});s.addEventListener('error',function(ev){var p=parse(ev);if(p&&p.message){setStatus('sbv1-rec-status',p.message,'err');toast('error',p.message);closeSse('recSse');return;}setStatus('sbv1-rec-status','连接重试中','info');});}
-    function selectDomain(domain,source){return post(cfg.selectDomain,{draft_public_id:st.draftId,domain:domain,domain_source:source,account_id:account()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'域名保存失败');return false;}st.selectedDomain=String(domain);st.selectedSource=String(source);$('sbv1-domain-summary').textContent='已选择域名：'+st.selectedDomain+'（'+st.selectedSource+'）';return true;});}
+    function recommendDomain(){
+        var seed=domainRecommendSeed(desc());
+        if(!seed){toast('warning','请先输入一句话需求。');return;}
+        // 推荐本身只依赖需求种子；draftId 丢失时仍可推荐，后续选域名/建会话再校验
+        closeSse('recSse');
+        renderRec([]);
+        setStatus('sbv1-rec-status','推荐中','info');
+        var params=new URLSearchParams();
+        params.set('description',seed);
+        if(st.draftId){params.set('draft_public_id',st.draftId);}
+        params.set('account_id',account()||'0');
+        if(cfg.fake){params.set('fake_mode','1');}
+        var url=cfg.recSse+(cfg.recSse.indexOf('?')>=0?'&':'?')+params.toString();
+        var s=(function(u){ var L={}; var api={close:function(){if(api._h)api._h.close();}, addEventListener:function(n,f){L[n]=f;}}; setTimeout(function(){ api._h=bqCollectSse(u, Object.assign({}, L, {_done:function(){}})); },0); return api; })(url);
+        st.recSse=s;
+        s.addEventListener('batch',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}setStatus('sbv1-rec-status',p.message||'推荐中','info');});
+        s.addEventListener('success',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}if(p.domain){st.recDomain=String(p.domain);document.querySelectorAll('[data-rec]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-rec')||'')===st.recDomain);});}setStatus('sbv1-rec-status',p.message||'推荐完成','ok');});
+        s.addEventListener('done',function(){closeSse('recSse');});
+        s.addEventListener('error',function(ev){var p=parse(ev);if(p&&p.message){setStatus('sbv1-rec-status',p.message,'err');toast('error',p.message);closeSse('recSse');return;}setStatus('sbv1-rec-status','连接重试中','info');});
+    }
+    function selectDomain(domain,source){if(!st.draftId){toast('warning','方案会话已丢失，请重新生成并确认方案后再保存域名。');return Promise.resolve(false);}return post(cfg.selectDomain,{draft_public_id:st.draftId,domain:domain,domain_source:source,account_id:account()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'域名保存失败');return false;}st.selectedDomain=String(domain);st.selectedSource=String(source);$('sbv1-domain-summary').textContent='已选择域名：'+st.selectedDomain+'（'+st.selectedSource+'）';return true;});}
     function checkManual(){var domain=String(($('sbv1-manual-domain')||{}).value||'').trim().toLowerCase();if(!domain){toast('warning','请先输入域名。');return;}setStatus('sbv1-manual-status','校验中','info');post(cfg.check,{domain:domain,account_id:account()}).then(function(d){if(!d||!d.success||!d.available){setStatus('sbv1-manual-status',d&&d.message?d.message:'域名不可用','err');return;}setStatus('sbv1-manual-status',d.message||'域名可用','ok');}).catch(function(){setStatus('sbv1-manual-status','网络错误，请稍后重试。','err');});}
-    function loadPool(){if(!st.draftId){toast('warning','请先确认方案。');return;}setStatus('sbv1-pool-status','加载中','info');setDisabled('sbv1-use-pool-domain',true);st.poolId=0;st.poolDomain='';get(cfg.pool+'?draft_public_id='+encodeURIComponent(st.draftId)).then(function(d){var box=$('sbv1-pool-list');if(!box)return;box.innerHTML='';if(!d||!d.success){setStatus('sbv1-pool-status',d&&d.message?d.message:'加载失败','err');return;}var items=Array.isArray(d.items)?d.items:[];if(!items.length){var empty=document.createElement('div');empty.className='text-muted small';empty.textContent='域名池暂无可用域名，请切换到“手动填写”或“AI 推荐”。';box.appendChild(empty);setStatus('sbv1-pool-status','暂无可用域名','warn');return;}items.forEach(function(item){var btn=document.createElement('button');btn.type='button';btn.className='sbv1-item';btn.setAttribute('data-pool-id',String(item.pool_id||'0'));btn.textContent=String(item.domain||'');btn.onclick=function(){st.poolId=parseInt(String(item.pool_id||'0'),10)||0;st.poolDomain=String(item.domain||'');setDisabled('sbv1-use-pool-domain',st.poolId<=0);document.querySelectorAll('[data-pool-id]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-pool-id')||'')===String(st.poolId));});};box.appendChild(btn);});setStatus('sbv1-pool-status','已加载 '+String(items.length)+' 个域名','ok');}).catch(function(){setStatus('sbv1-pool-status','网络错误，请稍后重试。','err');});}
+    function loadPool(){if(!st.draftId){toast('warning','方案会话已丢失，请重新生成并确认方案。');return;}setStatus('sbv1-pool-status','加载中','info');setDisabled('sbv1-use-pool-domain',true);st.poolId=0;st.poolDomain='';get(cfg.pool+'?draft_public_id='+encodeURIComponent(st.draftId)).then(function(d){var box=$('sbv1-pool-list');if(!box)return;box.innerHTML='';if(!d||!d.success){setStatus('sbv1-pool-status',d&&d.message?d.message:'加载失败','err');return;}var items=Array.isArray(d.items)?d.items:[];if(!items.length){var empty=document.createElement('div');empty.className='text-muted small';empty.textContent='域名池暂无可用域名，请切换到“手动填写”或“AI 推荐”。';box.appendChild(empty);setStatus('sbv1-pool-status','暂无可用域名','warn');return;}items.forEach(function(item){var btn=document.createElement('button');btn.type='button';btn.className='sbv1-item';btn.setAttribute('data-pool-id',String(item.pool_id||'0'));btn.textContent=String(item.domain||'');btn.onclick=function(){st.poolId=parseInt(String(item.pool_id||'0'),10)||0;st.poolDomain=String(item.domain||'');setDisabled('sbv1-use-pool-domain',st.poolId<=0);document.querySelectorAll('[data-pool-id]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-pool-id')||'')===String(st.poolId));});};box.appendChild(btn);});setStatus('sbv1-pool-status','已加载 '+String(items.length)+' 个域名','ok');}).catch(function(){setStatus('sbv1-pool-status','网络错误，请稍后重试。','err');});}
     function reservePool(){if(!st.poolId){toast('warning','请先从本地域名池选择域名。');return;}post(cfg.reservePool,{draft_public_id:st.draftId,pool_id:st.poolId,account_id:account()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'本地域名池预占用失败');return;}st.selectedDomain=String(d.domain||st.poolDomain);st.selectedSource='local_pool';$('sbv1-domain-summary').textContent='已选择域名：'+st.selectedDomain+'（本地域名池）';setStatus('sbv1-pool-status',d.message||'已预占用','ok');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
-    function createSession(){if(!st.draftId){toast('warning','请先确认方案。');return;}if(!st.selectedDomain){toast('warning','请先选择域名。');return;}post(cfg.createSession,{draft_public_id:st.draftId}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'创建会话失败');return;}window.location.href=String(d.workspace_url||'');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
+    function createSession(){if(!st.draftId){toast('warning','方案会话已丢失，请重新生成并确认方案。');return;}if(!st.selectedDomain){toast('warning','请先选择域名。');return;}post(cfg.createSession,{draft_public_id:st.draftId}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'创建会话失败');return;}window.location.href=String(d.workspace_url||'');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
     function runPlanStrict(action){
+        if(st.planBusy){
+            toast('warning','方案正在生成中，请稍候。');
+            return;
+        }
         var url=action==='revise'?cfg.revise:cfg.gen;
         var msg=action==='revise'?String(($('sbv1-revise-msg')||{}).value||'').trim():desc();
         if(action!=='revise'&&!msg){
@@ -186,17 +647,24 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
             return;
         }
         open('sbv1-plan-modal');
+        setPlanModalBusy(true);
         setStatus('sbv1-main-status',action==='revise'?'\u6b63\u5728\u4fee\u8ba2\u65b9\u6848':'\u6b63\u5728\u751f\u6210\u65b9\u6848','info');
         setStatus('sbv1-plan-stream-status','\u672a\u8fde\u63a5','');
         $('sbv1-plan-content').textContent='\u7b49\u5f85\u751f\u6210\u65b9\u6848...';
-        post(url,{provider_code:'websites_default',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs()}).then(function(d){
+        var langs=currentLanguagePayload();
+        var genPayload={provider_code:'websites_default',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs(),content_locale:langs.content_locale,plan_locale:langs.plan_locale,language_codes:(langs.language_codes||[]).join(',')};
+        if(cfg.fake){genPayload.fake_mode='1';}
+        post(url,genPayload).then(function(d){
             if(!d||!d.success){
                 var initMsg=d&&d.message?d.message:'\u65b9\u6848\u521d\u59cb\u5316\u5931\u8d25';
+                setPlanModalBusy(false);
                 setStatus('sbv1-main-status',initMsg,'err');
                 toast('error',initMsg);
                 return;
             }
             st.draftId=String(d.draft_public_id||st.draftId||'');
+            st.planConfirmed=false;
+            saveIntakeDraft(true);
             if(d.draft&&d.draft.payload&&d.draft.payload.current_plan){renderPlan(d.draft.payload.current_plan);}
             $('sbv1-plan-log').innerHTML='';
             closeSse('planSse');
@@ -205,7 +673,8 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
             if(streamUrl.origin!==window.location.origin){
                 streamUrl=new URL(streamUrl.pathname+streamUrl.search,window.location.origin);
             }
-            var s=new EventSource(streamUrl.toString());
+            if(cfg.fake){streamUrl.searchParams.set('fake_mode','1');}
+            var s=(function(u){ var L={}; var api={close:function(){if(api._h)api._h.close();}, addEventListener:function(n,f){L[n]=f;}}; setTimeout(function(){ api._h=bqCollectSse(u, Object.assign({}, L, {_done:function(){ if(st.planBusy){ setPlanModalBusy(false); } }})); },0); return api; })(streamUrl.toString());
             st.planSse=s;
             s.addEventListener('start',function(ev){
                 var p=parse(ev);
@@ -222,15 +691,19 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
             s.addEventListener('done',function(ev){
                 var p=parse(ev);
                 if(p.plan){renderPlan(p.plan);}
-                if(p.success===false){
+                var versionId=parseInt(String(p.version_id||'0'),10)||0;
+                if(p.success===false || versionId<=0){
                     if(p.message){addLog(p.message);}
+                    if(versionId<=0&&p.success!==false){addLog('方案未落库，请重新生成。');}
                     setStatus('sbv1-plan-stream-status','\u5931\u8d25','err');
-                    setStatus('sbv1-main-status','\u65b9\u6848\u751f\u6210\u5931\u8d25','err');
+                    setStatus('sbv1-main-status',versionId<=0?'方案未落库，请重新生成':'方案生成失败','err');
+                    if(versionId<=0){toast('error','方案未落库，请重新生成后再确认。');}
                 }else{
                     setStatus('sbv1-plan-stream-status','\u5df2\u5b8c\u6210','ok');
                     setStatus('sbv1-main-status','\u65b9\u6848\u5df2\u751f\u6210','ok');
                 }
                 closeSse('planSse');
+                setPlanModalBusy(false);
             });
             s.addEventListener('error',function(ev){
                 var p=parse(ev);
@@ -239,17 +712,34 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
                     setStatus('sbv1-plan-stream-status','\u5931\u8d25','err');
                     setStatus('sbv1-main-status','\u65b9\u6848\u751f\u6210\u5931\u8d25','err');
                     closeSse('planSse');
+                    setPlanModalBusy(false);
                     return;
                 }
                 setStatus('sbv1-plan-stream-status','\u8fde\u63a5\u91cd\u8bd5\u4e2d','info');
             });
         }).catch(function(){
+            setPlanModalBusy(false);
             setStatus('sbv1-main-status','\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002','err');
             toast('error','\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002');
         });
     }
     $('sbv1-generate').onclick=function(){runPlanStrict('generate');};
     $('sbv1-revise').onclick=function(){runPlanStrict('revise');};
+    if($('sbv1-clear-desc')){$('sbv1-clear-desc').onclick=clearRequirement;}
+    if($('sbv1-polish-desc')){$('sbv1-polish-desc').onclick=polishRequirement;}
+    ['sbv1-desc','sbv1-refs'].forEach(function(id){var n=$(id);if(!n)return;n.addEventListener('input',function(){saveIntakeDraft(false);});n.addEventListener('change',function(){saveIntakeDraft(true);});});
+    if(window.WelineLanguageSelectUtils&&typeof window.WelineLanguageSelectUtils.bindDefaultToMultiple==='function'){
+        window.WelineLanguageSelectUtils.bindDefaultToMultiple({
+            singleId:'sbv1-content-locale-select',
+            multipleId:'sbv1-language-codes-select'
+        });
+    }
+    ['sbv1-content-locale','sbv1-plan-locale','sbv1-language-codes'].forEach(function(id){
+        var n=$(id);
+        if(!n)return;
+        n.addEventListener('change',function(){saveIntakeDraft(true);});
+    });
+    restoreIntakeDraft();
     $('sbv1-confirm-plan').onclick=confirmPlan;
     $('sbv1-recommend-domain').onclick=recommendDomain;
     $('sbv1-use-rec-domain').onclick=function(){if(!st.recDomain){toast('warning','请先选择推荐域名。');return;}selectDomain(st.recDomain,'recommended');};

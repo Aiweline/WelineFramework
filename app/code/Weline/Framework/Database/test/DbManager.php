@@ -19,7 +19,7 @@ use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 
-class DbManager extends \Weline\Framework\UnitTest\TestCore
+class DbManager extends \Weline\Framework\Test\TestCore
 {
     public function testCreate()
     {

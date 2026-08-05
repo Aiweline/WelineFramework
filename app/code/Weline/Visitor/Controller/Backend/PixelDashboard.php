@@ -39,12 +39,14 @@ class PixelDashboard extends BackendController
         try {
             $dashboard = PixelStatisticsService::getEventListeningDashboard($this->getDashboardRequestFilters());
             $this->assignDashboardData($dashboard);
-            
+            $this->assignWebsiteSelectOptions();
+
             return $this->fetch();
             
         } catch (\Exception $e) {
             MessageManager::error((string)__('加载像素统计失败：%{1}', [$e->getMessage()]));
             $this->assignDashboardData($this->getEmptyDashboardData());
+            $this->assignWebsiteSelectOptions();
             return $this->fetch();
         }
     }
@@ -102,6 +104,7 @@ class PixelDashboard extends BackendController
             $this->assign('insight_recent', $report['recent_events'] ?? []);
             $this->assign('report_tabs', $reportTabs);
             $this->assign('active_report_tab', $activeReportTab);
+            $this->assignWebsiteSelectOptions();
             // F01：字典电商四步漏斗（热；与 B12 渠道营销简漏斗隔离）
             $this->assign('ecommerce_funnel', $this->buildEcommerceFunnel($filters, $websiteId));
             // F02：购成 / 收入（仅购买类 value）
@@ -411,6 +414,7 @@ class PixelDashboard extends BackendController
         $this->assign('rows', $result['rows']);
         $this->assign('filters', $displayFilters);
         $this->assign('traffic_type_options', \Weline\Visitor\Model\PixelChannel::TRAFFIC_TYPES);
+        $this->assignWebsiteSelectOptions();
         $this->assign('pagination', [
             'page' => $result['page'],
             'page_size' => $result['page_size'],
@@ -454,6 +458,7 @@ class PixelDashboard extends BackendController
         $this->assign('rows', $result['rows']);
         $this->assign('filters', $displayFilters);
         $this->assign('traffic_type_options', \Weline\Visitor\Model\PixelChannel::TRAFFIC_TYPES);
+        $this->assignWebsiteSelectOptions();
         $this->assign('pagination', [
             'page' => $result['page'],
             'page_size' => $result['page_size'],
@@ -781,6 +786,16 @@ class PixelDashboard extends BackendController
         $this->assign('channel_rows', $dashboard['channel_rows'] ?? []);
         $this->assign('realtime_rows', $dashboard['realtime_rows'] ?? []);
         $this->assign('recent_events', $dashboard['recent_events'] ?? []);
+    }
+
+    private function assignWebsiteSelectOptions(): void
+    {
+        $options = PixelStatisticsService::buildWebsiteSelectOptions();
+        $this->assign('website_select_options', $options);
+        $this->assign(
+            'website_select_options_json',
+            \json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]'
+        );
     }
 
     /**

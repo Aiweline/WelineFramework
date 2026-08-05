@@ -108,7 +108,7 @@ Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_en
 系统实体不能删除,"System entity cannot be deleted"
 实体删除成功,"Entity deleted successfully"
 "模型类: %{1} 必须是 EavModelInterface 接口类的实例","Model class: %{1} must be an instance of the EavModelInterface interface"
-请输入,"Please enter"
+请输入,Enter
 Eav属性输入：缺少select选项,"Eav attribute input: select option missing"
 依赖：,Dependencies:
 属性不存在！无法获取属性类型字段。,"Attribute does not exist! Unable to get attribute type field."
@@ -212,6 +212,7 @@ Eav实体-属性管理,"Eav entity-attribute management"
 你选择了,"You selected"
 选择属性集,"Select Attribute Set"
 选择属性组,"Select Attribute Group"
+创建属性,"Create Attribute"
 你创建了,"You created"
 配置项：,"Configuration item:"
 个,indivual
@@ -224,11 +225,9 @@ Eav实体-属性管理,"Eav entity-attribute management"
 必须选择一个类型,"Must select a type"
 是否启用,Enable
 禁用,Disable
-鍓嶇鍙,"Frontend Visible"
-鍚?,And
-鏄?,Yes
-鍙瓫閫?,Filterable?
-鍙悳绱?,Searchable?
+前端可见,"Frontend Visible"
+可筛选,Filterable?
+可搜索,Searchable?
 高级设置,"Advanced settings"
 是否多值,Multi-value
 必须选择一个多值类型,"Must select a multi-value type"
@@ -244,6 +243,7 @@ Eav实体-属性管理,"Eav entity-attribute management"
 颜色,Color
 图片,Image
 文本,Text
+选择图片,"Select Image"
 图片选择器,"Image picker"
 （双击选中图片）最大支持100kb,"(Double-click to select image) Max 100KB supported"
 确定,OK
@@ -315,6 +315,19 @@ EAV管理,"EAV management"
 "缺少必要参数：attribute_id 或 (entity_code + attribute_code)","Missing required parameter: attribute_id or (entity_code + attribute_code)"
 缺少必要参数：entity_code,"Missing required parameter: entity_code"
 鍏朵粬,Other
+当前实体下的属性不存在：%{1},"The attribute does not exist for the current entity: %{1}"
+当前实体下的依赖属性不存在：%{1},"The dependence attribute does not exist for the current entity: %{1}"
+当前属性类型模型类不存在：%{1},"The current attribute type model class does not exist: %{1}"
+当前属性类型模型未实现EavModelInterface：%{1},"The current attribute type model does not implement EavModelInterface: %{1}"
+当前属性类型模型不支持依赖解析：%{1},"The current attribute type model does not support dependence resolution: %{1}"
+属性依赖选项解析失败。,"Failed to resolve attribute dependency options."
+EAV实体ID必须是正整数,"The EAV entity ID must be a positive integer"
+EAV属性依赖参数格式无效：%{1},"Invalid EAV attribute dependence parameter: %{1}"
+属性依赖解析结果必须是选项映射,"The attribute dependence result must be an option map"
+属性依赖选项不能超过500项,"Attribute dependence options cannot exceed 500 items"
+属性依赖选项值必须是标量或可转字符串对象：%{1},"Attribute dependence option values must be scalar or stringable: %{1}"
+EAV属性依赖解析缺少必要参数：%{1},"Missing required EAV attribute dependence parameter: %{1}"
 "当前实体不存在 %{1}","Current entity does not exist %{1}"
 类型不存在:%{1},"Type does not exist: %{1}"
 "属性类型添加失败 %{1}","Failed to add attribute type %{1}"
+"EAV Scope 工具：help/preflight/ensure-columns（apply 仅隔离 clone，经 scope:migrate-p1a）","EAV Scope 工具：help/preflight/ensure-columns（apply 仅隔离 clone，经 scope:migrate-p1a）"

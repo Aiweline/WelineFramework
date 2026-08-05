@@ -117,7 +117,13 @@ class AlterWithBackup implements AlterInterface
             
             $backupService = $this->modelSetup->getFieldBackupService();
             foreach ($this->deletedFields as $fieldName) {
-                $backupService->backupFieldData($tableName, $fieldName, $primaryKey, $moduleName, $version);
+                $ok = $backupService->backupFieldData($tableName, $fieldName, $primaryKey, $moduleName, $version);
+                if ($ok !== true) {
+                    throw new \Weline\Framework\App\Exception(__(
+                        '字段 %{1}.%{2} 备份失败，已中止删除列以避免数据丢失',
+                        [$tableName, $fieldName]
+                    ));
+                }
             }
         }
         

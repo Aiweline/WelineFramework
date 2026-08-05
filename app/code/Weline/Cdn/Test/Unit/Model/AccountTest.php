@@ -87,11 +87,19 @@ class AccountTest extends TestCase
         ];
 
         $this->model->setCredentialsArray($credentials);
+        $raw = $this->model->getData(Account::schema_fields_CREDENTIALS);
+        $this->assertIsString($raw);
+        $this->assertStringStartsWith('secret_ref:v1:', $raw);
+        $this->assertStringNotContainsString('test-token-123', $raw);
+
         $result = $this->model->getCredentialsArray();
 
         $this->assertIsArray($result);
         $this->assertEquals('test-token-123', $result['api_token']);
         $this->assertEquals('test-key', $result['api_key']);
+        $public = $this->model->toPublicArray();
+        $this->assertArrayNotHasKey('credentials', $public);
+        $this->assertTrue($public['has_credentials']);
     }
 
     /**

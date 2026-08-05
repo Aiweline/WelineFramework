@@ -25,4 +25,44 @@
         <observer name="Weline_Seo::protocol_route_rewrite" instance="Weline\Seo\Observer\ProtocolRouteRewrite" disabled="false" shared="true" sort="-100" />
     </event>
 
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="seo_resource_changed"
+                  instance="Weline\Seo\Observer\ResourceChanged"
+                  delivery="sync"
+                  failure="critical"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
+
+    <!-- WLS normal responses; FPM skips this registration at runtime. -->
+    <event name="Weline_Framework::App::run_after">
+        <observer name="Weline_Seo::store_mode_response_run_after"
+                  instance="Weline\Seo\Observer\StoreModeSeoResponseObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="700"/>
+    </event>
+
+    <!-- FPM final responses; persistent runtimes skip this registration. -->
+    <event name="Weline_Framework_Http::response_ready">
+        <observer name="Weline_Seo::store_mode_response_ready"
+                  instance="Weline\Seo\Observer\StoreModeSeoResponseObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="90"/>
+    </event>
+
+    <!-- Early FPC hits bypass App::run_after and need the same request gate. -->
+    <event name="Weline_Framework_Fpc::cache_hit_response">
+        <observer name="Weline_Seo::store_mode_response_fpc_hit"
+                  instance="Weline\Seo\Observer\StoreModeSeoResponseObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="90"/>
+    </event>
+
 </config>

@@ -79,7 +79,8 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--master-lease-file=')) {
         $masterLeaseFile = $normalizeArgValue((string)\substr($arg, 20));
     } elseif (\str_starts_with($arg, '--master-token=')) {
-        $masterToken = $normalizeArgValue((string)\substr($arg, 15));
+        \fwrite(\STDERR, "Session Server --master-token is forbidden; use the protected child ledger.\n");
+        exit(1);
     } elseif (\str_starts_with($arg, '--role=')) {
         $argRole = $normalizeArgValue((string)\substr($arg, 7));
         if ($argRole !== '') {

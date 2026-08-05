@@ -63,6 +63,15 @@ final class ConnectionPoolExhaustionTest extends TestCase
         self::assertSame(1, $created);
     }
 
+    public function testDefaultAcquireBudgetAllowsHttpBackpressure(): void
+    {
+        $reflection = new \ReflectionClass(ConnectionPool::class);
+        self::assertGreaterThanOrEqual(
+            30.0,
+            (float)$reflection->getConstant('DEFAULT_ACQUIRE_TIMEOUT_SECONDS')
+        );
+    }
+
     private function config(): ConfigProviderInterface
     {
         $config = $this->createMock(ConfigProviderInterface::class);

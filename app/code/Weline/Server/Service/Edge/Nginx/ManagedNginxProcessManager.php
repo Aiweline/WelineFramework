@@ -6,6 +6,9 @@ namespace Weline\Server\Service\Edge\Nginx;
 
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxChildProcessProbe;
 use Weline\Server\Service\Edge\Nginx\Runtime\NginxProcessIdentity;
 
 /**
@@ -13,6 +16,8 @@ use Weline\Server\Service\Edge\Nginx\Runtime\NginxProcessIdentity;
  */
 final class ManagedNginxProcessManager
 {
+    private const MAX_CONFIG_BYTES = 16 * 1024 * 1024;
+    private const COMMAND_TIMEOUT_SECONDS = 30.0;
     private const GRACEFUL_STOP_TIMEOUT_SECONDS = 30.0;
     private const RELOAD_OLD_WORKER_TIMEOUT_SECONDS = 15.0;
 
@@ -50,22 +55,78 @@ final class ManagedNginxProcessManager
             ];
         }
         if ($pid === null) {
-            $recordedPid = $this->processIdentity->recordedPid();
-            if ($recordedPid !== null
-                && $this->pidState($recordedPid) === Processer::PROCESS_STATE_RUNNING
-            ) {
+            try {
+                $recordedPid = $this->processIdentity->recordedPid();
+            } catch (\Throwable $throwable) {
                 return [
                     'ok' => false,
                     'running' => false,
-                    'pid' => $recordedPid,
-                    'message' => 'verified nginx identity is running without its authoritative pid file',
+                    'pid' => null,
+                    'message' => 'process identity is unreadable or malformed: '
+                        . $throwable->getMessage(),
                 ];
+            }
+            if ($recordedPid !== null) {
+                $recordedState = $this->pidState($recordedPid);
+                if ($recordedState === Processer::PROCESS_STATE_RUNNING) {
+                    return [
+                        'ok' => false,
+                        'running' => false,
+                        'pid' => $recordedPid,
+                        'message' => 'verified nginx identity is running without its authoritative pid file',
+                    ];
+                }
+                if ($recordedState !== Processer::PROCESS_STATE_EXITED) {
+                    return [
+                        'ok' => false,
+                        'running' => false,
+                        'pid' => $recordedPid,
+                        'message' => 'process identity PID state is unknown while the authoritative pid file is missing',
+                    ];
+                }
             }
             return ['ok' => true, 'running' => false, 'pid' => null, 'message' => 'not running'];
         }
         $pidState = $this->pidState($pid);
         if ($pidState === Processer::PROCESS_STATE_EXITED) {
-            return ['ok' => true, 'running' => false, 'pid' => $pid, 'message' => 'stale pid file'];
+            try {
+                $recordedPid = $this->processIdentity->recordedPid();
+            } catch (\Throwable $throwable) {
+                return [
+                    'ok' => false,
+                    'running' => false,
+                    'pid' => $pid,
+                    'message' => 'stale pid file cannot be reconciled with the process identity: '
+                        . $throwable->getMessage(),
+                ];
+            }
+            if ($recordedPid !== null) {
+                $recordedState = $this->pidState($recordedPid);
+                if ($recordedState === Processer::PROCESS_STATE_RUNNING) {
+                    if ($recordedPid !== $pid) {
+                        return [
+                            'ok' => false,
+                            'running' => false,
+                            'pid' => $recordedPid,
+                            'message' => 'a PID-bound managed nginx generation is running while its authoritative pid file is stale',
+                        ];
+                    }
+                    // The PID can become observable between the two probes.
+                    // Continue through the full process-identity fence instead
+                    // of deleting a pid file that now names a live process.
+                    $pidState = $recordedState;
+                } elseif ($recordedState !== Processer::PROCESS_STATE_EXITED) {
+                    return [
+                        'ok' => false,
+                        'running' => false,
+                        'pid' => $recordedPid,
+                        'message' => 'stale pid file cannot be reconciled because the PID-bound process state is unknown',
+                    ];
+                }
+            }
+            if ($pidState === Processer::PROCESS_STATE_EXITED) {
+                return ['ok' => true, 'running' => false, 'pid' => $pid, 'message' => 'stale pid file'];
+            }
         }
         if ($pidState !== Processer::PROCESS_STATE_RUNNING) {
             return ['ok' => false, 'running' => false, 'pid' => $pid, 'message' => 'pid state is unknown'];
@@ -104,6 +165,15 @@ final class ManagedNginxProcessManager
         if (!\is_file($this->paths->confFile())) {
             return ['ok' => false, 'message' => 'managed nginx.conf missing; generate config first', 'pid' => null];
         }
+        $runtime = $this->processIdentity->runtimeStatus();
+        if (!($runtime['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx runtime identity is invalid: '
+                    . (string)($runtime['reason'] ?? 'unknown'),
+                'pid' => null,
+            ];
+        }
         $status = $this->status();
         if (!($status['ok'] ?? false)) {
             return [
@@ -119,10 +189,18 @@ final class ManagedNginxProcessManager
         $this->paths->ensureRuntimeDirectories();
         $recordedPid = $this->processIdentity->recordedPid();
         if ($recordedPid !== null) {
-            if ($this->pidState($recordedPid) === Processer::PROCESS_STATE_RUNNING) {
+            $recordedState = $this->pidState($recordedPid);
+            if ($recordedState === Processer::PROCESS_STATE_RUNNING) {
                 return [
                     'ok' => false,
                     'message' => 'refusing start: a PID-bound managed Nginx generation is still running',
+                    'pid' => $recordedPid,
+                ];
+            }
+            if ($recordedState !== Processer::PROCESS_STATE_EXITED) {
+                return [
+                    'ok' => false,
+                    'message' => 'refusing start: the PID-bound managed Nginx process state is unknown',
                     'pid' => $recordedPid,
                 ];
             }
@@ -138,8 +216,22 @@ final class ManagedNginxProcessManager
         }
 
         // Clear stale pid so a fresh master writes a new one.
-        if (\is_file($this->paths->pidFile()) && !$status['running']) {
-            @\unlink($this->paths->pidFile());
+        if ((\file_exists($this->paths->pidFile()) || \is_link($this->paths->pidFile()))
+            && !$status['running']
+        ) {
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $this->paths->pidFile(),
+                    'stale managed Nginx PID file',
+                );
+            } catch (\Throwable $throwable) {
+                return [
+                    'ok' => false,
+                    'message' => 'unable to clear stale managed Nginx PID file: '
+                        . $throwable->getMessage(),
+                    'pid' => $status['pid'],
+                ];
+            }
         }
 
         $started = $this->startNginx();
@@ -199,10 +291,12 @@ final class ManagedNginxProcessManager
                 'output' => '',
             ];
         }
-        $output = [];
-        $code = 0;
-        @\exec($this->shellCommand([$this->paths->binary(), '-V']) . ' 2>&1', $output, $code);
-        $text = \implode("\n", $output);
+        $probe = GatewayBoundedCommandRunner::run(
+            [$this->paths->binary(), '-V'],
+            self::COMMAND_TIMEOUT_SECONDS,
+        );
+        $code = (int)($probe['code'] ?? 1);
+        $text = (string)($probe['output'] ?? '');
         $version = '';
         if (\preg_match('/nginx\/(\d+\.\d+\.\d+)/i', $text, $match) === 1) {
             $version = (string)$match[1];
@@ -269,14 +363,19 @@ final class ManagedNginxProcessManager
             return ['code' => 1, 'output' => 'managed nginx candidate config is outside the isolated conf directory'];
         }
 
-        $config = @\file_get_contents($configFile);
-        if (!\is_string($config)) {
-            return ['code' => 1, 'output' => 'managed nginx candidate config is unreadable'];
-        }
         try {
-            $token = \bin2hex(\random_bytes(8));
-        } catch (\Throwable) {
-            $token = \str_replace('.', '', \uniqid('', true));
+            $config = GatewayProjectStateFilesystem::read(
+                $configFile,
+                self::MAX_CONFIG_BYTES,
+                'managed Nginx candidate config',
+            );
+            $token = \bin2hex(\random_bytes(16));
+        } catch (\Throwable $throwable) {
+            return [
+                'code' => 1,
+                'output' => 'managed nginx candidate config is unreadable: '
+                    . $throwable->getMessage(),
+            ];
         }
         $testPidName = 'nginx-config-test-' . $token . '.pid';
         $testConfig = $configFile . '.test.' . $token;
@@ -296,16 +395,46 @@ final class ManagedNginxProcessManager
         if (!\is_string($isolatedConfig) || $replacementCount !== 1) {
             return ['code' => 1, 'output' => 'managed nginx candidate must contain exactly one isolated pid directive'];
         }
-        if (@\file_put_contents($testConfig, $isolatedConfig, LOCK_EX) !== \strlen($isolatedConfig)) {
-            @\unlink($testConfig);
-            return ['code' => 1, 'output' => 'unable to write isolated managed nginx test config'];
+        if (\file_exists($testConfig) || \is_link($testConfig)) {
+            return ['code' => 1, 'output' => 'isolated managed nginx test config already exists'];
         }
         try {
-            return $this->runNginx(['-t'], $testConfig);
-        } finally {
-            @\unlink($testPidFile);
-            @\unlink($testConfig);
+            GatewayProjectStateFilesystem::atomicWrite(
+                $testConfig,
+                $isolatedConfig,
+                0600,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'code' => 1,
+                'output' => 'unable to write isolated managed nginx test config: '
+                    . $throwable->getMessage(),
+            ];
         }
+        $result = $this->runNginx(['-t'], $testConfig);
+        $cleanupErrors = [];
+        foreach ([$testPidFile, $testConfig] as $temporary) {
+            if (\file_exists($temporary) || \is_link($temporary)) {
+                try {
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $temporary,
+                        'isolated managed Nginx config-test artifact',
+                    );
+                } catch (\Throwable $throwable) {
+                    $cleanupErrors[] = $throwable->getMessage();
+                }
+            }
+        }
+        if ($cleanupErrors !== []) {
+            $output = \trim((string)($result['output'] ?? ''));
+            $cleanup = 'unable to remove isolated managed nginx config-test artifacts: '
+                . \implode('; ', $cleanupErrors);
+            return [
+                'code' => 1,
+                'output' => $output === '' ? $cleanup : $output . "\n" . $cleanup,
+            ];
+        }
+        return $result;
     }
 
     /**
@@ -315,10 +444,7 @@ final class ManagedNginxProcessManager
     private function runNginx(array $extra, ?string $configFile = null): array
     {
         $cmd = \array_merge($this->baseCommand($configFile), $extra);
-        $output = [];
-        $code = 0;
-        @\exec($this->shellCommand($cmd) . ' 2>&1', $output, $code);
-        return ['code' => $code, 'output' => \implode("\n", $output)];
+        return GatewayBoundedCommandRunner::run($cmd, self::COMMAND_TIMEOUT_SECONDS);
     }
 
     /** @return array{code:int,output:string} */
@@ -365,7 +491,20 @@ final class ManagedNginxProcessManager
             return ['ok' => false, 'message' => 'refusing stop: ' . (string)$status['message']];
         }
         if (!$status['running']) {
-            @\unlink($this->paths->pidFile());
+            if (\file_exists($this->paths->pidFile()) || \is_link($this->paths->pidFile())) {
+                try {
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $this->paths->pidFile(),
+                        'stale managed Nginx PID file',
+                    );
+                } catch (\Throwable $throwable) {
+                    return [
+                        'ok' => false,
+                        'message' => 'unable to clear stale managed Nginx PID file: '
+                            . $throwable->getMessage(),
+                    ];
+                }
+            }
             return ['ok' => true, 'message' => 'not running'];
         }
         if (!$this->paths->isInstalled()) {
@@ -377,10 +516,9 @@ final class ManagedNginxProcessManager
         // so a transient status mismatch is not permission to signal anything.
         $masterPid = (int)$status['pid'];
         $cmd = \array_merge($this->baseCommand(), ['-s', 'quit']);
-        $output = [];
-        $code = 0;
-        @\exec($this->shellCommand($cmd) . ' 2>&1', $output, $code);
-        $deadline = \microtime(true) + self::GRACEFUL_STOP_TIMEOUT_SECONDS;
+        $stopCommand = GatewayBoundedCommandRunner::run($cmd, self::COMMAND_TIMEOUT_SECONDS);
+        $deadline = (\hrtime(true) / 1_000_000_000)
+            + self::GRACEFUL_STOP_TIMEOUT_SECONDS;
         do {
             SchedulerSystem::usleep(100_000);
             $masterState = $this->pidState($masterPid);
@@ -398,7 +536,7 @@ final class ManagedNginxProcessManager
             if ($masterState === Processer::PROCESS_STATE_EXITED) {
                 return $this->finalizeExitedMasterPidFile($masterPid);
             }
-        } while (\microtime(true) < $deadline);
+        } while ((\hrtime(true) / 1_000_000_000) < $deadline);
 
         $masterState = $this->pidState($masterPid);
         if ($masterState === Processer::PROCESS_STATE_EXITED) {
@@ -463,13 +601,14 @@ final class ManagedNginxProcessManager
             ];
         }
         $cmd = \array_merge($this->baseCommand(), ['-s', 'reload']);
-        $output = [];
-        $code = 0;
-        @\exec($this->shellCommand($cmd) . ' 2>&1', $output, $code);
+        $reloadCommand = GatewayBoundedCommandRunner::run($cmd, self::COMMAND_TIMEOUT_SECONDS);
+        $code = (int)($reloadCommand['code'] ?? 1);
+        $output = (string)($reloadCommand['output'] ?? '');
         $remainingOldWorkerPids = \is_array($oldWorkerPids) ? $oldWorkerPids : [];
         $workerProbeFailed = false;
         if ($code === 0 && $remainingOldWorkerPids !== []) {
-            $deadline = \microtime(true) + self::RELOAD_OLD_WORKER_TIMEOUT_SECONDS;
+            $deadline = (\hrtime(true) / 1_000_000_000)
+                + self::RELOAD_OLD_WORKER_TIMEOUT_SECONDS;
             do {
                 SchedulerSystem::usleep(100000);
                 $currentWorkerPids = $this->childWorkerPids($masterPid);
@@ -481,7 +620,9 @@ final class ManagedNginxProcessManager
                     $oldWorkerPids,
                     $currentWorkerPids,
                 ));
-            } while ($remainingOldWorkerPids !== [] && \microtime(true) < $deadline);
+            } while ($remainingOldWorkerPids !== []
+                && (\hrtime(true) / 1_000_000_000) < $deadline
+            );
         } else {
             SchedulerSystem::usleep(100000);
         }
@@ -495,7 +636,7 @@ final class ManagedNginxProcessManager
                 : (!($finalStatus['ok'] ?? false)
                     ? 'nginx PID identity changed after reload'
                     : ($code !== 0
-                        ? \trim(\implode("\n", $output))
+                        ? \trim($output)
                         : ($workerProbeFailed
                             ? 'unable to prove old nginx worker generation drain'
                             : (!$workersReplaced
@@ -508,51 +649,7 @@ final class ManagedNginxProcessManager
     /** @return list<int>|null */
     private function childWorkerPids(int $masterPid): ?array
     {
-        if ($masterPid < 1) {
-            return null;
-        }
-        if (\PHP_OS_FAMILY === 'Windows') {
-            return [];
-        }
-        $output = [];
-        if (\PHP_OS_FAMILY === 'Linux') {
-            $childrenFile = '/proc/' . $masterPid . '/task/' . $masterPid . '/children';
-            $children = @\file_get_contents($childrenFile);
-            if (\is_string($children)) {
-                $workers = [];
-                foreach (\preg_split('/\s+/', \trim($children)) ?: [] as $child) {
-                    if (!\ctype_digit($child)) {
-                        continue;
-                    }
-                    $command = @\file_get_contents('/proc/' . $child . '/cmdline');
-                    $title = \is_string($command) ? \str_replace("\0", ' ', $command) : '';
-                    if (\str_contains(\strtolower($title), 'nginx: worker process')) {
-                        $workers[(int)$child] = true;
-                    }
-                }
-                $pids = \array_keys($workers);
-                \sort($pids, SORT_NUMERIC);
-                return $pids;
-            }
-        }
-        $code = 1;
-        @\exec('ps -axo pid=,ppid=,command= 2>/dev/null', $output, $code);
-        if ($code !== 0) {
-            return null;
-        }
-        $workers = [];
-        foreach ($output as $line) {
-            if (\preg_match('/\A\s*([1-9][0-9]*)\s+([1-9][0-9]*)\s+(.+)\z/D', $line, $match) !== 1
-                || (int)$match[2] !== $masterPid
-                || !\str_contains(\strtolower((string)$match[3]), 'nginx: worker process')
-            ) {
-                continue;
-            }
-            $workers[(int)$match[1]] = true;
-        }
-        $pids = \array_keys($workers);
-        \sort($pids, SORT_NUMERIC);
-        return $pids;
+        return NginxChildProcessProbe::workerPids($masterPid);
     }
 
     /**
@@ -576,28 +673,17 @@ final class ManagedNginxProcessManager
         return \str_replace('\\', '/', $path);
     }
 
-    /**
-     * @param list<string> $cmd
-     */
-    private function shellCommand(array $cmd): string
-    {
-        $parts = [];
-        foreach ($cmd as $part) {
-            $parts[] = \escapeshellarg($part);
-        }
-        return \implode(' ', $parts);
-    }
-
     private function readPid(): ?int
     {
         $file = $this->paths->pidFile();
-        if (!\is_file($file)) {
+        if (!\file_exists($file) && !\is_link($file)) {
             return null;
         }
-        $contents = @\file_get_contents($file);
-        if (!\is_string($contents)) {
-            throw new \RuntimeException('read failed');
-        }
+        $contents = GatewayProjectStateFilesystem::read(
+            $file,
+            32,
+            'Managed Nginx PID file',
+        );
         $raw = \trim($contents);
         if ($raw === '' || !\ctype_digit($raw)) {
             throw new \RuntimeException('expected one positive integer');
@@ -644,7 +730,12 @@ final class ManagedNginxProcessManager
                 'message' => 'nginx exited but its PID file now belongs to a different identity',
             ];
         }
-        if (!@\unlink($this->paths->pidFile()) && \is_file($this->paths->pidFile())) {
+        try {
+            GatewayProjectStateFilesystem::removeRegular(
+                $this->paths->pidFile(),
+                'exited managed Nginx PID file',
+            );
+        } catch (\Throwable) {
             return [
                 'ok' => false,
                 'message' => 'nginx exited but its stale PID file could not be removed',
@@ -720,7 +811,7 @@ final class ManagedNginxProcessManager
             return ['ok' => false, 'message' => 'refusing to kill a PID that does not match managed nginx identity'];
         }
         if (\PHP_OS_FAMILY === 'Windows') {
-            @\exec('taskkill /PID ' . $pid . ' /F 2>NUL', $output, $code);
+            Processer::killByPid($pid, true);
         } elseif (\function_exists('posix_kill')) {
             @\posix_kill($pid, 15);
             SchedulerSystem::usleep(200_000);
@@ -730,12 +821,12 @@ final class ManagedNginxProcessManager
                 @\posix_kill($pid, 9);
             }
         } else {
-            @\exec('kill -TERM ' . $pid . ' 2>/dev/null');
+            Processer::killByPid($pid, false);
             SchedulerSystem::usleep(200_000);
             if ($this->pidState($pid) === Processer::PROCESS_STATE_RUNNING
                 && $this->pidIdentityMatches($pid)
             ) {
-                @\exec('kill -KILL ' . $pid . ' 2>/dev/null');
+                Processer::killByPid($pid, true);
             }
         }
         for ($i = 0; $i < 20; $i++) {

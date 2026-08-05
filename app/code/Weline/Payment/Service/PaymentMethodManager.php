@@ -62,7 +62,7 @@ class PaymentMethodManager
         }
 
         /** @var PaymentMethod $paymentMethod */
-        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
+        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class, [], false);
         $paymentMethod->load(PaymentMethod::schema_fields_CODE, $code);
         $config = $paymentMethod->getId() ? $paymentMethod->getConfigData() : [];
         $providerMetadata = $this->buildProviderMetadata($provider, $definition, $code);
@@ -90,7 +90,7 @@ class PaymentMethodManager
     public function getActiveMethods(array $context = []): array
     {
         /** @var PaymentMethod $paymentMethod */
-        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
+        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class, [], false);
         $methods = $paymentMethod
             ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
             ->select()
@@ -124,10 +124,47 @@ class PaymentMethodManager
     public function getMethodByCode(string $code): ?PaymentMethod
     {
         /** @var PaymentMethod $paymentMethod */
-        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
+        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class, [], false);
         $paymentMethod->load(PaymentMethod::schema_fields_CODE, $this->normalizeCode($code));
 
         return $paymentMethod->getId() ? $paymentMethod : null;
+    }
+
+    /**
+     * Resolve an immutable webhook binding without requiring the mutable
+     * PaymentMethod row to remain present or active for the lifetime of the
+     * provider's callback obligation.
+     */
+    public function resolveWebhookProvider(string $methodCode, string $providerCode): ?ProviderInterface
+    {
+        $methodCode = $this->normalizeCode($methodCode);
+        $providerCode = $this->normalizeCode($providerCode);
+        if ($methodCode === '' || $providerCode === '') {
+            return null;
+        }
+
+        try {
+            $route = $this->resolveProviderRoute($methodCode);
+            $provider = $route['provider'] ?? null;
+            if ($provider instanceof ProviderInterface
+                && $this->normalizeCode($provider->getCode()) === $methodCode
+                && $this->normalizeCode($provider->getProviderCode()) === $providerCode
+            ) {
+                return $provider;
+            }
+        } catch (\Throwable) {
+            // Historical webhook endpoints must survive mutable method-row changes.
+        }
+
+        foreach ($this->providerScanner->getProviderInstances(true) as $provider) {
+            if ($this->normalizeCode($provider->getCode()) === $methodCode
+                && $this->normalizeCode($provider->getProviderCode()) === $providerCode
+            ) {
+                return $provider;
+            }
+        }
+
+        return null;
     }
 
     public function getProviderInstance(PaymentMethod $paymentMethod, array $context = []): ?ProviderInterface

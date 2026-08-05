@@ -141,7 +141,7 @@ $this->assign('meta', $meta);
 
             <!-- ========== 产品详情标签区域 ========== -->
             <if condition="meta.showTabs">
-                <section class="product-detail-layout__tabs">
+                <section class="product-detail-layout__tabs" weline-code="theme.product.section_1">
                     <w:hook>Weline_Theme::frontend::layouts::product::tabs-before</w:hook>
                     <div class="product-detail-layout__tabs-container">
                         <w:hook>Weline_Theme::frontend::layouts::product::tabs-content<else/>
@@ -170,7 +170,7 @@ $this->assign('meta', $meta);
 
             <!-- ========== 相关产品推荐区域 ========== -->
             <if condition="meta.showRelatedProducts">
-                <section class="product-detail-layout__related">
+                <section class="product-detail-layout__related" weline-code="theme.product.section_2">
                     <div class="product-detail-layout__related-container">
                         <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
                         <w:hook>Weline_Theme::frontend::layouts::product::recommendations-content<else/>

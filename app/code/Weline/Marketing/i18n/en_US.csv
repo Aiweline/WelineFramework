@@ -1,9 +1,38 @@
 ﻿加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
+加载促销活动表单失败：%{1},加载促销活动表单失败：%{1}
+促销活动保存成功,促销活动保存成功
+保存促销活动失败：%{1},保存促销活动失败：%{1}
+促销活动,促销活动
+促销活动管理,促销活动管理
+活动列表,活动列表
+查看促销活动列表,查看促销活动列表
+添加促销活动,添加促销活动
+打开促销活动新建表单,打开促销活动新建表单
+保存促销活动,保存促销活动
 加载规则列表失败：%{1},"Failed to load rule list: %{1}"
 加载规则表单失败：%{1},"Failed to load rule form: %{1}"
+规则名称和有效类型不能为空,规则名称和有效类型不能为空
+规则状态无效,规则状态无效
 规则保存成功,"Rule saved successfully"
 保存规则失败：%{1},"Failed to save rule: %{1}"
+营销规则,"Marketing Rule"
+营销规则管理,营销规则管理
+规则列表,"Rule List"
+查看营销规则列表,查看营销规则列表
+添加规则,"Add Rule"
+添加营销规则,添加营销规则
+保存规则,保存规则
+保存营销规则,保存营销规则
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
+加载优惠券表单失败：%{1},加载优惠券表单失败：%{1}
+优惠券保存成功,优惠券保存成功
+保存优惠券失败：%{1},保存优惠券失败：%{1}
+优惠券管理,"Coupon Management"
+优惠券列表,"Coupon List"
+查看优惠券列表,查看优惠券列表
+添加优惠券,"Add Coupon"
+打开优惠券新建表单,打开优惠券新建表单
+保存优惠券,保存优惠券
 优惠券代码不能为空,"Coupon Code Cannot Be Empty"
 优惠券无效或已过期,"Coupon is invalid or expired"
 免运费,"Free Shipping"
@@ -149,12 +178,9 @@ VIP等级,"VIP Level"
 包含任一标签,"Contains Any Tag"
 不包含任一标签,"Not Contains Any Tag"
 标签,Tag
-优惠券管理,"Coupon Management"
 后台,Background
 营销,Marketing
 优惠券,Coupon
-优惠券列表,"Coupon List"
-添加优惠券,"Add Coupon"
 暂无数据,"No data"
 ID,ID
 优惠券代码,"Coupon Code"
@@ -163,14 +189,25 @@ ID,ID
 使用次数,"Usage Count"
 操作,Action
 编辑,Edit
-营销规则,"Marketing Rule"
-规则管理,"Rule Management"
-规则列表,"Rule List"
-添加规则,"Add Rule"
+新建优惠券,新建优惠券
+返回列表,返回列表
+请选择,请选择
+优惠类型,优惠类型
+固定金额,固定金额
+赠品,赠品
 启用,Enable
 禁用,Disable
+最低订单金额,最低订单金额
+总使用次数,总使用次数
+每客户次数,每客户次数
+规则管理,"Rule Management"
 规则名称,"Rule Name"
 优先级,Priority
+新建营销规则,新建营销规则
+规则描述,规则描述
+规则类型,规则类型
+自动规则,自动规则
+已过期,已过期
 促销活动列表,"Campaign List"
 添加活动,"Add Campaign"
 活动名称,"Campaign Name"
@@ -178,3 +215,15 @@ ID,ID
 结束时间,"End time"
 预算,Budget
 已花费,Spent
+新建促销活动,新建促销活动
+活动描述,活动描述
+草稿,草稿
+暂停,暂停
+活动名称和有效营销规则不能为空,活动名称和有效营销规则不能为空
+活动状态无效,活动状态无效
+活动结束时间必须晚于开始时间,活动结束时间必须晚于开始时间
+活动预算不能为负数,活动预算不能为负数
+优惠券必须绑定有效营销规则,优惠券必须绑定有效营销规则
+优惠券类型无效,优惠券类型无效
+优惠券状态无效,优惠券状态无效
+优惠券代码已存在,优惠券代码已存在

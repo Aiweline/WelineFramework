@@ -10,6 +10,9 @@
 app/code/Weline/Framework/Rules/
 ├── RuleInterface.php          # 规则接口
 ├── RulesManager.php            # 规则管理器
+├── Frontend/                   # 前台相关规则
+│   ├── SectionWelineCodeScanner.php
+│   └── FrontendSectionWelineCodeRule.php
 ├── Test/                       # 测试相关规则
 │   └── TestClassPlacementRule.php
 └── README.md                   # 本文档
@@ -46,7 +49,7 @@ app/code/Weline/Framework/Rules/
 **简述**：测试类不应放在业务代码目录下
 
 **详细描述**：
-测试类（继承自 `PHPUnit\Framework\TestCase` 或 `Weline\Framework\UnitTest\TestCore`，或类名包含 `Test`）不应放在业务代码目录（Model、Controller、Block、Helper、Observer、Plugin、Console、View、Taglib、Api）下。测试类应放在专门的测试目录（如 Test、UnitTest、Tests、tests）下。
+测试类（继承自 `PHPUnit\Framework\TestCase` 或 `Weline\Framework\Test\TestCore`，或类名包含 `Test`）不应放在业务代码目录（Model、Controller、Block、Helper、Observer、Plugin、Console、View、Taglib、Api）下。测试类应放在专门的测试目录（如 Test、UnitTest、Tests、tests）下。
 
 **业务代码目录**：
 - Model
@@ -74,8 +77,27 @@ app/code/Weline/Backend/Model/MenuTest.php  ❌ 错误
 **正确示例**：
 ```
 app/code/Weline/Backend/Test/Model/MenuTest.php  ✅ 正确
-app/code/Weline/Backend/UnitTest/Model/MenuTest.php  ✅ 正确
+app/code/Weline/模块 Test/ 或 UnitTest/Model/MenuTest.php  ✅ 正确
 ```
+
+### 2. 前台 Section weline-code 规则 (frontend-section-weline-code)
+
+**分类**：frontend
+
+**优先级**：15
+
+**简述**：前台 section / wrapper=section 必须配置 weline-code
+
+**详细描述**：
+前台纳入集中的字面 `<section>` 与 `<w:slot wrapper="section">` 必须配置非空 `weline-code`（或含 PHP 插值）。同文件字面量 code 不得重复。后台 / Admin / `generated/` / `view/tpl/` 不在范围内。
+
+**本地自检**：
+
+```bash
+php bin/w frontend:check-section-code
+```
+
+**文档**：`app/code/Weline/Theme/doc/frontend-section-weline-code.md`
 
 ## 如何添加新规则
 

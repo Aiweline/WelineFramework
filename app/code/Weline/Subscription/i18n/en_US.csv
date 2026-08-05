@@ -1,0 +1,124 @@
+﻿前台账户订阅分区,"Frontend account subscription section"
+在顾客账户首页注入周期性订阅列表与管理入口。,"Adds recurring subscription status and management links to the customer account home page."
+"仅允许 POST 请求。","仅允许 POST 请求。"
+操作失败，请稍后重试。参考编号：%{1},"The operation failed. Please try again later. Reference: %{1}"
+数据暂时无法加载。参考编号：%{1},"Data is temporarily unavailable. Reference: %{1}"
+状态暂时无法读取。参考编号：%{1},"Status is temporarily unavailable. Reference: %{1}"
+订阅管理,订阅管理
+订阅创建、周期与续费管理,订阅创建、周期与续费管理
+订阅,订阅
+查看订阅,查看订阅
+订阅周期,订阅周期
+查看订阅周期,查看订阅周期
+续费调度,续费调度
+查看续费调度租约,查看续费调度租约
+续费尝试,续费尝试
+查看续费尝试,查看续费尝试
+失败水位,失败水位
+查看订阅失败水位,查看订阅失败水位
+迁移状态,迁移状态
+只读查看订阅迁移状态,只读查看订阅迁移状态
+创建订阅,创建订阅
+创建订阅并开启首个周期,创建订阅并开启首个周期
+执行续费,执行续费
+通过订单与沙箱支付端口执行续费尝试,通过订单与沙箱支付端口执行续费尝试
+"store_id 不能为负数：%{1}","store_id must not be negative: %{1}"
+"Subscription 必填字段为空：%{1}","Subscription required field is empty: %{1}"
+"Subscription version/CAS/hash 非法","Subscription version/CAS/hash is invalid"
+"Subscription scheduler lease 非法","Subscription scheduler lease is invalid"
+"非法 Subscription status：%{1}","Invalid Subscription status: %{1}"
+"website_id 不能为负数：%{1}","website_id must not be negative: %{1}"
+"非法 Subscription environment：%{1}","Invalid Subscription environment: %{1}"
+"非法 SubscriptionPeriod status：%{1}","Invalid SubscriptionPeriod status: %{1}"
+"SubscriptionPeriod identity/version/CAS 非法","SubscriptionPeriod identity/version/CAS is invalid"
+"Subscription missed watermark 非法","Subscription missed watermark is invalid"
+"Subscription Billing Attempt 非法","Subscription Billing Attempt is invalid"
+"Subscription Billing Attempt active guard 非法","Subscription Billing Attempt active guard is invalid"
+"Subscription Billing Attempt terminal guard 非法","Subscription Billing Attempt terminal guard is invalid"
+我的订阅,"My subscriptions"
+查看订阅周期与账单状态,"View subscription periods and billing status"
+订阅周期订单由系统按期新建，可在此查看状态。,"Period orders are created by the system each cycle; view status here."
+是,是
+否,否
+只读诊断,只读诊断
+可管理,可管理
+此页面显示订阅、周期与调度持久化事实；生产迁移不在后台触发。,此页面显示订阅、周期与调度持久化事实；生产迁移不在后台触发。
+"创建与续费复用 Subscription 服务；续费只通过 Order 公共端口和 sandbox Payment 公共端口执行。","创建与续费复用 Subscription 服务；续费只通过 Order 公共端口和 sandbox Payment 公共端口执行。"
+执行续费尝试,执行续费尝试
+"订阅 ID","订阅 ID"
+"客户 ID","客户 ID"
+"网站 ID","网站 ID"
+"店铺 ID","店铺 ID"
+Provider,Provider
+方案代码,方案代码
+幂等键,幂等键
+环境,环境
+"Worker ID","Worker ID"
+创建,创建
+当前没有记录。,当前没有记录。
+"Subscription 周期续费","Subscription periodic renewal"
+"按 Subscription lease 执行单周期续费或 missed 恢复","Run one renewal cycle or missed-period recovery under a Subscription lease"
+"Subscription renewal queue content 必须是 JSON object","Subscription renewal queue content must be a JSON object"
+"Subscription renewal queue 参数非法","Subscription renewal queue parameters are invalid"
+"Subscription missed watermark identity 非法","Subscription missed watermark identity is invalid"
+"Subscription missed watermark 并发更新冲突","Subscription missed watermark concurrent update conflict"
+"Subscription Billing Attempt identity 非法","Subscription Billing Attempt identity is invalid"
+"Subscription Billing Attempt Order reference 非法","Subscription Billing Attempt Order reference is invalid"
+"Billing Attempt 已绑定不同 Order：%{1}","Billing Attempt is already bound to another Order: %{1}"
+"Billing Attempt 不存在：%{1}","Billing Attempt not found: %{1}"
+"Subscription Billing Attempt status 非法","Subscription Billing Attempt status is invalid"
+"Billing Attempt 并发更新冲突：%{1}","Billing Attempt concurrent update conflict: %{1}"
+"Subscription Billing Attempt 字段过长","Subscription Billing Attempt field is too long"
+"Subscription recover period_index 非法","Subscription recovery period_index is invalid"
+"Billing Attempt 尚未绑定 Order，禁止替代重试","Billing Attempt has no Order; replacement retry is forbidden"
+已取消或暂停订阅不可调度：%{1},"Cancelled or paused subscription cannot be scheduled: %{1}"
+"Scheduler lease 被占用：%{1}","Scheduler lease held by: %{1}"
+"Subscription scheduler mode off：禁止新 tick，既有义务可 recover","Subscription scheduler mode off: new ticks blocked; recover still allowed"
+"Subscription Provider 已存在：%{1}","Subscription Provider already exists: %{1}"
+"Subscription Provider 不存在：%{1}","Subscription Provider not found: %{1}"
+"Subscription Provider 已禁用：%{1}","Subscription Provider is disabled: %{1}"
+订阅已取消：%{1},"Subscription already cancelled: %{1}"
+"Subscription capability mode off，禁止写路径","Subscription capability is mode off; mutations blocked"
+客户无权操作该订阅,"Customer is not the subscription owner"
+"Subscription Payment command 非法","Subscription Payment command is invalid"
+"TASK-P4B-002 只允许 sandbox Payment","TASK-P4B-002 permits sandbox Payment only"
+"Subscription Payment query identity 非法","Subscription Payment query identity is invalid"
+"Subscription Store Scope 非法","Subscription Store Scope is invalid"
+"Store 不允许创建新 Subscription 续费义务","Store does not allow a new Subscription renewal obligation"
+"Period 缺少 subscription_id/period_key/period_index","Period requires subscription_id/period_key/period_index"
+"SubscriptionPeriod identity 过长","SubscriptionPeriod identity is too long"
+"Period 不存在：%{1}","Period not found: %{1}"
+"SubscriptionPeriod Order reference 非法","SubscriptionPeriod Order reference is invalid"
+"Period 已绑定不同 Order：%{1}","Period already bound to a different Order: %{1}"
+"SubscriptionPeriod missed reason 非法","SubscriptionPeriod missed reason is invalid"
+"已出账 Period 不能标记 missed：%{1}","Billed period cannot be marked missed: %{1}"
+"SubscriptionPeriod 并发更新冲突","SubscriptionPeriod concurrent update conflict"
+"SubscriptionPeriod identity 已占用：%{1}","SubscriptionPeriod identity is already taken: %{1}"
+"Subscription Order 创建失败（测试注入）","Subscription Order create failed (test injection)"
+"Subscription 创建缺少必填字段","Subscription create is missing required fields"
+"Subscription 创建字段过长","Subscription create field is too long"
+"Subscription ID 过长","Subscription ID is too long"
+"Subscription 不存在：%{1}","Subscription not found: %{1}"
+"Subscription current_period_index 非法","Subscription current_period_index is invalid"
+"Subscription idempotency 冲突：%{1}","Subscription idempotency conflict: %{1}"
+"Subscription 已存在：%{1}","Subscription already exists: %{1}"
+同一客户/站点/计划订阅已存在,"Subscription already exists for customer/website/plan"
+"Subscription 版本冲突：expected=%{1} actual=%{2}","Subscription version conflict: expected=%{1} actual=%{2}"
+"Subscription Order command 非法","Subscription Order command is invalid"
+"Subscription Period 必须创建且只创建一个 Order","Subscription Period must create exactly one Order"
+"Subscription scheduler lease identity 非法","Subscription scheduler lease identity is invalid"
+"MIG-P4B：Subscription 周期水位与 scheduler allowlist（仅登记的 full clone）","MIG-P4B: Subscription period watermarks and scheduler allowlist (registered full clone only)"
+打印帮助,"Print help"
+"在 full clone 只读清点 Subscription/Period/Attempt/Watermark/Lease","Read-only inventory of Subscription/Period/Attempt/Watermark/Lease facts on a full clone"
+"写前 checkpoint，只补 gap Period/watermark 并保持 shadow","Checkpoint before writes, backfill gap Period/watermark only, and remain in shadow"
+"新进程重载 checkpoint，重算事实 hash、周期连续性与水位","Reload the checkpoint in a fresh process and recompute fact hashes, period continuity, and watermarks"
+"fresh verify 后仅放量 checkpoint 冻结的 Website scheduler","Allowlist only the checkpoint-frozen Website scheduler after fresh verification"
+"按 checkpoint mode off，保留既有 Period/Order/Payment 义务","Switch to mode off by checkpoint while retaining existing Period/Order/Payment obligations"
+"migration registry 已登记的 full mig_clone_*","A full mig_clone_* registered in the migration registry"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify/allowlist/rollback)"
+"目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
+显示本帮助,"Show this help"
+"MIG lease 探针失败","MIG lease probe failed"
+"MIG-P4B：Subscription shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4B: move Subscription from shadow to allowlist (apply requires --database=mig_clone_*)"
+已取消订阅不可调度：%{1},"Cancelled subscription cannot be scheduled: %{1}"
+"Period key 已占用：%{1}","Period key already taken: %{1}"

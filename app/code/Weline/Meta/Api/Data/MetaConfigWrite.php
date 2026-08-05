@@ -10,5 +10,6 @@ final readonly class MetaConfigWrite
         public MetaConfigIdentity $identity,
         public string $value,
     ) {
+        MetaConfigIdentity::assertValue($this->value);
     }
 }

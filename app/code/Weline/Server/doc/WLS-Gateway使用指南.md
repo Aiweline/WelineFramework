@@ -155,6 +155,14 @@ Master 的受保护 lease 是运行中实例的代际事实源。status、Benchm
   相对路径穿越、符号链接和组件摘要变化。宿主包已有签名、SBOM、provenance、
   Native Broker 与平台服务定义门禁；Linux/macOS/Windows 的系统服务、ACL 和 reboot
   仍需隔离 host/VM 实证。
+- Windows release manifest 必须声明
+  `windows_kernel32_ffi_atomic_write=true`。未签名组包阶段和安装后槽位 self-test 都会
+  使用包内锁定 `php.exe` 检查 FFI extension、`ffi.enable`，并实际执行 kernel32
+  `FFI::cdef`；只通过 `php --version` 不能满足发行合同。项目侧当前 PHP也在任何 UUID、
+  租约或续签队列写入前执行同一门禁，因此纯 WLS 不依赖网关 Broker 才能安全启动。
+- Windows 项目状态替换为每个目标最多 8 个、每目录最多 256 个恢复 backup 叶子设置
+  硬配额；成功提交立即用内核 API 清理本代 backup，分享冲突导致的保留项达到配额后
+  会 fail-closed 并要求修复，不能无限消耗目录或磁盘。
 - 控制协议标识为 `wls-edge/2`；管理/项目双通道、OS peer identity、项目能力凭据、
   nonce 防重放、请求/响应认证、generation 和 fencing 均已接通。
 - `repair`、`revoke`、`transfer`、`upgrade` 属于长管理事务，客户端和 Windows
@@ -238,6 +246,15 @@ macOS opt-in 验收只在随机高端口启动任务自有 Broker、Controller�
   自动切回 B；systemd、ACTIVE route、项目 Master 及 H1/H2 200/133089-byte 响应正常。
   Windows restart 在 stop/start 间按 SCM 数字状态进行 100ms 有界轮询，分别等待
   STOPPED/RUNNING，单阶段最长 30 秒；该逻辑已有解析/合同回归，仍不替代 Windows 实机；
+- 稳定 Launcher 不再把无 `ADMIN_STOPPED`、无平台 stop/reload 请求的 Broker 退出码 0
+  透传为成功。该情形会统一转为失败，使 systemd、LaunchDaemon 和 Windows SCM 的
+  恢复策略重新拉起宿主网关；管理员显式停止与签名停机意图仍保持成功退出且不重启。
+  macOS 又以随机标签的临时用户 launchd 服务真实验证同一签名 Launcher：
+  假 Broker clean exit 后至少启动两次，last exit code 为 1，测试后已 bootout 且无随机
+  标签残留。该证据只验证 launchd 重启语义，不替代 root LaunchDaemon/ACL/reboot；
+- 稳定 Launcher 在 Broker 回收后再次对账平台停机信号，Windows 也先发布 stop
+  intent、再上报 `STOP_PENDING`。因此显式停机与 Broker clean exit 同轮发生时，
+  不会被误分类为意外失败而诱发多余恢复；
 - 旧签名槽位 PHP 8.5.8 与项目 PHP 8.5.4 对 `own-status` 浮点最短表示不同，曾导致
   解码后重编码验签失败。客户端现在先走现行规范串，失败时保留原始 JSON 数字词法
   重建排序规范串，HMAC 仍为强制条件；验签后递归移除 secret/token/private-key，
@@ -328,6 +345,42 @@ ACME/Edge Protocol 2 聚焦回归通过 `101 tests / 1520 assertions`，聚焦
 Linux 隔离 ext4 已真实覆盖 ENOSPC、`IFree=0` 和只读 remount，均保持原数据面并在
 确认修复后重建 reserve、清除 marker。当前仍未覆盖 macOS/Windows 系统服务
 ACL/reboot、Windows 实机和外部 CA/DNS 公网首次实签。
+
+原生 CI 不再只做编译与组件 self-test：Ubuntu/macOS 会安装 `composer.lock` 指定的
+依赖并直接执行签名 Launcher 生命周期集成测试，同时分别启用 transient
+systemd/launchd 恢复场景；Windows 除编译并执行 Broker、Launcher 和 Controller
+self-test 外，还会以一次性签名槽和无端口测试 Broker 建立临时 SCM 服务，验证意外
+clean exit 自动重启及显式 stop 保持停止，并让真实 Broker 在 NTFS 上拒绝宽授权私钥
+及源/目标 reparse。macOS 同时使用随机 root:wheel 目录和 0644 plist 验证
+system-domain LaunchDaemon；root Broker 只写 root-owned 测试目录，finally 会先尝试
+bootout 再清理。固定 Windows 服务已存在时测试拒绝替换，删除服务、目录或临时私钥
+失败都会使门禁失败；测试 helper/private snapshot 命令默认不构建且不进入生产安装清单。
+Native 测试源码及 Composer 依赖变化均触发相应门禁，job 有
+45 分钟总期限。同一可执行组合已在当前 macOS 通过
+`10 tests / 307 assertions / 3 honest skips`，Host 合同通过 `23 / 488`，PostgreSQL
+发布组合通过 `30 / 663 / 1 capability skip`；此前 Linux 验收 VM 为
+`9 / 327 / 1 macOS-only skip`。托管 Runner 的 system-domain/SCM/NTFS 结果必须以
+提交后的 GitHub 工作流为准。门禁实际通过前不能声明对应平台已验收；通过后仍不替代
+macOS/Windows 冷 reboot、Windows rename 竞态或公网 CA/DNS 验收。
+
+稳定 Launcher 的退出码现在分为“Broker 原始结果”和“已授权控制结果”：只有平台
+HUP/PARAMCHANGE 或签名 A/B 迁移才能产生内部 reload，Broker 自行返回保留码 254 会按
+失败处理；平台 stop、shutdown 或签名 `ADMIN_STOPPED` 一旦成为权威意图，则 Broker
+即使非零退出也以正常停机结束。POSIX stop 信号优先于 HUP 并在阻塞信号后原子消费；
+Windows 通过 SRW lock 发布/撤销 stop event，以单调 reload generation 合并请求，
+stop/reload 都有 15 秒强制收敛期限。
+
+Windows 私钥快照不再只排除三个宽用户组。Broker 会枚举 DACL 中所有授予文件内容读取
+权的 allow ACE，仅接受已登记项目所有者、LocalSystem、Administrators、Gateway 服务
+SID 和 Windows 所有者语义；未知或对象型可读 ACE 直接拒绝。原生读取同时要求普通文件、
+1 字节至 1 MiB、每次 `ReadFile` 成功且总读取量与稳定文件大小一致，失败候选不得发布。
+托管 NTFS 夹具另外覆盖具体无关 SID、空/超限文件和源/目标 reparse。
+
+特权平台门禁只从独占的 root-owned/system ACL 根执行 Launcher 与签名槽；systemd 或
+launchd 提交一经尝试，finally 都会按唯一 unit/label 回收，且只删除已成功创建的随机
+根。原生命令全部有界，POSIX PHPUnit 只加载 `vendor/autoload.php`，不会建立 SQLite
+应用沙箱。Windows 密钥使用独占创建和受限 ACL，服务夹具以唯一二进制路径认领部分创建
+状态，stop 与 delete 分阶段清理，工作流另有 `always()` 密钥清理兜底。
 Linux 宿主包已经完成来源、依赖、SBOM、
 自检与签名门禁，但不会绕过 A/B 旧槽至少保留 24 小时的策略替换在线槽位。当前
 `controlrestart6` 候选包已由最新 Controller 源码构建并签名；在线宿主因 B 槽仍在

@@ -86,6 +86,8 @@ Scenario/Skill/Style 能力和翻译服务均在该命名空间发布。
 内部 `AiModel`、`AiScenarioAdapter`、`AdapterScanner`、`AccountService` 与 `UsageRecord` 不得泄露到调用模块。
 公开 `Api\AiModel` 提供 modality、active/default、token 上限与价格的只读访问器；已有构造和数组数据格式保持兼容。
 图片生成和模型能力探测通过 `Weline\Ai\Api\Image\ImageRuntimeInterface` 发布；可选模块不得直接注入 `AiService`。
+按场景（scenario）发起文生图、且禁止调用方传 model/provider 路由字段时，使用
+`Weline\Ai\Api\ScenarioImageGenerationInterface`（实现 `ScenarioImageGenerationGateway`）。
 `Weline\Ai\Api\Image\TextToImageScenarioBindingInterface` 是文生图场景的控制面命令边界：
 调用方只提交 data-only `TextToImageScenarioBindingRequest`，并获取标量模型代码或
 `TextToImageScenarioBindingResult`。默认图像模型、模态/供应商筛选、后台配置可用性、供应商账号修复、
@@ -108,6 +110,34 @@ Resolver、Registry、Service 或 ORM Model。
 均解析到 Ai 内部现有 SecretStore 实现，密文格式、主密钥派生和轮换逻辑不会暴露给调用模块。
 可选 I18n 集成的默认 locale 规范化通过 `Weline\I18n\Api\Localization\LocaleRepositoryInterface`
 解析，不直接调用 I18n 的综合 Model。
+
+## 供应商成功响应与用量审计
+
+OpenAI 兼容文本/图片请求默认继续使用 `ProviderTimeoutPolicy` 的低速门禁。确有大型结构化响应场景时，
+调用方可同时提交 `timeout` 与 `low_speed_time`；后者最少 30 秒且不会超过非零 `timeout`，
+只延长该次请求的首字节/低速等待，不改变其他供应商请求的默认保护。
+
+文本与流式调用在进入供应商前固定本次 `request_id`。供应商已经返回成功内容后，用量记录或
+账户余额写入失败不得把该响应重新判为供应商失败，也不得触发第二次付费调用。正常路径在一个
+短写事务内按唯一的 `request_key = sha256(request_id)` 写入 `ai_provider_usage_record`。
+余额使用 `balance_applied: 0→2→1` 的原子 CAS 认领：只有把待处理行认领为事务内状态的 Worker
+可以扣费，扣费与最终状态同事务提交，失败回滚后可由 Scheduler 再认领。重放同一请求只读取
+既有 canonical 行。
+
+升级时 `request_key` 先以 nullable 字段和 UNIQUE 索引进入 SchemaDiff，因此 SQLite/MySQL
+面对历史重复 `request_id` 均不会在建索引阶段失败。随后数据迁移把旧行的
+`balance_applied` 回填为 `1`；相同重复行全部保留并标记 `legacy_duplicate`，核心计量字段冲突
+的重复组标记为 `legacy_conflict` 并对后续重放 fail-closed，不删除或静默覆盖历史证据。
+
+SQLite 繁忙等数据库故障会把不含 prompt、response、密钥或模型配置的计量标量写入共享
+`var/ai/provider-usage-outbox`。文件按 16 个固定锁分片并通过临时文件原子 rename 发布；
+恢复前必须同时验证文件名 hash、envelope `request_key_sha256` 和 payload `request_id` hash。
+坏 envelope 只进入 quarantine，不会复用上一文件状态；异常只保存类别、异常类和 message hash，
+不保存原始 message。真实 Scheduler 每分钟最多恢复 50 条，单条失败不会阻断其余事件，连续失败
+10 次的坏行保留为 `dead` 证据；旧版逐请求锁仅在超过 7 天、无 pending 文件且非阻塞独占并核对
+inode 后每轮最多清理 32 个。
+恢复过程记录到 `ai_usage_audit_recovery.log`，结构化 outbox 自身不可用时另写
+`ai_usage_audit_emergency.log`，避免静默丢失审计信号。
 
 ## 📝 文档贡献
 

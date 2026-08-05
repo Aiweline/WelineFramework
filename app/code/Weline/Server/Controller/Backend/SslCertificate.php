@@ -279,38 +279,10 @@ class SslCertificate extends BackendController
             return $this->fetchJson(['success' => false, 'message' => $block]);
         }
         
-        $cert = $this->certModel->clearQuery()->loadByDomain($domain);
-        if (!$cert->getCertId()) {
-            return $this->fetchJson(['success' => false, 'message' => __('未找到证书记录')]);
-        }
-        
-        // 先禁用 HTTPS
-        if ($cert->isHttpsEnabled()) {
-            $cert->setHttpsEnabled(false)->save();
-        }
-        
-        // 删除证书文件
-        $certDir = $cert->getCertificateDir();
-        if (\is_dir($certDir)) {
-            $files = \glob($certDir . '*');
-            foreach ($files as $file) {
-                @\unlink($file);
-            }
-            @\rmdir($certDir);
-        }
-        
-        $certId = $cert->getCertId();
-
-        // 删除数据库记录
-        $cert->clearQuery()
-            ->where(CertModel::schema_fields_ID, $certId)
-            ->delete()
-            ->fetch();
-
-        // 通知其他模块清除关联状态（域名池 HTTPS/可建站）
-        $this->sslService->dispatchCertificateDeletedEvent($domain, $certId, (string) __('后台手动删除'));
-
-        return $this->fetchJson(['success' => true, 'message' => __('证书已删除')]);
+        return $this->fetchJson($this->sslService->deleteManagedCertificate(
+            $domain,
+            (string)__('后台手动删除'),
+        ));
     }
     
     /**
@@ -481,11 +453,14 @@ class SslCertificate extends BackendController
         $deleted = 0;
         $skippedProtected = [];
         $skippedIssuing = [];
+        $failed = [];
+        $seenDomains = [];
         foreach ($domains as $domain) {
             $domain = \strtolower(\trim((string) $domain));
-            if ($domain === '') {
+            if ($domain === '' || isset($seenDomains[$domain])) {
                 continue;
             }
+            $seenDomains[$domain] = true;
             if (\in_array($domain, self::PROTECTED_DOMAINS, true)) {
                 $skippedProtected[] = $domain;
                 continue;
@@ -494,32 +469,20 @@ class SslCertificate extends BackendController
                 $skippedIssuing[] = $domain;
                 continue;
             }
-            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
-            if (!$cert->getCertId()) {
+            $deletion = $this->sslService->deleteManagedCertificate(
+                $domain,
+                (string)__('后台批量删除'),
+            );
+            if (($deletion['success'] ?? false) === true) {
+                ++$deleted;
                 continue;
             }
-            if ($cert->isHttpsEnabled()) {
-                $cert->setHttpsEnabled(false)->save();
-            }
-            $certDir = $cert->getCertificateDir();
-            if (\is_dir($certDir)) {
-                $files = @\scandir($certDir);
-                if ($files !== false) {
-                    foreach ($files as $f) {
-                        if ($f !== '.' && $f !== '..') {
-                            @\unlink($certDir . $f);
-                        }
-                    }
-                }
-                @\rmdir($certDir);
-            }
-            $certId = $cert->getCertId();
-            $cert->clearQuery()
-                ->where(CertModel::schema_fields_ID, $certId)
-                ->delete()
-                ->fetch();
-            $this->sslService->dispatchCertificateDeletedEvent($domain, $certId, (string) __('后台批量删除'));
-            $deleted++;
+            $failed[$domain] = [
+                'phase' => (string)($deletion['phase'] ?? 'unknown'),
+                'message' => (string)(
+                    $deletion['message'] ?? __('证书删除失败')
+                ),
+            ];
         }
 
         $msg = __('已删除 %{1} 个证书', [$deleted]);
@@ -529,13 +492,17 @@ class SslCertificate extends BackendController
         if ($skippedIssuing !== []) {
             $msg .= '，' . __('跳过 %{1} 个正在申请证书的域名（%{2}）', [\count($skippedIssuing), \implode(', ', $skippedIssuing)]);
         }
+        if ($failed !== []) {
+            $msg .= '，' . __('%{1} 个证书删除未完成', [\count($failed)]);
+        }
         return $this->fetchJson([
-            'success' => true,
+            'success' => $failed === [],
             'message' => $msg,
             'deleted' => $deleted,
             'skipped' => \array_merge($skippedProtected, $skippedIssuing),
             'skipped_protected' => $skippedProtected,
             'skipped_issuing' => $skippedIssuing,
+            'failed' => $failed,
         ]);
     }
 

@@ -1,14 +1,5 @@
-# Cursor Rules for WelineFramework
+# Cursor entry for WelineFramework
 
-Read `AI-ENTRY.md`, then follow `dev/ai/global-constraints.md` as the single source of repository-wide AI rules.
+Read `AI-ENTRY.md`, then `dev/ai/global-constraints.md`. Select task-specific skills through `dev/ai/skills/_index.md`.
 
-Cursor-specific always-on summaries live in `.cursor/rules/*.mdc` and mirror selected rules from `dev/ai/global-constraints.md`; if they conflict, `dev/ai/global-constraints.md` wins.
-
-Additional legacy Cursor protocols remain reference-only unless explicitly triggered by task markers:
-
-- `dev/ai/rules/agent-supervisor-protocol.md` when files contain `@AgentID` or `[SUPERVISOR_TASK]`
-- `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md`
-- `dev/ai/rules/multi-agent-protocol.md`
-- `dev/ai/rules/efficiency_rules.md`
-
-Quick commands and skill routing are maintained in `AI-ENTRY.md` and `dev/ai/skills/_index.md`.
+Cursor-specific `.cursor/rules/*.mdc` files are conditional adapters only; they must point to canonical rules or skills and must not mirror long rule bodies.

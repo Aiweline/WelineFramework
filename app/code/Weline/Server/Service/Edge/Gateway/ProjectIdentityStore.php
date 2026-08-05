@@ -27,9 +27,23 @@ final class ProjectIdentityStore
         ?string $legacyDesiredStateFile = null,
     ) {
         $root = $projectRoot ?? (string)BP;
+        if ($root === ''
+            || \strlen($root) > 4096
+            || \str_contains($root, "\0")
+            || \is_link($root)
+        ) {
+            throw new \RuntimeException('Unable to resolve a safe WLS project root.');
+        }
         $realRoot = \realpath($root);
-        if (!\is_string($realRoot) || $realRoot === '') {
-            throw new \RuntimeException('Unable to resolve the WLS project root.');
+        $rootStatus = \is_string($realRoot) ? @\lstat($realRoot) : false;
+        if (!\is_string($realRoot)
+            || $realRoot === ''
+            || $this->isFilesystemRoot($realRoot)
+            || !\is_array($rootStatus)
+            || \is_link($realRoot)
+            || ((((int)($rootStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException('Unable to resolve a safe WLS project root.');
         }
         $this->projectRoot = \rtrim($realRoot, '/\\');
         $this->identityFile = $this->projectRoot . DIRECTORY_SEPARATOR . 'app'
@@ -37,14 +51,26 @@ final class ProjectIdentityStore
         $this->hostStateRoot = $hostStateRoot === null
             ? $this->defaultHostStateRoot()
             : $this->normalizeAbsolutePath($hostStateRoot, 'WLS edge host state root');
-        $this->legacyDesiredStateFile = $legacyDesiredStateFile
-            ?? Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'gateway-v2'
-                . DIRECTORY_SEPARATOR . 'desired-generation.json';
+        $this->legacyDesiredStateFile = $this->normalizeAbsolutePath(
+            $legacyDesiredStateFile
+                ?? Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'gateway-v2'
+                    . DIRECTORY_SEPARATOR . 'desired-generation.json',
+            'WLS legacy desired-state file',
+        );
     }
 
     public function projectUuid(): string
     {
         $state = $this->ensure();
+        $rotation = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
+        if (\in_array((string)($rotation['phase'] ?? ''), [
+            'HOST_COMMITTED',
+            'IDENTITY_COMMITTED',
+        ], true)) {
+            throw new \RuntimeException(
+                'WLS project identity rotation is host-committed and requires roll-forward recovery.'
+            );
+        }
         $this->claimHostIdentity((string)$state['project_uuid']);
         return (string)$state['project_uuid'];
     }
@@ -65,6 +91,30 @@ final class ProjectIdentityStore
     }
 
     /**
+     * Serialize the complete project desired-state build from source discovery
+     * through certificate activation, identity generation and renewal intent.
+     * Acquiring this lock before reading facts prevents delayed builders from
+     * turning an old A snapshot into a newer generation after B committed.
+     *
+     * @template TResult
+     * @param callable():TResult $callback
+     * @return TResult
+     */
+    public function withDesiredStateBuildLock(callable $callback): mixed
+    {
+        $directory = $this->ensureProjectIdentityDirectory();
+        $lockFile = $directory . DIRECTORY_SEPARATOR . '.wls-desired-state-build.lock';
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockFile,
+            static fn (): mixed => $callback(),
+            fn ($handle, string $path): mixed => $this->preserveProjectIdentityOwnership(
+                $path,
+                $handle,
+            ),
+        );
+    }
+
+    /**
      * @return array{generation:int,digest:string,idempotency_key:string}
      */
     public function advanceDesiredState(string $digest): array
@@ -81,29 +131,309 @@ final class ProjectIdentityStore
     }
 
     /**
+     * Allocate one strictly increasing project-owned instance generation.
+     * The durable project counter is the sole authority. The optional second
+     * argument is retained only for source compatibility with pre-release WLS
+     * 2.0 callers and is deliberately ignored: endpoint/receipt caches are
+     * host-derived observations and must never advance project-owned state.
+     *
+     * @return array{project_uuid:string,instance_id:string,generation:int}
+     */
+    public function advanceInstanceGeneration(
+        string $instanceId,
+        int $untrustedObservedFloor = 0,
+    ): array {
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceId) !== 1) {
+            throw new \InvalidArgumentException(
+                'WLS project instance generation identity is invalid.',
+            );
+        }
+
+        unset($untrustedObservedFloor);
+        return $this->withProjectLock(function (array $state) use ($instanceId): array {
+            $instances = \is_array($state['instances'] ?? null)
+                ? $state['instances']
+                : [];
+            if (!isset($instances[$instanceId]) && \count($instances) >= 256) {
+                throw new \RuntimeException(
+                    'WLS project instance generation registry reached its fixed limit.',
+                );
+            }
+            $entry = \is_array($instances[$instanceId] ?? null)
+                ? $instances[$instanceId]
+                : [];
+            $current = $entry['generation'] ?? 0;
+            if (!\is_int($current) || $current < 0) {
+                throw new \RuntimeException(
+                    'WLS project instance generation counter is malformed.',
+                );
+            }
+            if ($current >= PHP_INT_MAX) {
+                throw new \RuntimeException(
+                    'WLS project instance generation exhausted its integer range.',
+                );
+            }
+            $generation = $current + 1;
+            $now = \gmdate(DATE_ATOM);
+            $instances[$instanceId] = [
+                'generation' => $generation,
+                'updated_at' => $now,
+            ];
+            \ksort($instances, SORT_STRING);
+            $state['instances'] = $instances;
+            $state['updated_at'] = $now;
+
+            return [$state, [
+                'project_uuid' => (string)$state['project_uuid'],
+                'instance_id' => $instanceId,
+                'generation' => $generation,
+            ]];
+        });
+    }
+
+    /**
      * Explicitly replace a cloned/moved project's identity.
      *
      * @return array{previous_uuid:string,project_uuid:string}
      */
     public function rotate(): array
     {
-        $result = $this->withProjectLock(function (array $state): array {
-            $previous = (string)$state['project_uuid'];
-            $state['project_uuid'] = self::uuidV4();
-            $state['desired'] = self::emptyGeneration();
-            $state['certificate'] = self::emptyGeneration();
-            $state['rotated_from'] = $previous;
-            $state['rotated_at'] = \gmdate(DATE_ATOM);
-            $state['updated_at'] = $state['rotated_at'];
-            return [$state, [
-                'previous_uuid' => $previous,
-                'project_uuid' => (string)$state['project_uuid'],
-            ]];
-        });
+        throw new \RuntimeException(
+            'Direct WLS project identity rotation is retired; use transactional gateway enrollment.'
+        );
+    }
 
-        $this->releaseHostClaim((string)$result['previous_uuid']);
-        $this->claimHostIdentity((string)$result['project_uuid']);
+    /** @return array<string,mixed> */
+    public function prepareRotation(): array
+    {
+        return $this->withProjectLock(function (array $state): array {
+            $existing = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
+            if ($existing !== []) {
+                return [$state, $existing];
+            }
+            $oldUuid = (string)$state['project_uuid'];
+            $rotation = [
+                'schema_version' => 1,
+                'rotation_id' => \bin2hex(\random_bytes(16)),
+                'old_project_uuid' => $oldUuid,
+                'new_project_uuid' => self::uuidV4(),
+                'project_root' => $this->projectRoot,
+                'phase' => 'LOCAL_PREPARED',
+                'request_digest' => '',
+                'idempotency_key' => '',
+                'new_credential_id' => '',
+                'prepare_receipt_digest' => '',
+                'commit_receipt' => null,
+                'old_claim' => $this->hostClaimSnapshot($oldUuid),
+                'created_at' => \gmdate(DATE_ATOM),
+                'updated_at' => \gmdate(DATE_ATOM),
+            ];
+            $state['rotation'] = $rotation;
+            $state['updated_at'] = (string)$rotation['updated_at'];
+            return [$state, $rotation];
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function recordRotationPrepared(
+        string $rotationId,
+        string $requestDigest,
+        string $idempotencyKey,
+        string $newCredentialId,
+        string $prepareReceiptDigest,
+    ): array {
+        return $this->updateRotation(
+            $rotationId,
+            ['LOCAL_PREPARED', 'CONTROLLER_PREPARED'],
+            static function (array $rotation) use (
+                $requestDigest,
+                $idempotencyKey,
+                $newCredentialId,
+                $prepareReceiptDigest,
+            ): array {
+                $rotation['phase'] = 'CONTROLLER_PREPARED';
+                $rotation['request_digest'] = \strtolower(\trim($requestDigest));
+                $rotation['idempotency_key'] = \strtolower(\trim($idempotencyKey));
+                $rotation['new_credential_id'] = \strtolower(\trim($newCredentialId));
+                $rotation['prepare_receipt_digest'] = \strtolower(\trim(
+                    $prepareReceiptDigest,
+                ));
+                return $rotation;
+            },
+        );
+    }
+
+    /** @param array<string,mixed> $receipt @return array<string,mixed> */
+    public function markRotationHostCommitted(
+        string $rotationId,
+        array $receipt,
+    ): array {
+        return $this->updateRotation(
+            $rotationId,
+            ['CONTROLLER_PREPARED', 'HOST_COMMITTED'],
+            static function (array $rotation) use ($receipt): array {
+                $rotation['phase'] = 'HOST_COMMITTED';
+                $rotation['commit_receipt'] = $receipt;
+                return $rotation;
+            },
+        );
+    }
+
+    /** @return array<string,mixed> */
+    public function commitRotationIdentity(string $rotationId): array
+    {
+        $rotation = $this->rotationState();
+        if (!\hash_equals($rotationId, (string)($rotation['rotation_id'] ?? ''))
+            || !\in_array((string)($rotation['phase'] ?? ''), [
+                'HOST_COMMITTED',
+                'IDENTITY_COMMITTED',
+                'LOCAL_COMMITTED',
+            ], true)
+        ) {
+            throw new \RuntimeException('WLS project rotation is not host-committed.');
+        }
+        $newUuid = (string)$rotation['new_project_uuid'];
+        $this->claimHostIdentity($newUuid);
+        return $this->withProjectLock(function (array $state) use (
+            $rotationId,
+            $newUuid,
+        ): array {
+            $current = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
+            $this->assertRotationIdentity($current, $rotationId);
+            $phase = (string)($current['phase'] ?? '');
+            if (!\in_array($phase, [
+                'HOST_COMMITTED',
+                'IDENTITY_COMMITTED',
+                'LOCAL_COMMITTED',
+            ], true)) {
+                throw new \RuntimeException(
+                    'WLS project rotation cannot switch identity before host commit.'
+                );
+            }
+            if ($phase === 'HOST_COMMITTED') {
+                if (!\hash_equals(
+                    (string)$current['old_project_uuid'],
+                    (string)$state['project_uuid'],
+                )) {
+                    throw new \RuntimeException(
+                        'WLS project rotation old identity changed before local commit.'
+                    );
+                }
+                $state['project_uuid'] = $newUuid;
+                // Controller transfers anti-rollback generation/digest floors
+                // to the new UUID. Preserve the project-owned facts and only
+                // re-sign their idempotency key under the new identity.
+                foreach (['desired', 'certificate'] as $section) {
+                    $generationState = \is_array($state[$section] ?? null)
+                        ? $state[$section]
+                        : self::emptyGeneration();
+                    $generation = (int)($generationState['generation'] ?? 0);
+                    $digest = (string)($generationState['digest'] ?? '');
+                    $state[$section] = $generation > 0
+                        ? [
+                            'generation' => $generation,
+                            'digest' => $digest,
+                            'idempotency_key' => \substr(\hash(
+                                'sha256',
+                                $newUuid . ':' . $section . ':'
+                                    . $generation . ':' . $digest,
+                            ), 0, 40),
+                        ]
+                        : self::emptyGeneration();
+                }
+                $current['phase'] = 'IDENTITY_COMMITTED';
+                $current['identity_committed_at'] = \gmdate(DATE_ATOM);
+                $current['updated_at'] = $current['identity_committed_at'];
+                $state['rotation'] = $current;
+                $state['updated_at'] = $current['updated_at'];
+            } elseif (!\hash_equals($newUuid, (string)$state['project_uuid'])) {
+                throw new \RuntimeException(
+                    'WLS project rotation committed identity is inconsistent.'
+                );
+            }
+            return [$state, $current];
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function markRotationLocalCommitted(string $rotationId): array
+    {
+        return $this->updateRotation(
+            $rotationId,
+            ['IDENTITY_COMMITTED', 'LOCAL_COMMITTED'],
+            static function (array $rotation): array {
+                $rotation['phase'] = 'LOCAL_COMMITTED';
+                $rotation['local_committed_at'] ??= \gmdate(DATE_ATOM);
+                return $rotation;
+            },
+        );
+    }
+
+    /** @return array<string,mixed> */
+    public function finalizeRotation(string $rotationId): array
+    {
+        $pending = $this->rotationState();
+        $this->assertRotationIdentity($pending, $rotationId);
+        if ((string)($pending['phase'] ?? '') !== 'LOCAL_COMMITTED') {
+            throw new \RuntimeException(
+                'WLS project rotation cannot finalize before local commit.'
+            );
+        }
+        // Release first while the durable rotation journal still exists. A
+        // crash after release can safely replay this idempotent step; clearing
+        // the journal first would lose the only old-claim recovery fact.
+        $this->releaseHostClaim((string)$pending['old_project_uuid']);
+        $result = $this->withProjectLock(function (array $state) use ($rotationId): array {
+            $rotation = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
+            $this->assertRotationIdentity($rotation, $rotationId);
+            if ((string)($rotation['phase'] ?? '') !== 'LOCAL_COMMITTED'
+                || !\hash_equals(
+                    (string)$rotation['new_project_uuid'],
+                    (string)$state['project_uuid'],
+                )
+            ) {
+                throw new \RuntimeException(
+                    'WLS project rotation cannot finalize before local commit.'
+                );
+            }
+            $finishedAt = \gmdate(DATE_ATOM);
+            $state['last_rotation'] = [
+                'rotation_id' => (string)$rotation['rotation_id'],
+                'old_project_uuid' => (string)$rotation['old_project_uuid'],
+                'new_project_uuid' => (string)$rotation['new_project_uuid'],
+                'finalized_at' => $finishedAt,
+            ];
+            unset($state['rotation']);
+            $state['updated_at'] = $finishedAt;
+            return [$state, $rotation];
+        });
         return $result;
+    }
+
+    public function abortRotation(string $rotationId): void
+    {
+        $this->withProjectLock(function (array $state) use ($rotationId): array {
+            $rotation = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
+            $this->assertRotationIdentity($rotation, $rotationId);
+            if (!\in_array((string)($rotation['phase'] ?? ''), [
+                'LOCAL_PREPARED',
+                'CONTROLLER_PREPARED',
+            ], true)) {
+                throw new \RuntimeException(
+                    'Host-committed WLS project rotation can only roll forward.'
+                );
+            }
+            unset($state['rotation']);
+            $state['updated_at'] = \gmdate(DATE_ATOM);
+            return [$state, null];
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function rotationState(): array
+    {
+        $state = $this->ensure();
+        return \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
     }
 
     public function hostStateRoot(): string
@@ -127,6 +457,11 @@ final class ProjectIdentityStore
                 : self::emptyGeneration();
             $generation = \max(0, (int)($current['generation'] ?? 0));
             if (!\hash_equals((string)($current['digest'] ?? ''), $digest)) {
+                if ($generation >= \PHP_INT_MAX) {
+                    throw new \RuntimeException(
+                        'WLS project generation exhausted its integer range.'
+                    );
+                }
                 $generation++;
             }
             $idempotencyKey = \substr(\hash(
@@ -147,48 +482,116 @@ final class ProjectIdentityStore
     }
 
     /**
+     * @param list<string> $allowedPhases
+     * @param callable(array<string,mixed>):array<string,mixed> $mutation
+     * @return array<string,mixed>
+     */
+    private function updateRotation(
+        string $rotationId,
+        array $allowedPhases,
+        callable $mutation,
+    ): array {
+        return $this->withProjectLock(function (array $state) use (
+            $rotationId,
+            $allowedPhases,
+            $mutation,
+        ): array {
+            $rotation = \is_array($state['rotation'] ?? null) ? $state['rotation'] : [];
+            $this->assertRotationIdentity($rotation, $rotationId);
+            if (!\in_array((string)($rotation['phase'] ?? ''), $allowedPhases, true)) {
+                throw new \RuntimeException(
+                    'WLS project rotation phase does not allow this transition.'
+                );
+            }
+            $rotation = $mutation($rotation);
+            $rotation['updated_at'] = \gmdate(DATE_ATOM);
+            $state['rotation'] = $rotation;
+            $state['updated_at'] = $rotation['updated_at'];
+            return [$state, $rotation];
+        });
+    }
+
+    /** @param array<string,mixed> $rotation */
+    private function assertRotationIdentity(array $rotation, string $rotationId): void
+    {
+        $rotationId = \strtolower(\trim($rotationId));
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $rotationId) !== 1
+            || !\hash_equals($rotationId, (string)($rotation['rotation_id'] ?? ''))
+        ) {
+            throw new \RuntimeException('WLS project rotation identity does not match.');
+        }
+    }
+
+    /** @return array{exists:bool,digest:string,project_root:string} */
+    private function hostClaimSnapshot(string $projectUuid): array
+    {
+        $claims = $this->ensureHostStateDirectory('project-identities');
+        $claim = $claims . DIRECTORY_SEPARATOR . $projectUuid . '.json';
+        $raw = GatewayProjectStateFilesystem::readOptional(
+            $claim,
+            65_536,
+            'WLS host identity claim',
+        );
+        if ($raw === null) {
+            return ['exists' => false, 'digest' => '', 'project_root' => ''];
+        }
+        $decoded = \json_decode($raw, true);
+        if (!\is_array($decoded)
+            || !\hash_equals($projectUuid, (string)($decoded['project_uuid'] ?? ''))
+            || !$this->validClaimedProjectRoot($decoded['project_root'] ?? null)
+        ) {
+            throw new \RuntimeException('WLS host identity claim snapshot is invalid.');
+        }
+        return [
+            'exists' => true,
+            'digest' => \hash('sha256', GatewayClient::canonicalJson($decoded)),
+            'project_root' => (string)$decoded['project_root'],
+        ];
+    }
+
+    /**
      * @template TResult
      * @param callable(array<string,mixed>):array{0:array<string,mixed>,1:TResult} $callback
      * @return TResult
      */
     private function withProjectLock(callable $callback): mixed
     {
-        $directory = \dirname($this->identityFile);
-        if (\is_link($directory)
-            || (!\is_dir($directory) && !@\mkdir($directory, 0755, true) && !\is_dir($directory))
-        ) {
-            throw new \RuntimeException('WLS project identity directory is unavailable: ' . $directory);
-        }
+        $directory = $this->ensureProjectIdentityDirectory();
         if (!\is_writable($directory)) {
             throw new \RuntimeException(
                 'WLS project identity is missing or not writable: ' . $this->identityFile
             );
         }
-        $this->assertSafeFileTarget($this->identityFile);
         $lockFile = $directory . DIRECTORY_SEPARATOR . '.wls-project.lock';
-        $this->assertSafeFileTarget($lockFile);
-        $lock = @\fopen($lockFile, 'c+b');
-        if (!\is_resource($lock) || !@\flock($lock, LOCK_EX)) {
-            throw new \RuntimeException('Unable to lock WLS project identity.');
-        }
-        @\chmod($lockFile, 0600);
-        $this->preserveProjectIdentityOwnership($lockFile, $lock);
-        if (\is_file($this->identityFile)) {
-            $this->preserveProjectIdentityOwnership($this->identityFile);
-        }
-        try {
-            $exists = \is_file($this->identityFile);
-            $state = $exists ? $this->readStateFile($this->identityFile) : $this->newState();
-            [$next, $result] = $callback($state);
-            $this->validateState($next);
-            if (!$exists || $next !== $state) {
-                $this->publishJson($this->identityFile, $next);
-            }
-            return $result;
-        } finally {
-            @\flock($lock, LOCK_UN);
-            @\fclose($lock);
-        }
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockFile,
+            function () use ($callback): mixed {
+                $identityStatus = @\lstat($this->identityFile);
+                $exists = \is_array($identityStatus);
+                if (!$exists && (\file_exists($this->identityFile) || \is_link($this->identityFile))) {
+                    throw new \RuntimeException('WLS project identity path is indeterminate or unsafe.');
+                }
+                if ($exists) {
+                    $this->preserveProjectIdentityOwnership($this->identityFile);
+                }
+                $state = $exists ? $this->readStateFile($this->identityFile) : $this->newState();
+                // Never let an ordinary generation advance silently normalize a
+                // corrupted or weakly typed project identity.  The persisted
+                // facts are the protocol authority and must be valid before a
+                // caller is allowed to derive the next generation from them.
+                $this->validateState($state);
+                [$next, $result] = $callback($state);
+                $this->validateState($next);
+                if (!$exists || $next !== $state) {
+                    $this->publishJson($this->identityFile, $next);
+                }
+                return $result;
+            },
+            fn ($handle, string $path): mixed => $this->preserveProjectIdentityOwnership(
+                $path,
+                $handle,
+            ),
+        );
     }
 
     /**
@@ -202,11 +605,17 @@ final class ProjectIdentityStore
             'project_uuid' => self::uuidV4(),
             'desired' => self::emptyGeneration(),
             'certificate' => self::emptyGeneration(),
+            'instances' => [],
             'created_at' => $now,
             'updated_at' => $now,
         ];
         $legacy = $this->readLegacyDesiredState();
         if ($legacy !== null) {
+            $legacy['idempotency_key'] = \substr(\hash(
+                'sha256',
+                (string)$state['project_uuid'] . ':desired:'
+                    . (int)$legacy['generation'] . ':' . (string)$legacy['digest'],
+            ), 0, 40);
             $state['desired'] = $legacy;
             $state['migrated_from'] = 'var/server/gateway-v2/desired-generation.json';
         }
@@ -218,7 +627,8 @@ final class ProjectIdentityStore
      */
     private function readLegacyDesiredState(): ?array
     {
-        if (!\is_file($this->legacyDesiredStateFile) || \is_link($this->legacyDesiredStateFile)) {
+        $status = @\lstat($this->legacyDesiredStateFile);
+        if (!\is_array($status)) {
             return null;
         }
         $legacy = $this->readStateFile($this->legacyDesiredStateFile, false);
@@ -236,71 +646,114 @@ final class ProjectIdentityStore
 
     private function claimHostIdentity(string $projectUuid): void
     {
-        $claims = $this->hostStateRoot . DIRECTORY_SEPARATOR . 'project-identities';
-        if (!\is_dir($claims) && !@\mkdir($claims, 0700, true) && !\is_dir($claims)) {
-            throw new \RuntimeException('Unable to create WLS host identity claims directory.');
+        $claims = $this->ensureHostStateDirectory('project-identities');
+        $claimsStatus = @\lstat($claims);
+        if (!\is_array($claimsStatus)
+            || \is_link($claims)
+            || ((((int)($claimsStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+            || (\PHP_OS_FAMILY !== 'Windows' && !@\chmod($claims, 0700))
+        ) {
+            throw new \RuntimeException('WLS host identity claims directory is unsafe.');
         }
-        @\chmod($claims, 0700);
         $claim = $claims . DIRECTORY_SEPARATOR . $projectUuid . '.json';
         $lockFile = $claim . '.lock';
-        $this->assertSafeFileTarget($claim);
-        $this->assertSafeFileTarget($lockFile);
-        $lock = @\fopen($lockFile, 'c+b');
-        if (!\is_resource($lock) || !@\flock($lock, LOCK_EX)) {
-            throw new \RuntimeException('Unable to lock WLS host identity claim.');
-        }
-        @\chmod($lockFile, 0600);
-        try {
-            $existing = \is_file($claim) ? $this->readStateFile($claim, false) : [];
-            $claimedRoot = \trim((string)($existing['project_root'] ?? ''));
-            if ($claimedRoot !== '' && $claimedRoot !== $this->projectRoot && \is_dir($claimedRoot)) {
-                throw new \RuntimeException(
-                    'WLS project UUID ' . $projectUuid . ' is already active at ' . $claimedRoot
-                    . '; this copy must use explicit project identity rotation before starting.'
+        GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockFile,
+            function () use ($claim, $projectUuid): void {
+                $raw = GatewayProjectStateFilesystem::readOptional(
+                    $claim,
+                    65_536,
+                    'WLS host identity claim',
                 );
-            }
-            $now = \gmdate(DATE_ATOM);
-            $this->publishJson($claim, [
-                'schema_version' => self::SCHEMA_VERSION,
-                'project_uuid' => $projectUuid,
-                'project_root' => $this->projectRoot,
-                'claimed_at' => (string)($existing['claimed_at'] ?? $now),
-                'last_seen_at' => $now,
-            ]);
-        } finally {
-            @\flock($lock, LOCK_UN);
-            @\fclose($lock);
-        }
+                $existing = $raw !== null ? \json_decode($raw, true) : [];
+                if ($raw !== null
+                    && (!\is_array($existing)
+                        || ($existing['schema_version'] ?? null) !== self::SCHEMA_VERSION
+                        || !\is_string($existing['project_uuid'] ?? null)
+                        || !\hash_equals($projectUuid, (string)($existing['project_uuid'] ?? ''))
+                        || !$this->validClaimedProjectRoot(
+                            $existing['project_root'] ?? null,
+                        ))
+                ) {
+                    throw new \RuntimeException('WLS host identity claim is malformed.');
+                }
+                $existing = \is_array($existing) ? $existing : [];
+                $claimedRoot = \trim((string)($existing['project_root'] ?? ''));
+                if ($claimedRoot !== ''
+                    && !$this->sameHostPath($claimedRoot, $this->projectRoot)
+                ) {
+                    $claimedStatus = @\lstat($claimedRoot);
+                    if (\is_array($claimedStatus)) {
+                        if (\is_link($claimedRoot)
+                            || ((((int)($claimedStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+                        ) {
+                            throw new \RuntimeException(
+                                'WLS host identity claim points to a linked or special project root.'
+                            );
+                        }
+                        throw new \RuntimeException(
+                            'WLS project UUID ' . $projectUuid . ' is already active at ' . $claimedRoot
+                            . '; this copy must use explicit project identity rotation before starting.'
+                        );
+                    }
+                    if (\file_exists($claimedRoot) || \is_link($claimedRoot)) {
+                        throw new \RuntimeException(
+                            'WLS host identity claim project root is indeterminate or unsafe.'
+                        );
+                    }
+                }
+                $now = \gmdate(DATE_ATOM);
+                $this->publishJson($claim, [
+                    'schema_version' => self::SCHEMA_VERSION,
+                    'project_uuid' => $projectUuid,
+                    'project_root' => $this->projectRoot,
+                    'claimed_at' => (string)($existing['claimed_at'] ?? $now),
+                    'last_seen_at' => $now,
+                ]);
+            },
+        );
     }
 
     private function releaseHostClaim(string $projectUuid): void
     {
-        $claim = $this->hostStateRoot . DIRECTORY_SEPARATOR . 'project-identities'
+        $claims = $this->ensureHostStateDirectory('project-identities');
+        $claim = $claims
             . DIRECTORY_SEPARATOR . $projectUuid . '.json';
-        if (!\is_file($claim) || \is_link($claim)) {
+        if (@\lstat($claim) === false && !\file_exists($claim) && !\is_link($claim)) {
             return;
         }
         $lockFile = $claim . '.lock';
-        $this->assertSafeFileTarget($lockFile);
-        $lock = @\fopen($lockFile, 'c+b');
-        if (!\is_resource($lock) || !@\flock($lock, LOCK_EX)) {
-            throw new \RuntimeException('Unable to lock WLS host identity claim for release.');
-        }
-        try {
-            if (!\is_file($claim) || \is_link($claim)) {
-                return;
-            }
-            $existing = $this->readStateFile($claim, false);
-            if ((string)($existing['project_root'] ?? '') === $this->projectRoot
-                && !@\unlink($claim)
-                && \is_file($claim)
-            ) {
-                throw new \RuntimeException('Unable to release WLS host identity claim.');
-            }
-        } finally {
-            @\flock($lock, LOCK_UN);
-            @\fclose($lock);
-        }
+        GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockFile,
+            function () use ($claim, $projectUuid): void {
+                $raw = GatewayProjectStateFilesystem::readOptional(
+                    $claim,
+                    65_536,
+                    'WLS host identity claim',
+                );
+                if ($raw === null) {
+                    return;
+                }
+                $existing = \json_decode($raw, true);
+                if (!\is_array($existing)
+                    || ($existing['schema_version'] ?? null) !== self::SCHEMA_VERSION
+                    || !\is_string($existing['project_uuid'] ?? null)
+                    || !\hash_equals($projectUuid, (string)($existing['project_uuid'] ?? ''))
+                    || !$this->validClaimedProjectRoot($existing['project_root'] ?? null)
+                ) {
+                    throw new \RuntimeException('WLS host identity claim is malformed.');
+                }
+                if ($this->sameHostPath(
+                    (string)$existing['project_root'],
+                    $this->projectRoot,
+                )) {
+                    GatewayProjectStateFilesystem::removeRegular(
+                        $claim,
+                        'WLS host identity claim',
+                    );
+                }
+            },
+        );
     }
 
     /**
@@ -308,14 +761,11 @@ final class ProjectIdentityStore
      */
     private function readStateFile(string $file, bool $requireObject = true): array
     {
-        $this->assertSafeFileTarget($file);
-        if (!\is_readable($file)) {
-            throw new \RuntimeException('WLS project state is not readable: ' . $file);
-        }
-        $raw = @\file_get_contents($file);
-        if (!\is_string($raw)) {
-            throw new \RuntimeException('Unable to read WLS project state: ' . $file);
-        }
+        $raw = GatewayProjectStateFilesystem::read(
+            $file,
+            1_048_576,
+            'WLS project state',
+        );
         $decoded = \json_decode($raw, true);
         if (!\is_array($decoded)) {
             if (!$requireObject) {
@@ -331,10 +781,11 @@ final class ProjectIdentityStore
      */
     private function validateState(array $state): void
     {
-        if ((int)($state['schema_version'] ?? 0) !== self::SCHEMA_VERSION
+        if (($state['schema_version'] ?? null) !== self::SCHEMA_VERSION
+            || !\is_string($state['project_uuid'] ?? null)
             || \preg_match(
                 '/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/D',
-                \strtolower((string)($state['project_uuid'] ?? '')),
+                (string)$state['project_uuid'],
             ) !== 1
         ) {
             throw new \RuntimeException('WLS project identity schema or UUID is invalid.');
@@ -342,11 +793,126 @@ final class ProjectIdentityStore
         foreach (['desired', 'certificate'] as $section) {
             $generation = \is_array($state[$section] ?? null) ? $state[$section] : [];
             $number = $generation['generation'] ?? null;
-            $digest = \strtolower(\trim((string)($generation['digest'] ?? '')));
+            $rawDigest = $generation['digest'] ?? null;
+            $rawIdempotencyKey = $generation['idempotency_key'] ?? null;
+            $digest = \is_string($rawDigest) ? \strtolower(\trim($rawDigest)) : '';
+            $idempotencyKey = \is_string($rawIdempotencyKey)
+                ? \strtolower(\trim($rawIdempotencyKey))
+                : '';
             if (!\is_int($number) || $number < 0
-                || ($digest !== '' && \preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1)
+                || !\is_string($rawDigest)
+                || !\hash_equals($rawDigest, $digest)
+                || !\is_string($rawIdempotencyKey)
+                || !\hash_equals($rawIdempotencyKey, $idempotencyKey)
+                || ($number === 0 && ($digest !== '' || $idempotencyKey !== ''))
+                || ($number > 0
+                    && (\preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1
+                        || \preg_match('/^[a-f0-9]{40}$/D', $idempotencyKey) !== 1))
             ) {
                 throw new \RuntimeException('WLS project generation state is invalid: ' . $section);
+            }
+        }
+        $instances = $state['instances'] ?? [];
+        if (!\is_array($instances)
+            || ($instances !== [] && \array_is_list($instances))
+            || \count($instances) > 256
+        ) {
+            throw new \RuntimeException('WLS project instance generation registry is invalid.');
+        }
+        foreach ($instances as $instanceId => $entry) {
+            if (!\is_string($instanceId)
+                || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $instanceId) !== 1
+                || !\is_array($entry)
+                || \array_keys($entry) !== ['generation', 'updated_at']
+                || !\is_int($entry['generation'] ?? null)
+                || (int)$entry['generation'] < 1
+                || !\is_string($entry['updated_at'] ?? null)
+                || \strlen((string)$entry['updated_at']) > 128
+                || \strtotime((string)$entry['updated_at']) === false
+            ) {
+                throw new \RuntimeException(
+                    'WLS project instance generation entry is invalid.',
+                );
+            }
+        }
+        if (\array_key_exists('rotation', $state)) {
+            $rotation = $state['rotation'];
+            $phase = \is_array($rotation) ? (string)($rotation['phase'] ?? '') : '';
+            $oldUuid = \is_array($rotation)
+                ? (string)($rotation['old_project_uuid'] ?? '')
+                : '';
+            $newUuid = \is_array($rotation)
+                ? (string)($rotation['new_project_uuid'] ?? '')
+                : '';
+            $prepared = \in_array($phase, [
+                'CONTROLLER_PREPARED',
+                'HOST_COMMITTED',
+                'IDENTITY_COMMITTED',
+                'LOCAL_COMMITTED',
+            ], true);
+            $identityCommitted = \in_array($phase, [
+                'IDENTITY_COMMITTED',
+                'LOCAL_COMMITTED',
+            ], true);
+            if (!\is_array($rotation)
+                || ($rotation['schema_version'] ?? null) !== 1
+                || \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                    $rotation['rotation_id'] ?? ''
+                )) !== 1
+                || !$this->isUuidV4($oldUuid)
+                || !$this->isUuidV4($newUuid)
+                || \hash_equals($oldUuid, $newUuid)
+                || !\hash_equals($this->projectRoot, (string)(
+                    $rotation['project_root'] ?? ''
+                ))
+                || !\in_array($phase, [
+                    'LOCAL_PREPARED',
+                    'CONTROLLER_PREPARED',
+                    'HOST_COMMITTED',
+                    'IDENTITY_COMMITTED',
+                    'LOCAL_COMMITTED',
+                ], true)
+                || ($identityCommitted
+                    ? !\hash_equals($newUuid, (string)$state['project_uuid'])
+                    : !\hash_equals($oldUuid, (string)$state['project_uuid']))
+                || !\is_array($rotation['old_claim'] ?? null)
+                || !\is_bool($rotation['old_claim']['exists'] ?? null)
+                || !\is_string($rotation['old_claim']['digest'] ?? null)
+                || !\is_string($rotation['old_claim']['project_root'] ?? null)
+                || (($rotation['old_claim']['exists'] ?? false) === true
+                    && (\preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                        $rotation['old_claim']['digest'] ?? ''
+                    )) !== 1
+                        || !$this->validClaimedProjectRoot(
+                            $rotation['old_claim']['project_root'] ?? null,
+                        )
+                        || !$this->sameHostPath(
+                            (string)$rotation['old_claim']['project_root'],
+                            $this->projectRoot,
+                        )))
+                || (($rotation['old_claim']['exists'] ?? true) === false
+                    && ((string)($rotation['old_claim']['digest'] ?? '') !== ''
+                        || (string)($rotation['old_claim']['project_root'] ?? '') !== ''))
+                || ($prepared
+                    && (\preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                        $rotation['request_digest'] ?? ''
+                    )) !== 1
+                        || \preg_match('/\A[a-f0-9]{40}\z/D', (string)(
+                            $rotation['idempotency_key'] ?? ''
+                        )) !== 1
+                        || \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                            $rotation['new_credential_id'] ?? ''
+                        )) !== 1
+                        || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                            $rotation['prepare_receipt_digest'] ?? ''
+                        )) !== 1))
+                || (\in_array($phase, [
+                    'HOST_COMMITTED',
+                    'IDENTITY_COMMITTED',
+                    'LOCAL_COMMITTED',
+                ], true) && !\is_array($rotation['commit_receipt'] ?? null))
+            ) {
+                throw new \RuntimeException('WLS project identity rotation journal is invalid.');
             }
         }
     }
@@ -356,81 +922,17 @@ final class ProjectIdentityStore
      */
     private function publishJson(string $file, array $data): void
     {
-        $encoded = \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        $payload = \is_string($encoded) ? $encoded . PHP_EOL : '';
-        $temporary = $file . '.tmp.' . \bin2hex(\random_bytes(6));
-        $temporaryHandle = $payload === '' ? false : @\fopen($temporary, 'xb');
-        if (!\is_resource($temporaryHandle)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to stage WLS project state: ' . $file);
-        }
-        try {
-            $remaining = $payload;
-            while ($remaining !== '') {
-                $written = @\fwrite($temporaryHandle, $remaining);
-                if (!\is_int($written) || $written < 1) {
-                    throw new \RuntimeException('Unable to stage WLS project state: ' . $file);
-                }
-                $remaining = (string)\substr($remaining, $written);
-            }
-            if (!@\fflush($temporaryHandle)
-                || (\function_exists('fsync') && !@\fsync($temporaryHandle))
-            ) {
-                throw new \RuntimeException('Unable to synchronize WLS project state: ' . $file);
-            }
-            if (\hash_equals($this->identityFile, $file)) {
-                $this->preserveProjectIdentityOwnership($temporary, $temporaryHandle);
-            }
-            if (\function_exists('fchmod')) {
-                @\fchmod($temporaryHandle, 0600);
-            } else {
-                @\chmod($temporary, 0600);
-            }
-        } catch (\Throwable $throwable) {
-            @\fclose($temporaryHandle);
-            @\unlink($temporary);
-            throw $throwable;
-        }
-        @\fclose($temporaryHandle);
-        if (@\rename($temporary, $file)) {
-            @\chmod($file, 0600);
-            return;
-        }
-
-        // Windows cannot always atomically replace an existing target. Every
-        // caller already holds the corresponding project/claim lock, so use a
-        // complete locked overwrite instead of unlinking the live file.
-        $target = @\fopen($file, 'c+b');
-        if (!\is_resource($target) || !@\flock($target, LOCK_EX)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to publish WLS project state: ' . $file);
-        }
-        $published = false;
-        try {
-            if (!@\ftruncate($target, 0) || !@\rewind($target)) {
-                throw new \RuntimeException('Unable to replace WLS project state: ' . $file);
-            }
-            $remaining = $payload;
-            while ($remaining !== '') {
-                $written = @\fwrite($target, $remaining);
-                if (!\is_int($written) || $written < 1) {
-                    throw new \RuntimeException('Unable to write WLS project state: ' . $file);
-                }
-                $remaining = (string)\substr($remaining, $written);
-            }
-            if (!@\fflush($target)) {
-                throw new \RuntimeException('Unable to flush WLS project state: ' . $file);
-            }
-            @\chmod($file, 0600);
-            $published = true;
-        } finally {
-            @\flock($target, LOCK_UN);
-            @\fclose($target);
-            @\unlink($temporary);
-        }
-        if (!$published) {
-            throw new \RuntimeException('Unable to publish WLS project state: ' . $file);
-        }
+        $payload = \json_encode(
+            $data,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ) . PHP_EOL;
+        $seal = \hash_equals($this->identityFile, $file)
+            ? fn ($handle, string $path): mixed => $this->preserveProjectIdentityOwnership(
+                $path,
+                $handle,
+            )
+            : null;
+        GatewayProjectStateFilesystem::atomicWrite($file, $payload, 0600, $seal);
     }
 
     /**
@@ -450,21 +952,27 @@ final class ProjectIdentityStore
         }
         $lockFile = \dirname($this->identityFile) . DIRECTORY_SEPARATOR
             . '.wls-project.lock';
+        $buildLockFile = \dirname($this->identityFile) . DIRECTORY_SEPARATOR
+            . '.wls-desired-state-build.lock';
         if (!\hash_equals($this->identityFile, $file)
             && !\hash_equals($lockFile, $file)
-            && !\str_starts_with($file, $this->identityFile . '.tmp.')
+            && !\hash_equals($buildLockFile, $file)
+            && !\str_starts_with($file, $this->identityFile . '.tmp')
         ) {
             throw new \RuntimeException(
                 'Refusing to apply project ownership outside WLS project facts.'
             );
         }
         $owner = @\lstat($this->projectRoot);
+        $fileStatus = @\lstat($file);
         if (!\is_array($owner)
             || \is_link($this->projectRoot)
             || !\is_int($owner['uid'] ?? null)
             || !\is_int($owner['gid'] ?? null)
+            || !\is_array($fileStatus)
             || \is_link($file)
-            || !\is_file($file)
+            || ((((int)($fileStatus['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($fileStatus['nlink'] ?? 0) !== 1
         ) {
             throw new \RuntimeException(
                 'Unable to establish safe WLS project fact ownership.'
@@ -492,6 +1000,8 @@ final class ProjectIdentityStore
         if (!$ownerApplied
             || !$groupApplied
             || !\is_array($actual)
+            || ((((int)($actual['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($actual['nlink'] ?? 0) !== 1
             || (int)($actual['uid'] ?? -1) !== $uid
             || (int)($actual['gid'] ?? -1) !== $gid
         ) {
@@ -501,11 +1011,67 @@ final class ProjectIdentityStore
         }
     }
 
-    private function assertSafeFileTarget(string $file): void
+    private function ensureProjectIdentityDirectory(): string
     {
-        if (\is_link($file) || (\file_exists($file) && !\is_file($file))) {
-            throw new \RuntimeException('WLS project state target must be a regular non-symlink file: ' . $file);
+        $current = $this->projectRoot;
+        foreach (['app', 'etc'] as $leaf) {
+            $next = $current . DIRECTORY_SEPARATOR . $leaf;
+            if (!\is_dir($next) && !@\mkdir($next, 0755) && !\is_dir($next)) {
+                throw new \RuntimeException(
+                    'WLS project identity directory is unavailable: ' . $next
+                );
+            }
+            $status = @\lstat($next);
+            $real = \realpath($next);
+            if (!\is_array($status)
+                || \is_link($next)
+                || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+                || !\is_string($real)
+                || !$this->pathInsideProject($real)
+            ) {
+                throw new \RuntimeException(
+                    'WLS project identity directory escapes the project root: ' . $next
+                );
+            }
+            $current = \rtrim($real, '/\\');
         }
+        return $current;
+    }
+
+    private function pathInsideProject(string $path): bool
+    {
+        $normalize = static function (string $value): string {
+            $value = \rtrim(\str_replace('\\', '/', $value), '/');
+            return \PHP_OS_FAMILY === 'Windows' ? \strtolower($value) : $value;
+        };
+        $root = $normalize($this->projectRoot);
+        $candidate = $normalize($path);
+        return $candidate === $root || \str_starts_with($candidate, $root . '/');
+    }
+
+    private function validClaimedProjectRoot(mixed $root): bool
+    {
+        if (!\is_string($root)
+            || $root === ''
+            || \str_contains($root, "\0")
+            || \strlen($root) > 4096
+        ) {
+            return false;
+        }
+        return \str_starts_with($root, '/')
+            || \preg_match('/\A[A-Za-z]:[\\\\\/]/D', $root) === 1
+            || \str_starts_with($root, '\\\\');
+    }
+
+    private function sameHostPath(string $left, string $right): bool
+    {
+        $left = \rtrim(\str_replace('\\', '/', $left), '/');
+        $right = \rtrim(\str_replace('\\', '/', $right), '/');
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $left = \strtolower($left);
+            $right = \strtolower($right);
+        }
+        return \hash_equals($left, $right);
     }
 
     private function defaultHostStateRoot(): string
@@ -537,14 +1103,94 @@ final class ProjectIdentityStore
 
     private function normalizeAbsolutePath(string $path, string $label): string
     {
-        $path = \trim(\str_replace("\0", '', $path));
+        if (\str_contains($path, "\0") || \strlen($path) > 4096) {
+            throw new \RuntimeException($label . ' contains a null byte.');
+        }
+        $path = \trim($path);
         $absolute = \str_starts_with($path, '/')
             || \preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1
             || \str_starts_with($path, '\\\\');
-        if (!$absolute || \in_array('..', \preg_split('#[\\\\/]+#', $path) ?: [], true)) {
+        if (!$absolute
+            || $this->isFilesystemRoot($path)
+            || \in_array('..', \preg_split('#[\\\\/]+#', $path) ?: [], true)
+        ) {
             throw new \RuntimeException($label . ' must be absolute and must not contain traversal.');
         }
         return \rtrim($path, '/\\');
+    }
+
+    private function isFilesystemRoot(string $path): bool
+    {
+        $normalized = \str_replace('\\', '/', \trim($path));
+        if (\preg_match('#\A/+\z#D', $normalized) === 1) {
+            return true;
+        }
+        $normalized = \rtrim($normalized, '/');
+        return \preg_match('/\A[A-Za-z]:\z/D', $normalized) === 1
+            || \preg_match('#\A//(?![?.](?:/|\z))[^/]+(?:/[^/]+)?\z#D', $normalized) === 1
+            || \preg_match('#\A//[?.]/[A-Za-z]:\z#Di', $normalized) === 1
+            || \preg_match('#\A//[?.]/UNC(?:/[^/]+(?:/[^/]+)?)?\z#Di', $normalized) === 1
+            || \preg_match('#\A//[?.]/Volume\{[0-9A-Fa-f-]+\}\z#Di', $normalized) === 1;
+    }
+
+    private function ensureHostStateDirectory(string $leaf): string
+    {
+        if (\preg_match('/\A[a-z0-9][a-z0-9._-]{0,63}\z/D', $leaf) !== 1) {
+            throw new \InvalidArgumentException('WLS host state directory name is invalid.');
+        }
+        $root = $this->ensureAbsoluteDirectory($this->hostStateRoot);
+        $directory = $root . DIRECTORY_SEPARATOR . $leaf;
+        $status = @\lstat($directory);
+        if (!\is_array($status)) {
+            if (\file_exists($directory)
+                || \is_link($directory)
+                || !@\mkdir($directory, 0700)
+            ) {
+                throw new \RuntimeException('Unable to create WLS host identity claims directory.');
+            }
+            $status = @\lstat($directory);
+        }
+        if (!\is_array($status)
+            || \is_link($directory)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException('WLS host identity claims directory is unsafe.');
+        }
+        return $directory;
+    }
+
+    private function ensureAbsoluteDirectory(string $directory): string
+    {
+        $directory = $this->normalizeAbsolutePath($directory, 'WLS edge host state root');
+        $status = @\lstat($directory);
+        if (!\is_array($status)) {
+            if (\file_exists($directory) || \is_link($directory)) {
+                throw new \RuntimeException('WLS edge host state root is unsafe.');
+            }
+            $parent = \dirname($directory);
+            if ($parent === $directory) {
+                throw new \RuntimeException('WLS edge host state root has no safe parent.');
+            }
+            $this->ensureAbsoluteDirectory($parent);
+            if (!@\mkdir($directory, 0700)) {
+                throw new \RuntimeException('Unable to create WLS edge host state root.');
+            }
+            $status = @\lstat($directory);
+        }
+        if (!\is_array($status)
+            || \is_link($directory)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException('WLS edge host state root is unsafe.');
+        }
+        $real = \realpath($directory);
+        if (!\is_string($real)
+            || $real === ''
+            || !$this->sameHostPath($directory, $real)
+        ) {
+            throw new \RuntimeException('Unable to resolve WLS edge host state root.');
+        }
+        return \rtrim($real, '/\\');
     }
 
     /**
@@ -553,6 +1199,14 @@ final class ProjectIdentityStore
     private static function emptyGeneration(): array
     {
         return ['generation' => 0, 'digest' => '', 'idempotency_key' => ''];
+    }
+
+    private function isUuidV4(string $uuid): bool
+    {
+        return \preg_match(
+            '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+            \strtolower(\trim($uuid)),
+        ) === 1;
     }
 
     private static function uuidV4(): string

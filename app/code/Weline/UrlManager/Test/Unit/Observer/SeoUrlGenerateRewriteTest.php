@@ -25,7 +25,7 @@ class SeoUrlGenerateRewriteTest extends TestCase
         parent::tearDown();
     }
 
-    public function testFindRewriteOrdersByLatestRewriteIdDesc(): void
+    public function testFindRewriteDelegatesToLatestExactPathLookup(): void
     {
         $urlRewrite = new class extends UrlRewrite {
             /** @var array<int, array<int, mixed>> */
@@ -83,6 +83,15 @@ class SeoUrlGenerateRewriteTest extends TestCase
                     default => null,
                 };
             }
+
+            public function findLatestByWebsiteAndPath(int $websiteId, string $path): ?array
+            {
+                $this->calls[] = ['findLatestByWebsiteAndPath', $websiteId, $path];
+
+                return [
+                    UrlRewrite::schema_fields_REWRITE => 'newest-target',
+                ];
+            }
         };
 
         $observer = new SeoUrlGenerateRewrite($urlRewrite);
@@ -96,10 +105,7 @@ class SeoUrlGenerateRewriteTest extends TestCase
             'matched_uri' => 'sample/path',
         ], $result);
 
-        self::assertContains(
-            ['order', UrlRewrite::schema_fields_ID, 'DESC'],
-            $urlRewrite->calls
-        );
+        self::assertContains(['findLatestByWebsiteAndPath', 7, 'sample/path'], $urlRewrite->calls);
     }
 
     public function testExecuteSkipsStaticAssetsWithoutTouchingRewriteStorage(): void
@@ -270,6 +276,32 @@ class SeoUrlGenerateRewriteTest extends TestCase
             'website_id' => 7,
             'uri' => 'CNY/zh_Hans_CN/demo/path',
             'real_uri' => 'demo/path',
+        ], $result);
+    }
+
+    public function testResolveCurrentSiteRewriteContextStripsRequestedLocaleEvenWhenContextDiffers(): void
+    {
+        RequestContext::websiteId(25);
+        // Cookie/context still on the site default while the visitor asks for EN.
+        RequestContext::locale('bn_IN');
+        RequestContext::currency('CNY');
+        RequestContext::set('input.host', 'teenpatti-rummy.weline.test');
+        RequestContext::setWelineWebsiteUrl('https://teenpatti-rummy.weline.test');
+
+        $observer = new SeoUrlGenerateRewrite(new class extends UrlRewrite {
+            public function __construct()
+            {
+            }
+        });
+
+        $method = new \ReflectionMethod(SeoUrlGenerateRewrite::class, 'resolveCurrentSiteRewriteContext');
+        $method->setAccessible(true);
+        $result = $method->invoke($observer, 'https://teenpatti-rummy.weline.test/en_US/contact');
+
+        self::assertSame([
+            'website_id' => 25,
+            'uri' => 'en_US/contact',
+            'real_uri' => 'contact',
         ], $result);
     }
 

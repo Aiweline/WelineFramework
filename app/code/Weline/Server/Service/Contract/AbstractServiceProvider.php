@@ -5,6 +5,7 @@ namespace Weline\Server\Service\Contract;
 
 use Weline\Framework\System\IPC\ProcessKind;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\Runtime\SystemCpuProbe;
 use Weline\Server\Service\ServiceOrchestrator;
 
 /**
@@ -150,17 +151,7 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
      */
     protected function getAutoCpuCount(): int
     {
-        if (\function_exists('swoole_cpu_num')) {
-            return \swoole_cpu_num();
-        }
-
-        if (IS_WIN) {
-            $cores = (int) \trim((string) @\shell_exec('echo %NUMBER_OF_PROCESSORS%'));
-            return $cores > 0 ? $cores : 4;
-        }
-
-        $cores = (int) \trim((string) @\shell_exec('nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null'));
-        return $cores > 0 ? $cores : 4;
+        return SystemCpuProbe::logicalCount();
     }
 
     protected function isSharedStateRuntimeManaged(ServiceContext $context, string $runtimeKey): bool

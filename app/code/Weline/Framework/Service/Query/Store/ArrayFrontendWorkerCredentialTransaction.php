@@ -124,6 +124,46 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
         $this->store[$bucketKey] = $bucket;
     }
 
+    public function replaceActive(
+        string $type,
+        string $credential,
+        ?string $scope,
+        array $payload,
+        int $expiresAt,
+    ): void {
+        if ($credential === '' || $expiresAt < 1) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Worker credential record is invalid.',
+                503,
+            );
+        }
+        if ($type === FrontendWorkerCredentialType::NONCE || $scope !== null) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Worker credential replace target is invalid.',
+                503,
+            );
+        }
+        $now = $this->now();
+        $existing = $this->find($type, $credential, $scope, $now);
+        if ($existing === null) {
+            throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
+        }
+        $payload['expires_at'] = $expiresAt;
+        $bucketKey = self::TYPE_BUCKETS[$this->validatedType($type)];
+        $bucket = $this->bucket($type);
+        $key = \hash('sha256', $credential);
+        if (!\array_key_exists($key, $bucket)) {
+            $key = $this->credentialHash($type, $credential, '');
+        }
+        if (!\array_key_exists($key, $bucket)) {
+            throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
+        }
+        $bucket[$key] = $payload;
+        $this->store[$bucketKey] = $bucket;
+    }
+
     public function consume(string $type, string $credential, ?string $scope): bool
     {
         $bucketKey = self::TYPE_BUCKETS[$this->validatedType($type)];

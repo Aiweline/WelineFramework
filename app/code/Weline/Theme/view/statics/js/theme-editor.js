@@ -157,6 +157,57 @@
         });
     }
 
+    let cmsContextBridge = null;
+
+    function applyCmsEditorContext(context) {
+        const protocol = window.WelineCmsPreviewBridge;
+        const locale = protocol ? protocol.normalizeLocale(context.locale) : String(context.locale || '').trim();
+        const requestedLayout = protocol
+            ? protocol.normalizeLayoutOption(context.layoutOption)
+            : normalizeLayoutOptionValue(context.layoutOption);
+
+        state.configLocale = locale;
+        syncConfigLocaleSwitchers();
+        if (requestedLayout) {
+            state.layoutOption = resolveLayoutOptionForType(state.layoutType, requestedLayout);
+            renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+        }
+        syncEditorUrlState({
+            theme_id: state.themeId,
+            page_type: getCurrentPageType(),
+            layout_option: state.layoutOption || 'default',
+            locale: state.configLocale || null,
+            version_id: null,
+        });
+        showPreviewLoadingImmediate();
+        loadLayoutPreview({
+            locale: state.configLocale,
+            layout_option: state.layoutOption,
+        });
+        Promise.resolve(loadLayoutConfig({
+            locale: state.configLocale,
+            silent: true,
+        })).catch((error) => {
+            console.warn('[ThemeEditor] CMS context config refresh failed:', error);
+        });
+    }
+
+    function initCmsContextBridge() {
+        if (!window.parent || window.parent === window || !window.WelineCmsPreviewBridge) {
+            return;
+        }
+        if (cmsContextBridge) {
+            cmsContextBridge.destroy();
+        }
+        cmsContextBridge = window.WelineCmsPreviewBridge.createChildBridge({
+            hostWindow: window,
+            parentWindow: window.parent,
+            isDirty: () => state.hasChanges === true,
+            applyContext: applyCmsEditorContext,
+        });
+        cmsContextBridge.start();
+    }
+
     function isCompactEditorViewport() {
         return typeof window.matchMedia === 'function'
             ? window.matchMedia('(max-width: 1100px)').matches
@@ -1448,6 +1499,11 @@
         state.layoutOptionsByType = parseLayoutOptionsByType(container.dataset.layoutOptions || '{}');
         state.layoutLock = parseLayoutLock(container.dataset.layoutLock || '{}');
         state.layoutIdentity = parseLayoutIdentityDataset(container.dataset || {});
+        state.configLocale = window.WelineCmsPreviewBridge
+            ? window.WelineCmsPreviewBridge.normalizeLocale(
+                getCurrentWindowParam('locale') || container.dataset.configLocale || ''
+            )
+            : String(getCurrentWindowParam('locale') || container.dataset.configLocale || '').trim();
         _installedLocalesCache = parseInstalledLocales(container.dataset.installedLocales || '[]');
 
         // 缓存 DOM 元素
@@ -1497,6 +1553,7 @@
 
         // 绑定事件
         bindEvents();
+        initCmsContextBridge();
 
         // 初始化拖拽
         initDragAndDrop();

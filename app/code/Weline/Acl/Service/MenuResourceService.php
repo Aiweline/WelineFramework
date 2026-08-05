@@ -91,7 +91,7 @@ final class MenuResourceService implements MenuResourceServiceInterface
 
     public function findEnabledBackendMenuSource(string $route, string $method = ''): ?string
     {
-        $route = trim($route, '/');
+        $route = strtolower(trim($route, '/'));
         if ($route === '') {
             return null;
         }
@@ -179,7 +179,7 @@ final class MenuResourceService implements MenuResourceServiceInterface
         }
         $route = $data['action'] ?? $data['route'] ?? null;
         if ($route !== null) {
-            $mapped[Acl::schema_fields_ROUTE] = trim((string)$route, '/');
+            $mapped[Acl::schema_fields_ROUTE] = strtolower(trim((string)$route, '/'));
         }
         foreach (['parent_source', 'icon', 'module'] as $field) {
             if (array_key_exists($field, $data)) {

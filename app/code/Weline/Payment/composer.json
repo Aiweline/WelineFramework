@@ -5,16 +5,20 @@
     "license": "MIT",
     "require": {
         "php": "^8.4",
+        "weline/module-acl": "@dev",
         "weline/module-backend": "@dev",
         "weline/module-eav": "@dev",
         "weline/framework": "@dev",
         "weline/module-frontend": "@dev",
         "weline/module-hook": "@dev",
         "weline/module-i18n": "@dev",
+        "weline/module-inventory": "@dev",
+        "weline/module-queue": "@dev",
         "weline/module-system-config": "@dev",
         "weline/module-theme": "@dev"
     },
     "suggest": {
+        "weline/module-customer-asset": "Enables customer asset allocation, ledger settlement and refund return.",
         "weline/module-marketing": "Supplies discount-action metadata for payment compatibility checks."
     },
     "autoload": {

@@ -24,16 +24,40 @@
 "Rollback a scoped config version batch.","Rollback a scoped config version batch."
 "List scoped config version batches.","List scoped config version batches."
 "Get one scoped config version detail with sensitive values masked.","Get one scoped config version detail with sensitive values masked."
+"Preview lower-scope rows affected by locking one config key.","Preview lower-scope rows affected by locking one config key."
+"Lock one config key at the explicit target scope.","Lock one config key at the explicit target scope."
+"Unlock one config key at the explicit target scope.","Unlock one config key at the explicit target scope."
+"Preview suppressed lower-scope rows without mutation.","Preview suppressed lower-scope rows without mutation."
+"Restore selected suppressed rows after replay authorization.","Restore selected suppressed rows after replay authorization."
+"Discard selected suppressed rows after replay authorization.","Discard selected suppressed rows after replay authorization."
+"Register a reviewed Scope security-header candidate before activating the exact same values.","Register a reviewed Scope security-header candidate before activating the exact same values."
+"Export one explicitly authorized scope as an encrypted configuration envelope.","Export one explicitly authorized scope as an encrypted configuration envelope."
+"Decrypt and validate configuration envelope metadata without mutation.","Decrypt and validate configuration envelope metadata without mutation."
+"Import an encrypted configuration envelope after versioned submit authorization.","Import an encrypted configuration envelope after versioned submit authorization."
 "value|field|array; default value keeps compatibility.","value|field|array; default value keeps compatibility."
 "Limit field metadata lookup to one template code when return_type=field.","Limit field metadata lookup to one template code when return_type=field."
 "map|fields; default map keeps compatibility.","map|fields; default map keeps compatibility."
 "Limit field metadata lookup to one template code when return_type=fields.","Limit field metadata lookup to one template code when return_type=fields."
 backend|frontend,backend|frontend
+"完整三段 scope；写操作与 target_scope 二选一","完整三段 scope；写操作与 target_scope 二选一"
+"显式写目标；禁止依赖 Session","显式写目标；禁止依赖 Session"
+预览/读取时返回的对象授权版本；提交前必须保持一致,预览/读取时返回的对象授权版本；提交前必须保持一致
 统一配置中心,统一配置中心
+跨站请求被拒绝，配置未写入。,跨站请求被拒绝，配置未写入。
+"TargetScope 无效，配置未写入。","TargetScope 无效，配置未写入。"
 配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
 配置回滚预检失败，当前配置未改变。,配置回滚预检失败，当前配置未改变。
+锁操作已完成：%{1},锁操作已完成：%{1}
+锁操作失败,锁操作失败
 配置已保存，版本批次：%{1},配置已保存，版本批次：%{1}
+版本冲突，请刷新后重试。,版本冲突，请刷新后重试。
 配置保存失败，当前配置未改变。,配置保存失败，当前配置未改变。
+保存敏感配置需要重新输入登录密码。,保存敏感配置需要重新输入登录密码。
+无法验证当前管理员身份。,无法验证当前管理员身份。
+密码验证失败，敏感配置未写入。,密码验证失败，敏感配置未写入。
+查看统一配置中心,查看统一配置中心
+保存统一配置,保存统一配置
+配置回滚预检,配置回滚预检
 保存配置失败，已回滚本次批次。%{1},保存配置失败，已回滚本次批次。%{1}
 "回滚配置版本 %{1}","回滚配置版本 %{1}"
 回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
@@ -41,23 +65,26 @@ backend|frontend,backend|frontend
 定位当前项,"Locate current item"
 返回引导,"Back to guide"
 模块,模块
-全部模块,全部模块
 区域,区域
 后台,后台
 前台,前台
-Scope,Scope
+Website,Website
+Store,Store
+Channel,Channel
 Locale,Locale
 搜索,搜索
-"当前 Scope","当前 Scope"
 模板,模板
 字段,字段
 适配入口,适配入口
 没有找到配置模板,没有找到配置模板
+显式提交到,显式提交到
 当前值,当前值
 保存值,保存值
+Scope,Scope
 继承,继承
-当前定位,"Current target"
-引导目标,"Guide target"
+覆盖,覆盖
+已锁定,已锁定
+已压制,已压制
 默认值,默认值
 保存配置,保存配置
 最近版本,最近版本
@@ -67,19 +94,32 @@ Locale,Locale
 回滚,回滚
 不可回滚,不可回滚
 引导定位,"Guide navigation"
-收起,"Collapse"
-展开,"Expand"
-定位,Locate
-未找到,"Not found"
+全部模块,"All modules"
+搜索模块名称,"Search module name"
+Global（全部站点）,Global（全部站点）
+搜索站点名称或编码,"Search site name or code"
+"Website 层","Website 层"
+"搜索 Store","Search Store"
+"Store 层","Store 层"
+"搜索 Channel","Search Channel"
+default,default
+搜索语言或代码...,"Search language or code..."
 打开,打开
 "引导步骤 %{1}","Guide step %{1}"
 配置引导,"Configuration guide"
 配置或字段,配置或字段
+当前定位,"Current target"
+引导目标,"Guide target"
 保存原因,保存原因
+敏感配置：重新输入登录密码,敏感配置：重新输入登录密码
 当前：%{1},"Current: %{1}"
+收起,Collapse
+定位,Locate
+未找到,"Not found"
 未找到引导配置项，请确认已选中对应模块。,"Guide target was not found. Make sure the matching module is selected."
 同页,"Same page"
 跳转,Navigate
+展开,Expand
 存在未在配置模板声明的字段。,存在未在配置模板声明的字段。
 配置校验失败，当前配置未改变。,配置校验失败，当前配置未改变。
 没有需要保存的配置。,没有需要保存的配置。
@@ -87,3 +127,8 @@ Locale,Locale
 "当前字段不允许保存到所选 scope。","当前字段不允许保存到所选 scope。"
 此字段不能为空。,此字段不能为空。
 字段值不在允许选项内。,字段值不在允许选项内。
+"用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
+"MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）"
+"当前 TargetScope","当前 TargetScope"
+"写操作只使用表单显式 TargetScope，不信任 Cookie。","写操作只使用表单显式 TargetScope，不信任 Cookie。"
+回落链,回落链

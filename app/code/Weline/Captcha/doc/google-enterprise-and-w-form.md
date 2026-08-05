@@ -7,10 +7,19 @@
 - `renderChallenge($context)`：由 `<w:form>` 的关闭前事件调用。
 - `verifySubmission($submission, $intent, $hostname, $ip)`：业务写入前调用。
 
-`<w:form>` 的 `captcha` 默认值为 `auto`。POST 表单由关闭前事件自动注入当前 Provider
-挑战，GET 表单不注入。统一 Captcha 没有总关闭开关：Google Enterprise 未启用或配置不完整
-时必须使用 `local_image`，不能出现无验证码状态。显式 `off` 只保留给经过评审的框架内部豁免，
-官方业务 POST 表单不得使用。
+`<w:form>` 的 `captcha` 默认值为 `off`，普通 GET/POST 表单都不注入挑战。只有显式设置
+`captcha="auto"` 或 `captcha="required"` 才会启用：`auto` 仅对 POST 注入，
+`required` 声明入口必须验证。启用后，Google Enterprise 未启用或配置不完整时必须使用
+`local_image`，不能出现已经选择验证却静默跳过的状态。
+
+登录入口使用固定 intent：
+
+- 后台登录：`admin.login`
+- 前台客户登录：`customer.login`
+
+两者在提交端调用 `verifySubmission()`，验证失败时在账号查询或密码验证之前终止登录。
+Captcha 模块未启用时，登录模块保持可选依赖兼容，页面不会注入挑战，提交也不会被 Captcha
+模块阻断。
 
 Provider 实现 `VerificationProviderInterface`，并可通过
 `Weline_Captcha::providers::collect` 注册。只有 Google 已启用且配置完整时才选择

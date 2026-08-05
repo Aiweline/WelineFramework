@@ -18,7 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 /**
  * CDN攻击日志管理后台控制器
  */
-#[AclAttribute('Weline_Cdn::cdn_attack_log_manager', '攻击日志管理', 'mdi-shield-alert', 'CDN攻击日志管理', '')]
+#[AclAttribute('Weline_Cdn::cdn_attack_log_manager', '攻击日志管理', 'mdi-shield-alert', 'CDN攻击日志管理', 'Weline_Cdn::cdn_manager')]
 class AttackLog extends BackendController
 {
     /**

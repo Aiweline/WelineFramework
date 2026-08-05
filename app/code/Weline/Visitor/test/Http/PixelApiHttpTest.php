@@ -1,7 +1,7 @@
 <?php
 
 /**
- * 像素API HTTP集成测试
+ * 像素 API HTTP 手工探针
  * 
  * 测试像素数据收集API的HTTP请求和响应
  * 可以通过浏览器或HTTP客户端直接访问进行测试
@@ -9,9 +9,10 @@
 
 namespace Weline\Visitor\Test\Http;
 
+use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Controller\FrontendRestController;
 
-class PixelApiHttpTest extends FrontendRestController
+class PixelApiHttpProbe extends FrontendRestController
 {
     /**
      * 测试：接收明文像素数据
@@ -411,3 +412,15 @@ class PixelApiHttpTest extends FrontendRestController
     }
 }
 
+
+
+final class PixelApiHttpTest extends TestCase
+{
+    public function testManualProbeDeclaresExpectedHttpActions(): void
+    {
+        self::assertTrue(is_subclass_of(PixelApiHttpProbe::class, FrontendRestController::class));
+        foreach (['getPlainData', 'getEncryptedData', 'getDataValidation', 'getWebsiteId', 'getAbTestData', 'getRunAll'] as $method) {
+            self::assertTrue(method_exists(PixelApiHttpProbe::class, $method), $method);
+        }
+    }
+}

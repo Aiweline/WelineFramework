@@ -130,6 +130,14 @@ class PixelApiTest extends TestCore
         $this->assertArrayHasKey('code', $response);
     }
 
+    public function testFrontendPixelApiDoesNotExposeAcceptanceFixtureOperation(): void
+    {
+        $source = (string)\file_get_contents(BP . '/app/code/Weline/Visitor/Api/Rest/V1/Pixel.php');
+        self::assertStringContainsString('pixelEventService->track', $source);
+        self::assertStringNotContainsString('analyticsAcceptanceFixture', $source);
+        self::assertStringNotContainsString('acceptanceFixture', $source);
+    }
+
     public function testDecryptionFailureHandling(): void
     {
         $response = $this->post([

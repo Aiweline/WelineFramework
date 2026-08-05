@@ -213,14 +213,45 @@ const MAX_PAGE_BUTTONS = 7;
    - 总文件大小
    - 最后更新时间
 
+## 布局溢出（2026-07-24）
+
+长 Sitemap URL 与操作按钮曾被树形容器的 `overflow:hidden` 裁切，且无法左右滑动。
+
+当前约定：
+- 树/索引/语言桶容器使用 `overflow-x:auto`，支持横向滑动查看
+- 「当前站点 Sitemap 地址」卡片允许换行，按钮不收缩；URL `code` 可独立横向滚动
+- 文件行 grid 使用 `minmax(0, …)`，避免嵌套缩进后被硬性最小列宽撑破
+- 工具栏站点选择改用官方站点选择标签 `<w:websites:website:select multiple>`（标签胶囊 + 可搜索弹层），不再使用纯文本搜索框
+- 工具栏改为 flex 换行，并允许横向滑动，避免筛选控件被裁切
+
+静态资源缓存参数：`seo-admin.css?v=20260724-sitemap-website-select-1`
+
+## URL 管理侧栏兼容（2026-07-26）
+
+- `seo-admin.js` 同时兼容提供 `Offcanvas.getOrCreateInstance()` 的 Bootstrap 版本和仅提供构造器的版本。
+- Bootstrap Offcanvas 不可用时使用 `show` class 降级路径，并显式维护打开/关闭、`aria-modal`、`role` 与触发按钮焦点恢复。
+- URL 管理关闭按钮使用 `data-seo-url-manager-close` 由模块初始化器统一处理，不依赖运行环境是否注册 Bootstrap `data-bs-dismiss` 委托。
+- URL 管理侧栏层级固定为 `10060`，高于后台顶部栏 `10050`，保证关闭按钮和侧栏控件可点击。
+- 样式缓存参数：`seo-admin.css?v=20260726-sitemap-multi-domain-2`。
+- 静态资源缓存参数：`seo-admin.js?v=20260726-sitemap-multi-domain-6`。
+
 ## 相关文件
 
 **模板文件：**
 - `app/code/Weline/Seo/view/templates/Backend/Sitemap/index.phtml`
 
+**样式 / 脚本：**
+- `app/code/Weline/Seo/view/statics/css/seo-admin.css`
+- `app/code/Weline/Seo/view/statics/js/seo-admin.js`
+
+**站点选择标签：**
+- `app/code/Weline/Websites/Taglib/WebsiteSelect.php`（`<w:websites:website:select>`）
+
 **翻译文件：**
 - `app/code/Weline/Seo/i18n/zh_Hans_CN.csv`
 - `app/code/Weline/Seo/i18n/en_US.csv`
+- `app/code/Weline/Websites/i18n/zh_Hans_CN.csv`
+- `app/code/Weline/Websites/i18n/en_US.csv`
 
 **控制器：**
 - `app/code/Weline/Seo/Controller/Backend/Sitemap.php`

@@ -18,6 +18,31 @@ Seo 的 `Provider`、`Service` 或旧 `Interface` 内部命名空间。
 
 系统默认站点 `website_id=0 / code=default` 是合法且自动安装的站点，`WebsiteDirectoryInterface::all()`、`get(0)` 和 Provider 的 `getWebsiteIds()` 都必须保留它；只有缺失身份字段或负数 ID 才表示无效站点。
 
+## 前台首页归属（避免误标 Weline_Index）
+
+框架默认的 `Weline_Index` HomePageProvider 会为尚未被其他模块认领的站点写入 `/`。
+若业务模块自己拥有站点前台首页（例如 PageBuilder 的 `TYPE_HOME`），必须额外实现：
+
+```php
+use Weline\Seo\Api\Sitemap\FrontendHomeOwnerInterface;
+
+final class XxxSitemapUrlProvider extends AbstractSitemapUrlProvider implements FrontendHomeOwnerInterface
+{
+    public function getFrontendHomeWebsiteIds(): array
+    {
+        // 返回本模块拥有 `/` 的 website_id 列表（含 0 号默认站）
+        return [3, 5];
+    }
+}
+```
+
+规则：
+
+- 认领基于业务身份（站点码、已发布首页实体等），不依赖 `weline_sitemap_url` 是否已有行。
+- HomePageProvider 对已认领站点返回空快照，从而停用旧的 `Weline_Index` 首页行。
+- 定向同步认领 Provider 时，`SitemapUrlSyncService` 会顺带清理同站的 `Weline_Index`/`frontend` 回退首页。
+- 后台语言桶副标题展示的是真实写入的 `module · scope`；认领后应看到业务模块名，而不是 `Weline_Index`。
+
 ## 返回数据契约
 
 `getUrlsForWebsite(int $websiteId): array` 返回当前站点仍应收录的 URL。每条 URL 至少包含：

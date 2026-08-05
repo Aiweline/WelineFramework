@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\Resumable\ResumableTaskEventStreamInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskRuntimeInterface;
@@ -17,6 +18,7 @@ use Weline\Framework\Runtime\Resumable\TaskSnapshot;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Service\Runtime\ResumableTaskAccessPolicy;
 use Weline\Framework\Service\Runtime\ResumableTaskOwnerResolver;
 use Weline\Framework\Service\Runtime\ResumableTaskStoreException;
 
@@ -31,7 +33,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
 {
     private const EVENT_PAGE_SIZE = 200;
     private const DEFAULT_POLL_INTERVAL_MILLISECONDS = 250;
-    private const DEFAULT_SUBSCRIPTION_SECONDS = 55;
+    private const DEFAULT_SUBSCRIPTION_SECONDS = 240;
 
     public function __construct(
         private readonly ResumableTaskRuntimeInterface $runtime,
@@ -40,6 +42,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         private readonly Request $request,
         private readonly int $pollIntervalMilliseconds = self::DEFAULT_POLL_INTERVAL_MILLISECONDS,
         private readonly int $subscriptionSeconds = self::DEFAULT_SUBSCRIPTION_SECONDS,
+        private readonly ?ResumableTaskAccessPolicy $accessPolicy = null,
     ) {
         if ($this->pollIntervalMilliseconds < 1 || $this->pollIntervalMilliseconds > 5_000) {
             throw new \InvalidArgumentException('Runtime task stream poll interval is invalid.');
@@ -61,7 +64,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
             'status' => $this->status($params),
             'touch' => $this->touch($params),
             'cancel' => $this->cancel($params),
-            'events' => $this->events($params),
+            'events' => $this->prepareEvents($params),
             default => throw new \InvalidArgumentException(
                 (string)__('运行时任务查询器不支持的操作：%{1}', $operation)
             ),
@@ -150,6 +153,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         }
 
         $owner = $this->resolveOwner();
+        $this->requireTaskTypeAuthorization($owner, $typeCode, 'start');
         try {
             return $this->starter->startForOwner($typeCode, $input, $owner)->toArray();
         } catch (ResumableTaskAccessDeniedException $exception) {
@@ -170,6 +174,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         $owner = $this->resolveOwner();
         $snapshot = $this->runtimeCall(fn(): TaskSnapshot => $this->runtime->status($taskId, $owner));
         $this->assertOwnerMatches($owner, $snapshot->owner);
+        $this->requireTaskTypeAuthorization($owner, $snapshot->typeCode, 'status');
 
         return $this->snapshotPayload($snapshot);
     }
@@ -180,6 +185,9 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         $taskId = $this->requireIdentifier($params, 'task_id');
         $leaseId = $this->requireIdentifier($params, 'lease_id');
         $owner = $this->resolveOwner();
+        $snapshot = $this->runtimeCall(fn(): TaskSnapshot => $this->runtime->status($taskId, $owner));
+        $this->assertOwnerMatches($owner, $snapshot->owner);
+        $this->requireTaskTypeAuthorization($owner, $snapshot->typeCode, 'touch');
         $lease = $this->runtimeCall(fn(): TaskLease => $this->runtime->renew($taskId, $leaseId, $owner));
         $this->assertOwnerMatches($owner, $lease->owner);
 
@@ -198,6 +206,9 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         $intentId = $this->requireIdentifier($params, 'intent_id');
         $reason = $this->optionalReason($params);
         $owner = $this->resolveOwner();
+        $existing = $this->runtimeCall(fn(): TaskSnapshot => $this->runtime->status($taskId, $owner));
+        $this->assertOwnerMatches($owner, $existing->owner);
+        $this->requireTaskTypeAuthorization($owner, $existing->typeCode, 'cancel');
         $snapshot = $this->runtimeCall(
             fn(): TaskSnapshot => $this->runtime->cancel($taskId, $owner, $intentId, $reason)
         );
@@ -208,14 +219,29 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
 
     /**
      * @param array<string,mixed> $params
-     * @return \Generator<int, array<string,mixed>>
+     * @return iterable<int, array<string,mixed>>
      */
-    private function events(array $params): \Generator
+    private function prepareEvents(array $params): iterable
     {
         $taskId = $this->requireIdentifier($params, 'task_id');
         $leaseId = $this->requireIdentifier($params, 'lease_id');
         $owner = $this->resolveOwner();
+        $snapshot = $this->runtimeCall(fn(): TaskSnapshot => $this->runtime->status($taskId, $owner));
+        $this->assertOwnerMatches($owner, $snapshot->owner);
+        $this->requireTaskTypeAuthorization($owner, $snapshot->typeCode, 'events');
         $cursor = $this->resolveCursor($params);
+
+        return $this->streamEvents($taskId, $leaseId, $owner, $cursor);
+    }
+
+    /** @return \Generator<int, array<string,mixed>> */
+    private function streamEvents(
+        string $taskId,
+        string $leaseId,
+        TaskOwner $owner,
+        int $cursor,
+    ): \Generator
+    {
         $deadline = \microtime(true) + $this->subscriptionSeconds;
         $opened = false;
 
@@ -404,6 +430,32 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         }
     }
 
+    private function requireTaskTypeAuthorization(
+        TaskOwner $owner,
+        string $typeCode,
+        string $operation,
+    ): void
+    {
+        try {
+            ($this->accessPolicy ?? ObjectManager::getInstance(ResumableTaskAccessPolicy::class))
+                ->assertAllowed($owner, $typeCode, $operation);
+        } catch (ResumableTaskAccessDeniedException $exception) {
+            throw new FrontendQueryException(
+                'not_found',
+                'Runtime task was not found.',
+                404,
+                $exception,
+            );
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException(
+                'runtime_unavailable',
+                'Resumable task runtime is unavailable.',
+                503,
+                $exception,
+            );
+        }
+    }
+
     private function assertOwnerMatches(TaskOwner $current, TaskOwner $stored): void
     {
         $matches = $current->area === $stored->area
@@ -438,11 +490,14 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
             'attempt' => $snapshot->attempt,
             'max_attempts' => $snapshot->maxAttempts,
             'latest_event_id' => $snapshot->latestEventSequence,
+            // Include checkpoint.state so backend pages can poll progress without
+            // createStream / runtime_task.events (backend stream is fail-closed).
             'checkpoint' => $checkpoint === null ? null : [
                 'version' => $checkpoint->version,
                 'cursor' => $checkpoint->cursor,
                 'schema_version' => $checkpoint->schemaVersion,
                 'created_at' => $checkpoint->createdAt,
+                'state' => $checkpoint->state,
             ],
             'result' => $snapshot->result?->toArray(),
             'error_code' => $snapshot->errorCode,

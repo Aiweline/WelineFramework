@@ -52,8 +52,10 @@ final class PixelDashboardArchiveListContractTest extends TestCase
         self::assertStringNotContainsString('pixel_dashboard/', $src);
         self::assertStringContainsString('id="pixel-archive-list-filter-form"', $src);
         self::assertStringContainsString('name="websiteId"', $src);
-        self::assertStringContainsString('required', $src);
-        self::assertStringContainsString('站点 ID（必填）', $src);
+        self::assertStringContainsString('w:websites:website:select', $src);
+        self::assertStringContainsString('id="archive-filter-website"', $src);
+        self::assertStringContainsString('allow-empty="false"', $src);
+        self::assertStringContainsString('站点（必填）', $src);
         self::assertStringNotContainsString("'90d'", $src);
         self::assertStringContainsString('上一页', $src);
         self::assertStringContainsString('下一页', $src);

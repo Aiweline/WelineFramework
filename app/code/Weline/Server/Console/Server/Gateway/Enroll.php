@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server\Gateway;
 
 use Weline\Framework\Console\CommandHelper;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedText;
 use Weline\Server\Service\Edge\Gateway\GatewayCredentialStore;
-use Weline\Server\Service\Edge\Gateway\GatewayPlatformServiceInstaller;
+use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectIdentityRotator;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
-use Weline\Server\Service\Edge\Gateway\ProjectIdentityStore;
 
 final class Enroll extends AbstractGatewayCommand
 {
@@ -22,21 +23,30 @@ final class Enroll extends AbstractGatewayCommand
                 'confirmation_required',
             );
         }
-        $rotation = null;
-        if (isset($args['rotate-project-id']) || isset($args['rotate_project_id'])) {
+        $rotate = isset($args['rotate-project-id']) || isset($args['rotate_project_id']);
+        $abortRotation = isset($args['abort-rotation']) || isset($args['abort_rotation']);
+        if ($rotate || $abortRotation) {
             try {
-                $rotation = (new ProjectIdentityStore())->rotate();
-                if (!$json) {
-                    $this->printer->warning(__('项目身份已显式轮换：%{1} → %{2}', [
-                        (string)$rotation['previous_uuid'],
-                        (string)$rotation['project_uuid'],
-                    ]));
+                $rotator = new GatewayProjectIdentityRotator();
+                if ($abortRotation) {
+                    $rotator->abort();
+                    $result = ['state' => 'ABORTED'];
+                } else {
+                    $result = $rotator->rotate();
                 }
+                if (!$json) {
+                    $this->printer->success($abortRotation
+                        ? __('项目 UUID 轮换已在宿主提交前安全中止。')
+                        : __('项目 UUID、宿主授权与本地凭据已完成可恢复原子轮换。'));
+                }
+                $this->output($result, $json);
+                return 0;
             } catch (\Throwable $throwable) {
                 return $this->failure(
                     $throwable->getMessage(),
                     $json,
-                    'project_identity_rotation_failed',
+                    'project_identity_rotation_pending',
+                    ['retryable' => !$abortRotation],
                 );
             }
         }
@@ -60,7 +70,7 @@ final class Enroll extends AbstractGatewayCommand
                 'project_owner_gid' => (int)$rootStatus['gid'],
             ];
         }
-        $roots = $builder->enrollmentCertificateRoots($root);
+        $additionalRoots = [];
         $extra = $args['cert-root'] ?? $args['cert_root'] ?? [];
         $extraIndex = 1;
         foreach ((array)$extra as $path) {
@@ -74,14 +84,23 @@ final class Enroll extends AbstractGatewayCommand
                 $path = $root . DIRECTORY_SEPARATOR . $path;
             }
             $alias = $alias !== '' ? $alias : 'extra_cli_' . $extraIndex++;
-            if (isset($roots[$alias])) {
+            if (isset($additionalRoots[$alias]) || $alias === 'project_ssl') {
                 return $this->failure(
                     __('证书根别名重复：%{1}', [$alias]),
                     $json,
                     'certificate_root_alias_conflict',
                 );
             }
-            $roots[$alias] = $path;
+            $additionalRoots[$alias] = $path;
+        }
+        try {
+            $roots = $builder->enrollmentCertificateRoots($root, $additionalRoots);
+        } catch (\Throwable $throwable) {
+            return $this->failure(
+                $throwable->getMessage(),
+                $json,
+                'certificate_root_invalid',
+            );
         }
         $domains = [];
         foreach ((array)($args['domain'] ?? []) as $domain) {
@@ -102,33 +121,25 @@ final class Enroll extends AbstractGatewayCommand
             );
         }
         $projectUuid = $builder->projectUuid();
+        $capabilities = [
+            'acme_http_01' => !isset($args['no-acme-http-01'])
+                && !isset($args['no_acme_http_01']),
+            'acme_dns_01' => isset($args['acme-dns-01'])
+                || isset($args['acme_dns_01']),
+            'stateless' => isset($args['stateless']),
+            'shared_session' => isset($args['shared-session'])
+                || isset($args['shared_session']),
+        ];
+        $enrollment = GatewayHostManager::enrollmentRequestEnvelope([
+            'project_uuid' => $projectUuid,
+            'project_root' => $root,
+            'certificate_roots' => $roots,
+            'allowed_domains' => $domains,
+            'capabilities' => $capabilities,
+            ...$ownerProof,
+        ]);
         try {
-            $runtimeAccess = (new GatewayPlatformServiceInstaller())
-                ->authorizeProjectRuntimeRead(
-                    $root,
-                    isset($ownerProof['project_owner_uid'])
-                        ? (int)$ownerProof['project_owner_uid']
-                        : null,
-                    isset($ownerProof['project_owner_gid'])
-                        ? (int)$ownerProof['project_owner_gid']
-                        : null,
-                );
-            $response = $this->gateway()->request('enroll', [
-                'project_uuid' => $projectUuid,
-                'project_root' => $root,
-                'certificate_roots' => $roots,
-                'allowed_domains' => $domains,
-                'capabilities' => [
-                    'acme_http_01' => !isset($args['no-acme-http-01'])
-                        && !isset($args['no_acme_http_01']),
-                    'acme_dns_01' => isset($args['acme-dns-01'])
-                        || isset($args['acme_dns_01']),
-                    'stateless' => isset($args['stateless']),
-                    'shared_session' => isset($args['shared-session'])
-                        || isset($args['shared_session']),
-                ],
-                ...$ownerProof,
-            ]);
+            $response = $this->gateway()->request('enroll', $enrollment);
             if (!($response['ok'] ?? false)) {
                 $error = (array)($response['error'] ?? []);
                 return $this->failure(
@@ -142,20 +153,42 @@ final class Enroll extends AbstractGatewayCommand
             $credential = \is_array($payload['credential'] ?? null)
                 ? $payload['credential']
                 : [];
-            (new GatewayCredentialStore())->install($credential, $projectUuid);
+            $receipt = GatewayHostManager::validateCredentialReceipt(
+                $credential,
+                \is_array($payload['credential_receipt'] ?? null)
+                    ? $payload['credential_receipt']
+                    : [],
+                $enrollment,
+            );
+            try {
+                (new GatewayCredentialStore())->install($credential, $projectUuid);
+            } catch (\Throwable $throwable) {
+                return $this->failure(
+                    __('宿主 enrollment 已提交，但本地项目凭据未持久化；修复 var 目录权限后重试相同命令即可幂等续传。'),
+                    $json,
+                    'enrollment_local_commit_pending',
+                    [
+                        'host_committed' => true,
+                        'retryable' => true,
+                        'transaction_id' => (string)$receipt['tx_id'],
+                        'security_generation' => (int)$receipt['security_generation'],
+                        'credential_generation' => (int)$receipt['credential_generation'],
+                        'local_error' => GatewayBoundedText::singleLine(
+                            $throwable->getMessage(),
+                            512,
+                            'Credential persistence failed.',
+                        ),
+                    ],
+                );
+            }
             unset($payload['credential']);
             $payload['project_uuid'] = $projectUuid;
             $payload['allowed_domains'] = $domains;
             $payload['credential_installed'] = true;
-            $payload['endpoint_access_prepared'] = (bool)(
-                $runtimeAccess['applied'] ?? $runtimeAccess['test_mode'] ?? false
-            );
-            if (\is_array($rotation)) {
-                $payload['project_identity_rotation'] = $rotation;
-            }
+            $payload['certificate_access'] = 'broker_auth_snap';
             if (!$json) {
                 $this->printer->success(
-                    __('当前项目已授权到 WLS 2.0 宿主网关；宿主凭据已写入项目 var 目录。')
+                    __('当前项目已授权到 WLS 2.0 宿主网关；项目凭据已写入 var，证书仅通过 Broker AUTH/SNAP 读取。')
                 );
                 $this->printer->note(__('授权域名：%{1}', [\implode(', ', $domains)]));
             }
@@ -183,7 +216,8 @@ final class Enroll extends AbstractGatewayCommand
                 '--acme-dns-01' => __('授权项目使用 DNS-01 能力'),
                 '--stateless' => __('声明项目后端可按无状态策略分流；仍需运行时证明'),
                 '--shared-session' => __('声明项目后端共享 Session；仍需运行时证明'),
-                '--rotate-project-id' => __('为复制项目显式生成新 UUID；必须配合 --confirm'),
+                '--rotate-project-id' => __('以旧凭据+新凭据双证明执行可恢复 UUID/授权转移'),
+                '--abort-rotation' => __('仅在宿主 commit 前中止未完成 UUID 轮换'),
                 '--confirm' => __('确认 enrollment、域名能力和项目凭据轮换'),
                 '--json' => __('输出稳定 JSON 文档'),
             ],

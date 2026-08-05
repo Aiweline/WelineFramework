@@ -19,6 +19,16 @@
 删除失败：,"Delete failed:"
 历史记录已清空,"History has been cleared"
 清空失败：,"Clear failed:"
+bi-clock-history,bi-clock-history
+下载历史记录,下载历史记录
+查看历史,查看历史
+bi-list,bi-list
+查看下载历史,查看下载历史
+删除记录,删除记录
+bi-trash,bi-trash
+删除下载记录,删除下载记录
+清空历史,清空历史
+清空下载历史,清空下载历史
 应用商城,"App Store"
 "缺少许可证或模块 ID","缺少许可证或模块 ID"
 模块已下载到临时目录,模块已下载到临时目录
@@ -39,6 +49,22 @@
 获取模块列表失败,获取模块列表失败
 当前账户还没有该应用的许可证，请先在官网获取或购买。,当前账户还没有该应用的许可证，请先在官网获取或购买。
 未找到可安装的应用或应用尚未发布。,未找到可安装的应用或应用尚未发布。
+商城首页,商城首页
+bi-bag,bi-bag
+应用商城首页,应用商城首页
+查看商城,查看商城
+bi-house,bi-house
+查看应用商城,查看应用商城
+下载模块,下载模块
+bi-cloud-download,bi-cloud-download
+从官网商城下载模块包,从官网商城下载模块包
+模块列表,模块列表
+获取模块列表,获取模块列表
+bi-shield-check,bi-shield-check
+安装前确认应用权限,安装前确认应用权限
+安装模块,安装模块
+bi-download,bi-download
+下载并安装模块,下载并安装模块
 账户绑定,"Account Binding"
 缺少授权码,缺少授权码
 授权绑定失败：,授权绑定失败：
@@ -46,6 +72,24 @@
 请输入邮箱和密码,"Please enter email and password"
 绑定失败：,"Binding failed:"
 解绑失败：,"Unbinding failed:"
+bi-link-45deg,bi-link-45deg
+绑定官网账户,绑定官网账户
+查看账户,查看账户
+bi-person,bi-person
+查看账户绑定状态,查看账户绑定状态
+官网授权,官网授权
+跳转官网授权当前终端,跳转官网授权当前终端
+授权回调,授权回调
+bi-arrow-left-right,bi-arrow-left-right
+接收官网授权回调,接收官网授权回调
+绑定账户,绑定账户
+bi-link,bi-link
+解绑账户,解绑账户
+bi-link-break,bi-link-break
+解绑官网账户,解绑官网账户
+账户状态,账户状态
+bi-info-circle,bi-info-circle
+获取账户绑定状态,获取账户绑定状态
 许可证管理,"License Management"
 获取授权令牌失败，请重新绑定账户,"Failed to get authorization token. Please rebind the account."
 许可证激活成功,"License activated successfully"
@@ -53,6 +97,14 @@
 激活失败：,"Activation failed:"
 验证失败：,"Validation failed:"
 续订失败：,"Renewal failed:"
+bi-key,bi-key
+查看许可证,查看许可证
+查看许可证列表,查看许可证列表
+激活许可证,激活许可证
+bi-check-circle,bi-check-circle
+验证许可证,验证许可证
+续订许可证,续订许可证
+bi-arrow-repeat,bi-arrow-repeat
 我的模块,"My modules"
 模块不存在,"Module does not exist"
 缺少模块标识,"Missing module identifier"
@@ -72,6 +124,27 @@
 请先绑定官网账户后检查更新,"Bind the official account before checking updates."
 检查更新失败,"Failed to check for updates"
 检查更新失败：,"Failed to check for updates:"
+bi-puzzle,bi-puzzle
+"App 商城安装来源记录","App 商城安装来源记录"
+查看模块,查看模块
+"查看 App 商城安装来源记录","查看 App 商城安装来源记录"
+模块详情,模块详情
+查看模块详情,查看模块详情
+系统卸载提示,系统卸载提示
+bi-terminal,bi-terminal
+提示使用系统模块卸载,提示使用系统模块卸载
+检查更新,"Check updates"
+检查模块更新,检查模块更新
+更新模块,更新模块
+bi-cloud-arrow-down,bi-cloud-arrow-down
+下载并升级已安装模块,下载并升级已安装模块
+鏇存柊妯″潡,鏇存柊妯″潡
+涓嬭浇骞跺崌绾у凡瀹夎妯″潡,涓嬭浇骞跺崌绾у凡瀹夎妯″潡
+提交评价,提交评价
+bi-star,bi-star
+从终端提交应用评分和评价,从终端提交应用评分和评价
+卸载模块,卸载模块
+"通过系统卸载流程卸载 App 商城模块","通过系统卸载流程卸载 App 商城模块"
 有效,Valid
 未激活,"Not activated"
 待激活,"Pending activation"
@@ -107,7 +180,6 @@
 正在卸载,Uninstalling
 "这里管理从官方 App 商店安装的模块；卸载直接走系统模块卸载流程，数据和文件备份由系统自动完成。","Manage modules installed from the official App Store here. Uninstall runs through the system module removal flow, so data and file backups are handled automatically."
 "Back To WLS Panel","Back To WLS Panel"
-检查更新,"Check updates"
 正在卸载模块，请不要关闭页面。,"Uninstalling the module. Do not close this page."
 系统正在执行数据备份、文件备份和模块卸载，完成后页面会刷新。,"The system is backing up data and files, then uninstalling the module. The page will refresh when it finishes."
 版本：,版本：
@@ -149,7 +221,6 @@ Surface,Surface
 评分,评分
 评价,评价
 安装使用后的反馈,安装使用后的反馈
-提交评价,提交评价
 "暂无 App 商城安装记录。","暂无 App 商城安装记录。"
 "当前列表只展示通过官方 App 商店安装的应用；系统内置模块不会出现在这里。","This list only shows apps installed from the official App Store. Built-in system modules do not appear here."
 "每次从官方 App 商店下载都会记录当时下载的模块版本、文件哈希和许可证，便于追踪安装来源。","Every official App Store download records the module version, file hash, and license used at that moment."

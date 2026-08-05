@@ -482,6 +482,16 @@ class AiService
         );
         $this->applyResolvedConfigToModel($model, $resolvedConfig);
         $params['resolved_config'] = $resolvedConfig;
+        if ($scenarioCode !== null && \trim($scenarioCode) !== '') {
+            $params['scenario_code'] = \trim($scenarioCode);
+            $prompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
+        }
+        // Callers such as PageBuilder keep target_size as the rendered contract and
+        // omit provider `size`. Derive a provider-safe request size from aspect geometry.
+        $params['size'] = (new Image\ImageGenerationSizeResolver())->resolve(
+            $params,
+            $model->getModelCode()
+        );
 
         $intent = $this->prepareImageIdentityAssetIntent($prompt, $params, $model, $resolvedConfig);
         $prompt = $intent['prompt'];
@@ -529,6 +539,219 @@ class AiService
     ): ?array {
         $model = $this->selectModel($modelCode, $scenarioCode, $primaryModality);
         return $model ? $this->modelToArray($model) : null;
+    }
+
+    /**
+     * 场景就绪只读检查：适配器是否启用、能否解析到可用模型。
+     *
+     * @param list<string> $requiredCapabilities 预留能力清单（当前仅做非空记录，不阻断）
+     * @return array{ready:bool,code:string,scenario_code:string,primary_modality?:string,model?:array<string,mixed>,capabilities?:list<string>}
+     */
+    public function inspectScenarioReadiness(
+        string $scenarioCode,
+        string $primaryModality = AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT,
+        array $requiredCapabilities = [],
+    ): array {
+        $scenarioCode = \trim($scenarioCode);
+        $primaryModality = \trim($primaryModality) !== ''
+            ? \trim($primaryModality)
+            : AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT;
+        if ($scenarioCode === '') {
+            return [
+                'ready' => false,
+                'code' => 'ADAPTER_UNAVAILABLE',
+                'scenario_code' => '',
+                'primary_modality' => $primaryModality,
+            ];
+        }
+
+        $bindings = $this->getAdapterModelBindings($scenarioCode);
+        if ($bindings === []) {
+            return [
+                'ready' => false,
+                'code' => 'ADAPTER_UNAVAILABLE',
+                'scenario_code' => $scenarioCode,
+                'primary_modality' => $primaryModality,
+            ];
+        }
+
+        $model = $this->resolveModel(null, $scenarioCode, $primaryModality);
+        if ($model === null) {
+            return [
+                'ready' => false,
+                'code' => 'MODEL_UNAVAILABLE',
+                'scenario_code' => $scenarioCode,
+                'primary_modality' => $primaryModality,
+                'capabilities' => \array_values(\array_filter(\array_map('strval', $requiredCapabilities))),
+            ];
+        }
+
+        return [
+            'ready' => true,
+            'code' => 'OK',
+            'scenario_code' => $scenarioCode,
+            'primary_modality' => $primaryModality,
+            'model' => $model,
+            'capabilities' => \array_values(\array_filter(\array_map('strval', $requiredCapabilities))),
+        ];
+    }
+
+    /**
+     * 使用场景绑定的多模态模型分析一张图片（视觉审查）。
+     *
+     * 通过 OpenAI 兼容的多模态 message（data URL）传递图片；场景适配器
+     * 负责在 instruction 上追加审查契约并要求纯 JSON 输出。
+     *
+     * @param array<string,mixed> $context 场景适配器参数（asset_policy、allowed_texts、ocr_text 等）
+     * @return array{success: bool, analysis?: array<string,mixed>, model?: array<string,mixed>, response_sha256?: string, message?: string, raw?: string}
+     * @throws Exception
+     */
+    public function analyzeImage(
+        string $scenarioCode,
+        string $imageBytes,
+        string $mimeType,
+        string $instruction,
+        array $context = []
+    ): array {
+        $scenarioCode = trim($scenarioCode);
+        if ($scenarioCode === '') {
+            throw new Exception('analyzeImage 需要 scenario_code');
+        }
+        if ($imageBytes === '') {
+            throw new Exception('analyzeImage 需要非空的 image_bytes');
+        }
+
+        $model = $this->selectModel(null, $scenarioCode);
+        if (!$model || !$this->modelDeclaresVisionCapability($model)) {
+            $visionModel = $this->selectVisionCapableModel($scenarioCode);
+            if ($visionModel) {
+                $model = $visionModel;
+            }
+        }
+        if (!$model) {
+            throw new Exception($this->getModelSelectionFailureReason(null, $scenarioCode));
+        }
+        if (!$this->modelDeclaresVisionCapability($model)) {
+            throw new Exception(
+                'analyzeImage 需要具备 vision 能力的模型，当前解析到：' . $model->getModelCode()
+            );
+        }
+
+        $params = $context;
+        $params['is_backend'] = true;
+        $params['allow_zero_balance_provider'] = (bool)($params['allow_zero_balance_provider'] ?? true);
+        $params['scenario_code'] = $scenarioCode;
+        $params['request_type'] = 'vision_analysis';
+        if (isset($context['timeout_seconds']) && (int)$context['timeout_seconds'] > 0) {
+            $params['timeout'] = (int)$context['timeout_seconds'];
+        }
+
+        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
+        $params['resolved_config'] = $configResolver->resolveConfig($model->getModelCode(), [], null, true);
+
+        $adaptedPrompt = $this->applyScenarioAdapter($instruction, $scenarioCode, $params);
+        $mimeType = trim($mimeType) !== '' ? trim($mimeType) : 'image/png';
+        $params['messages'] = [[
+            'role' => 'user',
+            'content' => [
+                ['type' => 'text', 'text' => $adaptedPrompt],
+                [
+                    'type' => 'image_url',
+                    'image_url' => ['url' => 'data:' . $mimeType . ';base64,' . base64_encode($imageBytes)],
+                ],
+            ],
+        ]];
+
+        $response = $this->callModelApi($model, $adaptedPrompt, $params);
+        $response = $this->processScenarioResponse($response, $scenarioCode, $params);
+
+        $analysis = $this->extractJsonObjectFromResponse($response);
+        if ($analysis === null) {
+            return [
+                'success' => false,
+                'message' => 'Vision analysis response contained no valid JSON object.',
+                'model' => $this->modelToArray($model),
+                'raw' => mb_substr($response, 0, 2000, 'UTF-8'),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'analysis' => $analysis,
+            'model' => $this->modelToArray($model),
+            'response_sha256' => hash('sha256', $response),
+        ];
+    }
+
+    private function modelDeclaresVisionCapability(AiModel $model): bool
+    {
+        $capabilities = $model->getCapabilities();
+        if (!\is_array($capabilities) || $capabilities === []) {
+            $code = \strtolower($model->getModelCode() . ' ' . (string)$model->getName());
+
+            return \preg_match('/(?:^|[^a-z])(?:vl|vision)(?:[^a-z]|$)/', $code) === 1;
+        }
+        foreach ($capabilities as $key => $value) {
+            $token = \strtolower(\trim(\is_int($key) ? (string)$value : (string)$key));
+            if (\in_array($token, ['vision', 'multimodal', 'image2text', 'image_to_text'], true)) {
+                if (\is_int($key)) {
+                    return true;
+                }
+
+                return $value === true
+                    || $value === 1
+                    || $value === '1'
+                    || \strtolower(\trim((string)$value)) === 'true';
+            }
+        }
+
+        return false;
+    }
+
+    private function selectVisionCapableModel(?string $scenarioCode): ?AiModel
+    {
+        if ($scenarioCode) {
+            $candidate = $this->selectModel(null, $scenarioCode);
+            if ($candidate && $this->modelDeclaresVisionCapability($candidate)) {
+                return $candidate;
+            }
+        }
+
+        $items = $this->aiModel->reset()
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetch();
+        foreach ($this->iterableItems($items) as $model) {
+            if ($model instanceof AiModel && $this->modelDeclaresVisionCapability($model)) {
+                return $model;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 从模型响应中提取第一个 JSON 对象（容忍 markdown 代码块包裹）。
+     *
+     * @return array<string,mixed>|null
+     */
+    private function extractJsonObjectFromResponse(string $response): ?array
+    {
+        $response = trim($response);
+        if ($response === '') {
+            return null;
+        }
+        if (preg_match('/```(?:json)?\s*(\{.*\})\s*```/su', $response, $matches) === 1) {
+            $response = $matches[1];
+        }
+        $start = strpos($response, '{');
+        $end = strrpos($response, '}');
+        if ($start === false || $end === false || $end <= $start) {
+            return null;
+        }
+        $decoded = json_decode(substr($response, $start, $end - $start + 1), true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     /**
@@ -1474,6 +1697,7 @@ class AiService
     private function callModelApi(AiModel $model, string $prompt, array $params): string
     {
         $startTime = microtime(true);
+        $params['request_id'] = $this->resolveUsageRequestId($params);
         $account = null;
         $usage = [];
         try {
@@ -1554,9 +1778,9 @@ class AiService
                     // 记录到新的供应商使用记录
                     $account = $accModel; // 成功的账户
                     $requestTime = (int)((microtime(true) - $startTime) * 1000);
-                    $this->accountService->recordUsage($account, $model, $usage, [
+                    $this->recordUsageWithoutAffectingProviderResult($account, $model, $usage, [
                         'request_type' => $params['request_type'] ?? 'chat',
-                        'request_id' => $params['request_id'] ?? null,
+                        'request_id' => $params['request_id'],
                         'user_id' => $params['user_id'] ?? null,
                         'user_name' => $params['user_name'] ?? null,
                         'request_time' => $requestTime,
@@ -1600,9 +1824,9 @@ class AiService
             // 记录错误到供应商使用记录
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
-                $this->accountService->recordUsage($account, $model, $usage, [
+                $this->recordUsageWithoutAffectingProviderResult($account, $model, $usage, [
                     'request_type' => $params['request_type'] ?? 'chat',
-                    'request_id' => $params['request_id'] ?? null,
+                    'request_id' => $params['request_id'],
                     'user_id' => $params['user_id'] ?? null,
                     'user_name' => $params['user_name'] ?? null,
                     'request_time' => $requestTime,
@@ -1637,6 +1861,7 @@ class AiService
         array $params
     ): void {
         $startTime = microtime(true);
+        $params['request_id'] = $this->resolveUsageRequestId($params);
         $account = null;
         $usage = [];
         
@@ -1682,8 +1907,9 @@ class AiService
             
             // 7. 记录到新的供应商使用记录
             $requestTime = (int)((microtime(true) - $startTime) * 1000);
-            $this->accountService->recordUsage($account, $model, $usage, [
+            $this->recordUsageWithoutAffectingProviderResult($account, $model, $usage, [
                 'request_type' => 'stream',
+                'request_id' => $params['request_id'],
                 'user_id' => $params['user_id'] ?? null,
                 'user_name' => $params['user_name'] ?? null,
                 'request_time' => $requestTime,
@@ -1694,8 +1920,9 @@ class AiService
             // 记录错误到供应商使用记录
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
-                $this->accountService->recordUsage($account, $model, $usage, [
+                $this->recordUsageWithoutAffectingProviderResult($account, $model, $usage, [
                     'request_type' => 'stream',
+                    'request_id' => $params['request_id'],
                     'user_id' => $params['user_id'] ?? null,
                     'user_name' => $params['user_name'] ?? null,
                     'request_time' => $requestTime,
@@ -1710,6 +1937,58 @@ class AiService
             $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
             throw new Exception("AI流式生成失败: " . $cleanMessage);
         }
+    }
+
+    /**
+     * Provider output is already billable and observable at this point. Audit
+     * failures are retained as hashed diagnostics but can never re-enter the
+     * provider failure/retry branch or invalidate delivered stream chunks.
+     *
+     * @param array<string,mixed> $usage
+     * @param array<string,mixed> $context
+     */
+    private function recordUsageWithoutAffectingProviderResult(
+        Account $account,
+        AiModel $model,
+        array $usage,
+        array $context,
+    ): void {
+        try {
+            $this->accountService->recordUsageReliably($account, $model, $usage, $context);
+        } catch (\Throwable $auditFailure) {
+            w_log_error(
+                'AI供应商用量审计写入异常',
+                [
+                    'request_id_sha256' => hash(
+                        'sha256',
+                        (string)($context['request_id'] ?? ''),
+                    ),
+                    'status' => (string)($context['status'] ?? ''),
+                    'failure_class' => $auditFailure::class,
+                    'failure_message_sha256' => hash('sha256', $auditFailure->getMessage()),
+                ],
+                'ai_usage_audit',
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $params */
+    private function resolveUsageRequestId(array $params): string
+    {
+        $requestId = trim((string)(
+            $params['request_id']
+            ?? $params['idempotency_key']
+            ?? $params['resumable_task_id']
+            ?? ''
+        ));
+        if ($requestId === '') {
+            return 'req_' . bin2hex(random_bytes(16));
+        }
+        if (strlen($requestId) > 100 || preg_match('/[\x00-\x1F\x7F]/', $requestId) === 1) {
+            return 'req_' . hash('sha256', $requestId);
+        }
+
+        return $requestId;
     }
 
     /**
@@ -1779,9 +2058,19 @@ class AiService
                 AiUsageLog::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
             ]);
             $this->usageLog->save();
-        } catch (\Exception $e) {
-            // 记录失败不影响主流程
-            w_log_error("记录AI使用量失败: " . $e->getMessage());
+        } catch (\Throwable $failure) {
+            // Legacy audit persistence is strictly post-success best effort.
+            // Never expose its failure (or sensitive connection details) to the
+            // provider retry boundary or a stream that already delivered data.
+            try {
+                w_log_error(sprintf(
+                    'AI usage log persistence failed [class=%s message_sha256=%s]',
+                    $failure::class,
+                    hash('sha256', $failure->getMessage()),
+                ));
+            } catch (\Throwable) {
+                // Logging the audit failure is best effort as well.
+            }
         }
     }
 

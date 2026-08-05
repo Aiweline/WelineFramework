@@ -260,6 +260,8 @@ class ControlMessage
     public const ACTION_TELEMETRY_QUERY = 'telemetry_query';
     /** 热重载 SSL 证书映射（不重启进程） */
     public const ACTION_SSL_CERT_RELOAD = 'ssl_cert_reload';
+    /** 独立于新 manifest 的安全隔离：停止当前 Master 代际全部 TLS/H3 serving。 */
+    public const ACTION_SSL_SERVING_QUARANTINE = 'ssl_serving_quarantine';
 
     /** 查询 Fiber 池统计（各 Worker 挂起数、配置等） */
     public const ACTION_FIBER_STATS = 'fiber_stats';
@@ -293,6 +295,7 @@ class ControlMessage
     public const ACTION_GATEWAY_BACKEND_ENABLE = 'gateway_backend_enable';
     public const ACTION_GATEWAY_NATIVE_DRAIN = 'gateway_native_drain';
     public const ACTION_GATEWAY_AGENT_ENABLE = 'gateway_agent_enable';
+    public const ACTION_GATEWAY_AGENT_STATUS = 'gateway_agent_status';
     public const ACTION_GATEWAY_AGENT_COMMIT = 'gateway_agent_commit';
     public const ACTION_GATEWAY_AGENT_DISABLE = 'gateway_agent_disable';
     /** Host promotion rollback asks the still-running project Master to restore its own Nginx identity. */
@@ -300,6 +303,9 @@ class ControlMessage
 
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';
+
+    /** TLS Worker → Master：精确 serving-manifest 代际已原子切换。 */
+    public const TYPE_SSL_CERT_RELOAD_ACK = 'ssl_cert_reload_ack';
 
     /** Master → Dispatcher：解封指定 IP 或清空全部封禁 */
     public const TYPE_SECURITY_UNBLOCK = 'security_unblock';
@@ -533,7 +539,8 @@ class ControlMessage
         string $msgId = '',
         string $slotId = '',
         string $leaseId = '',
-        int $generation = 0
+        int $generation = 0,
+        string $hostLeaseId = '',
     ): string
     {
         $data = [
@@ -568,10 +575,16 @@ class ControlMessage
             $data['dynamic_first_render'] = $readiness['dynamic_first_render'];
             $data['listen_capabilities'] = $readiness['listen_capabilities'];
             $data['namespace_authority_clock'] = $readiness['namespace_authority_clock'];
+            $data['serving_manifest_generation'] = $readiness['serving_manifest_generation'];
+            $data['serving_manifest_digest'] = $readiness['serving_manifest_digest'];
+            $data['serving_manifest_route_count'] = $readiness['serving_manifest_route_count'];
         } elseif ($role === self::ROLE_DISPATCHER) {
             $data += DispatcherPolicyControl::readinessSnapshot();
         }
         self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
+        if ($hostLeaseId !== '') {
+            $data['host_lease_id'] = $hostLeaseId;
+        }
         return self::encode($data);
     }
 
@@ -781,12 +794,72 @@ class ControlMessage
      *                               null 或空数组 = 全量重载（仅刷新 map 文件，不清除负缓存）；
      *                               非空 = 只为指定域清除负缓存并刷新内存证书映射。
      */
-    public static function sslCertReload(?array $domains = null): string
-    {
-        $payload = ['type' => self::TYPE_SSL_CERT_RELOAD];
+    public static function sslCertReload(
+        ?array $domains = null,
+        string $operationId = '',
+        int $expectedManifestGeneration = 0,
+        string $expectedManifestDigest = '',
+        int $expectedTlsRouteCount = -1,
+        int $expectedRetiredContextCount = -1,
+        string $expectedRetiredContextDigest = '',
+    ): string {
+        $payload = [
+            'type' => self::TYPE_SSL_CERT_RELOAD,
+            'operation_id' => \strtolower(\trim($operationId)),
+            'expected_manifest_generation' => \max(0, $expectedManifestGeneration),
+            'expected_manifest_digest' => \strtolower(\trim($expectedManifestDigest)),
+            'expected_tls_route_count' => $expectedTlsRouteCount,
+            'expected_retired_context_count' => $expectedRetiredContextCount,
+            'expected_retired_context_digest' => \strtolower(\trim(
+                $expectedRetiredContextDigest,
+            )),
+        ];
         if (!empty($domains)) {
             $payload['domains'] = \array_values(\array_unique($domains));
         }
+        return self::encode($payload);
+    }
+
+    /**
+     * Build a fail-closed TLS reload receipt. A success receipt is valid only
+     * when the applied immutable manifest exactly matches the requested pair.
+     */
+    public static function sslCertReloadAck(
+        string $operationId,
+        bool $success,
+        int $appliedManifestGeneration,
+        string $appliedManifestDigest,
+        int $appliedTlsRouteCount,
+        string $servingMode,
+        string $tlsContextState,
+        int $retiredContextCount,
+        string $retiredContextDigest,
+        int $workerId = 0,
+        string $errorCode = '',
+        string $error = '',
+    ): string {
+        $payload = [
+            'type' => self::TYPE_SSL_CERT_RELOAD_ACK,
+            'operation_id' => \strtolower(\trim($operationId)),
+            'success' => $success,
+            'applied_manifest_generation' => \max(0, $appliedManifestGeneration),
+            'applied_manifest_digest' => \strtolower(\trim($appliedManifestDigest)),
+            'applied_tls_route_count' => \max(0, $appliedTlsRouteCount),
+            'serving_mode' => \substr(\strtolower(\trim($servingMode)), 0, 32),
+            'tls_context_state' => \substr(\strtolower(\trim($tlsContextState)), 0, 32),
+            'retired_context_count' => \max(0, $retiredContextCount),
+            'retired_context_digest' => \strtolower(\trim($retiredContextDigest)),
+        ];
+        if ($workerId > 0) {
+            $payload['worker_id'] = $workerId;
+        }
+        if ($errorCode !== '') {
+            $payload['error_code'] = \substr($errorCode, 0, 64);
+        }
+        if ($error !== '') {
+            $payload['error'] = \substr(\str_replace(["\r", "\n"], ' ', $error), 0, 512);
+        }
+
         return self::encode($payload);
     }
 

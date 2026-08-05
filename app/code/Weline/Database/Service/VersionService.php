@@ -89,12 +89,13 @@ class VersionService
      *
      * The cursor may only move forward here. A cursor ahead of the runtime
      * manifest means code/database drift and must be repaired before setup or
-     * rollback can continue.
+     * rollback can continue. A null migration means this setup run executed no
+     * new migration and must preserve the existing last_migration value.
      */
     public function reconcileSuccessfulSetup(
         string $moduleName,
         string $runtimeVersion,
-        string $lastMigration = ''
+        ?string $lastSuccessfulMigration = null,
     ): void {
         if (!$this->validateVersion($runtimeVersion)) {
             throw new \InvalidArgumentException(__(
@@ -103,7 +104,10 @@ class VersionService
             ));
         }
 
-        $currentVersion = $this->getModuleVersionString($moduleName);
+        $current = $this->getModuleVersion($moduleName);
+        $currentVersion = $current === null
+            ? null
+            : (string)$current->getData(ModuleVersion::schema_fields_CURRENT_VERSION);
         if ($currentVersion !== null && version_compare($currentVersion, $runtimeVersion, '>')) {
             throw new \RuntimeException(__(
                 '模块 %{1} 数据库版本游标 %{2} 高于代码版本 %{3}，已阻止继续升级',
@@ -111,7 +115,18 @@ class VersionService
             ));
         }
 
+        if ($lastSuccessfulMigration !== null && trim($lastSuccessfulMigration) === '') {
+            $lastSuccessfulMigration = null;
+        }
+        $lastMigration = $lastSuccessfulMigration
+            ?? ($current === null
+                ? ''
+                : (string)$current->getData(ModuleVersion::schema_fields_LAST_MIGRATION));
+
         if ($currentVersion === $runtimeVersion) {
+            if ($lastSuccessfulMigration === null) {
+                return;
+            }
             if (!$this->updateModuleVersion($moduleName, $runtimeVersion, $lastMigration)) {
                 throw new \RuntimeException(__('无法刷新模块 %{1} 的数据库版本游标', $moduleName));
             }
@@ -128,7 +143,7 @@ class VersionService
             $fromVersion,
             $runtimeVersion,
             $currentVersion === null ? ModuleVersionHistory::ACTION_INSTALL : ModuleVersionHistory::ACTION_UPGRADE,
-            $lastMigration
+            $lastSuccessfulMigration ?? '',
         );
     }
     
@@ -335,7 +350,7 @@ class VersionService
                 [$moduleName, $fromVersion, (string)$currentVersion]
             ));
         }
-        if (!$this->updateModuleVersion($moduleName, $toVersion, $operationId)) {
+        if (!$this->updateModuleVersion($moduleName, $toVersion, '')) {
             throw new \RuntimeException(__('无法提交模块 %{1} 的回滚版本游标', $moduleName));
         }
         $this->recordVersionHistory(
@@ -360,7 +375,7 @@ class VersionService
                 [$moduleName, $rolledBackVersion, (string)$currentVersion]
             ));
         }
-        if (!$this->updateModuleVersion($moduleName, $restoreVersion, $operationId . ':compensated')) {
+        if (!$this->updateModuleVersion($moduleName, $restoreVersion, '')) {
             throw new \RuntimeException(__('无法恢复模块 %{1} 的版本游标', $moduleName));
         }
         $this->recordVersionHistory(

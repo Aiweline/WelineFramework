@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Taglib\TaglibInterface;
 
 /**
@@ -26,11 +27,7 @@ use Weline\Framework\Taglib\TaglibInterface;
  */
 class Slot implements TaglibInterface
 {
-    /**
-     * 运行时追踪已注册的 slot ID
-     * 格式: ['slot-id' => 'file:line', ...]
-     */
-    private static array $registeredSlots = [];
+    private const REQUEST_REGISTERED_SLOTS_KEY = 'theme.taglib.registered_slots.v1';
     
     /**
      * 允许的 position 值
@@ -87,6 +84,7 @@ class Slot implements TaglibInterface
             'wrapper' => 0,      // 可选：包裹元素标签
             'class' => 0,        // 可选：添加到包裹元素的 CSS 类
             'style' => 0,        // 可选：添加到包裹元素的内联样式
+            'weline-code' => 0,  // 可选：事件溯源区块 code（wrapper=section 时由 Validator 强制）
         ];
     }
 
@@ -242,6 +240,11 @@ class Slot implements TaglibInterface
             $style = htmlspecialchars($attrs['style'], ENT_QUOTES, 'UTF-8');
             $htmlAttrs[] = "style=\"{$style}\"";
         }
+
+        if (isset($attrs['weline-code']) && $attrs['weline-code'] !== '') {
+            $welineCode = htmlspecialchars((string)$attrs['weline-code'], ENT_QUOTES, 'UTF-8');
+            $htmlAttrs[] = "weline-code=\"{$welineCode}\"";
+        }
         
         return $htmlAttrs ? ' ' . implode(' ', $htmlAttrs) : '';
     }
@@ -252,16 +255,18 @@ class Slot implements TaglibInterface
     private static function registerSlot(string $id, string $file, int $line): void
     {
         $location = "{$file}:{$line}";
+        $registeredSlots = self::getRegisteredSlots();
         
         // DEV 模式下检测重复
         if (defined('DEV') && DEV) {
-            if (isset(self::$registeredSlots[$id])) {
-                $existingLocation = self::$registeredSlots[$id];
+            if (isset($registeredSlots[$id])) {
+                $existingLocation = $registeredSlots[$id];
                 SlotValidator::throwDuplicateError($id, $existingLocation, $location);
             }
         }
         
-        self::$registeredSlots[$id] = $location;
+        $registeredSlots[$id] = $location;
+        RequestContext::set(self::REQUEST_REGISTERED_SLOTS_KEY, $registeredSlots);
     }
     
     /**
@@ -269,7 +274,7 @@ class Slot implements TaglibInterface
      */
     public static function clearRegisteredSlots(): void
     {
-        self::$registeredSlots = [];
+        RequestContext::remove(self::REQUEST_REGISTERED_SLOTS_KEY);
     }
     
     /**
@@ -277,7 +282,8 @@ class Slot implements TaglibInterface
      */
     public static function getRegisteredSlots(): array
     {
-        return self::$registeredSlots;
+        $registeredSlots = RequestContext::get(self::REQUEST_REGISTERED_SLOTS_KEY, []);
+        return is_array($registeredSlots) ? $registeredSlots : [];
     }
 
     /**

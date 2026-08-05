@@ -1358,9 +1358,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return false;
         }
 
-        // Full backend renders are not a routable-Worker readiness primitive.
-        // They may be enabled explicitly as a deferred compatibility warmup,
-        // but never run inside the READY gate by default.
+        // Backend first-render warmup is mandatory, but it runs after READY in
+        // the deferred worker warmup fiber so cold rendering cannot block pool entry.
         return false;
     }
 
@@ -1386,7 +1385,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP');
         }
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '0');
+            $rawFlag = Env::get('wls.worker.backend_deferred_warmup_enabled', '1');
         }
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
             return false;
@@ -3361,7 +3360,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '0');
+            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '1');
         }
 
         if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
@@ -3490,7 +3489,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $rawFlag = Env::get('wls.worker.fpc_process_pull_enabled', null);
         }
         if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            return false;
+            return true;
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
@@ -4414,12 +4413,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 if ($resolvedResponseClass !== Response::class) {
                     ObjectManager::setInstance($resolvedResponseClass, $requestResponse);
                 }
+                // 后台语言/货币路由段最高优先级：保留 /{backendKey}/{lang}/…，
+                // 不再早期 302 剥段（剥段会让 Cookie 盖过路由，切换失效）。
+                // 语言由 Url::detectLanguage / State::getLang 路径解析消费。
                 $globalsEmulator = new GlobalsEmulator();
                 $globalsEmulator->emulate($request);
-                $canonicalBackendRedirect = $this->buildCanonicalLocalizedBackendRedirect($request);
-                if ($canonicalBackendRedirect !== '') {
-                    return $this->buildEarlyRedirectResponse($canonicalBackendRedirect);
-                }
                 $requestMeta = [
                     'method' => (string)($_SERVER['REQUEST_METHOD'] ?? $request->getMethod() ?: 'GET'),
                     'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
@@ -4445,8 +4443,24 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // 观察者调用 getUrlPath 导致 static $url_paths / Acl 路由判定沿用旧路径，误判无权限跳 admin。
             Request::clearStaticUrlPathCache();
             \Weline\Framework\App\State::resetRequestPathLocalizationCache();
+            // Path locale is request-scoped. Clear leftovers from the previous
+            // fiber/request before Url::parser may re-detect /en_US/… — otherwise
+            // an unprefixed /about can inherit en_US, or the opposite after rewrite.
+            unset($_SERVER['WELINE_URL_PATH_LANG']);
+            try {
+                WelineEnv::removeServer('WELINE_URL_PATH_LANG');
+            } catch (\Throwable) {
+            }
             if ($request !== null) {
                 $request->invalidateUriCache();
+                try {
+                    if (\method_exists($request, 'unsetServer')) {
+                        $request->unsetServer('WELINE_URL_PATH_LANG');
+                    } elseif (\method_exists($request, 'setServer')) {
+                        $request->setServer('WELINE_URL_PATH_LANG', '');
+                    }
+                } catch (\Throwable) {
+                }
             }
             try {
                 $processUrlCacheClass = 'Weline\\Framework\\Router\\Cache\\ProcessUrlCache';
@@ -5421,79 +5435,17 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         return \is_scalar($uri) ? (string)$uri : '';
     }
 
-    private function buildCanonicalLocalizedBackendRedirect(Request $request): string
+    /**
+     * @deprecated 后台本地化段不再早期剥离：路由语言段优先于 Cookie。
+     * 保留方法供兼容调用方 / 单测引用；始终返回空（不跳转）。
+     *
+     * @return array{}
+     */
+    private function buildCanonicalLocalizedBackendRedirect(Request $request): array
     {
-        $backendPrefix = \trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
-        if ($backendPrefix === '') {
-            return '';
-        }
+        unset($request);
 
-        $uri = (string)($request->getServer('REQUEST_URI') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        if ($uri === '') {
-            return '';
-        }
-
-        try {
-            $parsed = \parse_url($uri);
-        } catch (\ValueError) {
-            return '';
-        }
-        $path = \is_array($parsed) ? (string)($parsed['path'] ?? '') : '';
-        if ($path === '') {
-            return '';
-        }
-
-        $segments = \array_values(\array_filter(
-            \explode('/', \trim($path, '/')),
-            static fn(string $segment): bool => $segment !== ''
-        ));
-        if (!isset($segments[0], $segments[1]) || \strcasecmp((string)$segments[0], $backendPrefix) !== 0) {
-            return '';
-        }
-
-        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 3));
-        $currency = (string)($localization['currency'] ?? '');
-        $language = (string)($localization['language'] ?? '');
-        if ($currency === '' && $language === '') {
-            return '';
-        }
-
-        $stripCount = 0;
-        foreach (\array_slice($segments, 1, 2) as $segment) {
-            $segment = (string)$segment;
-            if ($currency !== ''
-                && $this->isBackendLocalizedCurrencySegment($segment)
-                && \strtoupper($segment) === $currency
-            ) {
-                $stripCount++;
-                continue;
-            }
-            if ($language !== ''
-                && $this->isBackendLocalizedLocaleSegment($segment)
-                && \str_replace('-', '_', $segment) === $language
-            ) {
-                $stripCount++;
-                continue;
-            }
-            break;
-        }
-        if ($stripCount === 0) {
-            return '';
-        }
-
-        $canonicalSegments = \array_merge([$backendPrefix], \array_slice($segments, 1 + $stripCount));
-        $canonicalPath = '/' . \implode('/', $canonicalSegments);
-        if ($canonicalPath === $path) {
-            return '';
-        }
-
-        $query = \is_array($parsed) && isset($parsed['query']) && $parsed['query'] !== ''
-            ? '?' . $parsed['query']
-            : '';
-        $scheme = $request->isSecure() ? 'https' : 'http';
-        $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost');
-
-        return $scheme . '://' . $host . $canonicalPath . $query;
+        return [];
     }
 
     private function isBackendLocalizedCurrencySegment(string $segment): bool
@@ -5508,14 +5460,30 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
     }
 
-    private function buildEarlyRedirectResponse(string $location): string
-    {
-        return Response::fromContent('', 302, 'text/plain; charset=utf-8')
+    /**
+     * 早期 302（仍可用于其他入口）；语言偏好由路径段驱动时不再依赖此路径写 Cookie。
+     */
+    private function buildEarlyRedirectResponse(
+        string $location,
+        string $language = '',
+        string $currency = ''
+    ): string {
+        $response = Response::fromContent('', 302, 'text/plain; charset=utf-8')
             ->setHeader('Location', $location)
             ->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
             ->setHeader('Pragma', 'no-cache')
-            ->setHeader('Expires', '0')
-            ->toHttpString(false);
+            ->setHeader('Expires', '0');
+
+        $expireAt = \time() + 3600 * 24 * 30;
+        $secure = \str_starts_with($location, 'https://');
+        if ($language !== '') {
+            $response->setCookie('WELINE_USER_LANG', $language, $expireAt, '/', '', $secure, false, 'Lax');
+        }
+        if ($currency !== '') {
+            $response->setCookie('WELINE_USER_CURRENCY', $currency, $expireAt, '/', '', $secure, false, 'Lax');
+        }
+
+        return $response->toHttpString(false);
     }
 
     private function processUrlParse(array $parse): void
@@ -5588,11 +5556,35 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if (!\str_starts_with($currentUri, '/')) {
             $currentUri = '/' . $currentUri;
         }
-        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $currentUri;
-        $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $currentUri;
+        // Keep the visitor-facing pretty path (e.g. /en_US/about) in ORIGIN.
+        // Overwriting it with the decoded controller path
+        // (/pagebuilder/frontend/page/view?page_id=…) made PageBuilder lose the
+        // path locale and fall back to the site default after SEO rewrite.
+        $visitorOrigin = (string)(
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI']
+            ?? $_SERVER['ORIGIN_REQUEST_URI']
+            ?? $_SERVER['REQUEST_URI']
+            ?? ''
+        );
+        $_SERVER['REQUEST_URI'] = $currentUri;
+        $visitorIsInternal = $visitorOrigin !== ''
+            && \str_contains(\strtolower($visitorOrigin), 'pagebuilder/frontend/page');
+        $currentIsInternal = \str_contains(\strtolower($currentUri), 'pagebuilder/frontend/page');
+        if ($visitorOrigin !== '' && !$visitorIsInternal) {
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $visitorOrigin;
+        } elseif (!$currentIsInternal) {
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $currentUri;
+        } elseif ($visitorOrigin !== '') {
+            // Both look internal — keep existing rather than inventing a new one.
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $visitorOrigin;
+        } else {
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $currentUri;
+        }
+        $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $_SERVER['WELINE_ORIGIN_REQUEST_URI'];
         WelineEnv::set('request.uri', $currentUri, 'WlsRuntime processUrlParse');
-        WelineEnv::set('origin_request_uri', $currentUri, 'WlsRuntime processUrlParse');
+        WelineEnv::set('origin_request_uri', $_SERVER['WELINE_ORIGIN_REQUEST_URI'], 'WlsRuntime processUrlParse');
         WelineEnv::set('full_request_uri', $_SERVER['WELINE_FULL_REQUEST_URI'], 'WlsRuntime processUrlParse');
+        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $_SERVER['WELINE_ORIGIN_REQUEST_URI'], 'WlsRuntime processUrlParse');
         
         // 设置后端标识
         $welineArea = $_SERVER['WELINE_AREA'] ?? '';
@@ -5616,9 +5608,29 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             RequestContext::locale($parse['language']);
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $parse['language'], 'WlsRuntime processUrlParse');
+            // PATH_LANG is owned by Url::detectLanguage / RouterRewrite when the
+            // visitor URL actually contained a locale segment. parse['language']
+            // often falls back to Cookie/default and must not poison PATH_LANG
+            // for unprefixed URLs like /about.
+            $existingPathLang = \trim((string)($_SERVER['WELINE_URL_PATH_LANG'] ?? ''));
+            if ($existingPathLang === '') {
+                $originForLang = (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['ORIGIN_REQUEST_URI'] ?? '');
+                if ($originForLang !== ''
+                    && \preg_match(
+                        '#(?:^|/)(' . \preg_quote((string)$parse['language'], '#') . ')(?:/|$)#i',
+                        $originForLang
+                    ) === 1
+                ) {
+                    $_SERVER['WELINE_URL_PATH_LANG'] = $parse['language'];
+                    WelineEnv::setServer('WELINE_URL_PATH_LANG', $parse['language'], 'WlsRuntime processUrlParse');
+                }
+            }
         } else {
             // 设置默认值，确保模板访问时不会出现 undefined 警告
             $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? RequestContext::locale();
+            // Do not clear WELINE_URL_PATH_LANG here: SEO rewrite re-parses the
+            // controller path (no locale segment) after Url::detectLanguage already
+            // captured the visitor-facing /en_US/… locale.
         }
         
         // 存储网站信息到上下文
@@ -5657,6 +5669,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private function parseUrlLangCurrency(string $uri): void
     {
+        // Always clear per-request so a previous fiber/request cannot leak a
+        // path locale into an unprefixed URL (or the opposite).
+        unset($_SERVER['WELINE_URL_PATH_LANG']);
+        try {
+            WelineEnv::removeServer('WELINE_URL_PATH_LANG');
+        } catch (\Throwable) {
+        }
+
         if (empty($uri) || $uri === '/') {
             return;
         }
@@ -5680,9 +5700,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
         if ($language !== '') {
             $_SERVER['WELINE_USER_LANG'] = $language;
+            $_SERVER['WELINE_URL_PATH_LANG'] = $language;
             RequestContext::locale($language);
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $language, 'WlsRuntime parseUrlLangCurrency');
+            WelineEnv::setServer('WELINE_URL_PATH_LANG', $language, 'WlsRuntime parseUrlLangCurrency');
         }
     }
     

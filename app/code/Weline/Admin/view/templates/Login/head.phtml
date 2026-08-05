@@ -5,8 +5,8 @@ $loginSiteName = (string)($this->getData('login_site_name') ?: 'Weline');
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 $themeModel = (string)$themeConfig->getThemeModel();
 $themeCssSuffix = $themeModel !== '' ? '-' . $themeModel : '';
-$currentLang = (string)\w_env('user.lang', 'zh_Hans_CN');
-$currentCurrency = (string)\w_env('user.currency', 'CNY');
+$currentLang = (string)(\Weline\Framework\App\State::getLang() ?: 'zh_Hans_CN');
+$currentCurrency = (string)(\Weline\Framework\App\State::getCurrency() ?: 'CNY');
 $defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
 $availableCurrencies = [];
 try {

@@ -6,6 +6,7 @@ namespace Weline\Dashboard\Service;
 
 use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\Dashboard\Model\DashboardView;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Layout\LayoutStatus;
@@ -15,12 +16,14 @@ use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 class DashboardViewService
 {
     public const DEFAULT_WEBSITE_ID = 0;
+    public const EVENT_LAYOUT_IDENTITY_READY = 'Weline_Dashboard::layout_identity_ready';
 
     public function __construct(
         private readonly DashboardView $dashboardView,
         private readonly BackendUserConfigStore $backendUserConfig,
         private readonly WebsiteCatalogInterface $websiteCatalog,
         private readonly LayoutWorkspaceInterface $layoutWorkspace,
+        private readonly ?EventsManager $eventsManager = null,
     ) {
     }
 
@@ -155,15 +158,27 @@ class DashboardViewService
         return $this->canView($view, $userId) ? $view : null;
     }
 
-    public function resolveActiveView(int $websiteId, int $viewId = 0, int $userId = 0): ?DashboardView
+    public function resolveActiveView(int $websiteId, int $viewId = 0, int $userId = 0, string $viewCode = ''): ?DashboardView
     {
         $websiteId = $this->normalizeWebsiteId($websiteId);
         $userId = $userId > 0 ? $userId : $this->getCurrentUserId();
+        $viewCode = trim($viewCode);
 
         if ($viewId > 0) {
             $view = $this->getViewForUser($viewId, $userId);
             if ($view && $view->getWebsiteId() === $websiteId) {
                 return $view;
+            }
+            // 切站后旧 view_id 归属不同站点：携带其 code 在目标站匹配同名视图。
+            if ($view && $viewCode === '') {
+                $viewCode = $view->getCode();
+            }
+        }
+
+        if ($viewCode !== '') {
+            $matched = $this->findVisibleViewByCode($websiteId, $viewCode, $userId);
+            if ($matched) {
+                return $matched;
             }
         }
 
@@ -280,8 +295,6 @@ class DashboardViewService
             }
         }
 
-        $this->ensureLayoutInitialized($view);
-
         $replaceLayout = !empty($options['replace_layout']);
         $hasLayout = $this->hasLayoutRows($view);
         $layoutResult = [
@@ -290,6 +303,7 @@ class DashboardViewService
             'seeded' => [],
         ];
 
+        // Seed/copy before version init so the first published snapshot is not an empty v1.
         if ($replaceLayout || !$hasLayout) {
             if ($layoutData !== []) {
                 $layoutResult = $this->seedLayout($view, $layoutData);
@@ -304,6 +318,18 @@ class DashboardViewService
                     ];
             }
         }
+
+        if (empty($layoutResult['success'])) {
+            return [
+                'success' => false,
+                'created' => $created,
+                'layout' => $layoutResult,
+                'view' => $this->viewToPayload($view, 0),
+                'identity' => $view->layoutIdentity(),
+            ];
+        }
+
+        $this->ensureLayoutInitialized($view);
 
         return [
             'success' => true,
@@ -366,14 +392,38 @@ class DashboardViewService
             return;
         }
 
+        $identity = $this->layoutIdentity($view);
         try {
             $this->layoutWorkspace->initializeVersionIfNeeded(
                 $themeId,
                 DashboardView::PAGE_TYPE,
                 null,
-                $this->layoutIdentity($view),
+                $identity,
             );
         } catch (\Throwable) {
+            return;
+        }
+
+        $this->dispatchLayoutIdentityReady($themeId, $view, $identity);
+    }
+
+    private function dispatchLayoutIdentityReady(int $themeId, DashboardView $view, LayoutIdentity $identity): void
+    {
+        try {
+            $eventsManager = $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
+            $payload = [
+                'theme_id' => $themeId,
+                'page_type' => DashboardView::PAGE_TYPE,
+                'view_code' => $view->getCode(),
+                'view_id' => $view->getViewId(),
+                'website_id' => $view->getWebsiteId(),
+                'component_area' => 'backend',
+                'identity' => $identity->toArray(),
+                'layout_identity' => $identity->toArray(),
+            ];
+            $eventsManager->dispatch(self::EVENT_LAYOUT_IDENTITY_READY, $payload);
+        } catch (\Throwable) {
+            // Default injection observers must not break dashboard rendering.
         }
     }
 
@@ -646,6 +696,47 @@ class DashboardViewService
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * 按 code 在指定站点查找当前用户可见的视图（含 system / public / 本人 private）。
+     */
+    private function findVisibleViewByCode(int $websiteId, string $code, int $userId): ?DashboardView
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        try {
+            $rows = $this->dashboardView->clearQuery()->clearData()
+                ->where(DashboardView::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(DashboardView::schema_fields_CODE, $code)
+                ->where(DashboardView::schema_fields_IS_ACTIVE, 1)
+                ->order(DashboardView::schema_fields_IS_DEFAULT, 'DESC')
+                ->order(DashboardView::schema_fields_VISIBILITY, 'ASC')
+                ->order(DashboardView::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!is_array($row) || !$this->rowIsVisibleTo($row, $userId)) {
+                continue;
+            }
+            $viewId = (int)($row[DashboardView::schema_fields_ID] ?? 0);
+            if ($viewId <= 0) {
+                continue;
+            }
+            $view = $this->loadView($viewId);
+            if ($view) {
+                return $view;
+            }
+        }
+
+        return null;
     }
 
     private function findSharedViewByCode(int $websiteId, string $code): ?DashboardView

@@ -7,6 +7,9 @@
         "php": "^8.4",
         "weline/framework": "@dev"
     },
+    "suggest": {
+        "weline/module-customer": "Provides the authenticated current-customer facade used for server-owned cart merge and customer cart access."
+    },
     "autoload": {
         "psr-4": {
             "Weline\\Cart\\": ""

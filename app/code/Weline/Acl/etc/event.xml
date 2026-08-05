@@ -14,6 +14,7 @@
         <observer name="Weline_Acl::setup_before_route_collection_clear_registry" instance="Weline\Acl\Observer\ClearCollectedAclRegistry" disabled="false" shared="true" sort="0"/>
     </event>
     <event name="Weline_Framework_Setup::after_route_collection">
+        <observer name="Weline_Acl::setup_after_route_collection_collect_catalog" instance="Weline\Acl\Observer\CollectFrameworkAuthorizationCatalog" disabled="false" shared="true" sort="-10"/>
         <observer name="Weline_Acl::setup_after_route_collection_acl_diff" instance="Weline\Acl\Observer\AfterRouteCollectionAclDiff" disabled="false" shared="true" sort="0"/>
     </event>
     <event name="Weline_Framework_Setup::cleanup_missing_module_acl_residues">
@@ -23,6 +24,7 @@
         <observer name="Weline_Acl::remove_acl_diff_begin_clear_registry" instance="Weline\Acl\Observer\ClearCollectedAclRegistry" disabled="false" shared="true" sort="0"/>
     </event>
     <event name="Weline_Framework_Module::remove_acl_diff_cleanup">
+        <observer name="Weline_Acl::remove_acl_diff_collect_catalog" instance="Weline\Acl\Observer\CollectFrameworkAuthorizationCatalog" disabled="false" shared="true" sort="-10"/>
         <observer name="Weline_Acl::remove_acl_diff_cleanup" instance="Weline\Acl\Observer\AfterRouteCollectionAclDiff" disabled="false" shared="true" sort="0"/>
     </event>
     <!-- 系统升级完成后为 role_id=1 授予当前 ACL 全部权限，避免升级后超管无权限 -->

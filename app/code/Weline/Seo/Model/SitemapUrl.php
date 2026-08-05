@@ -21,7 +21,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_module', columns: ['module'])]
 #[Index(name: 'idx_module_scope', columns: ['module', 'scope'])]
 #[Index(name: 'idx_status', columns: ['status'])]
-#[Index(name: 'idx_unique_url_key', columns: ['website_id', 'scope', 'module', 'url_key'], type: 'UNIQUE')]
+#[Index(name: 'idx_unique_url_key_locale', columns: ['website_id', 'scope', 'module', 'url_key', 'locale'], type: 'UNIQUE')]
 class SitemapUrl extends Model
 {
 
@@ -38,6 +38,8 @@ class SitemapUrl extends Model
     public const schema_fields_SCOPE = 'scope';
     #[Col('varchar', 191, nullable: true, comment: 'Provider URL 稳定唯一键')]
     public const schema_fields_URL_KEY = 'url_key';
+    #[Col('varchar', 32, nullable: false, default: '', comment: '语言代码，空值为 legacy/default 桶')]
+    public const schema_fields_LOCALE = 'locale';
     #[Col('varchar', 50, nullable: false, default: '', comment: '实体类型')]
     public const schema_fields_ENTITY_TYPE = 'entity_type';
     #[Col('int', 0, nullable: false, default: 0, comment: '实体ID')]
@@ -83,7 +85,7 @@ class SitemapUrl extends Model
      * 获取站点的所有活跃 URL（按模块分组）
      *
      * @param int $websiteId
-     * @return array ['module_scope' => [url1, url2, ...], ...]
+     * @return list<array{module:string,scope:string,locale:string,urls:list<array<string,mixed>>}>
      */
     public function getActiveUrlsByWebsiteGrouped(int $websiteId): array
     {
@@ -92,6 +94,7 @@ class SitemapUrl extends Model
             ->where(self::schema_fields_STATUS, 1)
             ->order(self::schema_fields_MODULE, 'ASC')
             ->order(self::schema_fields_SCOPE, 'ASC')
+            ->order(self::schema_fields_LOCALE, 'ASC')
             ->order(self::schema_fields_URL_KEY, 'ASC')
             ->order(self::schema_fields_ENTITY_TYPE, 'ASC')
             ->order(self::schema_fields_ENTITY_ID, 'ASC')
@@ -100,18 +103,22 @@ class SitemapUrl extends Model
 
         $grouped = [];
         foreach ($urls as $url) {
-            $module = $url[self::schema_fields_MODULE] ?? 'default';
-            $scope = $url[self::schema_fields_SCOPE] ?? '';
-            $key = $scope ? $module . '_' . $scope : $module;
-            
+            $module = (string)($url[self::schema_fields_MODULE] ?? 'default');
+            $scope = (string)($url[self::schema_fields_SCOPE] ?? '');
+            $locale = (string)($url[self::schema_fields_LOCALE] ?? '');
+            $key = hash('sha256', json_encode([$module, $scope, $locale], JSON_UNESCAPED_UNICODE));
             if (!isset($grouped[$key])) {
-                $grouped[$key] = [];
+                $grouped[$key] = [
+                    'module' => $module,
+                    'scope' => $scope,
+                    'locale' => $locale,
+                    'urls' => [],
+                ];
             }
-            
-            $grouped[$key][] = $url;
+            $grouped[$key]['urls'][] = $url;
         }
 
-        return $grouped;
+        return array_values($grouped);
     }
 
     /**
@@ -162,10 +169,11 @@ class SitemapUrl extends Model
                 $module = $url['module'] ?? '';
                 $scope = $url['scope'] ?? '';
                 $urlKey = $url['url_key'] ?? $url['key'] ?? '';
+                $locale = trim((string)($url['locale'] ?? ''));
                 $entityType = $url['entity_type'] ?? '';
                 $entityId = $url['entity_id'] ?? 0;
 
-                if (!$websiteId || !$module || !$urlKey) {
+                if ((int)$websiteId < 0 || !$module || !$urlKey) {
                     continue;
                 }
 
@@ -175,6 +183,7 @@ class SitemapUrl extends Model
                     ->where(self::schema_fields_SCOPE, $scope)
                     ->where(self::schema_fields_MODULE, $module)
                     ->where(self::schema_fields_URL_KEY, $urlKey)
+                    ->where(self::schema_fields_LOCALE, $locale)
                     ->find()
                     ->fetch();
 
@@ -182,6 +191,7 @@ class SitemapUrl extends Model
                     // 更新
                     $this->reset()->load($existing[self::schema_fields_ID]);
                     $this->setData(self::schema_fields_URL_KEY, $urlKey);
+                    $this->setData(self::schema_fields_LOCALE, $locale);
                     $this->setData(self::schema_fields_SCOPE, $scope);
                     $this->setData(self::schema_fields_ENTITY_TYPE, $entityType);
                     $this->setData(self::schema_fields_ENTITY_ID, $entityId);
@@ -189,7 +199,7 @@ class SitemapUrl extends Model
                     $this->setData(self::schema_fields_CHANGEFREQ, $url['changefreq'] ?? 'weekly');
                     $this->setData(self::schema_fields_PRIORITY, $url['priority'] ?? '0.5');
                     $this->setData(self::schema_fields_METADATA, $url['metadata'] ?? '');
-                    $this->setData(self::schema_fields_LASTMOD, $url['lastmod'] ?? date('Y-m-d H:i:s'));
+                    $this->setData(self::schema_fields_LASTMOD, $url['lastmod'] ?? null);
                     $this->setData(self::schema_fields_STATUS, $url['status'] ?? 1);
                     $this->save();
                 } else {
@@ -199,13 +209,14 @@ class SitemapUrl extends Model
                         self::schema_fields_MODULE => $module,
                         self::schema_fields_SCOPE => $scope,
                         self::schema_fields_URL_KEY => $urlKey,
+                        self::schema_fields_LOCALE => $locale,
                         self::schema_fields_ENTITY_TYPE => $entityType,
                         self::schema_fields_ENTITY_ID => $entityId,
                         self::schema_fields_URL => $url['url'] ?? '',
                         self::schema_fields_CHANGEFREQ => $url['changefreq'] ?? 'weekly',
                         self::schema_fields_PRIORITY => $url['priority'] ?? '0.5',
                         self::schema_fields_METADATA => $url['metadata'] ?? '',
-                        self::schema_fields_LASTMOD => $url['lastmod'] ?? date('Y-m-d H:i:s'),
+                        self::schema_fields_LASTMOD => $url['lastmod'] ?? null,
                         self::schema_fields_STATUS => $url['status'] ?? 1,
                     ])->save();
                 }
@@ -242,18 +253,24 @@ class SitemapUrl extends Model
                     'scope' => $scope,
                     'module' => $module,
                     'count' => 0,
+                    'locales' => [],
                 ];
             }
             $stats[$key]['count']++;
+            $locale = (string)($url[self::schema_fields_LOCALE] ?? '');
+            $stats[$key]['locales'][$locale === '' ? 'default' : $locale] = true;
         }
 
-        return array_values($stats);
+        return array_map(static function (array $row): array {
+            $row['locales'] = array_keys($row['locales']);
+            return $row;
+        }, array_values($stats));
     }
 
     /**
      * 删除站点的所有 URL
      *
-     * @param int $websiteId
+     * @param int|null $websiteId null 表示所有站点；0 只表示系统默认站点
      * @return bool
      */
     public function deleteByWebsite(int $websiteId): bool
@@ -275,11 +292,11 @@ class SitemapUrl extends Model
      * @param int $websiteId
      * @return bool
      */
-    public function deleteByModule(string $module, int $websiteId = 0): bool
+    public function deleteByModule(string $module, ?int $websiteId = null): bool
     {
         try {
             $this->reset()->where(self::schema_fields_MODULE, $module);
-            if ($websiteId > 0) {
+            if ($websiteId !== null) {
                 $this->where(self::schema_fields_WEBSITE_ID, $websiteId);
             }
             $this->delete();

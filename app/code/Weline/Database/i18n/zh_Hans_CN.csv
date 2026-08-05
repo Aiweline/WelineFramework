@@ -1,4 +1,6 @@
-﻿"迁移返回失败状态: %{1}","迁移返回失败状态: %{1}"
+﻿"operation_id 长度不能超过 64 字符","operation_id 长度不能超过 64 字符"
+"模块 %{1} 数据库版本游标 %{2} 高于目标代码版本 %{3}，已阻止继续升级","模块 %{1} 数据库版本游标 %{2} 高于目标代码版本 %{3}，已阻止继续升级"
+"迁移返回失败状态: %{1}","迁移返回失败状态: %{1}"
 "模块 %{1} 升级 %{2} -> %{3}，执行 %{4} 个迁移","模块 %{1} 升级 %{2} -> %{3}，执行 %{4} 个迁移"
 "迁移完成: 成功 %{1}，失败 %{2}","迁移完成: 成功 %{1}，失败 %{2}"
 "模块升级迁移失败: %{1}","模块升级迁移失败: %{1}"
@@ -17,6 +19,49 @@
 "结构删除类操作需要确认短语 I_UNDERSTAND_THE_RISK","结构删除类操作需要确认短语 I_UNDERSTAND_THE_RISK"
 "未知结构操作: %{1}","未知结构操作: %{1}"
 结构变更成功,结构变更成功
+"mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
+"类 phpMyAdmin 数据库管理入口","类 phpMyAdmin 数据库管理入口"
+数据库管理总览,数据库管理总览
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+数据库管理总览与操作入口,数据库管理总览与操作入口
+数据库只读浏览,数据库只读浏览
+"mdi mdi-database-search","mdi mdi-database-search"
+数据库元数据与行数据查看,数据库元数据与行数据查看
+查看数据表,查看数据表
+"mdi mdi-table","mdi mdi-table"
+查看指定数据库数据表列表,查看指定数据库数据表列表
+查看表结构,查看表结构
+"mdi mdi-table-search","mdi mdi-table-search"
+查看字段索引与建表语句,查看字段索引与建表语句
+查看表数据,查看表数据
+"mdi mdi-table-eye","mdi mdi-table-eye"
+按分页查看表数据,按分页查看表数据
+写入数据,写入数据
+"mdi mdi-content-save-edit","mdi mdi-content-save-edit"
+新增与更新数据行,新增与更新数据行
+删除数据,删除数据
+"mdi mdi-delete-alert-outline","mdi mdi-delete-alert-outline"
+删除表数据（高风险）,删除表数据（高风险）
+"导出 CSV","导出 CSV"
+"mdi mdi-file-delimited-outline","mdi mdi-file-delimited-outline"
+"导出当前表 CSV 数据","导出当前表 CSV 数据"
+"导入 CSV","导入 CSV"
+"mdi mdi-database-import-outline","mdi mdi-database-import-outline"
+"导入 CSV 到数据表","导入 CSV 到数据表"
+"执行 SQL 语句","执行 SQL 语句"
+"mdi mdi-play-network-outline","mdi mdi-play-network-outline"
+"受控执行 SQL（需写确认）","受控执行 SQL（需写确认）"
+"准备 SQL 文件导入","准备 SQL 文件导入"
+"mdi mdi-database-arrow-up-outline","mdi mdi-database-arrow-up-outline"
+"上传 SQL、生成备份并暂存导入任务","上传 SQL、生成备份并暂存导入任务"
+"下载 SQL 导入前备份","下载 SQL 导入前备份"
+"mdi mdi-download-lock-outline","mdi mdi-download-lock-outline"
+"下载 SQL 导入前生成的备份文件","下载 SQL 导入前生成的备份文件"
+"执行 SQL 文件导入","执行 SQL 文件导入"
+"在已下载备份后执行 SQL 文件导入","在已下载备份后执行 SQL 文件导入"
+结构管理,结构管理
+"mdi mdi-database-edit-outline","mdi mdi-database-edit-outline"
+字段索引视图结构管理,字段索引视图结构管理
 数据库,数据库
 当前数据表,当前数据表
 已选数据库,已选数据库
@@ -379,3 +424,4 @@
 数据库迁移备份恢复命令,数据库迁移备份恢复命令
 "备份记录 ID（恢复单条备份）","备份记录 ID（恢复单条备份）"
 "迁移记录 ID（恢复该迁移的所有备份）","迁移记录 ID（恢复该迁移的所有备份）"
+"""operation_id 长度不能超过 64 字符""","operation_id 长度不能超过 64 字符"

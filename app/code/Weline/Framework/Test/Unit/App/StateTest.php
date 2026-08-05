@@ -9,11 +9,12 @@
 
 namespace Weline\Framework\App\test;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class StateTest extends TestCore
 {
@@ -110,16 +111,30 @@ class StateTest extends TestCore
     public function testResolveLocalizationSkipsEmptyAndBusinessOnlyPaths(): void
     {
         self::assertSame(
-            ['currency' => '', 'language' => ''],
+            [
+                'currency' => '',
+                'language' => '',
+                'area_offset' => 0,
+                'consumed' => 0,
+                'remaining' => [],
+                'canonical' => [],
+            ],
             State::resolveLocalizationFromPathSegments([])
         );
         self::assertSame(
-            ['currency' => '', 'language' => ''],
+            [
+                'currency' => '',
+                'language' => '',
+                'area_offset' => 0,
+                'consumed' => 0,
+                'remaining' => ['catalog'],
+                'canonical' => ['catalog'],
+            ],
             State::resolveLocalizationFromPathSegments(['catalog'])
         );
     }
 
-    public function testResolveLocalizationFollowsAreaCurrencyLanguageOrder(): void
+    public function testResolveLocalizationSupportsSingleAndEitherDoublePrefixOrder(): void
     {
         $hadContext = Context::getCurrent() !== null;
         $snapshot = WelineEnv::getInstance()->capture();
@@ -132,14 +147,27 @@ class StateTest extends TestCore
                 'HTTP_HOST' => 'example.test',
             ]);
 
-            self::assertSame(
-                ['currency' => 'CNY', 'language' => 'zh_Hans_CN'],
-                State::resolveLocalizationFromPathSegments(['CNY', 'zh_Hans_CN'])
-            );
-            self::assertSame(
-                ['currency' => 'CNY', 'language' => 'zh_Hans_CN'],
-                State::resolveLocalizationFromPathSegments(['api', 'CNY', 'zh_Hans_CN'])
-            );
+            $cases = [
+                [['USD', 'catalog'], 'USD', '', 0, 1, ['catalog'], ['USD', 'catalog']],
+                [['en_US', 'catalog'], '', 'en_US', 0, 1, ['catalog'], ['en_US', 'catalog']],
+                [['USD', 'en_US', 'catalog'], 'USD', 'en_US', 0, 2, ['catalog'], ['USD', 'en_US', 'catalog']],
+                [['en_US', 'USD', 'catalog'], 'USD', 'en_US', 0, 2, ['catalog'], ['USD', 'en_US', 'catalog']],
+                [['api', 'en_US', 'USD', 'catalog'], 'USD', 'en_US', 1, 2, ['catalog'], ['api', 'USD', 'en_US', 'catalog']],
+            ];
+
+            foreach ($cases as [$segments, $currency, $language, $areaOffset, $consumed, $remaining, $canonical]) {
+                self::assertSame(
+                    [
+                        'currency' => $currency,
+                        'language' => $language,
+                        'area_offset' => $areaOffset,
+                        'consumed' => $consumed,
+                        'remaining' => $remaining,
+                        'canonical' => $canonical,
+                    ],
+                    State::resolveLocalizationFromPathSegments($segments)
+                );
+            }
         } finally {
             State::resetRequestPathLocalizationCache();
             if ($hadContext) {
@@ -147,6 +175,46 @@ class StateTest extends TestCore
             } else {
                 WelineEnv::getInstance()->reset();
             }
+        }
+    }
+
+    public function testResolveLocalizationDoesNotConsumeDuplicateTypes(): void
+    {
+        $duplicateCurrency = State::resolveLocalizationFromPathSegments(['CNY', 'USD', 'catalog']);
+        self::assertSame('CNY', $duplicateCurrency['currency']);
+        self::assertSame('', $duplicateCurrency['language']);
+        self::assertSame(1, $duplicateCurrency['consumed']);
+        self::assertSame(['USD', 'catalog'], $duplicateCurrency['remaining']);
+
+        $duplicateLanguage = State::resolveLocalizationFromPathSegments(['en_US', 'zh_Hans_CN', 'catalog']);
+        self::assertSame('', $duplicateLanguage['currency']);
+        self::assertSame('en_US', $duplicateLanguage['language']);
+        self::assertSame(1, $duplicateLanguage['consumed']);
+        self::assertSame(['zh_Hans_CN', 'catalog'], $duplicateLanguage['remaining']);
+    }
+
+    public function testResolveLocalizationPreservesExactRuntimeBackendKeyFirst(): void
+    {
+        $backendPrefix = (string)(Env::getAreaRoutePrefix('backend') ?? '');
+        self::assertNotSame('', $backendPrefix);
+
+        $resolved = State::resolveLocalizationFromPathSegments([
+            $backendPrefix,
+            'en_US',
+            'USD',
+            'admin',
+            'login',
+        ]);
+        self::assertSame(1, $resolved['area_offset']);
+        self::assertSame(['admin', 'login'], $resolved['remaining']);
+        self::assertSame([$backendPrefix, 'USD', 'en_US', 'admin', 'login'], $resolved['canonical']);
+
+        $wrongCase = strtolower($backendPrefix);
+        if ($wrongCase !== $backendPrefix) {
+            $notArea = State::resolveLocalizationFromPathSegments([$wrongCase, 'USD', 'en_US', 'admin', 'login']);
+            self::assertSame(0, $notArea['area_offset']);
+            self::assertSame(0, $notArea['consumed']);
+            self::assertSame([$wrongCase, 'USD', 'en_US', 'admin', 'login'], $notArea['remaining']);
         }
     }
 }

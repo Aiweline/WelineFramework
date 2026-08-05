@@ -9,33 +9,33 @@ use Weline\I18n\Helper\JsTranslationsExtractor;
 
 final class JsTranslationsExtractorTest extends TestCase
 {
-    public function testResolveModulePathSupportsCompiledFrontendStaticUrl(): void
+    public function testResolveModulePathSupportsCurrentFrontendStaticUrl(): void
     {
-        $path = JsTranslationsExtractor::resolveModulePath('/WeShop/Cart/view/statics/js/cart.js');
+        $path = JsTranslationsExtractor::resolveModulePath('/Weline/Frontend/view/statics/js/weline.js');
 
         self::assertIsString($path);
         self::assertStringEndsWith(
-            str_replace('/', DIRECTORY_SEPARATOR, 'app/code/WeShop/Cart/view/statics/js/cart.js'),
+            str_replace('/', DIRECTORY_SEPARATOR, 'app/code/Weline/Frontend/view/statics/js/weline.js'),
             $path
         );
     }
 
-    public function testExtractWordsFromResolvedCartModule(): void
+    public function testExtractWordsFromResolvedFrontendModule(): void
     {
-        $path = JsTranslationsExtractor::resolveModulePath('/WeShop/Cart/view/statics/js/cart.js');
+        $path = JsTranslationsExtractor::resolveModulePath('/Weline/Frontend/view/statics/js/weline.js');
         self::assertIsString($path);
 
         $words = JsTranslationsExtractor::extractWordsFromJsFile($path);
 
-        self::assertArrayHasKey('已加入购物车', $words);
-        self::assertArrayHasKey('添加购物车失败', $words);
+        self::assertArrayHasKey('模块 %{1} 加载失败：未找到 %{2}', $words);
+        self::assertArrayHasKey('购物车相关页面', $words);
     }
 
-    public function testExtractWordsFromDeclaredCartModule(): void
+    public function testExtractWordsFromDeclaredFrontendModule(): void
     {
-        $words = JsTranslationsExtractor::extractWordsFromModules(['cart'], 'frontend');
+        $words = JsTranslationsExtractor::extractWordsFromModules(['weline'], 'frontend');
 
-        self::assertArrayHasKey('已加入购物车', $words);
-        self::assertArrayHasKey('前端 API 模块加载失败，请刷新后重试', $words);
+        self::assertArrayHasKey('模块 %{1} 加载失败：未找到 %{2}', $words);
+        self::assertArrayHasKey('自动预加载模块', $words);
     }
 }

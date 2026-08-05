@@ -16,6 +16,10 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_website_channel_created', columns: ['website_id', 'channel_code', 'created_at'])]
 #[Index(name: 'idx_website_traffic_created', columns: ['website_id', 'traffic_type', 'created_at'])]
 #[Index(name: 'idx_website_utm_campaign', columns: ['website_id', 'utm_campaign'])]
+#[Index(name: 'idx_optimization_site_created', columns: ['website_id', 'attribution_version', 'created_at'])]
+#[Index(name: 'idx_optimization_block_created', columns: ['website_id', 'page_type', 'block_key', 'plan_revision', 'created_at'])]
+#[Index(name: 'idx_optimization_fingerprint_created', columns: ['website_id', 'content_fingerprint', 'created_at'])]
+#[Index(name: 'idx_optimization_experiment_created', columns: ['website_id', 'experiment_id', 'variant', 'created_at'])]
 class Pixel extends Model
 {
     public const schema_table = 'w_pixel';
@@ -68,6 +72,20 @@ class Pixel extends Model
     public const schema_fields_UTM_MEDIUM = 'utm_medium';
     #[Col('varchar', 255, comment: 'utm_campaign')]
     public const schema_fields_UTM_CAMPAIGN = 'utm_campaign';
+    #[Col('varchar', 32, nullable: false, default: '', comment: 'PageBuilder 优化归因版本')]
+    public const schema_fields_ATTRIBUTION_VERSION = 'attribution_version';
+    #[Col('varchar', 64, nullable: false, default: '', comment: 'PageBuilder 页面类型')]
+    public const schema_fields_PAGE_TYPE = 'page_type';
+    #[Col('varchar', 128, nullable: false, default: '', comment: 'PageBuilder Block Key')]
+    public const schema_fields_BLOCK_KEY = 'block_key';
+    #[Col('int', 0, nullable: false, default: 0, comment: 'PageBuilder plan revision')]
+    public const schema_fields_PLAN_REVISION = 'plan_revision';
+    #[Col('varchar', 64, nullable: false, default: '', comment: 'Block 内容指纹')]
+    public const schema_fields_CONTENT_FINGERPRINT = 'content_fingerprint';
+    #[Col('varchar', 96, nullable: false, default: '', comment: 'SEO 实验标识')]
+    public const schema_fields_EXPERIMENT_ID = 'experiment_id';
+    #[Col('varchar', 32, nullable: false, default: '', comment: 'SEO 实验变体')]
+    public const schema_fields_VARIANT = 'variant';
     /**
      * 获取未处理的像素记录
      * 

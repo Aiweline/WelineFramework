@@ -5,6 +5,11 @@
  * @var array $coupons
  * @var \Weline\Framework\Pagination\Pagination $pagination
  */
+$escapeHtml = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
 ?>
 <link rel="stylesheet" href="@static(Weline_Marketing::css/coupon-index.css)">
 <div class="row marketing-coupon-page">
@@ -28,12 +33,12 @@
     </div>
 </div>
 
-<div class="row marketing-coupon-page">
+<div class="row marketing-coupon-page" data-testid="marketing-coupon-management">
     <div class="col-12">
         <div class="marketing-coupon-card">
             <div class="marketing-coupon-card-header">
                 <h5 class="marketing-coupon-card-title"><lang>优惠券列表</lang></h5>
-                <a href="<?= $this->getUrl('marketing/backend/coupon/getAdd') ?>" class="marketing-coupon-add-btn">
+                <a href="<?= $this->getBackendUrl('marketing/backend/coupon/getAdd') ?>" class="marketing-coupon-add-btn" data-testid="marketing-coupon-create">
                     <i class="ri-add-line"></i><lang>添加优惠券</lang>
                 </a>
             </div>
@@ -74,12 +79,12 @@
                             ?>
                             <tr>
                                 <td><?= $coupon['id'] ?></td>
-                                <td><code class="marketing-coupon-code"><?= $this->escapeHtml($coupon['code']) ?></code></td>
-                                <td><?= $this->escapeHtml($coupon['type'] ?? '') ?></td>
-                                <td><?= $this->escapeHtml((string)($coupon['discount_value'] ?? '')) ?></td>
+                                <td><code class="marketing-coupon-code"><?= $escapeHtml($coupon['code']) ?></code></td>
+                                <td><?= $escapeHtml($coupon['type'] ?? '') ?></td>
+                                <td><?= $escapeHtml((string)($coupon['discount_value'] ?? '')) ?></td>
                                 <td>
                                     <span class="marketing-coupon-badge marketing-coupon-badge--<?= $statusClass ?>">
-                                        <?= $this->escapeHtml((string)$status) ?>
+                                        <?= $escapeHtml((string)$status) ?>
                                     </span>
                                 </td>
                                 <td><?= (int)($coupon['usage_count'] ?? 0) ?>/<?= ($coupon['usage_limit'] ?? 0) ? (int)$coupon['usage_limit'] : '∞' ?></td>

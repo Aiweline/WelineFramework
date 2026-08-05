@@ -9,7 +9,6 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
-use Weline\Server\Service\Edge\NginxEdgeAdapter;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\SslCertificateService;
 
@@ -312,6 +311,23 @@ class SslCertificateServiceTest extends TestCase
         ));
     }
 
+    public function testSniCertificateMapRejectsOverPermissivePrivateKeySource(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX mode bits do not represent the Windows certificate ACL.');
+        }
+        $pair = $this->createSniCertificatePair(
+            'private-mode.example.test',
+            ['private-mode.example.test'],
+            'private-mode',
+        );
+        self::assertTrue(\chmod($pair['local_pk'], 0644));
+
+        self::assertSame([], SslCertificateService::sanitizeSniCertificateMap([
+            'private-mode.example.test' => $pair,
+        ]));
+    }
+
     /** @return array{local_cert:string,local_pk:string} */
     private function createSniCertificatePair(
         string $commonName,
@@ -441,42 +457,6 @@ class SslCertificateServiceTest extends TestCase
         $this->assertArrayNotHasKey('example.test', $map);
     }
 
-    public function testCertificatePublicationOnlyRenewsReachableGatewayBackendMaster(): void
-    {
-        $server = \stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
-        self::assertIsResource($server, $errorMessage);
-        $address = (string)\stream_socket_get_name($server, false);
-        $separator = \strrpos($address, ':');
-        self::assertNotFalse($separator);
-        $port = (int)\substr($address, $separator + 1);
-        self::assertGreaterThan(0, $port);
-
-        $probe = new ReflectionMethod(NginxEdgeAdapter::class, 'gatewayBackendMasterReachable');
-        $probe->setAccessible(true);
-        $endpoint = [
-            'master_pid' => \getmypid(),
-            'control_host' => '127.0.0.1',
-            'control_port' => $port,
-            'gateway' => ['mode' => 'gateway'],
-        ];
-
-        self::assertTrue($probe->invoke(null, $endpoint));
-        \fclose($server);
-        self::assertFalse($probe->invoke(null, $endpoint));
-        self::assertFalse($probe->invoke(null, \array_replace($endpoint, ['control_port' => 0])));
-    }
-    public function testCertificatePublicationReloadsOnlyInstalledManagedNginx(): void
-    {
-        $gate = new ReflectionMethod(NginxEdgeAdapter::class, 'managedNginxCanReload');
-        $gate->setAccessible(true);
-
-        self::assertFalse($gate->invoke(null, false, false));
-        self::assertFalse($gate->invoke(null, false, true));
-        self::assertFalse($gate->invoke(null, true, false));
-        self::assertTrue($gate->invoke(null, true, true));
-    }
-
-
     public function testGatewayCertificateRootFenceRejectsAccessibleStaleHostPath(): void
     {
         $inside = $this->makeTempDir();
@@ -491,6 +471,58 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertTrue($insideRoots->invoke($service, [$insideFile], [$inside]));
         $this->assertFalse($insideRoots->invoke($service, [$outsideFile], [$inside]));
+        $filesystemRoot = \dirname((string)\realpath($inside));
+        while (\dirname($filesystemRoot) !== $filesystemRoot) {
+            $filesystemRoot = \dirname($filesystemRoot);
+        }
+        $this->assertFalse($insideRoots->invoke($service, [$insideFile], [$filesystemRoot]));
+    }
+
+    public function testGatewayCertificateRootFenceRejectsLinkedRootAlias(): void
+    {
+        $canonicalRoot = $this->makeTempDir();
+        $linkedParent = $this->makeTempDir();
+        $linkedRoot = $linkedParent . DIRECTORY_SEPARATOR . 'linked-certificates';
+        if (!@\symlink($canonicalRoot, $linkedRoot)) {
+            $this->markTestSkipped('The current platform cannot create a directory symlink.');
+        }
+        $certificate = $canonicalRoot . DIRECTORY_SEPARATOR . 'certificate.pem';
+        \file_put_contents($certificate, 'certificate');
+        $service = new SslCertificateService();
+        $insideRoots = new ReflectionMethod($service, 'certificatePathsInsideRoots');
+        $insideRoots->setAccessible(true);
+
+        $this->assertFalse($insideRoots->invoke($service, [$certificate], [$linkedRoot]));
+    }
+
+    public function testCertificatePemPairValidationChecksNameAndPrivateKey(): void
+    {
+        $fixture = $this->createLocalCaFixture('certificate.example.test');
+        $other = $this->createLocalCaFixture('other.example.test');
+        $validate = new ReflectionMethod(
+            SslCertificateService::class,
+            'certificatePemPairIsValidForName',
+        );
+        $validate->setAccessible(true);
+
+        $this->assertTrue($validate->invoke(
+            null,
+            $fixture['fullchain'],
+            $fixture['key'],
+            'certificate.example.test',
+        ));
+        $this->assertFalse($validate->invoke(
+            null,
+            $fixture['fullchain'],
+            $fixture['key'],
+            'uncovered.example.test',
+        ));
+        $this->assertFalse($validate->invoke(
+            null,
+            $fixture['fullchain'],
+            $other['key'],
+            'certificate.example.test',
+        ));
     }
 
     public function testExtractLocalCaPemFromCertificateBundleReturnsEmbeddedRootCertificate(): void
@@ -581,7 +613,7 @@ class SslCertificateServiceTest extends TestCase
     }
 
     /**
-     * @return array{ca:string, leaf:string, chain:string, fullchain:string}
+     * @return array{ca:string, leaf:string, key:string, chain:string, fullchain:string}
      */
     private function createLocalCaFixture(string $domain, array $ipSans = []): array
     {
@@ -647,16 +679,20 @@ class SslCertificateServiceTest extends TestCase
         \openssl_x509_export($leafCert, $leafPem);
         $this->assertNotSame('', $leafPem);
 
+        \openssl_pkey_export($leafKey, $leafKeyPem);
+        $this->assertNotSame('', $leafKeyPem);
+
         return [
             'ca' => $caPem,
             'leaf' => $leafPem,
+            'key' => $leafKeyPem,
             'chain' => \trim($caPem) . "\n",
             'fullchain' => \trim($leafPem) . "\n" . \trim($caPem) . "\n",
         ];
     }
 
     /**
-     * @return array{ca:string, leaf:string, chain:string, fullchain:string}
+     * @return array{ca:string, leaf:string, key:string, chain:string, fullchain:string}
      */
     private function createLocalCaSignedCertificateFixture(string $domain): array
     {
@@ -669,7 +705,7 @@ class SslCertificateServiceTest extends TestCase
         \file_put_contents($caPath, 'ca');
 
         $service = new class extends SslCertificateService {
-            /** @var list<string> */
+            /** @var list<list<string>> */
             public array $commands = [];
             public bool $installed = false;
 
@@ -681,6 +717,14 @@ class SslCertificateServiceTest extends TestCase
             protected function commandExists(string $command): bool
             {
                 return \in_array($command, ['sudo', 'openssl', 'update-ca-certificates'], true);
+            }
+
+            protected function resolveTrustExecutable(string $command): string
+            {
+                return match ($command) {
+                    'sudo' => '/usr/bin/sudo',
+                    default => '',
+                };
             }
 
             protected function isRootUser(): bool
@@ -704,21 +748,37 @@ class SslCertificateServiceTest extends TestCase
             {
                 return [
                     'dest' => '/usr/local/share/ca-certificates/weline-local-development-ca.crt',
-                    'refresh' => 'update-ca-certificates',
-                    'manual' => 'sudo /bin/sh -c install',
+                    'install_argv' => [
+                        '/usr/bin/install',
+                        '-m',
+                        '0644',
+                        $caCertPath,
+                        '/usr/local/share/ca-certificates/weline-local-development-ca.crt',
+                    ],
+                    'refresh_argv' => ['/usr/sbin/update-ca-certificates'],
+                    'manual' => 'sudo install -m 0644 certificate destination',
                 ];
             }
 
-            protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+            protected function runTrustCommand(
+                array $command,
+                ?int &$exitCode = null,
+                bool $inheritStdin = false,
+            ): string
             {
+                unset($inheritStdin);
                 $this->commands[] = $command;
-                $this->installed = \str_contains($command, 'update-ca-certificates');
+                $this->installed = \in_array(
+                    '/usr/sbin/update-ca-certificates',
+                    $command,
+                    true,
+                );
                 $exitCode = 0;
 
                 return '';
             }
 
-            protected function runInteractiveTrustCommand(string $command, ?int &$exitCode = null): string
+            protected function runInteractiveTrustCommand(array $command, ?int &$exitCode = null): string
             {
                 return $this->runTrustCommand($command, $exitCode);
             }
@@ -733,11 +793,16 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertTrue((bool)($result['trusted'] ?? false));
         $this->assertNotEmpty($service->commands);
-        $this->assertStringContainsString('sudo -p', $service->commands[0]);
-        $this->assertStringContainsString('[WLS] sudo password for CA trust: ', $service->commands[0]);
-        $this->assertStringContainsString('/bin/sh -c', $service->commands[0]);
-        $this->assertStringContainsString('update-ca-certificates', $service->commands[0]);
-        $this->assertStringContainsString('weline-local-development-ca.crt', $service->commands[0]);
+        $this->assertSame('/usr/bin/sudo', $service->commands[0][0]);
+        $this->assertContains('-p', $service->commands[0]);
+        $this->assertContains('[WLS] sudo password for CA trust: ', $service->commands[0]);
+        $this->assertNotContains('/bin/sh', $service->commands[0]);
+        $this->assertContains('/usr/bin/install', $service->commands[0]);
+        $this->assertContains('/usr/sbin/update-ca-certificates', $service->commands[1]);
+        $this->assertContains(
+            '/usr/local/share/ca-certificates/weline-local-development-ca.crt',
+            $service->commands[0],
+        );
     }
 
     public function testTrustLocalCertificateAuthorityOnLinuxUsesNonInteractiveSudoWithoutTty(): void
@@ -746,7 +811,7 @@ class SslCertificateServiceTest extends TestCase
         \file_put_contents($caPath, 'ca');
 
         $service = new class extends SslCertificateService {
-            /** @var list<string> */
+            /** @var list<list<string>> */
             public array $commands = [];
             public bool $installed = false;
 
@@ -758,6 +823,11 @@ class SslCertificateServiceTest extends TestCase
             protected function commandExists(string $command): bool
             {
                 return \in_array($command, ['sudo', 'openssl', 'update-ca-certificates'], true);
+            }
+
+            protected function resolveTrustExecutable(string $command): string
+            {
+                return $command === 'sudo' ? '/usr/bin/sudo' : '';
             }
 
             protected function isRootUser(): bool
@@ -781,15 +851,31 @@ class SslCertificateServiceTest extends TestCase
             {
                 return [
                     'dest' => '/usr/local/share/ca-certificates/weline-local-development-ca.crt',
-                    'refresh' => 'update-ca-certificates',
-                    'manual' => 'sudo /bin/sh -c install',
+                    'install_argv' => [
+                        '/usr/bin/install',
+                        '-m',
+                        '0644',
+                        $caCertPath,
+                        '/usr/local/share/ca-certificates/weline-local-development-ca.crt',
+                    ],
+                    'refresh_argv' => ['/usr/sbin/update-ca-certificates'],
+                    'manual' => 'sudo install -m 0644 certificate destination',
                 ];
             }
 
-            protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+            protected function runTrustCommand(
+                array $command,
+                ?int &$exitCode = null,
+                bool $inheritStdin = false,
+            ): string
             {
+                unset($inheritStdin);
                 $this->commands[] = $command;
-                $this->installed = \str_contains($command, 'update-ca-certificates');
+                $this->installed = \in_array(
+                    '/usr/sbin/update-ca-certificates',
+                    $command,
+                    true,
+                );
                 $exitCode = 0;
 
                 return '';
@@ -805,7 +891,9 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertTrue((bool)($result['trusted'] ?? false));
         $this->assertNotEmpty($service->commands);
-        $this->assertStringContainsString('sudo -n /bin/sh -c', $service->commands[0]);
+        $this->assertSame('/usr/bin/sudo', $service->commands[0][0]);
+        $this->assertContains('-n', $service->commands[0]);
+        $this->assertNotContains('/bin/sh', $service->commands[0]);
     }
 
     public function testTrustLocalCertificateAuthorityOnMacosUsesLoginKeychain(): void
@@ -814,7 +902,7 @@ class SslCertificateServiceTest extends TestCase
         \file_put_contents($caPath, 'ca');
 
         $service = new class extends SslCertificateService {
-            /** @var list<string> */
+            /** @var list<list<string>> */
             public array $commands = [];
             public bool $installed = false;
 
@@ -826,6 +914,11 @@ class SslCertificateServiceTest extends TestCase
             protected function commandExists(string $command): bool
             {
                 return $command === 'security';
+            }
+
+            protected function resolveTrustExecutable(string $command): string
+            {
+                return $command === 'security' ? '/usr/bin/security' : '';
             }
 
             protected function isLocalCertificateAuthorityTrustedOnMacos(string $caCertPath): bool
@@ -840,10 +933,15 @@ class SslCertificateServiceTest extends TestCase
                 return '/Users/unit/Library/Keychains/login.keychain-db';
             }
 
-            protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+            protected function runTrustCommand(
+                array $command,
+                ?int &$exitCode = null,
+                bool $inheritStdin = false,
+            ): string
             {
+                unset($inheritStdin);
                 $this->commands[] = $command;
-                $this->installed = \str_contains($command, 'add-trusted-cert');
+                $this->installed = \in_array('add-trusted-cert', $command, true);
                 $exitCode = 0;
 
                 return '';
@@ -859,9 +957,13 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertTrue((bool)($result['trusted'] ?? false));
         $this->assertNotEmpty($service->commands);
-        $this->assertStringContainsString('/usr/bin/security add-trusted-cert', $service->commands[0]);
-        $this->assertStringContainsString('-d', $service->commands[0]);
-        $this->assertStringContainsString('/Users/unit/Library/Keychains/login.keychain-db', $service->commands[0]);
+        $this->assertSame('/usr/bin/security', $service->commands[0][0]);
+        $this->assertContains('add-trusted-cert', $service->commands[0]);
+        $this->assertContains('-d', $service->commands[0]);
+        $this->assertContains(
+            '/Users/unit/Library/Keychains/login.keychain-db',
+            $service->commands[0],
+        );
     }
 
     public function testIsCertificateSelfSignedDistinguishesLocalCaRootAndLeaf(): void
@@ -966,9 +1068,11 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertTrue(\copy($matching['local_cert'], $certPath));
         $this->assertTrue(\copy($matching['local_pk'], $keyPath));
+        $this->assertTrue(\chmod($keyPath, 0600));
         $this->assertTrue($service->hasValidLocalCertificate($domain));
 
         $this->assertTrue(\copy($other['local_pk'], $keyPath));
+        $this->assertTrue(\chmod($keyPath, 0600));
         $this->assertFalse($service->hasValidLocalCertificate($domain), '必须拒绝与证书不配对的私钥');
 
         $this->assertTrue(\copy($other['local_cert'], $certPath));
@@ -976,6 +1080,7 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertTrue(\copy($conflictingSan['local_cert'], $certPath));
         $this->assertTrue(\copy($conflictingSan['local_pk'], $keyPath));
+        $this->assertTrue(\chmod($keyPath, 0600));
         $this->assertFalse(
             $service->hasValidLocalCertificate($domain),
             '证书存在 SAN 时不得以冲突 CN 绕过域名覆盖校验',
@@ -983,6 +1088,7 @@ class SslCertificateServiceTest extends TestCase
 
         $this->assertTrue(\copy($matching['local_cert'], $certPath));
         $this->assertTrue(\copy($matching['local_pk'], $keyPath));
+        $this->assertTrue(\chmod($keyPath, 0600));
         $this->assertTrue(
             $service->hasValidLocalCertificate($domain),
             '同路径原子续签后不得沿用旧证书解析或 SAN 匹配缓存',

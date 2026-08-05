@@ -34,81 +34,75 @@ final class SqliteCompiler extends AbstractCompiler
             return '';
         }
 
-        $identityStatements = [];
         $valueRows = [];
-        $normalInsertFields = [];
-        $hasIdentityInsert = false;
-        $hasNormalInsert = false;
+        $insertFields = [];
+        $hasGeneratedIdentity = false;
+        $hasExplicitIdentity = false;
 
         foreach ($allItems as $insertKey => $row) {
             $insertKey += 1;
-            if ($identityField && empty($row[$identityField])) {
+            $rowHasExplicitIdentity = $identityField !== '' && !empty($row[$identityField]);
+            if ($identityField !== '' && !$rowHasExplicitIdentity) {
                 unset($row[$identityField]);
-                $fields = array_keys($row);
-                $fieldsQuoted = array_map(fn(string $f): string => $this->dialect->quoteIdentifier($f), $fields);
-                $rowPlaceholders = [];
-                foreach ($row as $f => $v) {
-                    $pk = ':' . md5("insert_{$f}_field_{$insertKey}");
-                    $this->bindings[$pk] = $this->valueToBinding($v);
-                    $rowPlaceholders[] = $pk;
-                }
-                $identityStatements[] = 'INSERT INTO ' . $table . ' (' . implode(',', $fieldsQuoted) . ') VALUES (' . implode(', ', $rowPlaceholders) . ');';
-                $hasIdentityInsert = true;
-            } else {
-                $rowPlaceholders = [];
-                foreach ($row as $f => $v) {
-                    $pk = ':' . md5("insert_{$f}_field_{$insertKey}");
-                    $this->bindings[$pk] = $this->valueToBinding($v);
-                    $rowPlaceholders[] = $pk;
-                }
-                if ($normalInsertFields === []) {
-                    $normalInsertFields = array_keys($row);
-                }
-                $valueRows[] = '(' . implode(', ', $rowPlaceholders) . ')';
-                $hasNormalInsert = true;
+                $hasGeneratedIdentity = true;
+            } elseif ($identityField !== '') {
+                $hasExplicitIdentity = true;
             }
-        }
+            if ($hasGeneratedIdentity && $hasExplicitIdentity) {
+                throw new \Exception(__('插入的数据记录中不允许同时存在有主键和无主键的情况！'));
+            }
 
-        if ($hasIdentityInsert && $hasNormalInsert) {
-            throw new \Exception(__('插入的数据记录中不允许同时存在有主键和无主键的情况！'));
+            $rowFields = array_keys($row);
+            if ($insertFields === []) {
+                $insertFields = $rowFields;
+            } elseif ($rowFields !== $insertFields) {
+                throw new DbException(__('批量插入的数据字段必须保持一致。'));
+            }
+
+            $rowPlaceholders = [];
+            foreach ($insertFields as $field) {
+                $pk = ':' . md5("insert_{$field}_field_{$insertKey}");
+                $this->bindings[$pk] = $this->valueToBinding($row[$field]);
+                $rowPlaceholders[] = $pk;
+            }
+            $valueRows[] = '(' . implode(', ', $rowPlaceholders) . ')';
         }
 
         $values = implode(',', $valueRows);
-        $sql = implode(' ', $identityStatements);
+        if ($values === '') {
+            return '';
+        }
 
-        if ($values !== '') {
-            $insertFields = $normalInsertFields;
-            $insertFieldsQuoted = array_map(fn(string $f): string => $this->dialect->quoteIdentifier($f), $insertFields);
-            $sql .= 'INSERT INTO ' . $table . ' (' . implode(',', $insertFieldsQuoted) . ') VALUES ' . $values;
+        $insertFieldsQuoted = array_map(fn(string $field): string => $this->dialect->quoteIdentifier($field), $insertFields);
+        $sql = 'INSERT INTO ' . $table . ' (' . implode(',', $insertFieldsQuoted) . ') VALUES ' . $values;
 
-            // 仅当调用方显式设置 exist_update_sql 时才加 ON CONFLICT（SQLite 要求冲突列必须是 PRIMARY KEY 或 UNIQUE，不能为无约束列自动加）
-            if ($existUpdateSql !== '') {
-                $conflictFields = [];
-                foreach ($insertUpdateWhereFields as $f) {
-                    $f = trim((string)$f);
-                    if ($f !== '' && in_array($f, $insertFields, true)) {
-                        $conflictFields[] = $this->dialect->quoteIdentifier($f);
-                    }
+        // 仅当调用方显式设置 exist_update_sql 时才加 ON CONFLICT（SQLite 要求冲突列必须是 PRIMARY KEY 或 UNIQUE，不能为无约束列自动加）
+        if ($existUpdateSql !== '') {
+            $conflictFields = [];
+            foreach ($insertUpdateWhereFields as $field) {
+                $field = trim((string)$field);
+                if ($field !== '' && in_array($field, $insertFields, true)) {
+                    $conflictFields[] = $this->dialect->quoteIdentifier($field);
                 }
-                if ($conflictFields !== []) {
-                    if ($existUpdateSql === QueryInterface::EXIST_UPDATE_ALL_FIELDS) {
-                        $parts = [];
-                        foreach ($insertFields as $f) {
-                            if (in_array($f, $insertUpdateWhereFields, true) || ($identityField && $f === $identityField)) {
-                                continue;
-                            }
-                            $q = $this->dialect->quoteIdentifier($f);
-                            $parts[] = "{$q}=excluded.{$q}";
+            }
+            if ($conflictFields !== []) {
+                if ($existUpdateSql === QueryInterface::EXIST_UPDATE_ALL_FIELDS) {
+                    $parts = [];
+                    foreach ($insertFields as $field) {
+                        if (in_array($field, $insertUpdateWhereFields, true) || ($identityField && $field === $identityField)) {
+                            continue;
                         }
-                        $existUpdateSql = empty($parts) ? 'DO NOTHING' : 'DO UPDATE SET ' . implode(', ', $parts);
+                        $quotedField = $this->dialect->quoteIdentifier($field);
+                        $parts[] = "{$quotedField}=excluded.{$quotedField}";
                     }
-                    $sql .= ' ON CONFLICT (' . implode(', ', $conflictFields) . ') ' . $existUpdateSql;
+                    $existUpdateSql = empty($parts) ? 'DO NOTHING' : 'DO UPDATE SET ' . implode(', ', $parts);
                 }
+                $sql .= ' ON CONFLICT (' . implode(', ', $conflictFields) . ') ' . $existUpdateSql;
             }
+        }
 
-            if ($identityField) {
-                $sql .= ' RETURNING ' . $this->dialect->quoteIdentifier($identityField);
-            }
+        if ($identityField) {
+            $sql .= ' RETURNING ' . $this->dialect->quoteIdentifier($identityField);
         }
 
         return $sql;

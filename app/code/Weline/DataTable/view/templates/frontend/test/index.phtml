@@ -14,7 +14,7 @@
 <?= $worker_bootstrap ?? '' ?>
 
 <div class="dt-demo-shell" data-demo-page="<?= $page_key ?>">
-    <section class="dt-demo-hero">
+    <section class="dt-demo-hero" weline-code="datatable.test.section_1">
         <div>
             <h1><?= $page_title ?></h1>
             <p>Frontend-safe DataTable demos backed by explicit whitelist-only REST routes.</p>
@@ -26,7 +26,7 @@
         <div id="demo-status" class="dt-demo-status" data-testid="demo-status"></div>
     </section>
 
-    <section class="dt-demo-grid">
+    <section class="dt-demo-grid" weline-code="datatable.test.section_2">
         <a class="dt-demo-card" data-testid="demo-link-basic" href="<?= $demo_links['basic'] ?>">
             <h3>Basic</h3><p>CRUD, filter, sort, pagination, export.</p>
         </a>

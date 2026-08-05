@@ -407,7 +407,90 @@ final class StatusCommandTest extends TestCase
         self::assertSame('-k https://127.0.0.1:9981', $status->target($info));
     }
 
-    public function testGatewayFallbackStatusSeparatesWildcardBindFromConcreteUrls(): void
+    public function testGatewayStatusRequiresExactWholeServingManifestFence(): void
+    {
+        $status = new Status();
+        $method = new \ReflectionMethod($status, 'hasExactServingManifestFence');
+        $digest = \str_repeat('a', 64);
+        $endpoint = [
+            'gateway' => [
+                'serving_manifest_generation' => 17,
+                'serving_manifest_digest' => $digest,
+                'runtime_project_proof' => [
+                    'serving_manifest_generation' => 17,
+                    'serving_manifest_digest' => $digest,
+                ],
+            ],
+        ];
+
+        self::assertTrue($method->invoke($status, $endpoint));
+        self::assertFalse($method->invoke($status, [
+            'gateway' => [
+                ...$endpoint['gateway'],
+                'serving_manifest_generation' => 18,
+            ],
+        ]));
+        self::assertFalse($method->invoke($status, [
+            'gateway' => [
+                ...$endpoint['gateway'],
+                'runtime_project_proof' => [],
+            ],
+        ]));
+    }
+
+    public function testGatewayRouteCoverageAllowsOnlyExactOrOneLabelWildcardHost(): void
+    {
+        $method = new \ReflectionMethod(Status::class, 'gatewayRouteSetCoversHost');
+
+        self::assertTrue($method->invoke(null, [
+            'shop.example.test' => true,
+        ], 'shop.example.test'));
+        self::assertTrue($method->invoke(null, [
+            '*.example.test' => true,
+        ], 'shop.example.test'));
+        self::assertFalse($method->invoke(null, [
+            '*.example.test' => true,
+        ], 'example.test'));
+        self::assertFalse($method->invoke(null, [
+            '*.example.test' => true,
+        ], 'deep.shop.example.test'));
+        self::assertFalse($method->invoke(null, [
+            '*.other.test' => true,
+        ], 'shop.example.test'));
+    }
+
+    public function testStandalonePureWlsOriginWithoutLiveLeaseIsNotPublic(): void
+    {
+        $method = new \ReflectionMethod(
+            Status::class,
+            'resolveStandalonePureWlsPublicEndpoint',
+        );
+
+        self::assertNull($method->invoke(new Status(), [
+            'edge_adapter' => 'wls',
+            'public_origin' => 'https://shop.example.test:29613',
+            'port' => 29613,
+            'ssl_enabled' => true,
+            'gateway' => [
+                'requested_mode' => 'wls',
+            ],
+        ]));
+    }
+
+    public function testPureWlsHttpDiagnosticAuthorityAcceptsCanonicalLoopbackHosts(): void
+    {
+        $method = new \ReflectionMethod(
+            \Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection::class,
+            'canonicalOriginAuthorityHost',
+        );
+
+        self::assertSame('127.0.0.1', $method->invoke(null, '127.0.0.1'));
+        self::assertSame('::1', $method->invoke(null, '[0:0:0:0:0:0:0:1]'));
+        self::assertSame('localhost', $method->invoke(null, 'LOCALHOST'));
+        self::assertNull($method->invoke(null, 'bad..host'));
+    }
+
+    public function testGatewayFallbackStatusRejectsUnprovenServiceMetadata(): void
     {
         $status = new class extends Status {
             public function fallback(ServerInstanceInfo $info, array $gatewayRuntime = []): ?array
@@ -435,14 +518,7 @@ final class StatusCommandTest extends TestCase
             ),
         ]);
 
-        $fallback = $status->fallback($info);
-
-        self::assertIsArray($fallback);
-        self::assertSame('[::]:24570', $fallback['bind'] ?? null);
-        self::assertSame(
-            ['https://shop.example.test:24570'],
-            $fallback['urls'] ?? null,
-        );
+        self::assertNull($status->fallback($info));
 
         $startupFallback = $status->fallback(
             $this->createInstanceInfo('startup', []),
@@ -453,11 +529,7 @@ final class StatusCommandTest extends TestCase
                 'fallback_urls' => ['https://startup.example.test:24571'],
             ],
         );
-        self::assertSame('0.0.0.0:24571', $startupFallback['bind'] ?? null);
-        self::assertSame(
-            ['https://startup.example.test:24571'],
-            $startupFallback['urls'] ?? null,
-        );
+        self::assertNull($startupFallback);
 
         $stoppedFallback = $status->fallback(
             $this->createInstanceInfo('stopped', [
@@ -507,8 +579,7 @@ final class StatusCommandTest extends TestCase
             'fallback_bind' => '127.0.0.1:26439',
             'fallback_urls' => ['https://shop.example.test:26439'],
         ]);
-        self::assertSame('native_edge', $draining['kind'] ?? null);
-        self::assertSame('NATIVE_EDGE_DRAINING', $draining['state'] ?? null);
+        self::assertNull($draining);
     }
 
     public function testMasterRuntimeStateFallsBackToManagedPidWhenIpcIsUnavailable(): void

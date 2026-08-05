@@ -1006,13 +1006,14 @@ class Dictionary extends BaseController
         $word = $this->request->getPost('word');
         $localeCode = $this->request->getPost('locale_code');
         
-        if (!$word || !$localeCode || $translate === null) {
+        if ($word === null || !$localeCode || $translate === null) {
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('参数不完整')
             ]);
         }
         try {
+            $word = WordDictionary::assertWord($word);
             if ($md5) {
                 // 有 md5，使用 md5 查找现有记录
                 $this->localeDictionary->load($md5);
@@ -1227,6 +1228,11 @@ class Dictionary extends BaseController
             
             $defaultLanguageCode = Env::default_LANGUAGE_CODE;
             $words = $this->normalizeCollectedWords($this->i18n->getLocalWords($defaultLanguageCode));
+            $validatedWords = [];
+            foreach ($words as $word => $translate) {
+                $validatedWords[WordDictionary::assertWord($word)] = $translate;
+            }
+            $words = $validatedWords;
             $wordCountBefore = (int)$this->dictionary->reset()->count();
             $defaultLocaleCountBefore = (int)$this->localeDictionary->reset()
                 ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
@@ -1624,6 +1630,7 @@ class Dictionary extends BaseController
      */
     private function updateBaseDictionaryViewData($word, $translate, $localeCode)
     {
+        $word = WordDictionary::assertWord($word);
         try {
             // 查找基础词典表中的记录
             $baseRecord = $this->dictionary->reset()

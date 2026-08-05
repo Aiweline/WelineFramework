@@ -57,11 +57,36 @@ Token无效,"Token is invalid"
 该用户尚未分配角色，请先分配角色,"This user has not been assigned a role yet. Please assign a role first"
 权限分配成功！,"Permission assignment succeeded!"
 权限分配失败：%{1},"Permission assignment failed: %{1}"
+API用户管理,API用户管理
+"fa fa-users","fa fa-users"
+管理API用户,"Manage API Users"
+API用户列表,API用户列表
+"fa fa-list","fa fa-list"
+添加API用户,添加API用户
+"fa fa-plus","fa fa-plus"
+编辑API用户,"Edit API user"
+"fa fa-edit","fa fa-edit"
+添加API用户请求,添加API用户请求
+"fa fa-save","fa fa-save"
+编辑API用户请求,编辑API用户请求
+删除API用户,删除API用户
+"fa fa-trash","fa fa-trash"
+启用API用户,启用API用户
+"fa fa-check","fa fa-check"
+禁用API用户,禁用API用户
+"fa fa-ban","fa fa-ban"
+重新生成API凭证,"Regenerate API credentials"
+"fa fa-refresh","fa fa-refresh"
+API用户权限分配,"API user permission assignment"
+"fa fa-key","fa fa-key"
+API用户权限分配请求,API用户权限分配请求
 仅支持POST请求,"Only POST requests are supported"
 配置保存成功！,"Configuration saved successfully!"
 没有需要保存的配置,"No configuration to save"
 保存失败：%{1},"Save failed: %{1}"
 查看API接入管理失败：{1},"View API access management failure: {1}"
+API接入管理,API接入管理
+查看API接入管理,查看API接入管理
 API模块配置,"API module configuration"
 配置API令牌刷新周期等参数,"Configure API token refresh cycle and other parameters"
 令牌刷新配置,"Token refresh configuration"
@@ -89,7 +114,6 @@ API用户,"API users"
 "日常的 API 管理入口","Daily API management entry"
 沙盒密钥,"Sandbox key"
 新建API用户,"Create API User"
-管理API用户,"Manage API Users"
 打开API文档,"Open API documentation"
 沙盒调试,"Sandbox debugging"
 集成提示,"Integration Tips"
@@ -108,7 +132,6 @@ API用户需分配角色方可访问接口,"API users need to be assigned roles 
 禁用,Disable
 正式,Official
 暂无API用户，立即创建第一个吧。,"No API Users, Create the First One Now."
-API用户权限分配,"API user permission assignment"
 API,API
 编辑用户,"Edit User"
 权限分配,"Permission assignment"
@@ -134,10 +157,8 @@ API,API
 "API Key用于标识API用户","API Key is used to identify API users"
 "API Secret","API Secret"
 "API Secret已加密存储，无法查看。如需重新生成，请点击""重新生成凭证""按钮。","The API Secret is stored encrypted and cannot be viewed. If you need to regenerate, please click the ""Regenerate Credentials"" button."
-重新生成API凭证,"Regenerate API credentials"
 "重新生成后，旧的API Key和Secret将失效，所有相关令牌将被删除。","After regeneration, the old API Key and Secret will become invalid, and all related tokens will be deleted."
 取消,Cancel
-编辑API用户,"Edit API user"
 新增API用户,"Add API User"
 编辑,Edit
 新增,Add
@@ -161,6 +182,11 @@ API,API
 "Token 不能为空","Token 不能为空"
 "Token 不存在或已失效","Token 不存在或已失效"
 "Token 已撤销","Token 已撤销"
+创建第三方应用,创建第三方应用
+edit,edit
+查看应用授权范围,查看应用授权范围
+read,read
+批准应用授权,批准应用授权
 用户未登录,"User not logged in"
 测试成功,"Test Passed"
 测试数量不能为负数,"Test count cannot be negative"

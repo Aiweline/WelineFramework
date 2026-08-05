@@ -1385,7 +1385,7 @@ class Taglib
                             
                             // 检查是否有 else 标签（支持多种格式）
                             $else_pattern = '/<(?:w:)?else\s*\/?>/i';
-                            $has_else = preg_match($else_pattern, $content, $else_matches, PREG_OFFSET_CAPTURE);
+                            $has_else = preg_match($else_pattern, $content, $else_matches, PREG_OFFSET_CAPTURE) === 1;
                             
                             if ($has_else && isset($else_matches[0]) && is_array($else_matches[0]) && isset($else_matches[0][1])) {
                                 // 分割内容：else 之前是 hook 名称，之后是 else 内容
@@ -1473,6 +1473,7 @@ class Taglib
                             
                             // 如果 hook 存在且有实现文件，返回 hook 调用代码
                             if ($hook_exists && $hook_has_files) {
+                                $hook_comment = '';
                                 // 在开发环境下，检查 hook 是否有规约
                                 if (defined('DEV') && DEV) {
                                     try {
@@ -1558,11 +1559,26 @@ class Taglib
                                             $hook_comment .= "  Hover 展开: 检查 CSS 中是否有 .header-{$hook_name}:hover 或相关 hover 样式\n";
                                             $hook_comment .= "-->\n";
                                             
-                                            return $hook_comment . self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
+                                            if (!$has_else) {
+                                                return $hook_comment . self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
+                                            }
                                         }
                                     } catch (\Throwable $e) {
                                         // 如果获取文件列表失败，继续执行但不添加注释
                                     }
+                                }
+
+                                // 有实现文件且声明了 <else/>：运行时 opt-in fallback（structured HookResult；非 debug 触发）
+                                if ($has_else) {
+                                    return $hook_comment
+                                        . self::PHP_OPEN_TAG
+                                        . 'php $__w_hr=$this->getHookResult(\'' . $hook_name . '\', false, true);'
+                                        . ' if($__w_hr->shouldUseFallback()): '
+                                        . self::PHP_CLOSE_TAG
+                                        . $else_content
+                                        . self::PHP_OPEN_TAG
+                                        . 'php else: echo $__w_hr->html; endif; '
+                                        . self::PHP_CLOSE_TAG;
                                 }
                                 
                                 return self::PHP_OPEN_TAG . '=$this->getHook(\'' . $hook_name . '\')' . self::PHP_CLOSE_TAG;
@@ -1937,6 +1953,8 @@ class Taglib
                 'tag-self-close-with-attrs' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
+                        // 防止非预期 tag_key 分支未赋值就 return：避免 Undefined variable warning。
+                        $result = '';
                         switch ($tag_key) {
                             //<block>Vendor\Module\Block\Demo|template=Vendor_Module::block/demo.phtml|cache=300</block>
                             case 'tag':
@@ -4001,10 +4019,19 @@ class Taglib
             : [$this->buildRuntimeRawTag($tagName, $rawAttributes, $content, $tagKey), $rawAttributes, $content];
 
         if (isset($config['runtime_callback']) && \is_callable($config['runtime_callback'])) {
-            return $config['runtime_callback']($template, $tagKey, $attributes, $content, $tagData);
+            $result = $config['runtime_callback']($template, $tagKey, $attributes, $content, $tagData);
+            // 保证严格返回类型为 string：运行期标签回调偶发返回 null 会导致 500 TypeError。
+            if ($result === null) {
+                return '';
+            }
+            return \is_string($result) ? $result : (string)$result;
         }
 
-        return $config['callback']($tagKey, $config, $tagData, $attributes);
+        $result = $config['callback']($tagKey, $config, $tagData, $attributes);
+        if ($result === null) {
+            return '';
+        }
+        return \is_string($result) ? $result : (string)$result;
     }
 
     private function enrichTagConfigWithSource(array $config, string $fileName, int $line = 0): array

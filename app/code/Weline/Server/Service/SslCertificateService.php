@@ -21,7 +21,10 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Server\Api\Tls\AcmeDnsTxtPollPolicyProviderInterface;
 use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\Edge\Gateway\GatewayAcmeChallengePublisher;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
+use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 
 /**
  * SSL 证书管理服务
@@ -75,6 +78,14 @@ class SslCertificateService
     protected const GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS = 15.0;
     protected const GATEWAY_ACME_PUBLISH_INITIAL_RETRY_MICROSECONDS = 250_000;
     protected const GATEWAY_ACME_PUBLISH_MAX_RETRY_MICROSECONDS = 4_000_000;
+    private const MAX_CERTIFICATE_MATERIAL_BYTES = 1_048_576;
+    private const MAX_CERTIFICATE_SOURCE_DIRECTORIES = 1024;
+    private const MAX_CERTIFICATE_DIRECTORY_ENTRIES = 32;
+    private const MAX_INSTANCE_JSON_FILES = 512;
+    private const MAX_TRUST_COMMAND_OUTPUT_BYTES = 262_144;
+    private const MAX_TRUST_COMMAND_TIMEOUT_MS = 30_000;
+    private const MAX_ACME_HTTP_HEADER_BYTES = 65_536;
+    private const MAX_ACME_HTTP_RESPONSE_BYTES = 4_194_304;
     
     /**
      * LiteSSL ACME 目录（Sectigo DV）
@@ -182,7 +193,12 @@ class SslCertificateService
     
     public function __construct(bool $deferCertificateStorage = false)
     {
-        $this->certBaseDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS;
+        $etcDirectory = \realpath(\dirname(Env::path_ENV_FILE));
+        if (!\is_string($etcDirectory) || $etcDirectory === '') {
+            throw new \RuntimeException('Unable to resolve the project certificate parent directory.');
+        }
+        $this->certBaseDir = \rtrim($etcDirectory, '/\\') . DS . 'ssl' . DS;
+        $this->ensureCertificateBaseDirectory();
         $this->accountKeyPath = $this->certBaseDir . 'account.key';
         $this->updateAcmeDirectory();
         if (!$deferCertificateStorage) {
@@ -190,10 +206,385 @@ class SslCertificateService
             $this->ensureCertificateStorageReady();
         }
         
-        // 确保目录存在
-        if (!\is_dir($this->certBaseDir)) {
-            @\mkdir($this->certBaseDir, 0755, true);
+    }
+
+    private static function sameFilesystemPath(string $left, string $right): bool
+    {
+        $normalize = static function (string $path): string {
+            $path = \rtrim(\str_replace('\\', '/', $path), '/');
+            return \PHP_OS_FAMILY === 'Windows' ? \strtolower($path) : $path;
+        };
+
+        return \hash_equals($normalize($left), $normalize($right));
+    }
+
+    private static function filesystemPathIsRoot(string $path): bool
+    {
+        $path = \str_replace('\\', '/', \trim($path));
+        if (\preg_match('#\A/+\z#D', $path) === 1) {
+            return true;
         }
+        $path = \rtrim($path, '/');
+        return \preg_match('/\A[A-Za-z]:\z/D', $path) === 1
+            || \preg_match('#\A//(?![?.](?:/|\z))[^/]+(?:/[^/]+)?\z#D', $path) === 1
+            || \preg_match('#\A//[?.]/[A-Za-z]:\z#Di', $path) === 1
+            || \preg_match('#\A//[?.]/UNC(?:/[^/]+(?:/[^/]+)?)?\z#Di', $path) === 1
+            || \preg_match(
+                '#\A//[?.]/Volume\{[0-9A-Fa-f-]+\}\z#Di',
+                $path,
+            ) === 1;
+    }
+
+    private static function regularFileIdentityMatches(array $left, array $right): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'size', 'mtime', 'ctime'] as $field) {
+            if ((int)($left[$field] ?? -1) !== (int)($right[$field] ?? -2)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function ensureCertificateBaseDirectory(): string
+    {
+        $base = \rtrim($this->certBaseDir, '/\\');
+        if ($base === '' || \str_contains($base, "\0")) {
+            throw new \RuntimeException('Project certificate directory path is unsafe.');
+        }
+        $status = @\lstat($base);
+        if (!\is_array($status)) {
+            if (\file_exists($base) || \is_link($base)) {
+                throw new \RuntimeException('Project certificate directory is indeterminate.');
+            }
+            if (!@\mkdir($base, 0700, false)) {
+                throw new \RuntimeException('Unable to create the project certificate directory.');
+            }
+            $status = @\lstat($base);
+        }
+        $real = \realpath($base);
+        if (!\is_array($status)
+            || (((int)($status['mode'] ?? 0)) & 0170000) !== 0040000
+            || \is_link($base)
+            || !\is_string($real)
+            || !self::sameFilesystemPath($base, $real)
+        ) {
+            throw new \RuntimeException(
+                'Project certificate directory must be a canonical no-follow directory.',
+            );
+        }
+        $this->certBaseDir = \rtrim($real, '/\\') . DS;
+        return $this->certBaseDir;
+    }
+
+    private function certificateDirectoryForSegment(string $segment, bool $create): ?string
+    {
+        if ($segment === ''
+            || \strlen($segment) > 255
+            || \str_contains($segment, "\0")
+            || \str_contains($segment, '/')
+            || \str_contains($segment, '\\')
+            || $segment === '.'
+            || $segment === '..'
+        ) {
+            throw new \RuntimeException('Certificate storage segment is unsafe.');
+        }
+        $base = $this->ensureCertificateBaseDirectory();
+        $path = \rtrim($base, '/\\') . DS . $segment;
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException('Certificate domain directory is indeterminate.');
+            }
+            if (!$create) {
+                return null;
+            }
+            if (!@\mkdir($path, 0700, false)) {
+                throw new \RuntimeException('Unable to create the certificate domain directory.');
+            }
+            $status = @\lstat($path);
+        }
+        $real = \realpath($path);
+        if (!\is_array($status)
+            || (((int)($status['mode'] ?? 0)) & 0170000) !== 0040000
+            || \is_link($path)
+            || !\is_string($real)
+            || !self::sameFilesystemPath($path, $real)
+            || !\str_starts_with(
+                \PHP_OS_FAMILY === 'Windows' ? \strtolower($real . DS) : $real . DS,
+                \PHP_OS_FAMILY === 'Windows' ? \strtolower($base) : $base,
+            )
+        ) {
+            throw new \RuntimeException(
+                'Certificate domain directory must be canonical and inside app/etc/ssl.',
+            );
+        }
+        return \rtrim($real, '/\\') . DS;
+    }
+
+    /** @return list<string> */
+    private function boundedDirectoryEntries(string $directory, int $maximum, string $label): array
+    {
+        if ($maximum < 1 || $maximum > self::MAX_CERTIFICATE_SOURCE_DIRECTORIES) {
+            throw new \InvalidArgumentException('Certificate directory bound is invalid.');
+        }
+        $status = @\lstat(\rtrim($directory, '/\\'));
+        if (!\is_array($status)
+            || (((int)($status['mode'] ?? 0)) & 0170000) !== 0040000
+            || \is_link(\rtrim($directory, '/\\'))
+        ) {
+            throw new \RuntimeException($label . ' is not a safe directory.');
+        }
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to enumerate ' . $label . '.');
+        }
+        $entries = [];
+        try {
+            while (($entry = \readdir($handle)) !== false) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                if (\count($entries) >= $maximum) {
+                    throw new \RuntimeException($label . ' exceeds its bounded entry limit.');
+                }
+                $entries[] = $entry;
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        $after = @\lstat(\rtrim($directory, '/\\'));
+        if (!\is_array($after)
+            || (int)($status['dev'] ?? -1) !== (int)($after['dev'] ?? -2)
+            || (int)($status['ino'] ?? -1) !== (int)($after['ino'] ?? -2)
+        ) {
+            throw new \RuntimeException($label . ' changed while it was enumerated.');
+        }
+        \sort($entries, SORT_STRING);
+        return $entries;
+    }
+
+    private static function readRegularFileNoFollow(
+        string $path,
+        int $maximumBytes = self::MAX_CERTIFICATE_MATERIAL_BYTES,
+        bool $allowEmpty = false,
+        bool $private = false,
+    ): ?string {
+        if ($path === ''
+            || \str_contains($path, "\0")
+            || $maximumBytes < 1
+            || \is_link($path)
+        ) {
+            return null;
+        }
+        $real = \realpath($path);
+        $before = @\lstat($path);
+        if (!\is_string($real)
+            || !\is_array($before)
+            || !self::sameFilesystemPath($path, $real)
+            || (((int)($before['mode'] ?? 0)) & 0170000) !== 0100000
+            || (int)($before['nlink'] ?? 0) !== 1
+            || (int)($before['size'] ?? -1) < ($allowEmpty ? 0 : 1)
+            || (int)($before['size'] ?? -1) > $maximumBytes
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && $private
+                && (((int)($before['mode'] ?? 0)) & 0077) !== 0)
+        ) {
+            return null;
+        }
+        $handle = @\fopen($real, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened) || !self::regularFileIdentityMatches($before, $opened)) {
+                return null;
+            }
+            $contents = @\stream_get_contents($handle, $maximumBytes + 1);
+            $after = @\fstat($handle);
+        } finally {
+            @\fclose($handle);
+        }
+        $latest = @\lstat($real);
+        if (!\is_string($contents)
+            || \strlen($contents) > $maximumBytes
+            || (!$allowEmpty && $contents === '')
+            || !\is_array($after)
+            || !\is_array($latest)
+            || !self::regularFileIdentityMatches($opened, $after)
+            || !self::regularFileIdentityMatches($after, $latest)
+            || (int)($latest['size'] ?? -1) !== \strlen($contents)
+        ) {
+            return null;
+        }
+        return $contents;
+    }
+
+    private static function readPrivateKeyFileNoFollow(string $path): ?string
+    {
+        return self::readRegularFileNoFollow(
+            $path,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            false,
+            true,
+        );
+    }
+
+    private function writeCertificateFileAtomically(
+        string $path,
+        string $contents,
+        int $mode,
+    ): void {
+        if ($contents === '' || \strlen($contents) > self::MAX_CERTIFICATE_MATERIAL_BYTES) {
+            throw new \RuntimeException('Certificate material content is empty or oversized.');
+        }
+        $base = $this->ensureCertificateBaseDirectory();
+        $parent = \dirname($path);
+        $parentReal = \realpath($parent);
+        if (!\is_string($parentReal)
+            || !self::sameFilesystemPath($parent, $parentReal)
+            || (!self::sameFilesystemPath(\rtrim($parentReal, '/\\'), \rtrim($base, '/\\'))
+                && !\str_starts_with(
+                    \PHP_OS_FAMILY === 'Windows'
+                        ? \strtolower(\rtrim($parentReal, '/\\') . DS)
+                        : \rtrim($parentReal, '/\\') . DS,
+                    \PHP_OS_FAMILY === 'Windows' ? \strtolower($base) : $base,
+                ))
+        ) {
+            throw new \RuntimeException('Certificate material target is outside app/etc/ssl.');
+        }
+        GatewayProjectStateFilesystem::atomicWrite($path, $contents, $mode);
+    }
+
+    private function writeLocalCaStateAtomically(
+        string $path,
+        string $contents,
+        int $mode,
+    ): void {
+        if ($contents === ''
+            || \strlen($contents) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \str_contains($path, "\0")
+        ) {
+            throw new \RuntimeException('Local CA state content or path is invalid.');
+        }
+        $parent = \dirname($path);
+        $parentReal = \realpath($parent);
+        $parentStatus = @\lstat($parent);
+        if (!\is_string($parentReal)
+            || !\is_array($parentStatus)
+            || \is_link($parent)
+            || ((((int)($parentStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+            || !self::sameFilesystemPath($parent, $parentReal)
+            || self::filesystemPathIsRoot($parentReal)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && ((((int)$parentStatus['mode']) & 0077) !== 0)
+            )
+        ) {
+            throw new \RuntimeException('Local CA state directory is unsafe.');
+        }
+        $allowed = [];
+        foreach ([
+            $this->getLocalCaDir(),
+            $this->getGlobalLocalCaDir(false),
+        ] as $directory) {
+            $real = $directory !== '' ? \realpath($directory) : false;
+            if (\is_string($real)) {
+                $allowed[] = $real;
+            }
+        }
+        $authorized = false;
+        foreach ($allowed as $directory) {
+            if (self::sameFilesystemPath($parentReal, $directory)) {
+                $authorized = true;
+                break;
+            }
+        }
+        if (!$authorized) {
+            throw new \RuntimeException('Local CA state target is outside an authorized directory.');
+        }
+        GatewayProjectStateFilesystem::atomicWrite($path, $contents, $mode);
+    }
+
+    private function removeCertificateLeafSafely(
+        string $directory,
+        string $leaf,
+        ?array $expectedDirectoryStatus = null,
+    ): bool {
+        if ($leaf === ''
+            || \str_contains($leaf, "\0")
+            || \str_contains($leaf, '/')
+            || \str_contains($leaf, '\\')
+            || $leaf === '.'
+            || $leaf === '..'
+        ) {
+            throw new \RuntimeException('Certificate leaf name is unsafe.');
+        }
+        $directory = \rtrim($directory, '/\\');
+        $directoryBefore = @\lstat($directory);
+        $directoryReal = \realpath($directory);
+        if (!\is_array($directoryBefore)
+            || (((int)($directoryBefore['mode'] ?? 0)) & 0170000) !== 0040000
+            || \is_link($directory)
+            || !\is_string($directoryReal)
+            || !self::sameFilesystemPath($directory, $directoryReal)
+            || (\is_array($expectedDirectoryStatus)
+                && ((int)($expectedDirectoryStatus['dev'] ?? -1)
+                        !== (int)($directoryBefore['dev'] ?? -2)
+                    || (int)($expectedDirectoryStatus['ino'] ?? -1)
+                        !== (int)($directoryBefore['ino'] ?? -2)))
+        ) {
+            throw new \RuntimeException('Certificate directory changed before leaf removal.');
+        }
+        $path = $directory . DS . $leaf;
+        $leafStatus = @\lstat($path);
+        if (!\is_array($leafStatus)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException('Certificate leaf is indeterminate.');
+            }
+            return false;
+        }
+        $type = ((int)($leafStatus['mode'] ?? 0)) & 0170000;
+        if ($type !== 0100000 && $type !== 0120000) {
+            throw new \RuntimeException('Certificate leaf is not a regular file or link.');
+        }
+        if ($type === 0100000 && (int)($leafStatus['nlink'] ?? 0) !== 1) {
+            throw new \RuntimeException('Hard-linked certificate leaves cannot be removed.');
+        }
+        if (!@\unlink($path)) {
+            throw new \RuntimeException('Unable to remove certificate leaf safely.');
+        }
+        $directoryAfter = @\lstat($directory);
+        if (!\is_array($directoryAfter)
+            || (int)($directoryBefore['dev'] ?? -1) !== (int)($directoryAfter['dev'] ?? -2)
+            || (int)($directoryBefore['ino'] ?? -1) !== (int)($directoryAfter['ino'] ?? -2)
+        ) {
+            throw new \RuntimeException('Certificate directory changed during leaf removal.');
+        }
+        return true;
+    }
+
+    /** @return list<string> */
+    private function boundedJsonFiles(string $directory, string $label): array
+    {
+        if (!\is_dir($directory)) {
+            return [];
+        }
+        $files = [];
+        foreach ($this->boundedDirectoryEntries(
+            $directory,
+            self::MAX_INSTANCE_JSON_FILES,
+            $label,
+        ) as $entry) {
+            if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.json\z/D', $entry) !== 1) {
+                continue;
+            }
+            $path = \rtrim($directory, '/\\') . DS . $entry;
+            if (self::readRegularFileNoFollow($path) === null) {
+                throw new \RuntimeException($label . ' contains an unsafe JSON file.');
+            }
+            $files[] = $path;
+        }
+        return $files;
     }
 
     protected function certificateModel(): SslCertificate
@@ -261,10 +652,10 @@ class SslCertificateService
     ): bool {
         return $certificatePath !== ''
             && $keyPath !== ''
-            && \is_file($certificatePath)
-            && \is_file($keyPath)
+            && self::readRegularFileNoFollow($certificatePath) !== null
+            && self::readPrivateKeyFileNoFollow($keyPath) !== null
             && self::sniCertificateCoversName($certificatePath, $name)
-            && self::sniCertificateMatchesPrivateKey($certificatePath, $keyPath);
+            && self::sniCertificateMatchesPrivateKey($certificatePath, $keyPath, $name);
     }
 
     public static function sniHostnameMatchesPattern(string $hostname, string $pattern): bool
@@ -325,10 +716,10 @@ class SslCertificateService
         static $cache = [];
 
         $realPath = \realpath($certificatePath);
-        if ($realPath === false || !\is_file($realPath)) {
+        $pem = self::readRegularFileNoFollow($certificatePath);
+        if (!\is_string($realPath) || $pem === null) {
             return [];
         }
-        $pem = (string)@\file_get_contents($realPath);
         if ($pem === '' || !\preg_match('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $pem, $match)) {
             return [];
         }
@@ -366,20 +757,163 @@ class SslCertificateService
         return $cache[$cacheKey] = \array_values(\array_unique($names));
     }
 
-    private static function sniCertificateMatchesPrivateKey(string $certificatePath, string $keyPath): bool
-    {
-        $certificatePem = (string)@\file_get_contents($certificatePath);
-        $privateKeyPem = (string)@\file_get_contents($keyPath);
-        if ($certificatePem === '' || $privateKeyPem === '') {
+    private static function sniCertificateMatchesPrivateKey(
+        string $certificatePath,
+        string $keyPath,
+        string $name,
+    ): bool {
+        $certificatePem = self::readRegularFileNoFollow($certificatePath);
+        $privateKeyPem = self::readPrivateKeyFileNoFollow($keyPath);
+        if ($certificatePem === null || $privateKeyPem === null) {
             return false;
         }
-        $certificate = @\openssl_x509_read($certificatePem);
+        return self::certificatePemPairIsValidForName(
+            $certificatePem,
+            $privateKeyPem,
+            $name,
+        );
+    }
+
+    private static function certificatePemPairIsValidForName(
+        string $certificatePem,
+        string $privateKeyPem,
+        string $name,
+    ): bool {
+        if (\strlen($certificatePem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($privateKeyPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || !self::certificateBundlePemIsValid($certificatePem, false)
+        ) {
+            return false;
+        }
+        if (!\preg_match(
+            '/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s',
+            $certificatePem,
+            $leafMatch,
+        )) {
+            return false;
+        }
+        $leafPem = (string)$leafMatch[0];
+        $certificate = @\openssl_x509_read($leafPem);
         $privateKey = @\openssl_pkey_get_private($privateKeyPem);
         if ($certificate === false || $privateKey === false) {
             return false;
         }
+        if (!@\openssl_x509_check_private_key($certificate, $privateKey)) {
+            return false;
+        }
+        if ($name === '') {
+            return true;
+        }
+        $parsed = @\openssl_x509_parse($certificate, false);
+        $now = \time();
+        if (!\is_array($parsed)
+            || (int)($parsed['validFrom_time_t'] ?? PHP_INT_MAX) > $now
+            || (int)($parsed['validTo_time_t'] ?? 0) <= $now
+        ) {
+            return false;
+        }
+        $requestedIp = \filter_var($name, FILTER_VALIDATE_IP) !== false
+            ? @\inet_pton($name)
+            : false;
+        $requestedDns = $requestedIp === false ? self::normalizeSniName($name, true) : '';
+        if ($requestedIp === false && $requestedDns === '') {
+            return false;
+        }
+        $subjectAltName = \trim((string)($parsed['extensions']['subjectAltName'] ?? ''));
+        if ($subjectAltName !== '') {
+            foreach (\preg_split('/,\s*/', $subjectAltName) ?: [] as $entry) {
+                if ($requestedIp !== false
+                    && \preg_match('/\AIP(?: Address)?:\s*(.+)\z/i', $entry, $match) === 1
+                ) {
+                    $candidate = @\inet_pton(\trim((string)$match[1]));
+                    if (\is_string($candidate) && \hash_equals($requestedIp, $candidate)) {
+                        return true;
+                    }
+                    continue;
+                }
+                if ($requestedDns === '' || !\str_starts_with(\strtoupper($entry), 'DNS:')) {
+                    continue;
+                }
+                $pattern = self::normalizeSniName(\substr($entry, 4), true);
+                if ($pattern === '') {
+                    continue;
+                }
+                if (\str_starts_with($requestedDns, '*.')) {
+                    if (\hash_equals($requestedDns, $pattern)) {
+                        return true;
+                    }
+                } elseif (self::sniHostnameMatchesPattern($requestedDns, $pattern)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if ($requestedDns === '') {
+            return false;
+        }
+        $commonName = $parsed['subject']['CN'] ?? '';
+        $pattern = \is_string($commonName) ? self::normalizeSniName($commonName, true) : '';
+        if ($pattern === '') {
+            return false;
+        }
+        return \str_starts_with($requestedDns, '*.')
+            ? \hash_equals($requestedDns, $pattern)
+            : self::sniHostnameMatchesPattern($requestedDns, $pattern);
+    }
 
-        return @\openssl_x509_check_private_key($certificate, $privateKey);
+    private static function certificateBundlePemIsValid(
+        string $certificatePem,
+        bool $allowEmpty,
+    ): bool {
+        if ($certificatePem === '') {
+            return $allowEmpty;
+        }
+        if (\strlen($certificatePem) > self::MAX_CERTIFICATE_MATERIAL_BYTES) {
+            return false;
+        }
+        $pattern = '/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s';
+        $count = \preg_match_all($pattern, $certificatePem, $matches);
+        if (!\is_int($count) || $count < 1 || $count > 16) {
+            return false;
+        }
+        $residual = \preg_replace($pattern, '', $certificatePem);
+        if (!\is_string($residual) || \trim($residual) !== '') {
+            return false;
+        }
+        foreach ((array)($matches[0] ?? []) as $pem) {
+            if (!\is_string($pem) || @\openssl_x509_read($pem) === false) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static function certificateBundleFileIsValid(
+        string $path,
+        bool $allowEmpty = false,
+    ): bool {
+        $pem = self::readRegularFileNoFollow(
+            $path,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            $allowEmpty,
+        );
+        return $pem !== null && self::certificateBundlePemIsValid($pem, $allowEmpty);
+    }
+
+    private static function certificateFilePairIsValidForName(
+        string $certificatePath,
+        string $privateKeyPath,
+        string $name,
+    ): bool {
+        $certificatePem = self::readRegularFileNoFollow($certificatePath);
+        $privateKeyPem = self::readPrivateKeyFileNoFollow($privateKeyPath);
+        return $certificatePem !== null
+            && $privateKeyPem !== null
+            && self::certificatePemPairIsValidForName(
+                $certificatePem,
+                $privateKeyPem,
+                $name,
+            );
     }
 
     private static function normalizeSniName(string $name, bool $allowWildcard): string
@@ -770,8 +1304,12 @@ class SslCertificateService
      */
     public function applyWildcardToSubdomainIfExists(string $domain, int $websiteId = 0): ?array
     {
-        $domain = \strtolower(\trim($domain));
-        if ($domain === '' || \str_starts_with($domain, '*.')) {
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (\str_starts_with($domain, '*.')) {
             return null;
         }
 
@@ -796,7 +1334,12 @@ class SslCertificateService
 
         $certPem  = $wildcardCert->getCertPem();
         $keyPem   = $wildcardCert->getKeyPem();
-        if ($certPem === '' || $keyPem === '') {
+        if ($certPem === ''
+            || $keyPem === ''
+            || \strlen($certPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($keyPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || !self::certificatePemPairIsValidForName($certPem, $keyPem, $domain)
+        ) {
             return null;
         }
 
@@ -843,11 +1386,19 @@ class SslCertificateService
             $subCert->setWebsiteId($websiteId);
         }
 
-        $subCert->save();
-
-        $this->restoreCertificateFilesFromData($subCert->getData());
+        $stagedData = $subCert->getData();
+        $stagedData[SslCertificate::schema_fields_ID] = 0;
+        if (!$this->restoreCertificateFilesFromData($stagedData)) {
+            return null;
+        }
 
         $certDir = $this->getCertificateDir($domain);
+        $subCert->setCertPath($certDir . 'fullchain.pem')
+            ->setKeyPath($certDir . 'privkey.pem')
+            ->setChainPath(\trim((string)$subCert->getChainPem()) !== ''
+                ? $certDir . 'chain.pem'
+                : '')
+            ->save();
         w_log_info(__(
             '[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请',
             [$domain, $rootDomain]
@@ -960,8 +1511,8 @@ class SslCertificateService
         $keyPath = $certDir . 'privkey.pem';
 
         if ($this->shouldUseTrustedLocalCertificateAuthority($domain)
-            && \is_file($certPath)
-            && \is_file($keyPath)
+            && self::readRegularFileNoFollow($certPath) !== null
+            && self::readPrivateKeyFileNoFollow($keyPath) !== null
             && !$this->prepareExistingLocalCaCertificateForReuse($certPath)) {
             $localCaResult = $this->generateLocalCaSignedCertificate($domain, $websiteId);
             if ($localCaResult['success'] ?? false) {
@@ -1024,9 +1575,11 @@ class SslCertificateService
             return false;
         }
         
-        // 检查是否过期（提前 7 天视为无效，需续签）
+        // 检查尚未生效或已进入续签窗口的证书。
+        $now = \time();
+        $validFrom = (int)($cert['validFrom_time_t'] ?? PHP_INT_MAX);
         $expiresAt = $cert['validTo_time_t'] ?? 0;
-        return $expiresAt > (\time() + 7 * 24 * 3600);
+        return $validFrom <= $now && $expiresAt > ($now + 7 * 24 * 3600);
     }
 
     /**
@@ -1040,7 +1593,7 @@ class SslCertificateService
     public function canReuseConfiguredCertificate(string $certPath, string $keyPath = ''): bool
     {
         $certPath = \trim($certPath);
-        if ($certPath === '' || !\is_file($certPath)) {
+        if ($certPath === '' || self::readRegularFileNoFollow($certPath) === null) {
             return false;
         }
 
@@ -1053,12 +1606,12 @@ class SslCertificateService
         }
 
         $keyPath = \trim($keyPath);
-        if ($keyPath === '' || !\is_file($keyPath)) {
+        if ($keyPath === '') {
             return false;
         }
 
-        $privateKeyPem = @\file_get_contents($keyPath);
-        if ($privateKeyPem === false || $privateKeyPem === '') {
+        $privateKeyPem = self::readPrivateKeyFileNoFollow($keyPath);
+        if ($privateKeyPem === null) {
             return false;
         }
 
@@ -1067,8 +1620,8 @@ class SslCertificateService
             return false;
         }
 
-        $certPem = @\file_get_contents($certPath);
-        if ($certPem === false || $certPem === '') {
+        $certPem = self::readRegularFileNoFollow($certPath);
+        if ($certPem === null) {
             return false;
         }
 
@@ -1126,7 +1679,11 @@ class SslCertificateService
         }
         $certPath = $cert->getCertPath();
         $keyPath = $cert->getKeyPath();
-        if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
+        if ($certPath === ''
+            || $keyPath === ''
+            || self::readRegularFileNoFollow($certPath) === null
+            || self::readPrivateKeyFileNoFollow($keyPath) === null
+        ) {
             return false;
         }
         if (!$this->certificateMatchesHost($certPath, $hostname)) {
@@ -1188,8 +1745,15 @@ class SslCertificateService
             ];
             
             foreach ($possiblePaths as $path) {
-                if ($path && \is_file($path)) {
-                    $config['config'] = $path;
+                $path = \is_string($path) ? \trim($path) : '';
+                if ($path !== ''
+                    && self::readRegularFileNoFollow(
+                        $path,
+                        self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                        true,
+                    ) !== null
+                ) {
+                    $config['config'] = (string)\realpath($path);
                     break;
                 }
             }
@@ -1197,7 +1761,12 @@ class SslCertificateService
             // 如果找不到配置文件，创建一个最小配置
             if (!isset($config['config'])) {
                 $tempConfig = $this->certBaseDir . 'openssl.cnf';
-                if (!\is_file($tempConfig)) {
+                if (self::readRegularFileNoFollow(
+                    $tempConfig,
+                    self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                    false,
+                    true,
+                ) === null) {
                     $minimalConfig = <<<'CNF'
 [ req ]
 default_bits = 2048
@@ -1214,9 +1783,19 @@ authorityKeyIdentifier = keyid:always,issuer
 basicConstraints = critical, CA:true
 keyUsage = critical, digitalSignature, cRLSign, keyCertSign
 CNF;
-                    @\file_put_contents($tempConfig, $minimalConfig);
+                    try {
+                        $this->writeCertificateFileAtomically($tempConfig, $minimalConfig, 0600);
+                    } catch (\Throwable) {
+                        // The caller will continue without an explicit config
+                        // and OpenSSL will report its own bounded error.
+                    }
                 }
-                if (\is_file($tempConfig)) {
+                if (self::readRegularFileNoFollow(
+                    $tempConfig,
+                    self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                    false,
+                    true,
+                ) !== null) {
                     $config['config'] = $tempConfig;
                 }
             }
@@ -1241,8 +1820,22 @@ CNF;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0700, true);
         }
-
-        return $dir;
+        $trimmed = \rtrim($dir, '/\\');
+        $status = @\lstat($trimmed);
+        $real = \realpath($trimmed);
+        if (!\is_array($status)
+            || \is_link($trimmed)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            || !\is_string($real)
+            || !self::sameFilesystemPath($trimmed, $real)
+            || self::filesystemPathIsRoot($real)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && (!@\chmod($real, 0700)
+                    || (((int)(@\fileperms($real) ?: 0)) & 0777) !== 0700))
+        ) {
+            throw new \RuntimeException('Project local CA directory is unsafe.');
+        }
+        return \rtrim($real, '/\\') . DS;
     }
 
     protected function getLocalCaCertPath(): string
@@ -1288,8 +1881,25 @@ CNF;
         if ($create && !\is_dir($dir)) {
             @\mkdir($dir, 0700, true);
         }
-
-        return \is_dir($dir) || !$create ? $dir : '';
+        if (!\is_dir($dir)) {
+            return $create ? '' : $dir;
+        }
+        $trimmed = \rtrim($dir, '/\\');
+        $status = @\lstat($trimmed);
+        $real = \realpath($trimmed);
+        if (!\is_array($status)
+            || \is_link($trimmed)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+            || !\is_string($real)
+            || !self::sameFilesystemPath($trimmed, $real)
+            || self::filesystemPathIsRoot($real)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && (!@\chmod($real, 0700)
+                    || (((int)(@\fileperms($real) ?: 0)) & 0777) !== 0700))
+        ) {
+            return '';
+        }
+        return \rtrim($real, '/\\') . DS;
     }
 
     protected function resolveUserStateBaseDir(): string
@@ -1311,9 +1921,20 @@ CNF;
         }
 
         foreach ($candidates as $candidate) {
-            $candidate = \trim($candidate);
-            if ($candidate !== '' && \is_dir($candidate)) {
-                return $candidate;
+            $candidate = \rtrim(\trim($candidate), '/\\');
+            if ($candidate === '' || \str_contains($candidate, "\0")) {
+                continue;
+            }
+            $status = @\lstat($candidate);
+            $real = \realpath($candidate);
+            if (\is_array($status)
+                && ((((int)($status['mode'] ?? 0)) & 0170000) === 0040000)
+                && !\is_link($candidate)
+                && \is_string($real)
+                && self::sameFilesystemPath($candidate, $real)
+                && !self::filesystemPathIsRoot($real)
+            ) {
+                return $real;
             }
         }
 
@@ -1343,8 +1964,8 @@ CNF;
 
     protected function canUseLocalCertificateAuthorityPair(string $certPath, string $keyPath): bool
     {
-        return \is_file($certPath)
-            && \is_file($keyPath)
+        return self::readRegularFileNoFollow($certPath) !== null
+            && self::readPrivateKeyFileNoFollow($keyPath) !== null
             && $this->isCertificateValid($certPath)
             && $this->isCertificateSelfSigned($certPath)
             && $this->isCertificateAuthority($certPath)
@@ -1363,7 +1984,10 @@ CNF;
     {
         $localCertPath = $this->getLocalCaCertPath();
         $globalCertPath = $this->getGlobalLocalCaCertPath();
-        if ($globalCertPath === '' || !\is_file($localCertPath) || !\is_file($globalCertPath)) {
+        if ($globalCertPath === ''
+            || self::readRegularFileNoFollow($localCertPath) === null
+            || self::readRegularFileNoFollow($globalCertPath) === null
+        ) {
             return false;
         }
 
@@ -1386,19 +2010,29 @@ CNF;
             return $this->certificateFilesHaveSameFingerprint($certPath, $globalCertPath);
         }
 
-        if (@\copy($certPath, $globalCertPath) === false || @\copy($keyPath, $globalKeyPath) === false) {
+        $certPem = self::readRegularFileNoFollow($certPath);
+        $keyPem = self::readPrivateKeyFileNoFollow($keyPath);
+        try {
+            if ($certPem === null || $keyPem === null) {
+                throw new \RuntimeException('Local CA source changed before global publication.');
+            }
+            $this->writeLocalCaStateAtomically($globalCertPath, $certPem, 0644);
+            $this->writeLocalCaStateAtomically($globalKeyPath, $keyPem, 0600);
+        } catch (\Throwable) {
             w_log_warning(__('[SslCertificateService] Failed to persist reusable global local CA files to %{1}', [\dirname($globalCertPath)]), [], 'ssl_cert');
             return false;
         }
 
         $localSerialPath = $this->getLocalCaSerialPath();
         $globalSerialPath = $this->getGlobalLocalCaSerialPath();
-        if ($globalSerialPath !== '' && \is_file($localSerialPath)) {
-            @\copy($localSerialPath, $globalSerialPath);
+        $serial = self::readRegularFileNoFollow($localSerialPath, 64, true, true);
+        if ($globalSerialPath !== '' && \is_string($serial) && $serial !== '') {
+            try {
+                $this->writeLocalCaStateAtomically($globalSerialPath, $serial, 0600);
+            } catch (\Throwable) {
+                return false;
+            }
         }
-
-        @\chmod($globalCertPath, 0644);
-        @\chmod($globalKeyPath, 0600);
         w_log_info(__('[SslCertificateService] Local CA is now reusable across projects from %{1}', [\dirname($globalCertPath)]));
 
         return true;
@@ -1418,18 +2052,34 @@ CNF;
 
         $certPath = $this->getLocalCaCertPath();
         $keyPath = $this->getLocalCaKeyPath();
-        if (@\copy($globalCertPath, $certPath) === false || @\copy($globalKeyPath, $keyPath) === false) {
+        $certPem = self::readRegularFileNoFollow($globalCertPath);
+        $keyPem = self::readPrivateKeyFileNoFollow($globalKeyPath);
+        try {
+            if ($certPem === null || $keyPem === null) {
+                throw new \RuntimeException('Global local CA source changed before restore.');
+            }
+            $this->writeLocalCaStateAtomically($certPath, $certPem, 0644);
+            $this->writeLocalCaStateAtomically($keyPath, $keyPem, 0600);
+        } catch (\Throwable) {
             w_log_warning(__('[SslCertificateService] Failed to restore project local CA files from global reusable CA'), [], 'ssl_cert');
             return null;
         }
 
         $globalSerialPath = $this->getGlobalLocalCaSerialPath();
-        if ($globalSerialPath !== '' && \is_file($globalSerialPath)) {
-            @\copy($globalSerialPath, $this->getLocalCaSerialPath());
+        $serial = $globalSerialPath !== ''
+            ? self::readRegularFileNoFollow($globalSerialPath, 64, true, true)
+            : null;
+        if (\is_string($serial) && $serial !== '') {
+            try {
+                $this->writeLocalCaStateAtomically(
+                    $this->getLocalCaSerialPath(),
+                    $serial,
+                    0600,
+                );
+            } catch (\Throwable) {
+                return null;
+            }
         }
-
-        @\chmod($certPath, 0644);
-        @\chmod($keyPath, 0600);
         w_log_info(__('[SslCertificateService] Reusing global Weline local CA for this project'));
 
         return [
@@ -1548,8 +2198,21 @@ CNF;
 
         $configHash = \md5('local-ca-leaf:' . $leafKeyType . ':' . $domain . \serialize($sanEntries));
         $configPath = $this->getLocalCaDir() . "openssl_leaf_{$configHash}.cnf";
-        @\file_put_contents($configPath, $this->buildServerLeafOpenSslConfig($domain, $sanEntries));
-        if (\is_file($configPath)) {
+        try {
+            $this->writeLocalCaStateAtomically(
+                $configPath,
+                $this->buildServerLeafOpenSslConfig($domain, $sanEntries),
+                0600,
+            );
+        } catch (\Throwable) {
+            return $opensslConfig;
+        }
+        if (self::readRegularFileNoFollow(
+            $configPath,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            false,
+            true,
+        ) !== null) {
             $opensslConfig['config'] = $configPath;
         }
 
@@ -1558,7 +2221,8 @@ CNF;
 
     protected function prepareExistingLocalCaCertificateForReuse(string $certPath): bool
     {
-        if (!\is_file($certPath)) {
+        $certPem = self::readRegularFileNoFollow($certPath);
+        if ($certPem === null) {
             return false;
         }
 
@@ -1568,9 +2232,12 @@ CNF;
             return false;
         }
 
-        $certPem = (string) @\file_get_contents($certPath);
         $chainPath = \dirname($certPath) . DS . 'chain.pem';
-        $chainPem = \is_file($chainPath) ? (string) @\file_get_contents($chainPath) : '';
+        $chainPem = self::readRegularFileNoFollow(
+            $chainPath,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            true,
+        ) ?? '';
 
         if ($this->extractLocalCaPemFromCertificateBundle($certPem, $chainPem) === '') {
             return false;
@@ -1584,7 +2251,7 @@ CNF;
     protected function localCaCertificateCoversRequiredSan(string $domain, string $certPath): bool
     {
         $domain = \strtolower(\trim($domain));
-        if ($domain === '' || !\is_file($certPath)) {
+        if ($domain === '' || self::readRegularFileNoFollow($certPath) === null) {
             return false;
         }
 
@@ -1619,19 +2286,21 @@ CNF;
     protected function localCaCertificateIsSignedByCurrentAuthority(string $certPath): bool
     {
         $caPath = $this->getLocalCaCertPath();
-        if (!\is_file($caPath) || !\is_file($certPath)) {
+        if (self::readRegularFileNoFollow($caPath) === null
+            || self::readRegularFileNoFollow($certPath) === null
+        ) {
             return false;
         }
 
         $leafPath = \dirname($certPath) . DS . 'cert.pem';
-        if (!\is_file($leafPath)) {
+        if (self::readRegularFileNoFollow($leafPath) === null) {
             $leafPath = $certPath;
         }
 
         if (\function_exists('openssl_x509_verify')) {
-            $leafPem = (string) @\file_get_contents($leafPath);
-            $caPem = (string) @\file_get_contents($caPath);
-            if ($leafPem === '' || $caPem === '') {
+            $leafPem = self::readRegularFileNoFollow($leafPath);
+            $caPem = self::readRegularFileNoFollow($caPath);
+            if ($leafPem === null || $caPem === null) {
                 return false;
             }
 
@@ -1691,8 +2360,21 @@ CNF;
 
         $opensslConfig = $this->getOpensslConfig();
         $configPath = $this->getLocalCaDir() . 'openssl_local_ca.cnf';
-        @\file_put_contents($configPath, $this->buildLocalCaOpenSslConfig());
-        if (\is_file($configPath)) {
+        try {
+            $this->writeLocalCaStateAtomically(
+                $configPath,
+                $this->buildLocalCaOpenSslConfig(),
+                0600,
+            );
+        } catch (\Throwable) {
+            // OpenSSL can still use its runtime default configuration.
+        }
+        if (self::readRegularFileNoFollow(
+            $configPath,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            false,
+            true,
+        ) !== null) {
             $opensslConfig['config'] = $configPath;
         }
 
@@ -1726,15 +2408,20 @@ CNF;
             return ['success' => false, 'message' => __('Failed to export local CA private key')];
         }
 
-        if (!$certPem || @\file_put_contents($certPath, $certPem) === false) {
-            return ['success' => false, 'message' => __('Failed to persist local CA certificate')];
+        try {
+            if (!$certPem || !$keyPem) {
+                throw new \RuntimeException('OpenSSL returned empty local CA material.');
+            }
+            $this->writeLocalCaStateAtomically($certPath, $certPem, 0644);
+            $this->writeLocalCaStateAtomically($keyPath, $keyPem, 0600);
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => __('Failed to persist local CA material: %{1}', [
+                    $throwable->getMessage(),
+                ]),
+            ];
         }
-        if (!$keyPem || @\file_put_contents($keyPath, $keyPem) === false) {
-            return ['success' => false, 'message' => __('Failed to persist local CA private key')];
-        }
-
-        @\chmod($certPath, 0644);
-        @\chmod($keyPath, 0600);
         $this->syncGlobalLocalCertificateAuthority($certPath, $keyPath);
 
         $caMs = (int) \round((\hrtime(true) - $caGenStart) / 1_000_000.0);
@@ -1763,118 +2450,102 @@ CNF;
         return \function_exists('posix_geteuid') && (int) @\posix_geteuid() === 0;
     }
 
-    protected function runTrustCommand(string $command, ?int &$exitCode = null): string
+    /**
+     * Execute one fixed argv vector without a command shell.
+     *
+     * @param list<string> $command
+     */
+    protected function runTrustCommand(
+        array $command,
+        ?int &$exitCode = null,
+        bool $inheritStdin = false,
+    ): string
     {
         $exitCode = 1;
-        if (!\function_exists('proc_open')) {
-            if (!\function_exists('exec')) {
+        if (!\function_exists('proc_open')
+            || !\array_is_list($command)
+            || $command === []
+            || \count($command) > 32
+        ) {
+            return '';
+        }
+        $argvBytes = 0;
+        foreach ($command as $argument) {
+            if (!\is_string($argument)
+                || $argument === ''
+                || \str_contains($argument, "\0")
+                || \strlen($argument) > 4096
+            ) {
                 return '';
             }
-            $output = [];
-            @\exec($command, $output, $exitCode);
-            return \implode("\n", $output);
+            $argvBytes += \strlen($argument);
         }
-
-        $timeoutMs = (int) (\getenv('WLS_SSL_TRUST_COMMAND_TIMEOUT_MS') ?: 5000);
-        if ($timeoutMs < 500) {
-            $timeoutMs = 500;
-        }
-        $deadline = \microtime(true) + ($timeoutMs / 1000.0);
-        $pipes = [];
-        $process = @\proc_open(
-            $command,
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes
-        );
-        if (!\is_resource($process)) {
+        if ($argvBytes > 32_768) {
             return '';
         }
 
-        foreach ($pipes as $pipe) {
-            if (\is_resource($pipe)) {
-                @\stream_set_blocking($pipe, false);
-            }
-        }
-        if (isset($pipes[0]) && \is_resource($pipes[0])) {
-            @\fclose($pipes[0]);
-        }
-
-        $output = '';
-        $timedOut = false;
-        while (true) {
-            foreach ([1, 2] as $idx) {
-                if (isset($pipes[$idx]) && \is_resource($pipes[$idx])) {
-                    $chunk = @\stream_get_contents($pipes[$idx]);
-                    if (\is_string($chunk) && $chunk !== '') {
-                        $output .= $chunk;
-                    }
-                }
-            }
-
-            $status = @\proc_get_status($process);
-            $running = \is_array($status) && !empty($status['running']);
-            if (!$running) {
-                if (\is_array($status) && isset($status['exitcode']) && (int)$status['exitcode'] >= 0) {
-                    $exitCode = (int)$status['exitcode'];
-                }
-                break;
-            }
-
-            if (\microtime(true) >= $deadline) {
-                $timedOut = true;
-                @\proc_terminate($process);
-                \Weline\Framework\Runtime\SchedulerSystem::usleep(100000);
-                $status = @\proc_get_status($process);
-                if (\is_array($status) && !empty($status['running'])) {
-                    @\proc_terminate($process, 9);
-                }
-                $exitCode = 124;
-                break;
-            }
-
-            \Weline\Framework\Runtime\SchedulerSystem::usleep(50000);
-        }
-
-        foreach ([1, 2] as $idx) {
-            if (isset($pipes[$idx]) && \is_resource($pipes[$idx])) {
-                $chunk = @\stream_get_contents($pipes[$idx]);
-                if (\is_string($chunk) && $chunk !== '') {
-                    $output .= $chunk;
-                }
-                @\fclose($pipes[$idx]);
-            }
-        }
-        if ($timedOut) {
-            $output .= ($output === '' ? '' : "\n") . 'WLS_SSL_TRUST_COMMAND_TIMEOUT after ' . $timeoutMs . 'ms';
+        $configuredTimeout = \getenv('WLS_SSL_TRUST_COMMAND_TIMEOUT_MS');
+        $timeoutMs = \is_string($configuredTimeout)
+            && \preg_match('/\A[0-9]{1,8}\z/D', $configuredTimeout) === 1
+                ? (int)$configuredTimeout
+                : 5000;
+        $timeoutMs = \max(500, \min(self::MAX_TRUST_COMMAND_TIMEOUT_MS, $timeoutMs));
+        // Trust mutation is intentionally non-interactive. The shared runner
+        // owns an isolated POSIX process group or the signed Windows Job helper,
+        // terminates the whole tree, and never calls proc_close before exit is
+        // proven. A caller that needs a password receives the manual command.
+        unset($inheritStdin);
+        $result = GatewayBoundedCommandRunner::run(
+            $command,
+            $timeoutMs / 1000.0,
+            failOnTruncatedOutput: true,
+        );
+        $exitCode = (int)($result['code'] ?? 125);
+        $output = (string)($result['output'] ?? '');
+        if ($exitCode === 124) {
+            $output = $this->appendBoundedCommandMarker(
+                $output,
+                'WLS_SSL_TRUST_COMMAND_TIMEOUT after ' . $timeoutMs . 'ms',
+            );
             w_log_warning(
                 'SSL trust command timed out after {timeout_ms}ms: {command}',
-                ['timeout_ms' => $timeoutMs, 'command' => $command],
-                'ssl_cert'
+                ['timeout_ms' => $timeoutMs, 'command' => \basename($command[0])],
+                'ssl_cert',
             );
-            return \trim($output);
         }
-
-        $closeCode = @\proc_close($process);
-        if ($exitCode === 1 && \is_int($closeCode) && $closeCode >= 0) {
-            $exitCode = $closeCode;
+        if (\strlen($output) > self::MAX_TRUST_COMMAND_OUTPUT_BYTES) {
+            $exitCode = 125;
+            $output = $this->appendBoundedCommandMarker(
+                \substr($output, 0, self::MAX_TRUST_COMMAND_OUTPUT_BYTES),
+                'WLS_SSL_TRUST_COMMAND_OUTPUT_LIMIT',
+            );
         }
-
         return \trim($output);
     }
 
-    protected function runInteractiveTrustCommand(string $command, ?int &$exitCode = null): string
+    private function appendBoundedCommandMarker(string $output, string $marker): string
     {
-        $exitCode = 1;
-        if ($this->canUseInteractivePrivilegePrompt() && \function_exists('passthru')) {
-            @\passthru($command, $exitCode);
-            return '';
+        $separator = $output === '' ? '' : "\n";
+        $suffix = $separator . $marker;
+        if (\strlen($suffix) >= self::MAX_TRUST_COMMAND_OUTPUT_BYTES) {
+            return \substr($marker, 0, self::MAX_TRUST_COMMAND_OUTPUT_BYTES);
         }
+        return \substr(
+            $output,
+            0,
+            self::MAX_TRUST_COMMAND_OUTPUT_BYTES - \strlen($suffix),
+        ) . $suffix;
+    }
 
-        return $this->runTrustCommand($command, $exitCode);
+    /** @param list<string> $command */
+    protected function runInteractiveTrustCommand(
+        array $command,
+        ?int &$exitCode = null,
+    ): string
+    {
+        // Automatic trust mutation never inherits a terminal. If elevation is
+        // not already authorized, the caller reports the explicit manual path.
+        return $this->runTrustCommand($command, $exitCode, false);
     }
 
     protected function canUseInteractivePrivilegePrompt(): bool
@@ -1892,42 +2563,81 @@ CNF;
         return true;
     }
 
-    protected function buildSudoCommand(string $script, string $prompt): string
+    /** @param list<string> $command @return list<string> */
+    protected function buildSudoCommand(array $command, string $prompt): array
     {
-        $sudoArgs = $this->canUseInteractivePrivilegePrompt()
-            ? ' -p ' . \escapeshellarg($prompt)
-            : ' -n';
-
-        return 'sudo' . $sudoArgs . ' /bin/sh -c ' . \escapeshellarg($script) . ' 2>&1';
+        $sudo = $this->resolveTrustExecutable('sudo');
+        if ($sudo === '') {
+            throw new \RuntimeException('The sudo executable is unavailable.');
+        }
+        unset($prompt);
+        return [$sudo, '-n', ...$command];
     }
 
     protected function commandExists(string $command): bool
     {
+        return $this->resolveTrustExecutable($command) !== '';
+    }
+
+    protected function resolveTrustExecutable(string $command): string
+    {
         $command = \trim($command);
-        if ($command === '') {
-            return false;
+        if ($command === ''
+            || \str_contains($command, "\0")
+            || \preg_match('/\A[A-Za-z0-9_.+-]+\z/D', $command) !== 1
+        ) {
+            return '';
         }
-
-        if ($command === 'security' && \is_file('/usr/bin/security')) {
-            return true;
+        $windowsRoot = \rtrim((string)\getenv('SystemRoot'), '/\\');
+        if ($windowsRoot !== ''
+            && (\strlen($windowsRoot) > 1024
+                || \str_contains($windowsRoot, "\0")
+                || \preg_match('/\A[A-Za-z]:[\\\\\/][^\x00]+\z/D', $windowsRoot) !== 1
+                || \in_array(
+                    '..',
+                    \preg_split('#[\\\\/]+#', $windowsRoot) ?: [],
+                    true,
+                ))
+        ) {
+            $windowsRoot = '';
         }
-
-        $exitCode = 1;
-        $probe = $this->getOsFamily() === 'Windows'
-            ? 'where ' . \escapeshellarg($command) . ' 2>NUL'
-            : 'command -v ' . \escapeshellarg($command) . ' 2>/dev/null';
-
-        return \trim($this->runTrustCommand($probe, $exitCode)) !== '' && $exitCode === 0;
+        $candidates = match (\strtolower($command)) {
+            'security' => ['/usr/bin/security'],
+            'openssl' => ['/usr/bin/openssl', '/opt/homebrew/bin/openssl', '/usr/local/bin/openssl'],
+            'sudo' => ['/usr/bin/sudo'],
+            'install' => ['/usr/bin/install', '/bin/install'],
+            'update-ca-certificates' => ['/usr/sbin/update-ca-certificates'],
+            'update-ca-trust' => ['/usr/bin/update-ca-trust', '/usr/sbin/update-ca-trust'],
+            'certutil', 'certutil.exe' => $windowsRoot === ''
+                ? []
+                : [$windowsRoot . DIRECTORY_SEPARATOR . 'System32'
+                    . DIRECTORY_SEPARATOR . 'certutil.exe'],
+            default => [],
+        };
+        foreach ($candidates as $candidate) {
+            $real = \realpath($candidate);
+            $status = @\lstat($candidate);
+            if (\is_string($real)
+                && \is_array($status)
+                && !\is_link($candidate)
+                && ((((int)($status['mode'] ?? 0)) & 0170000) === 0100000)
+                && (\PHP_OS_FAMILY === 'Windows' || \is_executable($real))
+            ) {
+                return $real;
+            }
+        }
+        return '';
     }
 
     protected function hasLocalCertificateAuthorityInSystemStore(): bool
     {
         if ($this->getOsFamily() === 'Windows') {
-            if (!$this->commandExists('certutil.exe')) {
+            $certutil = $this->resolveTrustExecutable('certutil.exe');
+            if ($certutil === '') {
                 return false;
             }
             $output = $this->runTrustCommand(
-                'certutil -user -store Root ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
+                [$certutil, '-user', '-store', 'Root', self::ISSUER_LOCAL_CA],
                 $exitCode
             );
 
@@ -1936,9 +2646,10 @@ CNF;
                 && !\preg_match('/command\s+FAILED|0x80092004|NOT_FOUND|Cannot\s+find|找不到/i', $output);
         }
 
-        if ($this->getOsFamily() === 'Darwin' && $this->commandExists('security')) {
+        $security = $this->resolveTrustExecutable('security');
+        if ($this->getOsFamily() === 'Darwin' && $security !== '') {
             $output = $this->runTrustCommand(
-                '/usr/bin/security find-certificate -a -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
+                [$security, 'find-certificate', '-a', '-c', self::ISSUER_LOCAL_CA],
                 $exitCode
             );
 
@@ -1950,12 +2661,8 @@ CNF;
 
     protected function isLocalCertificateAuthorityTrustedOnWindows(string $caCertPath): bool
     {
-        if (!\is_file($caCertPath) || !\function_exists('openssl_x509_fingerprint')) {
-            return false;
-        }
-
-        $certPem = (string) @\file_get_contents($caCertPath);
-        if ($certPem === '') {
+        $certPem = self::readRegularFileNoFollow($caCertPath);
+        if ($certPem === null || !\function_exists('openssl_x509_fingerprint')) {
             return false;
         }
 
@@ -1971,8 +2678,12 @@ CNF;
             return false;
         }
 
+        $certutil = $this->resolveTrustExecutable('certutil.exe');
+        if ($certutil === '') {
+            return false;
+        }
         $storeOutput = $this->runTrustCommand(
-            'certutil -user -store Root ' . \escapeshellarg($thumb) . ' 2>&1',
+            [$certutil, '-user', '-store', 'Root', $thumb],
             $exitCode
         );
         if ($exitCode !== 0 || $storeOutput === '') {
@@ -1992,7 +2703,9 @@ CNF;
 
     protected function isLocalCertificateAuthorityTrustedOnMacos(string $caCertPath): bool
     {
-        if (!\is_file($caCertPath) || !$this->commandExists('security')) {
+        if (self::readRegularFileNoFollow($caCertPath) === null
+            || !$this->commandExists('security')
+        ) {
             return false;
         }
 
@@ -2010,9 +2723,13 @@ CNF;
 
     protected function isMacosCaRootTrustedForSsl(string $caCertPath): bool
     {
+        $security = $this->resolveTrustExecutable('security');
+        if ($security === '') {
+            return false;
+        }
         $exitCode = 1;
         $output = $this->runTrustCommand(
-            '/usr/bin/security verify-cert -c ' . \escapeshellarg($caCertPath) . ' -p ssl 2>&1',
+            [$security, 'verify-cert', '-c', $caCertPath, '-p', 'ssl'],
             $exitCode
         );
 
@@ -2037,7 +2754,9 @@ CNF;
     protected function isLocalDevelopmentSslChainTrustedOnMacos(): bool
     {
         $caPath = $this->getLocalCaCertPath();
-        if (!\is_file($caPath) || !$this->isMacosCaRootTrustedForSsl($caPath)) {
+        if (self::readRegularFileNoFollow($caPath) === null
+            || !$this->isMacosCaRootTrustedForSsl($caPath)
+        ) {
             return false;
         }
 
@@ -2051,14 +2770,14 @@ CNF;
 
     protected function isLocalDevelopmentSslChainCryptographicallyValid(string $caCertPath, string $leafPath): bool
     {
-        if (!$this->commandExists('openssl')) {
+        $openssl = $this->resolveTrustExecutable('openssl');
+        if ($openssl === '') {
             return false;
         }
 
         $exitCode = 1;
         $output = $this->runTrustCommand(
-            'openssl verify -CAfile ' . \escapeshellarg($caCertPath) . ' '
-            . \escapeshellarg($leafPath) . ' 2>&1',
+            [$openssl, 'verify', '-CAfile', $caCertPath, $leafPath],
             $exitCode
         );
 
@@ -2067,28 +2786,35 @@ CNF;
 
     protected function resolveLocalDevelopmentProbeLeafPath(): string
     {
-        if (!\is_dir($this->certBaseDir)) {
-            return '';
-        }
-
-        foreach (\scandir($this->certBaseDir) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
+        $base = $this->ensureCertificateBaseDirectory();
+        foreach ($this->boundedDirectoryEntries(
+            $base,
+            self::MAX_CERTIFICATE_SOURCE_DIRECTORIES,
+            'project certificate source directory',
+        ) as $entry) {
             $logical = self::logicalDomainFromStorageSegment($entry);
-            if (!LocalDomainPolicy::isManagedLocalDomain($logical)
+            if ($logical === ''
+                || !LocalDomainPolicy::isManagedLocalDomain($logical)
                 || LocalDomainPolicy::isManagedWildcardDomain($logical)) {
                 continue;
             }
-            $leafPath = $this->certBaseDir . $entry . DS . 'fullchain.pem';
-            if (\is_file($leafPath) && $this->isCertificateValid($leafPath)) {
+            $directory = $this->certificateDirectoryForSegment($entry, false);
+            if ($directory === null) {
+                continue;
+            }
+            $leafPath = $directory . 'fullchain.pem';
+            if (self::readRegularFileNoFollow($leafPath) !== null
+                && $this->isCertificateValid($leafPath)
+            ) {
                 return $leafPath;
             }
         }
 
         $wildcard = LocalDomainPolicy::currentWildcardDomain();
         $wildcardPath = $this->getCertificateDir($wildcard) . 'fullchain.pem';
-        if (\is_file($wildcardPath) && $this->isCertificateValid($wildcardPath)) {
+        if (self::readRegularFileNoFollow($wildcardPath) !== null
+            && $this->isCertificateValid($wildcardPath)
+        ) {
             return $wildcardPath;
         }
 
@@ -2116,25 +2842,33 @@ CNF;
 
     protected function isLocalCertificateAuthorityTrustedOnLinux(string $caCertPath): bool
     {
-        if (!\is_file($caCertPath) || !$this->commandExists('openssl')) {
+        if (self::readRegularFileNoFollow($caCertPath) === null) {
+            return false;
+        }
+        $openssl = $this->resolveTrustExecutable('openssl');
+        if ($openssl === '') {
             return false;
         }
 
         $verifyCommands = [];
         if (\is_dir('/etc/ssl/certs')) {
-            $verifyCommands[] = 'openssl verify -CApath /etc/ssl/certs ' . \escapeshellarg($caCertPath) . ' 2>&1';
+            $verifyCommands[] = [$openssl, 'verify', '-CApath', '/etc/ssl/certs', $caCertPath];
         }
         foreach ([
             '/etc/ssl/certs/ca-certificates.crt',
             '/etc/pki/tls/certs/ca-bundle.crt',
             '/etc/ssl/cert.pem',
         ] as $bundlePath) {
-            if (\is_file($bundlePath)) {
-                $verifyCommands[] = 'openssl verify -CAfile ' . \escapeshellarg($bundlePath) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
+            if (self::readRegularFileNoFollow(
+                $bundlePath,
+                16 * self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                true,
+            ) !== null) {
+                $verifyCommands[] = [$openssl, 'verify', '-CAfile', $bundlePath, $caCertPath];
             }
         }
 
-        foreach (\array_unique($verifyCommands) as $command) {
+        foreach ($verifyCommands as $command) {
             $exitCode = 1;
             $output = $this->runTrustCommand($command, $exitCode);
             if ($exitCode === 0 && \str_contains($output, ': OK')) {
@@ -2147,12 +2881,12 @@ CNF;
 
     protected function getCertificateSha1Fingerprint(string $certPath): string
     {
-        if (!\is_file($certPath) || !\function_exists('openssl_x509_fingerprint')) {
+        if (!\function_exists('openssl_x509_fingerprint')) {
             return '';
         }
 
-        $certPem = (string) @\file_get_contents($certPath);
-        if ($certPem === '') {
+        $certPem = self::readRegularFileNoFollow($certPath);
+        if ($certPem === null) {
             return '';
         }
 
@@ -2162,31 +2896,45 @@ CNF;
     }
 
     /**
-     * @return array{dest:string,refresh:string,manual:string}|null
+     * @return array{
+     *   dest:string,
+     *   install_argv:list<string>,
+     *   refresh_argv:list<string>,
+     *   manual:string
+     * }|null
      */
     protected function resolveLinuxLocalCaInstallPlan(string $caCertPath): ?array
     {
-        if ($this->commandExists('update-ca-certificates') && \is_dir('/usr/local/share/ca-certificates')) {
+        $install = $this->resolveTrustExecutable('install');
+        $updateCaCertificates = $this->resolveTrustExecutable('update-ca-certificates');
+        if ($install !== ''
+            && $updateCaCertificates !== ''
+            && \is_dir('/usr/local/share/ca-certificates')
+        ) {
             $dest = '/usr/local/share/ca-certificates/weline-local-development-ca.crt';
-            $script = 'install -m 0644 ' . \escapeshellarg($caCertPath) . ' ' . \escapeshellarg($dest)
-                . ' && update-ca-certificates';
 
             return [
                 'dest' => $dest,
-                'refresh' => 'update-ca-certificates',
-                'manual' => 'sudo /bin/sh -c ' . \escapeshellarg($script),
+                'install_argv' => [$install, '-m', '0644', $caCertPath, $dest],
+                'refresh_argv' => [$updateCaCertificates],
+                'manual' => 'sudo install -m 0644 ' . \escapeshellarg($caCertPath)
+                    . ' ' . \escapeshellarg($dest) . ' && sudo update-ca-certificates',
             ];
         }
 
-        if ($this->commandExists('update-ca-trust') && \is_dir('/etc/pki/ca-trust/source/anchors')) {
+        $updateCaTrust = $this->resolveTrustExecutable('update-ca-trust');
+        if ($install !== ''
+            && $updateCaTrust !== ''
+            && \is_dir('/etc/pki/ca-trust/source/anchors')
+        ) {
             $dest = '/etc/pki/ca-trust/source/anchors/weline-local-development-ca.crt';
-            $script = 'install -m 0644 ' . \escapeshellarg($caCertPath) . ' ' . \escapeshellarg($dest)
-                . ' && update-ca-trust extract';
 
             return [
                 'dest' => $dest,
-                'refresh' => 'update-ca-trust extract',
-                'manual' => 'sudo /bin/sh -c ' . \escapeshellarg($script),
+                'install_argv' => [$install, '-m', '0644', $caCertPath, $dest],
+                'refresh_argv' => [$updateCaTrust, 'extract'],
+                'manual' => 'sudo install -m 0644 ' . \escapeshellarg($caCertPath)
+                    . ' ' . \escapeshellarg($dest) . ' && sudo update-ca-trust extract',
             ];
         }
 
@@ -2208,12 +2956,20 @@ CNF;
             ];
         }
 
-        $script = 'install -m 0644 ' . \escapeshellarg($caCertPath) . ' ' . \escapeshellarg($plan['dest'])
-            . ' && ' . $plan['refresh'];
+        $installCommand = $plan['install_argv'];
+        $refreshCommand = $plan['refresh_argv'];
         if ($this->isRootUser()) {
-            $command = '/bin/sh -c ' . \escapeshellarg($script) . ' 2>&1';
+            // Root still executes the exact binaries directly; no `/bin/sh`
+            // composition is permitted in WLS certificate publication paths.
         } elseif ($this->commandExists('sudo')) {
-            $command = $this->buildSudoCommand($script, '[WLS] sudo password for CA trust: ');
+            $installCommand = $this->buildSudoCommand(
+                $installCommand,
+                '[WLS] sudo password for CA trust: ',
+            );
+            $refreshCommand = $this->buildSudoCommand(
+                $refreshCommand,
+                '[WLS] sudo password for CA trust: ',
+            );
         } else {
             return [
                 'success' => false,
@@ -2223,9 +2979,19 @@ CNF;
         }
 
         $exitCode = 1;
-        $output = $this->runInteractiveTrustCommand($command, $exitCode);
+        $output = $this->runInteractiveTrustCommand($installCommand, $exitCode);
         if ($exitCode === 0) {
-            $trusted = $this->isLocalCertificateAuthorityTrustedOnLinux($caCertPath) || \is_file($plan['dest']);
+            $refreshExitCode = 1;
+            $refreshOutput = $this->runInteractiveTrustCommand(
+                $refreshCommand,
+                $refreshExitCode,
+            );
+            $output = \trim($output . "\n" . $refreshOutput);
+            $exitCode = $refreshExitCode;
+        }
+        if ($exitCode === 0) {
+            $trusted = $this->isLocalCertificateAuthorityTrustedOnLinux($caCertPath)
+                || self::readRegularFileNoFollow((string)$plan['dest']) !== null;
 
             return [
                 'success' => true,
@@ -2260,7 +3026,8 @@ CNF;
 
     protected function trustLocalCertificateAuthorityOnMacos(string $caCertPath): array
     {
-        if (!$this->commandExists('security')) {
+        $security = $this->resolveTrustExecutable('security');
+        if ($security === '') {
             return [
                 'success' => false,
                 'trusted' => false,
@@ -2281,11 +3048,23 @@ CNF;
 
         // Safari / Chrome 主要读取系统钥匙串；优先写入 System，再回退 login。
         if ($this->commandExists('sudo')) {
-            $sudoArgs = $this->canUseInteractivePrivilegePrompt()
-                ? ' -p ' . \escapeshellarg('[WLS] sudo password for macOS CA trust: ')
-                : ' -n';
-            $systemCommand = 'sudo' . $sudoArgs . ' /usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
-                . \escapeshellarg($caCertPath) . ' 2>&1';
+            $systemCommand = $this->buildSudoCommand(
+                [
+                    $security,
+                    'add-trusted-cert',
+                    '-d',
+                    '-r',
+                    'trustRoot',
+                    '-p',
+                    'ssl',
+                    '-p',
+                    'basic',
+                    '-k',
+                    '/Library/Keychains/System.keychain',
+                    $caCertPath,
+                ],
+                '[WLS] sudo password for macOS CA trust: ',
+            );
             $systemExitCode = 1;
             $systemOutput = $this->runInteractiveTrustCommand($systemCommand, $systemExitCode);
             if ($systemExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
@@ -2304,29 +3083,26 @@ CNF;
         }
 
         if (!$installedInLoginKeychain) {
-            $loginCommand = '/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k '
-                . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
+            $loginCommand = [
+                $security,
+                'add-trusted-cert',
+                '-d',
+                '-r',
+                'trustRoot',
+                '-p',
+                'ssl',
+                '-p',
+                'basic',
+                '-k',
+                $loginKeychain,
+                $caCertPath,
+            ];
             $loginExitCode = 1;
             $loginOutput = $this->runInteractiveTrustCommand($loginCommand, $loginExitCode);
             if ($loginExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
                 return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
             }
             $output = \trim($output . "\n" . $loginOutput);
-        }
-
-        if (!$this->canUseInteractivePrivilegePrompt()
-            && $this->commandExists('osascript')
-            && (string) \getenv('WLS_ENABLE_GUI_CA_TRUST_PROMPT') === '1') {
-            $systemScript = '/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
-                . \escapeshellarg($caCertPath);
-            $appleScript = 'do shell script ' . $this->quoteAppleScriptString($systemScript) . ' with administrator privileges';
-            $guiCommand = 'osascript -e ' . \escapeshellarg((string) $appleScript) . ' 2>&1';
-            $guiExitCode = 1;
-            $guiOutput = $this->runTrustCommand($guiCommand, $guiExitCode);
-            if ($guiExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
-                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
-            }
-            $output = \trim($output . "\n" . $guiOutput);
         }
 
         $hint = !$this->canUseInteractivePrivilegePrompt()
@@ -2340,21 +3116,24 @@ CNF;
         ];
     }
 
-    protected function quoteAppleScriptString(string $value): string
-    {
-        return '"' . \str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
-    }
-
     protected function removeStaleLocalCertificateAuthoritiesFromMacosKeychain(string $keychainPath, string $currentFingerprint): string
     {
         $currentFingerprint = $this->normalizeCertificateFingerprint($currentFingerprint);
-        if ($currentFingerprint === '' || $keychainPath === '' || !$this->commandExists('security')) {
+        $security = $this->resolveTrustExecutable('security');
+        if ($currentFingerprint === '' || $keychainPath === '' || $security === '') {
             return '';
         }
 
         $output = $this->runTrustCommand(
-            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' '
-            . \escapeshellarg($keychainPath) . ' 2>&1',
+            [
+                $security,
+                'find-certificate',
+                '-a',
+                '-Z',
+                '-c',
+                self::ISSUER_LOCAL_CA,
+                $keychainPath,
+            ],
             $exitCode
         );
         if ($exitCode !== 0 || $output === '') {
@@ -2370,8 +3149,7 @@ CNF;
                 }
 
                 $deleteOutput = $this->runTrustCommand(
-                    '/usr/bin/security delete-certificate -Z ' . \escapeshellarg($fingerprint) . ' '
-                    . \escapeshellarg($keychainPath) . ' 2>&1',
+                    [$security, 'delete-certificate', '-Z', $fingerprint, $keychainPath],
                     $deleteExitCode
                 );
                 $messages[] = $deleteExitCode === 0
@@ -2386,13 +3164,21 @@ CNF;
     protected function isLocalCertificateAuthorityInstalledInMacosSystemKeychain(string $caCertPath): bool
     {
         $fingerprint = $this->getCertificateSha1Fingerprint($caCertPath);
-        if ($fingerprint === '' || !$this->commandExists('security')) {
+        $security = $this->resolveTrustExecutable('security');
+        if ($fingerprint === '' || $security === '') {
             return false;
         }
 
         $output = $this->runTrustCommand(
-            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA)
-            . ' /Library/Keychains/System.keychain 2>&1',
+            [
+                $security,
+                'find-certificate',
+                '-a',
+                '-Z',
+                '-c',
+                self::ISSUER_LOCAL_CA,
+                '/Library/Keychains/System.keychain',
+            ],
             $exitCode
         );
         if ($exitCode !== 0 || $output === '') {
@@ -2413,13 +3199,21 @@ CNF;
     protected function isLocalCertificateAuthorityInstalledInMacosKeychain(string $caCertPath, string $keychainPath): bool
     {
         $fingerprint = $this->getCertificateSha1Fingerprint($caCertPath);
-        if ($fingerprint === '' || $keychainPath === '' || !$this->commandExists('security')) {
+        $security = $this->resolveTrustExecutable('security');
+        if ($fingerprint === '' || $keychainPath === '' || $security === '') {
             return false;
         }
 
         $output = $this->runTrustCommand(
-            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' '
-            . \escapeshellarg($keychainPath) . ' 2>&1',
+            [
+                $security,
+                'find-certificate',
+                '-a',
+                '-Z',
+                '-c',
+                self::ISSUER_LOCAL_CA,
+                $keychainPath,
+            ],
             $exitCode
         );
         if ($exitCode !== 0 || $output === '') {
@@ -2431,7 +3225,7 @@ CNF;
 
     protected function trustLocalCertificateAuthority(string $caCertPath): array
     {
-        if (!\is_file($caCertPath)) {
+        if (self::readRegularFileNoFollow($caCertPath) === null) {
             return ['success' => false, 'trusted' => false, 'message' => __('Local CA certificate file is missing: %{1}', [$caCertPath])];
         }
 
@@ -2469,7 +3263,8 @@ CNF;
                 return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')]);
             }
 
-            if (!$this->commandExists('certutil.exe')) {
+            $certutil = $this->resolveTrustExecutable('certutil.exe');
+            if ($certutil === '') {
                 return $remember([
                     'success' => false,
                     'trusted' => false,
@@ -2477,7 +3272,9 @@ CNF;
                 ]);
             }
 
-            $this->runTrustCommand('certutil -user -addstore Root ' . \escapeshellarg($caCertPath) . ' 2>&1');
+            $this->runTrustCommand(
+                [$certutil, '-user', '-addstore', 'Root', $caCertPath],
+            );
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
                 return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA imported into Current User Root store')]);
             }
@@ -2511,24 +3308,44 @@ CNF;
         if ($globalSerialPath !== '' && $this->localAndGlobalCertificateAuthorityMatch()) {
             \array_unshift($serialPaths, $globalSerialPath);
         }
-
-        $current = 1000;
-        foreach (\array_values(\array_unique($serialPaths)) as $serialPath) {
-            if (!\is_file($serialPath)) {
-                continue;
-            }
-            $stored = (int) \trim((string) @\file_get_contents($serialPath));
-            if ($stored > 0) {
-                $current = \max($current, $stored);
-            }
+        $serialPaths = \array_values(\array_unique(\array_filter(
+            $serialPaths,
+            static fn (string $path): bool => $path !== '',
+        )));
+        if ($serialPaths === []) {
+            throw new \RuntimeException('No local CA serial authority is available.');
         }
-
-        $next = $current + 1;
-        foreach (\array_values(\array_unique($serialPaths)) as $serialPath) {
-            @\file_put_contents($serialPath, (string) $next);
-        }
-
-        return $current;
+        $lockPath = \dirname($serialPaths[0]) . DS . 'serial.lock';
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockPath,
+            function () use ($serialPaths): int {
+                $current = 1000;
+                foreach ($serialPaths as $serialPath) {
+                    $stored = self::readRegularFileNoFollow(
+                        $serialPath,
+                        64,
+                        true,
+                        true,
+                    );
+                    if ($stored === null || $stored === '') {
+                        continue;
+                    }
+                    $stored = \trim($stored);
+                    if (\preg_match('/\A[1-9][0-9]{0,17}\z/D', $stored) !== 1) {
+                        throw new \RuntimeException('Local CA serial state is corrupt.');
+                    }
+                    $current = \max($current, (int)$stored);
+                }
+                if ($current >= PHP_INT_MAX) {
+                    throw new \RuntimeException('Local CA serial authority is exhausted.');
+                }
+                $next = (string)($current + 1);
+                foreach ($serialPaths as $serialPath) {
+                    $this->writeLocalCaStateAtomically($serialPath, $next, 0600);
+                }
+                return $current;
+            },
+        );
     }
 
     public function generateLocalCaSignedCertificate(string $domain, int $websiteId = 0, int $validDays = 825): array
@@ -2587,8 +3404,18 @@ CNF;
                 return ['success' => false, 'message' => __('Failed to generate local leaf CSR')];
             }
 
-            $caCertPem = (string) @\file_get_contents((string) $ca['cert_path']);
-            $caKeyPem = (string) @\file_get_contents((string) $ca['key_path']);
+            $caCertPem = self::readRegularFileNoFollow(
+                (string)$ca['cert_path'],
+            );
+            $caKeyPem = self::readPrivateKeyFileNoFollow(
+                (string)$ca['key_path'],
+            );
+            if ($caCertPem === null || $caKeyPem === null) {
+                return [
+                    'success' => false,
+                    'message' => __('Local CA material is unsafe or unreadable'),
+                ];
+            }
             $caCert = \openssl_x509_read($caCertPem);
             $caKey = \openssl_pkey_get_private($caKeyPem);
             if (!$caCert || !$caKey) {
@@ -2615,22 +3442,19 @@ CNF;
             }
 
             $fullchainPem = \rtrim($leafCertPem) . "\n" . \rtrim($caCertPem) . "\n";
-            if (!$fullchainPem || @\file_put_contents($certPath, $fullchainPem) === false) {
+            if (!$fullchainPem || !$keyPem) {
                 return ['success' => false, 'message' => __('Failed to persist local fullchain certificate')];
             }
-            if (!$keyPem || @\file_put_contents($keyPath, $keyPem) === false) {
-                return ['success' => false, 'message' => __('Failed to persist local certificate private key')];
-            }
-            @\file_put_contents($certDir . 'cert.pem', $leafCertPem);
-            @\file_put_contents($chainPath, $caCertPem);
-            @\file_put_contents($certDir . 'domain.key', $keyPem);
             $csrPem = '';
-            if (\openssl_csr_export($csr, $csrPem)) {
-                @\file_put_contents($certDir . 'csr.pem', $csrPem);
+            if (!\openssl_csr_export($csr, $csrPem) || $csrPem === '') {
+                return ['success' => false, 'message' => __('Failed to export local certificate CSR')];
             }
-
-            @\chmod($certPath, 0644);
-            @\chmod($keyPath, 0600);
+            $this->writeCertificateFileAtomically($certPath, $fullchainPem, 0644);
+            $this->writeCertificateFileAtomically($keyPath, $keyPem, 0600);
+            $this->writeCertificateFileAtomically($certDir . 'cert.pem', $leafCertPem, 0644);
+            $this->writeCertificateFileAtomically($chainPath, $caCertPem, 0644);
+            $this->writeCertificateFileAtomically($certDir . 'domain.key', $keyPem, 0600);
+            $this->writeCertificateFileAtomically($certDir . 'csr.pem', $csrPem, 0600);
 
             $saved = $this->updateCertificateRecord(
                 $domain,
@@ -2707,9 +3531,18 @@ CNF;
         $configHash = \md5($domain . \serialize($sanEntries));
         $sanConfigPath = $this->certBaseDir . "openssl_san_{$configHash}.cnf";
         $sanConfig = $this->buildSanOpenSslConfig($domain, $sanEntries);
-        @\file_put_contents($sanConfigPath, $sanConfig);
+        try {
+            $this->writeCertificateFileAtomically($sanConfigPath, $sanConfig, 0600);
+        } catch (\Throwable) {
+            return $opensslConfig;
+        }
         
-        if (\is_file($sanConfigPath)) {
+        if (self::readRegularFileNoFollow(
+            $sanConfigPath,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            false,
+            true,
+        ) !== null) {
             $opensslConfig['config'] = $sanConfigPath;
         }
         return $opensslConfig;
@@ -2918,7 +3751,9 @@ CNF;
         $certDir = $this->getCertificateDir($wildcardCert->getDomain());
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
-        if (!\is_file($certPath) || !\is_file($keyPath)) {
+        if (self::readRegularFileNoFollow($certPath) === null
+            || self::readPrivateKeyFileNoFollow($keyPath) === null
+        ) {
             return null;
         }
 
@@ -3017,25 +3852,19 @@ CNF;
                 return ['success' => false, 'message' => __('导出私钥失败') . ': ' . \implode(', ', $errors)];
             }
             
-            // 保存主文件
-            if (!$certPem || !\file_put_contents($certPath, $certPem)) {
+            if (!$certPem || !$keyPem) {
                 return ['success' => false, 'message' => __('保存证书文件失败')];
             }
-            if (!$keyPem || !\file_put_contents($keyPath, $keyPem)) {
-                return ['success' => false, 'message' => __('保存私钥文件失败')];
-            }
-            
-            // 补全所有文件：cert.pem、chain.pem、csr.pem、domain.key
-            @\file_put_contents($certDir . 'cert.pem', $certPem);
-            @\file_put_contents($certDir . 'chain.pem', $certPem);
-            @\file_put_contents($certDir . 'domain.key', $keyPem);
             $csrPem = '';
-            if (\openssl_csr_export($csr, $csrPem)) {
-                @\file_put_contents($certDir . 'csr.pem', $csrPem);
+            if (!\openssl_csr_export($csr, $csrPem) || $csrPem === '') {
+                return ['success' => false, 'message' => __('导出 CSR 失败')];
             }
-            
-            @\chmod($certPath, 0644);
-            @\chmod($keyPath, 0600);
+            $this->writeCertificateFileAtomically($certPath, $certPem, 0644);
+            $this->writeCertificateFileAtomically($keyPath, $keyPem, 0600);
+            $this->writeCertificateFileAtomically($certDir . 'cert.pem', $certPem, 0644);
+            $this->writeCertificateFileAtomically($certDir . 'chain.pem', $certPem, 0644);
+            $this->writeCertificateFileAtomically($certDir . 'domain.key', $keyPem, 0600);
+            $this->writeCertificateFileAtomically($certDir . 'csr.pem', $csrPem, 0600);
             
             $saved = $this->updateCertificateRecord(
                 $domain,
@@ -3082,6 +3911,7 @@ CNF;
         string $provider = self::PROVIDER_SELF_SIGNED
     ): bool {
         try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
             $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
             $isRenewal = $cert->getCertId() > 0;
             $oldExpiresAt = $isRenewal ? $cert->getExpiresAt() : null;
@@ -3098,6 +3928,13 @@ CNF;
             $expiresAt = \date('Y-m-d H:i:s', \strtotime("+{$validDays} days"));
             $chainPath = \dirname($certPath) . DS . 'chain.pem';
             $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
+            if (!self::certificatePemPairIsValidForName(
+                $certContents['cert_pem'],
+                $certContents['key_pem'],
+                $domain,
+            ) || !self::certificateBundlePemIsValid($certContents['chain_pem'], true)) {
+                return false;
+            }
 
             $isLocalManaged = $this->isLocalManagedProvider($provider);
             $this->recoverAndTrustLocalCaFromCertificateBundle(
@@ -3111,7 +3948,7 @@ CNF;
                 ->setWebsiteId($websiteId)
                 ->setCertPath($certPath)
                 ->setKeyPath($keyPath)
-                ->setChainPath(\is_file($chainPath) ? $chainPath : '')
+                ->setChainPath(self::certificateBundleFileIsValid($chainPath) ? $chainPath : '')
                 ->setCertPem($certContents['cert_pem'])
                 ->setKeyPem($certContents['key_pem'])
                 ->setChainPem($certContents['chain_pem'])
@@ -3130,7 +3967,16 @@ CNF;
             $cert->setDomain($domain);
             $cert->save();
 
-            // 触发事件通知其他模块（使用事件机制解耦）
+            // 泛域名证书更新后同步 PEM 到子域记录
+            if ($certType === SslCertificate::CERT_TYPE_WILDCARD) {
+                $this->syncWildcardToSubdomains($domain);
+            }
+
+            // 自签 / 本地 CA 签发路径必须刷新 SNI 映射，否则 Worker 仍用旧的 ssl_certificate_map.json，易出现 unrecognized_name
+            $this->regenerateCertificateMap();
+
+            // 事件是已完成发布的通知，不能早于服务清单及
+            // 原生 TLS Worker 的确认，否则消费者会观察到尚未服务的证书。
             if ($isRenewal) {
                 $this->dispatchCertificateRenewedEvent(
                     $domain,
@@ -3149,14 +3995,6 @@ CNF;
                     $certType
                 );
             }
-
-            // 泛域名证书更新后同步 PEM 到子域记录
-            if ($certType === SslCertificate::CERT_TYPE_WILDCARD) {
-                $this->syncWildcardToSubdomains($domain);
-            }
-
-            // 自签 / 本地 CA 签发路径必须刷新 SNI 映射，否则 Worker 仍用旧的 ssl_certificate_map.json，易出现 unrecognized_name
-            $this->regenerateCertificateMap();
 
             return true;
             
@@ -3256,6 +4094,11 @@ CNF;
         }
     }
 
+    private function deactivateProjectCertificateGeneration(string $domain): void
+    {
+        (new ProjectCertificateGenerationStore())->deactivate($domain);
+    }
+
     /**
      * 触发证书更新事件
      * 
@@ -3321,15 +4164,28 @@ CNF;
      */
     public function disableHttpsForDomain(string $domain): void
     {
-        $this->dispatchCertificateDisabledEvent($domain, null, __('手动禁用'));
+        $result = $this->disableManagedCertificate($domain, (string)__('手动禁用'));
+        if (($result['success'] ?? false) !== true) {
+            throw new \RuntimeException((string)(
+                $result['message'] ?? 'Unable to disable the managed certificate.'
+            ));
+        }
     }
     
     /**
-     * app/etc/ssl/ 下的目录名片段：Windows 路径禁止 `*`，泛域 `*.example.com` 映射为 `_wildcard_.example.com`（与 worker_ssl 磁盘解析一致）。
+     * app/etc/ssl/ 下的规范目录片段。拒绝路径分隔符和非域名输入；Windows
+     * 泛域映射为 `_wildcard_.example.com`，IPv6 映射为固定 32 位十六进制叶子。
      */
     public static function certificateStorageSegmentForFilesystem(string $domain): string
     {
-        $domain = \strtolower(\trim($domain));
+        $domain = self::normalizeCertificateStorageDomain($domain);
+        if (\filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+            $packed = @\inet_pton($domain);
+            if (!\is_string($packed)) {
+                throw new \InvalidArgumentException('Certificate IPv6 storage identity is invalid.');
+            }
+            return '_ip6_.' . \bin2hex($packed);
+        }
         if (\PHP_OS_FAMILY === 'Windows' && \str_starts_with($domain, '*.')) {
             return '_wildcard_.' . \substr($domain, 2);
         }
@@ -3338,13 +4194,14 @@ CNF;
     }
 
     /**
-     * 探测/删除证书目录时可能存在的名片段（Windows 上映射目录 + 逻辑名，兼容从 Linux 拷贝的 `*.` 目录等边缘情况）。
+     * 探测/删除证书目录时可能存在的规范片段（Windows 上映射目录 + 逻辑名，
+     * 兼容从 Linux 拷贝的 `*.` 目录；任何片段仍需通过 no-follow 目录校验）。
      *
      * @return list<string>
      */
     public static function certificateStorageSegmentCandidatesForProbe(string $logicalDomain): array
     {
-        $logicalDomain = \strtolower(\trim($logicalDomain));
+        $logicalDomain = self::normalizeCertificateStorageDomain($logicalDomain);
         $mapped = self::certificateStorageSegmentForFilesystem($logicalDomain);
         if ($mapped === $logicalDomain) {
             return [$mapped];
@@ -3359,12 +4216,83 @@ CNF;
     public static function logicalDomainFromStorageSegment(string $segment): string
     {
         $segment = \strtolower(\trim($segment));
+        if ($segment === ''
+            || \strlen($segment) > 255
+            || \str_contains($segment, "\0")
+            || \str_contains($segment, '/')
+            || \str_contains($segment, '\\')
+            || $segment === '.'
+            || $segment === '..'
+        ) {
+            return '';
+        }
+        $ip6Prefix = '_ip6_.';
+        if (\str_starts_with($segment, $ip6Prefix)) {
+            $hex = \substr($segment, \strlen($ip6Prefix));
+            if (\preg_match('/\A[a-f0-9]{32}\z/D', $hex) !== 1) {
+                return '';
+            }
+            $packed = @\hex2bin($hex);
+            $ip = \is_string($packed) ? @\inet_ntop($packed) : false;
+            return \is_string($ip) ? \strtolower($ip) : '';
+        }
         $prefix = '_wildcard_.';
         if (\str_starts_with($segment, $prefix)) {
-            return '*.' . \substr($segment, \strlen($prefix));
+            $segment = '*.' . \substr($segment, \strlen($prefix));
         }
+        try {
+            return self::normalizeCertificateStorageDomain($segment);
+        } catch (\Throwable) {
+            return '';
+        }
+    }
 
-        return $segment;
+    private static function normalizeCertificateStorageDomain(string $domain): string
+    {
+        if ($domain === ''
+            || \strlen($domain) > 255
+            || \str_contains($domain, "\0")
+            || \str_contains($domain, '/')
+            || \str_contains($domain, '\\')
+            || !\hash_equals($domain, \trim($domain))
+        ) {
+            throw new \InvalidArgumentException('Certificate domain is outside storage bounds.');
+        }
+        $domain = \strtolower(\rtrim($domain, '.'));
+        $wildcard = \str_starts_with($domain, '*.');
+        $body = $wildcard ? \substr($domain, 2) : $domain;
+        if (!$wildcard && \filter_var($body, FILTER_VALIDATE_IP) !== false) {
+            $packed = @\inet_pton($body);
+            $normalized = \is_string($packed) ? @\inet_ntop($packed) : false;
+            if (!\is_string($normalized)) {
+                throw new \InvalidArgumentException('Certificate IP identity is invalid.');
+            }
+            return \strtolower($normalized);
+        }
+        if (\function_exists('idn_to_ascii')) {
+            $variant = \defined('INTL_IDNA_VARIANT_UTS46')
+                ? \constant('INTL_IDNA_VARIANT_UTS46')
+                : 0;
+            $ascii = @\idn_to_ascii($body, IDNA_DEFAULT, $variant);
+            if (!\is_string($ascii) || $ascii === '') {
+                throw new \InvalidArgumentException('Certificate domain IDNA conversion failed.');
+            }
+            $body = \strtolower($ascii);
+        } elseif (\preg_match('/[^\x20-\x7e]/', $body) === 1) {
+            throw new \InvalidArgumentException(
+                'Non-ASCII certificate domains require the Intl extension.',
+            );
+        }
+        if (\strlen($body) > 253
+            || \preg_match(
+                '/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*'
+                    . '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z/D',
+                $body,
+            ) !== 1
+        ) {
+            throw new \InvalidArgumentException('Certificate domain is not a canonical DNS name.');
+        }
+        return $wildcard ? '*.' . $body : $body;
     }
 
     /**
@@ -3373,11 +4301,7 @@ CNF;
     public function getCertificateDir(string $domain): string
     {
         $segment = self::certificateStorageSegmentForFilesystem($domain);
-        $dir = $this->certBaseDir . $segment . DS;
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-        return $dir;
+        return (string)$this->certificateDirectoryForSegment($segment, true);
     }
 
     /**
@@ -3417,13 +4341,29 @@ CNF;
             return false;
         }
         foreach (self::certificateStorageSegmentCandidatesForProbe($domain) as $segment) {
-            $lockPath = $this->certBaseDir . $segment . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
-            if (!\is_file($lockPath)) {
+            $certDir = $this->certificateDirectoryForSegment($segment, false);
+            if ($certDir === null) {
                 continue;
             }
-            $age = \time() - (int)@\filemtime($lockPath);
+            $lockPath = $certDir . self::SSL_ISSUANCE_LOCK_FILENAME;
+            $lockStatus = @\lstat($lockPath);
+            if (!\is_array($lockStatus)) {
+                if (\file_exists($lockPath) || \is_link($lockPath)) {
+                    throw new \RuntimeException('SSL issuance lock is indeterminate.');
+                }
+                continue;
+            }
+            if ((((int)($lockStatus['mode'] ?? 0)) & 0170000) !== 0100000
+                || (int)($lockStatus['nlink'] ?? 0) !== 1
+            ) {
+                throw new \RuntimeException('SSL issuance lock is not a private regular file.');
+            }
+            $age = \time() - (int)($lockStatus['mtime'] ?? 0);
             if ($age > self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
-                @\unlink($lockPath);
+                $this->removeCertificateLeafSafely(
+                    $certDir,
+                    self::SSL_ISSUANCE_LOCK_FILENAME,
+                );
                 continue;
             }
             return true;
@@ -3446,21 +4386,50 @@ CNF;
      */
     protected function acquireSslIssuanceLock(string $domain): bool
     {
+        try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $this->certificateLifecycleLockPath(),
+                fn (): bool => $this->acquireSslIssuanceLockUnlocked($domain),
+                waitTimeoutSeconds: 10.0,
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function acquireSslIssuanceLockUnlocked(string $domain): bool
+    {
         $domain = \strtolower(\trim($domain));
         if ($domain === '') {
             return false;
         }
         $certDir = $this->getCertificateDir($domain);
         $lockPath = $certDir . self::SSL_ISSUANCE_LOCK_FILENAME;
-        if (\is_file($lockPath)) {
-            $age = \time() - (int)@\filemtime($lockPath);
+        $lockStatus = @\lstat($lockPath);
+        if (\is_array($lockStatus)) {
+            if ((((int)($lockStatus['mode'] ?? 0)) & 0170000) !== 0100000
+                || (int)($lockStatus['nlink'] ?? 0) !== 1
+            ) {
+                return false;
+            }
+            $age = \time() - (int)($lockStatus['mtime'] ?? 0);
             if ($age <= self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
                 return false;
             }
-            @\unlink($lockPath);
+            $this->removeCertificateLeafSafely(
+                $certDir,
+                self::SSL_ISSUANCE_LOCK_FILENAME,
+            );
+        } elseif (\file_exists($lockPath) || \is_link($lockPath)) {
+            return false;
         }
         $payload = (string)\getmypid() . "\n" . \date('c');
-        return @\file_put_contents($lockPath, $payload) !== false;
+        try {
+            $this->writeCertificateFileAtomically($lockPath, $payload, 0600);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -3473,9 +4442,12 @@ CNF;
             return;
         }
         foreach (self::certificateStorageSegmentCandidatesForProbe($domain) as $segment) {
-            $lockPath = $this->certBaseDir . $segment . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
-            if (\is_file($lockPath)) {
-                @\unlink($lockPath);
+            $certDir = $this->certificateDirectoryForSegment($segment, false);
+            if ($certDir !== null) {
+                $this->removeCertificateLeafSafely(
+                    $certDir,
+                    self::SSL_ISSUANCE_LOCK_FILENAME,
+                );
             }
         }
     }
@@ -3505,8 +4477,9 @@ CNF;
         string $provider = '',
         bool $recoverAndTrustLocalCa = true
     ): ?SslCertificate {
-        $domain = \strtolower(\trim($domain));
-        if ($domain === '' || !\is_file($certPath) || !\is_file($keyPath)) {
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
+        } catch (\Throwable) {
             return null;
         }
         // 颁发过程中禁止用磁盘扫描结果覆盖证书记录，避免「尚未成功下载」时管理器数据被改坏
@@ -3515,16 +4488,34 @@ CNF;
         }
 
         try {
+            $chainPath = '';
+            $candidateChainPath = \dirname($certPath) . DS . 'chain.pem';
+            if (self::certificateBundleFileIsValid($candidateChainPath)) {
+                $chainPath = $candidateChainPath;
+            }
+            $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
+            if (!self::certificatePemPairIsValidForName(
+                $certContents['cert_pem'],
+                $certContents['key_pem'],
+                $domain,
+            ) || !self::certificateBundlePemIsValid($certContents['chain_pem'], true)) {
+                return null;
+            }
+            $leafPem = $this->extractLeafCertFromFullchain($certContents['cert_pem']);
+            $parsed = $leafPem !== '' ? @\openssl_x509_parse($leafPem) : false;
+            if (!\is_array($parsed)) {
+                return null;
+            }
+
             $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
             if (!$cert->getCertId()) {
                 $cert = ObjectManager::getInstance(SslCertificate::class);
                 $cert->clearData(true);
             }
 
-            $parsed = $this->parseCertificate($certPath);
-            $issuer = (string)($parsed['issuer'] ?? '');
-            $issuedAt = (string)($parsed['issued_at'] ?? '');
-            $expiresAt = (string)($parsed['expires_at'] ?? '');
+            $issuer = (string)($parsed['issuer']['O'] ?? $parsed['issuer']['CN'] ?? '');
+            $issuedAt = \date('Y-m-d H:i:s', (int)$parsed['validFrom_time_t']);
+            $expiresAt = \date('Y-m-d H:i:s', (int)$parsed['validTo_time_t']);
 
             $provider = $this->inferProviderByIssuer(
                 $provider !== '' ? $provider : (string)$cert->getProvider(),
@@ -3537,16 +4528,6 @@ CNF;
                 : SslCertificate::CERT_TYPE_EXACT;
 
             $status = SslCertificate::STATUS_ACTIVE;
-            if ($expiresAt !== '' && \strtotime($expiresAt) < \time()) {
-                $status = SslCertificate::STATUS_EXPIRED;
-            }
-
-            $chainPath = '';
-            $candidateChainPath = \dirname($certPath) . DS . 'chain.pem';
-            if (\is_file($candidateChainPath)) {
-                $chainPath = $candidateChainPath;
-            }
-            $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
             if ($recoverAndTrustLocalCa) {
                 $this->recoverAndTrustLocalCaFromCertificateBundle(
                     $provider,
@@ -3710,13 +4691,294 @@ CNF;
      */
     public function getCertificateMap(array $certificateRoots = []): array
     {
-        $this->reconcileCertificateFiles();
+        return $this->buildCertificateMap($certificateRoots, false);
+    }
 
-        $certificates = $this->certificateModel()->clearQuery()
-            ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
-            ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
-            ->select()
-            ->fetchIterator();
+    /**
+     * Complete project domain facts for WLS Edge Protocol 2.
+     *
+     * Missing or expired material remains represented by an empty pair so a
+     * transient source failure can never be interpreted as route deletion.
+     * Wildcard expansion and database discovery fail closed in this mode.
+     *
+     * @param array<int|string,string> $certificateRoots
+     * @return array<string,array<string,mixed>>
+     */
+    public function getGatewayCertificateMap(array $certificateRoots = []): array
+    {
+        if ($certificateRoots === []) {
+            $certificateRoots = [
+                'project_ssl' => $this->ensureCertificateBaseDirectory(),
+            ];
+        }
+        return $this->buildCertificateMap($certificateRoots, true);
+    }
+
+    /**
+     * Complete project edge-route facts, independently of TLS material.
+     *
+     * Certificate rows remain the TLS fact source. Active WebsiteDomain rows
+     * are the host-routing authority and therefore keep port 80 routable after
+     * HTTPS is explicitly disabled. A failed/incomplete authority query is
+     * never interpreted as route deletion.
+     *
+     * @param array<int|string,string> $certificateRoots
+     * @return array<string,array<string,mixed>>
+     */
+    public function getGatewayRouteMap(array $certificateRoots = []): array
+    {
+        $map = $this->getGatewayCertificateMap($certificateRoots);
+        foreach ($map as $domain => &$material) {
+            if (!\is_array($material)) {
+                throw new \RuntimeException(
+                    'Gateway certificate route material is malformed: ' . (string)$domain,
+                );
+            }
+            $hasCertificate = \trim((string)($material['cert'] ?? '')) !== ''
+                && \trim((string)($material['key'] ?? '')) !== '';
+            $material['certificate_state'] = $hasCertificate ? 'active' : 'pending';
+        }
+        unset($material);
+
+        $authority = $this->requestGatewayRouteDomainFacts();
+        if (($authority['complete'] ?? false) !== true) {
+            if (($authority['present'] ?? false) !== true) {
+                // Weline_Server does not require Weline_Websites. In projects
+                // without a route-authority provider, the bounded certificate
+                // map plus durable project certificate tombstones remains the
+                // complete legacy domain authority. A revoked/deleted final DB
+                // row must still publish one HTTP-only desired route and an
+                // empty TLS serving set instead of looking like transient loss.
+                return $this->mergeGatewayDisabledRouteTombstones($map, true);
+            }
+            // Once HTTP-only routes exist, a certificate-only fallback cannot
+            // distinguish an intentional removal from a transient authority
+            // failure. Publishing that partial map would destructively retire
+            // otherwise healthy port-80 routes, so desired-state construction
+            // must always fail closed.
+            throw new \RuntimeException(
+                'Project routable-domain authority is unavailable; refusing a partial gateway route set.',
+            );
+        }
+        foreach ((array)($authority['domains'] ?? []) as $fact) {
+            if (!\is_array($fact) || \array_is_list($fact)) {
+                throw new \RuntimeException('Project routable-domain authority returned a malformed fact.');
+            }
+            $domain = $this->normalizeGatewayFactDomain(
+                (string)($fact['domain'] ?? ''),
+                false,
+            );
+            $httpsEnabled = $fact['https_enabled'] ?? null;
+            if (!\is_bool($httpsEnabled)) {
+                throw new \RuntimeException(
+                    'Project routable-domain HTTPS policy is not canonical: ' . $domain,
+                );
+            }
+            if (isset($map[$domain])) {
+                // WebsiteDomain is the host-routing authority, while the
+                // project certificate row/generation is the HTTPS lifecycle
+                // authority. Its derived https_enabled flag is updated only
+                // after serving ACK and must not erase a newly issued active
+                // certificate during that transaction.
+                continue;
+            }
+            $map[$domain] = [
+                'cert' => '',
+                'key' => '',
+                'chain' => '',
+                'cert_type' => SslCertificate::CERT_TYPE_EXACT,
+                // A certificate fact that still desires HTTPS is an issuance
+                // pending route. An explicitly HTTP-only website is a durable
+                // disabled-certificate route and must never redirect to 443.
+                'force_https' => $httpsEnabled,
+                'force_root_to_www' => false,
+                'certificate_state' => $httpsEnabled ? 'pending' : 'disabled',
+            ];
+        }
+        return $this->mergeGatewayDisabledRouteTombstones($map, false);
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $map
+     * @return array<string,array<string,mixed>>
+     */
+    private function mergeGatewayDisabledRouteTombstones(
+        array $map,
+        bool $addMissing,
+    ): array
+    {
+        $disabled = (new ProjectCertificateGenerationStore())->disabledCertificates();
+        foreach ($disabled as $domain => $fact) {
+            $domain = $this->normalizeGatewayFactDomain((string)$domain, false);
+            $existing = \is_array($map[$domain] ?? null) ? $map[$domain] : null;
+            if ($existing === null && !$addMissing) {
+                continue;
+            }
+            if ($existing !== null
+                && \trim((string)($existing['cert'] ?? '')) !== ''
+                && \trim((string)($existing['key'] ?? '')) !== ''
+            ) {
+                // A valid source fact is an explicit re-enable candidate. The
+                // generation store will allocate strictly above this tombstone
+                // before the route can become active.
+                continue;
+            }
+            $generation = (int)($fact['generation'] ?? 0);
+            $sourceDigest = \strtolower(\trim((string)(
+                $fact['source_digest'] ?? ''
+            )));
+            if ($generation < 1
+                || !\hash_equals('disabled', (string)($fact['state'] ?? ''))
+                || !\hash_equals($domain, (string)($fact['domain'] ?? ''))
+                || !\hash_equals(
+                    \hash(
+                        'sha256',
+                        "wls-disabled-certificate\0" . $domain . "\0" . $generation,
+                    ),
+                    $sourceDigest,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Project disabled-certificate route authority is inconsistent: ' . $domain,
+                );
+            }
+            $map[$domain] = [
+                'cert' => '',
+                'key' => '',
+                'chain' => '',
+                'cert_type' => SslCertificate::CERT_TYPE_EXACT,
+                'force_https' => false,
+                'force_root_to_www' => false,
+                'certificate_state' => 'disabled',
+            ];
+        }
+        if (\count($map) > 256) {
+            throw new \RuntimeException(
+                'Complete gateway route facts exceed the 256-route protocol limit.',
+            );
+        }
+        \ksort($map, SORT_STRING);
+        return $map;
+    }
+
+    /**
+     * @return array{present:bool,complete:bool,provider:string,domains:list<array<string,mixed>>}
+     */
+    private function requestGatewayRouteDomainFacts(): array
+    {
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventData = [
+                'filter' => [
+                    'edge_routable_only' => true,
+                    'group_by_root' => false,
+                ],
+                'domains' => [],
+                'route_authority_present' => false,
+                'route_authority_complete' => false,
+                'route_authority_provider' => '',
+            ];
+            $eventsManager->dispatch(
+                'Weline_Server::integration::domain_list_requested',
+                $eventData,
+            );
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'Unable to read the complete project routable-domain authority.',
+                0,
+                $throwable,
+            );
+        }
+        if (($eventData['route_authority_complete'] ?? false) !== true) {
+            return [
+                'present' => ($eventData['route_authority_present'] ?? false) === true,
+                'complete' => false,
+                'provider' => '',
+                'domains' => [],
+            ];
+        }
+        $provider = \trim((string)($eventData['route_authority_provider'] ?? ''));
+        $domains = $eventData['domains'] ?? null;
+        if ($provider === ''
+            || !\is_array($domains)
+            || !\array_is_list($domains)
+            || \count($domains) > 256
+        ) {
+            throw new \RuntimeException(
+                'Project routable-domain authority completeness envelope is invalid.',
+            );
+        }
+        $seen = [];
+        $validated = [];
+        foreach ($domains as $fact) {
+            if (!\is_array($fact)
+                || \array_is_list($fact)
+                || !\hash_equals('website_domain', (string)($fact['source'] ?? ''))
+            ) {
+                throw new \RuntimeException(
+                    'Project routable-domain authority returned a non-routing domain fact.',
+                );
+            }
+            $domain = $this->normalizeGatewayFactDomain(
+                (string)($fact['domain'] ?? ''),
+                false,
+            );
+            if (isset($seen[$domain])) {
+                throw new \RuntimeException(
+                    'Project routable-domain authority returned a duplicate domain: ' . $domain,
+                );
+            }
+            $seen[$domain] = true;
+            $fact['domain'] = $domain;
+            $validated[] = $fact;
+        }
+        \usort(
+            $validated,
+            static fn (array $left, array $right): int =>
+                (string)$left['domain'] <=> (string)$right['domain'],
+        );
+        return [
+            'present' => true,
+            'complete' => true,
+            'provider' => $provider,
+            'domains' => $validated,
+        ];
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    private function buildCertificateMap(array $certificateRoots, bool $strictGatewayFacts): array
+    {
+        if (!$strictGatewayFacts) {
+            $this->reconcileCertificateFiles();
+        }
+
+        $query = $this->certificateModel()->clearQuery()
+            ->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1);
+        if (!$strictGatewayFacts) {
+            $query->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE);
+        } else {
+            $query->where(
+                SslCertificate::schema_fields_STATUS,
+                SslCertificate::STATUS_REVOKED,
+                '!=',
+            )->limit(257);
+        }
+        $certificates = $query->select()->fetchIterator();
+        if ($strictGatewayFacts) {
+            $bounded = [];
+            foreach ($certificates as $certificate) {
+                $bounded[] = $certificate;
+                if (\count($bounded) > 256) {
+                    throw new \RuntimeException(
+                        'Complete gateway certificate facts exceed the 256-route protocol limit.'
+                    );
+                }
+            }
+            // Enforce the route cardinality before certificate activation can
+            // create snapshots or advance a project generation.
+            $certificates = $bounded;
+        }
         
         $map = [];
         $missingCerts = [];  // 记录证书文件缺失的域名
@@ -3725,10 +4987,30 @@ CNF;
         foreach ($certificates as $cert) {
             $cert = \is_array($cert) ? $cert : (\method_exists($cert, 'getData') ? $cert->getData() : []);
             $domain = (string)($cert[SslCertificate::schema_fields_DOMAIN] ?? '');
+            $recordStatus = (string)($cert[SslCertificate::schema_fields_STATUS] ?? '');
+            // HTTPS_ENABLED is the desired-route fact. Only an explicit
+            // revocation (or HTTPS disabled by the query) means deletion.
+            // Pending/error/expired rows remain present with empty material so
+            // first-issue ACME and transient renewal failures cannot remove a
+            // route from the complete desired state.
+            if ($strictGatewayFacts
+                && $recordStatus === SslCertificate::STATUS_REVOKED
+            ) {
+                continue;
+            }
 
             // 0.0.0.0 只是"监听所有网卡"的绑定地址，不是真实域名，跳过
             if ($domain === '0.0.0.0') {
                 continue;
+            }
+            if ($strictGatewayFacts) {
+                $domain = $this->normalizeGatewayFactDomain($domain, true);
+            } else {
+                try {
+                    $domain = self::normalizeCertificateStorageDomain($domain);
+                } catch (\Throwable) {
+                    continue;
+                }
             }
 
             $certPath = (string)($cert[SslCertificate::schema_fields_CERT_PATH] ?? '');
@@ -3736,12 +5018,53 @@ CNF;
             $certType = (string)($cert[SslCertificate::schema_fields_CERT_TYPE] ?? SslCertificate::CERT_TYPE_EXACT);
             $certId = (int)($cert[SslCertificate::schema_fields_ID] ?? 0);
             $expiresAt = (string)($cert[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
+            $expiresTimestamp = $expiresAt !== '' ? \strtotime($expiresAt) : false;
+            $isExpired = $recordStatus === SslCertificate::STATUS_EXPIRED
+                || (\is_int($expiresTimestamp) && $expiresTimestamp < \time());
+            $forceHttps = $this->certificatePolicyValue(
+                $cert[SslCertificate::schema_fields_FORCE_HTTPS] ?? 1,
+                true,
+                $strictGatewayFacts,
+                'force_https',
+                $domain,
+            );
+            $forceRootToWww = $this->certificatePolicyValue(
+                $cert[SslCertificate::schema_fields_FORCE_ROOT_TO_WWW] ?? 0,
+                false,
+                $strictGatewayFacts,
+                'force_root_to_www',
+                $domain,
+            );
+
+            if ($strictGatewayFacts
+                && ($isExpired || $recordStatus !== SslCertificate::STATUS_ACTIVE)
+            ) {
+                $expiredCerts[] = [
+                    'domain' => $domain,
+                    'expires_at' => $expiresAt,
+                    'cert_id' => $certId,
+                ];
+                $this->appendCertificateMapEntries($map, $domain, $certType, [
+                    'cert' => '',
+                    'key' => '',
+                    'chain' => '',
+                    'cert_type' => $certType,
+                    'force_https' => $forceHttps,
+                    'force_root_to_www' => $forceRootToWww,
+                ], true);
+                continue;
+            }
 
             // 检查证书文件是否存在；若 DB 路径为空/失效，先尝试从标准目录自动探测并回写路径
             if ($certPath === ''
                 || $keyPath === ''
-                || !\is_file($certPath)
-                || !\is_file($keyPath)
+                || self::readRegularFileNoFollow($certPath) === null
+                || self::readPrivateKeyFileNoFollow($keyPath) === null
+                || !self::certificateFilePairIsValidForName(
+                    $certPath,
+                    $keyPath,
+                    $domain,
+                )
                 || ($certificateRoots !== []
                     && !$this->certificatePathsInsideRoots(
                         [$certPath, $keyPath],
@@ -3761,45 +5084,64 @@ CNF;
                     $cert[SslCertificate::schema_fields_KEY_PATH] = $keyPath;
                     $resolvedChainPath = \dirname($certPath) . DS . 'chain.pem';
                     $cert[SslCertificate::schema_fields_CHAIN_PATH]
-                        = \is_file($resolvedChainPath) ? $resolvedChainPath : '';
+                        = self::certificateBundleFileIsValid($resolvedChainPath)
+                            ? $resolvedChainPath
+                            : '';
 
-                    // 路径探测成功后同步回 DB，避免后续请求重复误判
-                    try {
-                        $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(SslCertificate::class, [], false);
-                        $certModel->load($certId);
-                        if ($certModel->getCertId()) {
-                            $certModel->setCertPath($certPath)
-                                ->setKeyPath($keyPath)
-                                ->setChainPath((string)$cert[SslCertificate::schema_fields_CHAIN_PATH])
-                                ->setStatus(SslCertificate::STATUS_ACTIVE)
-                                ->setRenewError('')
-                                ->save();
+                    if (!$strictGatewayFacts) {
+                        // Legacy interactive discovery may reconcile the DB.
+                        // Agent desired-state reads are observation-only.
+                        try {
+                            $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(SslCertificate::class, [], false);
+                            $certModel->load($certId);
+                            if ($certModel->getCertId()) {
+                                $certModel->setCertPath($certPath)
+                                    ->setKeyPath($keyPath)
+                                    ->setChainPath((string)$cert[SslCertificate::schema_fields_CHAIN_PATH])
+                                    ->setStatus(SslCertificate::STATUS_ACTIVE)
+                                    ->setRenewError('')
+                                    ->save();
+                            }
+                        } catch (\Throwable $e) {
+                            w_log_warning('[SslCertificateService] 自动回写证书路径失败: ' . $e->getMessage());
                         }
-                    } catch (\Throwable $e) {
-                        w_log_warning('[SslCertificateService] 自动回写证书路径失败: ' . $e->getMessage());
                     }
                 }
             }
 
             // 标准目录探测后仍不可用时，再从证书管理（整行 PEM / 等价 localhost 记录）恢复
-            if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
-                $isExpired = $expiresAt !== '' && \strtotime($expiresAt) < \time();
-                if (!$isExpired && $this->tryRestoreCertificateFromManagement($certId, $domain, $cert)) {
+            if ($certPath === ''
+                || $keyPath === ''
+                || self::readRegularFileNoFollow($certPath) === null
+                || self::readPrivateKeyFileNoFollow($keyPath) === null
+                || !self::certificateFilePairIsValidForName(
+                    $certPath,
+                    $keyPath,
+                    $domain,
+                )
+            ) {
+                if (!$strictGatewayFacts
+                    && !$isExpired
+                    && $this->tryRestoreCertificateFromManagement($certId, $domain, $cert)
+                ) {
                     $restoredDir = $this->getCertificateDir((string) $domain);
                     $certPath = $restoredDir . 'fullchain.pem';
                     $keyPath = $restoredDir . 'privkey.pem';
                     $cert[SslCertificate::schema_fields_CERT_PATH] = $certPath;
                     $cert[SslCertificate::schema_fields_KEY_PATH] = $keyPath;
-                    $cert[SslCertificate::schema_fields_CHAIN_PATH] = \is_file($restoredDir . 'chain.pem')
-                        ? $restoredDir . 'chain.pem'
-                        : '';
+                    $cert[SslCertificate::schema_fields_CHAIN_PATH]
+                        = self::certificateBundleFileIsValid($restoredDir . 'chain.pem')
+                            ? $restoredDir . 'chain.pem'
+                            : '';
                 } elseif ($isExpired) {
                     $expiredCerts[] = [
                         'domain' => $domain,
                         'expires_at' => $expiresAt,
                         'cert_id' => $certId,
                     ];
-                    continue;
+                    if (!$strictGatewayFacts) {
+                        continue;
+                    }
                 } else {
                     $missingCerts[] = [
                         'domain' => $domain,
@@ -3808,18 +5150,32 @@ CNF;
                         'cert_path' => $certPath,
                         'key_path' => $keyPath,
                     ];
+                    if (!$strictGatewayFacts) {
+                        continue;
+                    }
+                }
+                if ($strictGatewayFacts) {
+                    $this->appendCertificateMapEntries($map, $domain, $certType, [
+                        'cert' => '',
+                        'key' => '',
+                        'chain' => '',
+                        'cert_type' => $certType,
+                        'force_https' => $forceHttps,
+                        'force_root_to_www' => $forceRootToWww,
+                    ], true);
                     continue;
                 }
             }
 
             $chainPath = (string)($cert[SslCertificate::schema_fields_CHAIN_PATH] ?? '');
-            if ($chainPath !== ''
-                && $certificateRoots !== []
-                && !$this->certificatePathsInsideRoots([$chainPath], $certificateRoots)
+            if ($chainPath !== '' && (!self::certificateBundleFileIsValid($chainPath)
+                || ($certificateRoots !== []
+                    && !$this->certificatePathsInsideRoots([$chainPath], $certificateRoots)))
             ) {
                 $localChain = \dirname($certPath) . DS . 'chain.pem';
-                $chainPath = \is_file($localChain)
-                    && $this->certificatePathsInsideRoots([$localChain], $certificateRoots)
+                $chainPath = self::certificateBundleFileIsValid($localChain)
+                    && ($certificateRoots === []
+                        || $this->certificatePathsInsideRoots([$localChain], $certificateRoots))
                         ? $localChain
                         : '';
             }
@@ -3828,20 +5184,26 @@ CNF;
                 'key' => $keyPath,
                 'chain' => $chainPath,
                 'cert_type' => $certType,
-                'force_https' => (int) ($cert[SslCertificate::schema_fields_FORCE_HTTPS] ?? 1),
-                'force_root_to_www' => (int) ($cert[SslCertificate::schema_fields_FORCE_ROOT_TO_WWW] ?? 0),
+                'force_https' => $forceHttps,
+                'force_root_to_www' => $forceRootToWww,
             ];
             
-            $this->appendCertificateMapEntries($map, (string) $domain, $certType, $certData);
+            $this->appendCertificateMapEntries(
+                $map,
+                (string)$domain,
+                $certType,
+                $certData,
+                $strictGatewayFacts,
+            );
         }
         
         // 发出证书缺失通知
-        if (!empty($missingCerts)) {
+        if (!$strictGatewayFacts && !empty($missingCerts)) {
             $this->notifyMissingCertificates($missingCerts);
         }
         
         // 发出证书过期通知
-        if (!empty($expiredCerts)) {
+        if (!$strictGatewayFacts && !empty($expiredCerts)) {
             $this->notifyExpiredCertificates($expiredCerts);
         }
         
@@ -3862,8 +5224,7 @@ CNF;
     {
         if ($certPath !== ''
             && $keyPath !== ''
-            && \is_file($certPath)
-            && \is_file($keyPath)
+            && self::certificateFilePairIsValidForName($certPath, $keyPath, $domain)
             && ($certificateRoots === []
                 || $this->certificatePathsInsideRoots(
                     [$certPath, $keyPath],
@@ -3885,12 +5246,18 @@ CNF;
         $dirCandidates = $this->getCertificateDirCandidates($domain);
         foreach ($dirCandidates as $dirName) {
             foreach (self::certificateStorageSegmentCandidatesForProbe($dirName) as $segment) {
-                $certDir = $this->certBaseDir . $segment . DS;
+                $certDir = $this->certificateDirectoryForSegment($segment, false);
+                if ($certDir === null) {
+                    continue;
+                }
                 foreach ($fileCandidates as $candidate) {
                     $candidateCertPath = $certDir . $candidate['cert'];
                     $candidateKeyPath = $certDir . $candidate['key'];
-                    if (\is_file($candidateCertPath)
-                        && \is_file($candidateKeyPath)
+                    if (self::certificateFilePairIsValidForName(
+                        $candidateCertPath,
+                        $candidateKeyPath,
+                        $domain,
+                    )
                         && ($certificateRoots === []
                             || $this->certificatePathsInsideRoots(
                                 [$candidateCertPath, $candidateKeyPath],
@@ -3914,17 +5281,37 @@ CNF;
     {
         $canonicalRoots = [];
         foreach ($roots as $root) {
-            $canonical = \realpath((string)$root);
-            if (\is_string($canonical) && $canonical !== '' && \is_dir($canonical)) {
-                $canonicalRoots[] = \str_replace('\\', '/', \rtrim($canonical, '/\\'));
+            $root = (string)$root;
+            if ($root === '' || \str_contains($root, "\0")) {
+                continue;
             }
+            $canonical = \realpath($root);
+            $status = @\lstat($root);
+            if (!\is_string($canonical)
+                || $canonical === ''
+                || !\is_array($status)
+                || (((int)($status['mode'] ?? 0)) & 0170000) !== 0040000
+                || \is_link($root)
+                || !self::sameFilesystemPath($root, $canonical)
+                || self::filesystemPathIsRoot($canonical)
+            ) {
+                continue;
+            }
+            $canonicalRoots[] = \str_replace('\\', '/', \rtrim($canonical, '/\\'));
         }
         if ($canonicalRoots === []) {
             return false;
         }
         foreach ($paths as $path) {
             $real = \realpath($path);
-            if (!\is_string($real) || !\is_file($real)) {
+            $status = @\lstat($path);
+            if (!\is_string($real)
+                || !\is_array($status)
+                || (((int)($status['mode'] ?? 0)) & 0170000) !== 0100000
+                || (int)($status['nlink'] ?? 0) !== 1
+                || \is_link($path)
+                || !self::sameFilesystemPath($path, $real)
+            ) {
                 return false;
             }
             $real = \str_replace('\\', '/', \rtrim($real, '/\\'));
@@ -4006,11 +5393,60 @@ CNF;
         }
     }
 
-    protected function appendCertificateMapEntries(array &$map, string $domain, string $certType, array $certData): void
+    private function certificatePolicyValue(
+        mixed $value,
+        bool $default,
+        bool $strictGatewayFacts,
+        string $field,
+        string $domain,
+    ): int|bool {
+        if (!$strictGatewayFacts) {
+            return (int)$value;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) && ($value === 0 || $value === 1)) {
+            return $value === 1;
+        }
+        if (\is_string($value) && ($value === '0' || $value === '1')) {
+            return $value === '1';
+        }
+        if ($value === null) {
+            return $default;
+        }
+        throw new \RuntimeException(
+            'Certificate policy ' . $field . ' is not a canonical boolean: ' . $domain,
+        );
+    }
+
+    protected function appendCertificateMapEntries(
+        array &$map,
+        string $domain,
+        string $certType,
+        array $certData,
+        bool $strictGatewayFacts = false,
+    ): void
     {
-        $map[$domain] = $certData;
+        if ($strictGatewayFacts && isset($map[$domain])) {
+            if (!$this->certificateMapEntryEquivalent((array)$map[$domain], $certData)) {
+                throw new \RuntimeException(
+                    'Complete gateway certificate facts contain a conflicting domain: ' . $domain
+                );
+            }
+        } else {
+            $map[$domain] = $certData;
+        }
 
         if ($certType !== SslCertificate::CERT_TYPE_WILDCARD || !\str_starts_with($domain, '*.')) {
+            return;
+        }
+
+        // Edge Protocol 2 and the Controller route matcher understand a
+        // wildcard SNI route directly. DomainPool expansion is legacy-only: it
+        // couples desired-state reads to another module, can exceed the 256
+        // route bound, and can manufacture conflicts with explicit exact rows.
+        if ($strictGatewayFacts) {
             return;
         }
 
@@ -4022,31 +5458,135 @@ CNF;
                 'root_domain' => $rootDomain,
                 'limit' => 2000,
             ]);
-            $subdomains = \is_array($subdomains) ? $subdomains : [];
+            if (!\is_array($subdomains) || \count($subdomains) > 2000) {
+                if ($strictGatewayFacts) {
+                    throw new \RuntimeException(
+                        'Wildcard DomainPool returned an invalid or oversized result.'
+                    );
+                }
+                $subdomains = [];
+            }
 
+            $seenSubdomains = [];
             foreach ($subdomains as $row) {
-                $subdomain = (string)($row['domain'] ?? '');
+                if (!\is_array($row)) {
+                    if ($strictGatewayFacts) {
+                        throw new \RuntimeException(
+                            'Wildcard DomainPool returned a malformed domain row.'
+                        );
+                    }
+                    continue;
+                }
+                $rawSubdomain = $row['domain'] ?? null;
+                if ($strictGatewayFacts && !\is_string($rawSubdomain)) {
+                    throw new \RuntimeException(
+                        'Wildcard DomainPool row has no canonical domain string.'
+                    );
+                }
+                $subdomain = (string)$rawSubdomain;
+                if ($strictGatewayFacts) {
+                    $subdomain = $this->normalizeGatewayFactDomain($subdomain, false);
+                    if (isset($seenSubdomains[$subdomain])) {
+                        throw new \RuntimeException(
+                            'Wildcard DomainPool contains a duplicate normalized domain.'
+                        );
+                    }
+                    $seenSubdomains[$subdomain] = true;
+                    if (isset($map[$subdomain])) {
+                        if (!$this->certificateMapEntryEquivalent(
+                            (array)$map[$subdomain],
+                            $certData,
+                        )) {
+                            throw new \RuntimeException(
+                                'Wildcard expansion conflicts with an explicit project domain: '
+                                    . $subdomain
+                            );
+                        }
+                        continue;
+                    }
+                }
                 if ($subdomain !== '' && !isset($map[$subdomain])) {
                     $map[$subdomain] = $certData;
                 }
             }
         } catch (\Throwable $e) {
+            if ($strictGatewayFacts) {
+                throw new \RuntimeException(
+                    'Unable to build the complete wildcard project domain set.',
+                    0,
+                    $e,
+                );
+            }
             w_log_debug('[SslCertificateService] 获取 DomainPool 子域名失败: ' . $e->getMessage());
         }
     }
 
+    private function normalizeGatewayFactDomain(string $domain, bool $allowWildcard): string
+    {
+        if ($domain === ''
+            || \strlen($domain) > 255
+            || \str_contains($domain, "\0")
+            || !\hash_equals($domain, \trim($domain))
+        ) {
+            throw new \RuntimeException('Gateway certificate fact domain is malformed.');
+        }
+        $domain = \strtolower(\rtrim($domain, '.'));
+        $wildcard = \str_starts_with($domain, '*.');
+        if ($wildcard && !$allowWildcard) {
+            throw new \RuntimeException('Wildcard expansion returned a wildcard domain.');
+        }
+        $body = $wildcard ? \substr($domain, 2) : $domain;
+        if (\function_exists('idn_to_ascii')) {
+            $variant = \defined('INTL_IDNA_VARIANT_UTS46')
+                ? \constant('INTL_IDNA_VARIANT_UTS46')
+                : 0;
+            $ascii = @\idn_to_ascii($body, IDNA_DEFAULT, $variant);
+            if (!\is_string($ascii) || $ascii === '') {
+                throw new \RuntimeException('Gateway certificate fact IDNA conversion failed.');
+            }
+            $body = \strtolower($ascii);
+        }
+        if (\strlen($body) > 253
+            || \preg_match(
+                '/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)'
+                    . '(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))+\z/D',
+                $body,
+            ) !== 1
+        ) {
+            throw new \RuntimeException('Gateway certificate fact domain is outside protocol bounds.');
+        }
+        return $wildcard ? '*.' . $body : $body;
+    }
+
+    /** @param array<string,mixed> $left @param array<string,mixed> $right */
+    private function certificateMapEntryEquivalent(array $left, array $right): bool
+    {
+        foreach (['cert', 'key', 'chain', 'force_https', 'force_root_to_www'] as $field) {
+            if (($left[$field] ?? null) !== ($right[$field] ?? null)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     protected function readCertificateContents(string $certPath, string $keyPath, string $chainPath = ''): array
     {
-        $certPem = \is_file($certPath) ? (string) @\file_get_contents($certPath) : '';
-        $keyPem = \is_file($keyPath) ? (string) @\file_get_contents($keyPath) : '';
-        $chainPem = ($chainPath !== '' && \is_file($chainPath)) ? (string) @\file_get_contents($chainPath) : '';
+        $certPem = self::readRegularFileNoFollow($certPath) ?? '';
+        $keyPem = self::readPrivateKeyFileNoFollow($keyPath) ?? '';
+        $chainPem = $chainPath !== ''
+            ? (self::readRegularFileNoFollow($chainPath, self::MAX_CERTIFICATE_MATERIAL_BYTES, true) ?? '')
+            : '';
 
         if ($chainPem === '' && $certPem !== '') {
             $chainPem = $this->extractChainFromFullchain($certPem);
         }
 
         $csrPath = \dirname($certPath) . DS . 'csr.pem';
-        $csrPem = \is_file($csrPath) ? (string) @\file_get_contents($csrPath) : '';
+        $csrPem = self::readRegularFileNoFollow(
+            $csrPath,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            true,
+        ) ?? '';
 
         return [
             'cert_pem' => $certPem,
@@ -4191,11 +5731,10 @@ CNF;
 
     protected function isCertificateSelfSigned(string $certPath): bool
     {
-        if (!\is_file($certPath)) {
+        $certPem = self::readRegularFileNoFollow($certPath);
+        if ($certPem === null) {
             return false;
         }
-
-        $certPem = (string) @\file_get_contents($certPath);
         $certs = $this->extractPemCertificates($certPem);
         if ($certs === []) {
             return false;
@@ -4206,11 +5745,10 @@ CNF;
 
     protected function isCertificateAuthority(string $certPath): bool
     {
-        if (!\is_file($certPath)) {
+        $certPem = self::readRegularFileNoFollow($certPath);
+        if ($certPem === null) {
             return false;
         }
-
-        $certPem = (string) @\file_get_contents($certPath);
         $certs = $this->extractPemCertificates($certPem);
         if ($certs === []) {
             return false;
@@ -4253,64 +5791,87 @@ CNF;
         }
 
         $caCertPath = $this->getLocalCaCertPath();
-        $existingPem = \is_file($caCertPath) ? (string) @\file_get_contents($caCertPath) : '';
+        $existingPem = self::readRegularFileNoFollow(
+            $caCertPath,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            true,
+        ) ?? '';
         if (\trim($existingPem) === \trim($localCaPem)) {
             return;
         }
 
-        if (@\file_put_contents($caCertPath, $localCaPem) === false) {
+        try {
+            $this->writeLocalCaStateAtomically($caCertPath, $localCaPem, 0644);
+        } catch (\Throwable $throwable) {
             w_log_warning(__('[SslCertificateService] Failed to recover local CA certificate to %{1}', [$caCertPath]), [], 'ssl_cert');
             return;
         }
-
-        @\chmod($caCertPath, 0644);
         $this->trustLocalCertificateAuthority($caCertPath);
     }
 
     protected function restoreCertificateFilesFromData(array $cert): bool
     {
-        $domain = \strtolower(\trim((string) ($cert[SslCertificate::schema_fields_DOMAIN] ?? '')));
+        try {
+            $domain = self::normalizeCertificateStorageDomain(
+                (string)($cert[SslCertificate::schema_fields_DOMAIN] ?? ''),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
         $certPem = (string) ($cert[SslCertificate::schema_fields_CERT_PEM] ?? '');
         $keyPem = (string) ($cert[SslCertificate::schema_fields_KEY_PEM] ?? '');
         $chainPem = (string) ($cert[SslCertificate::schema_fields_CHAIN_PEM] ?? '');
         $csrPem = (string) ($cert[SslCertificate::schema_fields_CSR_PEM] ?? '');
-        if ($domain === '' || $certPem === '' || $keyPem === '') {
+        if ($certPem === ''
+            || $keyPem === ''
+            || \strlen($certPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($keyPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($chainPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($csrPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+        ) {
+            return false;
+        }
+
+        $leafPem = $this->extractLeafCertFromFullchain($certPem);
+        if ($leafPem === ''
+            || !self::certificatePemPairIsValidForName($certPem, $keyPem, $domain)
+        ) {
             return false;
         }
 
         if ($chainPem === '') {
             $chainPem = $this->extractChainFromFullchain($certPem);
         }
-
-        $certDir = $this->getCertificateDir($domain);
-
-        // 1. fullchain.pem（核心：SSL 握手用）
-        if (@\file_put_contents($certDir . 'fullchain.pem', $certPem) === false) {
+        if (!self::certificateBundlePemIsValid($chainPem, true)) {
             return false;
         }
-        // 2. privkey.pem（核心：SSL 握手用）
-        if (@\file_put_contents($certDir . 'privkey.pem', $keyPem) === false) {
+
+        try {
+            $certDir = $this->getCertificateDir($domain);
+            $this->writeCertificateFileAtomically(
+                $certDir . 'fullchain.pem',
+                $certPem,
+                0644,
+            );
+            $this->writeCertificateFileAtomically($certDir . 'privkey.pem', $keyPem, 0600);
+            $this->writeCertificateFileAtomically($certDir . 'cert.pem', $leafPem, 0644);
+            $this->writeCertificateFileAtomically($certDir . 'domain.key', $keyPem, 0600);
+            if ($chainPem !== '') {
+                $this->writeCertificateFileAtomically($certDir . 'chain.pem', $chainPem, 0644);
+            } else {
+                $this->removeCertificateLeafSafely($certDir, 'chain.pem');
+            }
+            if ($csrPem !== '') {
+                $this->writeCertificateFileAtomically($certDir . 'csr.pem', $csrPem, 0600);
+            } else {
+                $this->removeCertificateLeafSafely($certDir, 'csr.pem');
+            }
+        } catch (\Throwable $throwable) {
+            w_log_error(
+                '[SslCertificateService] 证书文件安全发布失败：' . $throwable->getMessage(),
+            );
             return false;
         }
-        // 3. chain.pem（中间证书链，浏览器验证需要）
-        if ($chainPem !== '') {
-            @\file_put_contents($certDir . 'chain.pem', $chainPem);
-        }
-        // 4. cert.pem（叶子证书）
-        $leafPem = $this->extractLeafCertFromFullchain($certPem);
-        if ($leafPem !== '') {
-            @\file_put_contents($certDir . 'cert.pem', $leafPem);
-        }
-        // 5. domain.key（原始域名密钥，与 privkey.pem 内容相同）
-        @\file_put_contents($certDir . 'domain.key', $keyPem);
-        // 6. csr.pem（证书签名请求）
-        if ($csrPem !== '') {
-            @\file_put_contents($certDir . 'csr.pem', $csrPem);
-        }
-
-        @\chmod($certDir . 'fullchain.pem', 0644);
-        @\chmod($certDir . 'privkey.pem', 0600);
-        @\chmod($certDir . 'domain.key', 0600);
 
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
@@ -4337,6 +5898,7 @@ CNF;
             }
         } catch (\Throwable $e) {
             w_log_error('[SslCertificateService] 恢复证书文件后更新记录失败：' . $e->getMessage());
+            return false;
         }
 
         return true;
@@ -4463,15 +6025,27 @@ CNF;
                 continue;
             }
 
-            $targetDir = \dirname(Env::path_ENV_FILE) . DS . 'ssl' . DS . $domain . DS;
-            if (!\is_dir($targetDir)) {
-                @\mkdir($targetDir, 0755, true);
+            try {
+                $targetDir = $this->getCertificateDir($domain);
+            } catch (\Throwable $throwable) {
+                $result['errors'][] = __('证书目录无效 %{1}: %{2}', [$domain, $throwable->getMessage()]);
+                continue;
             }
             $targetCert = $targetDir . 'fullchain.pem';
             $targetKey = $targetDir . 'privkey.pem';
-            $targetExistsBefore = \is_file($targetCert) && \is_file($targetKey);
+            $targetExistsBefore = self::readRegularFileNoFollow($targetCert) !== null
+                && self::readPrivateKeyFileNoFollow($targetKey) !== null;
 
-            if ($sourceCert === '' || $sourceKey === '' || !\is_file($sourceCert) || !\is_file($sourceKey)) {
+            if ($sourceCert === ''
+                || $sourceKey === ''
+                || self::readRegularFileNoFollow($sourceCert) === null
+                || self::readPrivateKeyFileNoFollow($sourceKey) === null
+                || !self::certificateFilePairIsValidForName(
+                    $sourceCert,
+                    $sourceKey,
+                    $domain,
+                )
+            ) {
                 if ($this->restoreCertificateFilesFromData($row)) {
                     $result[$targetExistsBefore ? 'updated' : 'written']++;
                 } else {
@@ -4483,10 +6057,17 @@ CNF;
             try {
                 $copiedCert = $this->copyIfChanged($sourceCert, $targetCert);
                 $copiedKey = $this->copyIfChanged($sourceKey, $targetKey);
+                if (!self::certificateFilePairIsValidForName(
+                    $targetCert,
+                    $targetKey,
+                    $domain,
+                )) {
+                    throw new \RuntimeException(
+                        'Certificate target pair failed validation after reconciliation.',
+                    );
+                }
                 if ($copiedCert || $copiedKey) {
                     $result[$targetExistsBefore ? 'updated' : 'written']++;
-                    @\chmod($targetCert, 0644);
-                    @\chmod($targetKey, 0600);
                 } else {
                     $result['skipped']++;
                 }
@@ -4510,7 +6091,7 @@ CNF;
     public function syncCertificatesFromStorage(): array
     {
         $etcDir = \dirname(Env::path_ENV_FILE) . DS;
-        $sslDir = $etcDir . 'ssl' . DS;
+        $sslDir = $this->ensureCertificateBaseDirectory();
         $synced = 0;
         $skipped = 0;
 
@@ -4523,38 +6104,53 @@ CNF;
             ['cert' => 'certificate.crt', 'key' => 'private.key'],
         ];
 
-        if (\is_dir($sslDir)) {
-            $domains = @\scandir($sslDir) ?: [];
-            foreach ($domains as $dirName) {
-                if ($dirName === '.' || $dirName === '..') {
-                    continue;
-                }
-                $domainDir = $sslDir . $dirName . DS;
-                if (!\is_dir($domainDir)) {
-                    continue;
-                }
-                $logicalDomain = self::logicalDomainFromStorageSegment($dirName);
-                if ($this->isDomainSslIssuanceInProgress($logicalDomain)) {
-                    $skipped++;
-                    continue;
-                }
-                $matched = false;
-                foreach ($certFormats as $format) {
-                    $certPath = $domainDir . $format['cert'];
-                    $keyPath = $domainDir . $format['key'];
-                    if (\is_file($certPath) && \is_file($keyPath)) {
-                        $matched = true;
-                        if ($this->syncCertificateRecordFromFiles($logicalDomain, $certPath, $keyPath) instanceof SslCertificate) {
-                            $synced++;
-                        } else {
-                            $skipped++;
-                        }
-                        break;
+        foreach ($this->boundedDirectoryEntries(
+            $sslDir,
+            self::MAX_CERTIFICATE_SOURCE_DIRECTORIES,
+            'project certificate source directory',
+        ) as $dirName) {
+            $entryStatus = @\lstat($sslDir . $dirName);
+            $entryType = \is_array($entryStatus)
+                ? (((int)($entryStatus['mode'] ?? 0)) & 0170000)
+                : 0;
+            if ($entryType === 0100000) {
+                continue;
+            }
+            if ($entryType !== 0040000) {
+                throw new \RuntimeException(
+                    'Certificate source root contains a link or special entry: ' . $dirName,
+                );
+            }
+            $domainDir = $this->certificateDirectoryForSegment($dirName, false);
+            if ($domainDir === null) {
+                continue;
+            }
+            $logicalDomain = self::logicalDomainFromStorageSegment($dirName);
+            if ($logicalDomain === '') {
+                continue;
+            }
+            if ($this->isDomainSslIssuanceInProgress($logicalDomain)) {
+                $skipped++;
+                continue;
+            }
+            $matched = false;
+            foreach ($certFormats as $format) {
+                $certPath = $domainDir . $format['cert'];
+                $keyPath = $domainDir . $format['key'];
+                if (self::readRegularFileNoFollow($certPath) !== null
+                    && self::readPrivateKeyFileNoFollow($keyPath) !== null
+                ) {
+                    $matched = true;
+                    if ($this->syncCertificateRecordFromFiles($logicalDomain, $certPath, $keyPath) instanceof SslCertificate) {
+                        $synced++;
+                    } else {
+                        $skipped++;
                     }
+                    break;
                 }
-                if (!$matched) {
-                    $skipped++;
-                }
+            }
+            if (!$matched) {
+                $skipped++;
             }
         }
 
@@ -4567,7 +6163,9 @@ CNF;
         foreach ($certFormats as $format) {
             $certPath = $etcDir . $format['cert'];
             $keyPath = $etcDir . $format['key'];
-            if (\is_file($certPath) && \is_file($keyPath)) {
+            if (self::readRegularFileNoFollow($certPath) !== null
+                && self::readPrivateKeyFileNoFollow($keyPath) !== null
+            ) {
                 if ($this->syncCertificateRecordFromFiles($defaultDomain, $certPath, $keyPath) instanceof SslCertificate) {
                     $synced++;
                 } else {
@@ -4582,14 +6180,27 @@ CNF;
 
     private function copyIfChanged(string $source, string $target): bool
     {
-        if (\is_file($target)) {
-            $sourceHash = @\sha1_file($source);
-            $targetHash = @\sha1_file($target);
-            if ($sourceHash !== false && $sourceHash === $targetHash) {
-                return false;
-            }
+        $private = \in_array(\basename($target), ['privkey.pem', 'domain.key', 'account.key'], true);
+        $sourceContents = $private
+            ? self::readPrivateKeyFileNoFollow($source)
+            : self::readRegularFileNoFollow($source);
+        if ($sourceContents === null) {
+            throw new \RuntimeException('Certificate copy source is unsafe or unavailable.');
         }
-        return (bool)@\copy($source, $target);
+        $targetContents = $private
+            ? self::readPrivateKeyFileNoFollow($target)
+            : self::readRegularFileNoFollow($target);
+        if ($targetContents !== null
+            && \hash_equals(\hash('sha256', $sourceContents), \hash('sha256', $targetContents))
+        ) {
+            return false;
+        }
+        $this->writeCertificateFileAtomically(
+            $target,
+            $sourceContents,
+            $private ? 0600 : 0644,
+        );
+        return true;
     }
     
     public const CHALLENGE_HTTP01 = 'http01';
@@ -4695,7 +6306,10 @@ CNF;
             $chainPath = $certDir . 'chain.pem';
 
             // 3.5 若证书目录已有未过期证书，跳过申请，直接同步记录并返回
-            if (!$forceReissue && $this->isCertificateValid($certPath) && \is_file($keyPath)) {
+            if (!$forceReissue
+                && $this->isCertificateValid($certPath)
+                && self::readPrivateKeyFileNoFollow($keyPath) !== null
+            ) {
                 if ($onProgress) {
                     $onProgress((string) __('已存在未过期证书，跳过申请'), ['step' => 'skip_acme']);
                     $onProgress((string) __('证书存储位置：%{1}', [$certDir]), ['cert_dir' => $certDir]);
@@ -4739,15 +6353,34 @@ CNF;
 
                     // 将 PEM 内容写入证书记录，供 server:ssl:reload 等场景从 DB 恢复证书
                     $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
+                    if (!self::certificatePemPairIsValidForName(
+                        $certContents['cert_pem'],
+                        $certContents['key_pem'],
+                        $normalizedDomain,
+                    )) {
+                        return [
+                            'success' => false,
+                            'message' => __('证书落盘后的稳定校验失败，已拒绝替换当前有效证书'),
+                            'cert' => $cert,
+                        ];
+                    }
                     // ACME 只生成 fullchain.pem + privkey.pem，补全 chain.pem + cert.pem 到磁盘
-                    if ($certContents['chain_pem'] !== '' && !\is_file($chainPath)) {
-                        @\file_put_contents($chainPath, $certContents['chain_pem']);
+                    if ($certContents['chain_pem'] !== ''
+                        && !self::certificateBundleFileIsValid($chainPath)
+                    ) {
+                        $this->writeCertificateFileAtomically(
+                            $chainPath,
+                            $certContents['chain_pem'],
+                            0644,
+                        );
                     }
                     $leafCertPath = $certDir . 'cert.pem';
-                    if (!\is_file($leafCertPath) && $certContents['cert_pem'] !== '') {
+                    if (self::readRegularFileNoFollow($leafCertPath) === null
+                        && $certContents['cert_pem'] !== ''
+                    ) {
                         $leafPem = $this->extractLeafCertFromFullchain($certContents['cert_pem']);
                         if ($leafPem !== '') {
-                            @\file_put_contents($leafCertPath, $leafPem);
+                            $this->writeCertificateFileAtomically($leafCertPath, $leafPem, 0644);
                         }
                     }
                     $cert->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
@@ -4785,7 +6418,10 @@ CNF;
                         $onProgress((string) __('证书管理记录已保存，cert_id=%{1}', [$cert->getCertId()]), ['cert_id' => $cert->getCertId()]);
                     }
 
-                    // 触发证书签发事件（通过事件解耦模块间依赖）
+                    // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
+                    $this->regenerateCertificateMap();
+
+                    // 只在完整服务清单及原生 Worker 确认后发送通知。
                     $this->dispatchCertificateIssuedEvent(
                         $domain,
                         $cert->getCertId(),
@@ -4795,9 +6431,6 @@ CNF;
                         $expiresAt,
                         $cert->getCertType()
                     );
-
-                    // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
-                    $this->regenerateCertificateMap();
 
                     return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $cert];
                 }
@@ -4851,7 +6484,11 @@ CNF;
         bool $httpsEnabled = true,
         string $provider = 'manual'
     ): array {
-        $domain = \strtolower(\trim($domain));
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
+        } catch (\Throwable) {
+            return ['success' => false, 'message' => __('域名格式无效'), 'cert' => null];
+        }
         $fullchainPem = \trim($fullchainPem);
         $privateKeyPem = \trim($privateKeyPem);
         $chainPem = \trim($chainPem);
@@ -4859,42 +6496,83 @@ CNF;
         if ($domain === '') {
             return ['success' => false, 'message' => __('域名不能为空'), 'cert' => null];
         }
-        $issuingMsg = $this->getSslIssuanceConflictMessage($domain);
-        if ($issuingMsg !== '') {
-            return ['success' => false, 'message' => $issuingMsg, 'cert' => null];
-        }
         if ($fullchainPem === '') {
             return ['success' => false, 'message' => __('证书内容不能为空'), 'cert' => null];
         }
         if ($privateKeyPem === '') {
             return ['success' => false, 'message' => __('私钥内容不能为空'), 'cert' => null];
         }
-
-        $certResource = @\openssl_x509_read($fullchainPem);
-        if ($certResource === false) {
-            return ['success' => false, 'message' => __('证书内容格式无效，请上传/粘贴 PEM 证书链'), 'cert' => null];
+        if (\strlen($fullchainPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($privateKeyPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($chainPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+        ) {
+            return ['success' => false, 'message' => __('证书材料超出安全大小限制'), 'cert' => null];
         }
-        $keyResource = @\openssl_pkey_get_private($privateKeyPem);
-        if ($keyResource === false) {
-            return ['success' => false, 'message' => __('私钥内容格式无效，请上传/粘贴 PEM 私钥'), 'cert' => null];
+        if (!self::certificatePemPairIsValidForName($fullchainPem, $privateKeyPem, $domain)
+            || !self::certificateBundlePemIsValid($chainPem, true)
+        ) {
+            return [
+                'success' => false,
+                'message' => __('证书必须处于有效期内、覆盖目标域名并与私钥匹配'),
+                'cert' => null,
+            ];
         }
 
+        try {
+            $prepared = GatewayProjectStateFilesystem::withExclusiveLock(
+                $this->certificateLifecycleLockPath(),
+                fn (): array => $this->importManualCertificateLocked(
+                    $domain,
+                    $fullchainPem,
+                    $privateKeyPem,
+                    $chainPem,
+                    $websiteId,
+                    $httpsEnabled,
+                    $provider,
+                ),
+                waitTimeoutSeconds: 10.0,
+            );
+            if (($prepared['success'] ?? false) !== true
+                || !\hash_equals('prepared', (string)($prepared['phase'] ?? ''))
+            ) {
+                return $prepared;
+            }
+            return $this->completeManualCertificateImport($prepared);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => __('证书导入失败：%{1}', [$e->getMessage()]),
+                'cert' => null,
+            ];
+        }
+    }
+
+    /** @return array{success:bool,message:string,cert:?SslCertificate,cert_id?:int} */
+    private function importManualCertificateLocked(
+        string $domain,
+        string $fullchainPem,
+        string $privateKeyPem,
+        string $chainPem,
+        int $websiteId,
+        bool $httpsEnabled,
+        string $provider,
+    ): array {
+        $issuingMsg = $this->getSslIssuanceConflictMessage($domain);
+        if ($issuingMsg !== '') {
+            return ['success' => false, 'message' => $issuingMsg, 'cert' => null];
+        }
         try {
             $certDir = $this->getCertificateDir($domain);
             $certPath = $certDir . 'fullchain.pem';
             $keyPath = $certDir . 'privkey.pem';
             $chainPath = $certDir . 'chain.pem';
 
-            if (\file_put_contents($certPath, $fullchainPem) === false) {
-                return ['success' => false, 'message' => __('写入证书文件失败'), 'cert' => null];
-            }
-            if (\file_put_contents($keyPath, $privateKeyPem) === false) {
-                return ['success' => false, 'message' => __('写入私钥文件失败'), 'cert' => null];
-            }
+            $this->writeCertificateFileAtomically($certPath, $fullchainPem, 0644);
+            $this->writeCertificateFileAtomically($keyPath, $privateKeyPem, 0600);
             if ($chainPem !== '') {
-                if (\file_put_contents($chainPath, $chainPem) === false) {
-                    return ['success' => false, 'message' => __('写入中间证书文件失败'), 'cert' => null];
-                }
+                $this->writeCertificateFileAtomically($chainPath, $chainPem, 0644);
+            } else {
+                $this->removeCertificateLeafSafely($certDir, 'chain.pem');
             }
 
             $provider = \trim($provider) !== '' ? $provider : 'manual';
@@ -4904,28 +6582,61 @@ CNF;
             }
 
             $certInfo = $this->parseCertificate($certPath);
-            $this->dispatchCertificateIssuedEvent(
-                $domain,
-                $cert->getCertId(),
-                $certPath,
-                $keyPath,
-                (string)($certInfo['issuer'] ?? $cert->getIssuer()),
-                (string)($certInfo['expires_at'] ?? $cert->getExpiresAt()),
-                $cert->getCertType()
-            );
-
-            // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
-            $this->regenerateCertificateMap();
-
             return [
                 'success' => true,
-                'message' => __('证书导入成功'),
+                'phase' => 'prepared',
+                'message' => __('证书材料已安全写入，等待服务发布'),
                 'cert' => $cert,
                 'cert_id' => $cert->getCertId(),
+                'domain' => $domain,
+                'cert_path' => $certPath,
+                'key_path' => $keyPath,
+                'issuer' => (string)($certInfo['issuer'] ?? $cert->getIssuer()),
+                'expires_at' => (string)($certInfo['expires_at'] ?? $cert->getExpiresAt()),
+                'cert_type' => (string)$cert->getCertType(),
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => __('证书导入失败：%{1}', [$e->getMessage()]), 'cert' => null];
         }
+    }
+
+    /** @param array<string,mixed> $prepared */
+    private function completeManualCertificateImport(array $prepared): array
+    {
+        try {
+            // File import is material publication, not re-enable authority.
+            // A tombstoned domain therefore remains blocked here until the
+            // independent explicit HTTPS-enable lifecycle issues its intent.
+            $this->regenerateCertificateMap();
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'phase' => 'serving_publication',
+                'message' => (string)__(
+                    '证书材料已导入，但服务发布失败；已禁用的域名必须单独显式启用 HTTPS：%{1}',
+                    [$throwable->getMessage()],
+                ),
+                'cert' => $prepared['cert'] ?? null,
+                'cert_id' => (int)($prepared['cert_id'] ?? 0),
+            ];
+        }
+
+        $this->dispatchCertificateIssuedEvent(
+            (string)$prepared['domain'],
+            (int)$prepared['cert_id'],
+            (string)$prepared['cert_path'],
+            (string)$prepared['key_path'],
+            (string)$prepared['issuer'],
+            (string)$prepared['expires_at'],
+            (string)$prepared['cert_type'],
+        );
+        return [
+            'success' => true,
+            'phase' => 'complete',
+            'message' => __('证书导入成功'),
+            'cert' => $prepared['cert'] ?? null,
+            'cert_id' => (int)$prepared['cert_id'],
+        ];
     }
     
     /**
@@ -4953,8 +6664,12 @@ CNF;
      */
     public function syncWildcardToSubdomains(string $wildcardDomain): void
     {
-        $wildcardDomain = \strtolower(\trim($wildcardDomain));
-        if (!str_starts_with($wildcardDomain, '*.')) {
+        try {
+            $wildcardDomain = self::normalizeCertificateStorageDomain($wildcardDomain);
+        } catch (\Throwable) {
+            return;
+        }
+        if (!\str_starts_with($wildcardDomain, '*.')) {
             return;
         }
 
@@ -4970,7 +6685,19 @@ CNF;
         $keyPem   = $wildcardCert->getKeyPem();
         $chainPem = $wildcardCert->getChainPem();
         $csrPem   = $wildcardCert->getCsrPem();
-        if ($certPem === '' || $keyPem === '') {
+        if ($certPem === ''
+            || $keyPem === ''
+            || \strlen($certPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($keyPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($chainPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || \strlen($csrPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || !self::certificatePemPairIsValidForName(
+                $certPem,
+                $keyPem,
+                $wildcardDomain,
+            )
+            || !self::certificateBundlePemIsValid($chainPem, true)
+        ) {
             return;
         }
 
@@ -4986,8 +6713,14 @@ CNF;
 
         foreach ($subCerts as $row) {
             $row = \is_array($row) ? $row : (\method_exists($row, 'getData') ? $row->getData() : []);
-            $subDomain = (string) ($row[SslCertificate::schema_fields_DOMAIN] ?? '');
-            if ($subDomain === '' || !\str_ends_with($subDomain, '.' . $rootDomain)) {
+            try {
+                $subDomain = self::normalizeCertificateStorageDomain(
+                    (string)($row[SslCertificate::schema_fields_DOMAIN] ?? ''),
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!\str_ends_with($subDomain, '.' . $rootDomain)) {
                 continue;
             }
             $parts = \explode('.', $subDomain);
@@ -5000,6 +6733,9 @@ CNF;
             if (!$subCertModel->getCertId()) {
                 continue;
             }
+            if (!self::certificatePemPairIsValidForName($certPem, $keyPem, $subDomain)) {
+                continue;
+            }
 
             $subCertModel->setCertPem($certPem)
                 ->setKeyPem($keyPem)
@@ -5009,10 +6745,18 @@ CNF;
                 ->setProvider($wildcardCert->getProvider())
                 ->setIssuedAt($wildcardCert->getIssuedAt())
                 ->setExpiresAt($wildcardCert->getExpiresAt())
-                ->setUpdatedAt($now)
-                ->save();
+                ->setUpdatedAt($now);
 
-            $this->restoreCertificateFilesFromData($subCertModel->getData());
+            $stagedData = $subCertModel->getData();
+            $stagedData[SslCertificate::schema_fields_ID] = 0;
+            if (!$this->restoreCertificateFilesFromData($stagedData)) {
+                continue;
+            }
+            $certDir = $this->getCertificateDir($subDomain);
+            $subCertModel->setCertPath($certDir . 'fullchain.pem')
+                ->setKeyPath($certDir . 'privkey.pem')
+                ->setChainPath($chainPem !== '' ? $certDir . 'chain.pem' : '')
+                ->save();
             $synced++;
         }
 
@@ -5053,8 +6797,11 @@ CNF;
      */
     protected function ensureAccountKey(): bool
     {
-        if (\is_file($this->accountKeyPath)) {
+        if (self::readPrivateKeyFileNoFollow($this->accountKeyPath) !== null) {
             return true;
+        }
+        if (\file_exists($this->accountKeyPath) || \is_link($this->accountKeyPath)) {
+            return false;
         }
         
         // 生成 RSA 账户密钥
@@ -5069,8 +6816,12 @@ CNF;
         }
         
         \openssl_pkey_export($key, $privateKey);
-        
-        return (bool) \file_put_contents($this->accountKeyPath, $privateKey);
+        try {
+            $this->writeCertificateFileAtomically($this->accountKeyPath, $privateKey, 0600);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
     
     /**
@@ -5263,8 +7014,20 @@ CNF;
             $fullchainPath = $certDir . 'fullchain.pem';
             $privkeyPath = $certDir . 'privkey.pem';
 
-            \file_put_contents($fullchainPath, $certPem);
-            \copy($domainKeyPath, $privkeyPath);
+            $privateKeyPem = self::readPrivateKeyFileNoFollow($domainKeyPath);
+            if ($privateKeyPem === null) {
+                return ['success' => false, 'message' => __('域名私钥文件不安全或不可读')];
+            }
+            if (\strlen($certPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+                || !self::certificatePemPairIsValidForName($certPem, $privateKeyPem, $domain)
+            ) {
+                return [
+                    'success' => false,
+                    'message' => __('CA 返回的证书无效、未覆盖目标域名或与本地私钥不匹配'),
+                ];
+            }
+            $this->writeCertificateFileAtomically($fullchainPath, $certPem, 0644);
+            $this->writeCertificateFileAtomically($privkeyPath, $privateKeyPem, 0600);
 
             $onProg(__('证书已写入：%{1}', [$fullchainPath]), ['step' => 'saved', 'cert_path' => $fullchainPath, 'cert_dir' => $certDir]);
             $onProg(__('证书申请流程已完成'), ['step' => 'done', 'progress' => 100]);
@@ -5608,7 +7371,8 @@ CNF;
 
     protected function getAccountKeyThumbprint(): string
     {
-        $key = \openssl_pkey_get_private(\file_get_contents($this->accountKeyPath));
+        $keyPem = self::readPrivateKeyFileNoFollow($this->accountKeyPath);
+        $key = \is_string($keyPem) ? \openssl_pkey_get_private($keyPem) : false;
         if (!$key) {
             return '';
         }
@@ -5832,8 +7596,11 @@ CNF;
      */
     protected function generateDomainKey(string $path): bool
     {
-        if (\is_file($path)) {
+        if (self::readPrivateKeyFileNoFollow($path) !== null) {
             return true;
+        }
+        if (\file_exists($path) || \is_link($path)) {
+            return false;
         }
         
         $config = [
@@ -5847,8 +7614,12 @@ CNF;
         }
         
         \openssl_pkey_export($key, $privateKey);
-        
-        return (bool) \file_put_contents($path, $privateKey);
+        try {
+            $this->writeCertificateFileAtomically($path, $privateKey, 0600);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
     
     /**
@@ -5944,15 +7715,29 @@ CNF;
      */
     protected function createHttpChallenge(string $webroot, string $token, string $keyAuth): bool
     {
-        $challengeDir = $webroot . DS . '.well-known' . DS . 'acme-challenge' . DS;
-        if (!\is_dir($challengeDir)) {
-            @\mkdir($challengeDir, 0755, true);
+        unset($keyAuth);
+        if (\preg_match('/\A[A-Za-z0-9_-]{1,256}\z/D', $token) !== 1) {
+            return false;
         }
-        
+        $challengeDir = $this->resolveAcmeChallengeDirectory($webroot, true);
+        if ($challengeDir === null) {
+            return false;
+        }
         $thumbprint = $this->getAccountThumbprint();
         $content = $token . '.' . $thumbprint;
-        
-        return (bool) \file_put_contents($challengeDir . $token, $content);
+        if ($thumbprint === '' || \strlen($content) > 1024) {
+            return false;
+        }
+        try {
+            GatewayProjectStateFilesystem::atomicWrite(
+                $challengeDir . $token,
+                $content,
+                0644,
+            );
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
     
     /**
@@ -5960,10 +7745,72 @@ CNF;
      */
     protected function cleanupHttpChallenge(string $webroot, string $token): void
     {
-        $file = $webroot . DS . '.well-known' . DS . 'acme-challenge' . DS . $token;
-        if (\is_file($file)) {
+        if (\preg_match('/\A[A-Za-z0-9_-]{1,256}\z/D', $token) !== 1) {
+            return;
+        }
+        $challengeDir = $this->resolveAcmeChallengeDirectory($webroot, false);
+        if ($challengeDir === null) {
+            return;
+        }
+        $file = $challengeDir . $token;
+        $status = @\lstat($file);
+        if (!\is_array($status)) {
+            return;
+        }
+        $type = ((int)($status['mode'] ?? 0)) & 0170000;
+        if (($type === 0100000 && (int)($status['nlink'] ?? 0) === 1)
+            || $type === 0120000
+        ) {
             @\unlink($file);
         }
+    }
+
+    private function resolveAcmeChallengeDirectory(string $webroot, bool $create): ?string
+    {
+        if ($webroot === '' || \str_contains($webroot, "\0") || \is_link($webroot)) {
+            return null;
+        }
+        $root = \realpath($webroot);
+        $rootStatus = @\lstat($webroot);
+        if (!\is_string($root)
+            || !\is_array($rootStatus)
+            || (((int)($rootStatus['mode'] ?? 0)) & 0170000) !== 0040000
+            || !self::sameFilesystemPath($webroot, $root)
+            || self::filesystemPathIsRoot($root)
+        ) {
+            return null;
+        }
+        $current = $root;
+        foreach (['.well-known', 'acme-challenge'] as $segment) {
+            $current .= DS . $segment;
+            $status = @\lstat($current);
+            if (!\is_array($status)) {
+                if (!$create
+                    || \file_exists($current)
+                    || \is_link($current)
+                    || !@\mkdir($current, 0755, false)
+                ) {
+                    return null;
+                }
+                $status = @\lstat($current);
+            }
+            $real = \realpath($current);
+            if (!\is_array($status)
+                || (((int)($status['mode'] ?? 0)) & 0170000) !== 0040000
+                || \is_link($current)
+                || !\is_string($real)
+                || !self::sameFilesystemPath($current, $real)
+                || !\str_starts_with(
+                    \PHP_OS_FAMILY === 'Windows' ? \strtolower($real . DS) : $real . DS,
+                    \PHP_OS_FAMILY === 'Windows'
+                        ? \strtolower(\rtrim($root, '/\\') . DS)
+                        : \rtrim($root, '/\\') . DS,
+                )
+            ) {
+                return null;
+            }
+        }
+        return \rtrim($current, '/\\') . DS;
     }
 
     /**
@@ -5971,9 +7818,7 @@ CNF;
      */
     public static function domainToAcmeChallengeFilename(string $domain): string
     {
-        $s = \strtolower(\trim($domain));
-        $s = \str_replace('.', '_', $s);
-        return \preg_replace('/[^a-z0-9_]/', '', $s) ?: 'default';
+        return ProjectAcmeHttp01ChallengeStore::projectionFilename($domain);
     }
 
     /**
@@ -6112,7 +7957,8 @@ CNF;
      */
     protected function generateCsr(string $domain, string $keyPath, string $csrPath): ?string
     {
-        $key = \openssl_pkey_get_private(\file_get_contents($keyPath));
+        $keyPem = self::readPrivateKeyFileNoFollow($keyPath);
+        $key = \is_string($keyPem) ? \openssl_pkey_get_private($keyPem) : false;
         if (!$key) {
             return null;
         }
@@ -6124,7 +7970,11 @@ CNF;
         }
         
         \openssl_csr_export($csr, $csrPem);
-        \file_put_contents($csrPath, $csrPem);
+        try {
+            $this->writeCertificateFileAtomically($csrPath, $csrPem, 0600);
+        } catch (\Throwable) {
+            return null;
+        }
         
         // 转换为 DER 格式
         $csrDer = $this->csrToDer($csrPem);
@@ -6159,13 +8009,8 @@ CNF;
      */
     protected function getParsedCertificateRaw(string $certPath): array|false
     {
-        if (!\is_file($certPath)) {
-            unset($this->certParseCache[$certPath]);
-            return false;
-        }
-        
-        $certData = @\file_get_contents($certPath);
-        if (!$certData) {
+        $certData = self::readRegularFileNoFollow($certPath);
+        if ($certData === null) {
             unset($this->certParseCache[$certPath]);
             return false;
         }
@@ -6355,8 +8200,15 @@ CNF;
      */
     protected function getAccountThumbprint(): string
     {
-        $key = \openssl_pkey_get_private(\file_get_contents($this->accountKeyPath));
+        $keyPem = self::readPrivateKeyFileNoFollow($this->accountKeyPath);
+        $key = \is_string($keyPem) ? \openssl_pkey_get_private($keyPem) : false;
+        if ($key === false) {
+            return '';
+        }
         $details = \openssl_pkey_get_details($key);
+        if (!\is_array($details) || !\is_array($details['rsa'] ?? null)) {
+            return '';
+        }
         
         $jwk = [
             'e' => $this->base64UrlEncode($details['rsa']['e']),
@@ -6372,8 +8224,15 @@ CNF;
      */
     protected function signedRequest(string $url, $payload, ?string $kid = null): array
     {
-        $key = \openssl_pkey_get_private(\file_get_contents($this->accountKeyPath));
+        $keyPem = self::readPrivateKeyFileNoFollow($this->accountKeyPath);
+        $key = \is_string($keyPem) ? \openssl_pkey_get_private($keyPem) : false;
+        if ($key === false) {
+            throw new \RuntimeException('ACME account key is unavailable or unsafe.');
+        }
         $details = \openssl_pkey_get_details($key);
+        if (!\is_array($details) || !\is_array($details['rsa'] ?? null)) {
+            throw new \RuntimeException('ACME account key details are invalid.');
+        }
         
         $nonce = $this->getNonce();
         
@@ -6416,19 +8275,15 @@ CNF;
         if (!$directory || empty($directory['newNonce'])) {
             return '';
         }
-        
-        $ch = \curl_init($directory['newNonce']);
-        \curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        \curl_setopt($ch, CURLOPT_HEADER, true);
-        \curl_setopt($ch, CURLOPT_NOBODY, true);
-        $response = \curl_exec($ch);
-        \curl_close($ch);
-        
-        if (\preg_match('/replay-nonce:\s*(\S+)/i', $response, $matches)) {
-            return $matches[1];
-        }
-        
-        return '';
+
+        $response = $this->httpRequest(
+            (string)$directory['newNonce'],
+            'HEAD',
+        );
+        $nonce = \trim((string)($response['headers']['replay-nonce'] ?? ''));
+        return \preg_match('/\A[A-Za-z0-9_-]{1,512}\z/D', $nonce) === 1
+            ? $nonce
+            : '';
     }
     
     /**
@@ -6436,48 +8291,140 @@ CNF;
      */
     protected function httpRequest(string $url, string $method = 'GET', ?string $body = null): array
     {
+        $parts = \parse_url($url);
+        $authority = \parse_url($this->acmeDirectory);
+        $method = \strtoupper(\trim($method));
+        if (!\is_array($parts)
+            || !\is_array($authority)
+            || !\hash_equals('https', \strtolower((string)($parts['scheme'] ?? '')))
+            || \trim((string)($parts['host'] ?? '')) === ''
+            || !\hash_equals(
+                \strtolower((string)($authority['host'] ?? '')),
+                \strtolower((string)$parts['host']),
+            )
+            || (int)($authority['port'] ?? 443) !== (int)($parts['port'] ?? 443)
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || !\in_array($method, ['GET', 'POST', 'HEAD'], true)
+            || ($body !== null
+                && \strlen($body) > self::MAX_ACME_HTTP_RESPONSE_BYTES)
+        ) {
+            return [
+                'headers' => [],
+                'body' => null,
+                'raw' => '',
+                'error' => 'ACME request URL, method or body is outside its safety boundary.',
+            ];
+        }
         $ch = \curl_init($url);
+        if ($ch === false) {
+            return [
+                'headers' => [],
+                'body' => null,
+                'raw' => '',
+                'error' => 'Unable to initialize the ACME HTTP request.',
+            ];
+        }
+        $headers = [];
+        $currentHeaders = [];
+        $headerBytes = 0;
+        $responseBody = '';
+        $boundaryExceeded = false;
         \curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        \curl_setopt($ch, CURLOPT_HEADER, true);
+        \curl_setopt($ch, CURLOPT_HEADER, false);
         \curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         \curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        \curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        // ACME endpoints are fixed HTTPS authorities. Refuse redirects instead
+        // of letting a remote response retarget this host-side client at an
+        // unrelated or private HTTPS service.
+        \curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+        \curl_setopt($ch, CURLOPT_MAXREDIRS, 0);
+        \curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+        \curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
         \curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        \curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         \curl_setopt($ch, CURLOPT_USERAGENT, 'Weline-Server/1.0 ACME-Client');
+        \curl_setopt(
+            $ch,
+            CURLOPT_HEADERFUNCTION,
+            static function ($handle, string $line) use (
+                &$headers,
+                &$currentHeaders,
+                &$headerBytes,
+                &$boundaryExceeded,
+            ): int {
+                unset($handle);
+                $length = \strlen($line);
+                $headerBytes += $length;
+                if ($headerBytes > self::MAX_ACME_HTTP_HEADER_BYTES) {
+                    $boundaryExceeded = true;
+                    return 0;
+                }
+                $trimmed = \trim($line);
+                if (\preg_match('/\AHTTP\/\S+\s+[1-5][0-9]{2}(?:\s|\z)/D', $trimmed) === 1) {
+                    $currentHeaders = [];
+                    return $length;
+                }
+                if ($trimmed === '') {
+                    $headers = $currentHeaders;
+                    return $length;
+                }
+                if (\str_contains($line, ':')) {
+                    [$name, $value] = \explode(':', $line, 2);
+                    $name = \strtolower(\trim($name));
+                    if ($name !== '' && \strlen($name) <= 256) {
+                        $currentHeaders[$name] = \trim($value);
+                    }
+                }
+                return $length;
+            },
+        );
+        \curl_setopt(
+            $ch,
+            CURLOPT_WRITEFUNCTION,
+            static function ($handle, string $chunk) use (
+                &$responseBody,
+                &$boundaryExceeded,
+            ): int {
+                unset($handle);
+                $length = \strlen($chunk);
+                if (\strlen($responseBody) + $length
+                    > self::MAX_ACME_HTTP_RESPONSE_BYTES
+                ) {
+                    $boundaryExceeded = true;
+                    return 0;
+                }
+                $responseBody .= $chunk;
+                return $length;
+            },
+        );
 
         if ($method === 'POST') {
             \curl_setopt($ch, CURLOPT_POST, true);
             \curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
             \curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/jose+json']);
+        } elseif ($method === 'HEAD') {
+            \curl_setopt($ch, CURLOPT_NOBODY, true);
         }
 
         $response = \curl_exec($ch);
         $curlError = $response === false ? \curl_error($ch) : '';
         $httpCode = (int) \curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $headerSize = (int) \curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         \curl_close($ch);
 
         if ($response === false) {
+            if ($boundaryExceeded) {
+                $curlError = 'ACME HTTP response exceeded its fixed size boundary.';
+            }
             w_log_warning(__('ACME HTTP 请求失败: url=%{1}, error=%{2}', [$url, $curlError]), [], 'ssl_cert');
             return ['headers' => [], 'body' => null, 'raw' => '', 'error' => $curlError];
         }
 
-        $headerStr = \substr((string) $response, 0, $headerSize);
-        $bodyStr = \substr((string) $response, $headerSize);
-        
-        // 解析响应头
-        $headers = [];
-        foreach (\explode("\r\n", $headerStr) as $line) {
-            if (\strpos($line, ':') !== false) {
-                [$key, $value] = \explode(':', $line, 2);
-                $headers[\strtolower(\trim($key))] = \trim($value);
-            }
-        }
-        
         return [
             'headers' => $headers,
-            'body' => \json_decode($bodyStr, true),
-            'raw' => $bodyStr,
+            'body' => $responseBody === '' ? null : \json_decode($responseBody, true),
+            'raw' => $responseBody,
+            'http_code' => $httpCode,
         ];
     }
     
@@ -6505,7 +8452,40 @@ CNF;
      */
     public function toggleHttps(string $domain, bool $enabled): array
     {
+        if (!$enabled) {
+            return $this->disableManagedCertificate(
+                $domain,
+                (string)__('用户手动禁用'),
+            );
+        }
         try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
+            $prepared = GatewayProjectStateFilesystem::withExclusiveLock(
+                $this->certificateLifecycleLockPath(),
+                fn (): array => $this->enableManagedCertificateLocked($domain),
+                waitTimeoutSeconds: 10.0,
+            );
+            if (($prepared['success'] ?? false) !== true
+                || !\hash_equals('prepared', (string)($prepared['phase'] ?? ''))
+            ) {
+                return $prepared;
+            }
+            return $this->completeManagedCertificateEnable($prepared);
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'phase' => 'enable_preflight',
+                'domain' => $domain,
+                'message' => $throwable->getMessage(),
+            ];
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function enableManagedCertificateLocked(string $domain): array
+    {
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
             $issuingMsg = $this->getSslIssuanceConflictMessage($domain);
             if ($issuingMsg !== '') {
                 return ['success' => false, 'message' => $issuingMsg];
@@ -6517,145 +8497,582 @@ CNF;
                 return ['success' => false, 'message' => __('未找到域名证书：%{1}', [$domain])];
             }
             
-            if ($enabled) {
-                // 启用 HTTPS 前检查证书文件
-                if (!$cert->certificateFilesExist()) {
-                    $certDir = $this->getCertificateDir(\strtolower(\trim($domain)));
-                    $certPath = $certDir . 'fullchain.pem';
-                    $keyPath = $certDir . 'privkey.pem';
-                    if (\is_file($certPath) && \is_file($keyPath)) {
-                        $synced = $this->syncCertificateRecordFromFiles(
-                            $domain,
-                            $certPath,
-                            $keyPath,
-                            (int)$cert->getWebsiteId(),
-                            false,
-                            (string)($cert->getProvider() ?: self::PROVIDER_LETS_ENCRYPT)
-                        );
-                        if ($synced instanceof SslCertificate) {
-                            $cert = $synced;
-                        }
+            // 启用 HTTPS 前必须验证稳定文件、有效期、SAN 和私钥。
+            $activePairValid = self::certificateFilePairIsValidForName(
+                (string)$cert->getCertPath(),
+                (string)$cert->getKeyPath(),
+                $domain,
+            );
+            if (!$activePairValid) {
+                $certDir = $this->getCertificateDir(\strtolower(\trim($domain)));
+                $certPath = $certDir . 'fullchain.pem';
+                $keyPath = $certDir . 'privkey.pem';
+                if (self::certificateFilePairIsValidForName(
+                    $certPath,
+                    $keyPath,
+                    $domain,
+                )) {
+                    $synced = $this->syncCertificateRecordFromFiles(
+                        $domain,
+                        $certPath,
+                        $keyPath,
+                        (int)$cert->getWebsiteId(),
+                        false,
+                        (string)($cert->getProvider() ?: self::PROVIDER_LETS_ENCRYPT),
+                    );
+                    if ($synced instanceof SslCertificate) {
+                        $cert = $synced;
+                        $activePairValid = true;
                     }
                 }
-                if (!$cert->certificateFilesExist()) {
-                    return ['success' => false, 'message' => __('证书文件不存在，无法启用 HTTPS')];
-                }
-                if ($cert->isExpired()) {
-                    return ['success' => false, 'message' => __('证书已过期，请先续签')];
-                }
+            }
+            if (!$activePairValid) {
+                return [
+                    'success' => false,
+                    'message' => __('证书文件不安全、已过期、未覆盖域名或与私钥不匹配'),
+                ];
             }
             
-            $cert->setHttpsEnabled($enabled)->save();
-            
-            // 禁用时：触发服务器重启以使配置实时生效
-            $restartTriggered = !$enabled && $this->triggerServerRestartForDomain($domain);
-            
-            // 通过事件同步 HTTPS 状态（解耦模块间依赖）
-            if ($enabled) {
-                $this->dispatchCertificateIssuedEvent(
+            $cert->setStatus(SslCertificate::STATUS_ACTIVE)
+                ->setRenewError('')
+                ->setHttpsEnabled(true)
+                ->save();
+
+            $certId = (int)$cert->getCertId();
+            $reenableIntent = (new ProjectCertificateGenerationStore())
+                ->issueExplicitReenableIntent(
                     $domain,
-                    $cert->getCertId(),
-                    $cert->getCertPath(),
-                    $cert->getKeyPath(),
-                    $cert->getIssuer(),
-                    $cert->getExpiresAt(),
-                    $cert->getCertType()
+                    (string)$cert->getCertPath(),
+                    (string)$cert->getKeyPath(),
                 );
-            } else {
-                $this->dispatchCertificateDisabledEvent($domain, $cert->getCertId(), __('用户手动禁用'));
-            }
-            
-            // 清理服务器缓存，确保配置立即生效
-            $this->clearServerCache();
-            
-            $message = $enabled ? __('HTTPS 已启用') : __('HTTPS 已禁用');
-            if (!$enabled && $restartTriggered) {
-                $message = __('HTTPS 已禁用，服务器正在重启以使配置生效');
-            }
             return [
                 'success' => true,
-                'message' => $message,
+                'phase' => 'prepared',
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'cert_path' => (string)$cert->getCertPath(),
+                'key_path' => (string)$cert->getKeyPath(),
+                'issuer' => (string)$cert->getIssuer(),
+                'expires_at' => (string)$cert->getExpiresAt(),
+                'cert_type' => (string)$cert->getCertType(),
+                'reenable_intent_id' => (string)$reenableIntent['intent_id'],
+                'certificate_source_digest' => (string)$reenableIntent['source_digest'],
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
-    
-    /**
-     * 禁用 HTTPS 后触发服务器重启，使配置实时生效
-     */
-    protected function triggerServerRestartForDomain(string $domain): bool
+
+    /** @param array<string,mixed> $prepared */
+    private function completeManagedCertificateEnable(array $prepared): array
     {
-        $instanceNames = $this->findInstancesUsingDomain($domain);
-        if (empty($instanceNames)) {
-            return false;
+        $domain = (string)$prepared['domain'];
+        $certId = (int)$prepared['cert_id'];
+        try {
+            // Publication runs after releasing the lifecycle lock. Every
+            // activation path reacquires it before consuming this exact
+            // persistent intent, so disable cannot race an old PEM back in.
+            $this->clearServerCache();
+        } catch (\Throwable $throwable) {
+            $this->recordCertificateLifecycleFailure(
+                $certId,
+                $domain,
+                'enable_serving_publication',
+                $throwable,
+            );
+            return [
+                'success' => false,
+                'phase' => 'serving_publication',
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'desired_enabled' => true,
+                'reenable_intent_id' => (string)($prepared['reenable_intent_id'] ?? ''),
+                'message' => (string)__(
+                    'HTTPS 已写入启用事实，但服务清单尚未完成确认：%{1}',
+                    [$throwable->getMessage()],
+                ),
+            ];
+        }
+
+        $this->dispatchCertificateIssuedEvent(
+            $domain,
+            $certId,
+            (string)$prepared['cert_path'],
+            (string)$prepared['key_path'],
+            (string)$prepared['issuer'],
+            (string)$prepared['expires_at'],
+            (string)$prepared['cert_type'],
+        );
+        return [
+            'success' => true,
+            'phase' => 'complete',
+            'domain' => $domain,
+            'cert_id' => $certId,
+            'message' => __('HTTPS 已启用'),
+        ];
+    }
+    
+    /** @return array<string,mixed> */
+    public function disableManagedCertificate(string $domain, string $reason = ''): array
+    {
+        return $this->transitionCertificateOutOfService($domain, false, $reason);
+    }
+
+    /** @return array<string,mixed> */
+    public function deleteManagedCertificate(string $domain, string $reason = ''): array
+    {
+        return $this->transitionCertificateOutOfService($domain, true, $reason);
+    }
+
+    /** @return array<string,mixed> */
+    private function transitionCertificateOutOfService(
+        string $domain,
+        bool $delete,
+        string $reason,
+    ): array {
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
+            if (\in_array($domain, self::PROTECTED_LOCAL_DOMAINS, true)) {
+                throw new \RuntimeException((string)__(
+                    '本地域名 %{1} 的证书受保护，不能禁用或删除',
+                    [$domain],
+                ));
+            }
+            return (new ProjectCertificateGenerationStore())
+                ->withCertificateLifecycleLock(
+                    fn (): array => $this->transitionCertificateOutOfServiceLocked(
+                        $domain,
+                        $delete,
+                        $reason,
+                    ),
+                );
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'phase' => $delete ? 'delete_preflight' : 'disable_preflight',
+                'domain' => $domain,
+                'message' => $throwable->getMessage(),
+            ];
+        }
+    }
+
+    private function certificateLifecycleLockPath(): string
+    {
+        return $this->ensureCertificateBaseDirectory()
+            . '.wls-certificate-lifecycle.lock';
+    }
+
+    /** @return array<string,mixed> */
+    private function transitionCertificateOutOfServiceLocked(
+        string $domain,
+        bool $delete,
+        string $reason,
+    ): array {
+        $issuanceConflict = $this->getSslIssuanceConflictMessage($domain);
+        if ($issuanceConflict !== '') {
+            throw new \RuntimeException($issuanceConflict);
+        }
+        $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
+        if (!$cert->getCertId()) {
+            throw new \RuntimeException((string)__(
+                '未找到域名证书：%{1}',
+                [$domain],
+            ));
+        }
+        $certId = (int)$cert->getCertId();
+        $directoryPlan = $delete
+            ? $this->prepareCertificateDirectoryRemoval($domain)
+            : [];
+
+        $cert->setHttpsEnabled(false)
+            ->setAutoRenew(false)
+            ->setStatus(SslCertificate::STATUS_REVOKED)
+            ->setRenewError('')
+            ->save();
+
+        // Publish the project security tombstone before touching any derived
+        // endpoint state. A malformed endpoint or a crash must never leave the
+        // old active selector eligible after the database revocation commits.
+        try {
+            $this->deactivateProjectCertificateGeneration($domain);
+            $revocationTombstone = (new ProjectCertificateGenerationStore())
+                ->disabled($domain);
+            if (!\is_array($revocationTombstone)) {
+                throw new \RuntimeException(
+                    'Disabled certificate tombstone is unavailable after deactivation.',
+                );
+            }
+        } catch (\Throwable $throwable) {
+            $this->recordCertificateLifecycleFailure(
+                $certId,
+                $domain,
+                'snapshot_deactivation',
+                $throwable,
+            );
+            return [
+                'success' => false,
+                'phase' => 'snapshot_deactivation',
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'endpoint_updates' => 0,
+                'desired_revoked' => true,
+                'message' => (string)__(
+                    '证书已写入撤销事实，但证书生成选择器尚未停用：%{1}',
+                    [$throwable->getMessage()],
+                ),
+            ];
+        }
+
+        $endpointUpdates = 0;
+        $endpointFailure = null;
+        try {
+            $endpointUpdates = $this->revokeDomainFromInstanceConfigs($domain);
+        } catch (\Throwable $throwable) {
+            $this->recordCertificateLifecycleFailure(
+                $certId,
+                $domain,
+                'endpoint_revoke',
+                $throwable,
+            );
+            // Continue into live data-plane convergence. Endpoint JSON is
+            // derived state; returning here would strand a running Worker on
+            // the revoked certificate despite the durable tombstone.
+            $endpointFailure = $throwable;
         }
         try {
-            $ipcGateway = ObjectManager::getInstance(\Weline\Server\Service\Control\IpcControlGateway::class);
-            $controlMessage = \Weline\Server\IPC\ControlMessage::class;
-            $anyOk = false;
-            foreach ($instanceNames as $instanceName) {
-                $res = $ipcGateway->command($instanceName, $controlMessage::ACTION_STOP, '', [], 8.0);
-                if ($res['success'] ?? false) {
-                    $this->scheduleServerStart($instanceName);
-                    $anyOk = true;
+            // The coordinator publishes an exact whole-project manifest and,
+            // for native TLS surfaces, requires the matching Worker ACK set.
+            $this->regenerateCertificateMap(
+                true,
+                $domain,
+                [
+                    'domain' => $domain,
+                    'generation' => (int)$revocationTombstone['generation'],
+                    'source_digest' => (string)$revocationTombstone['source_digest'],
+                ],
+            );
+        } catch (\Throwable $throwable) {
+            $this->recordCertificateLifecycleFailure(
+                $certId,
+                $domain,
+                'serving_publication',
+                $throwable,
+            );
+            return [
+                'success' => false,
+                'phase' => 'serving_publication',
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'endpoint_updates' => $endpointUpdates,
+                'desired_revoked' => true,
+                'message' => (string)__(
+                    '证书已写入撤销事实，但服务清单尚未完成确认：%{1}',
+                    [($endpointFailure === null ? '' : $endpointFailure->getMessage() . '; ')
+                        . $throwable->getMessage()],
+                ),
+            ];
+        }
+
+        if ($endpointFailure !== null) {
+            return [
+                'success' => false,
+                'phase' => 'endpoint_revoke',
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'endpoint_updates' => $endpointUpdates,
+                'desired_revoked' => true,
+                'serving_removed' => true,
+                'message' => (string)__(
+                    '证书服务已安全撤销，但实例端点派生状态更新失败：%{1}',
+                    [$endpointFailure->getMessage()],
+                ),
+            ];
+        }
+
+        if ($delete) {
+            try {
+                $this->removeCertificateDirectoryPlan($directoryPlan);
+            } catch (\Throwable $throwable) {
+                $this->recordCertificateLifecycleFailure(
+                    $certId,
+                    $domain,
+                    'source_cleanup',
+                    $throwable,
+                );
+                return [
+                    'success' => false,
+                    'phase' => 'source_cleanup',
+                    'domain' => $domain,
+                    'cert_id' => $certId,
+                    'endpoint_updates' => $endpointUpdates,
+                    'desired_revoked' => true,
+                    'serving_removed' => true,
+                    'message' => (string)__(
+                        '服务路由已撤销，但证书源清理未完成：%{1}',
+                        [$throwable->getMessage()],
+                    ),
+                ];
+            }
+            try {
+                $toDelete = ObjectManager::getInstance(SslCertificate::class, [], false);
+                $toDelete->load($certId);
+                if ($toDelete->getCertId()) {
+                    $loadedDomain = self::normalizeCertificateStorageDomain(
+                        (string)$toDelete->getDomain(),
+                    );
+                    if (!\hash_equals($domain, $loadedDomain)) {
+                        throw new \RuntimeException(
+                            'Certificate row identity changed before final deletion.',
+                        );
+                    }
+                    $toDelete->delete()->fetch();
+                }
+            } catch (\Throwable $throwable) {
+                $this->recordCertificateLifecycleFailure(
+                    $certId,
+                    $domain,
+                    'database_cleanup',
+                    $throwable,
+                );
+                return [
+                    'success' => false,
+                    'phase' => 'database_cleanup',
+                    'domain' => $domain,
+                    'cert_id' => $certId,
+                    'endpoint_updates' => $endpointUpdates,
+                    'desired_revoked' => true,
+                    'serving_removed' => true,
+                    'source_removed' => true,
+                    'message' => (string)__(
+                        '证书路由和源文件已撤销，但数据库清理未完成：%{1}',
+                        [$throwable->getMessage()],
+                    ),
+                ];
+            }
+            $this->dispatchCertificateDeletedEvent($domain, $certId, $reason);
+            return [
+                'success' => true,
+                'phase' => 'complete',
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'endpoint_updates' => $endpointUpdates,
+                'deleted' => true,
+                'message' => (string)__('证书已删除'),
+            ];
+        }
+
+        $this->dispatchCertificateDisabledEvent($domain, $certId, $reason);
+        return [
+            'success' => true,
+            'phase' => 'complete',
+            'domain' => $domain,
+            'cert_id' => $certId,
+            'endpoint_updates' => $endpointUpdates,
+            'deleted' => false,
+            'message' => (string)__('HTTPS 已禁用'),
+        ];
+    }
+
+    private function revokeDomainFromInstanceConfigs(string $domain): int
+    {
+        $updated = 0;
+        foreach ([
+            Env::VAR_DIR . 'server' . DS . 'config' . DS,
+            Env::VAR_DIR . 'server' . DS . 'instances' . DS,
+        ] as $directory) {
+            foreach ($this->boundedJsonFiles(
+                $directory,
+                'WLS instance configuration directory',
+            ) as $file) {
+                $encoded = self::readRegularFileNoFollow($file);
+                try {
+                    $current = \is_string($encoded)
+                        ? \json_decode($encoded, true, 64, JSON_THROW_ON_ERROR)
+                        : null;
+                } catch (\JsonException $exception) {
+                    throw new \RuntimeException(
+                        'WLS instance configuration JSON is invalid.',
+                        0,
+                        $exception,
+                    );
+                }
+                if (!\is_array($current) || \array_is_list($current)) {
+                    throw new \RuntimeException(
+                        'WLS instance configuration payload is invalid.',
+                    );
+                }
+                [, $previewChanged] = $this->revokeDomainFromEndpointPayload(
+                    $current,
+                    $domain,
+                );
+                if (!$previewChanged) {
+                    continue;
+                }
+                $applied = false;
+                GatewayProjectStateFilesystem::withExclusiveLock(
+                    $file . '.lock',
+                    function () use ($file, $domain, &$applied): void {
+                        $latestEncoded = GatewayProjectStateFilesystem::read(
+                            $file,
+                            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                            'WLS certificate endpoint record',
+                        );
+                        try {
+                            $latest = \json_decode(
+                                $latestEncoded,
+                                true,
+                                64,
+                                JSON_THROW_ON_ERROR,
+                            );
+                        } catch (\JsonException $exception) {
+                            throw new \RuntimeException(
+                                'WLS certificate endpoint JSON changed to an invalid payload.',
+                                0,
+                                $exception,
+                            );
+                        }
+                        if (!\is_array($latest) || \array_is_list($latest)) {
+                            throw new \RuntimeException(
+                                'WLS certificate endpoint payload changed to an invalid value.',
+                            );
+                        }
+                        [$next, $applied] = $this->revokeDomainFromEndpointPayload(
+                            $latest,
+                            $domain,
+                        );
+                        if (!$applied) {
+                            return;
+                        }
+                        $nextEncoded = \json_encode(
+                            $next,
+                            JSON_PRETTY_PRINT
+                                | JSON_UNESCAPED_UNICODE
+                                | JSON_UNESCAPED_SLASHES
+                                | JSON_THROW_ON_ERROR,
+                        );
+                        GatewayProjectStateFilesystem::atomicWrite(
+                            $file,
+                            $nextEncoded,
+                            0600,
+                        );
+                    },
+                    waitTimeoutSeconds: 5.0,
+                );
+                if ($applied) {
+                    ++$updated;
                 }
             }
-            return $anyOk;
-        } catch (\Throwable $e) {
-            Env::log_warning('ssl_cert_toggle', 'SslCertificateService::triggerServerRestartForDomain failed: ' . $e->getMessage());
-            return false;
+        }
+        return $updated;
+    }
+
+    /** @return array{0:array<string,mixed>,1:bool} */
+    private function revokeDomainFromEndpointPayload(array $data, string $domain): array
+    {
+        $gateway = \is_array($data['gateway'] ?? null) ? $data['gateway'] : [];
+        $source = \is_array($gateway['certificate_source'] ?? null)
+            ? $gateway['certificate_source']
+            : [];
+        $rawTopDomain = \is_string($data['ssl_domain'] ?? null)
+            ? \trim((string)$data['ssl_domain'])
+            : '';
+        $rawSourceDomain = \is_string($source['domain'] ?? null)
+            ? \trim((string)$source['domain'])
+            : '';
+        $topDomain = $this->normalizedEndpointCertificateDomain(
+            $rawTopDomain,
+        );
+        $sourceDomain = $this->normalizedEndpointCertificateDomain(
+            $rawSourceDomain,
+        );
+        if (($rawTopDomain !== '' && $topDomain === '')
+            || ($rawSourceDomain !== '' && $sourceDomain === '')
+        ) {
+            throw new \RuntimeException(
+                'WLS endpoint contains a malformed certificate domain.',
+            );
+        }
+        $publicDomain = $topDomain === '' && $sourceDomain === ''
+            ? $this->normalizedEndpointCertificateDomain(
+                $data['public_host'] ?? '',
+            )
+            : '';
+        $topMatches = $topDomain !== '' && \hash_equals($domain, $topDomain);
+        $sourceMatches = $sourceDomain !== '' && \hash_equals($domain, $sourceDomain);
+        $publicMatches = $publicDomain !== '' && \hash_equals($domain, $publicDomain);
+        if (!$topMatches && !$sourceMatches && !$publicMatches) {
+            return [$data, false];
+        }
+        if ($topDomain !== ''
+            && $sourceDomain !== ''
+            && !\hash_equals($topDomain, $sourceDomain)
+        ) {
+            throw new \RuntimeException(
+                'WLS endpoint certificate domains disagree; refusing an ambiguous revoke.',
+            );
+        }
+        if ($topMatches || $publicMatches || ($sourceMatches && $topDomain === '')) {
+            $data['ssl_cert'] = '';
+            $data['ssl_key'] = '';
+            $data['ssl_domain'] = '';
+        }
+        if ($sourceMatches
+            || $publicMatches
+            || ($topMatches && $sourceDomain === '')
+        ) {
+            unset($gateway['certificate_source'], $gateway['certificate_pending']);
+            $data['gateway'] = $gateway;
+        }
+        return [$data, true];
+    }
+
+    private function normalizedEndpointCertificateDomain(mixed $value): string
+    {
+        if (!\is_string($value) || \trim($value) === '') {
+            return '';
+        }
+        try {
+            return self::normalizeCertificateStorageDomain($value);
+        } catch (\Throwable) {
+            return '';
         }
     }
-    
-    /**
-     * 查找使用指定域名的 WLS 实例
-     */
-    protected function findInstancesUsingDomain(string $domain): array
-    {
-        $domain = \strtolower(\trim($domain));
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
-        if (!\is_dir($instanceDir)) {
-            return [];
-        }
-        $found = [];
-        $files = @\glob($instanceDir . '*.json');
-        if (!$files) {
-            return [];
-        }
-        foreach ($files as $file) {
-            $data = @\json_decode((string)\file_get_contents($file), true);
-            if (!\is_array($data)) {
-                continue;
+
+    private function recordCertificateLifecycleFailure(
+        int $certId,
+        string $domain,
+        string $phase,
+        \Throwable $throwable,
+    ): void {
+        try {
+            $record = ObjectManager::getInstance(SslCertificate::class, [], false);
+            $record->load($certId);
+            if (!$record->getCertId()
+                || !\hash_equals(
+                    $domain,
+                    self::normalizeCertificateStorageDomain(
+                        (string)$record->getDomain(),
+                    ),
+                )
+            ) {
+                return;
             }
-            $instDomain = \strtolower(\trim((string)($data['ssl_domain'] ?? '')));
-            $sslCert = (string)($data['ssl_cert'] ?? '');
-            $matches = $instDomain === $domain
-                || ($domain === 'localhost' && ($instDomain === 'localhost' || \str_contains($sslCert, 'localhost')))
-                || ($domain === '127.0.0.1' && ($instDomain === '127.0.0.1' || \str_contains($sslCert, 'localhost')));
-            if ($matches) {
-                $found[] = \basename($file, '.json');
-            }
-        }
-        return $found;
-    }
-    
-    /**
-     * 延迟 4 秒后后台启动服务器（等待旧进程完全退出）
-     */
-    protected function scheduleServerStart(string $instanceName): void
-    {
-        $bp = \defined('BP') ? BP : \dirname(__DIR__, 4) . DS;
-        $php = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
-        $w = $bp . 'bin' . DS . 'w';
-        $tmp = \sys_get_temp_dir() . DS . 'weline_ssl_restart_' . \getmypid() . '_' . \uniqid() . '.php';
-        $code = '<?php sleep(4); passthru(' . \var_export($php . ' ' . \escapeshellarg($w) . ' server:start ' . \escapeshellarg($instanceName) . ' -d', true) . ');';
-        if (@\file_put_contents($tmp, $code) && \is_file($tmp)) {
-            \register_shutdown_function(static fn () => @\unlink($tmp));
-            $pid = \Weline\Framework\System\Process\Processer::create($php . ' ' . \escapeshellarg($tmp), false);
-            if ($pid <= 0) {
-                @\unlink($tmp);
-            }
+            $message = \preg_replace(
+                '/[\x00-\x1f\x7f]+/',
+                ' ',
+                $throwable->getMessage(),
+            );
+            $record->setRenewError(\substr(
+                'WLS certificate lifecycle ' . $phase . ' failed: '
+                    . (string)$message,
+                0,
+                1024,
+            ))->save();
+        } catch (\Throwable $diagnosticFailure) {
+            w_log_error('[SslCertificateService] ' . (string)__(
+                '证书生命周期失败诊断写入失败：%{1}',
+                [$diagnosticFailure->getMessage()],
+            ));
         }
     }
 
@@ -6776,60 +9193,155 @@ CNF;
      */
     private const PROTECTED_LOCAL_DOMAINS = ['localhost', '127.0.0.1', '::1'];
 
-    protected function clearDomainCertificate(string $domain, array $cert, array &$result): void
+    private const CERTIFICATE_REMOVABLE_LEAVES = [
+        'fullchain.pem',
+        'privkey.pem',
+        'chain.pem',
+        'cert.pem',
+        'domain.key',
+        'csr.pem',
+        self::SSL_ISSUANCE_LOCK_FILENAME,
+        'key.pem',
+        'ssl.crt',
+        'ssl.key',
+        'ssl.pem',
+        'server.crt',
+        'server.key',
+        'certificate.crt',
+        'private.key',
+    ];
+
+    /**
+     * @return list<array{directory:string,entries:list<string>,status:array<string,mixed>}>
+     */
+    private function prepareCertificateDirectoryRemoval(string $domain): array
     {
-        if (\in_array(\strtolower($domain), self::PROTECTED_LOCAL_DOMAINS, true)) {
-            $result['skipped'] = ($result['skipped'] ?? 0) + 1;
-            $result['errors'][] = (string) __('本地域名 %{1} 的证书受保护，跳过清除', [$domain]);
-            return;
-        }
-
-        $certId = (int) ($cert[SslCertificate::schema_fields_ID] ?? 0);
-
-        // 1. 删除 DB 记录
-        if ($certId > 0) {
-            try {
-                $toDelete = ObjectManager::getInstance(SslCertificate::class, [], false);
-                $toDelete->load($certId);
-                if ($toDelete->getCertId()) {
-                    $toDelete->delete()->fetch();
-                }
-            } catch (\Throwable $e) {
-                $result['errors'][] = (string) __('域名 %{1} 删除 DB 记录失败：%{2}', [$domain, $e->getMessage()]);
+        $directories = [];
+        foreach (self::certificateStorageSegmentCandidatesForProbe($domain) as $segment) {
+            $certDir = $this->certificateDirectoryForSegment($segment, false);
+            if ($certDir === null) {
+                continue;
             }
-        }
-
-        // 2. 清除磁盘证书目录（app/etc/ssl/{domain}/；Windows 泛域为 _wildcard_.）
-        foreach (self::certificateStorageSegmentCandidatesForProbe((string) $domain) as $segment) {
-            $certDir = $this->certBaseDir . $segment . DS;
-            if (\is_dir($certDir)) {
-                $files = @\scandir($certDir);
-                if ($files !== false) {
-                    foreach ($files as $file) {
-                        if ($file === '.' || $file === '..') {
-                            continue;
+            $entries = $this->boundedDirectoryEntries(
+                $certDir,
+                self::MAX_CERTIFICATE_DIRECTORY_ENTRIES,
+                'certificate domain directory',
+            );
+            foreach ($entries as $entry) {
+                $managedLeaf = \in_array(
+                    $entry,
+                    self::CERTIFICATE_REMOVABLE_LEAVES,
+                    true,
+                );
+                if (!$managedLeaf) {
+                    foreach (self::CERTIFICATE_REMOVABLE_LEAVES as $allowedLeaf) {
+                        if (\preg_match(
+                            '/\A' . \preg_quote($allowedLeaf, '/')
+                                . '(?:\.tmp-[a-f0-9]{24}|\.wls-backup-[a-f0-9]{16})\z/D',
+                            $entry,
+                        ) === 1) {
+                            $managedLeaf = true;
+                            break;
                         }
-                        @\unlink($certDir . $file);
                     }
                 }
-                @\rmdir($certDir);
+                if (!$managedLeaf) {
+                    throw new \RuntimeException(
+                        'Certificate directory contains an unmanaged leaf: ' . $entry,
+                    );
+                }
+                $leafStatus = @\lstat($certDir . $entry);
+                $leafType = \is_array($leafStatus)
+                    ? (((int)($leafStatus['mode'] ?? 0)) & 0170000)
+                    : 0;
+                if (!\is_array($leafStatus)
+                    || !\in_array($leafType, [0100000, 0120000], true)
+                    || ($leafType === 0100000
+                        && (int)($leafStatus['nlink'] ?? 0) !== 1)
+                ) {
+                    throw new \RuntimeException(
+                        'Certificate directory contains a special or hard-linked leaf: '
+                            . $entry,
+                    );
+                }
+            }
+            $directoryStatus = @\lstat(\rtrim($certDir, '/\\'));
+            if (!\is_array($directoryStatus)
+                || (((int)($directoryStatus['mode'] ?? 0)) & 0170000) !== 0040000
+            ) {
+                throw new \RuntimeException(
+                    'Certificate directory changed after deletion preflight.',
+                );
+            }
+            $directories[] = [
+                'directory' => $certDir,
+                'entries' => $entries,
+                'status' => $directoryStatus,
+            ];
+        }
+        return $directories;
+    }
+
+    /**
+     * @param list<array{directory:string,entries:list<string>,status:array<string,mixed>}> $plan
+     */
+    private function removeCertificateDirectoryPlan(array $plan): void
+    {
+        foreach ($plan as $directory) {
+            $certDir = (string)$directory['directory'];
+            $expectedStatus = (array)$directory['status'];
+            foreach ((array)$directory['entries'] as $entry) {
+                $this->removeCertificateLeafSafely(
+                    $certDir,
+                    (string)$entry,
+                    $expectedStatus,
+                );
+            }
+            $beforeRmdir = @\lstat(\rtrim($certDir, '/\\'));
+            if (!\is_array($beforeRmdir)
+                || (int)($expectedStatus['dev'] ?? -1)
+                    !== (int)($beforeRmdir['dev'] ?? -2)
+                || (int)($expectedStatus['ino'] ?? -1)
+                    !== (int)($beforeRmdir['ino'] ?? -2)
+            ) {
+                throw new \RuntimeException(
+                    'Certificate directory changed before final removal.',
+                );
+            }
+            if (!@\rmdir(\rtrim($certDir, '/\\'))) {
+                throw new \RuntimeException(
+                    'Unable to remove the empty certificate directory.',
+                );
             }
         }
+    }
 
-        // 3. 通知其他模块清除关联状态
-        $this->dispatchCertificateDeletedEvent($domain, $certId, (string) __('server:ssl:reload --clear 清理'));
-
-        $result['deleted']++;
-        $result['deleted_domains'][] = $domain;
+    protected function clearDomainCertificate(string $domain, array $cert, array &$result): void
+    {
+        unset($cert);
+        $deletion = $this->deleteManagedCertificate(
+            $domain,
+            (string)__('server:ssl:reload --clear 清理'),
+        );
+        if (($deletion['success'] ?? false) !== true) {
+            $result['skipped'] = ($result['skipped'] ?? 0) + 1;
+            $result['errors'][] = (string)(
+                $deletion['message'] ?? __('证书清理失败')
+            );
+            return;
+        }
+        ++$result['deleted'];
+        $result['deleted_domains'][] = (string)($deletion['domain'] ?? $domain);
     }
 
     protected function clearServerCache(): void
     {
-        // 重新生成证书映射文件（含泛域名展开）+ 自动通知 Worker 热重载
-        $this->regenerateCertificateMap();
-        
         // 清除实例配置中指向不存在证书的 ssl_cert/ssl_key/ssl_domain，避免 server:start 加载失效路径
         $this->clearInvalidSslPathsFromInstanceConfigs();
+
+        // Endpoint facts must converge before publishing the manifest that
+        // consumes them; otherwise a stale fallback can recreate a route.
+        $this->regenerateCertificateMap();
     }
 
     /**
@@ -6859,29 +9371,57 @@ CNF;
         $clearModifier = static function (array $data): array {
             $sslCert = \trim((string) ($data['ssl_cert'] ?? ''));
             $sslKey = \trim((string) ($data['ssl_key'] ?? ''));
-            if ($sslCert === '' && $sslKey === '') {
-                return $data;
+            if ($sslCert !== '' || $sslKey !== '') {
+                $certExists = $sslCert !== ''
+                    && self::readRegularFileNoFollow($sslCert) !== null;
+                $keyExists = $sslKey !== ''
+                    && self::readPrivateKeyFileNoFollow($sslKey) !== null;
+                if (!$certExists || !$keyExists) {
+                    $data['ssl_cert'] = '';
+                    $data['ssl_key'] = '';
+                    $data['ssl_domain'] = '';
+                }
             }
-            $certExists = $sslCert !== '' && \is_file($sslCert);
-            $keyExists = $sslKey !== '' && \is_file($sslKey);
-            if ($certExists && $keyExists) {
-                return $data;
+
+            $gateway = \is_array($data['gateway'] ?? null)
+                ? $data['gateway']
+                : [];
+            $source = \is_array($gateway['certificate_source'] ?? null)
+                ? $gateway['certificate_source']
+                : null;
+            if (\is_array($source)) {
+                $sourceCert = \trim((string)($source['cert_path'] ?? ''));
+                $sourceKey = \trim((string)($source['key_path'] ?? ''));
+                $pending = ($source['pending'] ?? false) === true
+                    || ($gateway['certificate_pending'] ?? false) === true;
+                $pendingWithoutMaterial = $pending
+                    && $sourceCert === ''
+                    && $sourceKey === '';
+                $sourceValid = $pendingWithoutMaterial
+                    || ($sourceCert !== ''
+                        && $sourceKey !== ''
+                        && self::readRegularFileNoFollow($sourceCert) !== null
+                        && self::readPrivateKeyFileNoFollow($sourceKey) !== null);
+                if (!$sourceValid) {
+                    unset(
+                        $gateway['certificate_source'],
+                        $gateway['certificate_pending'],
+                    );
+                    $data['gateway'] = $gateway;
+                }
             }
-            $data['ssl_cert'] = '';
-            $data['ssl_key'] = '';
-            $data['ssl_domain'] = '';
             return $data;
         };
         foreach ($dirsToClear as $dir) {
-            if (!\is_dir($dir)) {
-                continue;
-            }
-            $files = \glob($dir . '*.json');
-            if ($files === false) {
-                continue;
-            }
-            foreach ($files as $file) {
-                ServerInstanceManager::updateJsonFileAtomically((string) $file, $clearModifier);
+            foreach ($this->boundedJsonFiles($dir, 'WLS instance configuration directory') as $file) {
+                if (!ServerInstanceManager::updateJsonFileAtomically(
+                    (string)$file,
+                    $clearModifier,
+                )) {
+                    throw new \RuntimeException(
+                        'Unable to atomically clear an invalid WLS certificate endpoint.',
+                    );
+                }
             }
         }
     }
@@ -6892,31 +9432,44 @@ CNF;
      * 在证书签发、续签、启用/禁用后调用，确保证书映射文件包含最新的域名映射
      * 特别是处理泛域名证书的展开，使子域名能够正确匹配证书
      */
-    public function regenerateCertificateMap(bool $broadcastReload = true): void
+    public function regenerateCertificateMap(
+        bool $broadcastReload = true,
+        string $changedDomain = '',
+        array $revocationIntent = [],
+    ): void
     {
+        // WLS 1.x workers still consume this compatibility map. WLS 2.0 TLS
+        // workers never read it; their only serving input is the bound
+        // immutable manifest published by the edge coordinator below.
         $mapFile = Env::VAR_DIR . 'server' . DS . 'ssl_certificate_map.json';
-        
-        // 确保目录存在
         $mapDir = \dirname($mapFile);
         if (!\is_dir($mapDir)) {
             @\mkdir($mapDir, 0755, true);
         }
-        
-        // 获取证书映射（包含泛域名展开）
         $map = $this->getCertificateMap();
-        
-        // 保存映射文件
-        \file_put_contents($mapFile, \json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        
-        w_log_debug('[SslCertificateService] 证书映射文件已重新生成，包含 ' . \count($map) . ' 个域名');
+        $encodedMap = \json_encode(
+            $map,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+        GatewayProjectStateFilesystem::atomicWrite($mapFile, $encodedMap, 0600);
+        w_log_debug(
+            '[SslCertificateService] 兼容证书映射已重新生成，包含 '
+            . \count($map) . ' 个域名',
+        );
 
         if (!$broadcastReload) {
             return;
         }
 
-        // 按边缘适配器互斥处理：nginx → edge reload；wls → ssl_cert_reload IPC
+        // WLS 2.0 first commits a per-instance, whole-project immutable
+        // serving manifest and only then broadcasts a native TLS reload.
         ObjectManager::getInstance(\Weline\Server\Service\Edge\EdgeAdapterResolver::class)
             ->resolve()
-            ->onCertificateMaterialUpdated('');
+            ->onCertificateMaterialUpdated(
+                $changedDomain,
+                $revocationIntent === []
+                    ? []
+                    : ['wls_revocation_intent' => $revocationIntent],
+            );
     }
 }

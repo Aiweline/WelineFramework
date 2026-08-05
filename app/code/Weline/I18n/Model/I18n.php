@@ -669,6 +669,17 @@ class I18n
                 $fileTranslations[$key] = $value;
             }
 
+            // 保留 CSV 中已有、但本次静态收集未扫到的词条（如数组字面量再经 __($var) 输出的首页文案）。
+            foreach ($fileWords as $key => $value) {
+                if ($key === '' || \array_key_exists($key, $fileTranslations)) {
+                    continue;
+                }
+                if (self::isLikelyCorruptedTranslation($value)) {
+                    continue;
+                }
+                $fileTranslations[$key] = $value;
+            }
+
             $this->writeModuleLanguageCsvFile($file->getPathname(), $fileTranslations);
         }
     }

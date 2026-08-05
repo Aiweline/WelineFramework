@@ -19,9 +19,9 @@ app/code/Weline/Visitor/test/
 │   └── Cron/
 │       └── CleanExpiredTokensTest.php # 清理过期Token定时任务测试
 ├── Http/
-│   ├── PixelApiHttpTest.php           # 像素API HTTP测试
-│   ├── AnalyticsApiHttpTest.php       # 分析API HTTP测试
-│   └── run-all-tests.script.php       # 运行所有HTTP测试的脚本
+│   ├── PixelApiHttpProbe.php          # 像素 API 手工 HTTP 探针
+│   ├── AnalyticsApiHttpProbe.php      # 分析 API 手工 HTTP 探针
+│   └── run-all-tests.script.php       # 运行所有 HTTP 探针的脚本
 ├── Browser/
 │   └── PixelTrackingBrowserTest.html  # 浏览器端像素跟踪测试页面
 └── README.md
@@ -191,9 +191,11 @@ http://your-domain/visitor/test/browser
 - ✅ API错误时的处理
 - ✅ 接收加密数据并解密
 
-### HTTP集成测试（浏览器测试）
+### HTTP 集成手工探针（浏览器/HTTP 客户端）
 
-#### PixelApiHttpTest (像素API HTTP测试)
+这些 Probe 是手工 HTTP 验证入口，不属于 PHPUnit 测试类。
+
+#### PixelApiHttpProbe（像素 API HTTP 探针）
 - ✅ 接收明文像素数据（HTTP）
 - ✅ 接收加密像素数据（HTTP）
 - ✅ 数据验证和清理（HTTP）
@@ -201,7 +203,7 @@ http://your-domain/visitor/test/browser
 - ✅ A/B测试数据保存（HTTP）
 - ✅ 运行所有像素API测试
 
-#### AnalyticsApiHttpTest (分析API HTTP测试)
+#### AnalyticsApiHttpProbe（分析 API HTTP 探针）
 - ✅ 商业价值分析（HTTP）
 - ✅ 实时大屏数据（HTTP）
 - ✅ A/B测试数据分析（HTTP）

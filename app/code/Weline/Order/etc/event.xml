@@ -2,6 +2,17 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!-- Checkout legacy writer cutover guard（P2D-004） -->
+    <event name="Weline_Checkout::checkout::legacy_writer::assert">
+        <observer name="Weline_Order::assert_legacy_checkout_writer"
+                  instance="Weline\Order\Observer\AssertLegacyCheckoutWriter"
+                  delivery="sync"
+                  failure="critical"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <!-- 订单创建后 -->
     <event name="Weline_Order::order_created">
         <observer name="Weline_Order::order_created_observer" 
@@ -153,4 +164,3 @@
                   sort="10"/>
     </event>
 </config>
-

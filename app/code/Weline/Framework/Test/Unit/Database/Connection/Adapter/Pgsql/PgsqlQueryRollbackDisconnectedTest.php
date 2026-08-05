@@ -51,21 +51,23 @@ final class PgsqlQueryRetryDisconnectedStatement extends \PDOStatement
 
     private int $cursor = 0;
     private int $executeCalls;
+    private bool $disconnectOnExecute;
 
     /**
      * @param list<array<string, mixed>> $rows
      */
-    public function __construct(int &$executeCalls, array $rows = [])
+    public function __construct(int &$executeCalls, array $rows = [], bool $disconnectOnExecute = false)
     {
         $this->executeCalls = &$executeCalls;
         $this->rows = $rows;
+        $this->disconnectOnExecute = $disconnectOnExecute;
     }
 
     public function execute(?array $params = null): bool
     {
         unset($params);
         $this->executeCalls++;
-        if ($this->executeCalls === 1) {
+        if ($this->disconnectOnExecute) {
             throw new \PDOException('SQLSTATE[HY000]: General error: 7 no connection to the server');
         }
 
@@ -95,9 +97,15 @@ final class PgsqlQueryRetryDisconnectedQuery extends Query
     public int $prepareCalls = 0;
     public int $executeCalls = 0;
     public int $reconnectCalls = 0;
+    /** @var list<int> */
+    public array $prepareConnectionIds = [];
+    private PDO $pdo;
+    private PDO $reconnectedPdo;
 
-    public function __construct(private readonly PDO $pdo)
+    public function __construct(PDO $pdo)
     {
+        $this->pdo = $pdo;
+        $this->reconnectedPdo = new PgsqlQueryRollbackDisconnectedFakePdo(false, false);
     }
 
     public function getLink(): PDO
@@ -109,11 +117,13 @@ final class PgsqlQueryRetryDisconnectedQuery extends Query
     {
         unset($options);
         $this->prepareCalls++;
+        $this->prepareConnectionIds[] = spl_object_id($this->getLink());
         $this->sql = $sql;
 
         return new PgsqlQueryRetryDisconnectedStatement(
             $this->executeCalls,
-            [['probe' => 'ok']]
+            [['probe' => 'ok']],
+            $this->prepareCalls === 1
         );
     }
 
@@ -121,6 +131,7 @@ final class PgsqlQueryRetryDisconnectedQuery extends Query
     {
         unset($exception);
         $this->reconnectCalls++;
+        $this->pdo = $this->reconnectedPdo;
 
         return true;
     }
@@ -149,7 +160,9 @@ final class PgsqlQueryRollbackDisconnectedTest extends TestCase
 
         self::assertSame([['probe' => 'ok']], $result);
         self::assertSame(1, $query->reconnectCalls);
+        self::assertSame(2, $query->prepareCalls);
         self::assertSame(2, $query->executeCalls);
+        self::assertCount(2, array_unique($query->prepareConnectionIds));
     }
 
     public function testNonReadSqlDoesNotRetryAfterDisconnect(): void
@@ -165,6 +178,7 @@ final class PgsqlQueryRollbackDisconnectedTest extends TestCase
             $query->query('UPDATE unit_table SET value = 1')->fetch();
         } finally {
             self::assertSame(0, $query->reconnectCalls);
+            self::assertSame(1, $query->prepareCalls);
             self::assertSame(1, $query->executeCalls);
         }
     }

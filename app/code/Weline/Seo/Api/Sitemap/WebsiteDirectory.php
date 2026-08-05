@@ -49,7 +49,7 @@ final class WebsiteDirectory implements WebsiteDirectoryInterface
             $id,
             (string)($row['name'] ?? ''),
             (string)($row['code'] ?? ''),
-            (string)($row['url'] ?? ''),
+            $this->directory->effectivePublicBaseUrl($row),
         );
     }
 }

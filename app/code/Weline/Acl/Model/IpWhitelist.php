@@ -25,6 +25,17 @@ class IpWhitelist extends Model
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+
+    public function save_before(): void
+    {
+        $now = \date('Y-m-d H:i:s');
+        if (\trim((string)$this->getData(self::schema_fields_CREATED_AT)) === '') {
+            $this->setData(self::schema_fields_CREATED_AT, $now);
+        }
+        $this->setData(self::schema_fields_UPDATED_AT, $now);
+        parent::save_before();
+    }
+
 /**
      * 检查IP是否在白名单中
      * 

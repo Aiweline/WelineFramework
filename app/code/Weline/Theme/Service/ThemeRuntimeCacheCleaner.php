@@ -6,7 +6,9 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\CacheManager;
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
+use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
@@ -29,6 +31,13 @@ final class ThemeRuntimeCacheCleaner
             'steps' => [],
             'failures' => [],
         ];
+
+        $this->runStep($result, 'storefront_theme_generation', static function (): void {
+            $namespacePath = ObjectManager::getInstance(NamespacePath::class);
+            ObjectManager::getInstance(NamespaceGenerationInterface::class)->bump(
+                $namespacePath->global('storefront', ['theme']),
+            );
+        });
 
         $this->runStep($result, 'framework_non_global_pools', function (): void {
             ObjectManager::getInstance(CacheManager::class)->clearAll();

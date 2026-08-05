@@ -145,9 +145,9 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
         save: function(event) {
             event.preventDefault();
             var formData = new FormData(event.target);
-            window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', { method: 'POST', body: formData })
+            bqAdmin['backend_admin']('<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', { method: 'POST', body: formData })
             .then(function(response) {
-                var data = response.data;
+                var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
                 var Toast = window.BackendToast || window.BackendToast;
                 if (response.ok && data && data.success) {
                     Toast.success(data.message || '<?= __('保存成功') ?>');

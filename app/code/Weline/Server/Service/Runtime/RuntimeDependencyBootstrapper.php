@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Runtime;
 
 use Weline\Framework\App\Env;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 
 /**
  * Validates runtime dependencies before WLS creates any managed process.
@@ -22,6 +23,7 @@ final class RuntimeDependencyBootstrapper
     private const INSTALL_TIMEOUT_SECONDS = 900;
     private const RELAUNCH_TIMEOUT_SECONDS = 1800;
     private const MAX_CAPTURE_BYTES = 1048576;
+    private const MAX_EVENT_INI_BYTES = 65536;
 
     /**
      * @param array<int|string, mixed> $args
@@ -467,7 +469,9 @@ final class RuntimeDependencyBootstrapper
             }
 
             $previousExists = \is_file($target);
-            $previousContent = $previousExists ? @\file_get_contents($target) : false;
+            $previousContent = $previousExists
+                ? $this->readBoundedEventIni($target)
+                : false;
             if ($previousExists && !\is_string($previousContent)) {
                 return $this->eventConfigurationResult('failed', false, '无法读取既有 WLS ext-event ini。', $diagnostics, $target);
             }
@@ -657,6 +661,28 @@ final class RuntimeDependencyBootstrapper
         }
     }
 
+    private function readBoundedEventIni(string $target): string|false
+    {
+        if (!$this->isSafeEventRegularFile($target)) {
+            return false;
+        }
+        $handle = @\fopen($target, 'rb');
+        if (!\is_resource($handle) || !$this->openedEventFileMatchesPath($handle, $target)) {
+            if (\is_resource($handle)) {
+                @\fclose($handle);
+            }
+            return false;
+        }
+        try {
+            $content = @\stream_get_contents($handle, self::MAX_EVENT_INI_BYTES + 1);
+        } finally {
+            @\fclose($handle);
+        }
+        return \is_string($content) && \strlen($content) <= self::MAX_EVENT_INI_BYTES
+            ? $content
+            : false;
+    }
+
     /** @return array<string, mixed> */
     private function probeFreshEventChild(
         string $phpBinary,
@@ -714,57 +740,21 @@ PHP;
     /** @param list<string> $command @return array{exit_code:int,output:string,stderr:string} */
     private function runEventProcess(array $command): array
     {
-        if (!\function_exists('proc_open')) {
-            return ['exit_code' => -1, 'output' => '', 'stderr' => 'proc_open unavailable'];
+        try {
+            $result = GatewayBoundedCommandRunner::run(
+                $command,
+                (float)self::EVENT_CHILD_TIMEOUT_SECONDS,
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return ['exit_code' => -1, 'output' => '', 'stderr' => $exception->getMessage()];
         }
-        $process = @\proc_open(
-            $command,
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-            null,
-            null,
-            ['bypass_shell' => true],
-        );
-        if (!\is_resource($process)) {
-            return ['exit_code' => -1, 'output' => '', 'stderr' => 'proc_open failed'];
-        }
-        @\fclose($pipes[0]);
-        @\stream_set_blocking($pipes[1], false);
-        @\stream_set_blocking($pipes[2], false);
-        $stdout = '';
-        $stderr = '';
-        $exitCode = -1;
-        $deadline = \microtime(true) + self::EVENT_CHILD_TIMEOUT_SECONDS;
-        $status = null;
-
-        do {
-            $stdout .= (string)@\stream_get_contents($pipes[1], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stdout));
-            $stderr .= (string)@\stream_get_contents($pipes[2], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stderr));
-            $status = @\proc_get_status($process);
-            if (!\is_array($status) || !($status['running'] ?? false)) {
-                $exitCode = (int)($status['exitcode'] ?? -1);
-                break;
-            }
-            \usleep(10000);
-        } while (\microtime(true) < $deadline);
-
-        if (\is_array($status) && ($status['running'] ?? false)) {
-            @\proc_terminate($process);
-            $stderr .= ' child timeout';
-        }
-        $stdout .= (string)@\stream_get_contents($pipes[1], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stdout));
-        $stderr .= (string)@\stream_get_contents($pipes[2], self::EVENT_MAX_CAPTURE_BYTES - \strlen($stderr));
-        @\fclose($pipes[1]);
-        @\fclose($pipes[2]);
-        $closed = @\proc_close($process);
-        if ($exitCode < 0 && \is_int($closed)) {
-            $exitCode = $closed;
-        }
+        $output = \substr((string)($result['stdout'] ?? ''), 0, self::EVENT_MAX_CAPTURE_BYTES);
+        $stderr = \substr((string)($result['stderr'] ?? ''), 0, self::EVENT_MAX_CAPTURE_BYTES);
 
         return [
-            'exit_code' => $exitCode,
-            'output' => \substr($stdout, 0, self::EVENT_MAX_CAPTURE_BYTES),
-            'stderr' => \substr($stderr, 0, self::EVENT_MAX_CAPTURE_BYTES),
+            'exit_code' => (int)($result['code'] ?? 125),
+            'output' => $output,
+            'stderr' => $stderr,
         ];
     }
 
@@ -990,94 +980,32 @@ PHP;
      */
     private function runProcess(array $command, int $timeoutSeconds, bool $streamOutput): array
     {
-        if (!\function_exists('proc_open')) {
-            return ['success' => false, 'exit_code' => 127, 'output' => (string)__('proc_open 不可用。'), 'timed_out' => false];
+        try {
+            $result = GatewayBoundedCommandRunner::run(
+                $command,
+                (float)\max(1, $timeoutSeconds),
+                \defined('BP') ? (string)\constant('BP') : null,
+                false,
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return [
+                'success' => false,
+                'exit_code' => 126,
+                'output' => $exception->getMessage(),
+                'timed_out' => false,
+            ];
         }
-
-        $nullDevice = \Weline\Framework\System\Process\Processer::resolveNullDevice();
-        $descriptors = [
-            0 => ['file', $nullDevice, 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        $process = @\proc_open($command, $descriptors, $pipes, \defined('BP') ? BP : null, null, [
-            'bypass_shell' => true,
-        ]);
-        if (!\is_resource($process)) {
-            return ['success' => false, 'exit_code' => 126, 'output' => (string)__('无法启动依赖安装子进程。'), 'timed_out' => false];
+        $exitCode = (int)($result['code'] ?? 125);
+        $output = \substr((string)($result['output'] ?? ''), 0, self::MAX_CAPTURE_BYTES);
+        if ($streamOutput && $output !== '') {
+            echo $output;
         }
-
-        foreach ([1, 2] as $index) {
-            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
-                \stream_set_blocking($pipes[$index], false);
-            }
-        }
-
-        $startedAt = \microtime(true);
-        $output = '';
-        $timedOut = false;
-        $lastStatus = ['running' => true, 'exitcode' => -1];
-
-        while (true) {
-            $lastStatus = \proc_get_status($process);
-            $read = [];
-            foreach ([1, 2] as $index) {
-                if (isset($pipes[$index]) && \is_resource($pipes[$index]) && !\feof($pipes[$index])) {
-                    $read[] = $pipes[$index];
-                }
-            }
-
-            if ($read !== []) {
-                $write = null;
-                $except = null;
-                @\stream_select($read, $write, $except, 0, 200000);
-                foreach ($read as $pipe) {
-                    $chunk = (string)(\fread($pipe, 8192) ?: '');
-                    if ($chunk === '') {
-                        continue;
-                    }
-                    if ($streamOutput) {
-                        echo $chunk;
-                    }
-                    if (\strlen($output) < self::MAX_CAPTURE_BYTES) {
-                        $output .= \substr($chunk, 0, self::MAX_CAPTURE_BYTES - \strlen($output));
-                    }
-                }
-            }
-
-            if (!($lastStatus['running'] ?? false)) {
-                break;
-            }
-            if ((\microtime(true) - $startedAt) >= $timeoutSeconds) {
-                $timedOut = true;
-                @\proc_terminate($process);
-                break;
-            }
-        }
-
-        foreach ([1, 2] as $index) {
-            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
-                $chunk = (string)(\stream_get_contents($pipes[$index]) ?: '');
-                if ($streamOutput && $chunk !== '') {
-                    echo $chunk;
-                }
-                if (\strlen($output) < self::MAX_CAPTURE_BYTES) {
-                    $output .= \substr($chunk, 0, self::MAX_CAPTURE_BYTES - \strlen($output));
-                }
-                @\fclose($pipes[$index]);
-            }
-        }
-
-        $closeCode = @\proc_close($process);
-        $exitCode = $timedOut
-            ? 124
-            : ((int)($lastStatus['exitcode'] ?? -1) >= 0 ? (int)$lastStatus['exitcode'] : (int)$closeCode);
 
         return [
-            'success' => !$timedOut && $exitCode === 0,
+            'success' => $exitCode === 0,
             'exit_code' => $exitCode,
             'output' => $output,
-            'timed_out' => $timedOut,
+            'timed_out' => $exitCode === 124,
         ];
     }
 

@@ -37,7 +37,7 @@
     }
 </style>
 
-<div class="weline-currency-config">
+<div class="weline-currency-config" data-testid="currency-config-management">
 <!-- 页面标题 -->
 <div class='row'>
     <div class='col-12'>
@@ -69,7 +69,7 @@
                 <h4 class='card-title'><lang>货币导入配置</lang></h4>
                 <p class='card-title-desc'><lang>配置货币汇率自动导入的相关设置</lang></p>
                 
-                <w:form class='needs-validation' novalidate action="@backend-url('currency/backend/config/index')" method="post">
+                <w:form class='needs-validation' novalidate action="@backend-url('currency/backend/config/index')" method="post" data-testid="currency-config-form">
                     <div class='mb-4'>
                         <label class='form-label'><lang>汇率模式</lang></label>
                         <div class='d-flex flex-column gap-2'>
@@ -314,7 +314,7 @@
 
                     <!-- 操作按钮 -->
                     <div class='mb-3'>
-                        <button type='submit' class='btn btn-primary'>
+                        <button type='submit' class='btn btn-primary' data-testid="currency-config-submit">
                             <lang>保存配置</lang>
                         </button>
                         <button type='button' class='btn btn-success ms-2' data-rate-mode-section='auto' data-currency-config-action='manual-import'>
@@ -429,6 +429,35 @@
 </div>
 </div>
 
+
+<script>
+(function(g){
+  if(g.__bqAdmin_currency) return;
+  g.__bqAdmin_currency=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['currency']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('currency').adminRequest({url:url, method:options.method||'POST', headers:options.headers||{}, body:body||''}); };
+    var toResp=function(data){
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    var p=(g.Weline&&g.Weline.load)?g.Weline.load('api').then(run):Promise.resolve(run(g.Weline.Api));
+    return p.then(toResp);
+  };
+})(window);
+</script>
 <script>
 (function() {
     'use strict';
@@ -721,11 +750,11 @@
             var formData = new FormData(form);
             formData.append('isAjax', '1');
             
-            fetch(form.action || window.location.href, {
+            bqAdmin['currency'](form.action || window.location.href, {
                 method: 'POST',
                 body: formData
             })
-            .then(function(response) { return response.json(); })
+            .then(function(response){ return response; })
             .then(function(data) {
                 if (data.success && data.base_currency_changed) {
                     self.updateCurrencyRates(oldBaseCurrency, newBaseCurrency, form);
@@ -759,7 +788,7 @@
             var baseCurrencySelect = document.getElementById('base_currency');
             var updateUrl = '<?= $this->getBackendUrl("currency/backend/config/post-update-rates") ?>';
             
-            fetch(updateUrl, {
+            bqAdmin['currency'](updateUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
@@ -768,7 +797,7 @@
                     current: 0
                 })
             })
-            .then(function(response) { return response.json(); })
+            .then(function(response){ return response; })
             .then(function(data) {
                 if (data.success) {
                     self.updateProgress(data.total_count, data.success_count, data.fail_count, data.errors);
@@ -842,7 +871,7 @@
             
             var testApiUrl = '<?= $this->getBackendUrl("currency/backend/config/testApi") ?>';
             var testApiOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'api_key=' + encodeURIComponent(apiKey) };
-            window.Weline.Api.request(testApiUrl, testApiOpts)
+            bqAdmin['currency'](testApiUrl, testApiOpts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
@@ -868,7 +897,7 @@
             
             var importUrl = '<?= $this->getBackendUrl("currency/backend/config/import") ?>';
             var importOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
-            window.Weline.Api.request(importUrl, importOpts)
+            bqAdmin['currency'](importUrl, importOpts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {

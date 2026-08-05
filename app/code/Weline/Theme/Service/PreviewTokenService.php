@@ -8,6 +8,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * 预览 Token 管理服务
@@ -35,15 +36,11 @@ class PreviewTokenService
     /** Cookie 有效期（秒）：默认 1 小时 */
     private const COOKIE_TTL = 3600;
 
+    private const REQUEST_STATE_KEY = 'theme.preview_token.state.v1';
+
     private CachePoolInterface $cache;
     private Request $request;
     
-    /** 当前请求的预览数据缓存 */
-    private static ?array $currentPreviewData = null;
-    
-    /** 是否已检测过预览模式 */
-    private static bool $detected = false;
-
     public function __construct(
         Request $request,
         private readonly PreviewRequestInspector $previewRequestInspector,
@@ -248,7 +245,7 @@ class PreviewTokenService
     public function isPreviewMode(): bool
     {
         $this->detectPreviewMode();
-        return self::$currentPreviewData !== null;
+        return self::requestState()['preview_data'] !== null;
     }
 
     /**
@@ -259,7 +256,7 @@ class PreviewTokenService
     public function getCurrentPreviewData(): ?array
     {
         $this->detectPreviewMode();
-        return self::$currentPreviewData;
+        return self::requestState()['preview_data'];
     }
 
     /**
@@ -291,19 +288,23 @@ class PreviewTokenService
      */
     private function detectPreviewMode(): void
     {
-        // 每次都从当前请求获取 token
+        // Request 对象可能在同一请求的预览装配阶段更新，因此每次都重读 token。
         $token = $this->getTokenFromRequest();
 
         if ($token !== null) {
             // 当前请求有 token，使用它（并更新缓存）
-            self::$currentPreviewData = $this->validateToken($token);
-            self::$detected = true;
+            self::storeRequestState([
+                'detected' => true,
+                'preview_data' => $this->validateToken($token),
+            ]);
             return;
         }
 
         // 当前请求没有 token - 重置状态，不使用上一个请求的缓存
-        self::$currentPreviewData = null;
-        self::$detected = true;
+        self::storeRequestState([
+            'detected' => true,
+            'preview_data' => null,
+        ]);
     }
 
     /**
@@ -311,8 +312,7 @@ class PreviewTokenService
      */
     public static function resetDetection(): void
     {
-        self::$detected = false;
-        self::$currentPreviewData = null;
+        RequestContext::remove(self::REQUEST_STATE_KEY);
     }
 
     /**
@@ -321,6 +321,27 @@ class PreviewTokenService
     public static function resetRequestState(): void
     {
         self::resetDetection();
+    }
+
+    /** @return array{detected: bool, preview_data: array|null} */
+    private static function requestState(): array
+    {
+        $state = RequestContext::get(self::REQUEST_STATE_KEY, []);
+        if (!is_array($state)) {
+            $state = [];
+        }
+        $previewData = $state['preview_data'] ?? null;
+
+        return [
+            'detected' => (bool)($state['detected'] ?? false),
+            'preview_data' => is_array($previewData) ? $previewData : null,
+        ];
+    }
+
+    /** @param array{detected: bool, preview_data: array|null} $state */
+    private static function storeRequestState(array $state): void
+    {
+        RequestContext::set(self::REQUEST_STATE_KEY, $state);
     }
 
     /**

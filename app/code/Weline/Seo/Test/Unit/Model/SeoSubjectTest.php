@@ -12,7 +12,7 @@ declare(strict_types=1);
 namespace Weline\Seo\Test\Unit\Model;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Seo\Model\SeoSubject;
 
 /**

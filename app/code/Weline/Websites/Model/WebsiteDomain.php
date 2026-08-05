@@ -17,6 +17,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\WebsiteCacheInvalidationService;
 
 /**
  * 网站域名模型
@@ -38,6 +39,9 @@ class WebsiteDomain extends Model
 {
     public const schema_table = 'weline_websites_website_domain';
     public const schema_primary_key = 'domain_id';
+
+    private ?int $invalidationPreviousWebsiteId = null;
+    private ?int $invalidationDeletedWebsiteId = null;
 
 
     #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '域名ID')]
@@ -88,6 +92,21 @@ class WebsiteDomain extends Model
     public function save_before(): void
     {
         parent::save_before();
+        $this->invalidationPreviousWebsiteId = null;
+        $domainId = (int)$this->getData(self::schema_fields_ID);
+        if ($domainId > 0) {
+            $existing = clone $this;
+            $row = $existing->clearData()->clearQuery()
+                ->where(self::schema_fields_ID, $domainId)
+                ->find()
+                ->fetchArray();
+            if (is_array($row) && array_is_list($row)) {
+                $row = $row[0] ?? null;
+            }
+            if (is_array($row) && array_key_exists(self::schema_fields_WEBSITE_ID, $row)) {
+                $this->invalidationPreviousWebsiteId = (int)$row[self::schema_fields_WEBSITE_ID];
+            }
+        }
         
         $now = \date('Y-m-d H:i:s');
         $this->setData(self::schema_fields_UPDATED_AT, $now);
@@ -115,11 +134,43 @@ class WebsiteDomain extends Model
     {
         parent::save_after();
         try {
-            w_cache('website')->clear();
-            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
-            \Weline\Websites\Observer\DetectWebsite::clearProcessCache();
-        } catch (\Throwable $e) {
-            // 忽略
+            $service = ObjectManager::getInstance(WebsiteCacheInvalidationService::class);
+            $websiteId = $this->getWebsiteId();
+            $service->invalidateWebsite($this->getConnection(), $websiteId, ['domain']);
+            if ($this->invalidationPreviousWebsiteId !== null
+                && $this->invalidationPreviousWebsiteId !== $websiteId) {
+                $service->invalidateWebsite(
+                    $this->getConnection(),
+                    $this->invalidationPreviousWebsiteId,
+                    ['domain'],
+                );
+            }
+        } finally {
+            $this->invalidationPreviousWebsiteId = null;
+        }
+    }
+
+    public function delete_before(): void
+    {
+        parent::delete_before();
+        $this->invalidationDeletedWebsiteId = $this->hasData(self::schema_fields_WEBSITE_ID)
+            ? (int)$this->getData(self::schema_fields_WEBSITE_ID)
+            : null;
+    }
+
+    public function delete_after(): void
+    {
+        parent::delete_after();
+        try {
+            if ($this->invalidationDeletedWebsiteId !== null) {
+                ObjectManager::getInstance(WebsiteCacheInvalidationService::class)->invalidateWebsite(
+                    $this->getConnection(),
+                    $this->invalidationDeletedWebsiteId,
+                    ['domain'],
+                );
+            }
+        } finally {
+            $this->invalidationDeletedWebsiteId = null;
         }
     }
     
@@ -437,6 +488,25 @@ class WebsiteDomain extends Model
             ->where(self::schema_fields_DOMAIN, \strtolower(\trim($domain)))
             ->find()
             ->fetch();
+        return $this;
+    }
+
+    /**
+     * 按 (域名, 子路径) 加载绑定记录。
+     *
+     * AI 建站域名准备 / isBound 依赖本方法；缺失时会落入 Model::__call 并静默得到空结果，
+     * 导致「域名已写入但仍报未能验证站点绑定」。
+     */
+    public function loadByDomainAndSubPath(string $domain, string $subPath = ''): self
+    {
+        $domain = \strtolower(\trim($domain));
+        $subPath = $subPath === '' ? '' : (\str_starts_with($subPath, '/') ? $subPath : '/' . $subPath);
+        $this->clearQuery()
+            ->where(self::schema_fields_DOMAIN, $domain)
+            ->where(self::schema_fields_SUB_PATH, $subPath)
+            ->find()
+            ->fetch();
+
         return $this;
     }
 

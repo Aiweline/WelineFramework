@@ -5,6 +5,7 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Manager\ObjectManager;
 /**
  * 安全日志模型
  */
@@ -39,9 +40,10 @@ class SecurityLog extends Model
     public const EVENT_PERMISSION_DENIED = 'permission_denied';
     public const EVENT_ACL_VIOLATION = 'acl_violation';
     public const EVENT_SUSPICIOUS_ACTIVITY = 'suspicious_activity';
+    public const EVENT_OBJECT_SCOPE_AUTHORIZATION = 'object_scope_authorization';
     /**
      * 记录安全事件
-     * 
+     *
      * @param string $eventType
      * @param string $message
      * @param array $details
@@ -51,15 +53,17 @@ class SecurityLog extends Model
     public static function log(string $eventType, string $message, array $details = [], ?int $userId = null): bool
     {
         try {
-            $log = w_obj(self::class);
+            /** @var self $log */
+            $log = ObjectManager::getInstance(self::class, [], false);
             $log->setData(self::schema_fields_EVENT_TYPE, $eventType);
             $log->setData(self::schema_fields_MESSAGE, $message);
             $log->setData(self::schema_fields_DETAILS, json_encode($details, JSON_UNESCAPED_UNICODE));
             $log->setData(self::schema_fields_USER_ID, $userId);
             $log->setData(self::schema_fields_IP, (string)\w_env('server.remote_addr', ''));
             $log->setData(self::schema_fields_USER_AGENT, (string)\w_env('server.http_user_agent', ''));
-            return $log->save();
-        } catch (\Exception $e) {
+            $log->setData(self::schema_fields_CREATED_AT, \date('Y-m-d H:i:s'));
+            return (bool)$log->save();
+        } catch (\Throwable $e) {
             return false;
         }
     }

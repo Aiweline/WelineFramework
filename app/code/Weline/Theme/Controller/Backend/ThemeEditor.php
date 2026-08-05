@@ -607,19 +607,21 @@ class ThemeEditor extends BackendController
         }
 
         // 检查是否有草稿，如果没有则从已发布数据初始化
-        if (!$this->layoutService->hasDraft($themeId, $pageType)
-            && !$this->hasEmptyCurrentRestoreVersion($themeId, $pageType)
+        $identity = $this->resolveVersionLayoutIdentity();
+        if (!$this->layoutService->hasDraft($themeId, $pageType, $identity)
+            && !$this->hasEmptyCurrentRestoreVersion($themeId, $pageType, $identity)
         ) {
-            $this->layoutService->initDraftFromPublished($themeId, $pageType);
+            $this->layoutService->initDraftFromPublished($themeId, $pageType, $identity);
         }
 
-        // 读取草稿布局
-        $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
+        // 读取草稿布局（必须带 Dashboard view identity，否则会落到 default.default.default 空布局）
+        $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType, $identity);
 
         return $this->fetchJson([
             'success' => true,
             'data' => $layout,
-            'has_draft' => $this->layoutService->hasDraft($themeId, $pageType),
+            'has_draft' => $this->layoutService->hasDraft($themeId, $pageType, $identity),
+            'identity' => $identity,
         ]);
     }
 
@@ -1230,6 +1232,16 @@ class ThemeEditor extends BackendController
             $slotId = $widget->getData('slot_id');
             $pageType = $widget->getData('page_type');
             $area = $widget->getData('area');
+            $widgetModule = (string)$widget->getData('widget_module');
+            $widgetType = (string)$widget->getData('widget_type');
+            $widgetCode = (string)$widget->getData('widget_code');
+            $widgetSortOrder = (int)$widget->getData('sort_order');
+            $layoutIdentity = [
+                'layout_option' => (string)($widget->getData('layout_option') ?: 'default'),
+                'scope' => (string)($widget->getData('scope') ?: 'default'),
+                'target_type' => (string)($widget->getData('target_type') ?: ThemeVirtualLayout::TARGET_GLOBAL),
+                'target_id' => (int)$widget->getData('target_id'),
+            ];
             
             // 如果 DB 记录不存在，使用前端提供的 fallback 数据
             $recordExists = !empty($widget->getLayoutId());
@@ -1237,6 +1249,10 @@ class ThemeEditor extends BackendController
                 $slotId = $data['slot_id'] ?? null;
                 $area = $data['area'] ?? 'content';
                 $pageType = $data['layout_type'] ?? 'homepage';
+                $widgetModule = (string)($data['widget_module'] ?? $widgetModule);
+                $widgetType = (string)($data['widget_type'] ?? $widgetType);
+                $widgetCode = (string)($data['widget_code'] ?? $widgetCode);
+                $layoutIdentity = $this->resolveVersionLayoutIdentity($data);
             }
             
             // 尝试删除部件（如果记录存在）
@@ -1245,6 +1261,28 @@ class ThemeEditor extends BackendController
             // 删除后清除插槽渲染缓存，否则 getOriginalSlotContent 会读到旧 layout 缓存，返回仍含已删部件的内容
             if ($result) {
                 ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+                if ($themeId > 0 && $widgetModule !== '' && $widgetType !== '' && $widgetCode !== '') {
+                    $editorArea = ObjectManager::getInstance(PreviewContextService::class)->normalizeArea(
+                        (string)($data['editor_area'] ?? $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)),
+                        PreviewContextService::AREA_FRONTEND
+                    );
+                    /** @var WidgetDefaultInjectionService $injectionService */
+                    $injectionService = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
+                    $injectionService->markUserDeleted(
+                        $themeId,
+                        (string)($pageType ?: ($data['layout_type'] ?? $data['page_type'] ?? '')),
+                        $layoutIdentity,
+                        [
+                            'module' => $widgetModule,
+                            'type' => $widgetType,
+                            'code' => $widgetCode,
+                            'slot_id' => $slotId,
+                            'area' => $area,
+                            'sort_order' => $widgetSortOrder,
+                        ],
+                        $editorArea
+                    );
+                }
             }
             
             $response = [
@@ -5123,11 +5161,39 @@ HTML;
                     'showRightSidebar' => true,
                 ]);
 
+                // fetchModuleThemeHtml 不走 Controller::fetch_file_after，LayoutSlotRenderer 不会自动填槽。
+                // 这里显式保留 Dashboard 布局 identity，并手动 processSlots，否则编辑器预览会变成空槽占位。
+                $layoutIdentity = $this->resolveVersionLayoutIdentity($context);
+                $this->applyThemeLayoutRuntimeContextToRequest(array_merge(
+                    $context,
+                    $this->buildThemeLayoutRuntimeParams($layoutIdentity)
+                ));
+                $this->request->setGet('page_type', ThemeLayout::PAGE_TYPE_DASHBOARD);
+                $this->request->setGet('layout_type', ThemeLayout::PAGE_TYPE_DASHBOARD);
+                $this->request->setGet('layout_option', $layoutOption !== '' ? $layoutOption : 'default');
+                $status = (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT);
+                if ($status !== ThemeLayout::STATUS_DRAFT && $status !== ThemeLayout::STATUS_PUBLISHED) {
+                    $status = ThemeLayout::STATUS_DRAFT;
+                }
+                $this->request->setGet('status', $status);
+
                 // 直接编译框架提供的完整后台 Dashboard 外壳；当前预览主题仍通过 session
                 // 提供颜色、静态资源与局部部件，避免依赖主题 6 自身复制布局文件。
                 $this->layoutType = null;
-                return $this->getTemplate()->fetchModuleThemeHtml(
+                $html = (string)$this->getTemplate()->fetchModuleThemeHtml(
                     'Weline_Theme::theme/backend/layouts/dashboard/default.phtml'
+                );
+
+                /** @var SlotRendererService $slotRenderer */
+                $slotRenderer = ObjectManager::getInstance(SlotRendererService::class);
+                $slotRenderer->clearCache();
+
+                return $slotRenderer->processSlots(
+                    $html,
+                    $themeId,
+                    ThemeLayout::PAGE_TYPE_DASHBOARD,
+                    $status,
+                    PreviewContextService::AREA_BACKEND
                 );
             }
             $layoutIdentity = $this->resolveVersionLayoutIdentity($context);

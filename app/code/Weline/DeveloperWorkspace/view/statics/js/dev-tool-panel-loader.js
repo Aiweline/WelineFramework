@@ -1,3 +1,56 @@
+
+(function(g){
+  g.bqAdmin=g.bqAdmin||{};
+  // Install once. The panel shell and REST data both use published
+  // developer_workspace operations; no browser-native request fallback.
+  if(g.__bqAdmin_developer_workspace_rest){
+    return;
+  }
+  g.bqAdmin['developer_workspace']=function(url, options){
+    options=options||{};
+    var urlStr=String(url||'');
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){
+      var resource=api.resource('developer_workspace');
+      var payload={url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''};
+      var callOptions={keepBusinessResult:true,silent:true};
+      return /\/dev\/tool\/rest\//i.test(urlStr)
+        ?resource.panelRequest(payload,callOptions)
+        :resource.adminRequest(payload,callOptions);
+    };
+    var toResp=function(data){
+      if(data&&data.__weline_panel_response===true){
+        var responseBody=String(data.body==null?'':data.body);
+        var responseHeaders={'content-type':String(data.content_type||'')};
+        return {
+          ok:data.success!==false,
+          status:Number(data.status||0),
+          headers:{forEach:function(callback){Object.keys(responseHeaders).forEach(function(key){callback(responseHeaders[key],key);});}},
+          json:function(){try{return Promise.resolve(JSON.parse(responseBody||'{}'));}catch(error){return Promise.reject(error);}},
+          text:function(){return Promise.resolve(responseBody);}
+        };
+      }
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    if(!(g.Weline&&typeof g.Weline.load==='function')){
+      return Promise.reject(new Error('Weline API runtime is unavailable.'));
+    }
+    return g.Weline.load('api').then(run).then(toResp);
+  };
+  g.__bqAdmin_developer_workspace=true;
+  g.__bqAdmin_developer_workspace_rest=true;
+})(typeof window!=='undefined'?window:globalThis);
 (function (window, document) {
     'use strict';
 
@@ -50,6 +103,12 @@
 
     function restorePanelFromState() {
         if (restoreAttempted || tokenRequired) {
+            return;
+        }
+        // Some backend/public shells publish the developer-panel loader without
+        // the frontend Weline.Api runtime. A saved open state must not turn that
+        // supported page shape into a pair of console warnings.
+        if (!(window.Weline && typeof window.Weline.load === 'function')) {
             return;
         }
         var saved = readPanelState();
@@ -127,7 +186,7 @@
                 headers['Content-Type'] = headers['Content-Type'] || 'application/json';
                 body = JSON.stringify(body);
             }
-            return fetch(apiUrl(path, options.params || {}), {
+            return bqAdmin['developer_workspace'](apiUrl(path, options.params || {}), {
                 method: options.method || (body !== undefined && body !== null ? 'POST' : 'GET'),
                 credentials: 'same-origin',
                 cache: options.cache || 'no-store',
@@ -245,7 +304,7 @@
         if (errorNode) {
             errorNode.textContent = '';
         }
-        fetch(resolvedSessionUrl(), {
+        bqAdmin['developer_workspace'](resolvedSessionUrl(), {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
@@ -348,7 +407,7 @@
         if (loadingPromise) {
             return loadingPromise;
         }
-        loadingPromise = fetch(panelUrl(), {
+        loadingPromise = bqAdmin['developer_workspace'](panelUrl(), {
             credentials: 'same-origin',
             headers: {
                 'Accept': 'text/html',

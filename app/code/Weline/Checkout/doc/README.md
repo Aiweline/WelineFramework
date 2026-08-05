@@ -5,6 +5,8 @@
 - [使用指南](./使用指南.md) - 详细的使用说明、示例代码和最佳实践
 - [事件使用指南](./事件使用指南.md) - 如何通过事件系统扩展业务逻辑功能
 - [API文档](./API文档.md) - 完整的API接口文档
+- [Checkout V2](./checkout-v2.md) - P2E-002：单次 Shipping Quote、owner 分摊、Tax stub、OrderFacade
+- [Checkout UI](./checkout-ui.md) - P2E-003：服务端商品 Hook、Weline.Api 交互
 
 ## 模块概述
 
@@ -139,6 +141,15 @@ Hook文件放在 `view/hooks/` 目录下，通过 `<w:hook>` 标签在模板中�
 
 **重要**：Hook系统用于视图层，事件系统用于服务层，两者不冲突，可以同时使用。
 
+### Legacy Order writer 门禁（P2D-004）
+
+`CheckoutService::createOrder()` 在身份标准化后、业务校验和数据库事务开始前
+同步派发 `Weline_Checkout::checkout::legacy_writer::assert`。Order 等切换模块
+通过 `delivery=sync`、`failure=critical` Observer 拒绝旧 writer；Checkout
+不得通过 `class_exists()` 或类名直接调用其他模块内部 Service。事件 payload、
+零号站与 fail-closed 约束见
+[`doc/event/checkout/legacy-writer-assert.md`](event/checkout/legacy-writer-assert.md)。
+
 ## 前台结账页 API
 
 结账页通过 `Weline.Api.resource('checkout')` 调用：
@@ -149,6 +160,16 @@ Hook文件放在 `view/hooks/` 目录下，通过 `<w:hook>` 标签在模板中�
 实现位于 `extends/module/Weline_Framework/Query/CheckoutQueryProvider.php`。
 
 前台页面 `/checkout` **不强制登录**；匿名结账由 `CheckoutIdentityService` 标准化，匿名订单 `customer_id=0`。
+
+## Tax shadow 事实源（P3B）
+
+Checkout 拥有持久化 `CheckoutSession` 事实，并通过
+`CheckoutTaxShadowQuoteSource` 实现 Tax 公共只读契约，并从
+`TaxEngineInterface::SCHEMA_VERSION` 读取公共请求版本。适配器只接受一个
+精确 `(website_id, store_id, channel_id)`，扫描最新 session 后输出至少
+100 条唯一、规范化的 Tax 请求；`customer_id`、原始地址、购物车身份等信息
+不得进入迁移观察窗。Tax 迁移只读取这些事实，不回写 CheckoutSession，也
+不改变历史 `tax_engine=none` 快照。
 
 ## 快速开始
 
@@ -222,7 +243,7 @@ Checkout 构造的 `idempotency_key` 保持
 
 ## 版本
 
-当前版本：1.0.0
+当前版本：1.4.3
 
 ## 作者
 

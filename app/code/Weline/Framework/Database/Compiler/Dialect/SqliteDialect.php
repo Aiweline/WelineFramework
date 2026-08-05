@@ -27,6 +27,13 @@ final class SqliteDialect implements DialectInterface
         if ($table === '') {
             throw new \InvalidArgumentException('Table name cannot be empty');
         }
+        if (str_contains($table, '.')) {
+            $parts = array_values(array_filter(
+                array_map('trim', explode('.', $table)),
+                static fn(string $part): bool => $part !== '',
+            ));
+            $table = (string)end($parts);
+        }
         $quoted = '"' . str_replace('"', '""', $table) . '"';
         if ($alias !== '') {
             $alias = trim(str_replace(['"', '`'], '', $alias));

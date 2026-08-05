@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge\Nginx;
 
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedTreeWalker;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+
 /**
  * Downloads and installs pinned Nginx into the project's isolated local install root.
  *
@@ -17,6 +21,23 @@ namespace Weline\Server\Service\Edge\Nginx;
  */
 final class ManagedNginxInstaller
 {
+    private const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
+    private const MAX_TREE_BYTES = 512 * 1024 * 1024;
+    private const MAX_TREE_ENTRIES = 8192;
+    private const MAX_TREE_DEPTH = 64;
+    private const MAX_CPUINFO_BYTES = 8 * 1024 * 1024;
+    private const MAX_PARALLEL_JOBS = 256;
+    private const MAX_DOWNLOAD_REDIRECTS = 5;
+    private const DOWNLOAD_DEADLINE_SECONDS = 300.0;
+    private const DOWNLOAD_READ_TIMEOUT_SECONDS = 30.0;
+    private const DOWNLOAD_HOST = 'nginx.org';
+    private const TOOL_PROBE_TIMEOUT_SECONDS = 30.0;
+    private const EXTRACT_TIMEOUT_SECONDS = 300.0;
+    private const CONFIGURE_TIMEOUT_SECONDS = 600.0;
+    private const BUILD_TIMEOUT_SECONDS = 1800.0;
+    private const INSTALL_TIMEOUT_SECONDS = 600.0;
+    private const INSTALL_LOCK_TIMEOUT_SECONDS = 30.0;
+
     public const VERSION = '1.30.4';
 
     public const SOURCE_URL = 'https://nginx.org/download/nginx-1.30.4.tar.gz';
@@ -37,12 +58,57 @@ final class ManagedNginxInstaller
      */
     public function ensureInstalled(bool $force = false): array
     {
+        try {
+            return $this->withInstallationLock(
+                fn(): array => $this->ensureInstalledLocked($force),
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $throwable->getMessage(),
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+    }
+
+    /**
+     * @return array{ok:bool,message:string,manifest?:array<string,mixed>,platform?:string}
+     */
+    private function ensureInstalledLocked(bool $force): array
+    {
+        try {
+            $this->reconcileInterruptedInstallPublication();
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => 'Managed nginx interrupted-publication recovery failed closed: '
+                    . $throwable->getMessage(),
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
         if (!$force && $this->paths->isInstalled()) {
-            if ($this->manifestMatches()) {
+            $manifest = $this->readManifest();
+            if ($this->manifestMatches($manifest)) {
                 return [
                     'ok' => true,
                     'message' => 'managed nginx already installed',
-                    'manifest' => $this->readManifest() ?? [],
+                    'manifest' => $manifest ?? [],
+                    'platform' => \PHP_OS_FAMILY,
+                ];
+            }
+            if ($this->legacyManifestMatches($manifest)) {
+                $this->writeManifest($this->migratedLegacyManifest($manifest ?? []));
+                $migrated = $this->readManifest();
+                if (!$this->manifestMatches($migrated)) {
+                    throw new \RuntimeException(
+                        'Managed nginx legacy manifest migration did not produce a valid pinned manifest.',
+                    );
+                }
+
+                return [
+                    'ok' => true,
+                    'message' => 'managed nginx already installed; legacy manifest upgraded in place',
+                    'manifest' => $migrated ?? [],
                     'platform' => \PHP_OS_FAMILY,
                 ];
             }
@@ -68,6 +134,38 @@ final class ManagedNginxInstaller
     }
 
     /**
+     * @param callable():array{ok:bool,message:string,manifest?:array<string,mixed>,platform?:string} $operation
+     * @return array{ok:bool,message:string,manifest?:array<string,mixed>,platform?:string}
+     */
+    private function withInstallationLock(callable $operation): array
+    {
+        $lockFile = \PHP_OS_FAMILY === 'Windows'
+            ? \dirname($this->paths->installRoot()) . DIRECTORY_SEPARATOR . 'managed-nginx.install.lock'
+            : $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR
+                . 'server' . DIRECTORY_SEPARATOR . 'managed-nginx.install.lock';
+        $directory = \dirname($lockFile);
+        if (!\is_dir($directory)
+            && !@\mkdir($directory, 0700, true)
+            && !\is_dir($directory)
+        ) {
+            throw new \RuntimeException('Unable to create managed nginx installer lock directory.');
+        }
+        $directoryStatus = @\lstat($directory);
+        if (!\is_array($directoryStatus)
+            || \is_link($directory)
+            || ((((int)($directoryStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException('Managed nginx installer lock directory is unsafe.');
+        }
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockFile,
+            static fn(): array => $operation(),
+            null,
+            self::INSTALL_LOCK_TIMEOUT_SECONDS,
+        );
+    }
+
+    /**
      * @return array{installed:bool,manifest_matches:bool,expected_version:string,manifest:array<string,mixed>|null}
      */
     public function installationStatus(): array
@@ -80,9 +178,10 @@ final class ManagedNginxInstaller
         ];
     }
 
-    private function manifestMatches(): bool
+    /** @param array<string,mixed>|null $manifest */
+    private function manifestMatches(?array $manifest = null): bool
     {
-        $manifest = $this->readManifest();
+        $manifest ??= $this->readManifest();
         if ($manifest === null) {
             return false;
         }
@@ -90,6 +189,40 @@ final class ManagedNginxInstaller
             return false;
         }
         if (!\hash_equals(\PHP_OS_FAMILY, (string)($manifest['platform'] ?? ''))) {
+            return false;
+        }
+        if (($manifest['schema_version'] ?? null) !== 2
+            || !\is_string($manifest['role'] ?? null)
+            || !\hash_equals('legacy-project-nginx', (string)$manifest['role'])
+            || !\is_string($manifest['implementation_level'] ?? null)
+            || !\hash_equals('nginx-runtime-v2', (string)$manifest['implementation_level'])
+            || !\is_string($manifest['binary'] ?? null)
+            || !$this->sameManifestPath((string)$manifest['binary'], $this->paths->binary())
+            || !\is_string($manifest['prefix'] ?? null)
+            || !$this->sameManifestPath((string)$manifest['prefix'], $this->paths->installRoot())
+        ) {
+            return false;
+        }
+        $runtimeGeneration = $manifest['runtime_generation'] ?? null;
+        if (!\is_string($runtimeGeneration)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+        ) {
+            return false;
+        }
+        $generationSource = $manifest;
+        unset($generationSource['runtime_generation']);
+        try {
+            $calculatedGeneration = \hash(
+                'sha256',
+                \json_encode(
+                    $this->canonicalManifest($generationSource),
+                    JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                ),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+        if (!\hash_equals($runtimeGeneration, $calculatedGeneration)) {
             return false;
         }
         if (\PHP_OS_FAMILY !== 'Windows') {
@@ -113,9 +246,10 @@ final class ManagedNginxInstaller
         $expected = \PHP_OS_FAMILY === 'Windows' ? self::WINDOWS_ZIP_SHA256 : self::SOURCE_SHA256;
         $actual = (string)($manifest['artifact_sha256'] ?? $manifest['source_sha256'] ?? '');
         $expectedBinarySha256 = \strtolower((string)($manifest['binary_sha256'] ?? ''));
-        $actualBinarySha256 = \is_file($this->paths->binary())
-            ? \hash_file('sha256', $this->paths->binary())
-            : false;
+        $actualBinarySha256 = $this->sha256RegularFile(
+            $this->paths->binary(),
+            self::MAX_TREE_BYTES,
+        );
 
         return $actual !== ''
             && \hash_equals(\strtolower($expected), \strtolower($actual))
@@ -124,16 +258,125 @@ final class ManagedNginxInstaller
             && \hash_equals($expectedBinarySha256, \strtolower($actualBinarySha256));
     }
 
+    /** @param array<string,mixed>|null $manifest */
+    private function legacyManifestMatches(?array $manifest): bool
+    {
+        if ($manifest === null
+            || \array_key_exists('schema_version', $manifest)
+            || \array_key_exists('runtime_generation', $manifest)
+            || \array_key_exists('role', $manifest)
+            || \array_key_exists('implementation_level', $manifest)
+            || !\hash_equals(self::VERSION, (string)($manifest['version'] ?? ''))
+            || !\hash_equals(\PHP_OS_FAMILY, (string)($manifest['platform'] ?? ''))
+        ) {
+            return false;
+        }
+        $expectedArtifact = \PHP_OS_FAMILY === 'Windows'
+            ? self::WINDOWS_ZIP_SHA256
+            : self::SOURCE_SHA256;
+        $artifact = \strtolower((string)(
+            $manifest['artifact_sha256'] ?? $manifest['source_sha256'] ?? ''
+        ));
+        $expectedBinary = \strtolower((string)($manifest['binary_sha256'] ?? ''));
+        $actualBinary = $this->sha256RegularFile(
+            $this->paths->binary(),
+            self::MAX_TREE_BYTES,
+        );
+        $architecture = $this->binaryArchitecture($this->paths->binary());
+        if (!\hash_equals(\strtolower($expectedArtifact), $artifact)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedBinary) !== 1
+            || !\is_string($actualBinary)
+            || !\hash_equals($expectedBinary, \strtolower($actualBinary))
+            || $architecture === ''
+            || !\hash_equals($architecture, (string)($manifest['arch'] ?? ''))
+        ) {
+            return false;
+        }
+        foreach (['binary' => $this->paths->binary(), 'prefix' => $this->paths->installRoot()] as $key => $path) {
+            if (isset($manifest[$key])
+                && (!\is_string($manifest[$key])
+                    || !$this->sameManifestPath((string)$manifest[$key], $path))
+            ) {
+                return false;
+            }
+        }
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            $buildFlags = \is_array($manifest['build_flags'] ?? null)
+                ? $manifest['build_flags']
+                : [];
+            if (($buildFlags['has_pcre'] ?? false) !== true
+                || ($buildFlags['without_rewrite'] ?? true) !== false
+                || !\hash_equals(
+                    $architecture,
+                    $this->normalizeArchitecture((string)\php_uname('m')),
+                )
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param array<string,mixed> $manifest @return array<string,mixed> */
+    private function migratedLegacyManifest(array $manifest): array
+    {
+        $windows = \PHP_OS_FAMILY === 'Windows';
+        $artifact = $windows ? self::WINDOWS_ZIP_SHA256 : self::SOURCE_SHA256;
+        $legacyFlags = \is_array($manifest['build_flags'] ?? null)
+            ? $manifest['build_flags']
+            : [];
+        $buildFlags = $windows
+            ? [
+                'http_v2_module' => (bool)($legacyFlags['http_v2_module'] ?? true),
+                'http_v3_module' => false,
+                'http_v3_reason' => 'ngx_http_v3_module is not supported on Win32',
+            ]
+            : [
+                'http_v2_module' => (bool)($legacyFlags['http_v2_module'] ?? true),
+                'http_v3_module' => (bool)($legacyFlags['http_v3_module'] ?? true),
+                'has_pcre' => true,
+                'has_openssl' => (bool)($legacyFlags['has_openssl'] ?? true),
+                'has_zlib' => (bool)($legacyFlags['has_zlib'] ?? true),
+                'without_rewrite' => false,
+                'without_gzip' => (bool)($legacyFlags['without_gzip'] ?? false),
+            ];
+        $installedAt = \trim((string)($manifest['installed_at'] ?? ''));
+        if ($installedAt === '' || \strlen($installedAt) > 128 || \strtotime($installedAt) === false) {
+            $installedAt = \date('c');
+        }
+
+        return [
+            'version' => self::VERSION,
+            'source_url' => $windows ? self::WINDOWS_ZIP_URL : self::SOURCE_URL,
+            'artifact_sha256' => $artifact,
+            'source_sha256' => $artifact,
+            'platform' => \PHP_OS_FAMILY,
+            'arch' => $this->binaryArchitecture($this->paths->binary()),
+            'php_process_arch' => $this->normalizeArchitecture((string)\php_uname('m')),
+            'prefix' => $this->paths->installRoot(),
+            'binary' => $this->paths->binary(),
+            'binary_sha256' => \strtolower((string)$manifest['binary_sha256']),
+            'build_flags' => $buildFlags,
+            'installed_at' => $installedAt,
+            'migrated_from_schema' => 1,
+        ];
+    }
+
     /**
      * @return array<string,mixed>|null
      */
     private function readManifest(): ?array
     {
         $file = $this->paths->manifestFile();
-        if (!\is_file($file)) {
+        if (!\file_exists($file) && !\is_link($file)) {
             return null;
         }
-        $decoded = \json_decode((string)\file_get_contents($file), true);
+        $decoded = \json_decode(GatewayProjectStateFilesystem::read(
+            $file,
+            16 * 1024 * 1024,
+            'Managed Nginx install manifest',
+        ), true);
         return \is_array($decoded) ? $decoded : null;
     }
 
@@ -143,8 +386,12 @@ final class ManagedNginxInstaller
     private function writeManifest(array $manifest): void
     {
         $root = $this->paths->installRoot();
-        if (!\is_dir($root) && !@\mkdir($root, 0755, true) && !\is_dir($root)) {
-            throw new \RuntimeException('Unable to create nginx install root: ' . $root);
+        $status = @\lstat($root);
+        if (!\is_array($status)
+            || \is_link($root)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException('Nginx install root is missing or unsafe: ' . $root);
         }
         $this->writeManifestFile($this->paths->manifestFile(), $manifest);
     }
@@ -167,30 +414,7 @@ final class ManagedNginxInstaller
             $manifest,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         );
-        $temporary = $file . '.candidate.' . \bin2hex(\random_bytes(6));
-        if (\file_put_contents($temporary, $json, LOCK_EX) !== \strlen($json)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to stage managed nginx install manifest.');
-        }
-        @\chmod($temporary, 0644);
-        $previous = null;
-        if (\is_file($file)) {
-            $previous = $file . '.previous.' . \bin2hex(\random_bytes(6));
-            if (!@\rename($file, $previous)) {
-                @\unlink($temporary);
-                throw new \RuntimeException('Unable to preserve managed nginx install manifest.');
-            }
-        }
-        if (!@\rename($temporary, $file)) {
-            if ($previous !== null) {
-                @\rename($previous, $file);
-            }
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to publish managed nginx install manifest.');
-        }
-        if ($previous !== null) {
-            @\unlink($previous);
-        }
+        GatewayProjectStateFilesystem::atomicWrite($file, $json, 0644);
     }
 
     /** @param array<string,mixed> $manifest @return array<string,mixed> */
@@ -205,6 +429,216 @@ final class ManagedNginxInstaller
             \ksort($manifest, SORT_STRING);
         }
         return $manifest;
+    }
+
+    private function sameManifestPath(string $left, string $right): bool
+    {
+        $left = \rtrim(\str_replace('\\', '/', \trim($left)), '/');
+        $right = \rtrim(\str_replace('\\', '/', \trim($right)), '/');
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $left = \strtolower($left);
+            $right = \strtolower($right);
+        }
+        return $left !== '' && \hash_equals($left, $right);
+    }
+
+    private function assertUnixInstallRootPolicy(
+        string $prefix,
+        bool $requireExistingOwnership,
+    ): void {
+        $project = \rtrim($this->paths->projectRoot(), '/\\');
+        $canonicalProject = @\realpath($project);
+        $parent = \dirname($prefix);
+        $canonicalParent = @\realpath($parent);
+        $normalizedProject = \rtrim(\str_replace('\\', '/', $project), '/');
+        $normalizedPrefix = \rtrim(\str_replace('\\', '/', $prefix), '/');
+        if (!\is_string($canonicalProject)
+            || !\is_string($canonicalParent)
+            || !$this->sameManifestPath($project, $canonicalProject)
+            || !$this->sameManifestPath($parent, $canonicalParent)
+            || !\str_starts_with($normalizedPrefix . '/', $normalizedProject . '/')
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx install root must remain in the canonical project tree.'
+            );
+        }
+        $relative = \substr($normalizedPrefix, \strlen($normalizedProject) + 1);
+        $segments = \explode('/', $relative);
+        $first = \strtolower((string)($segments[0] ?? ''));
+        $leaf = \strtolower((string)\end($segments));
+        if ($relative === ''
+            || \in_array($first, [
+                '.codex',
+                '.git',
+                'app',
+                'dev',
+                'node_modules',
+                'pub',
+                'test',
+                'tests',
+                'vendor',
+            ], true)
+            || \preg_match('/\Anginx(?:[-._][a-z0-9][a-z0-9._-]*)?\z/D', $leaf) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx install_root must be a dedicated nginx-named directory; '
+                    . 'reserved project trees cannot be replaced.'
+            );
+        }
+        if ($requireExistingOwnership) {
+            $manifest = $this->readManifest();
+            if (!$this->managedInstallOwnershipMatches($manifest)
+                && !$this->legacyManifestMatches($manifest)
+            ) {
+                throw new \RuntimeException(
+                    'Existing managed nginx install_root has no valid WLS ownership manifest; '
+                        . 'automatic replacement is refused.'
+                );
+            }
+        }
+    }
+
+    /** @param array<string,mixed>|null $manifest */
+    private function managedInstallOwnershipMatches(?array $manifest): bool
+    {
+        if (!\is_array($manifest)
+            || ($manifest['schema_version'] ?? null) !== 2
+            || !\hash_equals('legacy-project-nginx', (string)($manifest['role'] ?? ''))
+            || !\hash_equals('nginx-runtime-v2', (string)($manifest['implementation_level'] ?? ''))
+            || !$this->sameManifestPath(
+                (string)($manifest['prefix'] ?? ''),
+                $this->paths->installRoot(),
+            )
+            || !\is_string($manifest['binary'] ?? null)
+        ) {
+            return false;
+        }
+        $prefix = \rtrim(\str_replace('\\', '/', $this->paths->installRoot()), '/');
+        $binary = \str_replace('\\', '/', (string)$manifest['binary']);
+        if (!\str_starts_with($binary, $prefix . '/')) {
+            return false;
+        }
+        $generation = $manifest['runtime_generation'] ?? null;
+        if (!\is_string($generation)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $generation) !== 1
+        ) {
+            return false;
+        }
+        $source = $manifest;
+        unset($source['runtime_generation']);
+        try {
+            $calculated = \hash('sha256', \json_encode(
+                $this->canonicalManifest($source),
+                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ));
+        } catch (\Throwable) {
+            return false;
+        }
+        return \hash_equals($generation, $calculated);
+    }
+
+    private function reconcileInterruptedInstallPublication(): void
+    {
+        $prefix = $this->paths->installRoot();
+        $rollback = $prefix . '.wls-rollback';
+        if (!\file_exists($rollback) && !\is_link($rollback)) {
+            return;
+        }
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            $this->assertUnixInstallRootPolicy($prefix, false);
+        }
+        if (!\is_dir($rollback) || \is_link($rollback)) {
+            throw new \RuntimeException('The managed nginx rollback slot is linked or special.');
+        }
+        if (!$this->managedRollbackMatches($rollback)) {
+            throw new \RuntimeException(
+                'The managed nginx rollback slot has no complete WLS ownership proof; manual recovery is required.'
+            );
+        }
+
+        if (!\file_exists($prefix) && !\is_link($prefix)) {
+            if (!@\rename($rollback, $prefix)) {
+                throw new \RuntimeException('Unable to restore the verified managed nginx rollback slot.');
+            }
+            if (!$this->paths->isInstalled() || !$this->manifestMatches()) {
+                if (!@\rename($prefix, $rollback)) {
+                    throw new \RuntimeException(
+                        'Restored managed nginx rollback failed verification and could not be returned to its slot.'
+                    );
+                }
+                throw new \RuntimeException('Restored managed nginx rollback failed verification.');
+            }
+            return;
+        }
+
+        if (!\is_dir($prefix) || \is_link($prefix)) {
+            throw new \RuntimeException(
+                'The managed nginx target collided with a linked or special path while a rollback slot exists.'
+            );
+        }
+        if (!$this->paths->isInstalled() || !$this->manifestMatches()) {
+            throw new \RuntimeException(
+                'Both managed nginx target and rollback slots exist, but the target is invalid; manual recovery is required.'
+            );
+        }
+        $this->removeTree($rollback);
+    }
+
+    private function managedRollbackMatches(string $rollback): bool
+    {
+        try {
+            $this->assertSafeTree($rollback, 'managed nginx rollback slot');
+            $manifestFile = $rollback . DIRECTORY_SEPARATOR
+                . \basename($this->paths->manifestFile());
+            $manifest = \json_decode(GatewayProjectStateFilesystem::read(
+                $manifestFile,
+                16 * 1024 * 1024,
+                'Managed nginx rollback manifest',
+            ), true, 512, JSON_THROW_ON_ERROR);
+            if (!\is_array($manifest)
+                || !$this->managedInstallOwnershipMatches($manifest)
+                || !\hash_equals(self::VERSION, (string)($manifest['version'] ?? ''))
+                || !\hash_equals(\PHP_OS_FAMILY, (string)($manifest['platform'] ?? ''))
+            ) {
+                return false;
+            }
+            $expectedArtifact = \PHP_OS_FAMILY === 'Windows'
+                ? self::WINDOWS_ZIP_SHA256
+                : self::SOURCE_SHA256;
+            $artifact = \strtolower((string)(
+                $manifest['artifact_sha256'] ?? $manifest['source_sha256'] ?? ''
+            ));
+            if (!\hash_equals(\strtolower($expectedArtifact), $artifact)) {
+                return false;
+            }
+            $prefix = \rtrim(\str_replace('\\', '/', $this->paths->installRoot()), '/');
+            $declaredBinary = \str_replace('\\', '/', (string)($manifest['binary'] ?? ''));
+            if (!\str_starts_with($declaredBinary, $prefix . '/')) {
+                return false;
+            }
+            $relative = \substr($declaredBinary, \strlen($prefix) + 1);
+            $segments = \explode('/', $relative);
+            if ($relative === ''
+                || \in_array('', $segments, true)
+                || \in_array('.', $segments, true)
+                || \in_array('..', $segments, true)
+            ) {
+                return false;
+            }
+            $binary = $rollback . DIRECTORY_SEPARATOR
+                . \implode(DIRECTORY_SEPARATOR, $segments);
+            $actualDigest = $this->sha256RegularFile($binary, self::MAX_TREE_BYTES);
+            $expectedDigest = \strtolower((string)($manifest['binary_sha256'] ?? ''));
+            $architecture = $this->binaryArchitecture($binary);
+            return \is_string($actualDigest)
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) === 1
+                && \hash_equals($expectedDigest, \strtolower($actualDigest))
+                && $architecture !== ''
+                && \hash_equals($architecture, (string)($manifest['arch'] ?? ''))
+                && (\PHP_OS_FAMILY === 'Windows' || \is_executable($binary));
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -223,8 +657,14 @@ final class ManagedNginxInstaller
 
         $cacheDir = $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'var'
             . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'nginx-build';
-        if (!\is_dir($cacheDir) && !@\mkdir($cacheDir, 0755, true) && !\is_dir($cacheDir)) {
+        if (\is_link($cacheDir)) {
+            return ['ok' => false, 'message' => 'build cache must not be a link: ' . $cacheDir, 'platform' => \PHP_OS_FAMILY];
+        }
+        if (!\is_dir($cacheDir) && !@\mkdir($cacheDir, 0700, true) && !\is_dir($cacheDir)) {
             return ['ok' => false, 'message' => 'unable to create build cache: ' . $cacheDir, 'platform' => \PHP_OS_FAMILY];
+        }
+        if (\PHP_OS_FAMILY !== 'Windows' && !@\chmod($cacheDir, 0700)) {
+            return ['ok' => false, 'message' => 'unable to seal build cache permissions: ' . $cacheDir, 'platform' => \PHP_OS_FAMILY];
         }
         $tarball = $cacheDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION . '.tar.gz';
         try {
@@ -235,30 +675,109 @@ final class ManagedNginxInstaller
         }
 
         $srcDir = $cacheDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION;
-        if ($force && \is_dir($srcDir)) {
+        if (\is_dir($srcDir)) {
             $this->removeTree($srcDir);
         }
-        if (!\is_dir($srcDir)) {
-            $cmd = 'tar -xzf ' . \escapeshellarg($tarball) . ' -C ' . \escapeshellarg($cacheDir);
-            $out = [];
-            $code = 0;
-            @\exec($cmd . ' 2>&1', $out, $code);
-            if ($code !== 0 || !\is_dir($srcDir)) {
-                return [
-                    'ok' => false,
-                    'message' => 'tar extract failed: ' . \trim(\implode("\n", $out)),
-                    'platform' => \PHP_OS_FAMILY,
-                ];
+        if (\file_exists($srcDir) || \is_link($srcDir)) {
+            return [
+                'ok' => false,
+                'message' => 'nginx source cache path is not an empty safe directory target: ' . $srcDir,
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+        $tar = $this->executablePath('tar');
+        if ($tar === null) {
+            return ['ok' => false, 'message' => 'tar executable disappeared after preflight', 'platform' => \PHP_OS_FAMILY];
+        }
+        $extract = $this->runTool(
+            [$tar, '-xzf', $tarball, '-C', $cacheDir],
+            self::EXTRACT_TIMEOUT_SECONDS,
+            null,
+            false,
+        );
+        try {
+            $this->assertSha256($tarball, self::SOURCE_SHA256);
+        } catch (\Throwable $throwable) {
+            if (\is_dir($srcDir) || \is_link($srcDir)) {
+                $this->removeTree($srcDir);
             }
+            return [
+                'ok' => false,
+                'message' => 'nginx source artifact changed while being extracted: ' . $throwable->getMessage(),
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+        if ((int)$extract['code'] !== 0 || !\is_dir($srcDir) || \is_link($srcDir)) {
+            return [
+                'ok' => false,
+                'message' => 'tar extract failed: ' . $this->tailText((string)$extract['output'], 4000),
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+        try {
+            $this->assertSafeTree($srcDir, 'nginx source archive');
+        } catch (\Throwable $throwable) {
+            $this->removeTree($srcDir);
+            return [
+                'ok' => false,
+                'message' => $throwable->getMessage(),
+                'platform' => \PHP_OS_FAMILY,
+            ];
         }
 
         $prefix = $this->paths->installRoot();
-        if ($force && \is_dir($prefix)) {
-            // Keep other extend/server siblings; only wipe nginx prefix on force.
-            $this->removeTree($prefix);
+        $prefixParent = \dirname($prefix);
+        if (!\is_dir($prefixParent)
+            && !@\mkdir($prefixParent, 0755, true)
+            && !\is_dir($prefixParent)
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'unable to create managed nginx install parent: ' . $prefixParent,
+                'platform' => \PHP_OS_FAMILY,
+            ];
         }
-        if (!\is_dir($prefix) && !@\mkdir($prefix, 0755, true) && !\is_dir($prefix)) {
-            return ['ok' => false, 'message' => 'unable to create install prefix: ' . $prefix, 'platform' => \PHP_OS_FAMILY];
+        $parentStatus = @\lstat($prefixParent);
+        if (!\is_array($parentStatus)
+            || \is_link($prefixParent)
+            || ((((int)($parentStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx install parent is linked or unsafe: ' . $prefixParent,
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+        $prefixPresent = \file_exists($prefix) || \is_link($prefix);
+        try {
+            $this->assertUnixInstallRootPolicy($prefix, false);
+        } catch (\Throwable $throwable) {
+            return [
+                'ok' => false,
+                'message' => $throwable->getMessage(),
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+        if ($prefixPresent && (!$force || !\is_dir($prefix) || \is_link($prefix))) {
+            return [
+                'ok' => false,
+                'message' => \is_link($prefix) || !\is_dir($prefix)
+                    ? 'managed nginx install root is linked or special and will not be replaced'
+                    : 'incomplete nginx install root exists; rerun with --force after confirming it is not running',
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+        if ($prefixPresent) {
+            try {
+                $this->assertUnixInstallRootPolicy($prefix, true);
+                $this->assertSafeTree($prefix, 'existing managed nginx install');
+            } catch (\Throwable $throwable) {
+                return [
+                    'ok' => false,
+                    'message' => $throwable->getMessage(),
+                    'platform' => \PHP_OS_FAMILY,
+                ];
+            }
         }
 
         $deps = $this->resolveUnixBuildFlags();
@@ -269,75 +788,154 @@ final class ManagedNginxInstaller
                 'platform' => \PHP_OS_FAMILY,
             ];
         }
-        $configure = './configure --prefix=' . \escapeshellarg($prefix)
-            . ' --with-http_ssl_module --with-http_v2_module --with-http_v3_module'
-            . ($deps['configure_extra'] !== '' ? ' ' . $deps['configure_extra'] : '');
-        if ($deps['cc_opts'] !== []) {
-            $configure .= ' --with-cc-opt=' . \escapeshellarg(\implode(' ', \array_values(\array_unique($deps['cc_opts']))));
-        }
-        if ($deps['ld_opts'] !== []) {
-            $configure .= ' --with-ld-opt=' . \escapeshellarg(\implode(' ', \array_values(\array_unique($deps['ld_opts']))));
-        }
-
-        $jobs = $this->detectParallelJobs();
-        $buildScript = 'cd ' . \escapeshellarg($srcDir)
-            . ' && make clean >/dev/null 2>&1 || true'
-            . ' && ' . $configure
-            . ' && make -j' . $jobs
-            . ' && make install';
-
-        $out = [];
-        $code = 0;
-        @\exec($buildScript . ' 2>&1', $out, $code);
-        if ($code !== 0 || !$this->paths->isInstalled()) {
-            $hint = $this->unixFailureHint();
+        $compiler = $this->detectCc();
+        $make = $this->executablePath('make');
+        $configureScript = $srcDir . DIRECTORY_SEPARATOR . 'configure';
+        if ($compiler === null
+            || $make === null
+            || !\is_file($configureScript)
+            || !\is_executable($configureScript)
+            || \is_link($configureScript)
+        ) {
             return [
                 'ok' => false,
-                'message' => 'nginx build/install failed on ' . \PHP_OS_FAMILY . '/' . \php_uname('m')
-                    . '. ' . $hint . ' Output: '
-                    . $this->tailText(\trim(\implode("\n", $out)), 4000),
+                'message' => 'nginx build tools or the verified configure script disappeared after preflight',
                 'platform' => \PHP_OS_FAMILY,
             ];
         }
+        $configureDigest = $this->sha256RegularFile($configureScript, 16 * 1024 * 1024);
+        if ($configureDigest === null) {
+            return [
+                'ok' => false,
+                'message' => 'verified nginx configure script is not a bounded regular file',
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        }
+        $candidate = $prefixParent . DIRECTORY_SEPARATOR
+            . 'install-candidate-' . \bin2hex(\random_bytes(8));
+        $this->resetDirectory($candidate);
+        try {
+            $configure = [
+                $configureScript,
+                '--prefix=' . $candidate,
+                '--with-http_ssl_module',
+                '--with-http_v2_module',
+                '--with-http_v3_module',
+                '--with-cc=' . $compiler,
+            ];
+            foreach (\preg_split('/\s+/', \trim((string)$deps['configure_extra'])) ?: [] as $option) {
+                if ($option !== '') {
+                    $configure[] = $option;
+                }
+            }
+            if ($deps['cc_opts'] !== []) {
+                $configure[] = '--with-cc-opt=' . \implode(' ', \array_values(\array_unique($deps['cc_opts'])));
+            }
+            if ($deps['ld_opts'] !== []) {
+                $configure[] = '--with-ld-opt=' . \implode(' ', \array_values(\array_unique($deps['ld_opts'])));
+            }
 
-        @\chmod($this->paths->binary(), 0755);
-        $binarySha256 = \hash_file('sha256', $this->paths->binary());
-        if (!\is_string($binarySha256)) {
-            return ['ok' => false, 'message' => 'unable to hash installed nginx binary', 'platform' => \PHP_OS_FAMILY];
+            $jobs = $this->detectParallelJobs();
+            $configureResult = $this->runTool(
+                $configure,
+                self::CONFIGURE_TIMEOUT_SECONDS,
+                $srcDir,
+                false,
+            );
+            $configureAfter = $this->sha256RegularFile($configureScript, 16 * 1024 * 1024);
+            if (!\is_string($configureAfter) || !\hash_equals($configureDigest, $configureAfter)) {
+                $configureResult = [
+                    'code' => 125,
+                    'output' => 'verified nginx configure script changed while it was being consumed',
+                ];
+            }
+            $buildResult = (int)$configureResult['code'] === 0
+                ? $this->runTool([$make, '-s', '-j' . $jobs], self::BUILD_TIMEOUT_SECONDS, $srcDir, false)
+                : ['code' => 125, 'output' => 'build skipped because configure failed'];
+            $installResult = (int)$buildResult['code'] === 0
+                ? $this->runTool([$make, '-s', 'install'], self::INSTALL_TIMEOUT_SECONDS, $srcDir, false)
+                : ['code' => 125, 'output' => 'install skipped because build failed'];
+            if ((int)$configureResult['code'] !== 0
+                || (int)$buildResult['code'] !== 0
+                || (int)$installResult['code'] !== 0
+            ) {
+                $hint = $this->unixFailureHint();
+                $diagnostic = 'configure: ' . (string)$configureResult['output']
+                    . "\nbuild: " . (string)$buildResult['output']
+                    . "\ninstall: " . (string)$installResult['output'];
+                return [
+                    'ok' => false,
+                    'message' => 'nginx build/install failed on ' . \PHP_OS_FAMILY . '/' . \php_uname('m')
+                        . '. ' . $hint . ' Output: '
+                        . $this->tailText(\trim($diagnostic), 4000),
+                    'platform' => \PHP_OS_FAMILY,
+                ];
+            }
+
+            $candidateBinary = $candidate . DIRECTORY_SEPARATOR . 'sbin'
+                . DIRECTORY_SEPARATOR . 'nginx';
+            if (!\is_file($candidateBinary)
+                || \is_link($candidateBinary)
+                || !@\chmod($candidateBinary, 0755)
+                || !\is_executable($candidateBinary)
+            ) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx candidate binary is missing or unsafe',
+                    'platform' => \PHP_OS_FAMILY,
+                ];
+            }
+            $binarySha256 = $this->sha256RegularFile(
+                $candidateBinary,
+                self::MAX_TREE_BYTES,
+            );
+            if (!\is_string($binarySha256)) {
+                return ['ok' => false, 'message' => 'unable to hash installed nginx binary', 'platform' => \PHP_OS_FAMILY];
+            }
+            $binaryArchitecture = $this->binaryArchitecture($candidateBinary);
+            if ($binaryArchitecture === '') {
+                return ['ok' => false, 'message' => 'unable to identify installed nginx binary architecture', 'platform' => \PHP_OS_FAMILY];
+            }
+            $manifest = [
+                'version' => self::VERSION,
+                'source_url' => self::SOURCE_URL,
+                'artifact_sha256' => self::SOURCE_SHA256,
+                'source_sha256' => self::SOURCE_SHA256,
+                'platform' => \PHP_OS_FAMILY,
+                'arch' => $binaryArchitecture,
+                'php_process_arch' => $this->normalizeArchitecture((string)\php_uname('m')),
+                'prefix' => $prefix,
+                'binary' => $prefix . DIRECTORY_SEPARATOR . 'sbin'
+                    . DIRECTORY_SEPARATOR . 'nginx',
+                'binary_sha256' => $binarySha256,
+                'build_flags' => [
+                    'http_v2_module' => true,
+                    'http_v3_module' => true,
+                    'has_pcre' => $deps['has_pcre'],
+                    'has_openssl' => $deps['has_openssl'],
+                    'has_zlib' => $deps['has_zlib'],
+                    'without_rewrite' => false,
+                    'without_gzip' => !$deps['has_zlib'],
+                ],
+                'installed_at' => \date('c'),
+            ];
+            $this->writeManifestFile(
+                $candidate . DIRECTORY_SEPARATOR . \basename($this->paths->manifestFile()),
+                $manifest,
+            );
+            $this->assertSafeTree($candidate, 'managed nginx install candidate');
+            $this->publishInstallCandidate($candidate, $prefix, true);
+            return [
+                'ok' => true,
+                'message' => 'managed nginx installed from source (' . \PHP_OS_FAMILY . '/' . \php_uname('m') . ')',
+                'manifest' => $manifest,
+                'platform' => \PHP_OS_FAMILY,
+            ];
+        } finally {
+            if (\file_exists($candidate) || \is_link($candidate)) {
+                $this->removeTree($candidate);
+            }
         }
-        $binaryArchitecture = $this->binaryArchitecture($this->paths->binary());
-        if ($binaryArchitecture === '') {
-            return ['ok' => false, 'message' => 'unable to identify installed nginx binary architecture', 'platform' => \PHP_OS_FAMILY];
-        }
-        $manifest = [
-            'version' => self::VERSION,
-            'source_url' => self::SOURCE_URL,
-            'artifact_sha256' => self::SOURCE_SHA256,
-            'source_sha256' => self::SOURCE_SHA256,
-            'platform' => \PHP_OS_FAMILY,
-            'arch' => $binaryArchitecture,
-            'php_process_arch' => $this->normalizeArchitecture((string)\php_uname('m')),
-            'prefix' => $prefix,
-            'binary' => $this->paths->binary(),
-            'binary_sha256' => $binarySha256,
-            'build_flags' => [
-                'http_v2_module' => true,
-                'http_v3_module' => true,
-                'has_pcre' => $deps['has_pcre'],
-                'has_openssl' => $deps['has_openssl'],
-                'has_zlib' => $deps['has_zlib'],
-                'without_rewrite' => false,
-                'without_gzip' => !$deps['has_zlib'],
-            ],
-            'installed_at' => \date('c'),
-        ];
-        $this->writeManifest($manifest);
-        return [
-            'ok' => true,
-            'message' => 'managed nginx installed from source (' . \PHP_OS_FAMILY . '/' . \php_uname('m') . ')',
-            'manifest' => $manifest,
-            'platform' => \PHP_OS_FAMILY,
-        ];
     }
 
     /**
@@ -428,9 +1026,16 @@ final class ManagedNginxInstaller
                     }
                 }
             }
+            $pkgConfig = $this->executablePath('pkg-config');
             foreach (['openssl', 'libssl', 'libpcre', 'libpcre2-8', 'zlib'] as $pkg) {
-                $cflags = \trim((string)@\shell_exec('pkg-config --cflags-only-I ' . \escapeshellarg($pkg) . ' 2>/dev/null'));
-                $libs = \trim((string)@\shell_exec('pkg-config --libs-only-L ' . \escapeshellarg($pkg) . ' 2>/dev/null'));
+                $cflagsResult = $pkgConfig !== null
+                    ? $this->runTool([$pkgConfig, '--cflags-only-I', $pkg], self::TOOL_PROBE_TIMEOUT_SECONDS)
+                    : ['code' => 127, 'output' => ''];
+                $libsResult = $pkgConfig !== null
+                    ? $this->runTool([$pkgConfig, '--libs-only-L', $pkg], self::TOOL_PROBE_TIMEOUT_SECONDS)
+                    : ['code' => 127, 'output' => ''];
+                $cflags = (int)$cflagsResult['code'] === 0 ? \trim((string)$cflagsResult['output']) : '';
+                $libs = (int)$libsResult['code'] === 0 ? \trim((string)$libsResult['output']) : '';
                 if ($cflags !== '') {
                     foreach (\preg_split('/\s+/', $cflags) ?: [] as $flag) {
                         if (\str_starts_with($flag, '-I') && \strlen($flag) > 2) {
@@ -528,13 +1133,12 @@ final class ManagedNginxInstaller
 
     private function macOsSdkHeaderExists(string $header): bool
     {
-        if (\PHP_OS_FAMILY !== 'Darwin' || !$this->commandExists('xcrun')) {
+        $xcrun = $this->executablePath('xcrun');
+        if (\PHP_OS_FAMILY !== 'Darwin' || $xcrun === null) {
             return false;
         }
-        $output = [];
-        $code = 0;
-        @\exec('xcrun --show-sdk-path 2>/dev/null', $output, $code);
-        $sdk = $code === 0 ? \trim((string)($output[0] ?? '')) : '';
+        $result = $this->runTool([$xcrun, '--show-sdk-path'], self::TOOL_PROBE_TIMEOUT_SECONDS);
+        $sdk = (int)$result['code'] === 0 ? \trim((string)$result['output']) : '';
 
         return $sdk !== '' && \is_file($sdk . '/usr/include/' . \ltrim($header, '/'));
     }
@@ -555,17 +1159,14 @@ final class ManagedNginxInstaller
      */
     private function installWindows(bool $force): array
     {
-        if (!$this->commandExists('powershell') || !\function_exists('iconv')) {
+        if (!\class_exists(\ZipArchive::class)
+            && $this->executablePath('tar') === null
+            && ($this->executablePath('powershell') === null
+                || !\function_exists('iconv'))
+        ) {
             return [
                 'ok' => false,
-                'message' => 'Windows managed nginx lifecycle requires powershell.exe and the PHP iconv extension',
-                'platform' => 'Windows',
-            ];
-        }
-        if (!\class_exists(\ZipArchive::class) && !$this->commandExists('powershell') && !$this->commandExists('tar')) {
-            return [
-                'ok' => false,
-                'message' => 'Windows managed nginx install requires PHP ZipArchive, or PowerShell, or tar',
+                'message' => 'Windows managed nginx install requires PHP ZipArchive, tar.exe, or PowerShell with PHP iconv',
                 'platform' => 'Windows',
             ];
         }
@@ -573,7 +1174,10 @@ final class ManagedNginxInstaller
         $prefix = $this->paths->installRoot();
         $localRoot = \dirname($prefix);
         $cacheDir = $localRoot . DIRECTORY_SEPARATOR . 'installer-cache';
-        if (!\is_dir($cacheDir) && !@\mkdir($cacheDir, 0755, true) && !\is_dir($cacheDir)) {
+        if (\is_link($cacheDir)) {
+            return ['ok' => false, 'message' => 'local installer cache must not be a link: ' . $cacheDir, 'platform' => 'Windows'];
+        }
+        if (!\is_dir($cacheDir) && !@\mkdir($cacheDir, 0700, true) && !\is_dir($cacheDir)) {
             return ['ok' => false, 'message' => 'unable to create local installer cache: ' . $cacheDir, 'platform' => 'Windows'];
         }
         if (\is_dir($prefix) && !$force) {
@@ -596,6 +1200,7 @@ final class ManagedNginxInstaller
             $candidate = $localRoot . DIRECTORY_SEPARATOR . 'install-candidate-' . $token;
             $this->resetDirectory($extractDir);
             $this->extractZip($zip, $extractDir);
+            $this->assertSha256($zip, self::WINDOWS_ZIP_SHA256);
 
             $nested = $extractDir . DIRECTORY_SEPARATOR . 'nginx-' . self::VERSION;
             if (!\is_dir($nested)) {
@@ -609,7 +1214,7 @@ final class ManagedNginxInstaller
             if (!\is_file($candidateBinary)) {
                 throw new \RuntimeException('windows nginx.exe missing from validated install candidate');
             }
-            $binarySha256 = \hash_file('sha256', $candidateBinary);
+            $binarySha256 = $this->sha256RegularFile($candidateBinary, self::MAX_TREE_BYTES);
             if (!\is_string($binarySha256)) {
                 throw new \RuntimeException('unable to hash Windows nginx install candidate');
             }
@@ -640,7 +1245,7 @@ final class ManagedNginxInstaller
                 $candidate . DIRECTORY_SEPARATOR . \basename($this->paths->manifestFile()),
                 $manifest,
             );
-            $this->publishWindowsCandidate($candidate, $prefix);
+            $this->publishInstallCandidate($candidate, $prefix);
 
             return [
                 'ok' => true,
@@ -666,7 +1271,10 @@ final class ManagedNginxInstaller
         if (\class_exists(\ZipArchive::class)) {
             $zipArchive = new \ZipArchive();
             $opened = $zipArchive->open($zip);
-            if ($opened === true && $zipArchive->extractTo($destination)) {
+            if ($opened === true
+                && $this->validateZipTopology($zipArchive)
+                && $zipArchive->extractTo($destination)
+            ) {
                 $zipArchive->close();
                 return;
             }
@@ -681,18 +1289,22 @@ final class ManagedNginxInstaller
             }
             $this->resetDirectory($destination);
         }
-        if ($this->commandExists('tar')) {
-            $cmd = 'tar -xf ' . \escapeshellarg($zip) . ' -C ' . \escapeshellarg($destination);
-            $out = [];
-            $code = 0;
-            @\exec($cmd . ' 2>&1', $out, $code);
-            if ($code === 0) {
+        $tar = $this->executablePath('tar');
+        if ($tar !== null) {
+            $result = $this->runTool(
+                [$tar, '-xf', $zip, '-C', $destination],
+                self::EXTRACT_TIMEOUT_SECONDS,
+                null,
+                false,
+            );
+            if ((int)$result['code'] === 0) {
                 return;
             }
-            $failures[] = 'tar failed: ' . \trim(\implode("\n", $out));
+            $failures[] = 'tar failed: ' . $this->tailText((string)$result['output'], 4000);
             $this->resetDirectory($destination);
         }
-        if ($this->commandExists('powershell') || $this->commandExists('powershell.exe')) {
+        $powershell = $this->executablePath('powershell');
+        if ($powershell !== null && \function_exists('iconv')) {
             $script = 'Expand-Archive -LiteralPath '
                 . $this->powerShellLiteral($zip)
                 . ' -DestinationPath '
@@ -702,20 +1314,74 @@ final class ManagedNginxInstaller
             if (!\is_string($encoded)) {
                 throw new \RuntimeException('unable to encode PowerShell Expand-Archive command');
             }
-            $ps = 'powershell -NoProfile -NonInteractive -EncodedCommand ' . \base64_encode($encoded);
-            $out = [];
-            $code = 0;
-            @\exec($ps . ' 2>&1', $out, $code);
-            if ($code === 0) {
+            $result = $this->runTool([
+                $powershell,
+                '-NoProfile',
+                '-NonInteractive',
+                '-EncodedCommand',
+                \base64_encode($encoded),
+            ], self::EXTRACT_TIMEOUT_SECONDS, null, false);
+            if ((int)$result['code'] === 0) {
                 return;
             }
-            $failures[] = 'Expand-Archive failed: ' . \trim(\implode("\n", $out));
+            $failures[] = 'Expand-Archive failed: ' . $this->tailText((string)$result['output'], 4000);
+        } elseif ($powershell !== null) {
+            $failures[] = 'PowerShell extraction requires the PHP iconv extension';
         }
         throw new \RuntimeException(
             $failures === []
                 ? 'no zip extractor available'
                 : 'unable to extract windows nginx zip: ' . \implode(' | ', $failures),
         );
+    }
+
+    private function validateZipTopology(\ZipArchive $archive): bool
+    {
+        $entries = $archive->numFiles;
+        if ($entries < 1 || $entries > self::MAX_TREE_ENTRIES) {
+            return false;
+        }
+        $totalBytes = 0;
+        for ($index = 0; $index < $entries; $index++) {
+            $stat = $archive->statIndex($index, \ZipArchive::FL_UNCHANGED);
+            if (!\is_array($stat)) {
+                return false;
+            }
+            $name = \str_replace('\\', '/', (string)($stat['name'] ?? ''));
+            $trimmed = \rtrim($name, '/');
+            if ($trimmed === ''
+                || \strlen($name) > 4096
+                || \str_contains($name, "\0")
+                || \str_starts_with($name, '/')
+                || \preg_match('/\A[A-Za-z]:\//D', $name) === 1
+            ) {
+                return false;
+            }
+            $components = \explode('/', $trimmed);
+            if (\count($components) > self::MAX_TREE_DEPTH + 1) {
+                return false;
+            }
+            foreach ($components as $component) {
+                if ($component === '' || $component === '.' || $component === '..') {
+                    return false;
+                }
+            }
+            $size = $stat['size'] ?? null;
+            if (!\is_int($size) || $size < 0 || $size > self::MAX_TREE_BYTES - $totalBytes) {
+                return false;
+            }
+            $totalBytes += $size;
+            $attributes = 0;
+            $opsys = 0;
+            if ($archive->getExternalAttributesIndex($index, $opsys, $attributes)) {
+                $type = ($attributes >> 16) & 0170000;
+                if ($type !== 0 && $type !== 0040000 && $type !== 0100000) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private function powerShellLiteral(string $value): string
@@ -733,38 +1399,65 @@ final class ManagedNginxInstaller
         }
     }
 
-    private function publishWindowsCandidate(string $candidate, string $prefix): void
+    private function publishInstallCandidate(
+        string $candidate,
+        string $prefix,
+        bool $requireOwnedPrevious = false,
+    ): void
     {
-        $rollback = \dirname($prefix) . DIRECTORY_SEPARATOR . 'install-rollback-' . \bin2hex(\random_bytes(8));
+        $rollback = $prefix . '.wls-rollback';
         $hadPrevious = \is_dir($prefix);
+        if (!\is_dir($candidate) || \is_link($candidate)) {
+            throw new \RuntimeException('Managed nginx install candidate is linked, missing, or special.');
+        }
+        $this->assertSafeTree($candidate, 'managed nginx install candidate');
+        if (\file_exists($prefix) || \is_link($prefix)) {
+            if (!$hadPrevious || \is_link($prefix)) {
+                throw new \RuntimeException('Managed nginx install target is linked or special.');
+            }
+            if ($requireOwnedPrevious) {
+                $this->assertUnixInstallRootPolicy($prefix, true);
+            }
+            $this->assertSafeTree($prefix, 'existing managed nginx install');
+        }
+        if (\file_exists($rollback) || \is_link($rollback)) {
+            throw new \RuntimeException(
+                'Managed nginx rollback slot is occupied; interrupted-publication recovery must complete first.'
+            );
+        }
         if ($hadPrevious && !@\rename($prefix, $rollback)) {
-            throw new \RuntimeException('unable to stage existing Windows nginx install for rollback');
+            throw new \RuntimeException('Unable to stage the existing managed nginx install for rollback.');
         }
 
         try {
             if (!@\rename($candidate, $prefix)) {
-                throw new \RuntimeException('unable to atomically publish Windows nginx install candidate');
+                throw new \RuntimeException('Unable to atomically publish the managed nginx install candidate.');
             }
             if (!$this->paths->isInstalled() || !$this->manifestMatches()) {
-                throw new \RuntimeException('published Windows nginx install failed binary/manifest validation');
+                throw new \RuntimeException('Published managed nginx install failed binary/manifest validation.');
             }
         } catch (\Throwable $e) {
-            if (\is_dir($prefix)) {
-                $this->removeTree($prefix);
+            $candidateCleanupFailure = null;
+            try {
+                if (\is_dir($prefix)) {
+                    $this->removeTree($prefix);
+                }
+            } catch (\Throwable $cleanupFailure) {
+                $candidateCleanupFailure = $cleanupFailure;
             }
-            if (\is_dir($prefix)) {
+            if (\file_exists($prefix) || \is_link($prefix) || $candidateCleanupFailure !== null) {
                 throw new \RuntimeException(
-                    'Windows nginx install failed and the invalid candidate could not be removed'
+                    'Managed nginx install failed and the invalid candidate could not be removed'
                     . ($hadPrevious ? '; rollback remains at ' . $rollback : '')
                     . ': '
-                    . $e->getMessage(),
+                    . ($candidateCleanupFailure?->getMessage() ?? $e->getMessage()),
                     0,
                     $e,
                 );
             }
             if ($hadPrevious && !@\rename($rollback, $prefix)) {
                 throw new \RuntimeException(
-                    'Windows nginx install failed and rollback restoration failed; previous install remains at '
+                    'Managed nginx install failed and rollback restoration failed; previous install remains at '
                     . $rollback
                     . ': '
                     . $e->getMessage(),
@@ -777,8 +1470,8 @@ final class ManagedNginxInstaller
 
         if ($hadPrevious) {
             $this->removeTree($rollback);
-            if (\is_dir($rollback)) {
-                throw new \RuntimeException('Windows nginx install succeeded but rollback cleanup failed: ' . $rollback);
+            if (\file_exists($rollback) || \is_link($rollback)) {
+                throw new \RuntimeException('Managed nginx install succeeded but rollback cleanup failed: ' . $rollback);
             }
         }
     }
@@ -789,81 +1482,370 @@ final class ManagedNginxInstaller
             new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::SELF_FIRST
         );
+        $entries = 0;
+        $matches = [];
         foreach ($iterator as $item) {
+            if (++$entries > self::MAX_TREE_ENTRIES || $iterator->getDepth() > self::MAX_TREE_DEPTH) {
+                throw new \RuntimeException('Windows nginx archive tree exceeds the fixed traversal limit.');
+            }
+            if ($item->isLink() || \is_link($item->getPathname())) {
+                throw new \RuntimeException('Windows nginx archive contains a linked entry.');
+            }
             if ($item->isFile() && \strtolower($item->getFilename()) === 'nginx.exe') {
-                return $item->getPath();
+                $path = $item->getPathname();
+                $status = @\lstat($path);
+                if (!\is_array($status)
+                    || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000)
+                    || (int)($status['nlink'] ?? 0) !== 1
+                ) {
+                    throw new \RuntimeException(
+                        'Windows nginx archive executable identity is unsafe.'
+                    );
+                }
+                $matches[] = $item->getPath();
+                if (\count($matches) > 1) {
+                    throw new \RuntimeException(
+                        'Windows nginx archive contains multiple nginx.exe roots.'
+                    );
+                }
             }
         }
-        return null;
+        return $matches[0] ?? null;
     }
 
     private function downloadFile(string $url, string $destination): void
     {
-        if (\is_file($destination) && \filesize($destination) > 1000) {
-            return;
+        if (\file_exists($destination) || \is_link($destination)) {
+            if ($this->validDownloadedFile($destination)) {
+                return;
+            }
+            if (\is_dir($destination) && !\is_link($destination)) {
+                throw new \RuntimeException('download cache target is an unexpected directory: ' . $destination);
+            }
+            if (!@\unlink($destination)
+                && (\file_exists($destination) || \is_link($destination))
+            ) {
+                throw new \RuntimeException('unable to remove invalid cached download: ' . $destination);
+            }
         }
         $tmp = $destination . '.part';
-        @\unlink($tmp);
-
-        if ($this->commandExists('curl')) {
-            $cmd = 'curl -fsSL --connect-timeout 30 --max-time 300 -o '
-                . \escapeshellarg($tmp) . ' ' . \escapeshellarg($url);
-            $out = [];
-            $code = 0;
-            @\exec($cmd . ' 2>&1', $out, $code);
-            if ($code === 0 && \is_file($tmp) && \filesize($tmp) > 1000) {
-                @\rename($tmp, $destination);
-                return;
+        if (\file_exists($tmp) || \is_link($tmp)) {
+            if (\is_dir($tmp) && !\is_link($tmp)) {
+                throw new \RuntimeException('partial download target is an unexpected directory: ' . $tmp);
+            }
+            if (!@\unlink($tmp) && (\file_exists($tmp) || \is_link($tmp))) {
+                throw new \RuntimeException('unable to remove stale partial download: ' . $tmp);
             }
         }
 
-        if (\PHP_OS_FAMILY === 'Windows' && ($this->commandExists('powershell') || $this->commandExists('powershell.exe'))) {
-            $ps = 'powershell -NoProfile -Command "Invoke-WebRequest -UseBasicParsing -Uri \''
-                . \str_replace("'", "''", $url)
-                . '\' -OutFile \''
-                . \str_replace("'", "''", $tmp)
-                . '\'"';
-            $out = [];
-            $code = 0;
-            @\exec($ps . ' 2>&1', $out, $code);
-            if ($code === 0 && \is_file($tmp) && \filesize($tmp) > 1000) {
-                @\rename($tmp, $destination);
-                return;
+        $deadline = $this->monotonicSeconds() + self::DOWNLOAD_DEADLINE_SECONDS;
+        $source = $this->openBoundedNginxDownload($url, $deadline);
+        $target = @\fopen($tmp, 'xb');
+        if (!\is_resource($target)) {
+            @\fclose($source);
+            throw new \RuntimeException('unable to create partial download: ' . $tmp);
+        }
+        $total = 0;
+        try {
+            while (!@\feof($source)) {
+                if ($this->monotonicSeconds() >= $deadline) {
+                    throw new \RuntimeException('download exceeded the fixed wall-clock deadline: ' . $url);
+                }
+                $chunk = @\fread($source, 1024 * 1024);
+                if (!\is_string($chunk)) {
+                    throw new \RuntimeException('download read failed: ' . $url);
+                }
+                if ($chunk === '') {
+                    $metadata = @\stream_get_meta_data($source);
+                    if ((bool)($metadata['timed_out'] ?? false)) {
+                        throw new \RuntimeException('download read timed out: ' . $url);
+                    }
+                    if (!@\feof($source)) {
+                        throw new \RuntimeException('download made no progress: ' . $url);
+                    }
+                    break;
+                }
+                $total += \strlen($chunk);
+                if ($total > self::MAX_DOWNLOAD_BYTES) {
+                    throw new \RuntimeException('download exceeds the fixed 512 MiB limit: ' . $url);
+                }
+                $offset = 0;
+                while ($offset < \strlen($chunk)) {
+                    $written = @\fwrite($target, \substr($chunk, $offset));
+                    if (!\is_int($written) || $written < 1) {
+                        throw new \RuntimeException('unable to write partial download: ' . $tmp);
+                    }
+                    $offset += $written;
+                }
             }
+            if (!@\fflush($target)
+                || (\function_exists('fsync') && !@\fsync($target))
+            ) {
+                throw new \RuntimeException('unable to flush partial download: ' . $tmp);
+            }
+        } catch (\Throwable $throwable) {
+            @\fclose($source);
+            @\fclose($target);
+            if (\file_exists($tmp) && !@\unlink($tmp)) {
+                throw new \RuntimeException(
+                    'download failed and its partial file could not be removed: ' . $tmp,
+                    0,
+                    $throwable,
+                );
+            }
+            throw $throwable;
+        }
+        @\fclose($source);
+        @\fclose($target);
+        if ($total <= 1000 || !$this->validDownloadedFile($tmp)) {
+            if (\file_exists($tmp) && !@\unlink($tmp)) {
+                throw new \RuntimeException('invalid partial download could not be removed: ' . $tmp);
+            }
+            throw new \RuntimeException('download is empty, truncated, or oversized: ' . $url);
+        }
+        $this->publishDownloadedFile($tmp, $destination);
+    }
+
+    /** @return resource */
+    private function openBoundedNginxDownload(string $url, float $deadline)
+    {
+        $current = $url;
+        for ($redirect = 0; $redirect <= self::MAX_DOWNLOAD_REDIRECTS; ++$redirect) {
+            $parts = \parse_url($current);
+            if (!\is_array($parts)
+                || !\hash_equals('https', \strtolower((string)($parts['scheme'] ?? '')))
+                || !\hash_equals(self::DOWNLOAD_HOST, \strtolower((string)($parts['host'] ?? '')))
+                || isset($parts['user'])
+                || isset($parts['pass'])
+                || isset($parts['fragment'])
+                || (isset($parts['port']) && (int)$parts['port'] !== 443)
+            ) {
+                throw new \RuntimeException(
+                    'Managed nginx downloads and redirects must remain on canonical nginx.org HTTPS URLs.'
+                );
+            }
+            $remaining = $deadline - $this->monotonicSeconds();
+            if ($remaining <= 0.0) {
+                throw new \RuntimeException('Managed nginx download exceeded its total deadline.');
+            }
+            $context = \stream_context_create([
+                'http' => [
+                    'follow_location' => 0,
+                    'ignore_errors' => true,
+                    'timeout' => (int)\max(1, \min(
+                        self::DOWNLOAD_READ_TIMEOUT_SECONDS,
+                        \ceil($remaining),
+                    )),
+                    'user_agent' => 'WelineFramework-ManagedNginx/' . self::VERSION,
+                ],
+                'ssl' => [
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                    'SNI_enabled' => true,
+                ],
+            ]);
+            $http_response_header = [];
+            $stream = @\fopen($current, 'rb', false, $context);
+            $headers = \is_array($http_response_header) ? $http_response_header : [];
+            $status = 0;
+            $location = '';
+            $contentLength = null;
+            foreach ($headers as $header) {
+                $header = (string)$header;
+                if (\preg_match('/\AHTTP\/\S+\s+([0-9]{3})\b/i', $header, $match) === 1) {
+                    $status = (int)$match[1];
+                    $location = '';
+                    $contentLength = null;
+                } elseif (\stripos($header, 'Location:') === 0) {
+                    $location = \trim(\substr($header, 9));
+                } elseif (\stripos($header, 'Content-Length:') === 0) {
+                    $length = \trim(\substr($header, 15));
+                    if (\preg_match('/\A[0-9]+\z/D', $length) !== 1) {
+                        if (\is_resource($stream)) {
+                            @\fclose($stream);
+                        }
+                        throw new \RuntimeException('Managed nginx download returned an invalid content length.');
+                    }
+                    $contentLength = (int)$length;
+                }
+            }
+            if ($status >= 200 && $status < 300 && \is_resource($stream)) {
+                if ($contentLength !== null && $contentLength > self::MAX_DOWNLOAD_BYTES) {
+                    @\fclose($stream);
+                    throw new \RuntimeException('Managed nginx download exceeds the fixed 512 MiB limit.');
+                }
+                return $stream;
+            }
+            if (\is_resource($stream)) {
+                @\fclose($stream);
+            }
+            if ($status < 300 || $status > 399 || $location === '') {
+                throw new \RuntimeException('Managed nginx HTTPS endpoint returned an invalid response.');
+            }
+            if ($redirect >= self::MAX_DOWNLOAD_REDIRECTS) {
+                throw new \RuntimeException('Managed nginx download exceeded its redirect limit.');
+            }
+            $current = $this->resolveNginxHttpsRedirect($current, $location);
         }
 
-        $ctx = \stream_context_create([
-            'http' => [
-                'timeout' => 300,
-                'follow_location' => 1,
-                'header' => "User-Agent: WelineFramework-ManagedNginx/1.0\r\n",
-            ],
-            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
-        ]);
-        $data = @\file_get_contents($url, false, $ctx);
-        if ($data === false || $data === '') {
-            throw new \RuntimeException('download failed: ' . $url);
+        throw new \RuntimeException('Managed nginx redirect resolution failed.');
+    }
+
+    private function resolveNginxHttpsRedirect(string $base, string $location): string
+    {
+        if ($location === '' || \preg_match('/[\x00-\x20\x7f]/', $location) === 1) {
+            throw new \RuntimeException('Managed nginx redirect location is malformed.');
         }
-        if (\file_put_contents($tmp, $data) === false) {
-            throw new \RuntimeException('unable to write download: ' . $destination);
+        if (\preg_match('/\Ahttps:\/\//i', $location) === 1) {
+            return $location;
         }
-        @\rename($tmp, $destination);
+        if (\str_starts_with($location, '//')
+            || \preg_match('/\A[A-Za-z][A-Za-z0-9+.-]*:/D', $location) === 1
+        ) {
+            throw new \RuntimeException('Managed nginx redirect attempted a protocol change.');
+        }
+        $parts = \parse_url($base);
+        if (!\is_array($parts) || !isset($parts['host'])) {
+            throw new \RuntimeException('Managed nginx redirect base is invalid.');
+        }
+        $authority = 'https://' . $parts['host'];
+        if (isset($parts['port'])) {
+            $authority .= ':' . (int)$parts['port'];
+        }
+        if (\str_starts_with($location, '/')) {
+            return $authority . $location;
+        }
+        $path = (string)($parts['path'] ?? '/');
+        return $authority . \substr($path, 0, (int)\strrpos($path, '/') + 1) . $location;
+    }
+
+    private function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    private function validDownloadedFile(string $path): bool
+    {
+        $status = @\lstat($path);
+        $size = \is_array($status) ? (int)($status['size'] ?? -1) : -1;
+
+        return \is_array($status)
+            && !\is_link($path)
+            && ((((int)($status['mode'] ?? 0)) & 0170000) === 0100000)
+            && (int)($status['nlink'] ?? 0) === 1
+            && $size > 1000
+            && $size <= self::MAX_DOWNLOAD_BYTES;
+    }
+
+    private function publishDownloadedFile(string $temporary, string $destination): void
+    {
+        if (\file_exists($destination) || \is_link($destination)) {
+            if ((\file_exists($temporary) || \is_link($temporary)) && !@\unlink($temporary)) {
+                throw new \RuntimeException('download destination collision and partial cleanup failed: ' . $temporary);
+            }
+            throw new \RuntimeException('download destination appeared before publication: ' . $destination);
+        }
+        if (!$this->validDownloadedFile($temporary) || !@\rename($temporary, $destination)) {
+            if ((\file_exists($temporary) || \is_link($temporary)) && !@\unlink($temporary)) {
+                throw new \RuntimeException('download publication and cleanup both failed: ' . $temporary);
+            }
+            throw new \RuntimeException('unable to publish validated download: ' . $destination);
+        }
+        if (\PHP_OS_FAMILY !== 'Windows' && !@\chmod($destination, 0600)) {
+            if (!@\unlink($destination) && (\file_exists($destination) || \is_link($destination))) {
+                throw new \RuntimeException('download permission sealing and cleanup both failed: ' . $destination);
+            }
+            throw new \RuntimeException('unable to seal downloaded artifact permissions: ' . $destination);
+        }
     }
 
     private function assertSha256(string $file, string $expected): void
     {
-        $actual = \hash_file('sha256', $file);
+        if (!$this->validDownloadedFile($file)) {
+            throw new \RuntimeException('downloaded artifact is not a bounded private regular file: ' . $file);
+        }
+        $actual = $this->sha256RegularFile($file, self::MAX_DOWNLOAD_BYTES);
         if (!\is_string($actual) || !\hash_equals(\strtolower($expected), \strtolower($actual))) {
-            @\unlink($file);
+            if (!@\unlink($file) && (\file_exists($file) || \is_link($file))) {
+                throw new \RuntimeException('SHA-256 mismatch and artifact cleanup failed for ' . $file);
+            }
             throw new \RuntimeException('SHA-256 mismatch for ' . $file);
         }
+    }
+
+    private function sha256RegularFile(string $path, int $maximumBytes): ?string
+    {
+        $named = @\lstat($path);
+        $expectedBytes = \is_array($named) ? (int)($named['size'] ?? -1) : -1;
+        if (!\is_array($named)
+            || \is_link($path)
+            || ((((int)($named['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($named['nlink'] ?? 0) !== 1
+            || $expectedBytes < 1
+            || $expectedBytes > $maximumBytes
+        ) {
+            return null;
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        $digest = \hash_init('sha256');
+        $readBytes = 0;
+        try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened)
+                || ((((int)($opened['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($opened['nlink'] ?? 0) !== 1
+                || (int)($opened['dev'] ?? -1) !== (int)($named['dev'] ?? -2)
+                || (int)($opened['ino'] ?? -1) !== (int)($named['ino'] ?? -2)
+                || (int)($opened['size'] ?? -1) !== $expectedBytes
+            ) {
+                return null;
+            }
+            while ($readBytes < $expectedBytes) {
+                $chunk = @\fread($handle, \min(1024 * 1024, $expectedBytes - $readBytes));
+                if (!\is_string($chunk) || $chunk === '') {
+                    return null;
+                }
+                \hash_update($digest, $chunk);
+                $readBytes += \strlen($chunk);
+            }
+            $extra = @\fread($handle, 1);
+            $openedAfter = @\fstat($handle);
+            if (!\is_string($extra)
+                || $extra !== ''
+                || !\is_array($openedAfter)
+                || (int)($openedAfter['size'] ?? -1) !== $expectedBytes
+                || (int)($openedAfter['mtime'] ?? -1) !== (int)($opened['mtime'] ?? -2)
+                || (int)($openedAfter['ctime'] ?? -1) !== (int)($opened['ctime'] ?? -2)
+            ) {
+                return null;
+            }
+        } finally {
+            @\fclose($handle);
+        }
+        $after = @\lstat($path);
+        if (!\is_array($after)
+            || \is_link($path)
+            || (int)($after['dev'] ?? -1) !== (int)($named['dev'] ?? -2)
+            || (int)($after['ino'] ?? -1) !== (int)($named['ino'] ?? -2)
+            || (int)($after['size'] ?? -1) !== $expectedBytes
+            || (int)($after['mtime'] ?? -1) !== (int)($named['mtime'] ?? -2)
+            || (int)($after['ctime'] ?? -1) !== (int)($named['ctime'] ?? -2)
+        ) {
+            return null;
+        }
+
+        return \hash_final($digest);
     }
 
     private function detectCc(): ?string
     {
         foreach (['clang', 'gcc', 'cc'] as $bin) {
-            if ($this->commandExists($bin)) {
-                return $bin;
+            $executable = $this->executablePath($bin);
+            if ($executable !== null) {
+                return $executable;
             }
         }
         return null;
@@ -872,17 +1854,62 @@ final class ManagedNginxInstaller
     private function detectParallelJobs(): int
     {
         if (\PHP_OS_FAMILY === 'Windows') {
-            $n = (int)\trim((string)@\shell_exec('echo %NUMBER_OF_PROCESSORS%'));
-            return \max(1, $n > 0 ? $n : 2);
+            $raw = \trim((string)\getenv('NUMBER_OF_PROCESSORS'));
+            $n = \preg_match('/\A[1-9][0-9]*\z/D', $raw) === 1 ? (int)$raw : 2;
+            return \max(1, \min(self::MAX_PARALLEL_JOBS, $n));
         }
         if (\is_readable('/proc/cpuinfo')) {
-            return \max(1, \substr_count((string)@\file_get_contents('/proc/cpuinfo'), 'processor'));
+            $cpuInfo = $this->readBoundedLocalFile('/proc/cpuinfo', self::MAX_CPUINFO_BYTES);
+            if ($cpuInfo !== null) {
+                $count = \preg_match_all('/^processor\s*:/m', $cpuInfo);
+                if (\is_int($count) && $count > 0) {
+                    return \min(self::MAX_PARALLEL_JOBS, $count);
+                }
+            }
         }
         if (\PHP_OS_FAMILY === 'Darwin') {
-            return \max(1, (int)\trim((string)@\shell_exec('sysctl -n hw.ncpu 2>/dev/null')));
+            return $this->boundedProcessorCount(['/usr/sbin/sysctl', '-n', 'hw.ncpu']);
         }
-        $nproc = (int)\trim((string)@\shell_exec('nproc 2>/dev/null'));
-        return \max(1, $nproc > 0 ? $nproc : 2);
+        foreach (['/usr/bin/nproc', '/bin/nproc'] as $nproc) {
+            if (\is_file($nproc) && \is_executable($nproc)) {
+                return $this->boundedProcessorCount([$nproc]);
+            }
+        }
+
+        return 2;
+    }
+
+    /** @param list<string> $command */
+    private function boundedProcessorCount(array $command): int
+    {
+        if (!\is_file($command[0]) || !\is_executable($command[0])) {
+            return 2;
+        }
+        $result = GatewayBoundedCommandRunner::run($command, 5.0);
+        $raw = \trim((string)($result['output'] ?? ''));
+        $count = (int)($result['code'] ?? 1) === 0
+            && \preg_match('/\A[1-9][0-9]*\z/D', $raw) === 1
+            ? (int)$raw
+            : 2;
+
+        return \max(1, \min(self::MAX_PARALLEL_JOBS, $count));
+    }
+
+    private function readBoundedLocalFile(string $path, int $maximumBytes): ?string
+    {
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        try {
+            $contents = @\stream_get_contents($handle, $maximumBytes + 1);
+        } finally {
+            @\fclose($handle);
+        }
+
+        return \is_string($contents) && \strlen($contents) <= $maximumBytes
+            ? $contents
+            : null;
     }
 
     private function binaryArchitecture(string $binary): string
@@ -948,13 +1975,15 @@ final class ManagedNginxInstaller
                 }
             }
         }
-        $output = [];
-        $code = 0;
-        @\exec('file -b ' . \escapeshellarg($binary) . ' 2>/dev/null', $output, $code);
-        if ($code !== 0) {
+        $file = $this->executablePath('file');
+        if ($file === null) {
             return '';
         }
-        $description = \strtolower(\implode(' ', $output));
+        $result = $this->runTool([$file, '-b', $binary], self::TOOL_PROBE_TIMEOUT_SECONDS);
+        if ((int)$result['code'] !== 0) {
+            return '';
+        }
+        $description = \strtolower((string)$result['output']);
         return match (true) {
             \str_contains($description, 'arm64'), \str_contains($description, 'aarch64') => 'arm64',
             \str_contains($description, 'x86-64'), \str_contains($description, 'x86_64') => 'x86_64',
@@ -975,35 +2004,113 @@ final class ManagedNginxInstaller
 
     private function commandExists(string $name): bool
     {
-        if (\PHP_OS_FAMILY === 'Windows') {
-            $out = [];
-            @\exec('where ' . \escapeshellarg($name) . ' 2>NUL', $out, $code);
-            return $code === 0 && isset($out[0]) && $out[0] !== '';
+        return $this->executablePath($name) !== null;
+    }
+
+    private function executablePath(string $name): ?string
+    {
+        $name = \strtolower(\trim($name));
+        if (\preg_match('/\A[a-z0-9_.+-]+\z/D', $name) !== 1) {
+            return null;
         }
-        $out = [];
-        @\exec('command -v ' . \escapeshellarg($name) . ' 2>/dev/null', $out, $code);
-        return $code === 0 && isset($out[0]) && $out[0] !== '';
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $systemRoot = \rtrim(\trim((string)\getenv('SystemRoot')), '/\\');
+            if ($systemRoot === ''
+                || \str_contains($systemRoot, "\0")
+                || \preg_match('/\A[A-Za-z]:[\\\\\/]/D', $systemRoot) !== 1
+            ) {
+                return null;
+            }
+            $candidates = match ($name) {
+                'powershell', 'powershell.exe' => [
+                    $systemRoot . DIRECTORY_SEPARATOR . 'System32' . DIRECTORY_SEPARATOR
+                        . 'WindowsPowerShell' . DIRECTORY_SEPARATOR . 'v1.0' . DIRECTORY_SEPARATOR . 'powershell.exe',
+                ],
+                'tar', 'tar.exe' => [
+                    $systemRoot . DIRECTORY_SEPARATOR . 'System32' . DIRECTORY_SEPARATOR . 'tar.exe',
+                ],
+                default => [],
+            };
+        } else {
+            $candidates = match ($name) {
+                'tar' => ['/usr/bin/tar', '/bin/tar', '/opt/homebrew/bin/tar', '/usr/local/bin/tar'],
+                'make' => ['/usr/bin/make', '/bin/make', '/opt/homebrew/bin/make', '/usr/local/bin/make'],
+                'clang' => [
+                    '/usr/bin/clang',
+                    '/Library/Developer/CommandLineTools/usr/bin/clang',
+                    '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang',
+                ],
+                'gcc' => ['/usr/bin/gcc', '/bin/gcc', '/opt/homebrew/bin/gcc', '/usr/local/bin/gcc'],
+                'cc' => ['/usr/bin/cc', '/bin/cc', '/opt/homebrew/bin/cc', '/usr/local/bin/cc'],
+                'pkg-config' => [
+                    '/usr/bin/pkg-config',
+                    '/bin/pkg-config',
+                    '/opt/homebrew/bin/pkg-config',
+                    '/usr/local/bin/pkg-config',
+                ],
+                'xcrun' => ['/usr/bin/xcrun'],
+                'brew' => ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'],
+                'file' => ['/usr/bin/file', '/bin/file'],
+                default => [],
+            };
+        }
+        foreach ($candidates as $candidate) {
+            $real = @\realpath($candidate);
+            if (\is_string($real)
+                && $real !== ''
+                && !\str_contains($real, "\0")
+                && \is_file($real)
+                && \is_executable($real)
+            ) {
+                return $real;
+            }
+        }
+
+        return null;
     }
 
     private function brewPrefix(string $name): ?string
     {
-        if (\PHP_OS_FAMILY !== 'Darwin' || !$this->commandExists('brew')) {
+        $brew = $this->executablePath('brew');
+        if (\PHP_OS_FAMILY !== 'Darwin' || $brew === null) {
             return null;
         }
-        $out = [];
-        @\exec('brew --prefix ' . \escapeshellarg($name) . ' 2>/dev/null', $out, $code);
-        $prefix = isset($out[0]) ? \trim($out[0]) : '';
-        return ($code === 0 && $prefix !== '' && \is_dir($prefix)) ? $prefix : null;
+        $result = $this->runTool([$brew, '--prefix', $name], self::TOOL_PROBE_TIMEOUT_SECONDS);
+        $prefix = (int)$result['code'] === 0 ? \trim((string)$result['output']) : '';
+        $real = $prefix !== '' && !\str_contains($prefix, "\0") ? @\realpath($prefix) : false;
+
+        return \is_string($real) && $real !== '' && \is_dir($real) ? $real : null;
     }
 
     private function pkgExists(string $name): bool
     {
-        if (!$this->commandExists('pkg-config')) {
+        $pkgConfig = $this->executablePath('pkg-config');
+        if ($pkgConfig === null || \preg_match('/\A[a-zA-Z0-9_.+\-]+\z/D', $name) !== 1) {
             return false;
         }
-        $out = [];
-        @\exec('pkg-config --exists ' . \escapeshellarg($name) . ' 2>/dev/null', $out, $code);
-        return $code === 0;
+        $result = $this->runTool([$pkgConfig, '--exists', $name], self::TOOL_PROBE_TIMEOUT_SECONDS);
+
+        return (int)$result['code'] === 0;
+    }
+
+    /** @param list<string> $command @return array{code:int,output:string} */
+    private function runTool(
+        array $command,
+        float $timeoutSeconds,
+        ?string $workingDirectory = null,
+        bool $failOnTruncatedOutput = true,
+    ): array
+    {
+        try {
+            return GatewayBoundedCommandRunner::run(
+                $command,
+                $timeoutSeconds,
+                $workingDirectory,
+                $failOnTruncatedOutput,
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return ['code' => 126, 'output' => $exception->getMessage()];
+        }
     }
 
     private function tailText(string $text, int $max): string
@@ -1016,22 +2123,30 @@ final class ManagedNginxInstaller
 
     private function removeTree(string $dir): void
     {
-        if (!\is_dir($dir)) {
+        if (!\file_exists($dir) && !\is_link($dir)) {
             return;
         }
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
+        if (!\is_dir($dir) || \is_link($dir)) {
+            throw new \RuntimeException(
+                'nginx installer cleanup root is linked or special: ' . $dir
+            );
+        }
+        $records = GatewayBoundedTreeWalker::collect(
+            $dir,
+            true,
+            true,
+            self::MAX_TREE_ENTRIES,
+            self::MAX_TREE_DEPTH,
         );
-        foreach ($items as $item) {
-            $path = $item->getPathname();
-            if ($item->isDir()) {
-                @\rmdir($path);
-            } else {
-                @\unlink($path);
+        foreach ($records as $record) {
+            GatewayBoundedTreeWalker::revalidate($record);
+            $removed = $record['directory']
+                ? @\rmdir($record['path'])
+                : @\unlink($record['path']);
+            if (!$removed) {
+                throw new \RuntimeException('unable to remove nginx installer entry: ' . $record['path']);
             }
         }
-        @\rmdir($dir);
     }
 
     private function copyTree(string $src, string $dst): void
@@ -1042,9 +2157,31 @@ final class ManagedNginxInstaller
             new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::SELF_FIRST
         );
+        $records = [];
+        $totalBytes = 0;
         foreach ($iterator as $item) {
-            $target = $dst . DIRECTORY_SEPARATOR . $iterator->getSubPathName();
-            if ($item->isDir()) {
+            if (\count($records) >= self::MAX_TREE_ENTRIES || $iterator->getDepth() > self::MAX_TREE_DEPTH) {
+                throw new \RuntimeException('nginx copy tree exceeds the fixed traversal limit.');
+            }
+            $source = $item->getPathname();
+            if ($item->isLink() || \is_link($source) || (!$item->isDir() && !$item->isFile())) {
+                throw new \RuntimeException('nginx copy tree contains a linked or special entry: ' . $source);
+            }
+            $size = $item->isFile() ? $item->getSize() : 0;
+            $totalBytes += \max(0, $size);
+            if ($totalBytes > self::MAX_TREE_BYTES) {
+                throw new \RuntimeException('nginx copy tree exceeds the fixed 512 MiB limit.');
+            }
+            $records[] = [
+                'source' => $source,
+                'relative' => $iterator->getSubPathName(),
+                'directory' => $item->isDir(),
+                'size' => $size,
+            ];
+        }
+        foreach ($records as $record) {
+            $target = $dst . DIRECTORY_SEPARATOR . $record['relative'];
+            if ($record['directory']) {
                 if (!\is_dir($target)) {
                     if (!@\mkdir($target, 0755, true) && !\is_dir($target)) {
                         throw new \RuntimeException('unable to create nginx install directory: ' . $target);
@@ -1057,10 +2194,148 @@ final class ManagedNginxInstaller
                         throw new \RuntimeException('unable to create nginx install directory: ' . $parent);
                     }
                 }
-                if (!@\copy($item->getPathname(), $target)) {
-                    throw new \RuntimeException('unable to copy managed nginx file: ' . $target);
-                }
+                $this->copyRegularFileSafely(
+                    (string)$record['source'],
+                    $target,
+                    (int)$record['size'],
+                );
             }
+        }
+    }
+
+    private function assertSafeTree(string $root, string $label): void
+    {
+        $rootStatus = @\lstat($root);
+        if (!\is_array($rootStatus)
+            || \is_link($root)
+            || ((((int)($rootStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException($label . ' root is unsafe.');
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+        $entries = 0;
+        $totalBytes = 0;
+        foreach ($iterator as $item) {
+            if (++$entries > self::MAX_TREE_ENTRIES
+                || $iterator->getDepth() > self::MAX_TREE_DEPTH
+            ) {
+                throw new \RuntimeException($label . ' exceeds its fixed traversal limit.');
+            }
+            $path = $item->getPathname();
+            $status = @\lstat($path);
+            if (!\is_array($status)
+                || $item->isLink()
+                || \is_link($path)
+                || (!$item->isDir() && !$item->isFile())
+                || ($item->isFile()
+                    && ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000
+                        || (int)($status['nlink'] ?? 0) !== 1))
+            ) {
+                throw new \RuntimeException($label . ' contains a linked or special entry.');
+            }
+            if ($item->isFile()) {
+                $size = (int)($status['size'] ?? -1);
+                if ($size < 0 || $size > self::MAX_TREE_BYTES - $totalBytes) {
+                    throw new \RuntimeException($label . ' exceeds its fixed byte limit.');
+                }
+                $totalBytes += $size;
+            }
+        }
+    }
+
+    private function copyRegularFileSafely(string $source, string $target, int $expectedBytes): void
+    {
+        if ($expectedBytes < 0
+            || $expectedBytes > self::MAX_TREE_BYTES
+            || \file_exists($target)
+            || \is_link($target)
+        ) {
+            throw new \RuntimeException('unsafe managed nginx copy target or size: ' . $target);
+        }
+        $named = @\lstat($source);
+        if (!\is_array($named)
+            || \is_link($source)
+            || ((((int)($named['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($named['nlink'] ?? 0) !== 1
+            || (int)($named['size'] ?? -1) !== $expectedBytes
+        ) {
+            throw new \RuntimeException('managed nginx source changed before copy: ' . $source);
+        }
+        $input = @\fopen($source, 'rb');
+        $output = @\fopen($target, 'xb');
+        if (!\is_resource($input) || !\is_resource($output)) {
+            if (\is_resource($input)) {
+                @\fclose($input);
+            }
+            if (\is_resource($output)) {
+                @\fclose($output);
+            }
+            if ((\file_exists($target) || \is_link($target)) && !@\unlink($target)) {
+                throw new \RuntimeException('managed nginx copy setup and cleanup failed: ' . $target);
+            }
+            throw new \RuntimeException('unable to open managed nginx copy handles: ' . $target);
+        }
+
+        $copyFailure = null;
+        try {
+            $opened = @\fstat($input);
+            if (!\is_array($opened)
+                || (int)($opened['dev'] ?? -1) !== (int)($named['dev'] ?? -2)
+                || (int)($opened['ino'] ?? -1) !== (int)($named['ino'] ?? -2)
+                || ((((int)($opened['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($opened['nlink'] ?? 0) !== 1
+                || (int)($opened['size'] ?? -1) !== $expectedBytes
+            ) {
+                throw new \RuntimeException('managed nginx source identity changed while opening: ' . $source);
+            }
+            $copied = 0;
+            while ($copied < $expectedBytes) {
+                $chunk = @\fread($input, \min(1024 * 1024, $expectedBytes - $copied));
+                if (!\is_string($chunk) || $chunk === '') {
+                    throw new \RuntimeException('managed nginx source was truncated during copy: ' . $source);
+                }
+                $offset = 0;
+                while ($offset < \strlen($chunk)) {
+                    $written = @\fwrite($output, \substr($chunk, $offset));
+                    if (!\is_int($written) || $written < 1) {
+                        throw new \RuntimeException('managed nginx target write failed: ' . $target);
+                    }
+                    $offset += $written;
+                }
+                $copied += \strlen($chunk);
+            }
+            $extra = @\fread($input, 1);
+            if (!\is_string($extra) || $extra !== '') {
+                throw new \RuntimeException('managed nginx source grew during copy: ' . $source);
+            }
+            if (!@\fflush($output)) {
+                throw new \RuntimeException('managed nginx target flush failed: ' . $target);
+            }
+            if (\function_exists('fsync') && !@\fsync($output)) {
+                throw new \RuntimeException('managed nginx target fsync failed: ' . $target);
+            }
+        } catch (\Throwable $throwable) {
+            $copyFailure = $throwable;
+        } finally {
+            @\fclose($input);
+            @\fclose($output);
+        }
+        if ($copyFailure !== null) {
+            if ((\file_exists($target) || \is_link($target)) && !@\unlink($target)) {
+                throw new \RuntimeException(
+                    'managed nginx copy failed and partial cleanup failed: ' . $target,
+                    0,
+                    $copyFailure,
+                );
+            }
+            throw $copyFailure;
+        }
+        $mode = (((int)($named['mode'] ?? 0)) & 0111) !== 0 ? 0755 : 0644;
+        if (!@\chmod($target, $mode)) {
+            throw new \RuntimeException('unable to set managed nginx copied file permissions: ' . $target);
         }
     }
 }

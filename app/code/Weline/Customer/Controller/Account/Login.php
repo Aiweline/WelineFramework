@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
+use Weline\Captcha\Api\CaptchaManagerInterface;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
 use Weline\Customer\Api\CustomerLoginChallengeCreatorInterface;
@@ -13,6 +14,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\View\Template;
 
 /**
@@ -22,16 +24,19 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 {
     private Template $template;
     private CustomerAuthReturnUrlService $authReturnUrlService;
+    private ?CaptchaManagerInterface $captchaManager;
 
     protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         Template $template,
-        ?CustomerAuthReturnUrlService $authReturnUrlService = null
+        ?CustomerAuthReturnUrlService $authReturnUrlService = null,
+        ?CaptchaManagerInterface $captchaManager = null,
     ) {
         $this->template = $template;
         $this->authReturnUrlService = $authReturnUrlService
             ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
+        $this->captchaManager = $captchaManager;
     }
 
     public function getIndex()
@@ -107,6 +112,12 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         if ($username === '' || $password === '') {
             return $this->respondFailure(
                 (string) __('请输入用户名/邮箱和密码。'),
+                $redirectUrl
+            );
+        }
+        if (!$this->verifyLoginCaptcha()) {
+            return $this->respondFailure(
+                (string) __('人机验证失败或已过期，请重试'),
                 $redirectUrl
             );
         }
@@ -218,6 +229,50 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 $redirectUrl
             );
         }
+    }
+
+    private function verifyLoginCaptcha(): bool
+    {
+        if (
+            !$this->captchaManager instanceof CaptchaManagerInterface
+            && !RegistryModulePresence::isActivePresent('Weline_Captcha')
+        ) {
+            return true;
+        }
+
+        try {
+            $this->captchaManager ??= ObjectManager::getInstance(CaptchaManagerInterface::class);
+            $submission = $this->request->getParams();
+            if (!\is_array($submission)) {
+                $submission = [];
+            }
+
+            return $this->captchaManager->verifySubmission(
+                $submission,
+                'customer.login',
+                $this->requestHostname(),
+                $this->request->clientIP(),
+            );
+        } catch (\Throwable $throwable) {
+            \w_log_error(
+                'Storefront login captcha verification failed: ' . $throwable->getMessage(),
+                ['intent' => 'customer.login'],
+                'captcha'
+            );
+            return false;
+        }
+    }
+
+    private function requestHostname(): string
+    {
+        $host = \trim((string)(
+            $this->request->getServer('HTTP_HOST')
+            ?: $this->request->getServer('SERVER_NAME')
+            ?: ''
+        ));
+        $hostname = $host === '' ? '' : \parse_url('http://' . \ltrim($host, '/'), PHP_URL_HOST);
+
+        return \is_string($hostname) ? \strtolower(\rtrim($hostname, '.')) : '';
     }
 
     private function findLocalCustomerByLogin(string $login): ?Customer

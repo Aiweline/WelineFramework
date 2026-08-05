@@ -57,11 +57,25 @@ class AttackSignalHandler implements ObserverInterface
             return;
         }
         $signal = $data->getData('signal');
+        $signal = is_array($signal) ? $signal : [];
         $summary = $data->getData('summary');
+        $summary = is_array($summary) ? $summary : [];
         $targetDomain = $data->getData('domain');
         $attackType = $data->getData('attack_type');
         $attackerIp = $data->getData('attacker_ip');
         $reason = $data->getData('reason');
+        if ($data->hasData('site_id')) {
+            $siteId = $this->normalizeSiteId($data->getData('site_id'), true);
+        } elseif (array_key_exists('site_id', $signal)) {
+            $siteId = $this->normalizeSiteId($signal['site_id'], true);
+        } else {
+            $siteId = $this->normalizeSiteId(w_env_website_id(), false);
+        }
+
+        if ($siteId === null) {
+            $this->log->warning(__('CDN 攻击信号缺少站点上下文，已拒绝处理'));
+            return;
+        }
         
         $totalAttacks = $summary['total'] ?? 0;
         
@@ -92,7 +106,7 @@ class AttackSignalHandler implements ObserverInterface
             );
             
             // 开启防护模式
-            $this->enableAttackModeForDomain($domainName, $signal, $summary, $attackLog);
+            $this->enableAttackModeForDomain($domainName, $signal, $summary, $attackLog, $siteId);
         }
     }
     
@@ -103,15 +117,25 @@ class AttackSignalHandler implements ObserverInterface
      * @param array $signal 攻击信号
      * @param array $summary 攻击摘要
      * @param AttackLog|null $attackLog 攻击日志记录
+     * @param int $siteId 网站 ID（0 是合法默认站）
      */
-    private function enableAttackModeForDomain(string $targetDomain, array $signal, array $summary, ?AttackLog $attackLog = null): void
+    private function enableAttackModeForDomain(
+        string $targetDomain,
+        array $signal,
+        array $summary,
+        ?AttackLog $attackLog,
+        int $siteId
+    ): void
     {
-        // 获取域名关联的 CDN 账户
-        $domainModel = $this->domain->reset()->where('domain', $targetDomain)->find()->fetch();
+        $domainModel = $this->domain->reset()
+            ->where(Domain::schema_fields_DOMAIN_NAME, $targetDomain)
+            ->where(Domain::schema_fields_ENABLED, 1)
+            ->where(Domain::schema_fields_SITE_ID, $siteId);
+        $domainModel->find()->fetch();
         
         if (!$domainModel->getId()) {
             // 尝试匹配通配符域名
-            $domainModel = $this->findWildcardDomain($targetDomain);
+            $domainModel = $this->findWildcardDomain($targetDomain, $siteId);
         }
         
         if (!$domainModel || !$domainModel->getId()) {
@@ -120,7 +144,7 @@ class AttackSignalHandler implements ObserverInterface
         }
         
         // 获取关联的账户
-        $accountId = $domainModel->getData('account_id');
+        $accountId = $domainModel->getData(Domain::schema_fields_ACCOUNT_ID);
         if (!$accountId) {
             $this->log->warning(__('CDN 攻击信号: 域名 %{1} 未关联 CDN 账户', [$targetDomain]));
             return;
@@ -142,7 +166,7 @@ class AttackSignalHandler implements ObserverInterface
      * @param string $domain 域名
      * @return Domain|null
      */
-    private function findWildcardDomain(string $domain): ?Domain
+    private function findWildcardDomain(string $domain, int $siteId): ?Domain
     {
         // 提取主域名部分尝试匹配 *.example.com
         $parts = \explode('.', $domain);
@@ -152,7 +176,11 @@ class AttackSignalHandler implements ObserverInterface
         
         // 尝试 *.example.com 格式
         $wildcardDomain = '*.' . \implode('.', \array_slice($parts, -2));
-        $model = $this->domain->reset()->where('domain', $wildcardDomain)->find()->fetch();
+        $model = $this->domain->reset()
+            ->where(Domain::schema_fields_DOMAIN_NAME, $wildcardDomain)
+            ->where(Domain::schema_fields_ENABLED, 1)
+            ->where(Domain::schema_fields_SITE_ID, $siteId);
+        $model->find()->fetch();
         
         if ($model->getId()) {
             return $model;
@@ -201,11 +229,8 @@ class AttackSignalHandler implements ObserverInterface
                 return;
             }
             
-            // 获取账户凭据
-            $credentials = $account->getData('credentials');
-            if (\is_string($credentials)) {
-                $credentials = \json_decode($credentials, true) ?: [];
-            }
+            // 获取账户凭据（支持 secret_ref 密封；禁止直接 json_decode）
+            $credentials = $account->getCredentialsArray();
             
             // 调用适配器开启攻击防护模式
             $result = $adapter->enableAttackMode(
@@ -220,7 +245,7 @@ class AttackSignalHandler implements ObserverInterface
             
             if ($result['success'] ?? false) {
                 $this->log->info(__('CDN 攻击防护模式已开启: 域名=%{1}, CDN=%{2}', [
-                    $domain->getData('domain'),
+                    $domain->getData(Domain::schema_fields_DOMAIN_NAME),
                     $account->getData('type'),
                 ]));
                 // 更新攻击日志
@@ -231,7 +256,7 @@ class AttackSignalHandler implements ObserverInterface
                 }
             } else {
                 $this->log->error(__('CDN 攻击防护模式开启失败: 域名=%{1}, 错误=%{2}', [
-                    $domain->getData('domain'),
+                    $domain->getData(Domain::schema_fields_DOMAIN_NAME),
                     $result['message'] ?? 'Unknown error',
                 ]));
                 // 更新日志状态为失败
@@ -250,5 +275,23 @@ class AttackSignalHandler implements ObserverInterface
                 $attackLog->save();
             }
         }
+    }
+
+    private function normalizeSiteId(mixed $value, bool $explicit): ?int
+    {
+        if ($value === null || (!$explicit && ($value === '' || $value === false))) {
+            return null;
+        }
+        if (is_int($value)) {
+            $siteId = $value;
+        } elseif (is_string($value) && preg_match('/^\d+$/D', $value) === 1) {
+            $siteId = (int)$value;
+        } else {
+            throw new \InvalidArgumentException(__('site_id 必须是非负整数'));
+        }
+        if ($siteId < 0) {
+            throw new \InvalidArgumentException(__('site_id 不能为负数'));
+        }
+        return $siteId;
     }
 }

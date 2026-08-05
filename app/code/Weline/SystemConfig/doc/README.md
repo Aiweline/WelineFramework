@@ -13,6 +13,61 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 
 ## 主要功能
 
+### 0. Typed Scope 解析（TASK-P1C-001）
+
+- 四层 fallback：`Channel → Store → Website → Global`（`ScopeIdentity`）。
+- 来源 DTO：`ConfigScopeSource`（`exact|fallback|default|unresolved`）。
+- API：`ConfigReader::resolveTypedConfig` / `ConfigStore::resolveTypedConfig` / `ScopedConfigRepositoryInterface::resolveTypedConfig`。
+- 零号站 Website（`code=default`）存储为 `default.__website__.default`，与 Global `default.default.default` 可区分。
+- **禁止短 scope 新写**（如 `default` / `shop.main`）；lock/unlock 见下节。
+
+### 0.1 Lock suppression（TASK-P1C-002）
+
+- 上级 `lock`：下级弱覆盖行写入 `metadata.suppressed_by_lock_version`（**不用** `is_active=0`）。
+- 解析跳过 suppressed 行，回落到上级/Global。
+- `unlock` **不自动复活**下级；需显式 `restore_suppressed` / `discard_suppressed`。
+- CAS：`base_versions` / `expected_version` 冲突返回 `status=conflict`。
+- API：`SystemConfigLockService` / `SystemConfigCenterService::{previewLock,lockScope,unlockScope,previewRestoreSuppressed,restoreSuppressedRows,discardSuppressedRows}`。
+
+### 0.2 配置中心 TargetScope（TASK-P1C-004）
+
+- 后台工作 Scope 用 Website / Store / Channel 三段选择；`Global` = 空 website。
+- **写目标只信表单显式** `target_scope` / `website_code+store_code+channel_code`；Session 仅 UI 恢复。
+- POST 强制 `form_key` CSRF + Same-Origin（Origin/Referer）；敏感字段需 `reauth_password`。
+- Query 写操作缺少显式 TargetScope 时拒绝：`system_config_write_requires_explicit_target_scope`。
+- 字段展示：`source_kind` / 覆盖 / 锁定 / 压制徽章。
+- 统一配置中心筛选栏使用官方 Taglib：
+  - 模块：`<w:module-manager:module:select>`
+  - Website：`<w:websites:website:select allow-empty>`（空值 = Global）
+  - Store / Channel：`<w:websites:store:select>` / `<w:websites:channel:select>`
+  - Locale：`<w:i18n:language:select>`（空值归一为 `default`）
+  - 切换 Website/Store/Channel/Module/Locale 会自动提交筛选表单；Website/Store 变更会清空下级段。
+
+### 0.3 配置对象授权（TASK-P1B-004）
+
+- 后台读取和写入除路由 ACL 外，还必须通过对象 Scope ACL；缺少后台身份或对象授权时固定拒绝。
+- 新写入只接受显式 `target_scope`；已有版本的查看、回滚和重放只从持久化版本行解析 Scope，忽略请求中的替代 Scope。
+- 保存、删除、回滚、锁定、解锁、恢复/丢弃压制行和导入在持久化前必须携带当前
+  `expected_grant_version`；预览后撤权或授权版本变化返回固定 403，不产生部分写入。
+- 动作映射：读取 `LIST/VIEW`，普通变更 `UPDATE/DELETE`，回滚与压制行处理 `REPLAY`，
+  锁定/解锁 `UPDATE/UNLOCK`，加密导出/导入 `EXPORT/IMPORT`。
+- 导入预览只校验封包，不授予提交权限；真正导入仍按封包目标 Scope 和当前授权版本重新鉴权。
+
+### 0.4 安全响应头 LKG（TASK-P1D-REV-001）
+
+- Framework 发布 `SecurityPolicyLkgRepositoryInterface` 和
+  `SecurityHeaderPolicyOverrideProviderInterface`；SystemConfig 分别提供 ORM
+  LKG 仓库和当前 Scope 配置 Provider。
+- verified LKG 持久化在 `system_config_security_policy_lkg`，唯一键为
+  `(schema_version, scope_key)`；进程重启或 Worker 切换后必须可读取。
+- `registerSecurityPolicyLkg` 是对象 Scope `UPDATE` 操作，必须携带显式
+  TargetScope 和当前 `expected_grant_version`。
+- `SystemConfig::saveScopeConfig()` 在任何写入前重建完整 CSP/CORS 候选；
+  LKG 缺失、摘要不匹配、存储不可用或候选弱于 Env Global 基线时固定拒绝，
+  不产生部分写入。
+- 配置模板由 Framework 通过 Extends 提供：
+  `Framework/Extends/module/Weline_SystemConfig/Config/backend/security-headers.phtml`。
+
 ### 1. 配置存储
 - 数据库配置存储
 - 文件配置存储
@@ -157,6 +212,29 @@ PHP 服务需要在热路径读取配置时，可注入或从进程容器取得
 需要写入的 PHP 服务使用 `Weline\SystemConfig\Api\ConfigStore`。新后台和站点级写入
 必须调用 `setScopedConfig()` / `deleteScopedConfig()` 并传入显式 scope；`setConfig()`
 只保留给既有全局配置写入兼容，不得用当前后台请求的隐式 scope 代替管理员选择。
+
+`ConfigStore::resolveConfig()` 是原子生产者的读后写快照入口：它从当前数据库事务直接解析值，
+不命中可能仍是旧值的 cache envelope。跨模块原子写入必须先用
+`ConfigStore::useConnection()` 绑定调用方已激活的 Framework 主库连接。
+
+## 提交后缓存失效
+
+`SystemConfig::saveScopeConfig()` 和版本回滚不再在 commit 前删除请求或共享缓存。
+`ConfigCacheInvalidationService` 会按 `module + area + scope + locale` 合并重复失效：
+
+- 如果调用方已在 `TransactionCoordinator` 主库事务中，只登记去重 afterCommit 回调；回滚不会触碰缓存。
+- 如果是 standalone 写入，在业务 SQL 成功后立即执行同一失效逻辑。
+- Website 的两个 start-page key 还会在同事务推进
+  `website/{code}/config/start-page` namespace。Website 完整生产者可显式延迟这次 bump，
+  由后续 `ResourceChange` critical Observer 统一执行，保证固定顺序。
+- `setScopedConfig()` / `deleteScopedConfig()` 的公开 bool 契约不变；业务编排必须对每一次返回值使用 `=== true`，非 true 必须作为整体保存失败。
+
+### 继承影响图（TASK-P1C-003 / TEST-P1C-06）
+
+- `ScopeConfigCacheInvalidator`：写父层时发现真实后代，**跳过**有显式覆盖（且未 suppressed）的单 key 后代。
+- 先按旧 version vector 删键，再 bump `system_config_scope_gen:{scope}`；读侧 cache key 含祖先 generation 向量（`KeyBuilder::systemConfigVersionVectorToken`），未知继承者不会脏读。
+- 指标写入 `RequestContext system_config.cache_invalidation.last_plan`。
+- 失败策略：宁可临时扩大失效并重建，不可保留脏读。
 
 Theme 虚拟布局这类需要配置批次、版本列表、回滚预检和 fallback 的必需依赖模块，使用
 `Weline\SystemConfig\Api\Scope\ScopedConfigRepositoryInterface`。该 Provider 精确委托现有
@@ -344,29 +422,31 @@ class ConfigController extends AbstractAdminController
 
 ## 配置导入导出
 
-### 配置导出
+跨实例导入/导出必须使用 AEAD envelope（TASK-P1D-003），见：
+
+- `app/code/Weline/Framework/doc/3-开发/配置包AEAD信封.md`
+- `Weline\SystemConfig\Service\ConfigEnvelopeService`
+
+历史明文 Helper 已 fail-closed：
+
 ```php
-use Weline\SystemConfig\Helper\ConfigExport;
-
-$exporter = new ConfigExport();
-$configData = $exporter->export('your_module');
-
-// 导出为JSON文件
-file_put_contents('config_backup.json', json_encode($configData, JSON_PRETTY_PRINT));
+use Weline\SystemConfig\Helper\ConfigExport; // throws config_envelope_plaintext_export_forbidden
+use Weline\SystemConfig\Helper\ConfigImport; // throws config_envelope_plaintext_import_forbidden
 ```
 
-### 配置导入
+推荐：
+
 ```php
-use Weline\SystemConfig\Helper\ConfigImport;
+use Weline\SystemConfig\Service\ConfigEnvelopeService;
+use Weline\Framework\Runtime\ScopeIdentity;
 
-$importer = new ConfigImport();
-$configData = json_decode(file_get_contents('config_backup.json'), true);
-
-if ($importer->import($configData)) {
-    echo '配置导入成功';
-} else {
-    echo '配置导入失败';
-}
+$svc = ConfigEnvelopeService::fromEnv(); // 需 security.config_envelope.enabled=true
+$envelope = $svc->export($configData, ScopeIdentity::website(0, 'default'), 'backup.json');
+// 一次性下载 envelope JSON；目标实例：
+$svc->import($envelope, function (array $payload, array $aad): void {
+    // AEAD 已验证且 package_uuid 已唯一 claim；在此事务写配置。
+    // apply 失败则账本 markFailed，uuid 不可重放。
+}, 'backup.json', ScopeIdentity::website(0, 'default'));
 ```
 
 ## 性能优化

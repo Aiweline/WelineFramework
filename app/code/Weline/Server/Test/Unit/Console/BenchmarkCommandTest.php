@@ -124,7 +124,32 @@ final class BenchmarkCommandTest extends TestCase
     public function testHostGatewayTargetRejectsRouteOwnedByAnotherPreferredInstance(): void
     {
         $status = $this->gatewayStatus();
-        $status['routes'][0]['preferred_instance_id'] = 'other-instance';
+        $status['active_routes'][0]['preferred_instance_id'] = 'other-instance';
+        $command = $this->createGatewayCommand($status);
+
+        self::assertNull(
+            $command->buildTarget('gateway-benchmark', $this->gatewayEndpoint()),
+        );
+    }
+
+    public function testHostGatewayTargetRejectsDuplicateInstanceIdentity(): void
+    {
+        $status = $this->gatewayStatus();
+        $status['instances'][] = $status['instances'][0];
+        $command = $this->createGatewayCommand($status);
+
+        self::assertNull(
+            $command->buildTarget('gateway-benchmark', $this->gatewayEndpoint()),
+        );
+    }
+
+    public function testHostGatewayTargetRejectsAmbiguousActiveRouteIdentity(): void
+    {
+        $status = $this->gatewayStatus();
+        $status['active_routes'][] = [
+            ...$status['active_routes'][0],
+            'route_id' => \str_repeat('e', 32),
+        ];
         $command = $this->createGatewayCommand($status);
 
         self::assertNull(
@@ -166,6 +191,19 @@ final class BenchmarkCommandTest extends TestCase
         self::assertSame('gateway_fallback_public', $target['target_endpoint_role']);
         self::assertSame(27673, $target['port']);
         self::assertTrue($target['ssl']);
+    }
+
+    public function testExplicitPureWlsRejectsPersistedOriginWithoutLiveLeaseProjection(): void
+    {
+        $endpoint = $this->gatewayEndpoint();
+        $endpoint['edge_adapter'] = 'wls';
+        $endpoint['ssl_enabled'] = true;
+        $endpoint['public_origin'] = 'https://shop.example.test:29613';
+        $endpoint['gateway']['mode'] = 'wls';
+        $endpoint['gateway']['requested_mode'] = 'wls';
+        $command = $this->createGatewayCommand($this->gatewayStatus());
+
+        self::assertNull($command->buildTarget('gateway-benchmark', $endpoint));
     }
 
     public function testExpectedReloadRequiresSameMasterAndChangedHealthyWorkerFingerprint(): void
@@ -333,6 +371,26 @@ final class BenchmarkCommandTest extends TestCase
                 return $this->status;
             }
 
+            protected function runtimeGatewayIsServing(array $endpoint): bool
+            {
+                return (string)($endpoint['gateway']['mode'] ?? '') === 'gateway';
+            }
+
+            protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
+            {
+                $gateway = \is_array($endpoint['gateway'] ?? null)
+                    ? $endpoint['gateway']
+                    : [];
+                if ((string)($gateway['fallback_state'] ?? '') !== 'DEGRADED_WLS') {
+                    return null;
+                }
+                return [
+                    'bind_host' => '127.0.0.1',
+                    'connect_host' => '127.0.0.1',
+                    'port' => (int)($gateway['public_https'] ?? 0),
+                ];
+            }
+
             protected function probeHostGatewayPublicProtocols(
                 string $connectHost,
                 string $authorityHost,
@@ -414,6 +472,9 @@ final class BenchmarkCommandTest extends TestCase
         return [
             'ok' => true,
             'ready' => true,
+            'project_ready' => true,
+            'publication_exact' => true,
+            'state' => 'ACTIVE',
             'protocol' => 'wls-edge/2',
             'protocol_min' => 2,
             'protocol_max' => 2,
@@ -424,16 +485,23 @@ final class BenchmarkCommandTest extends TestCase
             'supervisor_ready' => true,
             'epoch' => \str_repeat('a', 32),
             'generation' => 43,
+            'active_config_generation' => 43,
+            'active_config_digest' => \str_repeat('6', 64),
             'data_plane' => ['running' => true],
             'public_http' => 80,
             'public_https' => 443,
             'project_uuid' => '123e4567-e89b-42d3-a456-426614174001',
+            'project_generation' => 27,
+            'request_digest' => \str_repeat('7', 64),
+            'non_certificate_desired_digest' => \str_repeat('8', 64),
             'instances' => [[
                 'instance_id' => 'gateway-benchmark',
                 'status' => 'ACTIVE',
                 'generation' => 27,
+                'launch_id' => \str_repeat('b', 32),
+                'master_epoch' => 5,
             ]],
-            'routes' => [[
+            'active_routes' => [[
                 'route_id' => \str_repeat('c', 32),
                 'route_generation' => 9,
                 'project_uuid' => '123e4567-e89b-42d3-a456-426614174001',

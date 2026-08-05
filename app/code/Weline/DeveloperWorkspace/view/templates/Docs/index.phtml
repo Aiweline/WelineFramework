@@ -9,6 +9,54 @@ if ($document && $document->getId()) {
     $catalogId = $document->getCategoryId();
 }
 
+$documentDocsIsDev = defined('DEV') && DEV;
+$documentDocsModulesConfigUrl = $documentDocsIsDev
+    ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+    : '/static/Weline/Frontend/base/weline.modules.js';
+$documentDocsModulesBaseUrl = $documentDocsIsDev
+    ? '/Weline/Frontend/view/statics/js/weline-api'
+    : '/static/Weline/Frontend/js/weline-api';
+$documentDocsWorkerUrl = $documentDocsIsDev
+    ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+    : '/static/Weline/Frontend/js/weline-api-worker.js';
+$documentDocsFallbackUrl = $documentDocsIsDev
+    ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js?v=20260517-api-loader-2'
+    : '/static/Weline/Frontend/js/weline-api-fallback.js';
+$documentDocsApiUrl = $documentDocsIsDev
+    ? '/Weline/Frontend/view/statics/js/weline-api.js?v=20260517-api-loader-2'
+    : '/static/Weline/Frontend/js/weline-api.js';
+$documentDocsThemeJsUrl = $documentDocsIsDev
+    ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2'
+    : '/static/Weline/Theme/theme/frontend/assets/js/theme.js';
+$documentDocsQueryBinUrl = \Weline\Framework\App\Env::getFrontendQueryBinPath();
+$documentDocsThemeConfigPayload = [
+    'env' => [
+        'WELINE_ENV' => $documentDocsIsDev ? 'DEV' : 'PROD',
+        'DEV' => $documentDocsIsDev,
+        'PROD' => !$documentDocsIsDev,
+    ],
+    'baseUrl' => method_exists($this->request, 'getBaseUrl') ? $this->request->getBaseUrl() : '',
+    'modulesConfigUrl' => $documentDocsModulesConfigUrl,
+    'modulesBaseUrl' => $documentDocsModulesBaseUrl,
+    'api' => [
+        'workerUrl' => $documentDocsWorkerUrl,
+        'endpoint' => $documentDocsQueryBinUrl,
+        'queryBinUrl' => $documentDocsQueryBinUrl,
+    ],
+    'currentLang' => \w_env('user.lang', 'zh_Hans_CN'),
+    'currentCurrency' => \w_env('user.currency', 'CNY'),
+    'debug' => $documentDocsIsDev,
+    'site' => [
+        'name' => 'Weline Developer Docs',
+    ],
+];
+$documentDocsJsonFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT;
+
 $documentThemeAttributes = '';
 $documentHtmlDirection = '';
 $documentThemeCssUrl = '';
@@ -43,7 +91,49 @@ try {
     <title><?=__('WelineFramework 开发文档')?></title>
     <!-- Favicon -->
     <!-- Markdown 渲染库 -->
-    <script src="@static(Weline_DeveloperWorkspace::libs/marked/11.1.1/marked.min.js)"></script>
+    <script data-no-extract="true">
+        window.WelineApiConfig = window.WelineApiConfig || {};
+        window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || '<?= htmlspecialchars($documentDocsWorkerUrl, ENT_QUOTES, 'UTF-8') ?>';
+        window.WelineApiConfig.endpoint = window.WelineApiConfig.endpoint || <?= json_encode($documentDocsQueryBinUrl, $documentDocsJsonFlags) ?>;
+        window.WelineApiConfig.queryBinUrl = window.WelineApiConfig.queryBinUrl || <?= json_encode($documentDocsQueryBinUrl, $documentDocsJsonFlags) ?>;
+        window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
+        window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
+        window.__WelineThemeConfig = window.__WelineThemeConfig || {};
+        Object.assign(window.__WelineThemeConfig, <?= json_encode($documentDocsThemeConfigPayload, $documentDocsJsonFlags) ?>);
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+    </script>
+    <script src="<?= htmlspecialchars($documentDocsFallbackUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script src="<?= htmlspecialchars($documentDocsApiUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <script src="<?= htmlspecialchars($documentDocsThemeJsUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
+<script>
+(function(g){
+  if(g.__bqDocs_developer_workspace) return;
+  g.__bqDocs_developer_workspace=true;
+  g.bqDocs=g.bqDocs||{};
+  g.bqDocs['developer_workspace']=function(url, options){
+    options=options||{};
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){ return api.resource('developer_workspace').docsRequest({url:url, method:options.method||'GET'}); };
+    var toResp=function(data){
+      var body=data==null?{}:data;
+      var ok=!(body&&typeof body==='object'&&!Array.isArray(body)&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body));}};
+      if(body&&typeof body==='object'&&!Array.isArray(body)){
+        Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      }
+      return resp;
+    };
+    if(!(g.Weline&&typeof g.Weline.load==='function')){
+      return Promise.reject(new Error('Weline API runtime is unavailable.'));
+    }
+    return g.Weline.load('api').then(run).then(toResp);
+  };
+})(window);
+</script>
+<script src="@static(Weline_DeveloperWorkspace::libs/marked/11.1.1/marked.min.js)"></script>
     <link rel="shortcut icon" href="@static(Weline_Frontend::img/favicon.png)" type="image/png">
     <link rel="icon" href="@static(Weline_Frontend::img/favicon.png)" type="image/png">
     <link rel="apple-touch-icon" href="@static(Weline_Frontend::img/favicon.png)">
@@ -2414,7 +2504,7 @@ try {
                     return;
                 }
                 
-                fetch(appendDocLocale(baseUrl + '/docs/tree'))
+                bqDocs['developer_workspace'](appendDocLocale(baseUrl + '/docs/tree'))
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {
@@ -2633,7 +2723,7 @@ try {
                 const contentBody = document.getElementById('content-body');
                 contentBody.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 10px;">加载中...</p></div>';
                 
-                fetch(appendDocLocale(`${baseUrl}/docs/documents?catalog_id=${safeCatalogId}`))
+                bqDocs['developer_workspace'](appendDocLocale(`${baseUrl}/docs/documents?catalog_id=${safeCatalogId}`))
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {
@@ -2753,7 +2843,7 @@ try {
                 const contentBody = document.getElementById('content-body');
                 contentBody.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 10px;">加载中...</p></div>';
                 
-                fetch(appendDocLocale(`${baseUrl}/docs/document?id=${safeDocumentId}`))
+                bqDocs['developer_workspace'](appendDocLocale(`${baseUrl}/docs/document?id=${safeDocumentId}`))
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {
@@ -2880,7 +2970,7 @@ try {
                 const contentBody = document.getElementById('content-body');
                 contentBody.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 10px;">搜索中...</p></div>';
                 
-                fetch(appendDocLocale(`${baseUrl}/docs/search?keyword=${encodeURIComponent(keyword)}&include_catalogs=1`))
+                bqDocs['developer_workspace'](appendDocLocale(`${baseUrl}/docs/search?keyword=${encodeURIComponent(keyword)}&include_catalogs=1`))
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {

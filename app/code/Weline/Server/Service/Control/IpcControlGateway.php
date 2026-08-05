@@ -179,8 +179,378 @@ class IpcControlGateway implements IpcControlGatewayInterface
 
     public function reloadSslCert(string $instanceName = 'default', array $domains = []): array
     {
-        $payload = empty($domains) ? [] : ['domains' => \array_values(\array_unique($domains))];
-        return $this->command($instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, '', $payload, Timeouts::CONTROL_CMD_DEFAULT_READ_SEC);
+        unset($domains);
+        return ControlCommandResult::normalize([
+            'success' => false,
+            'message' => 'Legacy SSL reload is disabled; publish an immutable serving manifest and call reloadSslCertAndWait().',
+            'data' => [
+                'code' => 'exact_tls_reload_fence_required',
+                'deprecated_api' => 'reloadSslCert',
+            ],
+        ], $instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, ControlCommandResult::requestId(
+            ControlMessage::ACTION_SSL_CERT_RELOAD,
+        ));
+    }
+
+    public function reloadSslCertAndWait(
+        array $domains,
+        string $instanceName,
+        string $operationId,
+        int $expectedManifestGeneration,
+        string $expectedManifestDigest,
+        int $expectedTlsRouteCount,
+        float $timeout = 8.0,
+    ): array {
+        $operationId = \substr(\strtolower(\trim($operationId)), 0, 128);
+        $expectedManifestDigest = \substr(
+            \strtolower(\trim($expectedManifestDigest)),
+            0,
+            128,
+        );
+        $requestId = ControlCommandResult::requestId(
+            ControlMessage::ACTION_SSL_CERT_RELOAD,
+        );
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $operationId) !== 1
+            || $expectedManifestGeneration < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedManifestDigest) !== 1
+            || $expectedTlsRouteCount < 0
+            || $expectedTlsRouteCount > 256
+        ) {
+            return ControlCommandResult::normalize([
+                'success' => false,
+                'message' => 'Exact SSL reload operation/manifest fence is invalid.',
+                'data' => $this->sslReloadFailureData(
+                    $operationId,
+                    $expectedManifestGeneration,
+                    $expectedManifestDigest,
+                    $expectedTlsRouteCount,
+                    'invalid_reload_fence',
+                ),
+            ], $instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, $requestId);
+        }
+
+        $normalizedDomains = [];
+        foreach ($domains as $domain) {
+            if (!\is_string($domain)) {
+                continue;
+            }
+            $domain = \substr(\strtolower(\trim($domain)), 0, 253);
+            if ($domain !== '') {
+                $normalizedDomains[$domain] = true;
+            }
+            if (\count($normalizedDomains) >= 256) {
+                break;
+            }
+        }
+        // The caller's timeout is the Worker ACK budget. Master may then need
+        // the bounded fail-stop containment window before returning a terminal
+        // receipt; keep the publication transaction/socket alive for both.
+        $ackTimeout = \max(0.5, \min(20.0, $timeout));
+        $readTimeout = \min(32.0, $ackTimeout + 6.0);
+        $result = $this->command(
+            $instanceName,
+            ControlMessage::ACTION_SSL_CERT_RELOAD,
+            '',
+            [
+                'msg_id' => $requestId,
+                'domains' => \array_keys($normalizedDomains),
+                'operation_id' => $operationId,
+                'expected_manifest_generation' => $expectedManifestGeneration,
+                'expected_manifest_digest' => $expectedManifestDigest,
+                'expected_tls_route_count' => $expectedTlsRouteCount,
+                'ack_timeout_sec' => $ackTimeout,
+            ],
+            $readTimeout,
+        );
+        $data = \is_array($result['data'] ?? null) ? $result['data'] : [];
+        if (!\is_bool($data['success'] ?? null)
+            || ($data['success'] ?? null) !== ($result['success'] ?? false)
+            || !\hash_equals($operationId, (string)($data['operation_id'] ?? ''))
+            || (int)($data['expected_manifest_generation'] ?? 0)
+                !== $expectedManifestGeneration
+            || !\hash_equals(
+                $expectedManifestDigest,
+                (string)($data['expected_manifest_digest'] ?? ''),
+            )
+            || (int)($data['expected_tls_route_count'] ?? -1)
+                !== $expectedTlsRouteCount
+            || !\hash_equals(
+                $expectedTlsRouteCount === 0 ? 'neutral' : 'routes',
+                (string)($data['expected_serving_mode'] ?? ''),
+            )
+            || !\is_array($data['eligible_workers'] ?? null)
+            || !\array_is_list($data['eligible_workers'])
+            || !\is_array($data['acked_workers'] ?? null)
+            || !\array_is_list($data['acked_workers'])
+            || !\is_array($data['failed_workers'] ?? null)
+            || !\array_is_list($data['failed_workers'])
+            || !\is_int($data['expected_retired_context_count'] ?? null)
+            || (int)$data['expected_retired_context_count'] < 0
+            || \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($data['expected_retired_context_digest'] ?? ''),
+            ) !== 1
+            || ($data['async'] ?? null) !== false
+            || !$this->sslReloadTerminalIsSemanticallyValid(
+                $data,
+                $expectedManifestGeneration,
+                $expectedManifestDigest,
+                $expectedTlsRouteCount,
+            )
+        ) {
+            return ControlCommandResult::normalize([
+                'success' => false,
+                'message' => 'Master did not return the exact terminal SSL reload contract.',
+                'data' => $this->sslReloadFailureData(
+                    $operationId,
+                    $expectedManifestGeneration,
+                    $expectedManifestDigest,
+                    $expectedTlsRouteCount,
+                    'terminal_contract_missing',
+                ),
+                'timed_out' => (bool)($result['timed_out'] ?? false),
+            ], $instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, $requestId);
+        }
+
+        return $result;
+    }
+
+    public function quarantineSslServingAndWait(
+        string $instanceName,
+        string $operationId,
+        string $reason,
+        float $timeoutSeconds = 8.0,
+    ): array {
+        $operationId = \strtolower(\trim($operationId));
+        $requestId = ControlCommandResult::requestId(
+            ControlMessage::ACTION_SSL_SERVING_QUARANTINE,
+        );
+        $endpoint = MasterProcess::getMasterEndpoint($instanceName);
+        $gateway = \is_array($endpoint['gateway'] ?? null)
+            ? $endpoint['gateway']
+            : [];
+        $masterPid = (int)($endpoint['master_pid'] ?? 0);
+        $masterEpoch = (int)($endpoint['master_epoch'] ?? 0);
+        $instanceGeneration = (int)($gateway['instance_generation'] ?? 0);
+        $launchId = \strtolower(\trim((string)($gateway['launch_id'] ?? '')));
+        if (!\is_array($endpoint)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $operationId) !== 1
+            || $masterPid < 1
+            || $masterEpoch < 1
+            || $instanceGeneration < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+        ) {
+            return ControlCommandResult::normalize([
+                'success' => false,
+                'message' => 'Exact Master endpoint fence is unavailable for TLS quarantine.',
+                'data' => [
+                    'success' => false,
+                    'async' => false,
+                    'operation_id' => $operationId,
+                    'quarantined' => false,
+                    'zero_serving' => false,
+                    'code' => 'quarantine_master_fence_invalid',
+                ],
+            ], $instanceName, ControlMessage::ACTION_SSL_SERVING_QUARANTINE, $requestId);
+        }
+        $reason = \substr((string)\preg_replace(
+            '/[\r\n\x00-\x1f\x7f]+/',
+            ' ',
+            \trim($reason),
+        ), 0, 256);
+        if ($reason === '') {
+            $reason = 'certificate_transaction_containment';
+        }
+        $containmentBudget = \max(1.0, \min(20.0, $timeoutSeconds));
+        $readBudget = \min(32.0, $containmentBudget + 2.0);
+        $result = $this->command(
+            $instanceName,
+            ControlMessage::ACTION_SSL_SERVING_QUARANTINE,
+            '',
+            [
+                'msg_id' => $requestId,
+                'operation_id' => $operationId,
+                'reason' => $reason,
+                'master_pid' => $masterPid,
+                'master_epoch' => $masterEpoch,
+                'instance_generation' => $instanceGeneration,
+                'launch_id' => $launchId,
+                'containment_timeout_sec' => $containmentBudget,
+            ],
+            $readBudget,
+        );
+        $data = \is_array($result['data'] ?? null) ? $result['data'] : [];
+        $terminal = \is_bool($data['success'] ?? null)
+            && ($data['success'] ?? null) === ($result['success'] ?? null)
+            && ($data['async'] ?? null) === false
+            && \hash_equals($operationId, (string)($data['operation_id'] ?? ''))
+            && (int)($data['master_pid'] ?? 0) === $masterPid
+            && (int)($data['master_epoch'] ?? 0) === $masterEpoch
+            && (int)($data['instance_generation'] ?? 0) === $instanceGeneration
+            && \hash_equals($launchId, (string)($data['launch_id'] ?? ''))
+            && \is_bool($data['quarantined'] ?? null)
+            && \is_bool($data['zero_serving'] ?? null)
+            && \is_array($data['eligible_workers'] ?? null)
+            && \array_is_list($data['eligible_workers'])
+            && \is_array($data['contained_workers'] ?? null)
+            && \array_is_list($data['contained_workers'])
+            && \is_array($data['remaining_workers'] ?? null)
+            && \array_is_list($data['remaining_workers'])
+            && \is_array($data['failures'] ?? null)
+            && \array_is_list($data['failures']);
+        if (!$terminal
+            || (($result['success'] ?? false) === true
+                && (($data['quarantined'] ?? false) !== true
+                    || ($data['zero_serving'] ?? false) !== true
+                    || $data['remaining_workers'] !== []
+                    || $data['failures'] !== []))
+        ) {
+            return ControlCommandResult::normalize([
+                'success' => false,
+                'message' => 'Master did not return the exact zero-serving quarantine receipt.',
+                'data' => [
+                    'success' => false,
+                    'async' => false,
+                    'operation_id' => $operationId,
+                    'master_pid' => $masterPid,
+                    'master_epoch' => $masterEpoch,
+                    'instance_generation' => $instanceGeneration,
+                    'launch_id' => $launchId,
+                    'quarantined' => false,
+                    'zero_serving' => false,
+                    'eligible_workers' => [],
+                    'contained_workers' => [],
+                    'remaining_workers' => [],
+                    'failures' => [['code' => 'quarantine_terminal_contract_missing']],
+                ],
+                'timed_out' => (bool)($result['timed_out'] ?? false),
+            ], $instanceName, ControlMessage::ACTION_SSL_SERVING_QUARANTINE, $requestId);
+        }
+        return $result;
+    }
+
+    /** @param array<string,mixed> $data */
+    private function sslReloadTerminalIsSemanticallyValid(
+        array $data,
+        int $expectedManifestGeneration,
+        string $expectedManifestDigest,
+        int $expectedTlsRouteCount,
+    ): bool {
+        $eligible = $data['eligible_workers'] ?? null;
+        $acked = $data['acked_workers'] ?? null;
+        $failed = $data['failed_workers'] ?? null;
+        if (!\is_array($eligible)
+            || !\array_is_list($eligible)
+            || !\is_array($acked)
+            || !\array_is_list($acked)
+            || !\is_array($failed)
+            || !\array_is_list($failed)
+        ) {
+            return false;
+        }
+        // A terminal failure is authoritative without pretending that a
+        // partial Worker set completed. Exact set equality is mandatory only
+        // for a green transaction.
+        if (($data['success'] ?? false) !== true) {
+            return true;
+        }
+        if ($eligible === [] || $failed !== [] || \count($eligible) !== \count($acked)) {
+            return false;
+        }
+        $expected = [];
+        foreach ($eligible as $identity) {
+            if (!\is_array($identity)) {
+                return false;
+            }
+            $clientId = (int)($identity['client_id'] ?? 0);
+            if ($clientId < 1 || isset($expected[$clientId])) {
+                return false;
+            }
+            $expected[$clientId] = $identity;
+        }
+        $expectedServingMode = $expectedTlsRouteCount === 0 ? 'neutral' : 'routes';
+        $expectedContextState = $expectedTlsRouteCount === 0 ? 'disabled' : 'active';
+        $expectedRetiredContextCount = (int)$data['expected_retired_context_count'];
+        $expectedRetiredContextDigest = (string)$data['expected_retired_context_digest'];
+        foreach ($acked as $receipt) {
+            if (!\is_array($receipt)) {
+                return false;
+            }
+            $clientId = (int)($receipt['client_id'] ?? 0);
+            $identity = $expected[$clientId] ?? null;
+            if (!\is_array($identity)
+                || (int)($receipt['worker_id'] ?? 0)
+                    !== (int)($identity['instance_id'] ?? 0)
+                || !\hash_equals(
+                    (string)($identity['role'] ?? ''),
+                    (string)($receipt['role'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($identity['slot_id'] ?? ''),
+                    (string)($receipt['slot_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($identity['lease_id'] ?? ''),
+                    (string)($receipt['lease_id'] ?? ''),
+                )
+                || (int)($receipt['generation'] ?? 0)
+                    !== (int)($identity['generation'] ?? -1)
+                || (int)($receipt['pid'] ?? 0) !== (int)($identity['pid'] ?? -1)
+                || (int)($receipt['applied_manifest_generation'] ?? 0)
+                    !== $expectedManifestGeneration
+                || !\hash_equals(
+                    $expectedManifestDigest,
+                    (string)($receipt['applied_manifest_digest'] ?? ''),
+                )
+                || (int)($receipt['applied_tls_route_count'] ?? -1)
+                    !== $expectedTlsRouteCount
+                || !\hash_equals(
+                    $expectedServingMode,
+                    (string)($receipt['serving_mode'] ?? ''),
+                )
+                || !\hash_equals(
+                    $expectedContextState,
+                    (string)($receipt['tls_context_state'] ?? ''),
+                )
+                || !\is_int($receipt['retired_context_count'] ?? null)
+                || (int)($receipt['retired_context_count'] ?? -1)
+                    !== $expectedRetiredContextCount
+                || !\hash_equals(
+                    $expectedRetiredContextDigest,
+                    (string)($receipt['retired_context_digest'] ?? ''),
+                )
+            ) {
+                return false;
+            }
+            unset($expected[$clientId]);
+        }
+
+        return $expected === [];
+    }
+
+    /** @return array<string,mixed> */
+    private function sslReloadFailureData(
+        string $operationId,
+        int $expectedManifestGeneration,
+        string $expectedManifestDigest,
+        int $expectedTlsRouteCount,
+        string $code,
+    ): array {
+        return [
+            'success' => false,
+            'async' => false,
+            'state' => 'failed',
+            'operation_id' => $operationId,
+            'expected_manifest_generation' => $expectedManifestGeneration,
+            'expected_manifest_digest' => $expectedManifestDigest,
+            'expected_tls_route_count' => $expectedTlsRouteCount,
+            'expected_serving_mode' => $expectedTlsRouteCount === 0 ? 'neutral' : 'routes',
+            'expected_retired_context_count' => 0,
+            'expected_retired_context_digest' => \hash('sha256', '[]'),
+            'eligible_workers' => [],
+            'acked_workers' => [],
+            'failed_workers' => [['code' => $code]],
+        ];
     }
 
     /**
@@ -325,14 +695,19 @@ class IpcControlGateway implements IpcControlGatewayInterface
      */
     public function reloadSslCertMany(array $instanceNames, array $domains = [], float $timeout = 6.0): array
     {
-        $payload = empty($domains) ? [] : ['domains' => \array_values(\array_unique($domains))];
-        return $this->commandMany(
-            $instanceNames,
-            ControlMessage::ACTION_SSL_CERT_RELOAD,
-            '',
-            $payload,
-            $timeout
-        );
+        unset($domains, $timeout);
+        $results = [];
+        foreach ($instanceNames as $instanceName) {
+            if (!\is_string($instanceName)) {
+                continue;
+            }
+            $instanceName = \trim($instanceName);
+            if ($instanceName === '' || isset($results[$instanceName])) {
+                continue;
+            }
+            $results[$instanceName] = $this->reloadSslCert($instanceName);
+        }
+        return $results;
     }
 
     /**
@@ -777,7 +1152,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
     }
 
     /**
-     * @return array{success:bool,message:string,data:array}
+     * @return array{success:bool,message:string,data:array,timed_out?:bool}
      */
     private function sendCommand(
         int $controlPort,
@@ -816,8 +1191,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
         }
 
         try {
-            $written = @\fwrite($conn, $command);
-            if ($written === false || $written === 0) {
+            if (!$this->writeCommandFully($conn, $command, $readTimeout)) {
                 return [
                     'success' => false,
                     'message' => (string)__('发送控制命令失败，请检查 Orchestrator IPC 连接状态。'),
@@ -842,10 +1216,56 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 'success' => (bool)($result['success'] ?? false),
                 'message' => (string)($result['message'] ?? ''),
                 'data' => \is_array($result['data'] ?? null) ? $result['data'] : [],
+                'timed_out' => (bool)($result['timed_out'] ?? false),
             ];
         } finally {
             @\fclose($conn);
         }
+    }
+
+    /** @param resource $connection */
+    private function writeCommandFully($connection, string $command, float $timeout): bool
+    {
+        $length = \strlen($command);
+        if ($length < 1 || $length > 1_048_577) {
+            return false;
+        }
+        if (!@\stream_set_blocking($connection, false)) {
+            return false;
+        }
+        $deadline = \microtime(true) + \max(0.05, $timeout);
+        $offset = 0;
+        while ($offset < $length) {
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0.0) {
+                return false;
+            }
+            $read = null;
+            $write = [$connection];
+            $except = null;
+            $seconds = (int)\floor($remaining);
+            $microseconds = (int)(($remaining - $seconds) * 1_000_000);
+            $ready = @\stream_select(
+                $read,
+                $write,
+                $except,
+                $seconds,
+                $microseconds,
+            );
+            if ($ready === false || $ready === 0) {
+                return false;
+            }
+            $written = @\fwrite(
+                $connection,
+                \substr($command, $offset, \min(65_536, $length - $offset)),
+            );
+            if (!\is_int($written) || $written < 1) {
+                return false;
+            }
+            $offset += $written;
+        }
+
+        return true;
     }
 
     /** @return array{success:bool,message:string,data:array} */

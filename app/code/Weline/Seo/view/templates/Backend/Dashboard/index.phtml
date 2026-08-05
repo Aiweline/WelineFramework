@@ -9,7 +9,7 @@
  */
 
 $subjects = $this->getData('subjects') ?: [];
-$title = $this->getData('title') ?: __('SEO总览');
+$title = $this->getData('seo_page_title') ?: __('SEO总览');
 ?>
 <!-- 消息提示 -->
                 <div class='row'>
@@ -19,7 +19,7 @@ $title = $this->getData('title') ?: __('SEO总览');
                 </div>
                 
                 <!-- Page Title -->
-                <div class='row'>
+                <div class='row' data-testid="seo-dashboard-management">
                     <div class='col-12'>
                         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
                             <h4 class='mb-sm-0'>

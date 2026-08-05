@@ -185,9 +185,87 @@ $jsonForAttributeFlags = JSON_UNESCAPED_UNICODE
         box.style.display = '';
     }
 
+    function hostWindow() {
+        try {
+            if (window.parent && window.parent !== window) {
+                return window.parent;
+            }
+        } catch (e) {
+        }
+        return window;
+    }
+
+    /**
+     * OffCanvas iframe 不会签发 backend bootstrap（仅顶层文档导航才签发），
+     * 必须复用父页已鉴权的 Backend Worker API，否则 providerSaveAccount 会 403。
+     */
+    function resolveBackendApi() {
+        var host = hostWindow();
+        try {
+            if (host.Weline && typeof host.Weline.load === 'function') {
+                return host.Weline.load('api');
+            }
+            if (host.Weline && host.Weline.Api) {
+                return Promise.resolve(host.Weline.Api);
+            }
+        } catch (e) {
+        }
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api');
+        }
+        return Promise.resolve(window.Weline && window.Weline.Api);
+    }
+
+    function unwrapBusiness(response) {
+        var apiBiz = null;
+        try {
+            apiBiz = hostWindow().WelineApiBusiness || (hostWindow().Weline && hostWindow().Weline.ApiBusiness);
+        } catch (e) {
+        }
+        if (!apiBiz) {
+            apiBiz = window.WelineApiBusiness || (window.Weline && window.Weline.ApiBusiness);
+        }
+        if (apiBiz && typeof apiBiz.unwrapBusiness === 'function') {
+            return apiBiz.unwrapBusiness(response);
+        }
+        if (response && typeof response === 'object' && response.ok !== undefined && response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+            return response.data;
+        }
+        return response;
+    }
+
+    function formatApiError(err, fallback) {
+        var apiBiz = null;
+        try {
+            apiBiz = hostWindow().WelineApiBusiness || (hostWindow().Weline && hostWindow().Weline.ApiBusiness);
+        } catch (e) {
+        }
+        if (!apiBiz) {
+            apiBiz = window.WelineApiBusiness || (window.Weline && window.Weline.ApiBusiness);
+        }
+        if (apiBiz && typeof apiBiz.formatApiError === 'function') {
+            return apiBiz.formatApiError(err, fallback);
+        }
+        return (err && err.message) ? String(err.message) : String(fallback || '');
+    }
+
+    function showToast(type, message) {
+        var host = hostWindow();
+        try {
+            if (host.BackendToast && typeof host.BackendToast[type] === 'function') {
+                host.BackendToast[type](message);
+                return;
+            }
+        } catch (e) {
+        }
+        if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast[type] === 'function') {
+            BackendToast[type](message);
+        }
+    }
+
     function closeProviderOffcanvas() {
         try {
-            var w = window.parent;
+            var w = hostWindow();
             if (w !== window && w.bootstrap) {
                 var oc = w.document.querySelector('.offcanvas.show');
                 var instance = oc ? w.bootstrap.Offcanvas.getInstance(oc) : null;
@@ -215,24 +293,54 @@ $jsonForAttributeFlags = JSON_UNESCAPED_UNICODE
         }
     });
 
-    // 供应商选择时自动填充
+    // 供应商选择时自动填充：字段为空，或仍是某个供应商默认值时跟随切换
     var providerSelect = document.getElementById('weline-ai-oc-provider');
+
+    function collectProviderDefaults(attr) {
+        var values = {};
+        if (!providerSelect) return values;
+        Array.prototype.forEach.call(providerSelect.options, function(option) {
+            var value = String(option.getAttribute(attr) || '').trim();
+            if (value) values[value] = true;
+        });
+        return values;
+    }
+
+    function shouldFollowProviderDefault(currentValue, defaults) {
+        var current = String(currentValue || '').trim();
+        return current === '' || !!defaults[current];
+    }
+
+    function applyProviderDefaults(option) {
+        var baseUrl = document.getElementById('weline-ai-oc-base-url');
+        var accountName = document.getElementById('weline-ai-oc-account-name');
+        var apiKey = document.getElementById('weline-ai-oc-api-key');
+        if (!option || !option.value) {
+            renderProviderGuide(option);
+            return;
+        }
+        var url = option.getAttribute('data-base-url');
+        var name = option.getAttribute('data-name');
+        if (name && accountName && shouldFollowProviderDefault(accountName.value, collectProviderDefaults('data-name'))) {
+            accountName.value = name;
+        }
+        if (url && baseUrl && shouldFollowProviderDefault(baseUrl.value, collectProviderDefaults('data-base-url'))) {
+            baseUrl.value = url;
+        }
+        // 新建场景下供应商切换时清空旧密钥，避免误用上一供应商的 key
+        if (apiKey && !form.querySelector('input[name="id"]')) {
+            apiKey.value = '';
+        }
+        renderProviderGuide(option);
+    }
+
     if (providerSelect && !providerSelect.readOnly) {
         providerSelect.addEventListener('change', function() {
-            var opt = this.options[this.selectedIndex];
-            var baseUrl = document.getElementById('weline-ai-oc-base-url');
-            var accountName = document.getElementById('weline-ai-oc-account-name');
-            if (opt && opt.value) {
-                var url = opt.getAttribute('data-base-url');
-                var name = opt.getAttribute('data-name');
-                if (url && baseUrl && !baseUrl.value.trim()) baseUrl.value = url;
-                if (name && accountName && !accountName.value.trim()) accountName.value = name;
-            }
-            renderProviderGuide(opt);
+            applyProviderDefaults(this.options[this.selectedIndex]);
         });
     }
     if (providerSelect && providerSelect.value) {
-        renderProviderGuide(providerSelect.options[providerSelect.selectedIndex]);
+        applyProviderDefaults(providerSelect.options[providerSelect.selectedIndex]);
     }
 
     form.addEventListener('submit', function(e) {
@@ -252,20 +360,21 @@ $jsonForAttributeFlags = JSON_UNESCAPED_UNICODE
         if (!data.is_active) data.is_active = 0;
         if (!data.is_default) data.is_default = 0;
 
-        var req = window.Weline.Api.resource('ai').providerSaveAccount({payload: data});
-        req.then(function(res) {
-            var resData = (res && res.data) || res;
+        resolveBackendApi().then(function(api) {
+            if (!api || typeof api.resource !== 'function') {
+                throw new Error('<?= __('后台 API 不可用，请刷新父页面后重试') ?>');
+            }
+            return api.resource('ai').providerSaveAccount({payload: data});
+        }).then(function(res) {
+            var resData = unwrapBusiness(res);
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalHtml;
             if (resData && resData.success) {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.success(resData.message || '<?= __('保存成功') ?>');
-                } else if (typeof BackendToast !== 'undefined') {
-                    BackendToast.success(resData.message || '<?= __('保存成功') ?>');
-                }
+                showToast('success', resData.message || '<?= __('保存成功') ?>');
                 try {
-                    if (window.parent && window.parent !== window) {
-                        window.parent.location.reload();
+                    var host = hostWindow();
+                    if (host !== window) {
+                        host.location.reload();
                     } else {
                         window.location.reload();
                     }
@@ -273,21 +382,12 @@ $jsonForAttributeFlags = JSON_UNESCAPED_UNICODE
                     window.location.reload();
                 }
             } else {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error(res.message || '<?= __('保存失败') ?>');
-                } else if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error(resData.message || '<?= __('保存失败') ?>');
-                }
+                showToast('error', (resData && resData.message) || '<?= __('保存失败') ?>');
             }
-        })
-        .catch(function(err) {
+        }).catch(function(err) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalHtml;
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.error('<?= __('保存失败，请重试') ?>');
-            } else if (typeof BackendToast !== 'undefined') {
-                BackendToast.error('<?= __('保存失败，请重试') ?>');
-            }
+            showToast('error', formatApiError(err, '<?= __('保存失败，请重试') ?>'));
         });
     });
 })();

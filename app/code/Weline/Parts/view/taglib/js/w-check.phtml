@@ -1,3 +1,12 @@
+<?php
+/**
+ * w-check — bin-query 唯一性/存在性校验
+ *
+ * 必填：data-provider + data-operation（兼容窗后）
+ * 参数：输入值作为 q；另可读 data-params / w-check-* 字段映射
+ * 废弃：w-check-url / w-url（remove_by=2026-08-08）
+ */
+?>
 <css>jquery-ui.min.css</css>
 <js>jquery-ui.min.js</js>
 <script defer>
@@ -15,25 +24,28 @@
             return
         }
 
-        const welineJsonRequest = function (url) {
-            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.request !== 'function') {
-                return Promise.reject(new Error('Weline.Api.request is unavailable.'));
+        const callResource = function (provider, operation, params) {
+            if (!window.Weline) {
+                return Promise.reject(new Error('Weline.Api is unavailable.'));
             }
-            return Promise.resolve(window.Weline.Api.request(url, {
-                method: 'GET',
-                headers: {'Accept': 'application/json'},
-                silent: true
-            })).then(function (res) {
-                if (res && typeof res.json === 'function') {
-                    return res.json();
+            const run = function (api) {
+                const resource = api.resource(provider);
+                if (!resource || typeof resource[operation] !== 'function') {
+                    throw new Error('Unknown operation: ' + provider + '.' + operation);
                 }
-                return res;
-            });
+                return resource[operation](params || {});
+            };
+            if (typeof window.Weline.load === 'function') {
+                return window.Weline.load('api').then(run);
+            }
+            return Promise.resolve(run(window.Weline.Api));
         };
 
         $('[w-check="true"]').each(function () {
             let checkInput = $(this)
-            let url = checkInput.attr('w-check-url') ?? checkInput.attr('w-url') ?? '';
+            let provider = String(checkInput.attr('data-provider') || '').trim()
+            let operation = String(checkInput.attr('data-operation') || '').trim()
+            let legacyUrl = checkInput.attr('w-check-url') ?? checkInput.attr('w-url') ?? '';
             let type = checkInput.attr('w-check-type') ?? '';
             if (!type) {
                 console.error('@lang{w-check: w-check-type is required.}', checkInput.get(0))
@@ -48,8 +60,12 @@
             }
             let invalid_class = checkInput.attr('w-invalid-class') ?? 'is-invalid';
             let valid_class = checkInput.attr('w-valid-class') ?? 'is-valid';
-            if (!url) {
-                console.error('w-check @lang{element w-url is missing.}', checkInput.get(0))
+            // Compat window: remove_by=2026-08-08
+            if ((!provider || !operation) && legacyUrl) {
+                console.warn('[w-check] deprecated w-url; use data-provider + data-operation. remove_by=2026-08-08', checkInput.get(0))
+            }
+            if (!provider || !operation) {
+                console.error('w-check requires data-provider and data-operation.', checkInput.get(0))
                 return
             }
             checkInput.change(debounce(function () {
@@ -58,7 +74,10 @@
                     input.removeClass(valid_class).addClass(invalid_class);
                     return
                 }
-                welineJsonRequest(url + "?q=" + encodeURIComponent(input.val())).then(function (data) {
+                callResource(provider, operation, { q: input.val(), field: field, id: id, id_field: id_field }).then(function (payload) {
+                    let data = payload;
+                    if (payload && Array.isArray(payload.data)) data = payload.data;
+                    else if (payload && Array.isArray(payload.items)) data = payload.items;
                     data = Array.isArray(data) ? data : [];
                     if (type === 'unique') {
                         for (let i = 0; i < data.length; i++) {

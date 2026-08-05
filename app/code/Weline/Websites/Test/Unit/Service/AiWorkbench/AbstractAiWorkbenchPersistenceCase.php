@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Test\Unit\Service\AiWorkbench;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Websites\Model\AiSiteBuilderArtifact;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSiteBuilderMessage;

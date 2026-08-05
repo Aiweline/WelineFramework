@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Cms',
-    "version" => '1.0.0',
+    "version" => '1.0.2',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_BackendActivity' => '*',
@@ -11,6 +11,7 @@ return [
     "optional" => [
         'Weline_Seo' => '*',
         'Weline_Trash' => '*',
+        'Weline_TranslationService' => '*',
     ],
     "provides" => [],
 ];

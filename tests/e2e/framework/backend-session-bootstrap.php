@@ -8,8 +8,8 @@ use Weline\Framework\Session\Auth\AreaConfig;
 use Weline\Framework\Session\Auth\AuthenticatedSession;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\Session;
+use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionFactory;
-use Weline\Framework\Session\Strategy\FpmStrategy;
 use Weline\Framework\Session\Strategy\WlsStrategy;
 
 require dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'bootstrap.php';
@@ -52,6 +52,22 @@ function buildBackendSession(string $mode): AuthenticatedSessionInterface
     $rawSession = new Session($storage, $strategy, $ttl);
 
     return new AuthenticatedSession($rawSession, new AreaConfig('backend'));
+}
+
+function resolveBrowserSessionName(): string
+{
+    $origin = trim((string) (getenv('PLAYWRIGHT_TARGET_ORIGIN') ?: ''));
+    $host = (string) (parse_url($origin, PHP_URL_HOST) ?: '');
+    $port = parse_url($origin, PHP_URL_PORT);
+    if ($host === '') {
+        return SessionCookieNameResolver::resolve('');
+    }
+    if (str_contains($host, ':') && !str_starts_with($host, '[')) {
+        $host = '[' . $host . ']';
+    }
+    $authority = $host . (is_int($port) ? ':' . $port : '');
+
+    return SessionCookieNameResolver::resolve($authority);
 }
 
 function assertBackendUserCanLogin(BackendUser $user): void
@@ -139,7 +155,7 @@ try {
     $sessionConfig = getSessionConfig();
     echo json_encode([
         'mode' => $mode,
-        'session_name' => $mode === 'wls' ? WlsStrategy::SESSION_NAME : FpmStrategy::SESSION_NAME,
+        'session_name' => resolveBrowserSessionName(),
         'session_id' => $sessionId,
         'cookie_path' => $sessionConfig['cookie_path'] ?? '/',
         'cookie_lifetime' => (int) ($sessionConfig['cookie_lifetime'] ?? 86400 * 30),

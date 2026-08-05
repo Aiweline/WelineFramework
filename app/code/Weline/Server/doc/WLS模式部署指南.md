@@ -10,6 +10,13 @@ WLS（Weline Server）是框架内置的常驻内存 HTTP 服务器。WLS 2.0 �
 fresh TCP Session Ticket/Session Resumption 和跨 Worker恢复仍待实现与验证。
 自动降级的高端口不是 80/443 的透明替代，必须同步检查防火墙、DNS 或负载均衡。
 
+Windows 上的 WLS 2.0（包括显式纯 WLS）把项目 UUID、端口租约、证书待确认队列等
+状态通过 `ReplaceFileW`/`MoveFileExW` 原子发布。当前锁定 PHP 是硬前置：必须加载
+FFI 与 iconv，`ffi.enable` 必须允许普通 CLI 调用，并且 `FFI::cdef` 必须能实际加载
+`kernel32.dll`；不会回退到 PHP `rename` 或原地覆盖。`server:start` 会在创建身份、租约、
+Master/Worker 或平台副作用前统一拒绝不满足该合同的 PHP，`server:gateway:doctor` 以
+`project_state_atomic_write` 报告同一能力。
+
 ## 1. 模式说明
 
 | 模式 | 说明 |
@@ -257,6 +264,9 @@ HTTP/SSL Worker 统一读 `wls.memory_guard.worker_memory_*`（默认 warning=0.
 - macOS：可能以当前用户运行 Homebrew 和 PECL，不使用 `sudo`。
 - Linux：可能调用 apt/dnf/yum/apk/pacman；非交互路径只允许 `sudo -n`，不会等待密码。
 - Windows：Nginx 模式使用 `worker_ports` Direct，纯 WLS 使用 Dispatcher；`--install-deps` 不下载、不启用也不编译 PHP 事件扩展。
+- Windows：所有 edge 模式还硬性要求当前锁定 PHP 的 FFI/iconv、可用的
+  `ffi.enable` 和实际成功的 kernel32 `FFI::cdef`。该门禁发生在首次项目身份或宿主
+  端口租约写入前；普通启动不会修改 php.ini，也不会以不安全文件替换方式降级。
 - `--no-auto-deps` 仅作为旧脚本兼容选项；普通启动默认已经禁止安装，且该选项不能与 `--install-deps` 同用。
 - Linux `auto` 的 reuseport probe 失败会在 Direct 内部回退 `shared_fd`；最终 listener/event/FD 能力或 Direct 策略 capability 仍失败时停止启动，不会静默改写拓扑。
 

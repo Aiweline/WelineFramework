@@ -25,7 +25,8 @@ class Dashboard extends BackendPageController
         }
         $userId = $this->dashboardViewService->getCurrentUserId();
         $viewId = (int)$this->request->getParam('view_id', 0);
-        $activeView = $this->dashboardViewService->resolveActiveView($websiteId, $viewId, $userId);
+        $viewCode = trim((string)$this->request->getParam('view_code', ''));
+        $activeView = $this->dashboardViewService->resolveActiveView($websiteId, $viewId, $userId, $viewCode);
         if (!$activeView) {
             $this->assign('dashboard_error', __('当前没有可用站点，无法初始化 Dashboard。'));
             return $this->fetch();

@@ -143,6 +143,64 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
         ])->save();
     }
 
+    public function replaceActive(
+        string $type,
+        string $credential,
+        ?string $scope,
+        array $payload,
+        int $expiresAt,
+    ): void {
+        if ($credential === '' || $expiresAt < 1) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Worker credential record is invalid.',
+                503,
+            );
+        }
+        if ($type === FrontendWorkerCredentialType::NONCE || $scope !== null) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Worker credential replace target is invalid.',
+                503,
+            );
+        }
+        $identity = $this->identity($type, $credential, $scope);
+        $row = $this->credentialModel()
+            ->where(FrontendWorkerCredential::schema_fields_TYPE, $identity['type'])
+            ->where(FrontendWorkerCredential::schema_fields_SCOPE_HASH, $identity['scope_hash'])
+            ->where(FrontendWorkerCredential::schema_fields_CREDENTIAL_HASH, $identity['credential_hash'])
+            ->where(FrontendWorkerCredential::schema_fields_STATE, self::STATE_ACTIVE);
+        if ($this->supportsForUpdate()) {
+            $row->additional('FOR UPDATE');
+        }
+        $row->find()->fetch();
+        $id = (int)$row->getData(FrontendWorkerCredential::schema_fields_ID);
+        if ($id < 1) {
+            throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
+        }
+        $createdAt = (int)$row->getData(FrontendWorkerCredential::schema_fields_CREATED_AT);
+        if ($createdAt < 1 || $expiresAt <= $createdAt) {
+            throw new FrontendQueryException(
+                'worker_store_unavailable',
+                'Worker credential record is invalid.',
+                503,
+            );
+        }
+        $storedIdentity = [
+            ...$identity,
+            'created_at' => $createdAt,
+            'expires_at' => $expiresAt,
+        ];
+        $encrypted = $this->cipher->encrypt($payload, $storedIdentity);
+        $lockVersion = (int)$row->getData(FrontendWorkerCredential::schema_fields_LOCK_VERSION);
+        $row->setData(FrontendWorkerCredential::schema_fields_KEY_ID, $encrypted['key_id'])
+            ->setData(FrontendWorkerCredential::schema_fields_CIPHERTEXT, $encrypted['ciphertext'])
+            ->setData(FrontendWorkerCredential::schema_fields_PAYLOAD_BYTES, $encrypted['payload_bytes'])
+            ->setData(FrontendWorkerCredential::schema_fields_EXPIRES_AT, $expiresAt)
+            ->setData(FrontendWorkerCredential::schema_fields_LOCK_VERSION, $lockVersion + 1)
+            ->save();
+    }
+
     public function consume(string $type, string $credential, ?string $scope): bool
     {
         $identity = $this->identity($type, $credential, $scope);

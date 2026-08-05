@@ -17,7 +17,7 @@ use Exception;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 
-class PhpMailerTest extends \Weline\Framework\UnitTest\TestCore
+class PhpMailerTest extends \Weline\Framework\Test\TestCore
 {
     public function testPhpMailerSender()
     {

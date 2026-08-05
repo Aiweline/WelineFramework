@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Backend',
-    "version" => '1.3.0',
+    "version" => '1.3.4',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Framework' => '*',
@@ -26,6 +26,8 @@ return [
         'view_warmup_contribution.Weline_Backend' => \Weline\Backend\Api\View\ViewWarmupContributionProvider::class,
         'deploy.flat_static.Weline_Backend' => \Weline\Backend\Api\Deploy\FlatStaticRuntimeFilesProvider::class,
         \Weline\Framework\Runtime\BackendWarmupProviderInterface::class => \Weline\Backend\Api\Runtime\BackendWarmupProvider::class,
+        \Weline\Framework\Runtime\FrontendWorkerBackendAttestationProviderInterface::class => \Weline\Backend\Integration\Framework\FrontendWorkerBackendAttestationProvider::class,
+        \Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationProviderInterface::class => \Weline\Backend\Integration\Framework\FrontendWorkerBackendAuthorizationProvider::class,
         \Weline\Framework\Runtime\StartPageRouteProviderInterface::class => \Weline\Backend\Api\Runtime\StartPageRouteProvider::class,
         \Weline\Framework\Session\Auth\BackendSessionUserProviderInterface::class => \Weline\Backend\Api\Auth\BackendSessionUserProvider::class,
         'request_resetter.Weline_Backend' => \Weline\Backend\Api\Runtime\RequestResetter::class,

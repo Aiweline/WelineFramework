@@ -107,7 +107,7 @@
         
         var createUrl = '<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>';
         var createOpts = { method: 'POST', body: formData };
-        window.Weline.Api.request(createUrl, createOpts)
+        bqAdmin['maintenance'](createUrl, createOpts)
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {

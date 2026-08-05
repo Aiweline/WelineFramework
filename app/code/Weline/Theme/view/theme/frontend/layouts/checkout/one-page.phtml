@@ -181,7 +181,12 @@ $this->assign('title', $title);
                     <?php else: ?>
                         <div class="checkout-one-page__summary-placeholder">
                             <h2><?= __('订单摘要') ?></h2>
-                            <p><?= __('摘要 slot，可由结账模块写入真实金额、优惠和配送信息。') ?></p>
+                            <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-before</w:hook>
+                            <div class="checkout-one-page__items" data-cart-items>
+                                <w:hook>Weline_Checkout::frontend::partials::checkout::cart-items</w:hook>
+                                <p><?= __('摘要 slot，可由结账模块写入真实商品行与金额。') ?></p>
+                            </div>
+                            <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-after</w:hook>
                             <div class="checkout-one-page__summary-line"><span><?= __('商品') ?></span><span>--</span></div>
                             <div class="checkout-one-page__summary-line"><span><?= __('配送') ?></span><span>--</span></div>
                             <div class="checkout-one-page__summary-line"><strong><?= __('合计') ?></strong><strong>--</strong></div>

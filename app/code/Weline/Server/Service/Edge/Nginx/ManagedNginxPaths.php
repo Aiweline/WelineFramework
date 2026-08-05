@@ -119,11 +119,11 @@ final class ManagedNginxPaths
         $default = \PHP_OS_FAMILY === 'Linux'
             ? 'extend/server/nginx-' . $this->platformScope()
             : 'extend/server/nginx';
-        $rel = \trim((string)($this->config()['install_root'] ?? $default));
-        $rel = \str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $rel);
-        if ($rel === '' || \str_starts_with($rel, DIRECTORY_SEPARATOR) || \preg_match('#^[A-Za-z]:#', $rel) === 1) {
-            $rel = \str_replace('/', DIRECTORY_SEPARATOR, $default);
-        }
+        $rel = $this->projectRelativePath(
+            (string)($this->config()['install_root'] ?? $default),
+            $default,
+            'install_root',
+        );
         return $this->projectRoot() . DIRECTORY_SEPARATOR . $rel;
     }
 
@@ -135,11 +135,11 @@ final class ManagedNginxPaths
         $default = \PHP_OS_FAMILY === 'Linux'
             ? 'var/server/nginx-' . $this->platformScope()
             : 'var/server/nginx';
-        $rel = \trim((string)($this->config()['runtime_root'] ?? $default));
-        $rel = \str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $rel);
-        if ($rel === '' || \str_starts_with($rel, DIRECTORY_SEPARATOR) || \preg_match('#^[A-Za-z]:#', $rel) === 1) {
-            $rel = \str_replace('/', DIRECTORY_SEPARATOR, $default);
-        }
+        $rel = $this->projectRelativePath(
+            (string)($this->config()['runtime_root'] ?? $default),
+            $default,
+            'runtime_root',
+        );
         return $this->projectRoot() . DIRECTORY_SEPARATOR . $rel;
     }
 
@@ -407,19 +407,63 @@ final class ManagedNginxPaths
         return \strtolower(\PHP_OS_FAMILY) . '-' . $arch;
     }
 
+    private function projectRelativePath(string $configured, string $default, string $label): string
+    {
+        $configured = \trim($configured);
+        $candidate = $configured !== '' ? $configured : $default;
+        $normalized = \str_replace('\\', '/', $candidate);
+        $segments = \explode('/', $normalized);
+        if ($normalized === ''
+            || \str_contains($normalized, "\0")
+            || \str_starts_with($normalized, '/')
+            || \str_starts_with($normalized, '//')
+            || \preg_match('/\A[A-Za-z]:/D', $normalized) === 1
+            || \in_array('', $segments, true)
+            || \in_array('.', $segments, true)
+            || \in_array('..', $segments, true)
+        ) {
+            throw new \RuntimeException(
+                'Managed nginx ' . $label . ' must be a canonical project-relative path without traversal.',
+            );
+        }
+
+        return \implode(DIRECTORY_SEPARATOR, $segments);
+    }
+
     private function windowsLocalRoot(): string
     {
         $base = \trim((string)(\getenv('LOCALAPPDATA') ?: \getenv('TEMP') ?: \sys_get_temp_dir()));
-        if ($base === '') {
-            throw new \RuntimeException('Windows managed nginx requires LOCALAPPDATA or TEMP.');
+        $normalizedBase = \str_replace('\\', '/', $base);
+        $realBase = $base !== '' && !\str_contains($base, "\0")
+            ? @\realpath($base)
+            : false;
+        if (!\is_string($realBase)
+            || $realBase === ''
+            || !\is_dir($realBase)
+            || \preg_match('/\A[A-Za-z]:\//D', $normalizedBase) !== 1
+            || \str_starts_with($normalizedBase, '//')
+        ) {
+            throw new \RuntimeException(
+                'Windows managed nginx requires a local drive-absolute LOCALAPPDATA or TEMP directory.',
+            );
+        }
+        $expectedBase = \strtolower(\rtrim($normalizedBase, '/'));
+        $actualBase = \strtolower(\rtrim(\str_replace('\\', '/', $realBase), '/'));
+        if ($expectedBase === '' || !\hash_equals($expectedBase, $actualBase)) {
+            throw new \RuntimeException(
+                'Windows managed nginx local root must not traverse aliases or reparse points.',
+            );
         }
         $projectIdentity = \substr(
             \Weline\Server\Service\MasterProcess::getProjectIdentityHash(),
             0,
             20,
         );
+        if (\preg_match('/\A[a-f0-9]{20}\z/D', $projectIdentity) !== 1) {
+            throw new \RuntimeException('Windows managed nginx project identity is invalid.');
+        }
 
-        return \rtrim($base, '/\\')
+        return \rtrim($realBase, '/\\')
             . DIRECTORY_SEPARATOR . 'Weline'
             . DIRECTORY_SEPARATOR . 'ManagedNginx'
             . DIRECTORY_SEPARATOR . $projectIdentity;

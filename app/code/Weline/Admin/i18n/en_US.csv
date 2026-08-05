@@ -32,6 +32,7 @@ content,content
 您没有访问该页面的权限，请联系管理员。,"You do not have permission to access this page. Please contact the administrator."
 当前没有可用的访问入口，请重新登录或联系管理员。,"No access entry available. Please log in again or contact the administrator."
 您没有访问该页面的权限，请先登录或联系管理员。,"You do not have permission to access this page. Please log in or contact the administrator."
+人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
 异常的登录操作！,"Abnormal login operation!"
 账户不存在！,"Account does not exist!"
 账户被禁用！,"Account is disabled!"
@@ -79,6 +80,36 @@ content,content
 已取消角色分配,"Role assignment has been removed"
 角色分配成功,"Role assigned successfully"
 角色分配失败,"Role assignment failed"
+用户管理,"User Management"
+管理后台用户,管理后台用户
+管理员列表,管理员列表
+查看管理后台用户列表,查看管理后台用户列表
+管理员添加界面,管理员添加界面
+添加管理员界面访问,添加管理员界面访问
+管理员修改界面,管理员修改界面
+修改管理员界面访问,修改管理员界面访问
+管理员修改请求,管理员修改请求
+修改管理员请求,修改管理员请求
+管理员添加请求,管理员添加请求
+请求添加管理员,请求添加管理员
+管理员删除请求,管理员删除请求
+请求删除管理员,请求删除管理员
+激活管理员,激活管理员
+请求激活管理员,请求激活管理员
+禁用管理员,禁用管理员
+请求禁用管理员,请求禁用管理员
+管理员保存API,管理员保存API
+AJAX保存管理员,AJAX保存管理员
+管理员删除API,管理员删除API
+AJAX删除管理员,AJAX删除管理员
+管理员状态切换API,管理员状态切换API
+AJAX切换管理员状态,AJAX切换管理员状态
+管理员角色归配,管理员角色归配
+将管理员分配到角色,将管理员分配到角色
+管理员角色归配请求,管理员角色归配请求
+请求归配,请求归配
+管理员角色归配API,管理员角色归配API
+AJAX分配角色,AJAX分配角色
 关键参数ID不存在！,"Key parameter ID does not exist!"
 菜单不存在！,"Menu does not exist!"
 该菜单下有子菜单，请先删除子菜单！,"This menu has submenus. Please delete the submenus first!"
@@ -109,68 +140,6 @@ content,content
 删除!,Delete!
 删除成功,"Deletion successful"
 知道了,"Got it"
-后台登录,后台登录
-"登录 %{name} 管理面板","Login to %{name} Admin Panel"
-登录保护,"Login protection"
-连续异常登录会自动提高验证强度，减少后台入口暴露面。,"Consecutive abnormal logins will automatically increase verification strength, reducing the exposure of the backend entry point."
-统一工作台,"Unified Workbench"
-内容、配置、权限和模块操作都在同一后台闭环处理。,"Content, configuration, permissions, and module operations are all processed in the same backend closed loop."
-可信发布,"Trusted Release"
-后台入口、品牌标识和基础样式都保持统一的可回退策略。,"Background entry, brand identity, and base styles all maintain a consistent fallback strategy."
-权限边界清晰,"Clear permission boundaries"
-角色、菜单与访问入口统一受控。,"Roles, menus, and access points are centrally managed."
-发布动作集中,"Publish action set"
-配置调整、内容发布和模块维护在同一工作流里完成。,"Configuration adjustments, content publishing, and module maintenance are completed within the same workflow."
-受信任环境,"Trusted Environment"
-仅在可信设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
-账号开通,"Account Activation"
-密码重置,"Reset Password"
-权限分配,"Permission assignment"
-后台安全入口,"Backend Security Entry"
-"把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里","Consolidate the configuration, permissions, and publishing process of %{name} into a single backend workspace"
-这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。,"This is used for handling content publishing, configuration adjustments, permission assignment, and module maintenance. After logging in, you can continue your previous backend operation context."
-保持后台环境可信,"Keep Backend Environment Trustworthy"
-建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。,"Suggestion: Only save login status on trusted devices; if abnormal locking, account status changes, or missing permissions are detected, contact the super administrator for handling."
-安全入口,安全入口
-欢迎回来,"Welcome back"
-输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,"Enter the admin account to proceed with backend tasks, configuration changes, and permission operations."
-安全验证已启用,"Security verification enabled"
-管理员,Administrator
-请输入管理员账号,"Please enter the admin account"
-密码,Password
-请输入密码,"Enter password"
-验证码,"Verification code"
-点击刷新验证码,"Click to refresh the verification code."
-请输入验证码,"Please enter the verification code"
-记住我,"Remember Me"
-仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
-登录,"Log in"
-登录中,"Logging in"
-管理员账号由超级管理员统一开通与维护,"Admin accounts are created and maintained uniformly by the super admin"
-如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,"To reset your password, unlock your account, or supplement backend permissions, please contact an existing super administrator."
-"若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。","If no custom admin logo is configured, the login page will automatically fall back to the built-in Weline logo."
-确认操作,"Confirm operation"
-请重试,"Please try again"
-加载失败,"Load failed"
-输入,Input
-常用菜单,"Frequently Used Menus"
-布局预设配置包,"Layout Preset Configuration Package"
-选择布局预设,"Select Layout Preset"
-默认布局,"Default Layout"
-浅色侧边栏,"Light Sidebar"
-深色菜单,"Dark menu"
-图标侧边栏,"Icon Sidebar"
-紧凑侧边栏,"Compact Sidebar"
-水平布局,"Horizontal Layout"
-水平布局（深色顶部栏）,"Horizontal Layout (Dark Topbar)"
-水平布局（盒装宽度）,"Horizontal Layout (Boxed Width)"
-盒装布局,"Boxed Layout"
-选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
-主题颜色,"Theme Color"
-选择主题模式,"Select Theme Mode"
-明亮模式,"Light Mode"
-暗黑模式,"Dark Mode"
-RTL模式,"RTL Mode"
 网站维护,"Website Maintenance"
 网站正在维护中...,"Website is under maintenance..."
 请稍等片刻,"Please wait a moment"
@@ -185,6 +154,7 @@ RTL模式,"RTL Mode"
 "Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊汱㈡澘"
 管理员管理,"Administrator Management"
 系统,System
+管理员,Administrator
 新增管理员,"Add Administrator"
 用户信息,"User Info"
 状态,Status
@@ -200,7 +170,9 @@ RTL模式,"RTL Mode"
 请输入用户名,"Please enter the username"
 邮箱,Email
 请输入有效邮箱,"Please enter a valid email"
+密码,Password
 留空则不修改密码,"Leave empty to keep current password"
+请输入密码,"Enter password"
 保存,Save
 保存中...,Saving...
 编辑,Edit
@@ -227,7 +199,6 @@ RTL模式,"RTL Mode"
 未分配,Unassigned
 （当前登录）,"(Currently logged in)"
 已分配,Assigned
-用户管理,"User Management"
 用户名称验证成功,"Username validation successful"
 请输入用户名称,"Please enter username"
 邮箱验证成功,"Email validation successful"
@@ -325,8 +296,30 @@ Cms内容管理,"CMS Content Management"
 路由,Route
 版本,Version
 描述,Description
+常用菜单,"Frequently Used Menus"
+确认操作,"Confirm operation"
+请重试,"Please try again"
+加载失败,"Load failed"
+输入,Input
 "响应式 Bootstrap 5 管理后台","Responsive Bootstrap 5 Admin Dashboard"
 返回首页,"Return to Home"
+布局预设配置包,"Layout Preset Configuration Package"
+选择布局预设,"Select Layout Preset"
+默认布局,"Default Layout"
+浅色侧边栏,"Light Sidebar"
+深色菜单,"Dark menu"
+图标侧边栏,"Icon Sidebar"
+紧凑侧边栏,"Compact Sidebar"
+水平布局,"Horizontal Layout"
+水平布局（深色顶部栏）,"Horizontal Layout (Dark Topbar)"
+水平布局（盒装宽度）,"Horizontal Layout (Boxed Width)"
+盒装布局,"Boxed Layout"
+选择预设后，将自动配置所有相关布局选项,"After selecting a preset, all related layout options will be automatically configured"
+主题颜色,"Theme Color"
+选择主题模式,"Select Theme Mode"
+明亮模式,"Light Mode"
+暗黑模式,"Dark Mode"
+RTL模式,"RTL Mode"
 面板,Dashboard
 后台,Backend
 概览,Overview
@@ -352,6 +345,43 @@ Cms内容管理,"CMS Content Management"
 区域营收,"Regional Revenue"
 查看更多,"View More"
 最近成交,"Recent Transactions"
+后台登录,后台登录
+"登录 %{name} 管理面板","Login to %{name} Admin Panel"
+登录保护,"Login protection"
+连续异常登录会自动提高验证强度，减少后台入口暴露面。,"Consecutive abnormal logins will automatically increase verification strength, reducing the exposure of the backend entry point."
+统一工作台,"Unified Workbench"
+内容、配置、权限和模块操作都在同一后台闭环处理。,"Content, configuration, permissions, and module operations are all processed in the same backend closed loop."
+可信发布,"Trusted Release"
+后台入口、品牌标识和基础样式都保持统一的可回退策略。,"Background entry, brand identity, and base styles all maintain a consistent fallback strategy."
+权限边界清晰,"Clear permission boundaries"
+角色、菜单与访问入口统一受控。,"Roles, menus, and access points are centrally managed."
+发布动作集中,"Publish action set"
+配置调整、内容发布和模块维护在同一工作流里完成。,"Configuration adjustments, content publishing, and module maintenance are completed within the same workflow."
+受信任环境,"Trusted Environment"
+仅在可信设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
+账号开通,"Account Activation"
+密码重置,"Reset Password"
+权限分配,"Permission assignment"
+后台安全入口,"Backend Security Entry"
+"把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里","Consolidate the configuration, permissions, and publishing process of %{name} into a single backend workspace"
+这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。,"This is used for handling content publishing, configuration adjustments, permission assignment, and module maintenance. After logging in, you can continue your previous backend operation context."
+保持后台环境可信,"Keep Backend Environment Trustworthy"
+建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。,"Suggestion: Only save login status on trusted devices; if abnormal locking, account status changes, or missing permissions are detected, contact the super administrator for handling."
+安全入口,安全入口
+欢迎回来,"Welcome back"
+输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,"Enter the admin account to proceed with backend tasks, configuration changes, and permission operations."
+安全验证已启用,"Security verification enabled"
+请输入管理员账号,"Please enter the admin account"
+验证码,"Verification code"
+点击刷新验证码,"Click to refresh the verification code."
+请输入验证码,"Please enter the verification code"
+记住我,"Remember Me"
+仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
+登录,"Log in"
+登录中,"Logging in"
+管理员账号由超级管理员统一开通与维护,"Admin accounts are created and maintained uniformly by the super admin"
+如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,"To reset your password, unlock your account, or supplement backend permissions, please contact an existing super administrator."
+"若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。","If no custom admin logo is configured, the login page will automatically fall back to the built-in Weline logo."
 安全后台入口,安全后台入口
 内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。,内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。
 连续异常登录会自动提高验证强度。,连续异常登录会自动提高验证强度。

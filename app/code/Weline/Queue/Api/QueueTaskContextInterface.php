@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Queue\Api;
 
 use Weline\Framework\Async\TaskContextInterface;
+use Weline\Framework\Runtime\ScopeEnvelope;
 
 /**
  * Persistence-neutral task context passed to queue consumers.
@@ -77,6 +78,19 @@ interface QueueTaskContextInterface extends TaskContextInterface
      * @param array<string, mixed> $args
      */
     public function setExecutionArgs(array $args): void;
+
+    /**
+     * 读取任务 Scope 信封（P1b）。
+     *
+     * 仅全部 v1 固定列为空的 pre-P1b 遗留行可返回 null；
+     * 部分写入/非法组合必须由实现抛错，禁止静默降级为 Global。
+     */
+    public function getScopeEnvelope(): ?ScopeEnvelope;
+
+    /**
+     * 写入任务 Scope 信封固定列。传 null 显式写 global。
+     */
+    public function setScopeEnvelope(?ScopeEnvelope $envelope): static;
 
     public function persist(): void;
 }

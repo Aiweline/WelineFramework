@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Setup;
 
+use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
-use Weline\Framework\Setup\InstallInterface;
+use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ProductPageLayoutNormalizer;
 use Weline\Theme\Service\ThemeContextService;
 
-class Upgrade implements InstallInterface
+class Upgrade implements UpgradeInterface
 {
     public const VERSION = '1.0.4';
 
@@ -66,7 +67,11 @@ class Upgrade implements InstallInterface
         try {
             ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
                 ->relocateBestsellersInDatabase();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '主题布局迁移失败（bestsellers 侧栏归位）：%{1}',
+                [$e->getMessage()]
+            ), 0, $e);
         }
     }
 
@@ -80,6 +85,7 @@ class Upgrade implements InstallInterface
             if (!$theme->getId()) {
                 return;
             }
+            $themeId = (int)$theme->getId();
 
             /** @var ThemeContextService $themeContext */
             $themeContext = ObjectManager::getInstance(ThemeContextService::class);
@@ -87,8 +93,9 @@ class Upgrade implements InstallInterface
                 $theme,
                 $themeContext,
                 function (string $field): bool {
+                    // 禁止复用共享单例：clearData/load 会冲掉外层已加载的默认主题行，导致 save 变成无 name 的 INSERT。
                     /** @var WelineTheme $activeTheme */
-                    $activeTheme = ObjectManager::getInstance(WelineTheme::class);
+                    $activeTheme = ObjectManager::create(WelineTheme::class, [], false);
                     $activeTheme->clearData()->clearQuery();
                     $activeTheme->load($field, 1);
                     return (bool)$activeTheme->getId();
@@ -99,11 +106,21 @@ class Upgrade implements InstallInterface
                 return;
             }
 
+            $theme->clearData()->clearQuery()->load($themeId);
+            if (!$theme->getId()) {
+                throw new Exception(__('默认主题区域激活回填失败：主题 #%{1} 在探测后无法重新加载', [(string)$themeId]));
+            }
             foreach ($updates as $field => $value) {
                 $theme->setData($field, $value);
             }
             $theme->save();
-        } catch (\Throwable) {
+        } catch (Exception $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new Exception(__(
+                '默认主题区域激活回填失败：%{1}',
+                [$e->getMessage()]
+            ), 0, $e);
         }
     }
 

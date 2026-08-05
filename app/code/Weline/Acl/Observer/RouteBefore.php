@@ -29,6 +29,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\StateManager;
@@ -37,11 +38,7 @@ use Weline\Framework\Session\Strategy\WlsStrategy;
 class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 {
     private const OBSERVER_SPAN_NAME = 'observer::Weline::Acl::Observer::RouteBefore';
-    /** 请求级白名单缓存，同请求内避免重复读 cache/DB，WLS 下由 StateManager 重置 */
-    private static array|false $backendWhiteListRequestCache = false;
-    private static array|false $frontendWhiteListRequestCache = false;
-    /** 请求级后台 Session 缓存，WLS 下由 StateManager 重置，避免跨请求复用 */
-    private static ?AuthenticatedSessionInterface $backendSessionRequestCache = null;
+    private const REQUEST_STATE_KEY = 'acl.route_before.state.v1';
     private static bool $stateManagerRegistered = false;
 
     /**
@@ -83,11 +80,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
     /** 获取当前请求的后台 Session，延迟创建；同请求内复用，WLS 下由 StateManager 在请求结束时清空 */
     private function getBackendSession(): AuthenticatedSessionInterface
     {
-        if (self::$backendSessionRequestCache === null) {
+        $state = self::requestState();
+        if (!$state['backend_session'] instanceof AuthenticatedSessionInterface) {
             self::registerStateManager();
-            self::$backendSessionRequestCache = SessionFactory::getInstance()->createBackendSession();
+            $state['backend_session'] = SessionFactory::getInstance()->createBackendSession();
+            self::storeRequestState($state);
         }
-        return self::$backendSessionRequestCache;
+        return $state['backend_session'];
     }
 
     /**
@@ -179,16 +178,54 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
     /** WLS 请求结束后清空请求级缓存（白名单 + 后台 Session） */
     public static function resetRequestCache(): void
     {
-        self::$backendWhiteListRequestCache = false;
-        self::$frontendWhiteListRequestCache = false;
-        self::$backendSessionRequestCache = null;
+        RequestContext::remove(self::REQUEST_STATE_KEY);
+    }
+
+    /**
+     * @return array{
+     *     backend_whitelist: array|false,
+     *     frontend_whitelist: array|false,
+     *     backend_session: AuthenticatedSessionInterface|null
+     * }
+     */
+    private static function requestState(): array
+    {
+        $state = RequestContext::get(self::REQUEST_STATE_KEY, []);
+        if (!is_array($state)) {
+            $state = [];
+        }
+
+        return [
+            'backend_whitelist' => is_array($state['backend_whitelist'] ?? null)
+                ? $state['backend_whitelist']
+                : false,
+            'frontend_whitelist' => is_array($state['frontend_whitelist'] ?? null)
+                ? $state['frontend_whitelist']
+                : false,
+            'backend_session' => ($state['backend_session'] ?? null) instanceof AuthenticatedSessionInterface
+                ? $state['backend_session']
+                : null,
+        ];
+    }
+
+    private static function storeRequestState(array $state): void
+    {
+        RequestContext::set(self::REQUEST_STATE_KEY, $state);
+    }
+
+    private static function setBackendSession(?AuthenticatedSessionInterface $session): void
+    {
+        $state = self::requestState();
+        $state['backend_session'] = $session;
+        self::storeRequestState($state);
     }
 
     private function getBackendWhiteList(): array
     {
         self::registerStateManager();
-        if (self::$backendWhiteListRequestCache !== false) {
-            return self::$backendWhiteListRequestCache;
+        $state = self::requestState();
+        if ($state['backend_whitelist'] !== false) {
+            return $state['backend_whitelist'];
         }
         $white_acl_cache_key = 'backend_white_acl_sources';
         $white_lists = $this->aclCache->get($white_acl_cache_key);
@@ -205,7 +242,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $white_lists = $paths;
             $this->aclCache->set($white_acl_cache_key, $white_lists);
         }
-        self::$backendWhiteListRequestCache = $white_lists;
+        $state['backend_whitelist'] = $white_lists;
+        self::storeRequestState($state);
         return $white_lists;
     }
 
@@ -323,10 +361,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                         $restoredAclContext = $this->backendRememberLoginProvider->consumeRestoredAclContext();
                         $restoredSession = $this->backendRememberLoginProvider->consumeRestoredSession();
                         if ($restoredSession instanceof AuthenticatedSessionInterface) {
-                            self::$backendSessionRequestCache = $restoredSession;
+                            self::setBackendSession($restoredSession);
                             $backendSession = $restoredSession;
                         } else {
-                            self::$backendSessionRequestCache = null;
+                            self::setBackendSession(null);
                             $backendSession = $this->getBackendSession();
                         }
                         $userId = $restoredAclContext['user_id'] ?? $backendSession->getUserId();
@@ -559,8 +597,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
     private function getFrontendWhiteList(): array
     {
         self::registerStateManager();
-        if (self::$frontendWhiteListRequestCache !== false) {
-            return self::$frontendWhiteListRequestCache;
+        $state = self::requestState();
+        if ($state['frontend_whitelist'] !== false) {
+            return $state['frontend_whitelist'];
         }
         $white_acl_cache_key = 'frontend_api_white_acl_sources';
         $white_lists = $this->aclCache->get($white_acl_cache_key);
@@ -577,7 +616,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $white_lists = $paths;
             $this->aclCache->set($white_acl_cache_key, $white_lists);
         }
-        self::$frontendWhiteListRequestCache = $white_lists;
+        $state['frontend_whitelist'] = $white_lists;
+        self::storeRequestState($state);
         return $white_lists;
     }
 
@@ -696,7 +736,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $request->getUri()
                 ]));
                 // 使用后台 URL 构建器生成正确的后台地址
-                $backendUrl = $request->getUrlBuilder()->getBackendUrl($accessRoute);
+                $backendUrl = $this->appendNoAccessReason(
+                    $request->getUrlBuilder()->getBackendUrl($accessRoute),
+                    'no_permission_for_route'
+                );
                 $request->getResponse()->redirect($backendUrl);
                 return;
             }
@@ -709,7 +752,10 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             if (!$accessRoute || $accessType !== 'menus') {
                 continue;
             }
-            $backendUrl = $request->getUrlBuilder()->getBackendUrl($accessRoute);
+            $backendUrl = $this->appendNoAccessReason(
+                $request->getUrlBuilder()->getBackendUrl($accessRoute),
+                'no_permission_for_route'
+            );
             /** @var MessageManager $message */
             $message = ObjectManager::getInstance(MessageManager::class);
             $message->warning(__('你无权进行该操作！已将你带到你可访问的后台页面：%{1}', [$backendUrl]));
@@ -725,6 +771,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         $noAccessData = ['data' => ['reason' => 'no_usable_permission']];
         $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
         $request->getResponse()->noRouter(DEV ? 403 : 404);
+    }
+
+    private function appendNoAccessReason(string $url, string $reason): string
+    {
+        return $url
+            . (str_contains($url, '?') ? '&' : '?')
+            . http_build_query(['no_access_reason' => $reason], '', '&', PHP_QUERY_RFC3986);
     }
 
     /**

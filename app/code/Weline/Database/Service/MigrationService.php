@@ -46,11 +46,20 @@ class MigrationService
      * 
      * @param string $moduleName 模块名称
      * @param string $migrationFile 迁移文件路径
+     * @param string $operationId 调用方显式提供的操作 ID；空值保持独立迁移兼容语义
      * @return bool
      */
-    public function upgradeMigration(string $moduleName, string $migrationFile): bool
+    public function upgradeMigration(
+        string $moduleName,
+        string $migrationFile,
+        string $operationId = '',
+    ): bool
     {
         try {
+            $operationId = trim($operationId);
+            if (strlen($operationId) > 64) {
+                throw new \InvalidArgumentException(__('operation_id 长度不能超过 64 字符'));
+            }
             if (!file_exists($migrationFile)) {
                 throw new \Exception(__("迁移文件不存在: %{1}", $migrationFile));
             }
@@ -82,7 +91,8 @@ class MigrationService
                     $moduleName,
                     $migrationFile,
                     $migrationClass,
-                    Migration::STATUS_RUNNING
+                    Migration::STATUS_RUNNING,
+                    $operationId,
                 );
                 if ($migrationId <= 0) {
                     throw new \RuntimeException(__('无法记录迁移运行状态'));
@@ -380,9 +390,20 @@ class MigrationService
     /**
      * 记录迁移执行（status = installed）
      */
-    private function recordMigration(string $moduleName, string $migrationFile, MigrationInterface $migrationClass): int
+    private function recordMigration(
+        string $moduleName,
+        string $migrationFile,
+        MigrationInterface $migrationClass,
+        string $operationId = '',
+    ): int
     {
-        return $this->insertMigrationRecord($moduleName, $migrationFile, $migrationClass, Migration::STATUS_INSTALLED);
+        return $this->insertMigrationRecord(
+            $moduleName,
+            $migrationFile,
+            $migrationClass,
+            Migration::STATUS_INSTALLED,
+            $operationId,
+        );
     }
 
     /**
@@ -394,7 +415,8 @@ class MigrationService
         string $moduleName,
         string $migrationFile,
         MigrationInterface $migrationClass,
-        string $status
+        string $status,
+        string $operationId = '',
     ): int {
         $data = [
             'module_name'    => $moduleName,
@@ -407,6 +429,7 @@ class MigrationService
             'executed_at'    => date('Y-m-d H:i:s'),
             'migration_type' => 'script',
             'operation_kind' => method_exists($migrationClass, 'getType') ? $migrationClass->getType() : 'script',
+            'operation_id'   => $operationId,
         ];
 
         return $this->migrationModel->recordMigration($data);

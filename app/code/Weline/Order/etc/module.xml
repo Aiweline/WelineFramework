@@ -6,7 +6,10 @@
             <module name="Weline_Framework"/>
             <module name="Weline_Backend"/>
             <module name="Weline_Customer"/>
+            <module name="Weline_Inventory"/>
+            <module name="Weline_Payment"/>
+            <module name="Weline_Queue"/>
+            <module name="Weline_Websites"/>
         </sequence>
     </module>
 </config>
-

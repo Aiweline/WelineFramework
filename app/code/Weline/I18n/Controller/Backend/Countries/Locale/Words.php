@@ -58,8 +58,12 @@ class Words extends BaseController
         $words = $this->i18n->getCollectedWords();
         foreach ($words as $key => $word) {
             unset($words[$key]);
-            if ($key) {
-                $words[] = ['word' => $key];
+            try {
+                $words[] = ['word' => Dictionary::assertWord($key)];
+            } catch (\Exception $exception) {
+                Message::exception($exception);
+                $this->redirect('*/backend/countries/locales', $this->request->getParams());
+                return;
             }
         }
         if ($words) {

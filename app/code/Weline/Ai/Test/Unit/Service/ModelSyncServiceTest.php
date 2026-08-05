@@ -5,7 +5,7 @@ namespace Weline\Ai\Test\Unit\Service;
 
 use Weline\Ai\Service\Provider\ModelSyncService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 /**
  * ModelSyncService 单元测试

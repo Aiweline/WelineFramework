@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace Weline\Framework\Service\Runtime;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\Resumable\TaskOwner;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 
 /**
- * Derives a task access scope from the authenticated server session only.
+ * Derives a task access scope from trusted request authority and its matching
+ * authenticated server session.
  *
  * Browser parameters never supply area, user, session, website or ACL values.
- * Backend authentication wins when present because backend pages currently use
- * the same worker transport path as frontend pages.
+ * Worker calls use the server-constructed execution context, so a backend PHP
+ * Session cookie carried by a storefront request can never upgrade its owner.
+ * Legacy non-Worker callers retain the historical backend-first resolution.
  */
 class ResumableTaskOwnerResolver
 {
@@ -33,6 +37,21 @@ class ResumableTaskOwnerResolver
     {
         $websiteId = $this->resolveWebsiteId();
 
+        if (RequestContext::has(FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY)) {
+            $executionContext = RequestContext::get(
+                FrontendWorkerExecutionContext::REQUEST_CONTEXT_KEY,
+            );
+            if (!$executionContext instanceof FrontendWorkerExecutionContext) {
+                throw new ResumableTaskAccessDeniedException(
+                    'Runtime task Worker authority is invalid.',
+                );
+            }
+
+            return $executionContext->area === FrontendWorkerExecutionContext::AREA_BACKEND
+                ? $this->resolveBackendOwner($executionContext, $websiteId)
+                : $this->resolveFrontendOwner($websiteId);
+        }
+
         $backend = $this->sessionFactory->createBackendSession();
         $backendUserId = $this->authenticatedUserId($backend);
         if ($backendUserId !== null) {
@@ -45,6 +64,44 @@ class ResumableTaskOwnerResolver
             );
         }
 
+        return $this->resolveFrontendOwner($websiteId);
+    }
+
+    private function resolveBackendOwner(
+        FrontendWorkerExecutionContext $executionContext,
+        ?int $websiteId,
+    ): TaskOwner
+    {
+        $binding = $executionContext->backendBinding;
+        if ($binding === null || $binding->expiresAt <= \time()) {
+            throw new ResumableTaskAccessDeniedException(
+                'Runtime task backend authority is unavailable.',
+            );
+        }
+
+        $backend = $this->sessionFactory->createBackendSession();
+        $backendUserId = $this->authenticatedUserId($backend);
+        $sessionId = $this->sessionId($backend);
+        if ($backendUserId === null
+            || !\hash_equals((string)$binding->backendUserId, $backendUserId)
+            || $sessionId === ''
+            || !\hash_equals($binding->sessionFingerprint, \hash('sha256', $sessionId))) {
+            throw new ResumableTaskAccessDeniedException(
+                'Runtime task backend authority no longer matches the Session.',
+            );
+        }
+
+        return new TaskOwner(
+            area: 'backend',
+            principal: 'backend:' . $backendUserId,
+            sessionId: $sessionId,
+            websiteId: $websiteId,
+            acl: $this->backendAcl($backend),
+        );
+    }
+
+    private function resolveFrontendOwner(?int $websiteId): TaskOwner
+    {
         $frontend = $this->sessionFactory->createFrontendSession();
         $frontendUserId = $this->authenticatedUserId($frontend);
         if ($frontendUserId !== null) {

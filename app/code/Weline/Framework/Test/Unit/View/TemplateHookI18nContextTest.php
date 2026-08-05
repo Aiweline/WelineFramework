@@ -8,7 +8,7 @@ use ReflectionMethod;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\Template;
 
 final class TemplateHookI18nContextTest extends TestCore

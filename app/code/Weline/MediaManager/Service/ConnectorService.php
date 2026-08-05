@@ -808,11 +808,24 @@ class ConnectorService
 
     private function parseSource(Request $request): array
     {
-        $isPost = \strtoupper($request->getMethod()) === 'POST';
-        $src = $isPost ? \array_merge($_GET, $_POST) : $_GET;
+        // Query operations and WLS keep request input in the Fiber-local Request
+        // object. Reading $_GET/$_POST directly here loses cmd/target/path and
+        // silently turns every directory open into a root open.
+        $requestParams = $request->getData('params');
+        if (\is_array($requestParams)) {
+            $src = $requestParams;
+            $hasCanonicalParams = true;
+        } else {
+            $src = $request->getParameterBag()->all();
+            $hasCanonicalParams = false;
+        }
 
         $maxInputVars = (!$src || isset($src['targets'])) ? \ini_get('max_input_vars') : null;
-        if ((!$src || $maxInputVars) && ($rawPostData = @\file_get_contents('php://input'))) {
+        if (
+            !$hasCanonicalParams
+            && (!$src || $maxInputVars)
+            && ($rawPostData = $request->getParameterBag()->getRawBody())
+        ) {
             $parts = \explode('&', $rawPostData);
             if (!$src || (int) $maxInputVars < \count($parts)) {
                 $src = [];

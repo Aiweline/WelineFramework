@@ -22,7 +22,7 @@ class SeoWebsiteAccountBindingService
      */
     public function getBindingsByWebsite(int $websiteId): array
     {
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             return [];
         }
 
@@ -58,8 +58,11 @@ class SeoWebsiteAccountBindingService
             if (!is_array($website)) {
                 continue;
             }
-            $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
-            if ($websiteId > 0) {
+            if (!array_key_exists('website_id', $website) && !array_key_exists('id', $website)) {
+                continue;
+            }
+            $websiteId = (int)($website['website_id'] ?? $website['id']);
+            if ($websiteId >= 0) {
                 $counts[$websiteId] = count($this->getBindingsByWebsite($websiteId));
             }
         }
@@ -186,7 +189,7 @@ class SeoWebsiteAccountBindingService
         $websiteIds = [];
         foreach ($this->websiteAccount->reset()->select()->fetchArray() as $binding) {
             $websiteId = (int)($binding[SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
-            if ($websiteId <= 0) {
+            if ($websiteId < 0) {
                 continue;
             }
             $websiteIds[$websiteId] = $websiteId;

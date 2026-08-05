@@ -21,8 +21,9 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
-use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
+use Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection;
+use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
 use Weline\Server\Service\Policy\RuntimePolicyStore;
 use Weline\Server\Service\Runtime\RuntimeEndpointMetadata;
 use Weline\Server\Service\Runtime\RuntimeSelection;
@@ -172,9 +173,7 @@ class Status extends CommandAbstract
             $prefix = $isLast ? '└─' : '├─';
             $childPrefix = $isLast ? '   ' : '│  ';
             
-            $port = $info->port;
             $count = $info->workerCount;
-            $host = $info->host;
             $startedAt = $info->startedAt;
             
             // 从实际服务列表获取 Worker 信息
@@ -193,8 +192,11 @@ class Status extends CommandAbstract
             $this->printer->$statusColor($prefix . ' [' . $name . '] ' . $status . ' (' . $runningCount . '/' . $count . ' ' . __('workers') . ')');
             
             // 详细信息
-            $scheme = $info->sslEnabled ? 'https' : 'http';
-            $this->printer->note($childPrefix . '  ├─ ' . __('地址：') . $scheme . '://' . $host . ':' . $port);
+            $serving = $this->resolveServingPresentation($name, $info);
+            $this->printer->note(
+                $childPrefix . '  ├─ ' . $serving['label'] . '：'
+                . $serving['endpoint']
+            );
             $this->showRuntimeMetadata($name, $childPrefix . '  ├─ ', true, $info);
             
             // 端口展示统一由实例契约根据 RuntimeSelection 与实际服务计算
@@ -265,20 +267,11 @@ class Status extends CommandAbstract
         $this->printer->note(__('║                    实例详细信息                                ║'));
         $this->printer->note('╠══════════════════════════════════════════════════════════════╣');
         $this->printer->note(\sprintf('║  ' . __('实例名称：') . '%-50s║', $info->name));
-        $gatewayPublicEndpoint = $this->resolveGatewayPublicEndpoint($name, $info);
-        $managedNginxPublicEndpoint = $this->resolveManagedNginxPublicEndpoint($info);
-        $pureWlsPublicEndpoint = $this->resolvePureWlsPublicEndpoint($name);
-        $publicEndpoint = $gatewayPublicEndpoint
-            ?? $managedNginxPublicEndpoint
-            ?? $pureWlsPublicEndpoint;
-        $addressLabel = $gatewayPublicEndpoint !== null
-            ? __('WLS 2.0 网关入口') . '：'
-            : ($managedNginxPublicEndpoint !== null
-                ? __('Nginx 公网入口') . '：'
-                : ($pureWlsPublicEndpoint !== null
-                    ? __('纯 WLS 公网入口') . '：'
-                    : __('监听地址：')));
-        $this->printer->note(\sprintf('║  ' . $addressLabel . '%-50s║', $publicEndpoint ?? $info->getListenAddress()));
+        $serving = $this->resolveServingPresentation($name, $info);
+        $this->printer->note(\sprintf(
+            '║  ' . $serving['label'] . '：%-50s║',
+            $serving['endpoint'],
+        ));
         $this->printer->note(\sprintf('║  ' . __('端口范围：') . '%-50s║', $info->getPortRangeDescription()));
         $this->printer->note(\sprintf('║  ' . __('Worker 数：') . '%-49s║', (string)$info->workerCount));
         $this->printer->note(\sprintf('║  ' . __('启动时间：') . '%-50s║', $info->startedAt ?: __('unknown')));
@@ -337,21 +330,8 @@ class Status extends CommandAbstract
 
     private function showAccessAddresses(string $instanceName, ServerInstanceInfo $info): void
     {
-        $baseUrl = $this->resolveGatewayPublicEndpoint($instanceName, $info)
-            ?? $this->resolveManagedNginxPublicEndpoint($info)
-            ?? $this->resolvePureWlsPublicEndpoint($instanceName);
-        if ($baseUrl === null) {
-            $scheme = $info->sslEnabled ? 'https' : 'http';
-            $host = \strtolower(\trim($info->host));
-            if ($host === '' || $host === '0.0.0.0' || $host === '*') {
-                $host = '127.0.0.1';
-            } elseif ($host === '::') {
-                $host = '[::1]';
-            } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
-                $host = '[' . $host . ']';
-            }
-            $baseUrl = $scheme . '://' . $host . ':' . $info->port;
-        }
+        $serving = $this->resolveServingPresentation($instanceName, $info);
+        $baseUrl = $serving['endpoint'];
 
         $backendPrefix = \trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
         $restBackendPrefix = \trim((string)(Env::getAreaRoutePrefix('rest_backend') ?? ''), '/');
@@ -366,7 +346,12 @@ class Status extends CommandAbstract
             __('前台 REST 接口') => $baseUrl . '/' . ($restFrontendPrefix !== '' ? $restFrontendPrefix : 'api') . '/',
         ];
 
-        $this->printer->title(__('服务访问地址'), '─');
+        $this->printer->title(
+            $serving['public']
+                ? __('服务访问地址')
+                : __('回源内部地址（当前无可验证公网入口）'),
+            '─',
+        );
         $this->printer->keyValue($urls, '→', 18);
     }
 
@@ -413,7 +398,7 @@ class Status extends CommandAbstract
         $containerDigest = \strtolower(\trim((string)($runtime['container_registry_digest'] ?? '')));
         $containerDigestShort = $containerDigest !== '' ? \substr($containerDigest, 0, 12) : '-';
         $gateway = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
-        $fallbackStatus = $this->resolveGatewayFallbackStatus($instanceInfo, $gateway);
+        $fallbackStatus = $this->resolveGatewayFallbackStatus($instanceInfo, $gateway, $raw);
 
         if ($compact) {
             $summary = $effective
@@ -457,7 +442,9 @@ class Status extends CommandAbstract
             . 'schema=v' . RuntimeSelection::ENDPOINT_SCHEMA_VERSION
             . ', metadata=' . (string)($runtime['metadata_source'] ?? '-')
             . ', container=' . ($containerDigest !== '' ? $containerDigest : '-'));
-        if ((string)($gateway['mode'] ?? '') === 'gateway') {
+        if ($this->hasExactServingManifestFence($raw)
+            && GatewayRuntimeServingProjection::gatewayIsServing($raw)
+        ) {
             $this->printer->note($prefix . __('共享网关：')
                 . (string)($gateway['protocol'] ?? '-')
                 . ', epoch=' . (string)($gateway['epoch'] ?? '-')
@@ -481,7 +468,12 @@ class Status extends CommandAbstract
     protected function resolveGatewayFallbackStatus(
         ?ServerInstanceInfo $instanceInfo,
         array $gatewayRuntime = [],
+        array $endpoint = [],
     ): ?array {
+        // A first-start auto fallback is independently authenticated by its
+        // live lease and immutable serving manifest; it may never have had a
+        // historical gateway runtime_project_proof.
+        $trustedFallback = GatewayRuntimeServingProjection::fallbackServingEndpoint($endpoint);
         $metadata = [];
         $state = '';
         $port = 0;
@@ -501,7 +493,24 @@ class Status extends CommandAbstract
                 $port = (int)($fallback->port ?? 0);
             }
         }
+        if ($trustedFallback !== null) {
+            $metadata = $gatewayRuntime;
+            $state = 'DEGRADED_WLS';
+            $port = (int)$trustedFallback['port'];
+            $bindHost = (string)$trustedFallback['bind_host'];
+            $bindAuthority = \str_contains($bindHost, ':')
+                ? '[' . $bindHost . ']'
+                : $bindHost;
+            $metadata['fallback_bind_host'] = $bindHost;
+            $metadata['fallback_bind'] = $bindAuthority . ':' . $port;
+        } elseif (\strtoupper(\trim($state)) === 'DEGRADED_WLS') {
+            // A service-role metadata row without a fresh lease proof is not
+            // evidence that the public fallback listener is still serving.
+            return null;
+        }
         if ($metadata === []
+            && (GatewayRuntimeServingProjection::fallbackWlsIsServing($endpoint)
+                || GatewayRuntimeServingProjection::gatewayIsServing($endpoint))
             && (string)($gatewayRuntime['fallback_state'] ?? '') !== ''
         ) {
             $runtimeState = \strtoupper(\trim(
@@ -661,13 +670,212 @@ class Status extends CommandAbstract
 
     protected function buildTestCurlTarget(ServerInstanceInfo $info): string
     {
-        $publicEndpoint = $this->resolveGatewayPublicEndpoint($info->name, $info)
-            ?? $this->resolveManagedNginxPublicEndpoint($info)
-            ?? $this->resolvePureWlsPublicEndpoint($info->name);
-        if ($publicEndpoint !== null) {
-            return '-k ' . $publicEndpoint;
-        }
+        $serving = $this->resolveServingPresentation($info->name, $info);
+        return \str_starts_with($serving['endpoint'], 'https://')
+            ? '-k ' . $serving['endpoint']
+            : $serving['endpoint'];
+    }
 
+    /**
+     * Use one fail-closed serving resolver for list, detail, address and curl
+     * output. Startup intent never proves a public surface: a gateway-capable
+     * project without a fresh exact gateway/fallback proof exposes only its
+     * backend listener and it is labelled as internal.
+     *
+     * @return array{endpoint:string,label:string,public:bool,source:string}
+     */
+    protected function resolveServingPresentation(
+        string $instanceName,
+        ServerInstanceInfo $info,
+    ): array {
+        $raw = $this->getInstanceManager()->getRawInstanceData($instanceName);
+        if (\is_array($raw)) {
+            if ($this->hasExactServingManifestFence($raw)) {
+                $gatewayEndpoint = $this->resolveGatewayPublicEndpoint($raw);
+                if ($gatewayEndpoint !== null) {
+                    return [
+                        'endpoint' => $gatewayEndpoint,
+                        'label' => __('WLS 2.0 网关入口'),
+                        'public' => true,
+                        'source' => 'gateway',
+                    ];
+                }
+            }
+            // A first-start fallback has its own live port-lease + immutable
+            // serving-manifest proof and may never have had a gateway project
+            // proof. Do not gate that independently authenticated projection
+            // on historical runtime_project_proof fields.
+            $fallbackEndpoint = $this->resolveGatewayFallbackPublicEndpoint($raw);
+            if ($fallbackEndpoint !== null) {
+                return [
+                    'endpoint' => $fallbackEndpoint,
+                    'label' => __('纯 WLS 降级入口'),
+                    'public' => true,
+                    'source' => 'fallback_wls',
+                ];
+            }
+            if ($this->requiresGatewayServingProof($raw)) {
+                return $this->internalServingPresentation($info, true);
+            }
+            $pureWlsEndpoint = $this->resolveStandalonePureWlsPublicEndpoint($raw);
+            if ($pureWlsEndpoint !== null) {
+                return [
+                    'endpoint' => $pureWlsEndpoint,
+                    'label' => __('纯 WLS 公网入口'),
+                    'public' => true,
+                    'source' => 'pure_wls',
+                ];
+            }
+        }
+        $managedNginxEndpoint = $this->resolveManagedNginxPublicEndpoint($info);
+        if ($managedNginxEndpoint !== null) {
+            return [
+                'endpoint' => $managedNginxEndpoint,
+                'label' => __('Nginx 公网入口'),
+                'public' => true,
+                'source' => 'managed_nginx',
+            ];
+        }
+        return $this->internalServingPresentation($info);
+    }
+
+    /** @param array<string,mixed> $raw */
+    private function resolveGatewayPublicEndpoint(array $raw): ?string
+    {
+        $gateway = \is_array($raw) && \is_array($raw['gateway'] ?? null)
+            ? $raw['gateway']
+            : [];
+        if (!GatewayRuntimeServingProjection::gatewayIsServing($raw)) {
+            return null;
+        }
+        $port = (int)($gateway['public_https'] ?? 0);
+        if ($port < 1 || $port > 65535) {
+            return null;
+        }
+        try {
+            $host = ProjectServingManifestStore::normalizeHost(
+                (string)($raw['public_host'] ?? ''),
+                false,
+            );
+        } catch (\Throwable) {
+            $host = '';
+        }
+        $proof = \is_array($gateway['runtime_project_proof'] ?? null)
+            ? $gateway['runtime_project_proof']
+            : [];
+        $routes = \is_array($proof['active_routes'] ?? null)
+            ? $proof['active_routes']
+            : [];
+        $provenHosts = [];
+        $firstExactHost = '';
+        foreach ($routes as $route) {
+            if (!\is_array($route)) {
+                continue;
+            }
+            $domain = \strtolower(\rtrim(\trim((string)($route['domain'] ?? '')), '.'));
+            if ($domain !== '') {
+                $provenHosts[$domain] = true;
+                if ($firstExactHost === '' && !\str_starts_with($domain, '*.')) {
+                    $firstExactHost = $domain;
+                }
+            }
+        }
+        if ($host === '') {
+            $host = $firstExactHost;
+        }
+        if ($host === '' || !self::gatewayRouteSetCoversHost($provenHosts, $host)) {
+            return null;
+        }
+        if (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+            $host = '[' . $host . ']';
+        }
+        return 'https://' . $host . ($port === 443 ? '' : ':' . $port);
+    }
+
+    /** @param array<string,bool> $domains */
+    private static function gatewayRouteSetCoversHost(array $domains, string $host): bool
+    {
+        if (isset($domains[$host])) {
+            return true;
+        }
+        foreach ($domains as $domain => $_) {
+            if (!\str_starts_with($domain, '*.')) {
+                continue;
+            }
+            $suffix = \substr($domain, 1);
+            if (\str_ends_with($host, $suffix)
+                && \substr_count($host, '.') === \substr_count($domain, '.')
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @param array<string,mixed> $raw */
+    private function resolveGatewayFallbackPublicEndpoint(array $raw): ?string
+    {
+        $fallbackEndpoint = GatewayRuntimeServingProjection::fallbackServingEndpoint($raw);
+        if ($fallbackEndpoint !== null) {
+            $port = (int)$fallbackEndpoint['port'];
+            $host = (string)$fallbackEndpoint['authority_host'];
+            if (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+                $host = '[' . $host . ']';
+            }
+            return 'https://' . $host . ':' . $port;
+        }
+        return null;
+    }
+
+    /** @param array<string,mixed> $raw */
+    private function resolveStandalonePureWlsPublicEndpoint(array $raw): ?string
+    {
+        $serving = GatewayRuntimeServingProjection::explicitPureWlsServingEndpoint($raw);
+        return \is_array($serving) ? (string)$serving['origin'] : null;
+    }
+
+    /** @param array<string,mixed> $raw */
+    private function requiresGatewayServingProof(array $raw): bool
+    {
+        $gateway = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
+        $requested = \strtolower(\trim((string)(
+            $gateway['requested_mode'] ?? $gateway['mode'] ?? $raw['edge_mode'] ?? ''
+        )));
+        $servingMode = \strtolower(\trim((string)($gateway['serving_mode'] ?? '')));
+        return GatewayRuntimeServingProjection::participatesInGateway($raw)
+            || \in_array($requested, ['auto', 'gateway'], true)
+            || \in_array($servingMode, ['gateway', 'fallback_wls'], true);
+    }
+
+    /** @param array<string,mixed> $raw */
+    private function hasExactServingManifestFence(array $raw): bool
+    {
+        $gateway = \is_array($raw['gateway'] ?? null) ? $raw['gateway'] : [];
+        $proof = \is_array($gateway['runtime_project_proof'] ?? null)
+            ? $gateway['runtime_project_proof']
+            : [];
+        $generation = $gateway['serving_manifest_generation'] ?? null;
+        $proofGeneration = $proof['serving_manifest_generation'] ?? null;
+        $digest = \strtolower(\trim((string)(
+            $gateway['serving_manifest_digest'] ?? ''
+        )));
+        $proofDigest = \strtolower(\trim((string)(
+            $proof['serving_manifest_digest'] ?? ''
+        )));
+        return \is_int($generation)
+            && $generation > 0
+            && \is_int($proofGeneration)
+            && $proofGeneration === $generation
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $digest) === 1
+            && \hash_equals($digest, $proofDigest);
+    }
+
+    /** @return array{endpoint:string,label:string,public:bool,source:string} */
+    private function internalServingPresentation(
+        ServerInstanceInfo $info,
+        bool $publicStateUnknown = false,
+    ): array
+    {
         $scheme = $info->sslEnabled ? 'https' : 'http';
         $host = \strtolower(\trim($info->host));
         if ($host === '' || $host === '0.0.0.0' || $host === '*') {
@@ -677,48 +885,14 @@ class Status extends CommandAbstract
         } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
             $host = '[' . $host . ']';
         }
-
-        $target = $scheme . '://' . $host . ':' . $info->port;
-        return $info->sslEnabled ? '-k ' . $target : $target;
-    }
-
-    private function resolveGatewayPublicEndpoint(string $instanceName, ServerInstanceInfo $info): ?string
-    {
-        $raw = $this->getInstanceManager()->getRawInstanceData($instanceName);
-        $gateway = \is_array($raw) && \is_array($raw['gateway'] ?? null)
-            ? $raw['gateway']
-            : [];
-        if ((string)($gateway['mode'] ?? '') !== 'gateway'
-            || (string)($gateway['protocol'] ?? '') !== \Weline\Server\Service\Edge\Gateway\GatewayPaths::PROTOCOL
-        ) {
-            return null;
-        }
-        $port = (int)($gateway['public_https'] ?? 0);
-        if ($port < 1 || $port > 65535) {
-            return null;
-        }
-        $host = \strtolower(\trim((string)($raw['public_host'] ?? $info->host)));
-        if ($host === '' || $host === '0.0.0.0' || $host === '*' || $host === '::') {
-            $host = '127.0.0.1';
-        } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
-            $host = '[' . $host . ']';
-        }
-        return 'https://' . $host . ($port === 443 ? '' : ':' . $port);
-    }
-
-    private function resolvePureWlsPublicEndpoint(string $instanceName): ?string
-    {
-        $raw = $this->getInstanceManager()->getRawInstanceData($instanceName);
-        if (!\is_array($raw)
-            || \strtolower(\trim((string)($raw['edge_adapter'] ?? ''))) !== 'wls'
-        ) {
-            return null;
-        }
-        try {
-            return PureWlsPublicOrigin::normalize((string)($raw['public_origin'] ?? ''));
-        } catch (\Throwable) {
-            return null;
-        }
+        return [
+            'endpoint' => $scheme . '://' . $host . ':' . $info->port,
+            'label' => $publicStateUnknown
+                ? __('回源内部地址（公网状态未知）')
+                : __('回源内部地址'),
+            'public' => false,
+            'source' => $publicStateUnknown ? 'backend_unproven' : 'backend',
+        ];
     }
 
     private function resolveManagedNginxPublicEndpoint(ServerInstanceInfo $info): ?string

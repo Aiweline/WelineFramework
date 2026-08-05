@@ -11,12 +11,12 @@
  */
 
 $subjects = $this->getData('subjects') ?: [];
-$title = $this->getData('title') ?: __('SEO主体列表');
+$title = $this->getData('seo_page_title') ?: __('SEO主体列表');
 $search = $this->getData('search') ?: '';
 $status = $this->getData('status');
 ?>
 <!-- 消息提示 -->
-                <div class='row'>
+                <div class='row' data-testid="seo-subject-management">
                     <div class='col-12'>
                         <template>Weline_Component::message.phtml</template>
                     </div>

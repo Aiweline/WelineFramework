@@ -6,7 +6,7 @@ namespace Weline\Theme\Test\Unit;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Theme\Controller\Router;
 
 class RouterPreviewRewriteTest extends TestCore

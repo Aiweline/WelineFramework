@@ -4,6 +4,7 @@ project(wls_gateway_native C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+option(WLS_BUILD_TEST_HELPERS "Build native gateway integration-test helpers" OFF)
 if(MSVC)
     set(
         CMAKE_MSVC_RUNTIME_LIBRARY
@@ -30,7 +31,18 @@ if(WIN32)
         WIN32_LEAN_AND_MEAN
         _WIN32_WINNT=0x0A00
     )
-    target_link_libraries(wls-gateway-broker PRIVATE advapi32 bcrypt ntdll ws2_32)
+    target_link_libraries(wls-gateway-broker PRIVATE advapi32 bcrypt ntdll shell32 ws2_32)
+
+    add_executable(wls-bounded-command windows/wls_bounded_command.c)
+    target_compile_definitions(
+        wls-bounded-command
+        PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        _WIN32_WINNT=0x0A00
+    )
+    target_link_libraries(wls-bounded-command PRIVATE advapi32 bcrypt)
 
     add_executable(wls-gateway-launcher windows/wls_gateway_launcher.c)
     target_compile_definitions(
@@ -52,6 +64,7 @@ if(WIN32)
     if(MSVC)
         target_compile_options(wls-gateway-broker PRIVATE /W4 /WX /sdl)
         target_compile_options(wls-gateway-launcher PRIVATE /W4 /WX /sdl)
+        target_compile_options(wls-bounded-command PRIVATE /W4 /WX /sdl)
     else()
         target_compile_options(
             wls-gateway-broker
@@ -69,9 +82,50 @@ if(WIN32)
             -Werror
             -fstack-protector-strong
         )
+        target_compile_options(
+            wls-bounded-command
+            PRIVATE
+            -Wall
+            -Wextra
+            -Werror
+            -fstack-protector-strong
+        )
         if(MINGW)
             target_link_options(wls-gateway-broker PRIVATE -municode -static)
             target_link_options(wls-gateway-launcher PRIVATE -municode -static)
+            target_link_options(wls-bounded-command PRIVATE -municode -static)
+        endif()
+    endif()
+    if(WLS_BUILD_TEST_HELPERS)
+        target_compile_definitions(
+            wls-gateway-broker
+            PRIVATE
+            WLS_NATIVE_TEST_HOOKS=1
+        )
+        add_executable(
+            wls-gateway-test-broker
+            windows/wls_gateway_test_broker.c
+        )
+        target_compile_definitions(
+            wls-gateway-test-broker
+            PRIVATE
+            UNICODE
+            _UNICODE
+            WIN32_LEAN_AND_MEAN
+            _WIN32_WINNT=0x0A00
+        )
+        if(MSVC)
+            target_compile_options(wls-gateway-test-broker PRIVATE /W4 /WX /sdl)
+        elseif(MINGW)
+            target_compile_options(
+                wls-gateway-test-broker
+                PRIVATE
+                -Wall
+                -Wextra
+                -Werror
+                -fstack-protector-strong
+            )
+            target_link_options(wls-gateway-test-broker PRIVATE -municode -static)
         endif()
     endif()
 else()
@@ -89,6 +143,10 @@ else()
         target_compile_definitions(wls-gateway-broker PRIVATE _GNU_SOURCE)
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         target_compile_definitions(wls-gateway-broker PRIVATE _DARWIN_C_SOURCE)
+        # proc_pidinfo/proc_pidpath are exported by libproc, not by the
+        # default C runtime link set. Keep the process-attestation dependency
+        # explicit for both CMake packages and the direct integration build.
+        target_link_libraries(wls-gateway-broker PRIVATE proc)
     endif()
 
     if(NOT DEFINED WLS_RELEASE_PUBLIC_KEY_HEX)
@@ -113,7 +171,10 @@ else()
 endif()
 
 if(WIN32)
-    install(TARGETS wls-gateway-broker wls-gateway-launcher RUNTIME DESTINATION bin)
+    install(
+        TARGETS wls-gateway-broker wls-gateway-launcher wls-bounded-command
+        RUNTIME DESTINATION bin
+    )
 else()
     install(TARGETS wls-gateway-broker wls-gateway-launcher RUNTIME DESTINATION bin)
 endif()

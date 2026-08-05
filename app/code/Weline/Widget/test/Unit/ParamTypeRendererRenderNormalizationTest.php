@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Test\Unit;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Widget\Service\ParamTypeRenderer;
 
 class ParamTypeRendererRenderNormalizationTest extends TestCore

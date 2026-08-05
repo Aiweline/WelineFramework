@@ -1,0 +1,111 @@
+﻿"B2B 接口不支持该操作：%{1}","B2B 接口不支持该操作：%{1}"
+"仅允许 POST 请求。","仅允许 POST 请求。"
+操作失败，请稍后重试。参考编号：%{1},"The operation failed. Please try again later. Reference: %{1}"
+数据暂时无法加载。参考编号：%{1},"Data is temporarily unavailable. Reference: %{1}"
+状态暂时无法读取。参考编号：%{1},"Status is temporarily unavailable. Reference: %{1}"
+"B2B 管理","B2B 管理"
+"B2B 客户组、价目表与报价审批管理","B2B 客户组、价目表与报价审批管理"
+客户组,客户组
+"查看 B2B 客户组","查看 B2B 客户组"
+价目表,价目表
+"查看 B2B 价目表","查看 B2B 价目表"
+报价令牌,报价令牌
+"查看 B2B 报价令牌","查看 B2B 报价令牌"
+订单价格快照,订单价格快照
+"查看 B2B 订单价格快照","查看 B2B 订单价格快照"
+迁移状态,迁移状态
+"只读查看 B2B 迁移状态","只读查看 B2B 迁移状态"
+创建客户组,创建客户组
+"创建 B2B 客户组","创建 B2B 客户组"
+创建价目表,创建价目表
+"创建 B2B 价目表","创建 B2B 价目表"
+审批报价,审批报价
+签发报价、重新校验并生成不可变订单价格快照,签发报价、重新校验并生成不可变订单价格快照
+"B2B price list header 数据非法","Invalid B2B price list header"
+"B2B group_id 必填且不能超过 64 字符","B2B group_id is required and must not exceed 64 characters"
+"B2B website_id 不能为负数：%{1}","B2B website_id must not be negative: %{1}"
+"B2B group code 必填且不能超过 64 字符","B2B group code is required and must not exceed 64 characters"
+"B2B group status 非法：%{1}","Invalid B2B group status: %{1}"
+"B2B group version 非法","Invalid B2B group version"
+"B2B price list item 数据非法","Invalid B2B price list item"
+"B2B quote token_id 非法","Invalid B2B quote token_id"
+"B2B quote customer_id 非法","Invalid B2B quote customer_id"
+"B2B quote SKU 非法","Invalid B2B quote SKU"
+"B2B quote Website/amount 非法","Invalid B2B quote Website or amount"
+"B2B quote source 非法","Invalid B2B quote source"
+"B2B quote group_id 非法","Invalid B2B quote group_id"
+"B2B quote price_list_id 非法","Invalid B2B quote price_list_id"
+"B2B quote channel_id 非法","Invalid B2B quote channel_id"
+"B2B quote order_ref 非法","Invalid B2B quote order_ref"
+"B2B quote version 非法","Invalid B2B quote version"
+"B2B quote fingerprint 非法","Invalid B2B quote fingerprint"
+"B2B quote 有效期非法","Invalid B2B quote validity period"
+"B2B quote status 非法：%{1}","Invalid B2B quote status: %{1}"
+"B2B quote 消费状态与 order_ref 不一致","B2B quote consumption status does not match order_ref"
+"B2B quote rule stack 非法","Invalid B2B quote rule stack"
+"B2B quote fingerprint 校验失败","B2B quote fingerprint verification failed"
+"B2B Order snapshot identity 非法","Invalid B2B order snapshot identity"
+"B2B Order snapshot 可选 identity 非法","Invalid optional B2B order snapshot identity"
+"B2B Order snapshot Website/amount/time 非法","Invalid B2B order snapshot Website, amount, or time"
+"B2B Order snapshot version 非法","Invalid B2B order snapshot version"
+"B2B Order snapshot hash 非法","Invalid B2B order snapshot hash"
+"B2B Order snapshot rule stack 非法","Invalid B2B order snapshot rule stack"
+"B2B Order snapshot hash 校验失败","B2B order snapshot hash verification failed"
+"B2B price list_id 必填且不能超过 64 字符","B2B price list_id is required and must not exceed 64 characters"
+"B2B price list group_id 非法","Invalid B2B price list group_id"
+"B2B price list website_id 不能为负数：%{1}","B2B price list website_id must not be negative: %{1}"
+"B2B price list version 必须大于 0","B2B price list version must be greater than 0"
+"B2B price list channel_id 非法","Invalid B2B price list channel_id"
+"B2B price list 至少包含一个 SKU","B2B price list must contain at least one SKU"
+"B2B price list SKU 非法","Invalid B2B price list SKU"
+"B2B price list amount_minor 非法：%{1}","Invalid B2B price list amount_minor: %{1}"
+"B2B membership 数据非法","Invalid B2B membership data"
+是,是
+否,否
+只读诊断,只读诊断
+可管理,可管理
+"此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。","此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。"
+"写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。","写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。"
+签发并审批报价,签发并审批报价
+新增配置,新增配置
+"客户组 ID","客户组 ID"
+"网站 ID","网站 ID"
+代码,代码
+状态,状态
+"价目表 ID","价目表 ID"
+版本,版本
+SKU,SKU
+金额（分）,金额（分）
+"渠道 ID（可选）","渠道 ID（可选）"
+"客户 ID","客户 ID"
+零售价（分）,零售价（分）
+订单引用,订单引用
+保存,保存
+当前没有记录。,当前没有记录。
+"B2B group identity 不可变：%{1}","B2B group identity is immutable: %{1}"
+"B2B customer_id 必填且不能超过 64 字符","B2B customer_id is required and must not exceed 64 characters"
+"B2B group 不存在：%{1}","B2B group does not exist: %{1}"
+"同一 Website 的 B2B group code 已占用：%{1}","B2B group code is already in use within the same Website: %{1}"
+"B2B Order snapshot 不可覆盖：%{1}","B2B order snapshot cannot be overwritten: %{1}"
+"B2B quote TTL 非法","Invalid B2B quote TTL"
+"B2B 浏览器测试夹具未启用","B2B browser test fixture is not enabled"
+"B2B price list 与 group Website 不一致","B2B price list Website does not match the group Website"
+"B2B candidate 请求缺少合法 Website/SKU/amount","B2B candidate request is missing a valid Website, SKU, or amount"
+"B2B quote token 不可覆盖：%{1}","B2B quote token cannot be overwritten: %{1}"
+"B2B price list revision 不可覆盖：%{1}@%{2}","B2B price list revision cannot be overwritten: %{1}@%{2}"
+打印帮助,"Print help"
+"在 full clone 只读清点 group/membership/list/quote/snapshot","Read-only inventory of groups, memberships, lists, quotes, and snapshots in a full clone"
+"写前 checkpoint，验证 version mapping 并保持 shadow","Create a pre-write checkpoint, verify version mapping, and remain in shadow mode"
+"新进程重载 checkpoint，重算事实与 shadow report","Reload the checkpoint in a fresh process and recompute facts and the shadow report"
+"fresh verify 后仅放量 checkpoint 冻结的 Website Checkout","Allowlist Checkout only for the Website frozen by the checkpoint after fresh verification"
+"按 checkpoint mode off，保留 quote/order snapshot 与零售路径","Switch to mode off by checkpoint while retaining quote/order snapshots and the retail path"
+"migration registry 已登记的 full mig_clone_*","A full mig_clone_* registered in the migration registry"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify, allowlist, and rollback)"
+"目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
+显示本帮助,"Show this help"
+"""B2B 接口不支持该操作：%{1}""","Unsupported B2B operation: %{1}"
+"MIG-P4C：B2B 版本映射与 Checkout allowlist（仅登记的 full clone）","MIG-P4C: B2B version mapping and Checkout allowlist (registered full clones only)"
+"MIG-P4C：B2B shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4C: move B2B from shadow to allowlist (apply requires --database=mig_clone_*)"
+"B2B price candidate","B2B price candidate"
+"Customer group","Customer group"
+"Price list","Price list"

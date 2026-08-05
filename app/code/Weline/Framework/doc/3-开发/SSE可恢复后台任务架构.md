@@ -60,6 +60,19 @@ starting -> running -> completed | failed
 - `completed`、`failed`、`cancelled`、`expired`、结果、错误和不可重建业务事件不得压缩；终态事件只持久化一次。
 - progress、log、token、chunk 事件可在 80% 配额后以 checkpoint 快照为锚点压缩。若不可压缩事件触及硬上限，任务进入 `event_backlog_limit`，不静默丢失数据。
 
+### Worker ticket、身份与截止时间
+
+- stream ticket 是一次性 bearer secret，签发后 60 秒失效；如果其 Scope Token 或后台 binding 更早到期，则取更早时间。
+- 多节点生产的 ticket 必须由 `database` Worker credential store 逐记录原子消费；未过期 tombstone 继续占用容量，stream ticket 密文窗口总量限制为 8 MiB。Redis snapshot-CAS、SQLite 与 local 文件均不能作为多节点生产一次消费证明。
+- Worker nonce 使用 16 个确定性容量分片，固定锁序为 `nonce shard guard → Session → nonce`；每分片最多保留 32,768 个未过期 retained 行、全局未过期窗口最多 524,288，并叠加每 Session 4,096 行限制。每次 nonce 写入在 shard guard 内先跨 Session 清理至多 256 个同分片过期行；清理速率高于单次最多一行的写入速率，使历史 backlog 在后续流量中有界收敛，同时避免单一全局热锁。
+- ticket 只保存服务端构造的 execution area、Scope binding、owner/principal 和已校验参数。页面不得传入或覆盖 area、owner、ACL、website、Session ID 或 binding。
+- Gateway 必须在 `SseWriter::start()` 前完成 descriptor、参数、权限、owner 与 Scope 的全部预检。拒绝时不得先打开 SSE，也不得产生部分 provider 执行。
+- Scope 在 provider 启动前以及每次 yield/heartbeat 前检查到期。流式 provider 必须有界地产生事件或 heartbeat；框架不能硬中断一个长期阻塞且从不 yield 的第三方 provider，因此不得承诺对这类错误实现提供绝对实时的硬截止。
+- `auth=backend` 的普通 QueryProvider stream 当前仍 fail-closed，返回 `backend_stream_disabled`。`runtime_task` 是明确例外：后台页面带着有效 backend binding 时，可签发并消费 `runtime_task.events` ticket（ticket 保留 backend execution context，不降级成 frontend）；授权仍走 type `areas` + 精确 `backend_acl`，以及 task owner/lease。前台 ticket 绝不能因请求同时携带后台 PHP Session Cookie 而升级为后台 owner。
+- 旧 ticket 若缺少 execution area，按 `frontend` 处理，绝不自动升级为后台。
+- 每个浏览器可启动的 `type_code` 必须在 `etc/resumable_tasks.php` 显式声明 `areas`。包含 `backend` 时还必须声明已收集的精确 `backend_acl` source；缺失、未知 area、未知配置字段或非法 source 会让注册失败。
+- `start` 在 handler 实例化和 `prepareStart()` 前授权。`status` 使用持久任务冻结的 `type_code` 重新授权；`touch` / `cancel` 必须先完成同样的 status + owner + type ACL 检查，再产生续租或取消副作用。同一角色的权限被撤销后，旧 Worker Session 也不能继续操作任务。
+
 ## 保留与定期清理
 
 - 活动任务不会按时间删除；其事件负载受单任务 50,000 条 / 50 MiB 硬上限和压缩规则保护。
@@ -102,9 +115,9 @@ stream.close();
 await stream.cancel('user_requested');
 ```
 
-`createStream()` lets the page register listeners before the first durable replay. The handle persists its task/lease/cursor state in `sessionStorage`, renews only its own lease, reconnects with a fresh ticket and exponential backoff, and never turns browser `offline` or a transport error into cancellation.
+`createStream()` lets the page register listeners before the first durable replay. The handle persists its task/lease/cursor state in `sessionStorage`, renews only its own lease, and reconnects with a fresh ticket. Clean `runtime_rotate` (default ~240s subscription window) is an immediate silent ticket refresh — it must not emit browser `error` or paint business “断流” UI. Only real transport loss uses exponential backoff. Backend page attestations slide while the PHP backend Session remains valid, so long-running runtime actions do not require a full page reload just to keep the SSE observer alive. Never turn browser `offline` or a transport error into task cancellation.
 
-The runtime SSE controller is registered from `Weline_Api/Api/Framework/Stream.php`, not `Controller/`. This is required so route generation places `/api/framework/stream` and its prefix-stripped `framework/stream` lookup alias in the frontend REST router; run `php bin/w setup:upgrade --route` after changing that registration. The two exact paths are browser-transport exceptions to API-token/ACL preflight only: the controller still requires same-origin plus a single-use, worker-session-bound ticket and, for runtime tasks, an owner/area/lease/cursor binding.
+The runtime SSE controller is registered from `Weline_Api/Api/Framework/Stream.php`, not `Controller/`. This is required so route generation places `/api/framework/stream` and its prefix-stripped `framework/stream` lookup alias in the frontend REST router; run `php bin/w setup:upgrade --route` after changing that registration. The two exact paths are browser-transport exceptions to API-token/ACL preflight only: the controller still requires same-origin plus a single-use, worker-session-bound ticket and, for runtime tasks, an owner/area/lease/cursor binding. Same-origin 只是传输条件，不等同于后台授权；后台权威仍须由服务端页面证明和当前 Session 共同恢复。
 
 ## Migration rule
 

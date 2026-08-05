@@ -37,4 +37,39 @@ final class HeaderLanguageSwitcherTemplateTest extends TestCase
         self::assertStringNotContainsString('$i18n->getCountryFlag($countryCode', $content);
         self::assertStringContainsString('<span class="weline-choice-flag-fallback"><?= $escape($lang[\'short\'] ?? \'\') ?></span>', $content);
     }
+
+    public function testLanguageSwitcherFiltersByWebsiteAndAllowsCustomLocales(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-language-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('getWebsiteLanguageCodes', $content);
+        self::assertStringContainsString("'allowed_locales'", $content);
+        self::assertStringContainsString('RequestContext::getWelineWebsiteId()', $content);
+        self::assertStringContainsString('$filterLanguagesByCodes', $content);
+    }
+
+    public function testLanguageSwitcherEmitsFrameworkPathHrefsNotQueryParams(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-language-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('LocalizedUrlBuilderInterface', $content);
+        self::assertStringContainsString('$buildLanguageHref', $content);
+        self::assertStringContainsString('href="<?= $escape($langHref) ?>"', $content);
+        self::assertStringContainsString('data-pb-i18n-path-href="2"', $content);
+        self::assertStringNotContainsString('<a href="#"', $content);
+    }
+
+    public function testLanguageSwitcherChromeLabelsBypassExclusivePhraseViaWidgetI18n(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-language-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('WidgetI18n::label', $content);
+        self::assertStringContainsString("\$i18nChrome('语言')", $content);
+        self::assertStringContainsString("\$i18nChrome('切换语言')", $content);
+        self::assertStringNotContainsString("__('语言')", $content);
+        self::assertStringNotContainsString("__('切换语言')", $content);
+    }
 }

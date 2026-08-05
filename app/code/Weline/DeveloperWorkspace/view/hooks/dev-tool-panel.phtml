@@ -3078,7 +3078,7 @@ $panelType = $panelType ?? 'frontend';
                     </div>
                 </div>
             </div>
-            
+
             <!-- 文档搜索 (docs tab) -->
             <div id="doc-search-area">
                 <div class="dev-tool-search-mode">
@@ -3094,7 +3094,7 @@ $panelType = $panelType ?? 'frontend';
                 </select>
                 <input type="text" id="doc-search-input" placeholder="搜索文档标题或内容..." data-dev-tool-keyup-action="search-docs">
             </div>
-            
+
             <!-- 性能统计区域 (performance tab) -->
             <div id="performance-search-area" style="display: none;">
                 <div style="padding: 8px; font-size: 12px; color: #666;">
@@ -3102,7 +3102,59 @@ $panelType = $panelType ?? 'frontend';
                 </div>
             </div>
             <!-- 扩展注册 API：必须在扩展脚本（如 WLS）之前执行，避免扩展因脚本顺序无法就绪 -->
-            <script>
+
+<script>
+(function(g){
+  // Prefer the provider-backed bridge installed by dev-tool-panel-loader.js.
+  if(g.__bqAdmin_developer_workspace_rest) return;
+  g.__bqAdmin_developer_workspace=true;
+  g.__bqAdmin_developer_workspace_rest=true;
+  g.bqAdmin=g.bqAdmin||{};
+  g.bqAdmin['developer_workspace']=function(url, options){
+    options=options||{};
+    var urlStr=String(url||'');
+    var body=options.body;
+    if(body && typeof FormData!=='undefined' && body instanceof FormData){
+      var p=new URLSearchParams(); body.forEach(function(v,k){ if(!(typeof File!=='undefined'&&v instanceof File)) p.append(k,String(v)); }); body=p.toString();
+    } else if(body && typeof body!=='string'){ try{ body=JSON.stringify(body); }catch(e){ body=''; } }
+    var run=function(api){
+      var resource=api.resource('developer_workspace');
+      var payload={url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''};
+      var callOptions={keepBusinessResult:true,silent:true};
+      return /\/dev\/tool\/rest\//i.test(urlStr)
+        ?resource.panelRequest(payload,callOptions)
+        :resource.adminRequest(payload,callOptions);
+    };
+    var toResp=function(data){
+      if(data&&data.__weline_panel_response===true){
+        var responseBody=String(data.body==null?'':data.body);
+        var responseHeaders={'content-type':String(data.content_type||'')};
+        return {
+          ok:data.success!==false,
+          status:Number(data.status||0),
+          headers:{forEach:function(callback){Object.keys(responseHeaders).forEach(function(key){callback(responseHeaders[key],key);});}},
+          json:function(){try{return Promise.resolve(JSON.parse(responseBody||'{}'));}catch(error){return Promise.reject(error);}},
+          text:function(){return Promise.resolve(responseBody);}
+        };
+      }
+      var _biz=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);
+      if(_biz&&typeof _biz.wrapAdminBridgeResult==='function'){
+        return _biz.wrapAdminBridgeResult(data);
+      }
+      var body=(data&&typeof data==='object'&&!Array.isArray(data))?data:{success:true,data:data};
+      var ok=!(body&&body.success===false);
+      var resp={ok:ok,status:ok?200:400,json:function(){return Promise.resolve(body);},text:function(){return Promise.resolve(typeof body==='string'?body:JSON.stringify(body==null?{}:body));}};
+      Object.keys(body).forEach(function(k){ if(k==='ok'||k==='json'||k==='text'||k==='status') return; resp[k]=body[k]; });
+      return resp;
+    };
+    if(!(g.Weline&&typeof g.Weline.load==='function')){
+      return Promise.reject(new Error('Weline API runtime is unavailable.'));
+    }
+    return g.Weline.load('api').then(run).then(toResp);
+  };
+})(window);
+</script>
+<script>
             window.DevToolPanelExtensionLoaders = window.DevToolPanelExtensionLoaders || {};
             window.DevToolPanelRegisterExtensionTab = function(tabId, loadContentFn) {
                 if (typeof tabId !== 'string' || typeof loadContentFn !== 'function') return;
@@ -4316,7 +4368,7 @@ const DevToolPanel = (function() {
             content.innerHTML = '<div class="dev-tool-empty">无法构建 API 地址（请从后台打开本页）</div>';
             return Promise.resolve();
         }
-        return fetch(url)
+        return bqAdmin['developer_workspace'](url)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -4492,34 +4544,42 @@ const DevToolPanel = (function() {
     }
 
     function devToolFetchJson(url) {
-        if (typeof window.fetch !== 'function') {
-            return Promise.reject(new Error('当前浏览器不支持 fetch，无法请求开发面板 API。'));
+        var call = (window.bqAdmin && window.bqAdmin['developer_workspace'])
+            ? window.bqAdmin['developer_workspace']
+            : null;
+        if (!call) {
+            return Promise.reject(new Error('开发面板 bin-query 桥接不可用。'));
         }
-
-        return window.fetch(url, {
+        return call(url, {
             method: 'GET',
-            credentials: 'same-origin',
-            cache: 'no-store',
             headers: {
                 'Accept': 'application/json',
                 'X-Weline-Dev-Tool': '1'
             }
-        }).then(function(response) {
-            return response.text().then(function(text) {
-                let data = null;
-                if (text) {
-                    try {
-                        data = JSON.parse(text);
-                    } catch (error) {
-                        throw new Error('API 返回了非 JSON 响应（HTTP ' + response.status + '）。');
+        }).then(function(data) {
+            // The QueryProvider bridge returns a fetch-compatible Response-like object.
+            // Detect the response contract by capability because it intentionally is
+            // not a browser-native Response instance.
+            if (data && typeof data.text === 'function' && typeof data.ok === 'boolean') {
+                return data.text().then(function(text) {
+                    var payload = {};
+                    if (text) {
+                        try {
+                            payload = JSON.parse(text);
+                        } catch (error) {
+                            throw new Error('文档 API 返回内容不是 JSON');
+                        }
                     }
-                }
-                if (!response.ok) {
-                    const message = data && data.msg ? data.msg : ('HTTP ' + response.status);
-                    throw new Error(message);
-                }
-                return data;
-            });
+                    if (!data.ok || (payload && payload.success === false)) {
+                        throw new Error((payload && (payload.msg || payload.message)) || ('HTTP ' + data.status));
+                    }
+                    return payload;
+                });
+            }
+            if (data && data.success === false) {
+                throw new Error(data.msg || data.message || '请求失败');
+            }
+            return data;
         });
     }
 
@@ -4857,66 +4917,7 @@ const DevToolPanel = (function() {
 
     // ========== 性能统计功能 ==========
     function initPerformanceMonitoring() {
-        // 拦截fetch请求，记录API耗时
-        const originalFetch = window.fetch;
-        window.fetch = function(...args) {
-            const startTime = performance.now();
-            const url = args[0] || '';
-            
-            return originalFetch.apply(this, args)
-                .then(response => {
-                    const endTime = performance.now();
-                    const duration = endTime - startTime;
-                    
-                    // 记录API请求（只记录开发工具面板的API请求）
-                    if (typeof url === 'string' && url.includes('/dev/tool/')) {
-                        state.apiRequests.push({
-                            url: url,
-                            method: 'GET',
-                            duration: duration,
-                            timestamp: Date.now(),
-                            status: response.status
-                        });
-                        
-                        // 只保留最近50条记录
-                        if (state.apiRequests.length > 50) {
-                            state.apiRequests.shift();
-                        }
-                        
-                        // 如果当前在性能标签页，更新显示
-                        if (state.activeMainTab === 'performance') {
-                            renderPerformanceStats();
-                        }
-                    }
-                    
-                    return response;
-                })
-                .catch(error => {
-                    const endTime = performance.now();
-                    const duration = endTime - startTime;
-                    
-                    if (typeof url === 'string' && url.includes('/dev/tool/')) {
-                        state.apiRequests.push({
-                            url: url,
-                            method: 'GET',
-                            duration: duration,
-                            timestamp: Date.now(),
-                            status: 'error',
-                            error: error.message
-                        });
-                        
-                        if (state.apiRequests.length > 50) {
-                            state.apiRequests.shift();
-                        }
-                        
-                        if (state.activeMainTab === 'performance') {
-                            renderPerformanceStats();
-                        }
-                    }
-                    
-                    throw error;
-                });
-        };
+        // bin-query 迁移后不再劫持 window.fetch。
     }
 
     function getPerformanceTiming() {
@@ -5349,7 +5350,7 @@ const DevToolPanel = (function() {
             });
         }
 
-        return fetch(url.href, {
+        return bqAdmin['developer_workspace'](url.href, {
             method: 'HEAD',
             credentials: 'same-origin'
         }).then(function(response) {
@@ -5483,7 +5484,7 @@ const DevToolPanel = (function() {
             return;
         }
 
-        fetch(url)
+        bqAdmin['developer_workspace'](url)
             .then(function(response) {
                 if (!response.ok) {
                     throw new Error(response.status === 404 ? '请求链路不存在或已过期，请刷新页面重试' : ('HTTP ' + response.status));
@@ -6124,7 +6125,7 @@ const DevToolPanel = (function() {
                     resultEl.style.display = 'block';
                     resultEl.innerHTML = '<span style="color:#888;">执行中…</span>';
                     target.disabled = true;
-                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
+                    bqAdmin['developer_workspace'](url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
                             target.disabled = false;

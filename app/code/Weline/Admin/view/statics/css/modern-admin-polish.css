@@ -55,15 +55,37 @@ body {
 }
 
 .page-title-box {
-    margin-bottom: 20px;
-    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px 20px;
     border: 1px solid var(--weline-admin-line);
     border-radius: 8px;
     background: var(--weline-admin-surface);
     box-shadow: 0 1px 0 rgba(20, 33, 61, 0.03);
 }
 
-.page-title-box h4,
+.page-title-box h4 {
+    margin: 0;
+    line-height: 1.35;
+    color: var(--weline-admin-ink);
+    letter-spacing: 0;
+}
+
+.page-title-box .page-title-right {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.page-title-box .breadcrumb {
+    margin: 0;
+    padding: 0;
+    line-height: 1.35;
+}
+
 .card-title,
 .card h1,
 .card h2,
@@ -423,7 +445,7 @@ button:focus-visible {
 
 @media (max-width: 768px) {
     .page-title-box {
-        padding: 14px;
+        padding: 12px 14px;
     }
 
     .card-body {

@@ -67,6 +67,37 @@ interface IpcControlGatewayInterface
     public function reloadSslCert(string $instanceName = 'default', array $domains = []): array;
 
     /**
+     * Reload one exact immutable serving manifest and wait for the terminal
+     * per-process acknowledgement aggregate.
+     *
+     * @param string[] $domains
+     * @return array{success:bool,message:string,data:array}
+     */
+    public function reloadSslCertAndWait(
+        array $domains,
+        string $instanceName,
+        string $operationId,
+        int $expectedManifestGeneration,
+        string $expectedManifestDigest,
+        int $expectedTlsRouteCount,
+        float $timeout = 8.0,
+    ): array;
+
+    /**
+     * Fail-stop every TLS/H3 participant owned by the exact persisted Master
+     * fence. This containment path deliberately does not depend on a newly
+     * published serving manifest.
+     *
+     * @return array{success:bool,message:string,data:array}
+     */
+    public function quarantineSslServingAndWait(
+        string $instanceName,
+        string $operationId,
+        string $reason,
+        float $timeoutSeconds = 8.0,
+    ): array;
+
+    /**
      * @param array<int, array<string, mixed>> $routes
      * @return array{success:bool,message:string,data:array}
      */

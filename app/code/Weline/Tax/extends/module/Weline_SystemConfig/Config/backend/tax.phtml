@@ -1,0 +1,56 @@
+<?php
+/**
+ * @meta.title {default="税务配置",description="Weline_Tax 模块配置中心标题"}
+ * @meta.description {default="配置 Scope 税务引擎开关、默认管辖区与 schema 版本。"}
+ * @config.area {backend}
+ * @config.sort {55}
+ * @config.acl {Weline_SystemConfig::config}
+ */
+?>
+
+<w:config:group code="tax_runtime" label="税务运行规则" description="由 Weline_Tax 提供；保存与 scope 继承由 SystemConfig 负责。" sort="10">
+    <w:config:field
+        key="tax/general/enabled"
+        label="启用税务引擎"
+        description="关闭时保持 checkout stub；开启后由服务端 TaxEngine 算税（P3B-002 接入）。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="tax/general/default_jurisdiction"
+        label="默认管辖区"
+        description="格式 country|region，例如 CN| 或 US|CA。"
+        type="text"
+        value-type="string"
+        default="CN|"
+        scope="global,website,store"
+        validation="required|max:64" />
+
+    <w:config:field
+        key="tax/general/rule_schema_version"
+        label="规则 Schema 版本"
+        description="必须与引擎 TaxEngine::SCHEMA_VERSION 一致；跨版本 LKG 不可读。"
+        type="text"
+        value-type="string"
+        default="tax-schema-v1"
+        scope="global,website,store"
+        validation="required|max:64" />
+
+    <w:config:field
+        key="tax/general/rounding"
+        label="舍入模式"
+        description="开卡冻结：half_up（单项舍入误差 ≤1 minor）。"
+        type="select"
+        value-type="string"
+        default="half_up"
+        scope="global,website,store"
+        options="half_up:四舍五入（Half Up）"
+        validation="required|in_options" />
+</w:config:group>
+
+<w:config:hint
+    code="tax_freeze"
+    label="开卡冻结"
+    description="管辖区键=country|region；舍入=half_up 按行再汇总；失败禁止回零税；仅同 schema+rule_set_hash 的已验证 LKG 可读。" />

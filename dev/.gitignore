@@ -14,6 +14,17 @@
 !ai/
 !ai/**
 
+# 任务目录只保留目录占位文件，其他内容不纳入版本控制
+ai/tasks/*
+!ai/tasks/.gitkeep
+
+# 本地临时、备份与 Python 缓存
+ai/codex/tmp/
+ai/code_backup/
+ai/archive/**/*.log
+**/__pycache__/
+*.py[cod]
+
 # 保留部署 webhook 脚本与示例配置
 !deploy/
 !deploy/**
@@ -23,6 +34,7 @@
 
 # 保留分项口令脚本
 !tools/
+!tools/wls-gateway-package.php
 !tools/fenxiang/
 !tools/fenxiang/**
 

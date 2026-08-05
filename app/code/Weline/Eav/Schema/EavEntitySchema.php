@@ -44,12 +44,12 @@ class EavEntitySchema extends AbstractSchema
     {
         return [
             self::FIELD_ID => $this->primaryKey('实体ID'),
-            self::FIELD_CODE => $this->varchar('实体代码', 255, 'unique not null'),
+            self::FIELD_CODE => $this->varchar('实体代码', 255, 'not null'),
             self::FIELD_NAME => $this->varchar('实体名', 255, 'not null'),
             self::FIELD_CLASS => $this->varchar('实体类', 255, 'not null'),
             self::FIELD_ID_FIELD_TYPE => $this->varchar('实体ID字段类型', 60, 'not null'),
             self::FIELD_ID_FIELD_LENGTH => $this->smallint('实体ID字段长度', 5, 'not null'),
-            self::FIELD_IS_SYSTEM => $this->boolean('是否系统生成', false),
+            self::FIELD_IS_SYSTEM => $this->boolean('是否系统', false),
         ];
     }
 

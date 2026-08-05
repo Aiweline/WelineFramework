@@ -12,10 +12,14 @@ use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectEndpointReader;
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicOrigin;
 use Weline\Server\Service\Edge\PureWlsPublicOrigin;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\RuntimeSelection;
+use Weline\Server\Service\Runtime\VerifiedPersistentFileLock;
+use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 
 /**
  * 服务器实例管理器（单一职责）
@@ -31,6 +35,15 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
  */
 class ServerInstanceManager
 {
+    private const MAX_ATOMIC_JSON_BYTES = 16 * 1024 * 1024;
+
+    private readonly MasterLeaseManager $masterLeaseManager;
+
+    public function __construct(?MasterLeaseManager $masterLeaseManager = null)
+    {
+        $this->masterLeaseManager = $masterLeaseManager ?? new MasterLeaseManager();
+    }
+
     /** 实例信息存储相对路径（相对 VAR_DIR） */
     public const INSTANCE_SUBDIR = 'server' . \DIRECTORY_SEPARATOR . 'instances' . \DIRECTORY_SEPARATOR;
 
@@ -378,11 +391,6 @@ class ServerInstanceManager
             @\unlink($pidFile);
         }
 
-        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
-        if (\is_file($lockFile)) {
-            @\unlink($lockFile);
-        }
-
         $exceptionFile = MasterProcess::getServiceExceptionFile($name);
         if (\is_file($exceptionFile)) {
             @\unlink($exceptionFile);
@@ -482,7 +490,9 @@ class ServerInstanceManager
             'dispatcher_memory_limit', 'session_server_port', 'session_server_token_file_name',
             'memory_server_port', 'memory_server_token_file_name', 'shared_state', 'gateway',
             'orchestrator_runtime_options', 'http_redirect_port', 'started_by', 'started_at',
-            'started_timestamp', 'php_version', 'os', 'window_mode', 'enable_log',
+            'started_timestamp', 'started_monotonic', 'startup_host_boot_id',
+            'startup_process_birth', 'startup_pid_namespace_id',
+            'php_version', 'os', 'window_mode', 'enable_log',
             'runtime_state', 'last_verified_at', 'startup_phase', 'lifecycle_state',
             'stopped_reason', 'stopped_at', 'stopped_timestamp', 'server_ready_at',
             'server_ready_service_count', 'startup_event_seq', 'startup_events',
@@ -828,24 +838,23 @@ class ServerInstanceManager
             return true;
         }
 
-        $lease = (new MasterLeaseManager())->readProtected(MasterLeaseManager::pathForInstance($name));
-        if (!\is_array($lease)
-            || (string)($lease['instance'] ?? '') !== $name
-            || (string)($lease['state'] ?? '') !== MasterLeaseManager::STATE_RUNNING
-        ) {
+        $validation = $this->masterLeaseManager->validateRunningLease(
+            MasterLeaseManager::pathForInstance($name),
+            expectedInstance: $name,
+            requireManagedName: true,
+        );
+        $lease = $validation['lease'] ?? null;
+        if (($validation['veto'] ?? false) !== true || !\is_array($lease)) {
             return false;
         }
 
         $leasePid = (int)($lease['master_pid'] ?? 0);
         $leaseEpoch = (int)($lease['master_epoch'] ?? 0);
-        $recordEpoch = (int)($rawData['master_epoch'] ?? $rawData['epoch'] ?? 0);
-        $updatedAt = (float)($lease['updated_at'] ?? 0.0);
+        $recordEpoch = (int)($rawData['master_epoch'] ?? 0);
         if ($leasePid <= 0
             || $leasePid === $masterPid
             || $leaseEpoch <= 0
             || ($recordEpoch > 0 && $leaseEpoch < $recordEpoch)
-            || $updatedAt <= 0.0
-            || (\microtime(true) - $updatedAt) > MasterLeaseManager::HEARTBEAT_STALE_SEC
         ) {
             return false;
         }
@@ -863,16 +872,15 @@ class ServerInstanceManager
      */
     public function getRawInstanceData(string $name): ?array
     {
-        $file = $this->getInstanceFile($name);
-        if (!\is_file($file)) {
+        try {
+            // The reader calls only getInstanceDir()/getInstanceFile() on this
+            // manager, so this replacement cannot recurse through getRawInstanceData().
+            return (new GatewayProjectEndpointReader($this))->read($name);
+        } catch (\InvalidArgumentException) {
+            // Invalid user input is not an endpoint identity. Unsafe/torn
+            // persisted state remains an observable fail-closed exception.
             return null;
         }
-        $content = @\file_get_contents($file);
-        if ($content === false) {
-            return null;
-        }
-        $data = \json_decode($content, true);
-        return \is_array($data) ? $data : null;
     }
 
     /**
@@ -890,17 +898,10 @@ class ServerInstanceManager
      */
     private function listRawInstanceNames(): array
     {
-        $dir = $this->getInstanceDir();
-        if (!\is_dir($dir)) {
-            return [];
-        }
-
-        $files = \glob($dir . '*.json');
-        if ($files === false) {
-            return [];
-        }
-
-        return \array_map(static fn(string $path): string => \basename($path, '.json'), $files);
+        // Complete discovery is fixed at 256 raw entries/2 MiB per endpoint
+        // by GatewayProjectEndpointReader. Overflow, links, special files,
+        // malformed JSON, or a changing generation fail closed.
+        return \array_keys((new GatewayProjectEndpointReader($this))->all());
     }
 
     /**
@@ -983,35 +984,23 @@ class ServerInstanceManager
      */
     private function readLiveMasterLease(string $name, array $rawData): ?array
     {
-        $lease = (new MasterLeaseManager())->readProtected(MasterLeaseManager::pathForInstance($name));
-        if (!\is_array($lease)
-            || (string)($lease['instance'] ?? '') !== $name
-            || (string)($lease['state'] ?? '') !== MasterLeaseManager::STATE_RUNNING) {
-            return null;
-        }
-
-        $updatedAt = (float)($lease['updated_at'] ?? 0.0);
-        if ($updatedAt <= 0.0 || (\microtime(true) - $updatedAt) > MasterLeaseManager::HEARTBEAT_STALE_SEC) {
+        $validation = $this->masterLeaseManager->validateRunningLease(
+            MasterLeaseManager::pathForInstance($name),
+            expectedInstance: $name,
+            requireManagedName: true,
+        );
+        $lease = $validation['lease'] ?? null;
+        if (($validation['authorized'] ?? false) !== true || !\is_array($lease)) {
             return null;
         }
 
         $masterPid = (int)($lease['master_pid'] ?? 0);
         $leaseEpoch = (int)($lease['master_epoch'] ?? 0);
-        $recordEpoch = (int)($rawData['master_epoch'] ?? $rawData['epoch'] ?? 0);
+        $recordEpoch = (int)($rawData['master_epoch'] ?? 0);
         if ($masterPid <= 0
             || $leaseEpoch <= 0
             || ($recordEpoch > 0 && $leaseEpoch < $recordEpoch)
         ) {
-            return null;
-        }
-
-        $processName = MasterProcess::getMasterProcessName($name);
-        if (!Processer::isManagedProcessRunning(
-            $masterPid,
-            $processName,
-            '',
-            '--name=' . $processName
-        )) {
             return null;
         }
 
@@ -1231,18 +1220,29 @@ class ServerInstanceManager
         ?int $expectedExitedMasterPid = null,
         ?int $expectedExitTimestamp = null
     ): bool {
+        $lifecycleLock = new ServerLifecycleOperationLock();
+        if (!$lifecycleLock->acquire($name, 'stale-cleanup', 0.05)) {
+            return false;
+        }
         $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
         if (!\is_dir($lockDir) && !@\mkdir($lockDir, 0755, true) && !\is_dir($lockDir)) {
+            $lifecycleLock->release();
             return false;
         }
 
         $lockFile = $lockDir . 'start_' . $name . '.lock';
-        $lockHandle = @\fopen($lockFile, 'c');
-        if ($lockHandle === false) {
-            return false;
-        }
-        if (!@\flock($lockHandle, \LOCK_EX | \LOCK_NB)) {
-            @\fclose($lockHandle);
+        $lockHandle = VerifiedPersistentFileLock::acquire(
+            $lockFile,
+            0.05,
+            static fn(): array => [
+                'pid' => \getmypid(),
+                'instance' => $name,
+                'purpose' => 'stale_instance_cleanup',
+                'started_at' => \date('Y-m-d H:i:s'),
+            ],
+        );
+        if (!\is_resource($lockHandle)) {
+            $lifecycleLock->release();
             return false;
         }
 
@@ -1290,6 +1290,7 @@ class ServerInstanceManager
         } finally {
             @\flock($lockHandle, \LOCK_UN);
             @\fclose($lockHandle);
+            $lifecycleLock->release();
         }
     }
 
@@ -1299,22 +1300,9 @@ class ServerInstanceManager
     private function isStartLockHeld(string $name): bool
     {
         $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
-        if (!\is_file($lockFile)) {
-            return false;
-        }
-
-        $fp = @\fopen($lockFile, 'c');
-        if ($fp === false) {
-            return false;
-        }
-
-        $locked = @\flock($fp, \LOCK_EX | \LOCK_NB);
-        if ($locked) {
-            @\flock($fp, \LOCK_UN);
-        }
-
-        @\fclose($fp);
-        return !$locked;
+        // Unsafe/indeterminate lock state is a cleanup veto, never evidence
+        // that no launcher owns the instance.
+        return VerifiedPersistentFileLock::isHeld($lockFile) !== false;
     }
 
     /**
@@ -2158,67 +2146,32 @@ class ServerInstanceManager
     public static function atomicWriteJsonStatic(string $file, array $data, int $timeout = 5): bool
     {
         $dir = \dirname($file);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-
-        $json = \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        if ($json === false) {
+        if ($timeout <= 0
+            || (!\is_dir($dir) && !@\mkdir($dir, 0755, true) && !\is_dir($dir))
+        ) {
             return false;
         }
-
-        self::cleanupStaleTempFiles($file);
-
-        $lockFile = $file . '.lock';
-        $fp = @\fopen($lockFile, 'c');
-        if ($fp === false) {
-            return false;
-        }
-
-        $locked = false;
-        $startTime = \time();
-
-        while (\time() - $startTime < $timeout) {
-            if (\flock($fp, LOCK_EX | LOCK_NB)) {
-                $locked = true;
-                break;
-            }
-            SchedulerSystem::usleep(10000);
-        }
-
-        if (!$locked) {
-            @\fclose($fp);
-            return false;
-        }
-
         try {
-            $tempFile = $file . '.tmp.' . \getmypid();
-            if (@\file_put_contents($tempFile, $json) === false) {
+            $json = \json_encode(
+                $data,
+                JSON_PRETTY_PRINT
+                    | JSON_UNESCAPED_UNICODE
+                    | JSON_UNESCAPED_SLASHES
+                    | JSON_THROW_ON_ERROR,
+            );
+            if (\strlen($json) > self::MAX_ATOMIC_JSON_BYTES) {
                 return false;
             }
-
-            // PHP 8.4 can atomically replace an existing file on Windows.
-            // Never unlink the committed JSON first: a transient Defender or
-            // filesystem rename failure must leave the previous generation
-            // readable instead of deleting the instance authority entirely.
-            $renameAttempts = PHP_OS_FAMILY === 'Windows' ? 5 : 1;
-            $success = false;
-            for ($attempt = 0; $attempt < $renameAttempts; $attempt++) {
-                $success = @\rename($tempFile, $file);
-                if ($success) {
-                    break;
-                }
-                if ($attempt + 1 < $renameAttempts) {
-                    SchedulerSystem::usleep(10_000);
-                }
-            }
-            if (!$success) {
-                @\unlink($tempFile);
-            }
-            return $success;
-        } finally {
-            \flock($fp, LOCK_UN);
-            @\fclose($fp);
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $file . '.lock',
+                static function () use ($file, $json): bool {
+                    GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+                    return true;
+                },
+                waitTimeoutSeconds: \min(300.0, (float)$timeout),
+            );
+        } catch (\Throwable) {
+            return false;
         }
     }
 
@@ -2228,117 +2181,55 @@ class ServerInstanceManager
     public static function updateJsonFileAtomically(string $file, callable $modifier, int $timeout = 5): bool
     {
         $dir = \dirname($file);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-
-        self::cleanupStaleTempFiles($file);
-
-        $lockFile = $file . '.lock';
-        $fp = @\fopen($lockFile, 'c');
-        if ($fp === false) {
+        if ($timeout <= 0
+            || (!\is_dir($dir) && !@\mkdir($dir, 0755, true) && !\is_dir($dir))
+        ) {
             return false;
         }
-
-        $locked = false;
-        $startTime = \time();
-
-        while (\time() - $startTime < $timeout) {
-            if (\flock($fp, LOCK_EX | LOCK_NB)) {
-                $locked = true;
-                break;
-            }
-            SchedulerSystem::usleep(10000);
-        }
-
-        if (!$locked) {
-            @\fclose($fp);
-            return false;
-        }
-
         try {
-            $data = [];
-            if (\is_file($file)) {
-                $content = @\file_get_contents($file);
-                $parsed = \json_decode($content ?: '', true);
-                if (\is_array($parsed)) {
-                    $data = $parsed;
-                }
-            }
-
-            $newData = $modifier($data);
-            if (!\is_array($newData)) {
-                return false;
-            }
-
-            $json = \json_encode($newData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            if ($json === false) {
-                return false;
-            }
-
-            $tempFile = $file . '.tmp.' . \getmypid();
-            if (@\file_put_contents($tempFile, $json) === false) {
-                return false;
-            }
-
-            // Keep the committed JSON in place until replacement succeeds.
-            // Windows PHP 8.4 supports replacing an existing target; bounded
-            // retries cover transient filesystem/Defender sharing windows.
-            $renameAttempts = PHP_OS_FAMILY === 'Windows' ? 5 : 1;
-            $success = false;
-            for ($attempt = 0; $attempt < $renameAttempts; $attempt++) {
-                $success = @\rename($tempFile, $file);
-                if ($success) {
-                    break;
-                }
-                if ($attempt + 1 < $renameAttempts) {
-                    SchedulerSystem::usleep(10_000);
-                }
-            }
-            if (!$success) {
-                @\unlink($tempFile);
-            }
-            return $success;
-        } finally {
-            \flock($fp, LOCK_UN);
-            @\fclose($fp);
-        }
-    }
-
-    /**
-     * 清理陈旧临时文件
-     */
-    private static function cleanupStaleTempFiles(string $file): void
-    {
-        $dir = \dirname($file);
-        $basename = \basename($file);
-        $pattern = $dir . DIRECTORY_SEPARATOR . $basename . '.tmp.*';
-
-        $tmpFiles = @\glob($pattern);
-        if ($tmpFiles === false || $tmpFiles === []) {
-            return;
-        }
-
-        $now = \time();
-        $staleThreshold = 60;
-
-        foreach ($tmpFiles as $tmpFile) {
-            $mtime = @\filemtime($tmpFile);
-            if ($mtime === false) {
-                continue;
-            }
-
-            if ($now - $mtime > $staleThreshold) {
-                @\unlink($tmpFile);
-                continue;
-            }
-
-            if (\preg_match('/\.tmp\.(\d+)$/', $tmpFile, $matches)) {
-                $pid = (int) $matches[1];
-                if ($pid > 0 && !Processer::processExists($pid)) {
-                    @\unlink($tmpFile);
-                }
-            }
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $file . '.lock',
+                static function () use ($file, $modifier): bool {
+                    $content = GatewayProjectStateFilesystem::readOptional(
+                        $file,
+                        self::MAX_ATOMIC_JSON_BYTES,
+                        'WLS atomic JSON state',
+                        true,
+                    );
+                    $data = [];
+                    if ($content !== null && $content !== '') {
+                        $decoded = \json_decode(
+                            $content,
+                            true,
+                            512,
+                            JSON_THROW_ON_ERROR,
+                        );
+                        if (!\is_array($decoded)) {
+                            throw new \RuntimeException('WLS atomic JSON state is not an object or array.');
+                        }
+                        $data = $decoded;
+                    }
+                    $newData = $modifier($data);
+                    if (!\is_array($newData)) {
+                        throw new \RuntimeException('WLS atomic JSON modifier returned invalid state.');
+                    }
+                    $json = \json_encode(
+                        $newData,
+                        JSON_PRETTY_PRINT
+                            | JSON_UNESCAPED_UNICODE
+                            | JSON_UNESCAPED_SLASHES
+                            | JSON_THROW_ON_ERROR,
+                    );
+                    if (\strlen($json) > self::MAX_ATOMIC_JSON_BYTES) {
+                        throw new \RuntimeException('WLS atomic JSON state exceeds its fixed size limit.');
+                    }
+                    GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+                    return true;
+                },
+                waitTimeoutSeconds: \min(300.0, (float)$timeout),
+            );
+        } catch (\Throwable) {
+            return false;
         }
     }
 }

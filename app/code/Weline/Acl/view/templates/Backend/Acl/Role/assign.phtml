@@ -263,6 +263,12 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     display: flex;
     gap: var(--backend-spacing-sm, 8px);
     flex-wrap: wrap;
+    align-items: center;
+}
+
+.weline-acl-filters .weline-module-select,
+.weline-acl-filters .weline-acl-module-filter {
+    min-width: 240px;
 }
 
 .weline-acl-filter-select {
@@ -397,7 +403,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
    ============================================ */
 
 /* 顶级节点分组样式 - 卡片化设计 */
-#acl > .jstree-container-ul > .jstree-node {
+#acl > .jstree-container-ul > .jstree-node, #acl-tag > .jstree-container-ul > .jstree-node {
     margin-bottom: var(--backend-spacing-md, 12px);
     border: 1px solid var(--backend-color-border-light, #e9ecef);
     border-radius: var(--backend-border-radius-md, 8px);
@@ -408,7 +414,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 }
 
 /* 顶级节点标题 - 渐变背景 */
-#acl > .jstree-container-ul > .jstree-node > .jstree-anchor {
+#acl > .jstree-container-ul > .jstree-node > .jstree-anchor, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-anchor {
     display: flex;
     align-items: center;
     padding: var(--backend-spacing-md, 12px) var(--backend-spacing-lg, 16px);
@@ -420,25 +426,25 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     transition: all 0.2s ease;
 }
 
-#acl > .jstree-container-ul > .jstree-node > .jstree-anchor:hover {
+#acl > .jstree-container-ul > .jstree-node > .jstree-anchor:hover, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-anchor:hover {
     background: linear-gradient(135deg, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.08)) 0%, var(--backend-color-bg-secondary, #f8f9fa) 100%);
 }
 
 /* 顶级节点选中状态 */
-#acl > .jstree-container-ul > .jstree-node > .jstree-anchor.jstree-clicked {
+#acl > .jstree-container-ul > .jstree-node > .jstree-anchor.jstree-clicked, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-anchor.jstree-clicked {
     background: linear-gradient(135deg, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15)) 0%, var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) 100%) !important;
     color: var(--backend-color-primary, #556ee6) !important;
     border-bottom-color: var(--backend-color-primary, #556ee6);
 }
 
 /* 顶级节点的子节点容器 */
-#acl > .jstree-container-ul > .jstree-node > .jstree-children {
+#acl > .jstree-container-ul > .jstree-node > .jstree-children, #acl-tag > .jstree-container-ul > .jstree-node > .jstree-children {
     padding: var(--backend-spacing-sm, 8px);
     background: var(--backend-color-bg-primary, #fff);
 }
 
 /* 子节点样式 */
-#acl .jstree-node {
+#acl .jstree-node, #acl-tag .jstree-node {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -446,21 +452,21 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     min-width: 0;
 }
 
-#acl .jstree-node > .jstree-ocl {
+#acl .jstree-node > .jstree-ocl, #acl-tag .jstree-node > .jstree-ocl {
     flex: 0 0 auto;
 }
 
-#acl .jstree-node > .jstree-anchor {
+#acl .jstree-node > .jstree-anchor, #acl-tag .jstree-node > .jstree-anchor {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-#acl .jstree-node > .jstree-children {
+#acl .jstree-node > .jstree-children, #acl-tag .jstree-node > .jstree-children {
     flex: 0 0 100%;
     min-width: 0;
 }
 
-#acl .jstree-anchor {
+#acl .jstree-anchor, #acl-tag .jstree-anchor {
     padding: 8px 12px;
     border-radius: var(--backend-border-radius, 6px);
     color: var(--backend-color-text-primary, #212529);
@@ -472,20 +478,20 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     min-width: 0;
 }
 
-#acl .jstree-anchor > .jstree-checkbox,
-#acl .jstree-anchor > .jstree-themeicon,
-#acl .weline-acl-type-badge,
-#acl .weline-acl-module-badge {
+#acl .jstree-anchor > .jstree-checkbox, #acl-tag .jstree-anchor > .jstree-checkbox,
+#acl .jstree-anchor > .jstree-themeicon, #acl-tag .jstree-anchor > .jstree-themeicon,
+#acl .weline-acl-type-badge, #acl-tag .weline-acl-type-badge,
+#acl .weline-acl-module-badge, #acl-tag .weline-acl-module-badge {
     flex-shrink: 0;
 }
 
-#acl .jstree-anchor:hover {
+#acl .jstree-anchor:hover, #acl-tag .jstree-anchor:hover {
     background: var(--backend-color-bg-secondary, #f8f9fa);
     transform: translateX(2px);
 }
 
 /* 选中节点样式 - 左侧强调边 */
-#acl .jstree-clicked {
+#acl .jstree-clicked, #acl-tag .jstree-clicked {
     background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.12)) !important;
     color: var(--backend-color-primary, #556ee6) !important;
     font-weight: 500;
@@ -493,23 +499,23 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 }
 
 /* wholerow 行样式 */
-#acl .jstree-wholerow {
+#acl .jstree-wholerow, #acl-tag .jstree-wholerow {
     border-radius: var(--backend-border-radius, 6px);
     transition: all 0.15s ease;
 }
 
-#acl .jstree-wholerow-clicked {
+#acl .jstree-wholerow-clicked, #acl-tag .jstree-wholerow-clicked {
     background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)) !important;
     border-radius: var(--backend-border-radius, 6px);
 }
 
-#acl .jstree-wholerow-hovered {
+#acl .jstree-wholerow-hovered, #acl-tag .jstree-wholerow-hovered {
     background: var(--backend-color-bg-secondary, #f8f9fa) !important;
     border-radius: var(--backend-border-radius, 6px);
 }
 
 /* 复选框样式美化 */
-#acl .jstree-checkbox {
+#acl .jstree-checkbox, #acl-tag .jstree-checkbox {
     width: 18px;
     height: 18px;
     margin-right: 6px;
@@ -520,16 +526,16 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     position: relative;
 }
 
-#acl .jstree-checkbox:hover {
+#acl .jstree-checkbox:hover, #acl-tag .jstree-checkbox:hover {
     border-color: var(--backend-color-primary, #556ee6);
 }
 
-#acl .jstree-clicked > .jstree-checkbox {
+#acl .jstree-clicked > .jstree-checkbox, #acl-tag .jstree-clicked > .jstree-checkbox {
     background: var(--backend-color-primary, #556ee6);
     border-color: var(--backend-color-primary, #556ee6);
 }
 
-#acl .jstree-checkbox::after {
+#acl .jstree-checkbox::after, #acl-tag .jstree-checkbox::after {
     content: '';
     position: absolute;
     left: 5px;
@@ -543,17 +549,17 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     transition: opacity 0.15s ease;
 }
 
-#acl .jstree-clicked > .jstree-checkbox::after {
+#acl .jstree-clicked > .jstree-checkbox::after, #acl-tag .jstree-clicked > .jstree-checkbox::after {
     opacity: 1;
 }
 
 /* 部分选中状态 */
-#acl .jstree-undetermined > .jstree-checkbox {
+#acl .jstree-undetermined > .jstree-checkbox, #acl-tag .jstree-undetermined > .jstree-checkbox {
     background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.15));
     border-color: var(--backend-color-primary, #556ee6);
 }
 
-#acl .jstree-undetermined > .jstree-checkbox::after {
+#acl .jstree-undetermined > .jstree-checkbox::after, #acl-tag .jstree-undetermined > .jstree-checkbox::after {
     content: '';
     opacity: 1;
     left: 3px;
@@ -567,8 +573,8 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 }
 
 /* jstree 自定义图标使用 MDI 字体时需覆盖默认 background */
-#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom.mdi,
-#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom[class*="mdi-"] {
+#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom.mdi, #acl-tag .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom.mdi,
+#acl .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom[class*="mdi-"], #acl-tag .jstree-anchor > .jstree-themeicon.jstree-themeicon-custom[class*="mdi-"] {
     background: none !important;
     background-image: none !important;
     font-size: 1.15em;
@@ -637,13 +643,19 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     color: var(--backend-color-success, #34c38f);
 }
 
+.weline-acl-type-badge.is-tag {
+    border-color: var(--backend-color-warning, #f1b44c);
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.12));
+    color: var(--backend-color-warning, #f1b44c);
+}
+
 /* 悬停时的节点阴影效果 */
-#acl > .jstree-container-ul > .jstree-node:hover {
+#acl > .jstree-container-ul > .jstree-node:hover, #acl-tag > .jstree-container-ul > .jstree-node:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* 搜索匹配高亮 */
-#acl .jstree-search {
+#acl .jstree-search, #acl-tag .jstree-search {
     background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.2));
     border-radius: var(--backend-border-radius-sm, 4px);
     padding: 2px 4px;
@@ -657,7 +669,7 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     100% { transform: scale(1); }
 }
 
-#acl .jstree-clicked {
+#acl .jstree-clicked, #acl-tag .jstree-clicked {
     animation: acl-node-select 0.2s ease;
 }
 
@@ -712,11 +724,6 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     </div>
 </div>
 <!-- end page title -->
-
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
 
 <div class="weline-acl-page">
     <!-- 顶部信息卡片 -->
@@ -792,16 +799,39 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             
             <!-- 筛选器 -->
             <div class="weline-acl-filters">
-                <select id="acl-filter-module" class="weline-acl-filter-select" title="<?php echo __('按模块筛选'); ?>">
-                    <option value=""><?php echo __('所有模块'); ?></option>
-                    <?php foreach ($this->getData('module_list') ?: [] as $module): ?>
-                    <option value="<?php echo htmlspecialchars($module); ?>"><?php echo htmlspecialchars($module); ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <?php
+                $acl_module_filter_empty = __('所有模块');
+                $acl_module_filter_placeholder = __('搜索模块名称');
+                $acl_module_filter_value = '';
+                $acl_module_filter_options = [];
+                foreach ($this->getData('module_list') ?: [] as $module) {
+                    $moduleName = \trim((string)$module);
+                    if ($moduleName === '') {
+                        continue;
+                    }
+                    $acl_module_filter_options[] = [
+                        'value' => $moduleName,
+                        'label' => $moduleName,
+                    ];
+                }
+                $acl_module_filter_options_json = \json_encode($acl_module_filter_options, JSON_UNESCAPED_UNICODE);
+                ?>
+                <w:module-manager:module:select
+                    id="acl-filter-module"
+                    name="acl_filter_module"
+                    value="acl_module_filter_value"
+                    options="acl_module_filter_options_json"
+                    allow-empty="true"
+                    clearable="true"
+                    empty-label="acl_module_filter_empty"
+                    placeholder="acl_module_filter_placeholder"
+                    class="weline-acl-module-filter"
+                    on-change="if (window.__aclApplyFilters) { window.__aclApplyFilters(); }"
+                />
                 <select id="acl-filter-type" class="weline-acl-filter-select" title="<?php echo __('按类型筛选'); ?>">
                     <option value=""><?php echo __('所有类型'); ?></option>
                     <?php foreach ($this->getData('type_list') ?: [] as $type): ?>
-                    <option value="<?php echo htmlspecialchars($type); ?>"><?php echo $type === 'menus' ? __('菜单') : ($type === 'pc' ? __('接口') : htmlspecialchars($type)); ?></option>
+                    <option value="<?php echo htmlspecialchars($type); ?>"><?php echo htmlspecialchars(\Weline\Acl\Service\Resource\AclResourcePresentation::typeLabel((string)$type)); ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -830,8 +860,95 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
         <span id="acl-search-result-text"></span>
     </div>
 
+    <!-- 双视图切换 + 标签树（D-12） -->
+    <div class="weline-acl-toolbar" style="margin-bottom:12px;">
+        <div class="weline-acl-actions">
+            <button type="button" class="weline-acl-action-btn active" id="acl-view-menu"><i class="mdi mdi-menu"></i> <lang>菜单维度</lang></button>
+            <button type="button" class="weline-acl-action-btn" id="acl-view-tag"><i class="mdi mdi-tag-multiple"></i> <lang>标签维度</lang></button>
+        </div>
+        <p class="text-muted mb-0" style="font-size:0.85rem;"><lang>取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。</lang></p>
+    </div>
+
+    <div class="weline-acl-tree-card" id="acl-tag-panel" style="display:none;margin-bottom:16px;">
+        <div class="weline-acl-tree-header">
+            <span class="weline-acl-tree-title"><i class="mdi mdi-tag-multiple-outline"></i> <lang>标签权限树</lang></span>
+            <span style="font-size: 0.85rem; color: var(--backend-color-text-secondary);">
+                <lang>勾选标签可整包授权；叶子也可单独勾选或取消</lang>
+            </span>
+        </div>
+        <div class="weline-acl-tree-body">
+            <?php
+            $tagTreeData = $this->getData('tag_tree') ?: [];
+            $tagGrantFlip = array_flip($this->getData('tag_grants') ?: []);
+            $renderTagNodeLi = function (array $node) use (&$renderTagNodeLi, $tagGrantFlip): void {
+                $path = (string)($node['tag_path'] ?? '');
+                $name = (string)($node['name'] ?? $path);
+                $tagSelected = isset($tagGrantFlip[$path]);
+                $tagId = 'tag:' . $path;
+                $tagAttr = " class='show_tooltip' title='" . htmlspecialchars($path, ENT_QUOTES) . "' data-node-kind='tag' data-tag-path='"
+                    . htmlspecialchars($path, ENT_QUOTES) . "' data-jstree='{\"disabled\":false,\"opened\":true,\"selected\":"
+                    . ($tagSelected ? 'true' : 'false') . ",\"icon\":\"mdi mdi-tag-outline\"}' ";
+                echo '<li id="' . htmlspecialchars($tagId, ENT_QUOTES) . '" ' . $tagAttr . '>'
+                    . htmlspecialchars($name)
+                    . " <span class='weline-acl-type-badge is-tag'><lang>标签</lang></span>";
+                $children = $node['children'] ?? [];
+                $leaves = $node['leaves'] ?? [];
+                if ($children || $leaves) {
+                    echo '<ul>';
+                    foreach ($children as $child) {
+                        if (\is_array($child)) {
+                            $renderTagNodeLi($child);
+                        }
+                    }
+                    foreach ($leaves as $leaf) {
+                        if (!\is_array($leaf)) {
+                            continue;
+                        }
+                        $sourceId = (string)($leaf['source_id'] ?? $leaf['id'] ?? '');
+                        if ($sourceId === '') {
+                            continue;
+                        }
+                        $leafName = (string)($leaf['name'] ?? $sourceId);
+                        $leafType = (string)($leaf['type'] ?? '');
+                        $leafModule = (string)($leaf['module'] ?? '');
+                        if ($leafModule === '') {
+                            $leafModule = explode('::', $sourceId)[0] ?? '';
+                        }
+                        $leafSelected = $tagSelected || !empty($leaf['selected']);
+                        $typeLabel = match ($leafType) {
+                            'query' => 'Query',
+                            'task' => (string)__('任务'),
+                            'operation' => (string)__('运维'),
+                            default => ($leafType !== '' ? $leafType : 'ACL'),
+                        };
+                        $leafAttr = " class='show_tooltip' title='" . htmlspecialchars($sourceId, ENT_QUOTES)
+                            . "' data-node-kind='leaf' data-parent-tag-path='" . htmlspecialchars($path, ENT_QUOTES)
+                            . "' data-module='" . htmlspecialchars($leafModule, ENT_QUOTES)
+                            . "' data-type='" . htmlspecialchars($leafType, ENT_QUOTES)
+                            . "' data-jstree='{\"disabled\":false,\"opened\":false,\"selected\":"
+                            . ($leafSelected ? 'true' : 'false') . ",\"icon\":\"mdi mdi-key-outline\"}' ";
+                        echo '<li id="' . htmlspecialchars($sourceId, ENT_QUOTES) . '" ' . $leafAttr . '>'
+                            . htmlspecialchars($leafName)
+                            . " <span class='weline-acl-type-badge is-acl'>" . htmlspecialchars($typeLabel) . '</span>'
+                            . '</li>';
+                    }
+                    echo '</ul>';
+                }
+                echo '</li>';
+            };
+            ?>
+            <div id="acl-tag" class="acl-container">
+                <ul>
+                    <?php foreach ($tagTreeData as $tagNode): ?>
+                        <?php if (\is_array($tagNode)) { $renderTagNodeLi($tagNode); } ?>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <!-- 权限树卡片 -->
-    <div class="weline-acl-tree-card">
+    <div class="weline-acl-tree-card" id="acl-menu-panel">
         <div class="weline-acl-tree-header">
             <span class="weline-acl-tree-title">
                 <i class="mdi mdi-file-tree-outline"></i>
@@ -973,60 +1090,161 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 <script>
 (function() {
     'use strict';
-    
+
+    window.__aclSharedSourceIds = new Set(<?php echo json_encode(array_values($this->getData('selected_source_ids') ?: []), JSON_UNESCAPED_UNICODE); ?>);
+    window.__aclTagGrants = new Set(<?php echo json_encode(array_values($this->getData('tag_grants') ?: []), JSON_UNESCAPED_UNICODE); ?>);
+    window.__aclTagPathLeaves = <?php echo json_encode($this->getData('tag_path_leaves') ?: [], JSON_UNESCAPED_UNICODE); ?>;
+    window.__aclSyncing = false;
+    window.__aclActiveView = 'menu';
+
     var searchTimeout = null;
     var totalPermissions = <?php echo $totalAll; ?>;
-    
-    var aclTree = $('#acl').jstree({
-        'core': {
-            'themes': {
-                'variant': 'large',
-                'responsive': true
-            },
-            'animation': 150
+    var initialSelected = <?php echo json_encode(array_values($this->getData('selected_source_ids') ?: []), JSON_UNESCAPED_UNICODE); ?>;
+    var initialTagGrants = <?php echo json_encode(array_values($this->getData('tag_grants') ?: []), JSON_UNESCAPED_UNICODE); ?>;
+
+    var jstreeCommon = {
+        core: {
+            themes: { variant: 'large', responsive: true },
+            animation: 150
         },
-        'checkbox': {
-            'keep_selected_style': false,
-            'three_state': true,
-            'cascade': 'up'
+        checkbox: {
+            keep_selected_style: false,
+            three_state: true,
+            cascade: 'up'
         },
-        'search': {
-            'show_only_matches': true,
-            'show_only_matches_children': true,
-            'search_leaves_only': false,
-            'fuzzy': true
+        search: {
+            show_only_matches: true,
+            show_only_matches_children: true,
+            search_leaves_only: false,
+            fuzzy: true
         },
-        'plugins': ['wholerow', 'checkbox', 'search']
-    });
-    
+        plugins: ['wholerow', 'checkbox', 'search']
+    };
+
+    function activeTreeSelector() {
+        return window.__aclActiveView === 'tag' ? '#acl-tag' : '#acl';
+    }
+
+    function activeTree() {
+        return $(activeTreeSelector()).jstree(true);
+    }
+
+    function isTagNodeId(id) {
+        return String(id || '').indexOf('tag:') === 0;
+    }
+
+    function tagPathFromId(id) {
+        return String(id || '').slice(4);
+    }
+
     function updateStatistics() {
-        var tree = $('#acl').jstree(true);
-        if (!tree) return;
-        
-        var selectedCount = tree.get_selected().length;
+        var shared = window.__aclSharedSourceIds || new Set();
+        var selectedCount = shared.size;
         var percent = totalPermissions > 0 ? Math.round((selectedCount / totalPermissions) * 100) : 0;
-        
         $('#stat-selected').text(selectedCount);
         $('#stat-percent').text(percent + '%');
         $('#stat-progress').css('width', percent + '%');
     }
-    
-    $('#acl').on('ready.jstree', function() {
-        updateStatistics();
-    });
-    
-    $('#acl').on('select_node.jstree', function () {
-        updateStatistics();
-    });
-    
-    $('#acl').on('deselect_node.jstree', function (e, data) {
-        var tree = $('#acl').jstree(true);
-        var node = data.node;
 
+    function addLeavesToShared(path) {
+        var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
+        leaves.forEach(function(id) { window.__aclSharedSourceIds.add(id); });
+        return leaves;
+    }
+
+    function removeLeavesFromShared(path) {
+        var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
+        leaves.forEach(function(id) { window.__aclSharedSourceIds.delete(id); });
+        return leaves;
+    }
+
+    function removeTagGrantsForPath(path) {
+        var next = new Set();
+        window.__aclTagGrants.forEach(function(p) {
+            if (p === path || String(p).indexOf(path + ':') === 0) {
+                return;
+            }
+            next.add(p);
+        });
+        window.__aclTagGrants = next;
+    }
+
+    function removeTagGrantsCoveringLeaf(sourceId) {
+        var next = new Set();
+        window.__aclTagGrants.forEach(function(path) {
+            var leaves = (window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || [];
+            if (leaves.indexOf(sourceId) >= 0) {
+                return;
+            }
+            next.add(path);
+        });
+        window.__aclTagGrants = next;
+    }
+
+    function rebuildTagGrantsFromTree() {
+        var tree = $('#acl-tag').jstree(true);
+        var grants = new Set();
+        if (!tree) {
+            window.__aclTagGrants = grants;
+            return;
+        }
+        tree.get_selected().forEach(function(id) {
+            if (isTagNodeId(id)) {
+                grants.add(tagPathFromId(id));
+            }
+        });
+        window.__aclTagGrants = grants;
+        grants.forEach(function(path) { addLeavesToShared(path); });
+    }
+
+    function syncMenuTreeFromShared() {
+        var tree = $('#acl').jstree(true);
+        if (!tree) return;
+        window.__aclSyncing = true;
+        try {
+            var selected = tree.get_selected();
+            selected.forEach(function(id) {
+                if (!window.__aclSharedSourceIds.has(id)) {
+                    tree.deselect_node(id, true);
+                }
+            });
+            window.__aclSharedSourceIds.forEach(function(id) {
+                if (tree.get_node(id) && !tree.is_selected(id)) {
+                    tree.select_node(id, true, true);
+                }
+            });
+        } finally {
+            window.__aclSyncing = false;
+        }
+    }
+
+    function syncTagTreeFromShared() {
+        var tree = $('#acl-tag').jstree(true);
+        if (!tree) return;
+        window.__aclSyncing = true;
+        try {
+            tree.deselect_all(true);
+            window.__aclSharedSourceIds.forEach(function(id) {
+                if (tree.get_node(id)) {
+                    tree.select_node(id, true, true);
+                }
+            });
+            window.__aclTagGrants.forEach(function(path) {
+                var id = 'tag:' + path;
+                if (tree.get_node(id)) {
+                    tree.select_node(id, true, true);
+                }
+                addLeavesToShared(path);
+            });
+        } finally {
+            window.__aclSyncing = false;
+        }
+    }
+
+    function applyMenuDeselectCascade(tree, node) {
         if (node.parent !== '#') {
             var parentNode = tree.get_node(node.parent);
-
-            var hasSelectedChildren = parentNode.children.some(function (childId) {
+            var hasSelectedChildren = parentNode.children.some(function(childId) {
                 return tree.is_selected(childId);
             });
             if (!hasSelectedChildren) {
@@ -1034,50 +1252,202 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             }
         }
         if (node.children.length > 0) {
-            node.children.forEach(function (childId) {
+            node.children.forEach(function(childId) {
                 tree.deselect_node(childId);
             });
         }
-        
+    }
+
+    $('#acl').jstree(jstreeCommon);
+    $('#acl-tag').jstree(jstreeCommon);
+
+    $('#acl').on('ready.jstree', function() {
         updateStatistics();
     });
-    
-    $('#save_button').on('click', function (e) {
-        var selectedNodes = $('#acl').jstree('get_selected', true);
-        
-        $('#aclForm input[name="ids[]"]').remove();
-        
-        $.each(selectedNodes, function () {
-            $('#aclForm').append('<input type="hidden" name="ids[]" value="' + this.id + '">');
+
+    $('#acl-tag').on('ready.jstree', function() {
+        syncTagTreeFromShared();
+        updateStatistics();
+    });
+
+    $('#acl').on('select_node.jstree', function(e, data) {
+        if (window.__aclSyncing) return;
+        if (!isTagNodeId(data.node.id)) {
+            window.__aclSharedSourceIds.add(data.node.id);
+        }
+        updateStatistics();
+    });
+
+    $('#acl').on('deselect_node.jstree', function(e, data) {
+        if (window.__aclSyncing) return;
+        var tree = $('#acl').jstree(true);
+        var node = data.node;
+        applyMenuDeselectCascade(tree, node);
+        if (!isTagNodeId(node.id)) {
+            window.__aclSharedSourceIds.delete(node.id);
+        }
+        // also drop any still-deselected children from shared
+        (node.children_d || []).forEach(function(id) {
+            if (!isTagNodeId(id) && tree && !tree.is_selected(id)) {
+                window.__aclSharedSourceIds.delete(id);
+            }
         });
-        
+        updateStatistics();
+    });
+
+    $('#acl-tag').on('select_node.jstree', function(e, data) {
+        if (window.__aclSyncing) return;
+        var id = data.node.id;
+        if (isTagNodeId(id)) {
+            var path = tagPathFromId(id);
+            window.__aclTagGrants.add(path);
+            addLeavesToShared(path);
+        } else {
+            window.__aclSharedSourceIds.add(id);
+        }
+        updateStatistics();
+    });
+
+    $('#acl-tag').on('deselect_node.jstree', function(e, data) {
+        if (window.__aclSyncing) return;
+        var tree = $('#acl-tag').jstree(true);
+        var node = data.node;
+        var id = node.id;
+
+        if (isTagNodeId(id)) {
+            var path = tagPathFromId(id);
+            // D-1: cancel tag = remove ALL leaves under this tag path prefix
+            removeTagGrantsForPath(path);
+            removeLeavesFromShared(path);
+            if (node.children.length > 0) {
+                node.children.forEach(function(childId) {
+                    tree.deselect_node(childId);
+                });
+            }
+        } else {
+            window.__aclSharedSourceIds.delete(id);
+            removeTagGrantsCoveringLeaf(id);
+            applyMenuDeselectCascade(tree, node);
+        }
+        updateStatistics();
+    });
+
+    $('#acl-view-menu').on('click', function() {
+        // flush tag tree into shared/grants before leaving
+        rebuildTagGrantsFromTree();
+        $('#acl-tag').jstree(true) && $('#acl-tag').jstree('get_selected').forEach(function(id) {
+            if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
+        });
+        window.__aclActiveView = 'menu';
+        $('#acl-menu-panel').show();
+        $('#acl-tag-panel').hide();
+        $(this).addClass('active');
+        $('#acl-view-tag').removeClass('active');
+        syncMenuTreeFromShared();
+        updateStatistics();
+        applyFilters();
+    });
+
+    $('#acl-view-tag').on('click', function() {
+        // flush menu tree selection into shared
+        var menuTree = $('#acl').jstree(true);
+        if (menuTree) {
+            var visibleIds = {};
+            $('#acl li').each(function() { visibleIds[this.id] = true; });
+            menuTree.get_selected().forEach(function(id) {
+                if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
+            });
+            window.__aclSharedSourceIds.forEach(function(id) {
+                if (visibleIds[id] && !menuTree.is_selected(id)) {
+                    window.__aclSharedSourceIds.delete(id);
+                }
+            });
+        }
+        window.__aclActiveView = 'tag';
+        $('#acl-menu-panel').hide();
+        $('#acl-tag-panel').show();
+        $(this).addClass('active');
+        $('#acl-view-menu').removeClass('active');
+        syncTagTreeFromShared();
+        updateStatistics();
+        applyFilters();
+    });
+
+    $('#save_button').on('click', function() {
+        var shared = window.__aclSharedSourceIds || new Set(initialSelected);
+        var menuTree = $('#acl').jstree(true);
+        var tagTree = $('#acl-tag').jstree(true);
+
+        if (menuTree) {
+            menuTree.get_selected().forEach(function(id) {
+                if (!isTagNodeId(id)) shared.add(id);
+            });
+            var menuVisible = {};
+            $('#acl li').each(function() { menuVisible[this.id] = true; });
+            shared.forEach(function(id) {
+                if (menuVisible[id] && !menuTree.is_selected(id)) {
+                    shared.delete(id);
+                }
+            });
+        }
+
+        if (tagTree) {
+            tagTree.get_selected().forEach(function(id) {
+                if (!isTagNodeId(id)) shared.add(id);
+            });
+            var tagVisibleLeaves = {};
+            $('#acl-tag li[data-node-kind="leaf"]').each(function() { tagVisibleLeaves[this.id] = true; });
+            shared.forEach(function(id) {
+                if (tagVisibleLeaves[id] && !tagTree.is_selected(id)) {
+                    shared.delete(id);
+                }
+            });
+            rebuildTagGrantsFromTree();
+            window.__aclTagGrants.forEach(function(path) {
+                ((window.__aclTagPathLeaves && window.__aclTagPathLeaves[path]) || []).forEach(function(id) {
+                    shared.add(id);
+                });
+            });
+        }
+
+        window.__aclSharedSourceIds = shared;
+
+        $('#aclForm input[name="ids[]"]').remove();
+        $('#aclForm input[name="tag_paths[]"]').remove();
+        shared.forEach(function(id) {
+            $('#aclForm').append('<input type="hidden" name="ids[]" value="' + id + '">');
+        });
+        (window.__aclTagGrants || new Set(initialTagGrants)).forEach(function(path) {
+            $('#aclForm').append('<input type="hidden" name="tag_paths[]" value="' + path + '">');
+        });
+
         var $btn = $(this);
-        var originalHtml = $btn.html();
         $btn.prop('disabled', true).html('<i class="mdi mdi-loading mdi-spin"></i> <?php echo __("保存中..."); ?>');
-        
         setTimeout(function() {
             $btn.closest('form').submit();
         }, 100);
     });
-    
+
+    function runSearch(searchVal) {
+        var sel = activeTreeSelector();
+        if (searchVal.length > 0) {
+            $(sel).jstree('search', searchVal);
+        } else {
+            $(sel).jstree('clear_search');
+            $('#acl-search-result').removeClass('visible');
+        }
+    }
+
     $('#acl-search').on('keyup', function() {
         var searchVal = $(this).val().trim();
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(function() {
-            if (searchVal.length > 0) {
-                $('#acl').jstree('search', searchVal);
-            } else {
-                $('#acl').jstree('clear_search');
-                $('#acl-search-result').removeClass('visible');
-            }
-        }, 300);
+        searchTimeout = setTimeout(function() { runSearch(searchVal); }, 300);
     });
-    
-    $('#acl').on('search.jstree', function(e, data) {
+
+    $('#acl, #acl-tag').on('search.jstree', function(e, data) {
         var count = data.nodes.length;
         var $result = $('#acl-search-result');
         var $text = $('#acl-search-result-text');
-        
         if (count > 0) {
             $text.text('<?php echo __("找到"); ?> ' + count + ' <?php echo __("个匹配权限"); ?>');
             $result.addClass('visible');
@@ -1086,54 +1456,95 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
             $result.addClass('visible');
         }
     });
-    
-    $('#acl').on('clear_search.jstree', function() {
+
+    $('#acl, #acl-tag').on('clear_search.jstree', function() {
         $('#acl-search-result').removeClass('visible');
     });
-    
+
     $('#acl-search-clear').on('click', function() {
         $('#acl-search').val('').focus();
         $('#acl').jstree('clear_search');
+        $('#acl-tag').jstree('clear_search');
         $('#acl-search-result').removeClass('visible');
     });
-    
+
     $('#acl-select-all').on('click', function() {
-        $('#acl').jstree('select_all');
+        var sel = activeTreeSelector();
+        $(sel).jstree('select_all');
+        if (sel === '#acl-tag') {
+            rebuildTagGrantsFromTree();
+            $('#acl-tag').jstree('get_selected').forEach(function(id) {
+                if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
+            });
+        } else {
+            $('#acl').jstree('get_selected').forEach(function(id) {
+                if (!isTagNodeId(id)) window.__aclSharedSourceIds.add(id);
+            });
+        }
+        updateStatistics();
         if (typeof BackendToast !== 'undefined') {
             BackendToast.info('<?php echo __("已全选所有权限"); ?>');
         }
     });
-    
+
     $('#acl-deselect-all').on('click', function() {
-        $('#acl').jstree('deselect_all');
+        var sel = activeTreeSelector();
+        $(sel).jstree('deselect_all');
+        if (sel === '#acl-tag') {
+            // clear tag grants and their leaves; keep menu-only shared ids not in tag tree
+            var tagLeafIds = {};
+            $('#acl-tag li[data-node-kind="leaf"]').each(function() { tagLeafIds[this.id] = true; });
+            Object.keys(tagLeafIds).forEach(function(id) { window.__aclSharedSourceIds.delete(id); });
+            window.__aclTagGrants = new Set();
+        } else {
+            var menuIds = {};
+            $('#acl li').each(function() { menuIds[this.id] = true; });
+            Object.keys(menuIds).forEach(function(id) {
+                if (!isTagNodeId(id)) window.__aclSharedSourceIds.delete(id);
+            });
+        }
+        updateStatistics();
         if (typeof BackendToast !== 'undefined') {
             BackendToast.info('<?php echo __("已清空所有选择"); ?>');
         }
     });
-    
+
     $('#acl-expand-all').on('click', function() {
-        $('#acl').jstree('open_all');
+        $(activeTreeSelector()).jstree('open_all');
     });
-    
+
     $('#acl-collapse-all').on('click', function() {
-        $('#acl').jstree('close_all');
+        $(activeTreeSelector()).jstree('close_all');
     });
-    
+
     function applyFilters() {
-        var moduleFilter = $('#acl-filter-module').val();
-        var typeFilter = $('#acl-filter-type').val();
-        var tree = $('#acl').jstree(true);
+        var moduleApi = window.WelineModuleSelect && window.WelineModuleSelect['acl-filter-module'];
+        var moduleFilter = moduleApi
+            ? String(moduleApi.getValue() || '')
+            : String($('#acl-filter-module').val() || '');
+        var typeFilter = String($('#acl-filter-type').val() || '');
+        var tree = activeTree();
+        if (!tree) return;
+        var rootSel = activeTreeSelector();
+        var hasFilter = !!(moduleFilter || typeFilter);
+
+        if (rootSel === '#acl-tag') {
+            applyTagFilters(tree, moduleFilter, typeFilter, hasFilter);
+        } else {
+            applyMenuFilters(tree, moduleFilter, typeFilter, hasFilter);
+        }
+    }
+
+    // 菜单维度：按顶层分组（li[data-module]）进行模块/类型过滤
+    function applyMenuFilters(tree, moduleFilter, typeFilter, hasFilter) {
         var visibleCount = 0;
-        
         $('#acl li[data-module]').each(function() {
             var $node = $(this);
             var nodeModule = $node.attr('data-module') || '';
             var nodeType = $node.attr('data-type') || '';
             var nodeId = $node.attr('id');
-            
             var moduleMatch = !moduleFilter || nodeModule.indexOf(moduleFilter) !== -1;
             var typeMatch = !typeFilter || nodeType === typeFilter;
-            
             if (moduleMatch && typeMatch) {
                 tree.show_node(nodeId);
                 visibleCount++;
@@ -1141,16 +1552,51 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
                 tree.hide_node(nodeId);
             }
         });
-        
-        if ((moduleFilter || typeFilter) && typeof BackendToast !== 'undefined') {
+        if (hasFilter && typeof BackendToast !== 'undefined') {
             BackendToast.info('<?php echo __("筛选结果"); ?>: ' + visibleCount + ' <?php echo __("个分组"); ?>');
         }
     }
-    
+
+    // 标签维度：先按模块/类型过滤叶子，再按“是否含可见叶子”上卷父标签节点
+    function applyTagFilters(tree, moduleFilter, typeFilter, hasFilter) {
+        var leafVisible = 0;
+        $('#acl-tag li[data-node-kind="leaf"]').each(function() {
+            var $leaf = $(this);
+            var nodeModule = $leaf.attr('data-module') || '';
+            var nodeType = $leaf.attr('data-type') || '';
+            var nodeId = this.id;
+            var moduleMatch = !moduleFilter || nodeModule.indexOf(moduleFilter) !== -1;
+            var typeMatch = !typeFilter || nodeType === typeFilter;
+            if (moduleMatch && typeMatch) {
+                tree.show_node(nodeId);
+                leafVisible++;
+            } else {
+                tree.hide_node(nodeId);
+            }
+        });
+        // 标签父节点：只要其下仍有可见叶子就显示，否则隐藏（支持多级标签）
+        $('#acl-tag li[data-node-kind="tag"]').each(function() {
+            var $tag = $(this);
+            var hasVisibleLeaf = $tag.find('li[data-node-kind="leaf"]').filter(function() {
+                return !$(this).hasClass('jstree-hidden');
+            }).length > 0;
+            if (hasVisibleLeaf) {
+                tree.show_node(this.id);
+            } else {
+                tree.hide_node(this.id);
+            }
+        });
+        if (hasFilter && typeof BackendToast !== 'undefined') {
+            BackendToast.info('<?php echo __("筛选结果"); ?>: ' + leafVisible + ' <?php echo __("项权限"); ?>');
+        }
+    }
+
+    window.__aclApplyFilters = applyFilters;
+
     $('#acl-filter-module, #acl-filter-type').on('change', function() {
         applyFilters();
     });
-    
+
     $(document).on('keydown', function(e) {
         if (e.ctrlKey || e.metaKey) {
             if (e.key === 'f' || e.key === 'F') {

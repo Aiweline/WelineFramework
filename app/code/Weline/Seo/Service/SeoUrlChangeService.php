@@ -26,6 +26,10 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
      */
     public function notify(array $change): array
     {
+        if (strtolower(trim((string)($change['action'] ?? ''))) === 'refresh') {
+            return $this->notifySitemapRefresh($change);
+        }
+
         $payload = $this->normalizeChange($change);
         if ($payload['targets'] === []) {
             return [
@@ -47,11 +51,20 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
         $submitSummary = $this->emptySubmitSummary();
         $sitemapSummary = $this->emptySitemapSummary();
 
+        $sitemapResults = [];
+        foreach ($payload['targets'] as $target) {
+            $websiteId = (int)($target['website_id'] ?? -1);
+            if ($websiteId >= 0 && !array_key_exists($websiteId, $sitemapResults)) {
+                $sitemapResults[$websiteId] = $this->syncSitemap(array_replace($payload, $target));
+            }
+        }
+
         foreach ($payload['targets'] as $target) {
             $targetPayload = array_replace($payload, $target);
             $targetPayload['targets'] = [$target];
             $submit = $this->submitUrlChange($targetPayload);
-            $sitemap = $this->syncSitemap($targetPayload);
+            $sitemap = $sitemapResults[(int)($target['website_id'] ?? -1)]
+                ?? ['skipped' => true, 'reason' => 'missing_module_or_website'];
 
             $this->mergeSubmitSummary($submitSummary, $submit);
             $this->mergeSitemapSummary($sitemapSummary, $sitemap);
@@ -90,6 +103,121 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
         $processedPayload['result'] = $result;
         $this->eventsManager->dispatch(self::EVENT_URL_CHANGE_PROCESSED, $processedPayload);
 
+        return $result;
+    }
+
+    /**
+     * Sitemap-only refresh does not require a URL and never creates push tasks or XML files.
+     *
+     * @param array<string,mixed> $change
+     * @return array<string,mixed>
+     */
+    private function notifySitemapRefresh(array $change): array
+    {
+        $module = trim((string)($change['sitemap_module'] ?? $change['module'] ?? ''));
+        $scope = trim((string)($change['scope'] ?? $change['subject_type'] ?? 'url'));
+        $websiteIds = $this->extractWebsiteIds($change);
+        foreach ((array)($change['targets'] ?? []) as $target) {
+            if (!is_array($target)) {
+                continue;
+            }
+            foreach ($this->extractWebsiteIds($target) as $websiteId) {
+                $websiteIds[] = $websiteId;
+            }
+        }
+        $websiteIds = array_values(array_unique($websiteIds));
+
+        if ($module === '' || $websiteIds === []) {
+            return [
+                'notified' => false,
+                'event' => self::EVENT_URL_CHANGED,
+                'reason' => 'missing_module_or_website',
+                'module' => $module,
+                'scope' => $scope,
+                'action' => 'refresh',
+                'target_count' => 0,
+                'targets' => [],
+                'generation_pending' => false,
+            ];
+        }
+
+        $targets = [];
+        foreach ($websiteIds as $websiteId) {
+            $website = $this->websiteDirectory->getWebsiteById($websiteId);
+            if (!is_array($website)) {
+                continue;
+            }
+            $targets[] = [
+                'website_id' => $websiteId,
+                'website_code' => (string)($website['code'] ?? ''),
+                'url' => '',
+                'previous_url' => '',
+                'url_key' => '',
+            ];
+        }
+
+        $payload = array_replace($change, [
+            'module' => $module,
+            'sitemap_module' => $module,
+            'scope' => $scope !== '' ? $scope : 'url',
+            'action' => 'refresh',
+            'source' => trim((string)($change['source'] ?? 'seo_sitemap_refresh')),
+            'changed_at' => date('c'),
+            'sitemap_only' => true,
+            'targets' => $targets,
+            'unresolved_targets' => [],
+        ]);
+        if ($targets === []) {
+            return [
+                'notified' => false,
+                'event' => self::EVENT_URL_CHANGED,
+                'reason' => 'website_not_found',
+                'module' => $module,
+                'scope' => $scope,
+                'action' => 'refresh',
+                'target_count' => 0,
+                'targets' => [],
+                'generation_pending' => false,
+            ];
+        }
+
+        $this->eventsManager->dispatch(self::EVENT_URL_CHANGED, $payload);
+        $targetResults = [];
+        $sitemapSummary = $this->emptySitemapSummary();
+        $generationPending = false;
+        $retryable = false;
+        foreach ($targets as $target) {
+            $sitemap = $this->syncSitemap(array_replace($payload, $target));
+            $this->mergeSitemapSummary($sitemapSummary, $sitemap);
+            $generationPending = $generationPending || !empty($sitemap['generation_pending']);
+            $retryable = $retryable || !empty($sitemap['retryable']);
+            $targetResults[] = [
+                'website_id' => (int)$target['website_id'],
+                'website_code' => (string)$target['website_code'],
+                'sync_status' => $sitemap,
+                'generation_pending' => !empty($sitemap['generation_pending']),
+            ];
+        }
+
+        $result = [
+            'notified' => true,
+            'event' => self::EVENT_URL_CHANGED,
+            'processed_event' => self::EVENT_URL_CHANGE_PROCESSED,
+            'command' => 'seo-url-change-processed',
+            'module' => $module,
+            'scope' => $payload['scope'],
+            'action' => 'refresh',
+            'sitemap_only' => true,
+            'target_count' => count($targetResults),
+            'targets' => $targetResults,
+            'submit' => ['skipped' => true, 'reason' => 'sitemap_only_refresh'],
+            'sitemap' => $sitemapSummary,
+            'generation_pending' => $generationPending,
+            'retryable' => $retryable,
+        ];
+        $processedPayload = $payload;
+        $processedPayload['result'] = $result;
+        $this->eventsManager->dispatch(self::EVENT_URL_CHANGE_PROCESSED, $processedPayload);
         return $result;
     }
 
@@ -193,7 +321,15 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
                 return;
             }
             foreach ($websites as $website) {
-                $target = $this->normalizeTargetForWebsite($data, (int)($website['website_id'] ?? 0), $url, $website);
+                if (!array_key_exists('website_id', $website) && !array_key_exists('id', $website)) {
+                    continue;
+                }
+                $target = $this->normalizeTargetForWebsite(
+                    $data,
+                    (int)($website['website_id'] ?? $website['id']),
+                    $url,
+                    $website
+                );
                 if ($target !== null) {
                     $targets[] = $target;
                 }
@@ -211,19 +347,26 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
     private function extractWebsiteIds(array $data): array
     {
         $ids = [];
-        $raw = $data['website_ids'] ?? $data['site_ids'] ?? null;
+        $raw = array_key_exists('website_ids', $data)
+            ? $data['website_ids']
+            : ($data['site_ids'] ?? null);
         if (is_array($raw)) {
             foreach ($raw as $id) {
-                $id = (int)$id;
-                if ($id > 0) {
+                $id = $this->normalizeWebsiteId($id);
+                if ($id !== null) {
                     $ids[$id] = $id;
                 }
             }
         }
 
-        $single = (int)($data['website_id'] ?? $data['site_id'] ?? 0);
-        if ($single > 0) {
-            $ids[$single] = $single;
+        $singleKey = array_key_exists('website_id', $data)
+            ? 'website_id'
+            : (array_key_exists('site_id', $data) ? 'site_id' : null);
+        if ($singleKey !== null) {
+            $single = $this->normalizeWebsiteId($data[$singleKey]);
+            if ($single !== null) {
+                $ids[$single] = $single;
+            }
         }
 
         return array_values($ids);
@@ -236,7 +379,7 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
      */
     private function normalizeTargetForWebsite(array $data, int $websiteId, string $url, ?array $website = null): ?array
     {
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             return null;
         }
 
@@ -313,8 +456,9 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
     private function submitUrlChange(array $payload): array
     {
         $url = trim((string)($payload['url'] ?? ''));
-        $websiteId = (int)($payload['website_id'] ?? 0);
-        if ($url === '' || $websiteId <= 0) {
+        $hasWebsiteId = array_key_exists('website_id', $payload);
+        $websiteId = (int)($payload['website_id'] ?? -1);
+        if ($url === '' || !$hasWebsiteId || $websiteId < 0) {
             return ['skipped' => true, 'reason' => 'unresolved_target'];
         }
 
@@ -342,8 +486,9 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
     private function syncSitemap(array $payload): array
     {
         $module = trim((string)($payload['sitemap_module'] ?? $payload['module'] ?? ''));
-        $websiteId = (int)($payload['website_id'] ?? 0);
-        if ($module === '' || $websiteId <= 0) {
+        $hasWebsiteId = array_key_exists('website_id', $payload);
+        $websiteId = (int)($payload['website_id'] ?? -1);
+        if ($module === '' || !$hasWebsiteId || $websiteId < 0) {
             return ['skipped' => true, 'reason' => 'missing_module_or_website'];
         }
 
@@ -401,6 +546,7 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
             'total' => 0,
             'invalid' => 0,
             'errors' => 0,
+            'manual_cleanup' => 0,
         ];
     }
 
@@ -450,5 +596,23 @@ class SeoUrlChangeService implements UrlChangeNotifierInterface
         }
 
         return ['is_local' => false, 'reason' => '', 'host' => $host];
+    }
+
+    private function normalizeWebsiteId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_int($value)) {
+            $websiteId = $value;
+        } elseif (is_string($value) && preg_match('/^\d+$/D', $value) === 1) {
+            $websiteId = (int)$value;
+        } else {
+            throw new \InvalidArgumentException(__('website_id 必须是非负整数'));
+        }
+        if ($websiteId < 0) {
+            throw new \InvalidArgumentException(__('website_id 不能为负数'));
+        }
+        return $websiteId;
     }
 }

@@ -1,4 +1,8 @@
-﻿前台顾客登录扩展区,"Frontend Customer Login Extension Area"
+﻿客户账户登录后,客户账户登录后
+客户身份和前台会话建立成功后同步触发，供购物车合并等登录后业务扩展使用。,客户身份和前台会话建立成功后同步触发，供购物车合并等登录后业务扩展使用。
+请先登录,"Please log in first"
+缺少账户分区参数,缺少账户分区参数
+前台顾客登录扩展区,"Frontend Customer Login Extension Area"
 在顾客登录页注入第三方登录入口等扩展内容。,"Inject extended content such as third-party login options on the customer login page."
 账户首页订阅分区,"Account Homepage Subscriptions Section"
 在顾客账户首页「订阅」分区注入周期性订阅入口等内容。,"Inject recurring subscription entry points and other content into the ""Subscriptions"" section on the customer account homepage."
@@ -18,18 +22,24 @@
 删除成功,"Deleted successfully"
 令牌已重置,"Tokens have been reset"
 密码已重置,"Password has been reset"
+前端客户,"Frontend Customers"
+查看前端客户,查看前端客户
+查看前端客户详情,查看前端客户详情
+保存前端客户,保存前端客户
+删除前端客户,删除前端客户
+重置前端令牌,重置前端令牌
+重置前端密码,重置前端密码
 联系我们,联系我们
 登录,"Log in"
 你已经登录了，请先退出登录.,"You are already logged in. Please log out first."
 请输入用户名/邮箱和密码。,"Username/email and password are required."
+人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
 用户不存在.,"User does not exist."
 登录尝试次数过多，请稍后再试.,"Too many login attempts, please try again later."
 密码错误.,"Incorrect password."
 请完成两步验证。,"Please complete two-factor verification."
 登录成功.,"Login successful."
 "登录失败: %{1}","Login failed: %{1}"
-请先登录,"Please log in first"
-缺少账户分区参数,缺少账户分区参数
 请输入原密码,"Please enter your current password"
 原密码错误,"Current password is incorrect"
 新密码长度不能少于6位,"New password must be at least 6 characters"
@@ -61,9 +71,6 @@
 缺少重置令牌。,"The reset token is required."
 请输入新密码。,"Please enter a new password."
 密码已重置，请使用新密码登录。,"Your password has been reset. Please sign in with the new password."
-用户登录,"User login"
-登录失败，请检查用户名和密码,"Login failed, please check your username and password"
-登录请求失败，请稍后重试,"Login request failed, please try again later"
 账户,Account
 个人资料,"Personal information"
 安全设置,"Security settings"
@@ -149,6 +156,9 @@
 登录成功！,"Login successful!"
 '显示密码',"'Show password'"
 '隐藏密码',"'hide password'"
+用户登录,"User login"
+登录失败，请检查用户名和密码,"Login failed, please check your username and password"
+登录请求失败，请稍后重试,"Login request failed, please try again later"
 欢迎回来！您可以在这里管理您的账户信息,"Welcome back! You can manage your account information here"
 账户标识,"Account Identifier"
 "用户名和用户 ID 为系统标识，不可修改","Username and user ID are system identifiers and cannot be modified"
@@ -183,7 +193,6 @@
 确定要重置该客户的令牌吗？此操作会强制该客户重新登录。,"Reset tokens for this customer? This forces a re-login."
 确定要删除该客户吗？此操作不可撤销。,"Delete this customer? This action cannot be undone."
 关闭,Close
-前端客户,"Frontend Customers"
 搜索关键字,Keyword
 用户名模糊查询,"Search by username"
 搜索,Search

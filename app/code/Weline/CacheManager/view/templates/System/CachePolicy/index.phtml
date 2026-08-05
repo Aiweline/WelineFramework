@@ -190,14 +190,12 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
             button.disabled = true;
             message.className = 'cache-policy-message';
             message.textContent = '<?= __('正在保存...') ?>';
-            fetch(form.action, {
+            bqAdmin['cache_manager'](form.action, {
                 method: 'POST',
                 body: new FormData(form),
                 credentials: 'same-origin',
                 headers: {'X-Requested-With': 'XMLHttpRequest'}
-            }).then(function (response) {
-                return response.json();
-            }).then(function (payload) {
+            }).then(function(response){ return response; }).then(function (payload) {
                 if (!payload || Number(payload.code) !== 200) {
                     throw new Error(payload && payload.msg ? payload.msg : '<?= __('保存失败') ?>');
                 }

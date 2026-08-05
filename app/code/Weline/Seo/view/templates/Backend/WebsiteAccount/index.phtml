@@ -11,13 +11,14 @@
 $websites = $websites ?? [];
 $bindingCounts = $binding_counts ?? [];
 ?>
+<link rel="stylesheet" href="@static(Weline_Seo::css/seo-admin.css)">
 <div class='row'>
                     <div class='col-12'>
                         <template>Weline_Component::message.phtml</template>
                     </div>
                 </div>
 
-                <div class='row'>
+                <div class='row' data-testid="seo-website-account-management">
                     <div class='col-12'>
                         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
                             <h4 class='mb-sm-0'>
@@ -72,18 +73,19 @@ $bindingCounts = $binding_counts ?? [];
                                                 <td>
                                                     <strong><?= htmlspecialchars((string)$websiteName, ENT_QUOTES) ?></strong>
                                                     <br><small class="text-muted"><?= htmlspecialchars((string)($website['code'] ?? ''), ENT_QUOTES) ?></small>
+                                                    <?php if ($websiteId === 0): ?><span class="badge bg-primary ms-1"><lang>系统默认站</lang></span><?php endif; ?>
                                                 </td>
                                                 <td><?= htmlspecialchars((string)$websiteDomain, ENT_QUOTES) ?></td>
                                                 <td>
                                                     <?php if ($boundCount > 0): ?>
                                                     <span class="badge bg-success"><?= $boundCount ?> <lang>个账户</lang></span>
                                                     <?php else: ?>
-                                                    <span class="badge bg-secondary"><lang>未绑定</lang></span>
+                                                    <span class="badge bg-secondary"><lang>可生成，尚未提交</lang></span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
                                                     <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES) ?>" class="btn btn-sm btn-primary">
-                                                        <i class="mdi mdi-cog me-1"></i><lang>管理绑定</lang>
+                                                        <i class="mdi mdi-cog me-1" aria-hidden="true"></i><lang>管理绑定</lang>
                                                     </a>
                                                 </td>
                                             </tr>

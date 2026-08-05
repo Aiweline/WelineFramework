@@ -87,6 +87,17 @@ $search = $this->getData('search') ?? '';
     align-items: center;
     cursor: pointer;
     user-select: none;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: inherit;
+}
+.weline-websites-admin-guide-header:focus-visible {
+    outline: 3px solid var(--backend-color-primary, #556ee6);
+    outline-offset: 4px;
+    border-radius: var(--backend-border-radius-sm, 4px);
 }
 .weline-websites-admin-guide-header h6 {
     margin: 0;
@@ -114,7 +125,7 @@ $search = $this->getData('search') ?? '';
     border-color: var(--backend-color-primary, #556ee6);
 }
 .weline-websites-compact-table {
-    min-width: 840px;
+    min-width: 1180px;
     margin-bottom: 0;
 }
 .weline-websites-site-cell {
@@ -206,10 +217,109 @@ $search = $this->getData('search') ?? '';
 .weline-websites-op-cell .btn {
     white-space: nowrap;
 }
+.weline-websites-directory-cell {
+    min-width: 22rem;
+    max-width: 30rem;
+    vertical-align: top;
+}
+.weline-websites-directory {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    max-height: 24rem;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    scrollbar-width: thin;
+}
+.weline-websites-directory-heading,
+.weline-websites-store-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.weline-websites-directory-heading {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.weline-websites-directory-empty,
+.weline-websites-channel-empty {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    padding: 0.65rem;
+    border: 1px dashed var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    color: var(--backend-color-text-secondary, #6c757d);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    font-size: 0.8rem;
+}
+.weline-websites-store-list,
+.weline-websites-channel-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.weline-websites-store-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.weline-websites-store-item {
+    padding: 0.65rem;
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+.weline-websites-store-header > div:first-child,
+.weline-websites-directory-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+.weline-websites-directory-badges {
+    justify-content: flex-end;
+}
+.weline-websites-channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.55rem;
+    padding-left: 0.65rem;
+    border-left: 2px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-websites-channel-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.8rem;
+}
+.weline-websites-channel-name {
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 500;
+}
+.weline-websites-channel-empty {
+    margin-top: 0.55rem;
+    padding: 0.45rem 0.55rem;
+}
+@media (max-width: 767.98px) {
+    .weline-websites-directory-cell {
+        min-width: 19rem;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    #weline-websites-guide-icon {
+        transition: none !important;
+    }
+}
 </style>
 
 <!-- 页面标题 -->
-<div class="row">
+<div class="row" data-testid="website-management">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18">
@@ -237,13 +347,18 @@ $search = $this->getData('search') ?? '';
 <div class="row">
     <div class="col-12">
         <div class="weline-websites-admin-guide">
-            <div class="weline-websites-admin-guide-header" id="weline-websites-guide-toggle">
+            <button type="button"
+                    class="weline-websites-admin-guide-header"
+                    id="weline-websites-guide-toggle"
+                    aria-expanded="false"
+                    aria-controls="weline-websites-guide-body">
                 <h6><i class="mdi mdi-help-circle-outline me-2"></i><lang>使用说明</lang></h6>
-                <i class="mdi mdi-chevron-down" id="weline-websites-guide-icon" style="transition: transform 0.3s ease;"></i>
-            </div>
+                <i class="mdi mdi-chevron-down" id="weline-websites-guide-icon" style="transition: transform 0.3s ease;" aria-hidden="true"></i>
+            </button>
             <div class="weline-websites-admin-guide-body" id="weline-websites-guide-body">
                 <ul>
                     <li><strong><lang>网站</lang>：</strong><lang>代表一个独立站点，可配置多个域名、语言与货币</lang></li>
+                    <li><strong><lang>Store / SalesChannel</lang>：</strong><lang>列表只读展示站点下的店铺模式、生命周期与销售渠道，不在此处修改目录。</lang></li>
                     <li><strong><lang>关联域名</lang>：</strong><lang>一个网站可绑定多个域名，主域名用于默认访问</lang></li>
                     <li><strong><lang>编辑/删除</lang>：</strong><lang>在操作列中可编辑网站或删除（请谨慎操作）</lang></li>
                 </ul>
@@ -313,150 +428,30 @@ $search = $this->getData('search') ?? '';
             var icon = document.getElementById('weline-websites-guide-icon');
             if (body && icon) {
                 body.classList.toggle('show');
-                icon.style.transform = body.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
+                var expanded = body.classList.contains('show');
+                guideToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                icon.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
             }
         });
     }
 
-    var searchTimeout = null;
     var searchForm = document.getElementById('search-form');
     var searchInput = document.getElementById('search-input');
-    var tableContainer = document.getElementById('website-table-container');
-    var clearSearchBtn = document.getElementById('clear-search');
-    var searchUrl = '<?= $this->getUrl('*/admin/website') ?>';
+    if (searchForm && searchInput) {
+        searchForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            var currentParams = new URLSearchParams(window.location.search);
+            var pageSize = currentParams.get('pageSize') || '10';
+            var params = new URLSearchParams();
+            params.append('page', '1');
+            params.append('pageSize', pageSize);
+            var searchValue = searchInput.value.trim();
+            if (searchValue) {
+                params.append('search', searchValue);
+            }
+            window.location.assign(searchForm.action + '?' + params.toString());
+        });
+    }
 
-    function escapeHtml(value) {
-        return String(value == null ? '' : value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-    
-    function performSearch() {
-        if (!searchForm || !tableContainer) return;
-        
-        var searchValue = searchInput ? searchInput.value.trim() : '';
-        var currentParams = new URLSearchParams(window.location.search);
-        var pageSize = currentParams.get('pageSize') || '10';
-        
-        tableContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div><p class="mt-3"><?= __('正在搜索...') ?></p></div>';
-        
-        var params = new URLSearchParams();
-        params.append('page', '1');
-        params.append('pageSize', pageSize);
-        if (searchValue) {
-            params.append('search', searchValue);
-        }
-        var ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
-        
-        fetch(ajaxUrl, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP error! status: ' + response.status);
-            }
-            return response.text();
-        })
-        .then(function(text) {
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.error('JSON parse error:', e, text);
-                throw new Error('<?= __('服务器返回的不是有效的JSON数据') ?>');
-            }
-        })
-        .then(function(data) {
-            if (data.success) {
-                tableContainer.innerHTML = data.html;
-                
-                var scripts = tableContainer.querySelectorAll('script');
-                scripts.forEach(function(oldScript) {
-                    var newScript = document.createElement('script');
-                    Array.from(oldScript.attributes).forEach(function(attr) {
-                        newScript.setAttribute(attr.name, attr.value);
-                    });
-                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
-                    oldScript.parentNode.replaceChild(newScript, oldScript);
-                });
-                
-                var currentClearBtn = document.getElementById('clear-search');
-                if (searchValue) {
-                    if (!currentClearBtn) {
-                        var btn = document.createElement('a');
-                        btn.href = searchUrl;
-                        btn.className = 'btn btn-outline-secondary';
-                        btn.id = 'clear-search';
-                        btn.innerHTML = '<i class="mdi mdi-close"></i> <?= __('清除') ?>';
-                        searchForm.appendChild(btn);
-                        btn.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            searchInput.value = '';
-                            performSearch();
-                        });
-                    }
-                } else {
-                    if (currentClearBtn && currentClearBtn.parentNode) {
-                        currentClearBtn.parentNode.removeChild(currentClearBtn);
-                    }
-                }
-                
-                if (typeof window.initWDelete === 'function') {
-                    window.initWDelete();
-                } else {
-                    var wDeleteScript = document.querySelector('script[src*="w-delete"]');
-                    if (wDeleteScript) {
-                        var newScript = document.createElement('script');
-                        newScript.src = wDeleteScript.src;
-                        document.body.appendChild(newScript);
-                    }
-                }
-            } else {
-                tableContainer.innerHTML = '<div class="alert alert-danger"><?= __('搜索失败') ?>: ' + escapeHtml(data.message || '<?= __('未知错误') ?>') + '</div>';
-            }
-        })
-        .catch(function(error) {
-            console.error('Search error:', error);
-            tableContainer.innerHTML = '<div class="alert alert-danger"><?= __('搜索出错，请刷新页面重试') ?></div>';
-        });
-    }
-    
-    document.addEventListener('DOMContentLoaded', function() {
-        if (!searchForm || !searchInput) return;
-        
-        searchForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            clearTimeout(searchTimeout);
-            performSearch();
-        });
-        
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(function() {
-                performSearch();
-            }, 500);
-        });
-        
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                clearTimeout(searchTimeout);
-                performSearch();
-            }
-        });
-        
-        if (clearSearchBtn) {
-            clearSearchBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                searchInput.value = '';
-                performSearch();
-            });
-        }
-    });
 })();
 </script>

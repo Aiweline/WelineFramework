@@ -72,6 +72,7 @@ function wlsParseHttpRequestFrame(
     $contentLength = null;
     $transferEncodings = [];
     $headers = [];
+    $hostCount = 0;
     foreach ($lines as $line) {
         if ($line === '' || $line[0] === ' ' || $line[0] === "\t") {
             return wlsInvalidHttpRequestFrame('invalid_header_folding', 400, $headerBytes);
@@ -91,6 +92,9 @@ function wlsParseHttpRequestFrame(
             || \preg_match('/[\x00-\x08\x0A-\x1F\x7F]/', $rawValue) === 1
         ) {
             return wlsInvalidHttpRequestFrame('invalid_header', 400, $headerBytes);
+        }
+        if ($name === 'host' && ++$hostCount > 1) {
+            return wlsInvalidHttpRequestFrame('duplicate_host', 400, $headerBytes);
         }
         $headers[$name] = isset($headers[$name])
             ? (
@@ -140,6 +144,9 @@ function wlsParseHttpRequestFrame(
             ? 'unsupported_chunked_transfer_encoding'
             : 'unsupported_transfer_encoding';
         return wlsInvalidHttpRequestFrame($reason, 400, $headerBytes);
+    }
+    if ((string)$requestMatch[3] === '1.1' && $hostCount !== 1) {
+        return wlsInvalidHttpRequestFrame('missing_host', 400, $headerBytes);
     }
 
     $contentLength ??= '0';
