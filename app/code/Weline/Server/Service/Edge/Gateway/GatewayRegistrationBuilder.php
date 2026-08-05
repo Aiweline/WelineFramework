@@ -1400,6 +1400,10 @@ final class GatewayRegistrationBuilder
                 $body = \strtolower($ascii);
             }
         }
+        // Local loopback fact keys remain valid without a public TLD.
+        if ($body === 'localhost') {
+            return $wildcard ? '*.' . $body : $body;
+        }
         if (\strlen($body) > 253
             || \preg_match(
                 '/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)'

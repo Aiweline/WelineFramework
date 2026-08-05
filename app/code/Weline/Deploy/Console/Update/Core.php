@@ -22,8 +22,8 @@ use Weline\Framework\Output\Cli\Printing;
 
 class Core extends CommandAbstract
 {
-    /** 命令别名：支持旧用法 core:update */
-    public const ALIASES = ['core:update'];
+    /** 命令别名：core:update / core:up */
+    public const ALIASES = ['core:update', 'core:up'];
 
     /** 默认主仓库（GitHub），未配置且可达时使用 */
     private const DEFAULT_REPO_GITHUB = 'https://github.com/Aiweline/WelineFramework.git';
