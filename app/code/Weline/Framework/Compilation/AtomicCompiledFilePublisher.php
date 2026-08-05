@@ -43,7 +43,10 @@ final class AtomicCompiledFilePublisher
 
         $directory = \dirname($target);
         $this->ensureDirectory($directory);
-        $this->acquireCompileLock($directory, \LOCK_EX);
+        // true = this call newly acquired the lock; false = already held by this PID
+        // (e.g. inside FrameworkCompiler session). Must release only when acquired here,
+        // otherwise a leaked EX lock blocks later framework:compile subprocesses.
+        $acquiredHere = $this->acquireCompileLock($directory, \LOCK_EX);
 
         if ($this->isWindows()) {
             $this->recoverInterruptedWindowsPublish($target);
@@ -59,6 +62,9 @@ final class AtomicCompiledFilePublisher
         } finally {
             if ($this->pathExists($temporary)) {
                 @\unlink($temporary);
+            }
+            if ($acquiredHere) {
+                self::releaseDirectoryLock($directory);
             }
         }
 
