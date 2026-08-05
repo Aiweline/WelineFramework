@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Taglib;
 
 use Symfony\Component\Intl\Countries;
+use Symfony\Component\Intl\Locales;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
@@ -49,9 +50,11 @@ class LanguageSelect implements TaglibInterface
             'allow-empty' => false,
             'display-only' => false,
             'readonly-values' => false,
+            'disabled-values' => false,
             'allowed-values' => false,
             'option-values' => false,
             'options-values' => false,
+            'locales' => false,
             'display-locale' => false,
             'input-id' => false,
             'empty-text' => false,
@@ -59,6 +62,7 @@ class LanguageSelect implements TaglibInterface
             'on-change' => false,
             'inline-dropdown' => false,
             'show-reference' => false,
+            'catalog' => false,
         ];
     }
 
@@ -79,7 +83,16 @@ $__wls_display_locale = \trim((string)($Taglib__display_locale ?? ''));
 if ($__wls_display_locale === '') {
     $__wls_display_locale = \Weline\Framework\App\State::getLang() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN';
 }
-$__wls_items_json = \Weline\I18n\Taglib\LanguageSelect::getLanguageItemsJson($__wls_display_locale);
+$__wls_catalog = \strtolower(\trim((string)($Taglib__catalog ?? 'installed')));
+if (!\in_array($__wls_catalog, ['installed', 'global'], true)) {
+    $__wls_catalog = 'installed';
+}
+$__wls_allowed_values_early = $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? ($Taglib__locales ?? [])));
+$__wls_items_json = \Weline\I18n\Taglib\LanguageSelect::getLanguageItemsJson(
+    $__wls_display_locale,
+    $__wls_catalog,
+    $__wls_allowed_values_early
+);
 ?>
 PHP;
 $html[] = <<<'PHP'
@@ -150,8 +163,9 @@ $__wls_required = $__wls_normalize_bool($Taglib__required ?? false, false);
 $__wls_allow_empty = $__wls_normalize_bool($Taglib__allow_empty ?? (!$__wls_required), !$__wls_required);
 $__wls_selected_values = $__wls_parse_values($Taglib__value ?? []);
 $__wls_readonly_values = $__wls_parse_values($Taglib__readonly_values ?? []);
+$__wls_disabled_values = $__wls_parse_values($Taglib__disabled_values ?? []);
 $__wls_allowed_values = $__wls_parse_values(
-    $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? []))
+    $Taglib__allowed_values ?? ($Taglib__option_values ?? ($Taglib__options_values ?? ($Taglib__locales ?? [])))
 );
 foreach ($__wls_readonly_values as $__wls_readonly_value) {
     if (!\in_array($__wls_readonly_value, $__wls_selected_values, true)) {
@@ -190,6 +204,13 @@ $__wls_readonly_json = \json_encode(
 );
 if ($__wls_readonly_json === false) {
     $__wls_readonly_json = '[]';
+}
+$__wls_disabled_json = \json_encode(
+    $__wls_disabled_values,
+    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+if ($__wls_disabled_json === false) {
+    $__wls_disabled_json = '[]';
 }
 $__wls_allowed_json = \json_encode(
     $__wls_allowed_values,
@@ -487,6 +508,7 @@ HTML;
     var items = <?= $__wls_items_json ?> || [];
     var selectedValues = <?= $__wls_selected_json ?> || [];
     var readonlyValues = <?= $__wls_readonly_json ?> || [];
+    var disabledValues = <?= $__wls_disabled_json ?> || [];
     var allowedValues = <?= $__wls_allowed_json ?> || [];
     var onChangeName = <?= json_encode($__wls_on_change, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var showReference = <?= $__wls_show_reference ? 'true' : 'false' ?>;
@@ -510,6 +532,11 @@ HTML;
     }
     selectedValues = filterAllowedValues(selectedValues);
     readonlyValues = filterAllowedValues(readonlyValues);
+    disabledValues = filterAllowedValues(disabledValues);
+    var disabledMap = {};
+    disabledValues.forEach(function (code) {
+        disabledMap[code] = true;
+    });
 
     var map = {};
     items.forEach(function (item) {
@@ -608,6 +635,13 @@ HTML;
         if (locale && locale.flag) {
             return locale.flag;
         }
+        var countryCode = String(locale && locale.country_code || '').toUpperCase();
+        if (/^[A-Z]{2}$/.test(countryCode)) {
+            return '<span aria-hidden="true">' + String.fromCodePoint(
+                countryCode.charCodeAt(0) + 127397,
+                countryCode.charCodeAt(1) + 127397
+            ) + '</span>';
+        }
         return '<i class="mdi mdi-translate"></i>';
     }
 
@@ -657,6 +691,15 @@ HTML;
     function groupItems(filteredItems) {
         var groups = [];
         var currentGroup = null;
+        var selectedCountryKeys = {};
+
+        selectedValues.forEach(function (code) {
+            filteredItems.forEach(function (item) {
+                if (String(item.code || '') === String(code || '')) {
+                    selectedCountryKeys[(item.country_name || '') + '|' + (item.country_code || '')] = true;
+                }
+            });
+        });
 
         filteredItems.forEach(function (item) {
             var countryKey = (item.country_name || '') + '|' + (item.country_code || '');
@@ -671,6 +714,30 @@ HTML;
             }
             currentGroup.items.push(item);
         });
+
+        if (Object.keys(selectedCountryKeys).length) {
+            var pinned = [];
+            var rest = [];
+            groups.forEach(function (group) {
+                if (selectedCountryKeys[group.key]) {
+                    // Keep the currently selected locale(s) at the top of their country group.
+                    var selectedItems = [];
+                    var otherItems = [];
+                    group.items.forEach(function (item) {
+                        if (selectedValues.indexOf(item.code) !== -1) {
+                            selectedItems.push(item);
+                        } else {
+                            otherItems.push(item);
+                        }
+                    });
+                    group.items = selectedItems.concat(otherItems);
+                    pinned.push(group);
+                } else {
+                    rest.push(group);
+                }
+            });
+            groups = pinned.concat(rest);
+        }
 
         return groups;
     }
@@ -707,21 +774,24 @@ HTML;
                     ? (item.display_name || item.tag_label || item.name || item.code)
                     : (item.name || item.reference_name || item.code);
                 var selected = selectedValues.indexOf(item.code) !== -1;
-                var locked = readonlyValues.indexOf(item.code) !== -1 && selected;
+                var disabled = !!disabledMap[item.code];
+                var locked = (readonlyValues.indexOf(item.code) !== -1 && selected) || disabled;
                 var icon = isMultiple
                     ? (selected ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline')
                     : (selected ? 'mdi-radiobox-marked' : 'mdi-radiobox-blank');
                 var metaParts = [item.code];
+                var selfName = String(item.self_name || '').trim();
                 var englishName = String(item.english_name || item.reference_name || '').trim();
-                if (englishName && englishName !== label && metaParts.indexOf(englishName) === -1) {
-                    metaParts.push(englishName);
+                var metaSecondary = selfName || englishName;
+                if (metaSecondary && metaSecondary !== label && metaParts.indexOf(metaSecondary) === -1) {
+                    metaParts.push(metaSecondary);
                 }
                 var countryName = String(item.country_name || '').trim();
                 if (countryName && metaParts.indexOf(countryName) === -1) {
                     metaParts.push(countryName);
                 }
 
-                html += '<button type="button" class="weline-language-select-item' + (selected ? ' is-selected' : '') + (locked ? ' is-readonly' : '') + '" data-code="' + escapeHtml(item.code) + '">';
+                html += '<button type="button" class="weline-language-select-item' + (selected ? ' is-selected' : '') + (locked ? ' is-readonly' : '') + '" data-code="' + escapeHtml(item.code) + '"' + (disabled ? ' disabled aria-disabled="true"' : '') + '>';
                 html += '<span class="weline-language-select-indicator"><i class="mdi ' + icon + '"></i></span>';
                 html += '<span class="weline-language-select-flag">' + renderFlag(item) + '</span>';
                 html += '<span class="weline-language-select-item-copy">';
@@ -754,7 +824,7 @@ HTML;
                     return;
                 }
 
-                if (readonlyValues.indexOf(code) !== -1 && selectedValues.indexOf(code) !== -1) {
+                if (disabledMap[code] || (readonlyValues.indexOf(code) !== -1 && selectedValues.indexOf(code) !== -1)) {
                     return;
                 }
 
@@ -828,7 +898,7 @@ HTML;
 
     function addValue(code) {
         code = String(code || '').trim();
-        if (!code || !isAllowed(code) || selectedValues.indexOf(code) !== -1) {
+        if (!code || !isAllowed(code) || disabledMap[code] || selectedValues.indexOf(code) !== -1) {
             return;
         }
         selectedValues.push(code);
@@ -1167,10 +1237,23 @@ DOC;
         return \htmlspecialchars($doc, ENT_NOQUOTES);
     }
 
-    private static function getLanguageItems(string $displayLocale): array
+    /**
+     * Canonical country-grouped locale catalog shared by I18n selector Taglibs.
+     *
+     * @return list<array<string, string>>
+     */
+    public static function getLanguageItems(string $displayLocale, string $catalog = 'installed'): array
     {
-        if (isset(self::$itemsCache[$displayLocale])) {
-            return self::$itemsCache[$displayLocale];
+        $catalog = \strtolower(\trim($catalog));
+        if (!\in_array($catalog, ['installed', 'global'], true)) {
+            $catalog = 'installed';
+        }
+        $cacheKey = $catalog . '|' . $displayLocale;
+        if (isset(self::$itemsCache[$cacheKey])) {
+            return self::$itemsCache[$cacheKey];
+        }
+        if ($catalog === 'global') {
+            return self::$itemsCache[$cacheKey] = self::buildGlobalLanguageItems($displayLocale);
         }
 
         /** @var I18n $i18n */
@@ -1300,9 +1383,16 @@ DOC;
         }
 
         \usort($items, static function (array $a, array $b): int {
-            $countryCompare = \strnatcasecmp((string)($a['country_name'] ?? ''), (string)($b['country_name'] ?? ''));
+            // Prefer ISO country code over localized country_name so zh display
+            // locale does not put 中国 ahead of every other country by Unicode order.
+            $countryCompare = \strnatcasecmp((string)($a['country_code'] ?? ''), (string)($b['country_code'] ?? ''));
             if ($countryCompare !== 0) {
                 return $countryCompare;
+            }
+
+            $countryNameCompare = \strnatcasecmp((string)($a['country_name'] ?? ''), (string)($b['country_name'] ?? ''));
+            if ($countryNameCompare !== 0) {
+                return $countryNameCompare;
             }
 
             $nameCompare = \strnatcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
@@ -1313,19 +1403,243 @@ DOC;
             return \strnatcasecmp((string)($a['code'] ?? ''), (string)($b['code'] ?? ''));
         });
 
-        self::$itemsCache[$displayLocale] = $items;
+        self::$itemsCache[$cacheKey] = $items;
         return $items;
     }
 
-    public static function getLanguageItemsJson(string $displayLocale): string
-    {
+    public static function getLanguageItemsJson(
+        string $displayLocale,
+        string $catalog = 'installed',
+        mixed $allowedValues = null,
+    ): string {
         $displayLocale = trim($displayLocale) !== '' ? trim($displayLocale) : (State::getLang() ?: State::getLangLocal() ?: 'zh_Hans_CN');
         $itemsJson = \json_encode(
-            self::getLanguageItems($displayLocale),
+            self::resolveLanguageItems($displayLocale, $catalog, $allowedValues),
             JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
         );
 
         return $itemsJson === false ? '[]' : $itemsJson;
+    }
+
+    /**
+     * Resolve selector options. When locales/allowed-values is non-empty, that
+     * list is authoritative (pre-website inject): labels come from the i18n
+     * catalog, missing codes still appear with a locale fallback label.
+     *
+     * @return list<array<string, string>>
+     */
+    public static function resolveLanguageItems(
+        string $displayLocale,
+        string $catalog = 'installed',
+        mixed $allowedValues = null,
+    ): array {
+        $allowedCodes = self::normalizeInjectCodes($allowedValues);
+        if ($allowedCodes === []) {
+            return self::getLanguageItems($displayLocale, $catalog);
+        }
+
+        $sourceCatalog = $catalog === 'installed' ? 'global' : $catalog;
+        $base = self::getLanguageItems($displayLocale, $sourceCatalog);
+        $installed = $catalog === 'installed'
+            ? self::getLanguageItems($displayLocale, 'installed')
+            : [];
+        $byCode = [];
+        foreach ($base as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $code = \trim((string)($item['code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $byCode[\strtolower(\str_replace('-', '_', $code))] = $item;
+        }
+        foreach ($installed as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $code = \trim((string)($item['code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $byCode[\strtolower(\str_replace('-', '_', $code))] = $item;
+        }
+
+        $items = [];
+        foreach ($allowedCodes as $code) {
+            $key = \strtolower(\str_replace('-', '_', $code));
+            if (isset($byCode[$key])) {
+                $items[] = $byCode[$key];
+                continue;
+            }
+            $items[] = self::synthesizeLanguageItem($code, $displayLocale);
+        }
+
+        return $items;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function normalizeInjectCodes(mixed $raw): array
+    {
+        if (\is_array($raw)) {
+            $values = $raw;
+        } elseif ($raw === null || $raw === '') {
+            return [];
+        } else {
+            $raw = \trim((string)$raw);
+            if ($raw !== '' && ($raw[0] === '[' || $raw[0] === '{')) {
+                $decoded = \json_decode($raw, true);
+                $values = (\json_last_error() === \JSON_ERROR_NONE && \is_array($decoded))
+                    ? $decoded
+                    : (\preg_split('/[\s,]+/', $raw, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+            } else {
+                $values = \preg_split('/[\s,]+/', $raw, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+            }
+        }
+        $result = [];
+        foreach ($values as $value) {
+            if (\is_array($value) && isset($value['code'])) {
+                $value = $value['code'];
+            }
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $value = \trim((string)$value);
+            if ($value === '' || \in_array($value, $result, true)) {
+                continue;
+            }
+            $result[] = $value;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function synthesizeLanguageItem(string $code, string $displayLocale): array
+    {
+        /** @var I18n $i18n */
+        $i18n = ObjectManager::getInstance(I18n::class);
+        $name = '';
+        $selfName = '';
+        $referenceName = '';
+        try {
+            $name = \trim((string)$i18n->getLocaleName($code, $displayLocale));
+        } catch (\Throwable) {
+        }
+        try {
+            $selfName = \trim((string)$i18n->getLocaleName($code, $code));
+        } catch (\Throwable) {
+        }
+        try {
+            $referenceName = \trim((string)$i18n->getLocaleName($code, 'en'));
+        } catch (\Throwable) {
+        }
+        $countryCode = self::extractCountryCode($code);
+        $displayName = self::buildDisplayName($name, $referenceName, $selfName, $code);
+        $tagLabel = self::buildTagLabel($name, $selfName, $referenceName, $code);
+
+        return [
+            'code' => $code,
+            'name' => $name !== '' ? $name : $code,
+            'self_name' => $selfName,
+            'english_name' => $referenceName,
+            'reference_name' => $referenceName,
+            'display_name' => $displayName,
+            'tag_label' => $tagLabel,
+            'country_code' => $countryCode,
+            'country_name' => $countryCode !== '' ? $countryCode : (string)__('未分组国家'),
+            'flag' => '',
+            'short_code' => Locale::extractShortCode($code),
+            'iso2' => '',
+            'iso3' => '',
+            'search' => \implode(' ', self::buildSearchTerms([
+                $code,
+                $name,
+                $selfName,
+                $referenceName,
+                $displayName,
+                $tagLabel,
+                $countryCode,
+            ])),
+        ];
+    }
+
+    /**
+     * @return list<array<string, string>>
+     */
+    private static function buildGlobalLanguageItems(string $displayLocale): array
+    {
+        /** @var I18n $i18n */
+        $i18n = ObjectManager::getInstance(I18n::class);
+        $countryNames = [];
+        try {
+            foreach (Countries::getNames(\extension_loaded('intl') ? $displayLocale : 'en') as $code => $name) {
+                $countryNames[\strtoupper((string)$code)] = (string)$name;
+            }
+        } catch (\Throwable) {
+            $countryNames = [];
+        }
+
+        $items = [];
+        foreach (Locales::getLocales() as $rawCode) {
+            $code = \str_replace('-', '_', \trim((string)$rawCode));
+            if ($code === '' || \preg_match('/\A[A-Za-z]{2,3}(?:_[A-Za-z]{4})?(?:_[A-Z]{2}|\_[0-9]{3})?\z/D', $code) !== 1) {
+                continue;
+            }
+            $name = \trim($i18n->getLocaleName($code, $displayLocale));
+            $selfName = \trim($i18n->getLocaleName($code, $code));
+            $referenceName = \trim($i18n->getLocaleName($code, 'en'));
+            $countryCode = self::extractCountryCode($code);
+            $countryName = $countryCode !== ''
+                ? (string)($countryNames[$countryCode] ?? $countryCode)
+                : (string)__('全球语言');
+            $displayName = self::buildDisplayName($name, $referenceName, $selfName, $code);
+            $tagLabel = self::buildTagLabel($name, $selfName, $referenceName, $code);
+            $items[$code] = [
+                'code' => $code,
+                'name' => $name !== '' ? $name : $code,
+                'self_name' => $selfName,
+                'english_name' => $referenceName,
+                'reference_name' => $referenceName,
+                'display_name' => $displayName,
+                'tag_label' => $tagLabel,
+                'country_code' => $countryCode,
+                'country_name' => $countryName,
+                // Keep the global catalog compact enough for QueryBin's bounded
+                // response frame. The browser derives a Unicode country flag
+                // from country_code; installed locales may still use custom SVG.
+                'flag' => '',
+                'short_code' => Locale::extractShortCode($code),
+                'iso2' => '',
+                'iso3' => '',
+                'search' => \implode(' ', self::buildSearchTerms([
+                    $code,
+                    $name,
+                    $selfName,
+                    $referenceName,
+                    $displayName,
+                    $tagLabel,
+                    $countryCode,
+                    $countryName,
+                ])),
+            ];
+        }
+        $items = \array_values($items);
+        \usort($items, static function (array $left, array $right): int {
+            $country = \strnatcasecmp((string)$left['country_code'], (string)$right['country_code']);
+            if ($country !== 0) {
+                return $country;
+            }
+            $countryName = \strnatcasecmp((string)$left['country_name'], (string)$right['country_name']);
+            return $countryName !== 0
+                ? $countryName
+                : \strnatcasecmp((string)$left['display_name'], (string)$right['display_name']);
+        });
+        return $items;
     }
 
     private static function buildDisplayName(string $localizedName, string $referenceName, string $selfName, string $code): string
@@ -1338,12 +1652,15 @@ DOC;
             $localizedName = $selfName !== '' ? $selfName : ($referenceName !== '' ? $referenceName : $code);
         }
 
+        // Parentheses show the language's own endonym (e.g. 中文简体), not English.
+        // Current UI locale already owns the leading label (e.g. русский / китайский).
+        // When the row is the current locale, localized === self — do not fall back to English.
         $locatorName = '';
-        if ($referenceName !== '' && $referenceName !== $localizedName) {
-            $locatorName = $referenceName;
-        } elseif ($selfName !== '' && $selfName !== $localizedName) {
+        if ($selfName !== '' && $selfName !== $localizedName) {
             $locatorName = $selfName;
-        } elseif ($code !== $localizedName) {
+        } elseif ($selfName === '' && $referenceName !== '' && $referenceName !== $localizedName) {
+            $locatorName = $referenceName;
+        } elseif ($selfName === '' && $code !== $localizedName) {
             $locatorName = $code;
         }
 
