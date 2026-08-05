@@ -89,6 +89,9 @@ final class QueryProviderCompiler
 
         foreach ($definitions as $definition) {
             $compiled = $this->compileDefinition($definition);
+            if ($compiled === null) {
+                continue;
+            }
             $providerName = $compiled['provider_name'];
             if (isset($providers[$providerName])) {
                 throw new \RuntimeException("Duplicate QueryProvider name: {$providerName}.");
@@ -167,7 +170,7 @@ final class QueryProviderCompiler
      *     operations:array<string, array<string, mixed>>
      * }
      */
-    private function compileDefinition(array $definition): array
+    private function compileDefinition(array $definition): ?array
     {
         $className = \trim($definition['class_name']);
         $sourceFile = $definition['source_file'];
@@ -180,7 +183,8 @@ final class QueryProviderCompiler
 
         $provider = ObjectManager::getInstance($className);
         if (!$provider instanceof QueryProviderInterface) {
-            throw new \RuntimeException("QueryProvider {$className} violates QueryProviderInterface.");
+            // Helpers colocated under Query/ (e.g. *Support) are not providers.
+            return null;
         }
 
         $providerName = \trim($provider->getProviderName());

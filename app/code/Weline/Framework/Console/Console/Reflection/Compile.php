@@ -93,19 +93,31 @@ class Compile extends CommandAbstract
         /** @var array<string, array{candidates_hash: string, safe: list<string>}> */
         $safeClassesCache = ['modules' => []];
         $cacheFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_safe_classes.php';
+        // version>=2：verifyBatch 改为临时 PHP 文件，避免 shell 展开 $ 变量把验证脚本弄坏
+        $safeCacheVersion = 2;
         if (\is_file($cacheFile)) {
             $loaded = @(include $cacheFile);
-            if (\is_array($loaded) && isset($loaded['modules']) && \is_array($loaded['modules'])) {
+            if (
+                \is_array($loaded)
+                && (int)($loaded['version'] ?? 0) >= $safeCacheVersion
+                && isset($loaded['modules'])
+                && \is_array($loaded['modules'])
+            ) {
                 $safeClassesCache['modules'] = $loaded['modules'];
             }
         }
+        $safeClassesCache['version'] = $safeCacheVersion;
         $seenModuleSignatures = [];
+        $moduleIndex = 0;
+        $moduleTotal = \count($modules);
 
         foreach ($modules as $module) {
+            $moduleIndex++;
             $basePath = $module['base_path'] ?? '';
             if (empty($basePath) || !\is_dir($basePath)) {
                 continue;
             }
+            $moduleName = (string)($module['name'] ?? \basename(\rtrim($basePath, '/\\')));
 
             $phpFiles = $this->scanPhpFiles($basePath);
 
@@ -131,14 +143,32 @@ class Compile extends CommandAbstract
 
             // 第二步：在子进程中批量验证哪些类可以安全加载（或从缓存复用）
             $cached = $safeClassesCache['modules'][$moduleSignature] ?? null;
-            if ($cached !== null && ($cached['candidates_hash'] ?? '') === $candidatesHash) {
+            $fromCache = $cached !== null && ($cached['candidates_hash'] ?? '') === $candidatesHash;
+            if ($fromCache) {
                 $safeClasses = \array_fill_keys($cached['safe'], true);
             } else {
+                $this->printer->note(__(
+                    '  [%{1}/%{2}] 验证模块 %{3}（%{4} 个候选类）...',
+                    [$moduleIndex, $moduleTotal, $moduleName, \count($candidateKeys)]
+                ));
                 $safeClasses = $this->verifySafeClasses($candidateKeys, $verbose);
                 $safeClassesCache['modules'][$moduleSignature] = [
                     'candidates_hash' => $candidatesHash,
                     'safe' => \array_keys($safeClasses),
                 ];
+            }
+            if (!$fromCache || $verbose) {
+                $this->printer->note(__(
+                    '  [%{1}/%{2}] %{3}：安全 %{4} / 候选 %{5}%{6}',
+                    [
+                        $moduleIndex,
+                        $moduleTotal,
+                        $moduleName,
+                        \count($safeClasses),
+                        \count($candidateKeys),
+                        $fromCache ? '（缓存）' : '',
+                    ]
+                ));
             }
 
             foreach ($candidates as $className => $phpFile) {
@@ -688,28 +718,37 @@ class Compile extends CommandAbstract
      */
     private function verifyBatch(array $classNames, string $phpBin, string $bootstrap): bool
     {
-        // 构建临时验证脚本
-        $escapedClasses = [];
-        foreach ($classNames as $cls) {
-            $escapedClasses[] = \addslashes($cls);
+        // 必须用临时文件跑验证脚本：php -r "…$c…" 经 shell 双引号时 $c 会被展开，
+        // 导致 Parse error，进而把几乎所有类误判为 UNSAFE（并拖成数分钟静默空转）。
+        $tmp = \tempnam(\sys_get_temp_dir(), 'weline_refl_');
+        if ($tmp === false) {
+            return false;
         }
-        
-        // 内联 PHP 脚本：加载 bootstrap 然后逐个 class_exists
-        $script = \sprintf(
-            'require_once \'%s\'; foreach([%s] as $c){ class_exists($c, true); } echo "OK";',
-            \addslashes($bootstrap),
-            "'" . \implode("','", $escapedClasses) . "'"
-        );
-        
-        $cmd = \sprintf('"%s" -r "%s" 2>&1', $phpBin, \str_replace('"', '\\"', $script));
-        
+        $scriptPath = $tmp . '.php';
+        if (!@\rename($tmp, $scriptPath)) {
+            $scriptPath = $tmp;
+        }
+
+        $code = '<?php' . "\n"
+            . 'require_once ' . \var_export($bootstrap, true) . ';' . "\n"
+            . 'foreach (' . \var_export(\array_values($classNames), true) . ' as $c) {' . "\n"
+            . '    class_exists($c, true);' . "\n"
+            . '}' . "\n"
+            . "echo 'OK';\n";
+
+        if (@\file_put_contents($scriptPath, $code) === false) {
+            @\unlink($scriptPath);
+            return false;
+        }
+
+        $cmd = \sprintf('"%s" "%s" 2>&1', $phpBin, $scriptPath);
         $output = [];
         $exitCode = 0;
         @\exec($cmd, $output, $exitCode);
-        
+        @\unlink($scriptPath);
+
         $outputStr = \implode("\n", $output);
-        
-        // 如果输出包含 "OK" 且 exit code 为 0，则全部安全
+
         return $exitCode === 0 && \str_contains($outputStr, 'OK');
     }
 

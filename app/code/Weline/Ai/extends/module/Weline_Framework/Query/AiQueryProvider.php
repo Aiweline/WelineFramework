@@ -13,12 +13,12 @@ use Weline\Ai\Service\DefaultModelManager;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Php\FiberTaskRunner;
+use Weline\Ai\Service\Query\AiStyleSkillQuerySupport;
 use Weline\Framework\Service\Query\AdminControllerBridge;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 
 require_once __DIR__ . '/AiProviderAccountQueryProvider.php';
-require_once __DIR__ . '/AiStyleSkillQuerySupport.php';
 
 class AiQueryProvider implements QueryProviderInterface
 {
