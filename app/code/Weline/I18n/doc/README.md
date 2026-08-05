@@ -284,7 +284,7 @@ class Product implements LocalModelInterface
 
 切回默认语言时会写入 `WELINE_USER_LANG`（非 HttpOnly，供 JS 读写）；服务端 `App::syncCookieRouteStateFromServer()` 也会用 `State::getLang()` 纠正无效残留 Cookie。
 
-页头语言与货币选择器的搜索、选项和跳转逻辑仍由 `Frontend/header-choice-selector-assets.phtml` 负责，浮层定位统一委托给 Theme.js 的 `window.WelineSmartDropdown` 基座。基座在打开、悬停以及视口 resize/scroll 时重新检测可视区域：四边保留至少 8px 安全边距并夹取到视口内；下方空间不足且上方更宽裕时自动向上翻转；列表高度按剩余空间收敛，避免窄屏产生横向滚动或被上下边缘截断。`place({ portal: false, hoverBridge: true })` 时由基座桥接触发器与面板间距，语言/货币等继承该基础选择器的控件无需各自再写 hover 保活逻辑。
+页头语言与货币选择器的搜索、选项和跳转逻辑仍由 `Frontend/header-choice-selector-assets.phtml` 负责，浮层定位统一委托给 Theme.js 的 `window.WelineSmartDropdown` 基座。基座在打开、悬停以及视口 resize/scroll 时重新检测可视区域：四边保留至少 8px 安全边距并夹取到视口内；下方空间不足且上方更宽裕时自动向上翻转；列表高度按剩余空间收敛，避免窄屏产生横向滚动或被上下边缘截断。Taglib 选择器浮层由标签输出内的 `WelineTaglibFloatingDropdown`（`FloatingDropdownEmitter`）自洽，不向 Theme.js 写入标签 hover 逻辑。
 
 ```php
 use Weline\Framework\Http\Cookie;

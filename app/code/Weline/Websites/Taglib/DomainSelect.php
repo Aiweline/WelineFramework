@@ -416,6 +416,7 @@ class DomainSelect implements TaglibInterface
             $t_default = addslashes(__('请选择域名'));
             $t_selected = addslashes(__('已选择 %s 个域名'));
             
+            $html[] = \Weline\Framework\View\Taglib\Support\FloatingDropdownEmitter::script();
             $html[] = '<script>(function(){';
             $html[] = '"use strict";';
             $html[] = 'var ep = ' . json_encode($epPath) . ';';
@@ -466,46 +467,6 @@ class DomainSelect implements TaglibInterface
             $html[] = 'var knownOptionsByDomain = {};';
             $html[] = 'var knownOptionsByPoolId = {};';
             $html[] = 'var activeLoadSeq = 0;';
-            $html[] = 'if (!window.WelineSmartDropdown) {';
-            $html[] = '  window.WelineSmartDropdown = (function(){';
-            $html[] = '    function compute(anchorRect, panelRect, cfg){';
-            $html[] = '      var margin = cfg.margin || 8, gap = cfg.gap || 4;';
-            $html[] = '      var vw = window.innerWidth || document.documentElement.clientWidth || 1200;';
-            $html[] = '      var vh = window.innerHeight || document.documentElement.clientHeight || 900;';
-            $html[] = '      var width = Math.max(cfg.minWidth || 0, panelRect.width || anchorRect.width);';
-            $html[] = '      var height = panelRect.height || 0;';
-            $html[] = '      var bottomSpace = vh - anchorRect.bottom - margin;';
-            $html[] = '      var topSpace = anchorRect.top - margin;';
-            $html[] = '      var openUp = bottomSpace < Math.min(cfg.preferredHeight || 320, height) && topSpace > bottomSpace;';
-            $html[] = '      var top = openUp ? (anchorRect.top - height - gap) : (anchorRect.bottom + gap);';
-            $html[] = '      if (top < margin) top = margin;';
-            $html[] = '      if (top + height > vh - margin) top = Math.max(margin, vh - margin - height);';
-            $html[] = '      var left = anchorRect.left;';
-            $html[] = '      if (left + width > vw - margin) left = Math.max(margin, vw - margin - width);';
-            $html[] = '      if (left < margin) left = margin;';
-            $html[] = '      return { left:left, top:top, width:width, maxHeight:Math.max(180, vh - margin * 2), openUp:openUp };';
-            $html[] = '    }';
-            $html[] = '    return {';
-            $html[] = '      mount:function(anchor,panel,cfg){';
-            $html[] = '        cfg = cfg || {}; if (!anchor || !panel) return null;';
-            $html[] = '        if (!panel.__welineOriginalParent) { panel.__welineOriginalParent = panel.parentNode || null; panel.__welineOriginalNext = panel.nextSibling || null; }';
-            $html[] = '        panel.style.position = "fixed"; panel.style.zIndex = String(cfg.zIndex || 4000); panel.style.left = "0px"; panel.style.top = "0px";';
-            $html[] = '        panel.style.minWidth = Math.max(cfg.minWidth || 0, Math.round(anchor.getBoundingClientRect().width)) + "px"; panel.style.maxWidth = "calc(100vw - 16px)";';
-            $html[] = '        document.body.appendChild(panel); panel.style.display = "block";';
-            $html[] = '        var rect = anchor.getBoundingClientRect(); var pr = panel.getBoundingClientRect(); var next = compute(rect, pr, cfg);';
-            $html[] = '        panel.style.left = Math.round(next.left) + "px"; panel.style.top = Math.round(next.top) + "px"; panel.style.width = Math.round(next.width) + "px"; panel.style.maxHeight = Math.round(next.maxHeight) + "px";';
-            $html[] = '        return next;';
-            $html[] = '      },';
-            $html[] = '      unmount:function(panel){';
-            $html[] = '        if (!panel) return; panel.style.display = "none";';
-            $html[] = '        if (panel.__welineOriginalParent) {';
-            $html[] = '          if (panel.__welineOriginalNext && panel.__welineOriginalNext.parentNode === panel.__welineOriginalParent) { panel.__welineOriginalParent.insertBefore(panel, panel.__welineOriginalNext); }';
-            $html[] = '          else { panel.__welineOriginalParent.appendChild(panel); }';
-            $html[] = '        }';
-            $html[] = '      }';
-            $html[] = '    };';
-            $html[] = '  })();';
-            $html[] = '}';
             $html[] = '';
             $html[] = 'function notify(msg, type) {';
             $html[] = '  if (window.BackendToast && typeof BackendToast[type || "info"] === "function") {';
@@ -934,9 +895,9 @@ class DomainSelect implements TaglibInterface
             $html[] = '';
             
             // 事件绑定
-            $html[] = 'function positionDropdown(){ window.WelineSmartDropdown.mount(trigger, dropdown, { minWidth: trigger ? trigger.offsetWidth : 0, preferredHeight: 420, zIndex: 4300, gap: 4 }); }';
+            $html[] = 'function positionDropdown(){ window.WelineTaglibFloatingDropdown.mount(trigger, dropdown, { minWidth: trigger ? trigger.offsetWidth : 0, preferredHeight: 420, zIndex: 4300, gap: 4 }); }';
             $html[] = 'function openDropdown(){ positionDropdown(); floatingOpened = true; if (search) search.value = ""; loadData(); setTimeout(function() { if (search) search.focus(); }, 50); window.addEventListener("resize", handleViewportChange); window.addEventListener("scroll", handleViewportChange, true); }';
-            $html[] = 'function closeDropdownPanel(){ floatingOpened = false; window.WelineSmartDropdown.unmount(dropdown); document.removeEventListener("click", closeDropdown); document.removeEventListener("keydown", escClose); window.removeEventListener("resize", handleViewportChange); window.removeEventListener("scroll", handleViewportChange, true); }';
+            $html[] = 'function closeDropdownPanel(){ floatingOpened = false; window.WelineTaglibFloatingDropdown.unmount(dropdown); document.removeEventListener("click", closeDropdown); document.removeEventListener("keydown", escClose); window.removeEventListener("resize", handleViewportChange); window.removeEventListener("scroll", handleViewportChange, true); }';
             $html[] = 'function handleViewportChange(ev){ if (!floatingOpened) return; if (ev && ev.type === "scroll" && dropdown && dropdown.contains(ev.target)) return; positionDropdown(); }';
             $html[] = 'trigger.addEventListener("click", function(e) {';
             $html[] = '  e.stopPropagation();';

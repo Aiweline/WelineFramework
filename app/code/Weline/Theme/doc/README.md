@@ -79,9 +79,7 @@
 
 Theme.js 前后端入口统一发布 `window.WelineSmartDropdown`，作为 Taglib、主题组件和页头选择器的浮层定位基座。业务控件只负责触发、选项、搜索与回填，并调用 `place()` 或 `mount()`；不得各自复制视口计算算法。
 
-基座统一处理 `visualViewport`、四边 8px 安全边距、窄屏宽度夹取、上下方向选择和剩余高度约束。需要脱离裁剪容器时使用 `mount()` 的默认 body portal；必须保留父子 CSS/hover 关系时使用 `place()` 或 `portal: false`。
-
-当面板仍留在锚点子树内且 `gap > 0` 时，基座默认插入透明 `data-weline-dropdown-hover-bridge`，覆盖触发器与面板之间的空隙（含水平并集），避免鼠标移入面板时 `:hover` 中断。可显式传 `hoverBridge: true/false` 覆盖默认。
+基座统一处理 `visualViewport`、四边 8px 安全边距、窄屏宽度夹取、上下方向选择和剩余高度约束。需要脱离裁剪容器时使用 `mount()` 的默认 body portal；必须保留父子 CSS/hover 关系时使用 `place()` 或 `portal: false`。Taglib 选择器浮层不得依赖本基座承载标签专属交互；标签侧使用 `FloatingDropdownEmitter` / `WelineTaglibFloatingDropdown` 自洽输出。
 
 ### 5. 严格边界
 

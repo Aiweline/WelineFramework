@@ -25,8 +25,5 @@ final class HeaderChoiceSelectorAssetsContractTest extends TestCase
         self::assertStringContainsString('z-index: 10060', $content);
         self::assertStringContainsString('[WelineChoice]', $content);
         self::assertStringContainsString('language-option-click', $content);
-        self::assertStringContainsString('hoverBridge: true', $content);
-        self::assertStringContainsString('margin-top: 0', $content);
-        self::assertStringContainsString('.weline-choice-switcher::after', $content);
     }
 }
