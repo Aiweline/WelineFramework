@@ -128,7 +128,8 @@ class Core extends CommandAbstract
             [
                 '双仓库策略' => __('未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
-                '增量更新' => '默认使用 git fetch 增量拉取；仅 Git 有变更的文件覆盖，另补本地缺失文件；已存在但内容不同的本地核心不因 hash 不一致被回刷',
+                '两阶段语义' => __('旧缓存 HEAD 只用于检测「项目本地核心是否相对上次同步被私改」；检测通过后必须把缓存仓更新到线上最新 tip，再按旧基线→新 tip 的 diff（并补缺失）同步到项目。绝不能用旧缓存内容当作本次更新源'),
+                '增量更新' => __('默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）'),
                 '同步范围' => __('仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内'),
                 '本地冲突检测' => __('只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略'),
                 '强制更新' => __('仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线'),
@@ -182,29 +183,33 @@ class Core extends CommandAbstract
         if ($tag) {
             $this->printer->note(__('标签：%{1}', [$tag]));
         }
-        $this->printer->note(__('更新模式：%{1}', [$this->forceUpdate ? '强制完整更新（覆盖所有文件）' : '增量更新（只更新 Git 变化的文件）']));
+        $this->printer->note(__('更新模式：%{1}', [
+            $this->forceUpdate
+                ? '强制完整更新（跳过冲突检测，重克后覆盖）'
+                : '两阶段：旧基线仅做冲突检测 → 拉取线上最新 → 按 diff 同步到项目',
+        ]));
         $this->printer->note('');
 
-        // 3. 创建/准备临时目录（缓存仓 HEAD = 上次已更新到本地的核心 commit）
+        // 3. 准备缓存目录（当前 HEAD = 上次已同步到项目的核心 commit，仅作冲突基线）
         $this->printer->setup(__('步骤 3/7：准备临时目录...'));
         $tmpDir = $this->prepareTempDirectory();
 
-        // 4. 仅当本地核心相对上次同步 commit 有私自改动时拦截
+        // 4. 旧基线只用于检测：本地核心相对「上次同步 commit」是否被私改
         $this->printer->setup(__('步骤 4/7：检查本地核心是否相对上次同步有改动...'));
         $this->assertLocalCoreUnmodifiedSinceLastSyncUnlessForced($tmpDir);
 
-        // 5. 克隆/拉取仓库（增量模式会获取变化文件列表）
-        $this->printer->setup(__('步骤 5/7：下载框架代码...'));
+        // 5. 冲突检测已通过：必须把缓存仓更新到线上最新 tip（绝不能继续用旧内容当更新源）
+        $this->printer->setup(__('步骤 5/7：下载框架代码（线上最新）...'));
         $this->downloadFramework($tmpDir, $branch, $tag);
 
-        // 6. 拷贝核心文件
+        // 6. 用「已更新到最新 tip」的缓存树，按旧基线→新 tip 的变更同步到项目
         $this->printer->setup(__('步骤 6/7：更新核心文件...'));
         $this->copyCoreFiles($tmpDir);
         $this->refreshReflectionFactoriesAfterUpdate();
 
-        // 7. 保留临时目录（用于下次增量更新）；缓存仓 HEAD = 下次对比基线
+        // 7. 保留缓存；此时 HEAD = 新 tip，成为下次冲突检测基线
         $this->printer->setup(__('步骤 7/7：完成处理...'));
-        $this->printer->note(__('保留缓存目录用于下次增量更新'));
+        $this->printer->note(__('保留缓存目录：当前 HEAD 仅作为下次冲突检测基线'));
         $this->printer->success(__('✓ 缓存目录：%{1}', [$tmpDir]));
         $this->printSyncedCoreBaseline($tmpDir);
 
@@ -239,7 +244,7 @@ class Core extends CommandAbstract
             return;
         }
         $this->printer->success(__(
-            '✓ 核心更新基线已设为缓存仓 commit %{1}（下次无 -f 将与此对比本地核心文件，与业务 git 无关）',
+            '✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）',
             [$short]
         ));
     }
@@ -256,10 +261,11 @@ class Core extends CommandAbstract
     /**
      * 默认拒绝「本地私自改过核心文件」时的更新。
      *
-     * 对比基准：仅 tmp/core-update 缓存仓当前 HEAD（上次已更新到本地的核心仓库 commit）。
-     * 对比对象：本地磁盘上 CORE_UPDATE_PATHS 内的核心文件内容 ↔ 该缓存树同路径文件。
-     * 绝不读取业务项目（QiPai 等）的 git status / git diff；GuoLaiRen 等业务改动完全忽略。
-     * 显式 -f/--force 可跳过；首次尚无缓存时跳过。成功更新后缓存 HEAD 即成为下次基线。
+     * 旧缓存 HEAD 的唯一职责：作为「上次已同步到项目的核心 commit」对比基线。
+     * 对比对象：本地磁盘 CORE_UPDATE_PATHS ↔ 该旧基线树同路径内容。
+     * 绝不读取业务项目 git；GuoLaiRen 等业务改动完全忽略。
+     * 本检查必须在 downloadFramework（拉线上最新）之前完成；通过后旧树才会被前进到新 tip。
+     * 显式 -f/--force 可跳过；首次尚无缓存时跳过。
      */
     private function assertLocalCoreUnmodifiedSinceLastSyncUnlessForced(string $tmpDir): void
     {
@@ -281,7 +287,7 @@ class Core extends CommandAbstract
             : '';
 
         $this->printer->note(__(
-            '对比基准：核心缓存仓 commit %{1}（非业务项目 git）',
+            '冲突检测基线（旧）：核心缓存仓 commit %{1}——仅用于判断本地核心是否被私改，不会作为本次更新源',
             [$lastSyncedCommit !== '' ? $lastSyncedCommit : '?']
         ));
 
