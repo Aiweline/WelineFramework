@@ -14,6 +14,7 @@ use Weline\Framework\Console\CommandHelper;
  * 由 setup:upgrade 在后台调用，执行耗时的优化操作：
  * - 类映射缓存生成
  * - PSR-4 映射缓存生成
+ * - framework:compile（modules provides / container / QueryProvider）
  * - 反射元数据编译
  * 
  * 这些操作被移到后台执行，不占用升级主流程时间。
@@ -33,24 +34,34 @@ class BackgroundOptimize extends CommandAbstract
             $skipClassmap = isset($args['skip-classmap']);
             if ($skipClassmap) {
                 $classCount = 0;
-                $this->log($logFile, '[1/3] 跳过类映射缓存（--skip-classmap）');
+                $this->log($logFile, '[1/4] 跳过类映射缓存（--skip-classmap）');
             } else {
-                $this->log($logFile, '[1/3] 生成类映射缓存...');
+                $this->log($logFile, '[1/4] 生成类映射缓存...');
                 $classCount = $this->generateClassmapCache();
                 $this->log($logFile, "      完成，共 {$classCount} 个类");
             }
             
             // 2. 生成 PSR-4 映射缓存
-            $this->log($logFile, '[2/3] 生成 PSR-4 映射缓存...');
+            $this->log($logFile, '[2/4] 生成 PSR-4 映射缓存...');
             $psr4Count = $this->generatePsr4Cache();
             $this->log($logFile, "      完成，共 {$psr4Count} 个命名空间");
+
+            // 3. 编译框架运行时索引（provides 等）
+            $skipFrameworkCompile = isset($args['skip-framework-compile']);
+            if ($skipFrameworkCompile) {
+                $this->log($logFile, '[3/4] 跳过框架运行时编译（--skip-framework-compile）');
+            } else {
+                $this->log($logFile, '[3/4] 执行 framework:compile...');
+                $this->compileFrameworkRuntimeRegistries($logFile);
+                $this->log($logFile, '      完成');
+            }
             
-            // 3. 编译反射元数据与编译型工厂
+            // 4. 编译反射元数据与编译型工厂
             $skipReflectionCompile = isset($args['skip-reflection-compile']) || isset($args['skip-reflect']);
             if ($skipReflectionCompile) {
-                $this->log($logFile, '[3/3] 跳过反射/工厂编译（--skip-reflection-compile）');
+                $this->log($logFile, '[4/4] 跳过反射/工厂编译（--skip-reflection-compile）');
             } else {
-                $this->log($logFile, '[3/3] 编译反射元数据与编译型工厂...');
+                $this->log($logFile, '[4/4] 编译反射元数据与编译型工厂...');
                 $this->compileReflectionAndFactories($logFile);
                 $this->log($logFile, '      完成');
             }
@@ -247,6 +258,32 @@ class BackgroundOptimize extends CommandAbstract
     }
     
     /**
+     * 执行 framework:compile，重建 provides / container / QueryProvider 等运行时索引
+     */
+    private function compileFrameworkRuntimeRegistries(string $logFile): void
+    {
+        $phpBin = PHP_BINARY ?: 'php';
+        $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+        $cmd = '"' . $phpBin . '" "' . $binW . '" framework:compile 2>&1';
+        $output = [];
+        $exitCode = 0;
+        exec($cmd, $output, $exitCode);
+        $outputStr = implode("\n", $output);
+
+        if ($outputStr) {
+            foreach (explode("\n", $outputStr) as $line) {
+                if (trim($line) !== '') {
+                    $this->log($logFile, '      ' . $line);
+                }
+            }
+        }
+
+        if ($exitCode !== 0) {
+            $this->log($logFile, "      警告: framework:compile 返回码 {$exitCode}");
+        }
+    }
+
+    /**
      * 执行 reflection:compile，生成反射元数据和编译型工厂容器
      */
     private function compileReflectionAndFactories(string $logFile): void
@@ -275,7 +312,7 @@ class BackgroundOptimize extends CommandAbstract
 
     public function tip(): string
     {
-        return __('后台执行优化缓存生成（类映射、PSR-4、反射编译）');
+        return __('后台执行优化缓存生成（类映射、PSR-4、framework:compile、反射编译）');
     }
 
     public function help(): array|string
@@ -286,6 +323,7 @@ class BackgroundOptimize extends CommandAbstract
                '也可手动执行来重新生成优化缓存。'),
             [
                 '--skip-classmap' => __('跳过类映射缓存生成'),
+                '--skip-framework-compile' => __('跳过 framework:compile'),
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据编译'),
                 '-h, --help' => __('显示帮助信息'),
             ],
@@ -293,6 +331,7 @@ class BackgroundOptimize extends CommandAbstract
             [
                 __('手动执行') => 'php bin/w setup:background-optimize',
                 __('跳过类映射') => 'php bin/w setup:background-optimize --skip-classmap',
+                __('跳过框架编译') => 'php bin/w setup:background-optimize --skip-framework-compile',
                 __('跳过反射编译') => 'php bin/w setup:background-optimize --skip-reflection-compile',
             ]
         );
