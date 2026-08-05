@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\Console\ConsoleEncoding;
+use Weline\Server\Log\WlsLogger;
 
 /**
  * Long-running daemon processes must explicitly disable PHP execution limits.

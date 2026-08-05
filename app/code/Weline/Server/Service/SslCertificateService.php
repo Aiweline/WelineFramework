@@ -5546,6 +5546,11 @@ CNF;
             }
             $body = \strtolower($ascii);
         }
+        // Local loopback fact keys (certificate map / website domain) are valid
+        // without a public TLD; the FQDN regex below requires at least one dot.
+        if ($body === 'localhost') {
+            return $wildcard ? '*.' . $body : $body;
+        }
         if (\strlen($body) > 253
             || \preg_match(
                 '/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)'
