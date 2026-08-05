@@ -128,10 +128,10 @@ class Core extends CommandAbstract
             [
                 '双仓库策略' => __('未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
-                '增量更新' => '默认使用 git fetch 增量拉取；Git 有变更的文件直接覆盖，其余文件按大小/hash 与源不一致则覆盖',
+                '增量更新' => '默认使用 git fetch 增量拉取；仅 Git 有变更的文件覆盖，另补本地缺失文件；已存在但内容不同的本地核心不因 hash 不一致被回刷',
                 '同步范围' => __('仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内'),
-                '本地冲突检测' => __('与「上次已更新到本地的核心 commit」对比：仅当本地私自改过核心文件时拒绝并列出文件；业务仓改动不参与'),
-                '强制更新' => __('仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件'),
+                '本地冲突检测' => __('只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略'),
+                '强制更新' => __('仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线'),
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
                 '排除目录' => __('不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理'),
@@ -202,10 +202,11 @@ class Core extends CommandAbstract
         $this->copyCoreFiles($tmpDir);
         $this->refreshReflectionFactoriesAfterUpdate();
 
-        // 7. 保留临时目录（用于下次增量更新）
+        // 7. 保留临时目录（用于下次增量更新）；缓存仓 HEAD = 下次对比基线
         $this->printer->setup(__('步骤 7/7：完成处理...'));
         $this->printer->note(__('保留缓存目录用于下次增量更新'));
         $this->printer->success(__('✓ 缓存目录：%{1}', [$tmpDir]));
+        $this->printSyncedCoreBaseline($tmpDir);
 
         $this->printer->note('');
         $this->printer->success('═══════════════════════════════════════════════════════════════');
@@ -222,6 +223,27 @@ class Core extends CommandAbstract
         $this->printer->note('');
     }
 
+    /**
+     * 打印本次写入的核心基线（tmp/core-update 的 HEAD）。
+     * 下次无 -f 时只与该基线对比本地核心文件，不看业务仓 git。
+     */
+    private function printSyncedCoreBaseline(string $tmpDir): void
+    {
+        $headOutput = [];
+        $headCode = $this->runGitCommand($tmpDir, ['rev-parse', '--short', 'HEAD'], $headOutput);
+        if ($headCode !== 0 || $headOutput === []) {
+            return;
+        }
+        $short = trim((string)$headOutput[0]);
+        if ($short === '') {
+            return;
+        }
+        $this->printer->success(__(
+            '✓ 核心更新基线已设为缓存仓 commit %{1}（下次无 -f 将与此对比本地核心文件，与业务 git 无关）',
+            [$short]
+        ));
+    }
+
     private function checkGit(): void
     {
         if (!$this->commandExists('git')) {
@@ -234,9 +256,10 @@ class Core extends CommandAbstract
     /**
      * 默认拒绝「本地私自改过核心文件」时的更新。
      *
-     * 对比基准：核心更新缓存仓当前 HEAD（即上次已更新到本地的核心 commit）。
-     * 只检查 CORE_UPDATE_PATHS 内、且存在于该次同步树中的文件；业务路径不在范围内。
-     * 显式 -f/--force 可跳过；首次尚无缓存时跳过。
+     * 对比基准：仅 tmp/core-update 缓存仓当前 HEAD（上次已更新到本地的核心仓库 commit）。
+     * 对比对象：本地磁盘上 CORE_UPDATE_PATHS 内的核心文件内容 ↔ 该缓存树同路径文件。
+     * 绝不读取业务项目（QiPai 等）的 git status / git diff；GuoLaiRen 等业务改动完全忽略。
+     * 显式 -f/--force 可跳过；首次尚无缓存时跳过。成功更新后缓存 HEAD 即成为下次基线。
      */
     private function assertLocalCoreUnmodifiedSinceLastSyncUnlessForced(string $tmpDir): void
     {
@@ -257,6 +280,11 @@ class Core extends CommandAbstract
             ? trim((string)$headOutput[0])
             : '';
 
+        $this->printer->note(__(
+            '对比基准：核心缓存仓 commit %{1}（非业务项目 git）',
+            [$lastSyncedCommit !== '' ? $lastSyncedCommit : '?']
+        ));
+
         $drifted = $this->collectLocalCoreDriftAgainstLastSynced($tmpDir);
         if ($drifted === []) {
             if ($lastSyncedCommit !== '') {
@@ -271,7 +299,7 @@ class Core extends CommandAbstract
         }
 
         $this->printer->error(__(
-            '检测到 %{1} 个核心文件相对上次同步 commit%{2} 有本地私自修改，已拒绝更新',
+            '检测到 %{1} 个核心文件相对上次同步核心 commit%{2} 有本地私自修改，已拒绝更新',
             [
                 count($drifted),
                 $lastSyncedCommit !== '' ? (' ' . $lastSyncedCommit) : '',
@@ -283,6 +311,7 @@ class Core extends CommandAbstract
         if (count($drifted) > 30) {
             $this->printer->note(__('  ……另有 %{1} 项未显示', [count($drifted) - 30]));
         }
+        $this->printer->note(__('以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关'));
         $this->printer->note(__('请先自行处理这些核心改动；确需用仓库版本强制覆盖时执行：php bin/w core:update <分支名> -f'));
         exit(1);
     }
@@ -911,7 +940,7 @@ class Core extends CommandAbstract
         
         // 判断更新模式：
         // 1. 强制模式(-f)或新克隆 → 全量覆盖
-        // 2. 增量模式 → Git diff 变更直接覆盖；再扫描缺失或内容与源不一致的文件并覆盖
+        // 2. 增量模式 → 仅 Git diff 变更覆盖；再补本地缺失文件（不因内容不同回刷本地私改）
         
         if ($this->forceUpdate || $this->isNewClone) {
             // 强制模式或新克隆：完全覆盖所有文件
@@ -920,7 +949,7 @@ class Core extends CommandAbstract
         } else {
             $processedBefore = $this->newFiles + $this->updatedFiles;
 
-            $this->printer->note(__('增量模式：Git 变更 + 内容不一致文件同步...'));
+            $this->printer->note(__('增量模式：Git 变更覆盖 + 仅补本地缺失文件...'));
 
             if (!empty($this->changedFiles)) {
                 $this->copyChangedFilesOnly($tmpDir, $allPaths);
@@ -1024,12 +1053,13 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 增量模式：同步缺失文件，并覆盖内容与源不一致的文件
+     * 增量模式：仅补本地缺失的核心文件。
+     * 已存在但内容不同的文件不在此覆盖——避免把本地领先/私改核心打回缓存仓旧版。
+     * 上游有变更时由 copyChangedFilesOnly（git diff）覆盖；全量覆盖仅 -f / 新克隆。
      */
     private function syncIncrementalCoreFiles(string $tmpDir): void
     {
         $missingCount = 0;
-        $staleCount = 0;
 
         foreach (self::CORE_UPDATE_PATHS as $path) {
             $source = $tmpDir . DS . \str_replace('/', DS, $path);
@@ -1051,16 +1081,7 @@ class Core extends CommandAbstract
                     \copy($source, $targetPath);
                     $this->newFiles++;
                     $missingCount++;
-                    continue;
                 }
-
-                if (!$this->shouldSyncIncrementalFile($source, $targetPath)) {
-                    continue;
-                }
-
-                \copy($source, $targetPath);
-                $this->updatedFiles++;
-                $staleCount++;
                 continue;
             }
 
@@ -1097,24 +1118,12 @@ class Core extends CommandAbstract
                     \copy($sourcePath, $targetPath);
                     $this->newFiles++;
                     $missingCount++;
-                    continue;
                 }
-
-                if (!$this->shouldSyncIncrementalFile($sourcePath, $targetPath)) {
-                    continue;
-                }
-
-                \copy($sourcePath, $targetPath);
-                $this->updatedFiles++;
-                $staleCount++;
             }
         }
 
         if ($missingCount > 0) {
             $this->printer->note(__('补缺：同步 %{1} 个本地缺失的核心文件', [$missingCount]));
-        }
-        if ($staleCount > 0) {
-            $this->printer->note(__('刷新：覆盖 %{1} 个内容与源不一致的核心文件', [$staleCount]));
         }
     }
 
