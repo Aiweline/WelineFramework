@@ -116,22 +116,28 @@ refs/heads/main
 
 后台核心仓库配置会覆盖 `app/etc/env.php` 的 `core_update` 和 `.env` 的 `CORE_UPDATE_*`。
 
-核心更新会增量同步以下根目录（Git 有变更的文件直接覆盖；其余文件按大小/hash 与源不一致则覆盖；`vendor` 不更新）：
+核心更新会增量同步以下路径（Git 有变更的文件直接覆盖；其余按大小/hash 与源不一致则覆盖；`vendor` 不更新）。**只操作核心仓库涉及的代码，绝不覆盖或回撤业务模块**：
 
-- `app`
-- `bin`
-- `pub`
-- `setup`
-- `dev`
+- `app/code/Weline`（框架模块）
+- `app/autoload.php` / `app/bootstrap.php` / `app/bootstrap_phpunit.php` / `app/code/config.php`
+- `app/etc/env.sample.php`（`env.php` / `modules.php` / `module_dependencies.php` 受保护不覆盖）
+- `bin` / `dev` / `pub` / `setup`
+
+核心更新**本来就只同步上述核心路径**；业务文件（如 `GuoLaiRen/**`）不在范围内，与业务仓 git 是否脏无关。
+
+冲突检测：与「上次已更新到本地的核心 commit」（`var/.../tmp/core-update` 缓存仓 HEAD）做内容对比。仅当本地**私自改过**核心文件时拒绝，并列出漂移文件；否则直接覆盖更新。可用 `-f/--force` 强制覆盖本地核心改动。
 
 以下项目级模块目录不会被 `php bin/w update:core` 拷贝到目标项目，目标项目如需使用应自行维护：
 
 - `app/code/Aiweline`
+- `app/code/GuoLaiRen`
 - `app/code/WeShop`
 
 以下文件若已存在于目标项目则不会被覆盖：
 
 - `app/etc/env.php`
+- `app/etc/modules.php`
+- `app/etc/module_dependencies.php`
 - 项目根目录 `.env`
 - `dev/deploy/.config`
 
