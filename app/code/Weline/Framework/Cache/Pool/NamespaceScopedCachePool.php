@@ -37,8 +37,14 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
             $decorator ??= $pool->decorator;
             $pool = $pool->pool;
         }
-        $repository ??= ObjectManager::getInstance(NamespaceGenerationRepository::class);
-        $decorator ??= ObjectManager::getInstance(NamespaceKeyDecorator::class);
+        $decorator ??= new NamespaceKeyDecorator();
+        // Empty namespace vector keeps legacy keys compatible and must stay
+        // ObjectManager-free so CacheManager can wrap pools during early boot.
+        if ($namespaces === []) {
+            $repository = null;
+        } else {
+            $repository ??= ObjectManager::getInstance(NamespaceGenerationRepository::class);
+        }
 
         if ($pool instanceof TaggableInterface) {
             return new NamespaceScopedTaggableCachePool($pool, $namespaces, $repository, $decorator);
@@ -50,10 +56,12 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
     protected function __construct(
         protected readonly CachePoolInterface $pool,
         array $namespaces,
-        protected readonly NamespaceGenerationRepository $repository,
+        protected readonly ?NamespaceGenerationRepository $repository,
         protected readonly NamespaceKeyDecorator $decorator,
     ) {
-        $this->namespaces = $this->repository->canonicalizeMany($namespaces);
+        $this->namespaces = $this->repository !== null
+            ? $this->repository->canonicalizeMany($namespaces)
+            : [];
     }
 
     public function withNamespace(string $namespace): NamespaceScopedCachePoolInterface
@@ -80,11 +88,19 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
     /** @return array{authority_clock:int,generations:array<string,int>} */
     public function getNamespaceVector(): array
     {
+        if ($this->namespaces === [] || $this->repository === null) {
+            return ['authority_clock' => 0, 'generations' => []];
+        }
+
         return $this->repository->resolveVector($this->namespaces);
     }
 
     public function getNamespaceFingerprint(): string
     {
+        if ($this->namespaces === [] || $this->repository === null) {
+            return '';
+        }
+
         return $this->repository->fingerprint($this->namespaces);
     }
 
@@ -120,6 +136,9 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
 
     public function clear(): bool
     {
+        if ($this->namespaces === [] || $this->repository === null) {
+            return $this->pool->clear();
+        }
         $this->repository->bumpMany($this->namespaces);
         return true;
     }
@@ -256,6 +275,10 @@ class NamespaceScopedCachePool implements NamespaceScopedCachePoolInterface
 
     protected function decorateKey(string $key): string
     {
+        if ($this->namespaces === [] || $this->repository === null) {
+            return $key;
+        }
+
         return $this->decorator->decorate($key, $this->getNamespaceFingerprint());
     }
 

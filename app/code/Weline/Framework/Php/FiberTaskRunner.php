@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Php;
 
+use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Runtime\SchedulerSystem;
 
@@ -60,7 +61,9 @@ final class FiberTaskRunner
         }
 
         $concurrency = $this->normalizeConcurrency($concurrency);
-        if ($concurrency <= 1 || !\class_exists(\Fiber::class)) {
+        $requiresSingleFiberCooperation = $concurrency <= 1
+            && SchedulerSystem::isSchedulerActive();
+        if ((!$requiresSingleFiberCooperation && $concurrency <= 1) || !\class_exists(\Fiber::class)) {
             return $this->runSequentially($tasks);
         }
 
@@ -96,6 +99,88 @@ final class FiberTaskRunner
     }
 
     /**
+     * Run one task in a cooperative Fiber and expose progress values suspended
+     * through {@see self::yield()}. While the task is waiting on provider I/O,
+     * an optional heartbeat value is emitted at a bounded interval so an SSE
+     * transport can keep the connection observable without executing the task
+     * in the transport writer itself.
+     *
+     * @return \Generator<int, mixed, mixed, mixed>
+     */
+    public function runProgress(
+        callable $task,
+        mixed $heartbeatValue = null,
+        float $heartbeatIntervalSeconds = 5.0
+    ): \Generator {
+        if (!\class_exists(\Fiber::class)) {
+            return $task();
+        }
+
+        $restoreOuterScheduler = SchedulerSystem::suppressGlobalSchedulerMomentarily();
+        $contextSnapshot = $this->captureContextSnapshot();
+        $this->startLocalScheduler();
+        $previousPump = self::$activePump;
+        $this->pump = new CurlStreamPump();
+        self::$activePump = $this->pump;
+        $heartbeatIntervalSeconds = \max(0.001, $heartbeatIntervalSeconds);
+        $lastProgressAt = \microtime(true);
+        $wrappedTask = static fn(string|int $_taskKey): mixed => $task();
+        $fiber = new \Fiber(
+            fn(): mixed => $this->runTaskWithContext($wrappedTask, 'progress', $contextSnapshot)
+        );
+
+        try {
+            $progress = $fiber->start();
+            if ($progress !== null) {
+                $lastProgressAt = \microtime(true);
+                yield $progress;
+            }
+
+            while (!$fiber->isTerminated()) {
+                $madeProgress = false;
+                if ($fiber->isSuspended() && $this->fiberReadyToResume($fiber)) {
+                    $progress = $fiber->resume();
+                    $madeProgress = true;
+                    if ($progress !== null) {
+                        $lastProgressAt = \microtime(true);
+                        yield $progress;
+                    }
+                }
+
+                if ($this->pump?->hasActiveHandles() && $this->pump->tick(0.0)) {
+                    $madeProgress = true;
+                }
+
+                $now = \microtime(true);
+                if ($heartbeatValue !== null && ($now - $lastProgressAt) >= $heartbeatIntervalSeconds) {
+                    $lastProgressAt = $now;
+                    yield $heartbeatValue;
+                    $madeProgress = true;
+                }
+
+                if (!$madeProgress && !$fiber->isTerminated()) {
+                    if ($this->pump?->hasActiveHandles()) {
+                        $this->pump->tick(self::PUMP_BLOCKING_TICK_SECONDS);
+                    } else {
+                        $this->waitForFiberProgress();
+                    }
+                }
+
+                SchedulerSystem::yieldToSuppressedScheduler();
+            }
+
+            return $fiber->getReturn();
+        } finally {
+            unset($this->waits[\spl_object_id($fiber)]);
+            self::$activePump = $previousPump;
+            $this->pump = null;
+            $this->stopLocalScheduler();
+            $this->waits = [];
+            $restoreOuterScheduler();
+        }
+    }
+
+    /**
      * 并发版本的 Promise.allSettled：边完成边产出，永不抛出。
      *
      * 与 {@see self::run()} 不同，runEvents 把每个任务的成功/失败都包装成
@@ -115,7 +200,9 @@ final class FiberTaskRunner
         }
 
         $concurrency = $this->normalizeConcurrency($concurrency);
-        if ($concurrency <= 1 || !\class_exists(\Fiber::class)) {
+        $requiresSingleFiberCooperation = $concurrency <= 1
+            && SchedulerSystem::isSchedulerActive();
+        if ((!$requiresSingleFiberCooperation && $concurrency <= 1) || !\class_exists(\Fiber::class)) {
             foreach ($tasks as $key => $task) {
                 if (!\is_callable($task)) {
                     yield $key => [
@@ -257,6 +344,11 @@ final class FiberTaskRunner
                     $this->waitForFiberProgress();
                 }
             }
+
+            // A nested AI Fiber pool temporarily owns SchedulerSystem. Return
+            // control to the hidden WLS scheduler on every pool turn so a long
+            // provider stream cannot starve Worker IPC/heartbeats.
+            SchedulerSystem::yieldToSuppressedScheduler();
         }
     }
 
@@ -386,6 +478,8 @@ final class FiberTaskRunner
                     $this->waitForFiberProgress();
                 }
             }
+
+            SchedulerSystem::yieldToSuppressedScheduler();
         }
 
         if ($errors !== []) {
@@ -404,11 +498,24 @@ final class FiberTaskRunner
 
     private function runTaskWithContext(callable $task, string|int $taskKey, ?array $contextSnapshot): mixed
     {
+        $enteredContext = false;
         if ($contextSnapshot !== null) {
-            WelineEnv::getInstance()->restore($contextSnapshot);
+            $welineEnv = $contextSnapshot['weline_env'] ?? [];
+            WelineEnv::getInstance()->restore(\is_array($welineEnv) ? $welineEnv : []);
+            $frameworkContext = $contextSnapshot['framework_context'] ?? null;
+            if (\is_array($frameworkContext)) {
+                Context::enter(new Context($frameworkContext));
+                $enteredContext = true;
+            }
         }
 
-        return $task($taskKey);
+        try {
+            return $task($taskKey);
+        } finally {
+            if ($enteredContext) {
+                Context::leave();
+            }
+        }
     }
 
     /**
@@ -523,14 +630,22 @@ final class FiberTaskRunner
         return $minDelay;
     }
 
-    /** @return array<string, mixed>|null */
+    /**
+     * @return array{
+     *     weline_env:array<string,mixed>,
+     *     framework_context:?array<string,mixed>
+     * }|null
+     */
     private function captureContextSnapshot(): ?array
     {
         if (!$this->preserveContext) {
             return null;
         }
 
-        return WelineEnv::getInstance()->capture();
+        return [
+            'weline_env' => WelineEnv::getInstance()->capture(),
+            'framework_context' => Context::getCurrent()?->toArray(),
+        ];
     }
 
     /**
@@ -546,6 +661,10 @@ final class FiberTaskRunner
             && \Fiber::getCurrent() !== null
         ) {
             SchedulerSystem::yield();
+            return;
+        }
+
+        if (SchedulerSystem::yieldToSuppressedScheduler()) {
             return;
         }
 

@@ -6,7 +6,7 @@ namespace Weline\Database\test;
 use Weline\Database\Model\DatabaseAdminAuditLog;
 use Weline\Database\Service\Admin\SqlGuardService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class AdminServicesTest extends TestCore
 {

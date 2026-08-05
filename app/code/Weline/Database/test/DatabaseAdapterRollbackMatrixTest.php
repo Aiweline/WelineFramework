@@ -160,7 +160,100 @@ final class DatabaseAdapterRollbackMatrixTest extends TestCase
         self::assertSame(1, (int)($row['parent_id'] ?? 0));
     }
 
-    private function createConnector(string $driver): ConnectorInterface
+    public function testSqliteDdlNormalizesConfiguredLogicalDatabaseToPhysicalTables(): void
+    {
+        self::assertContains('sqlite', PDO::getAvailableDrivers());
+        $this->connector = $this->createConnector('sqlite', 'weline');
+
+        $this->connector->createTableFromSchema('parent', [
+            'columns' => [
+                [
+                    'name' => 'id',
+                    'type' => 'integer',
+                    'nullable' => false,
+                    'primaryKey' => true,
+                    'autoIncrement' => true,
+                ],
+            ],
+        ]);
+        $this->connector->createTableFromSchema('child', [
+            'columns' => [
+                [
+                    'name' => 'id',
+                    'type' => 'integer',
+                    'nullable' => false,
+                    'primaryKey' => true,
+                    'autoIncrement' => true,
+                ],
+                [
+                    'name' => 'parent_id',
+                    'type' => 'integer',
+                    'nullable' => false,
+                    'primaryKey' => false,
+                    'autoIncrement' => false,
+                ],
+                [
+                    'name' => 'label',
+                    'type' => 'varchar',
+                    'length' => 64,
+                    'nullable' => true,
+                    'primaryKey' => false,
+                    'autoIncrement' => false,
+                ],
+            ],
+            'indexes' => [
+                [
+                    'name' => 'idx_parent_id',
+                    'columns' => ['parent_id'],
+                    'type' => 'INDEX',
+                ],
+            ],
+            'foreignKeys' => [
+                [
+                    'name' => 'fk_child_parent',
+                    'columns' => ['parent_id'],
+                    'referencesTable' => 'parent',
+                    'referencesColumns' => ['id'],
+                ],
+            ],
+        ]);
+
+        $formattedChild = $this->connector->formatTableName('child');
+        self::assertStringNotContainsString('"weline".', $formattedChild);
+        self::assertStringEndsWith('child"', $formattedChild);
+        self::assertTrue($this->connector->tableExist('child'));
+        self::assertTrue($this->connector->hasIndex('child', 'idx_parent_id'));
+        $foreignKeys = $this->connector->getTableForeignKeys('child');
+        self::assertCount(1, $foreignKeys);
+        self::assertSame(['parent_id'], $foreignKeys[0]['columns'] ?? []);
+        self::assertStringEndsWith('parent', (string)($foreignKeys[0]['ref_table'] ?? ''));
+
+        $addColumnSql = $this->connector->buildAlterAddColumnSql($formattedChild, [
+            'name' => 'extra_value',
+            'type' => 'varchar',
+            'length' => 32,
+            'nullable' => true,
+            'primaryKey' => false,
+            'autoIncrement' => false,
+            'default' => null,
+            'comment' => '',
+            'unique' => false,
+        ]);
+        self::assertStringNotContainsString('"weline".', $addColumnSql);
+        $this->executeDdl($this->connector, $addColumnSql);
+        self::assertTrue($this->connector->hasField('child', 'extra_value'));
+
+        $addIndexSql = $this->connector->buildAddIndexSql($formattedChild, [
+            'name' => 'idx_label',
+            'columns' => ['label'],
+            'type' => 'INDEX',
+        ]);
+        self::assertStringNotContainsString(' ON "weline".', $addIndexSql);
+        $this->executeDdl($this->connector, $addIndexSql);
+        self::assertTrue($this->connector->hasIndex('child', 'idx_label'));
+    }
+
+    private function createConnector(string $driver, string $sqliteDatabase = ''): ConnectorInterface
     {
         $pdoDriver = in_array($driver, ['mysql', 'mariadb'], true) ? 'mysql' : $driver;
         self::assertContains(
@@ -175,7 +268,7 @@ final class DatabaseAdapterRollbackMatrixTest extends TestCase
             return new SqliteConnector(new ConfigProvider([
                 'type' => 'sqlite',
                 'path' => $this->sqlitePath,
-                'database' => '',
+                'database' => $sqliteDatabase,
                 'prefix' => $prefix,
                 'persistent' => false,
             ]));

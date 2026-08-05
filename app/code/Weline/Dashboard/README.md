@@ -55,7 +55,7 @@ v1 使用固定区域 + 区域内排序，不做自由定位。Widget 的区域�
 }
 ```
 
-默认 Dashboard 部件只在普通文件 Widget 第一次写入 `widget_registry_entry` 且声明 `default_injections` 时自动写入一次。首次自动写入按 Dashboard 布局级别执行，同一主题、同一 `dashboard/default` 布局下已经存在的所有 Dashboard view 身份都会写入。用户在 ThemeEditor 中删除、移动、保存或保存空布局后，后续刷新注册表、打开页面、预览渲染、保存布局都不会自动补回默认部件；缺失项会保留在部件库“应用”tab 中，用户可选择“应用当前身份”或“应用全部身份”恢复建议的默认部件位置。
+默认 Dashboard 部件只有在 `default_injections` 中显式声明稳定的 `default_view`（等于 `DashboardView.code`）时，才会在对应视图布局身份就绪后自动挂载；未声明 `default_view` 的 Dashboard 注入只作为部件库推荐位置，不会在首次入库时扩散到全部 Dashboard 视图身份。自动补齐由 `Weline_Dashboard::layout_identity_ready` 触发，仅匹配 `default_view === view_code` 的声明，并对 draft/published 一次性写入。用户在 ThemeEditor 中删除自动部件后会记录 `user_deleted` 决策，后续刷新、重开、注册刷新或升级都不会自动补回；缺失项仍保留在部件库“应用”tab，可手动应用恢复。整页空布局哨兵 `__no_widget_placements__` 表示用户明确清空，不会整页强制重种。
 
 后台新建 Dashboard 视图会创建新的 `dashboard_view:{view_id}` 布局身份，并复制同站点默认视图当前的 draft/published 布局作为初始内容；这不是默认注入事件重放，也不会覆盖用户后续对该视图身份的独立布局配置。
 
@@ -98,7 +98,7 @@ $eventsManager->dispatch('Weline_Dashboard::layout_page_ensure', [
 - `copy_default_layout = true` 可让新页面从同站点默认 Dashboard 视图复制布局；模块提供专属页面时通常设置为 `false` 并传入自己的初始部件。
 - 这是“创建布局页面身份”的公共能力，不是 Widget 默认注入；不会重放 `Weline_Widget::widget_install_after`。
 
-`Weline_Visitor` 的事件统计页就是这个模式：模块派发事件创建 `weline_visitor_event_statistics`，页面名称为“事件统计”，并把 Visitor 的 4 个统计部件写入 `dashboard-summary`、`dashboard-analysis`、`dashboard-side`、`dashboard-detail`。
+`Weline_Visitor` 的事件统计页就是这个模式：模块派发事件创建 `weline_visitor_event_statistics`，页面名称为“事件统计”；六个像素部件（概览、参与度、事件趋势、实时动向、热门事件、热门页面）通过 `default_injections.default_view = weline_visitor_event_statistics` 定向自动进入该视图，不会污染默认概览或其他用户自建视图。
 
 ## 默认注入回归用例
 
@@ -128,12 +128,12 @@ php bin/w e2e:run --module=Weline_Dashboard --case-id=DASHBOARD-DEFAULT-WIDGETS-
 
 这些用例验证：
 
-- 清理 `widget_registry_entry` 后触发真实 Widget 收集，首次入库派发 `Weline_Widget::widget_install_after`。
-- Theme 按事件里的精确 Widget identity 把 `default_injections` 写入同一 Dashboard 布局下已经存在的全部身份。
-- 用户清空布局后，再次刷新 Widget 不会强制补回；缺失项仍通过 ThemeEditor 的“应用”tab 提示，并提供当前身份/全部身份两个恢复范围。
-- 后台 Dashboard 页面能真实渲染默认注入的 8 个统计/图表/列表部件，并放在声明的 slot 上。
-- 后台 Dashboard 页面通过 `w_query('dashboard', 'createView', ...)` 新建视图时不会被 frontend worker API 拦截，新视图会继承默认视图的默认统计部件布局。
-- 模块通过 `Weline_Dashboard::layout_page_ensure` 创建独立 Dashboard 页面身份时，会初始化自己的 Theme 布局配置；Visitor 的“事件统计”页会渲染 4 个 Visitor 部件，并与默认概览的布局身份隔离。
+- 清理 `widget_registry_entry` 后触发真实 Widget 收集，首次入库派发 `Weline_Widget::widget_install_after`（非 Dashboard 布局仍可按布局身份自动写入；Dashboard 需 `default_view`）。
+- Theme 在 `Weline_Dashboard::layout_identity_ready` 后只把匹配 `default_view` 的注入写入对应视图身份。
+- 用户删除自动部件后写入 `user_deleted`，再次刷新 Widget / 打开页面不会强制补回；缺失项仍通过 ThemeEditor 的“应用”tab 提示，并提供当前身份/全部身份两个恢复范围。
+- 后台默认概览渲染声明 `default_view=default` 的 Dashboard 部件；事件统计页渲染六个 Visitor 像素部件，两者布局身份隔离。
+- 后台 Dashboard 页面通过 `w_query('dashboard', 'createView', ...)` 新建视图时不会被 frontend worker API 拦截；空白/非复制新视图不会自动获得上述默认部件。
+- 模块通过 `Weline_Dashboard::layout_page_ensure` 创建独立 Dashboard 页面身份时，会先播种再初始化版本快照，并派发 `layout_identity_ready` 供 Theme 定向补齐。
 
 后台“应用”tab 的浏览器交互由 `Weline_Theme` 的 `THEME-DEFAULT-INJECTION-001` 和 `THEME-DEFAULT-INJECTION-002` 覆盖；Dashboard 不单独维护 ThemeEditor 交互用例。
 

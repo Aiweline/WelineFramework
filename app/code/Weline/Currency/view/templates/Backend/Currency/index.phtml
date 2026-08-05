@@ -9,7 +9,7 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class='row'>
+<div class='row' data-testid="currency-list-management" data-record-count="<?= count((array)$this->getData('currencies')) ?>">
     <div class='col-12'>
         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
             <h4 class='mb-sm-0'>
@@ -41,8 +41,8 @@
                         <h4 class='card-title'><lang>货币列表</lang></h4>
                     </div>
                     <div class='col-md-6 text-end'>
-                        <a href="@backend-url('currency/backend/currency/getAdd')" class='btn btn-primary'>
-                            <i class='mdi mdi-plus'></i> <lang>添加货币</lang>
+                        <a href="@backend-url('currency/backend/currency/getAdd')" class='btn btn-primary' data-testid="currency-create">
+                            <i class='mdi mdi-plus' aria-hidden="true"></i> <lang>添加货币</lang>
                         </a>
                     </div>
                 </div>
@@ -76,13 +76,12 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <empty name="currencies">
+                            <w:empty name="currencies">
                                 <tr>
                                     <td colspan='9' class='text-center'><lang>暂无数据</lang></td>
                                 </tr>
-                            </empty>
-                            <notempty name="currencies">
-                                <foreach name="currencies" item="currency" key="key">
+                            </w:empty>
+                            <foreach items="$currencies" as="$currency" key="$key">
                                     <tr>
                                         <td>{{currency.currency_id}}</td>
                                         <td>{{currency.code}}</td>
@@ -103,25 +102,24 @@
                                                class='btn btn-sm btn-primary'><lang>编辑</lang></a>
                                             <button type='button' class='btn btn-sm btn-danger' 
                                                     w-delete="true"
-                                                    w-url="@backend-url('currency/backend/currency/postDelete')"
-                                                    w-method="POST"
-                                                    w-var-id="{{currency.currency_id}}"
+                                                    data-provider="currency"
+                                                    data-operation="deleteCurrency"
+                                                    w-var-currency_id="{{currency.currency_id}}"
                                                     w-msg="<?= __('确定要删除该货币吗？') ?>"><lang>删除</lang></button>
                                         </td>
                                     </tr>
-                                </foreach>
-                            </notempty>
+                            </foreach>
                         </tbody>
                     </table>
                 </div>
 
-                <notempty name="pagination">
+                <w:notempty name="pagination">
                     <div class='row mt-3'>
                         <div class='col-12'>
                             <var>pagination</var>
                         </div>
                     </div>
-                </notempty>
+                </w:notempty>
             </div>
         </div>
     </div>

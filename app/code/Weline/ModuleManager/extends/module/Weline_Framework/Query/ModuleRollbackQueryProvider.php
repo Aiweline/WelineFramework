@@ -20,6 +20,12 @@ final class ModuleRollbackQueryProvider implements QueryProviderInterface
         'start' => ['module-manager/backend/rollback/start', 'POST'],
         'getOperation' => ['module-manager/backend/rollback/operation', 'GET'],
     ];
+    private const ACL_SOURCES = [
+        'listTargets' => 'Weline_ModuleManager::module_rollback_targets',
+        'createPlan' => 'Weline_ModuleManager::module_rollback_plan',
+        'start' => 'Weline_ModuleManager::module_rollback_start',
+        'getOperation' => 'Weline_ModuleManager::module_rollback_operation',
+    ];
 
     public function __construct(
         private readonly ModuleRollbackManagerInterface $rollbackManager,
@@ -136,6 +142,10 @@ final class ModuleRollbackQueryProvider implements QueryProviderInterface
             'graph' => false,
             'cost' => $mode === 'write' ? 5 : 2,
             'auth' => 'backend',
+            'backend_acl' => [
+                'kind' => 'source',
+                'source_id' => self::ACL_SOURCES[$name],
+            ],
             'params' => $params,
             'returns' => ['type' => 'array'],
         ];

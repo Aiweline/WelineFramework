@@ -11,16 +11,25 @@
 "Queue 查询器不支持的操作：%{1}","Operations not supported by Queue query: %{1}"
 "请提供有效的 queue_id。","Please provide a valid queue_id."
 "请提供 biz_key。","Please provide the biz_key."
+"请提供 idempotency_key。","请提供 idempotency_key。"
+"idempotency_scope 与 idempotency_key 组合后不能超过 %{1} 字节","idempotency_scope 与 idempotency_key 组合后不能超过 %{1} 字节"
 "请提供有效的 type_id 或 class（队列类型）。","Please provide a valid type_id or class (queue type)."
 队列类型不存在。,"Queue type does not exist."
 "请提供队列名称 name。","Please provide the queue name."
 "请提供 module。","Please provide the module."
-"无效的 status。","Invalid status."
+"公开 Queue create 只允许 status=pending；运行态和终态必须通过专用控制操作进入。","公开 Queue create 只允许 status=pending；运行态和终态必须通过专用控制操作进入。"
 创建队列失败。,"Failed to create queue."
 "请提供 queue_id 或 biz_key。","Please provide queue_id or biz_key."
 队列不存在。,"Queue does not exist."
-"队列正在运行中，无法删除。请先暂停或传 force=true（慎用）。","Queue is running and cannot be deleted. Please pause first or pass force=true (use with caution)."
+队列编辑失败。,队列编辑失败。
+队列接管失败。,队列接管失败。
+队列接管完成。,队列接管完成。
+队列删除失败。,队列删除失败。
 队列已删除。,"Queue has been deleted."
+"队列状态、PID、完成标记和 dispatch fence 只能通过专用控制操作修改。","队列状态、PID、完成标记和 dispatch fence 只能通过专用控制操作修改。"
+"Queue create 禁止直接传入 Scope 列 %{1}；请使用唯一入参 scope_envelope。","Queue create 禁止直接传入 Scope 列 %{1}；请使用唯一入参 scope_envelope。"
+"Queue content 禁止混入 Scope 协议字段 %{1}；请使用 scope_envelope。","Queue content 禁止混入 Scope 协议字段 %{1}；请使用 scope_envelope。"
+"scope_envelope 必须是数组。","scope_envelope 必须是数组。"
 "Queue 统一服务","Queue unified service"
 "任务队列增删改查与统计，模块间请使用 w_query('queue', ...) 代替直接使用 Queue 模型。","For task queue CRUD and statistics, use w_query('queue', ...) between modules instead of directly using the Queue model."
 获取单条队列记录,"Retrieved a single queue record"
@@ -44,104 +53,130 @@
 处理器类全名,"Full processor class name"
 任务名称,"Task name"
 所属模块名,"Module Name"
-"JSON 或数组","JSON or array"
-"默认 pending","Default pending"
+"JSON 或数组；禁止混入 Scope 字段","JSON 或数组；禁止混入 Scope 字段"
+"仅允许 pending","仅允许 pending"
 是否参与自动消费,"Participate in automatic consumption"
-"更新队列（queue_id 或 biz_key）","Update queue (queue_id or biz_key)"
+"唯一 Scope 入参；展开为 Queue v1 固定列。省略时新建行在 save_before 捕获当前请求 Scope（无上下文→global）","唯一 Scope 入参；展开为 Queue v1 固定列。省略时新建行在 save_before 捕获当前请求 Scope（无上下文→global）"
+"默认 true；false 时仅创建，后续用 dispatch 操作显式派发","默认 true；false 时仅创建，后续用 dispatch 操作显式派发"
+"按 idempotency_key 幂等创建；默认立即尝试派发，可用 dispatch=false 延后","按 idempotency_key 幂等创建；默认立即尝试派发，可用 dispatch=false 延后"
+"与 type_id 二选一","与 type_id 二选一"
+"唯一 Scope 入参；展开为 Queue v1 固定列","唯一 Scope 入参；展开为 Queue v1 固定列"
+幂等键,幂等键
+幂等作用域,幂等作用域
+"立即尝试派发一条 pending+auto 队列到后台 Worker","立即尝试派发一条 pending+auto 队列到后台 Worker"
+"更新无活动执行代次的 pending 队列业务字段（queue_id 或 biz_key）","更新无活动执行代次的 pending 队列业务字段（queue_id 或 biz_key）"
 "与 biz_key 二选一","Alternative to biz_key"
 定位键,"Locator Key"
-"字段补丁；也可顶层传 name/status/content 等","Field patch; can also pass name/status/content etc. at the top level"
-"Force takeover a queue without executing it in the current request.","Force takeover a queue without executing it in the current request."
-queue_id,queue_id
-biz_key,biz_key
-"Terminate old PID if needed","Terminate old PID if needed"
-"system_scheduler or manual_cli","system_scheduler or manual_cli"
-"Takeover reason","Takeover reason"
-"删除队列（queue_id 或 biz_key；运行中需 force）","Delete queue (queue_id or biz_key; force required if running)"
+"允许字段：name/module/content/result/process/biz_key/auto/type_id；禁止直接修改状态与 dispatch fence","允许字段：name/module/content/result/process/biz_key/auto/type_id；禁止直接修改状态与 dispatch fence"
+"安全释放当前 Queue attempt 并重置为 pending，不在当前请求中执行消费者。","安全释放当前 Queue attempt 并重置为 pending，不在当前请求中执行消费者。"
+"为 true 时仅在受管身份确认后终止当前 Worker","为 true 时仅在受管身份确认后终止当前 Worker"
+"接管所有者：system_scheduler 或 manual_cli","接管所有者：system_scheduler 或 manual_cli"
+接管原因,接管原因
+"删除队列（queue_id 或 biz_key；活动或脏执行代次需 force）","删除队列（queue_id 或 biz_key；活动或脏执行代次需 force）"
 主键,"primary key"
-"为 true 时允许删除运行中任务","When true, allow deletion of running tasks"
+"为 true 时仅在受管身份确认并释放后删除活动或脏执行代次","为 true 时仅在受管身份确认并释放后删除活动或脏执行代次"
+"Queue 后台查询器不支持的操作：%{1}","Queue 后台查询器不支持的操作：%{1}"
+"Queue 后台管理查询器","Queue 后台管理查询器"
+"为 Queue 后台页面提供受 ACL 保护的列表、表单和控制操作。","为 Queue 后台页面提供受 ACL 保护的列表、表单和控制操作。"
 队列类型收集完成。,队列类型收集完成。
 队列类型收集失败，已跳过，不影响本次系统更新。错误：%{1},队列类型收集失败，已跳过，不影响本次系统更新。错误：%{1}
 队列类型,"Queue type"
-请选择要启用的队列类型,"Please select the queue type to enable"
-队列类型不存在,"Queue type does not exist"
-"队列类型 ""%1"" 已成功启用","队列类型 ""%1"" 已成功启用"
-请选择要禁用的队列类型,"Please select the queue type to disable"
-"队列类型 ""%1"" 已成功禁用","队列类型 ""%1"" 已成功禁用"
+"旧 Queue 类型控制接口已停用，请使用后台页面操作。","旧 Queue 类型控制接口已停用，请使用后台页面操作。"
 请选择要查看的队列类型,"Please select the queue type to view"
+队列类型不存在,"Queue type does not exist"
+队列类型管理,队列类型管理
+"mdi mdi-shape-outline","mdi mdi-shape-outline"
+管理队列类型,管理队列类型
+队列类型列表,队列类型列表
+"mdi mdi-format-list-bulleted","mdi mdi-format-list-bulleted"
+查看队列类型列表,查看队列类型列表
+启停队列类型,启停队列类型
+"mdi mdi-toggle-switch","mdi mdi-toggle-switch"
+启用或禁用队列类型,启用或禁用队列类型
+查看队列类型,查看队列类型
+"mdi mdi-eye","mdi mdi-eye"
+查看队列类型详情,查看队列类型详情
 消息队列,"Message queue"
 暂无内容数据,"No Content Data"
 队列已经运行，无法修改,"Queue is already running, cannot be modified"
 "队列已经完成,无法修改","Queue has already completed, cannot be modified"
-执行类：,"Execution class:"
 添加队列,"Add Queue"
-队列不存在,"Queue does not exist"
-创建队列失败,"Failed to create queue"
-属性数据：,"Attribute data:"
-队列属性编码不能为空,"Queue attribute code cannot be empty"
-"队列属性编码不存在,请确保您输入的属性code在Eav属性系统中存在。","Queue attribute code does not exist, please ensure the attribute code you entered exists in the Eav attribute system."
-队列属性名称不能为空,"Queue attribute name cannot be empty"
-队列属性值不能为空,"Queue attribute value cannot be empty"
-队列属性值别名不能为空,"Queue attribute value alias cannot be empty"
-设置队列属性失败！请修改重试。%{1},"Failed to set queue attributes! Please modify and retry. %{1}"
-队列校验失败，校验消息：%{1},"Queue validation failed, validation message: %{1}"
-队列已编辑！等待运行中...,"Queue has been edited! Waiting to run..."
-队列已成功创建！等待运行中...,"Queue has been successfully created! Waiting to run..."
-请选择队列类型后再操作！,"Please select a queue type before proceeding!"
 请选择要查看的队列,"Please select the queue to view"
+队列不存在,"Queue does not exist"
 "队列结果过大:%{1} Mb。 请<a href=""%{2}"">下载队列结果</a>查看。","Queue result too large: %{1} Mb. Please <a href=""%{2}"">download the queue result</a> to view."
 请选择要下载的队列,"Please select the queue to download"
 队列没有结果,"Queue has no results"
 请选择要操作的队列,"Please select the queue to operate on"
-队列正在运行中，无法删除！请先暂停队列后再删除。,"Queue is running and cannot be deleted! Please pause the queue before deleting."
-"队列 ""%1"" 已成功删除！","队列 ""%1"" 已成功删除！"
 执行结果为空，以下展示任务内容：,"Execution result is empty. Below is the task content:"
-队列记录不存在！,"Queue record does not exist!"
-"队列有正在运行的进程（PID: %{1}），请先暂停队列后再重置！","Queue has a running process (PID: %{1}), please pause the queue before resetting!"
-"队列 ""%1"" 已重置，等待重新执行！","队列 ""%1"" 已重置，等待重新执行！"
-"（进程 PID: %{1} 已终止）","(Process PID: %{1} has been terminated)"
-"无法终止队列进程（PID: %{1}），请手动结束进程后重试！","Unable to terminate queue process (PID: %{1}), please manually end the process and retry!"
-"队列 ""%1"" 已暂停！","队列 ""%1"" 已暂停！"
-"队列进程（PID: %{1}）仍在运行中，无法继续！请先暂停队列。","Queue process (PID: %{1}) is still running, cannot continue! Please pause the queue first."
-"队列 ""%1"" 已恢复，等待继续执行！","队列 ""%1"" 已恢复，等待继续执行！"
-队列记录不存在,"Queue record does not exist"
-队列正在运行，无法删除！请先暂停队列。,"Queue is running and cannot be deleted! Please pause the queue first."
-队列已成功删除,"Queue has been successfully deleted"
-杀死进程失败！进程ID：%{1},"Failed to kill process! Process ID: %{1}"
-队列已暂停,"Queue has been paused"
-队列有进程正在运行，无法继续！进程ID：%{1},"Queue has a running process, cannot continue! Process ID: %{1}"
-队列已重试,"Queue has been retried"
-队列已继续,"Queue has been resumed"
-队列有进程正在运行，请先暂停队列！进程ID：%{1},"Queue has a running process, please pause the queue first! Process ID: %{1}"
-队列已重置,"Queue has been reset"
-不支持的操作类型：%{1},"Unsupported operation type: %{1}"
-操作失败：%{1},"Operation failed: %{1}"
-正在运行,Running
-有进程运行,"Has processes running"
-不支持的操作,"Unsupported operation"
-操作完成。成功：%{1}，失败：%{2},"Operation completed. Success: %{1}, Failed: %{2}"
+"旧 Queue 控制接口已停用，请使用后台页面操作。","旧 Queue 控制接口已停用，请使用后台页面操作。"
+队列管理,队列管理
+管理队列信息,管理队列信息
+队列首页列表,队列首页列表
+"mdi mdi-format-list-numbered","mdi mdi-format-list-numbered"
+队列列表快照,队列列表快照
+"mdi mdi-refresh","mdi mdi-refresh"
+队列列表实时快照,队列列表实时快照
+编辑或者新增,编辑或者新增
+"mdi mdi-form-textbox","mdi mdi-form-textbox"
+获取类型数据,获取类型数据
+"mdi mdi-database-arrow-right-outline","mdi mdi-database-arrow-right-outline"
+获取属性数据,获取属性数据
+查看,查看
+"mdi mdi-monitor-eye","mdi mdi-monitor-eye"
+下载结果,下载结果
+"mdi mdi-download","mdi mdi-download"
+删除队列,删除队列
+"mdi mdi-delete","mdi mdi-delete"
+查看结果,查看结果
+"mdi mdi-table-headers-eye","mdi mdi-table-headers-eye"
+查看详情,查看详情
+"mdi mdi-information","mdi mdi-information"
+重置刊登任务,重置刊登任务
+"mdi mdi-lock-reset","mdi mdi-lock-reset"
+完成刊登任务,完成刊登任务
+继续刊登任务,继续刊登任务
+"mdi mdi-arrow-right-thin-circle-outline","mdi mdi-arrow-right-thin-circle-outline"
+旧队列单条控制接口,旧队列单条控制接口
+"mdi mdi-alert-octagon-outline","mdi mdi-alert-octagon-outline"
+已停用的队列单条控制接口,已停用的队列单条控制接口
+旧队列批量控制接口,旧队列批量控制接口
+已停用的队列批量控制接口,已停用的队列批量控制接口
+队列诊断,队列诊断
+队列只读运行诊断,队列只读运行诊断
+消费者,消费者
+查看已注册队列消费者,查看已注册队列消费者
+重试诊断,重试诊断
+查看失败与待重试队列,查看失败与待重试队列
+Inbox,Inbox
+查看队列任务收件状态,查看队列任务收件状态
+Outbox,Outbox
+"查看可靠异步事件 Outbox","查看可靠异步事件 Outbox"
+"幂等键不能超过 %{1} 字节","幂等键不能超过 %{1} 字节"
 "请填写 %{1}","Fill in %{1}."
-提交,Submit
-下一步,"Next step"
-温馨提示！,"Friendly Reminder!"
-好的,OK
-错误！,Error!
-未知错误！,"Unknown error!"
+队列状态筛选值无效。,队列状态筛选值无效。
+"queue_id 不能小于 0。","queue_id 不能小于 0。"
+"%{1} 长度不能超过 %{2}。","%{1} 长度不能超过 %{2}。"
 管理系统中注册的队列类型，可以启用或禁用特定类型的队列处理器,"Manage the registered queue types in the system, enabling or disabling specific types of queue processors."
 暂无队列类型数据,"No queue type data"
 启用,Enable
 禁用,Disable
+详情,详情
 ID,ID
 类型名称,"Type name"
 所属模块,"Parent Module"
 执行类,"Execution class"
 更新时间,"Update time"
 操作,Operation
+网络错误，请检查网络后重试,"Network error, please check your network and try again"
 队列类型详细信息,"Queue type details"
 已启用,Enabled
 已禁用,Disabled
 创建时间,"Create time"
 执行注意事项,"Execution notes"
+是,Yes
+否,No
+此工作台仅显示脱敏运行事实，不执行消费、重试、删除或投递。,此工作台仅显示脱敏运行事实，不执行消费、重试、删除或投递。
+当前没有记录。,当前没有记录。
 筛选,Filter
 全部状态,"All Statuses"
 等待中,Waiting
@@ -162,7 +197,6 @@ ID,ID
 "确定要暂停选中的 %{1} 个队列吗？","Are you sure you want to pause the selected %{1} queues?"
 "确定要继续执行选中的 %{1} 个队列吗？","Are you sure you want to continue executing the selected %{1} queues?"
 请至少选择一个队列,"Please select at least one queue"
-网络错误，请检查网络后重试,"Network error, please check your network and try again"
 队列结果已复制到剪贴板,"Queue result has been copied to clipboard"
 复制失败，请手动复制,"Copy failed, please copy manually"
 正在执行批量操作...,"Executing batch operation..."
@@ -182,20 +216,29 @@ dir：,dir：
 】,】
 请选择任务类型：,"Select task type:"
 队列类型提醒：,"Queue type reminder:"
+下一步,"Next step"
 队列名称,"Queue name"
+正在执行...,Executing...
+部分依赖属性更新失败，请重试后再继续。,部分依赖属性更新失败，请重试后再继续。
+重试,Retry
 上一步,"Previous step"
 队列信息总览：,"Queue information overview:"
 队列名称：,"Queue name:"
 队列类型：,"Queue type:"
+执行类：,"Execution class:"
 参数信息：,"Parameter info:"
-队列无属性，可以直接进行下一步提交。,"Queue has no attributes, you can proceed directly to the next step."
+提交,Submit
 请输入要查找的队列类型名或者队列类型代码,"Please enter the queue type name or queue type code to search"
 搜索【队列类型】结果,"Search [Queue Type] results"
+错误！,Error!
+好的,OK
+队列创建失败!,"Queue creation failed!"
 请先选择队列类型再操作！,"Please select a queue type before proceeding!"
 当前队列类型为空！无法创建属性！,"The current queue type is empty! Unable to create attribute!"
-队列创建失败!,"Queue creation failed!"
-属性已存在！,"Attribute already exists!"
-该属性已存在！,"The attribute already exists!"
+队列无属性，可以直接进行下一步提交。,"Queue has no attributes, you can proceed directly to the next step."
+设置队列属性失败！请修改重试。%{1},"Failed to set queue attributes! Please modify and retry. %{1}"
+正在更新依赖属性...,正在更新依赖属性...
+更新队列属性依赖失败，请重试。,更新队列属性依赖失败，请重试。
 复制内容,"Copy content"
 "队列 ID","Queue ID"
 类型,Type
@@ -207,8 +250,6 @@ dir：,dir：
 已结束,Ended
 未结束,"Not ended"
 自动运行,Auto-run
-是,Yes
-否,No
 类型信息,"Type information"
 运行结果,"Run result"
 暂无运行结果,"No execution results"
@@ -219,16 +260,16 @@ dir：,dir：
 进度/结果,Progress/Result
 时间,Time
 等待执行...,"Waiting for execution..."
-正在执行...,Executing...
 查看全部,"View all"
 暂无队列数据,"No queue data"
 队列结果详情,"Queue result details"
 关闭,Close
 自动消费,Auto-consume
+查看队列详情,查看队列详情
 暂停,Pause
-重试,Retry
 继续,Continue
 重新执行,Re-execute
+编辑队列,编辑队列
 删除,Delete
 全部,All
 "%{1}(%{2}): %{3}","%{1}(%{2}): %{3}"
@@ -247,6 +288,8 @@ dir：,dir：
 队列校验...,"Queue validation..."
 测试队列提示,"Test Queue Prompt"
 测试队列,"Test Queue"
+异步事件投递,异步事件投递
+"执行一轮带 fencing 的异步 Observer 投递","执行一轮带 fencing 的异步 Observer 投递"
 致命错误：,"Fatal Error:"
 错误：,Error:
 "总计: %s 条,成功: %s 条,失败: %s 条 当前：%s","总计: %s 条,成功: %s 条,失败: %s 条 当前：%s"
@@ -255,25 +298,168 @@ dir：,dir：
 成功,Success
 失败,Failed
 附加错误,"Additional Error"
+"队列任务缺少已迁移的 Scope 信封，拒绝执行；请先完成迁移或 quarantine。","队列任务缺少已迁移的 Scope 信封，拒绝执行；请先完成迁移或 quarantine。"
+"队列任务 Scope kind=%{1} 不在消费者接受列表 [%{2}] 内，拒绝执行。","队列任务 Scope kind=%{1} 不在消费者接受列表 [%{2}] 内，拒绝执行。"
+"队列任务 Scope 缺少必需维度 %{1}，拒绝执行。","队列任务 Scope 缺少必需维度 %{1}，拒绝执行。"
 队列进程已结束，检测到完成标记，已同步为完成状态。,"Queue process ended and a completion marker was detected; status has been synchronized to done."
 "队列记录的 PID %{1} 仍存在，但已不匹配当前队列执行进程，已标记为异常。","The queue record PID %{1} still exists but no longer matches the current queue worker; the queue has been marked as error."
 "队列记录的 PID %{1} 已不存在，已标记为异常。","The queue record PID %{1} no longer exists; the queue has been marked as error."
+"可恢复队列处于 running 但没有 PID，且恢复契约拒绝恢复；已标记为 error，避免重复派发。","可恢复队列处于 running 但没有 PID，且恢复契约拒绝恢复；已标记为 error，避免重复派发。"
 "运行中队列没有记录 PID，已重置为 pending 等待重新调度。","The running queue has no recorded PID; it has been reset to pending for rescheduling."
-"Failed to create queue process. Process name: %{1}","Failed to create queue process. Process name: %{1}"
+"Queue Transport 检测到 PID 已不属于当前 attempt，未发送终止信号并已释放过期 fence。","Queue Transport 检测到 PID 已不属于当前 attempt，未发送终止信号并已释放过期 fence。"
+"Queue Transport 已确认终止超时 Worker。","Queue Transport 已确认终止超时 Worker。"
+"队列已暂停，并确认对应 Worker 已退出。","队列已暂停，并确认对应 Worker 已退出。"
+队列已暂停。,队列已暂停。
+"队列已安全恢复为 pending，等待后续调度。","队列已安全恢复为 pending，等待后续调度。"
+队列没有需要更新的业务字段。,队列没有需要更新的业务字段。
+队列业务字段已更新。,队列业务字段已更新。
+队列业务字段已安全更新。,队列业务字段已安全更新。
+"队列已由当前 CLI Worker 安全认领。","队列已由当前 CLI Worker 安全认领。"
+强制接管完成；队列归手动执行，不会自动派发。,强制接管完成；队列归手动执行，不会自动派发。
+"强制接管完成；队列已重置为 pending，等待系统调度。","强制接管完成；队列已重置为 pending，等待系统调度。"
+队列状态已安全更新。,队列状态已安全更新。
+队列派发令牌已变化，未覆盖新的执行代次。,队列派发令牌已变化，未覆盖新的执行代次。
+队列当前状态不允许终止。,队列当前状态不允许终止。
+"队列存在活动执行代次，请先暂停或显式使用 force。","队列存在活动执行代次，请先暂停或显式使用 force。"
+"当前进程就是该队列 Worker，系统拒绝自我终止。","当前进程就是该队列 Worker，系统拒绝自我终止。"
+"队列由未携带派发令牌的手动或旧 Worker 运行；为避免误杀，系统已拒绝终止，请手动结束该进程后重试。","队列由未携带派发令牌的手动或旧 Worker 运行；为避免误杀，系统已拒绝终止，请手动结束该进程后重试。"
+暂时无法确认队列进程身份，系统未发送终止信号，请稍后重试。,暂时无法确认队列进程身份，系统未发送终止信号，请稍后重试。
+"队列 Worker 终止操作失败，状态未变更。","队列 Worker 终止操作失败，状态未变更。"
+"尚未确认队列 Worker 已退出，状态未变更，请稍后重试。","尚未确认队列 Worker 已退出，状态未变更，请稍后重试。"
+队列状态已被并发修改，系统未覆盖新状态，请重试。,队列状态已被并发修改，系统未覆盖新状态，请重试。
+"只有没有活动执行代次的 pending 队列才能编辑。","只有没有活动执行代次的 pending 队列才能编辑。"
+"队列 Scope 已 quarantine，拒绝领取或执行。","队列 Scope 已 quarantine，拒绝领取或执行。"
+"队列当前不是可由 CLI 安全认领的 clean pending 或无活动执行代次的终态。","队列当前不是可由 CLI 安全认领的 clean pending 或无活动执行代次的终态。"
+"当前请求已在数据库事务中；为避免外层回滚与 Worker 副作用失配，Queue 控制操作已拒绝。","当前请求已在数据库事务中；为避免外层回滚与 Worker 副作用失配，Queue 控制操作已拒绝。"
+"Queue Worker 已失去当前执行代次 ownership，未写入任何状态。","Queue Worker 已失去当前执行代次 ownership，未写入任何状态。"
+队列进程控制失败。,队列进程控制失败。
+"Queue Worker 状态已按当前执行代次安全写入。","Queue Worker 状态已按当前执行代次安全写入。"
+"创建脱离式 Queue Worker 异常：%{1}","创建脱离式 Queue Worker 异常：%{1}"
+"创建 Queue Worker 失败，进程名：%{1}","创建 Queue Worker 失败，进程名：%{1}"
+"Queue 派发 claim 已过期，已恢复为 pending。","Queue 派发 claim 已过期，已恢复为 pending。"
+"无法清理 Queue EAV 属性值：%{1}","无法清理 Queue EAV 属性值：%{1}"
+请选择队列类型后再操作！,"Please select a queue type before proceeding!"
+队列类型不存在或已停用。,队列类型不存在或已停用。
+队列属性编码不能为空。,队列属性编码不能为空。
+需要选择依赖值,需要选择依赖值
+"Queue EAV 实体不存在。","Queue EAV 实体不存在。"
+队列属性不属于所选类型。,队列属性不属于所选类型。
+解析队列属性依赖失败，请稍后重试。,解析队列属性依赖失败，请稍后重试。
+请选择有效的队列类型。,请选择有效的队列类型。
+队列类型缺少所属模块。,队列类型缺少所属模块。
+队列名称不能为空。,队列名称不能为空。
+队列属性参数格式无效。,队列属性参数格式无效。
+"Queue 原子编辑不能嵌套在已有数据库事务中。","Queue 原子编辑不能嵌套在已有数据库事务中。"
+"当前数据库不支持 Queue 原子编辑。","当前数据库不支持 Queue 原子编辑。"
+创建队列失败,"Failed to create queue"
+队列属性编码不存在：%{1},队列属性编码不存在：%{1}
+队列消费者未实现受支持的消费接口。,队列消费者未实现受支持的消费接口。
+队列校验失败，校验消息：%{1},"Queue validation failed, validation message: %{1}"
+队列已保存，但提交后的数据刷新未完成。,队列已保存，但提交后的数据刷新未完成。
+队列已保存，但临时表单数据未能清理。,队列已保存，但临时表单数据未能清理。
+队列已编辑！等待运行中...,"Queue has been edited! Waiting to run..."
+队列已成功创建！等待运行中...,"Queue has been successfully created! Waiting to run..."
+不支持的操作类型：%{1},"Unsupported operation type: %{1}"
+队列记录不存在,"Queue record does not exist"
+队列已成功删除,"Queue has been successfully deleted"
+队列暂停失败。,队列暂停失败。
+队列继续失败。,队列继续失败。
+队列状态已更新，但提交后的数据刷新未完成。,队列状态已更新，但提交后的数据刷新未完成。
+队列已暂停,"Queue has been paused"
+队列已重试,"Queue has been retried"
+队列已重置,"Queue has been reset"
+队列已继续,"Queue has been resumed"
+操作失败：%{1},"Operation failed: %{1}"
+不支持的批量操作。,不支持的批量操作。
+"单次最多操作 %{1} 条队列。","单次最多操作 %{1} 条队列。"
+"批量队列 ID 格式无效。","批量队列 ID 格式无效。"
+操作完成。成功：%{1}，失败：%{2},"Operation completed. Success: %{1}, Failed: %{2}"
+请选择要操作的队列类型,请选择要操作的队列类型
+队列类型启用状态无效。,队列类型启用状态无效。
+"队列类型 ""%{1}"" 已成功启用","队列类型 ""%{1}"" 已成功启用"
+"队列类型 ""%{1}"" 已成功禁用","队列类型 ""%{1}"" 已成功禁用"
+队列属性编码无效或重复。,队列属性编码无效或重复。
+队列属性编码不存在或不属于所选类型：%{1},队列属性编码不存在或不属于所选类型：%{1}
+队列属性值不能为空：%{1},队列属性值不能为空：%{1}
+"单个队列属性值不能超过 1 MiB。","单个队列属性值不能超过 1 MiB。"
+队列属性值格式无效。,队列属性值格式无效。
+保存队列失败，请稍后重试。,保存队列失败，请稍后重试。
+队列状态已保存，但后续事件通知未完全完成。,队列状态已保存，但后续事件通知未完全完成。
+"异步事件投递 #%{1} 尝试 %{2}","异步事件投递 #%{1} 尝试 %{2}"
+类型不存在:%{1},类型不存在:%{1}
 "队列类：%{1} 属性错误。 队列属性必须继承自 %{2}","Queue class: %{1} attribute error. Queue attributes must inherit from %{2}"
+异步事件投递维护失败，已跳过并继续消费普通队列：%{1},异步事件投递维护失败，已跳过并继续消费普通队列：%{1}
+"异步事件投递 GC 失败，已跳过：%{1}","异步事件投递 GC 失败，已跳过：%{1}"
+"Queue Scope 映射工具：help/preflight/quarantine/verify（禁止 apply；信封 cutover 归 TASK-MIG-P1A）","Queue Scope 映射工具：help/preflight/quarantine/verify（禁止 apply；信封 cutover 归 TASK-MIG-P1A）"
 "队列并发数必须是大于 0 的整数。","队列并发数必须是大于 0 的整数。"
 "队列并发数已更新为 %{1}","队列并发数已更新为 %{1}"
 请输入队列ID。,"Please enter the queue ID."
+"Queue Worker 启动身份参数无效，未读取或执行队列。","Queue Worker 启动身份参数无效，未读取或执行队列。"
+"Queue 派发令牌无效或已过期，Worker 不执行任何消费者。","Queue 派发令牌无效或已过期，Worker 不执行任何消费者。"
+强制接管会在释放队列后立即返回；后续执行由系统调度器负责。,强制接管会在释放队列后立即返回；后续执行由系统调度器负责。
+队列接管完成，等待系统调度。,队列接管完成，等待系统调度。
 "队列 #%{1} 正在运行中，禁止重复运行（pid=%{2}）。","Queue #%{1} is currently running, duplicate execution is not allowed (pid=%{2})."
 "如需接管，请使用 --force；系统会先终止当前同 ID 任务后再启动新任务。","To take over, use --force; the system will first terminate the current task with the same ID before starting a new task."
-"强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。","Force mode: detected queue #%{1} is running (pid=%{2}), will terminate old task before continuing."
-"检测到历史运行进程不存在，已自动回收为 pending。","Detected that no historical running process exists, automatically recycled to pending."
+"强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先安全接管并交回系统调度；当前 CLI 不直接执行。","强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先安全接管并交回系统调度；当前 CLI 不直接执行。"
+"队列 CLI 认领失败。","队列 CLI 认领失败。"
 已启用强制模式(-f)：本次执行将优先使用队列类中的强制重建逻辑。,"Force mode (-f) enabled: This execution will prioritize the forced rebuild logic in the queue class."
 已清空该队列历史输出，本次仅展示最新执行过程。,"Cleared the queue's historical output; only the latest execution process is shown."
-闃熷垪鎵ц璇︽儏,闃熷垪鎵ц璇︽儏
+"Queue Worker 已失去当前执行代次 ownership。","Queue Worker 已失去当前执行代次 ownership。"
+"Queue Worker 终态因执行代次变化未写入。","Queue Worker 终态因执行代次变化未写入。"
 队列执行详情,"Queue execution detail"
-队列执行详情（失败）,"Queue execution detail (failed)"
 队列消息内容验证不通过。,"Queue message content validation failed."
-验证结果：,"Verification result:"
+"Queue Worker 延期终态因执行代次变化未写入。","The deferred queue Worker state was not written because the execution generation changed."
+队列已安全延期,"Queue was safely deferred"
+队列执行详情（失败）,"Queue execution detail (failed)"
 运行队列.,"Run queue."
 说明：,Description:
+"无效的 status。","Invalid status."
+"队列正在运行中，无法删除。请先暂停或传 force=true（慎用）。","Queue is running and cannot be deleted. Please pause first or pass force=true (use with caution)."
+"JSON 或数组","JSON or array"
+"默认 pending","Default pending"
+"更新队列（queue_id 或 biz_key）","Update queue (queue_id or biz_key)"
+"字段补丁；也可顶层传 name/status/content 等","Field patch; can also pass name/status/content etc. at the top level"
+"Force takeover a queue without executing it in the current request.","Force takeover a queue without executing it in the current request."
+queue_id,queue_id
+biz_key,biz_key
+"Terminate old PID if needed","Terminate old PID if needed"
+"system_scheduler or manual_cli","system_scheduler or manual_cli"
+"Takeover reason","Takeover reason"
+"删除队列（queue_id 或 biz_key；运行中需 force）","Delete queue (queue_id or biz_key; force required if running)"
+"为 true 时允许删除运行中任务","When true, allow deletion of running tasks"
+请选择要启用的队列类型,"Please select the queue type to enable"
+"队列类型 ""%1"" 已成功启用","队列类型 ""%1"" 已成功启用"
+请选择要禁用的队列类型,"Please select the queue type to disable"
+"队列类型 ""%1"" 已成功禁用","队列类型 ""%1"" 已成功禁用"
+属性数据：,"Attribute data:"
+队列属性编码不能为空,"Queue attribute code cannot be empty"
+"队列属性编码不存在,请确保您输入的属性code在Eav属性系统中存在。","Queue attribute code does not exist, please ensure the attribute code you entered exists in the Eav attribute system."
+队列属性名称不能为空,"Queue attribute name cannot be empty"
+队列属性值不能为空,"Queue attribute value cannot be empty"
+队列属性值别名不能为空,"Queue attribute value alias cannot be empty"
+队列正在运行中，无法删除！请先暂停队列后再删除。,"Queue is running and cannot be deleted! Please pause the queue before deleting."
+"队列 ""%1"" 已成功删除！","队列 ""%1"" 已成功删除！"
+队列记录不存在！,"Queue record does not exist!"
+"队列有正在运行的进程（PID: %{1}），请先暂停队列后再重置！","Queue has a running process (PID: %{1}), please pause the queue before resetting!"
+"队列 ""%1"" 已重置，等待重新执行！","队列 ""%1"" 已重置，等待重新执行！"
+"（进程 PID: %{1} 已终止）","(Process PID: %{1} has been terminated)"
+"无法终止队列进程（PID: %{1}），请手动结束进程后重试！","Unable to terminate queue process (PID: %{1}), please manually end the process and retry!"
+"队列 ""%1"" 已暂停！","队列 ""%1"" 已暂停！"
+"队列进程（PID: %{1}）仍在运行中，无法继续！请先暂停队列。","Queue process (PID: %{1}) is still running, cannot continue! Please pause the queue first."
+"队列 ""%1"" 已恢复，等待继续执行！","队列 ""%1"" 已恢复，等待继续执行！"
+队列正在运行，无法删除！请先暂停队列。,"Queue is running and cannot be deleted! Please pause the queue first."
+杀死进程失败！进程ID：%{1},"Failed to kill process! Process ID: %{1}"
+队列有进程正在运行，无法继续！进程ID：%{1},"Queue has a running process, cannot continue! Process ID: %{1}"
+队列有进程正在运行，请先暂停队列！进程ID：%{1},"Queue has a running process, please pause the queue first! Process ID: %{1}"
+正在运行,Running
+有进程运行,"Has processes running"
+不支持的操作,"Unsupported operation"
+温馨提示！,"Friendly Reminder!"
+未知错误！,"Unknown error!"
+属性已存在！,"Attribute already exists!"
+该属性已存在！,"The attribute already exists!"
+"Failed to create queue process. Process name: %{1}","Failed to create queue process. Process name: %{1}"
+"强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。","Force mode: detected queue #%{1} is running (pid=%{2}), will terminate old task before continuing."
+"检测到历史运行进程不存在，已自动回收为 pending。","Detected that no historical running process exists, automatically recycled to pending."
+闃熷垪鎵ц璇︽儏,闃熷垪鎵ц璇︽儏
+验证结果：,"Verification result:"

@@ -6,6 +6,7 @@ use Weline\DataTable\Helper\FrontendAccess;
 use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Form\FormRenderer;
 use Weline\Framework\View\Template;
 use Weline\Framework\Taglib\TaglibInterface;
 
@@ -1591,12 +1592,22 @@ HTML;
         $formHtml .= '<h3 class="w-form-title"><i class="fas fa-edit"></i>' . $title . '</h3>';
         $formHtml .= '<button type="button" class="w-form-close" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '"><i class="fas fa-times"></i></button>';
         $formHtml .= '</div>';
-        $formHtml .= '<form class="w-form w-form-vertical" id="' . $formId . '" action="' . htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8') . '" method="POST" data-model="' . htmlspecialchars($model, ENT_QUOTES, 'UTF-8') . '" data-scope="' . htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') . '" data-mode="' . htmlspecialchars($mode, ENT_QUOTES, 'UTF-8') . '" data-record-id="">';
+        $formHtml .= FormRenderer::open([
+            'class' => 'w-form w-form-vertical',
+            'id' => $formId,
+            'action' => $apiUrl,
+            'method' => 'post',
+            'data-model' => $model,
+            'data-scope' => $scope,
+            'data-mode' => $mode,
+            'data-record-id' => '',
+            'intent' => 'datatable.record',
+        ]);
         $formHtml .= '<div class="w-form-body"><div class="w-form-fields" id="w-form-fields-' . $formId . '"><div class="w-auto-fields" id="w-auto-fields-' . $formId . '"><div class="w-loading-fields"><i class="fas fa-spinner fa-spin"></i>' . __('正在加载字段...') . '</div></div></div></div>';
         $formHtml .= '<div class="w-form-footer"><div class="w-form-actions">';
         $formHtml .= '<button type="button" class="w-btn w-btn-secondary" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '"><i class="fas fa-times"></i>' . $cancelText . '</button>';
         $formHtml .= '<button type="button" class="w-btn w-btn-primary" data-datatable-form-action="submit-form" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '"><i class="fas fa-save"></i>' . $saveText . '</button>';
-        $formHtml .= '</div></div></form></div></div></div>';
+        $formHtml .= '</div></div>' . FormRenderer::close() . '</div></div></div>';
         if ($mode === 'add') {
             $formHtml .= '<button type="button" class="w-btn w-btn-primary w-form-trigger" data-datatable-form-action="open-modal" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '" data-mode="add"><i class="fas fa-plus"></i>' . $addText . '</button>';
         }

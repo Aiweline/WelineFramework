@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Hook\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Hook\HookRegistry;
 use Weline\Hook\HookScanner;
 
 final class HookScannerLegacyShortNameTest extends TestCase
@@ -78,6 +79,30 @@ PHP;
         self::assertTrue(is_array($result) || $result === null);
 
         return $result;
+    }
+
+    public function testAppleDoubleHookImplementationIsIgnoredWithoutHidingRealTemplate(): void
+    {
+        $basePath = sys_get_temp_dir()
+            . DIRECTORY_SEPARATOR
+            . 'weline-hook-appledouble-'
+            . bin2hex(random_bytes(4));
+        self::assertTrue(mkdir($basePath, 0777, true));
+
+        $realHook = $basePath . DIRECTORY_SEPARATOR . 'search-areas-after.phtml';
+        $appleDouble = $basePath . DIRECTORY_SEPARATOR . '._search-areas-after.phtml';
+        self::assertNotFalse(file_put_contents($realHook, '<?php // @hook-priority 100'));
+        self::assertNotFalse(file_put_contents($appleDouble, "AppleDouble\n"));
+
+        try {
+            $method = new \ReflectionMethod(HookRegistry::class, 'isHookImplementationFile');
+            $method->setAccessible(true);
+
+            self::assertTrue($method->invoke(null, new \SplFileInfo($realHook)));
+            self::assertFalse($method->invoke(null, new \SplFileInfo($appleDouble)));
+        } finally {
+            $this->removeDirectory($basePath);
+        }
     }
 
     private function removeDirectory(string $path): void

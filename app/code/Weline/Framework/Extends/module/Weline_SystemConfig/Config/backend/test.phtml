@@ -1,0 +1,20 @@
+<?php
+/**
+ * @meta.title {default="测试管理",description="框架后台测试管理运行偏好"}
+ * @meta.description {default="控制测试管理页默认是否以 headed UI 运行 Playwright E2E。"}
+ * @config.area {backend}
+ * @config.sort {95}
+ * @config.acl {Weline_Framework::test:view}
+ */
+?>
+
+<w:config:group code="framework_test_runtime" label="测试运行" description="测试管理页的默认运行偏好；开关变更会写入系统配置并在刷新后保持。" sort="10">
+    <w:config:field
+        key="test.ui_enabled"
+        label="UI 测试"
+        description="开启后 Playwright E2E 以 headed 启动；总览行内直跑与详情运行均遵循此配置。服务器无图形界面时请保持关闭。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global" />
+</w:config:group>

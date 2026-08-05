@@ -123,8 +123,14 @@ class SseWriter
         @\set_time_limit(0);
         @\ignore_user_abort(true);
         
-        // 标记 SSE 模式已启用（请求级 + 兼容旧全局标记）
-        RequestContext::set(RequestContext::SSE_WRITER_KEY, true);
+        // 标记 SSE 模式已启用，并保留当前请求的真实 Writer。
+        //
+        // 长任务的分块回调可能运行在继承当前 RequestContext 的嵌套
+        // Fiber 中；它们需要通过该键直接发送进度/心跳。这里只保存
+        // bool 会让运行时仍误判为“已启动”，但业务回调拿不到 Writer，
+        // 最终形成只有服务端任务心跳、浏览器没有任何进度帧的假在线。
+        // WlsRuntime 对该键使用 truthy 判定，因此对象值保持向后兼容。
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, $this);
         SseContext::enableSse();
         
         // 检查是否在 WLS 模式（有连接资源）

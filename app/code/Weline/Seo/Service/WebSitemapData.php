@@ -13,6 +13,7 @@ namespace Weline\Seo\Service;
 
 use Weline\Seo\Model\SitemapUrl;
 use Weline\Seo\Interface\SitemapPlatformAdapterInterface;
+use Weline\Seo\Service\Sitemap\AtomicSitemapPublisher;
 
 /**
  * Sitemap 数据服务
@@ -48,17 +49,20 @@ class WebSitemapData
     private SitemapAdapterRegistry $adapterRegistry;
     private SeoWebsiteDirectory $websiteDirectory;
     private SeoWebsiteAccountBindingService $bindingService;
+    private AtomicSitemapPublisher $publisher;
 
     public function __construct(
         SitemapUrl $sitemapUrlModel,
         SitemapAdapterRegistry $adapterRegistry,
         SeoWebsiteDirectory $websiteDirectory,
-        SeoWebsiteAccountBindingService $bindingService
+        SeoWebsiteAccountBindingService $bindingService,
+        AtomicSitemapPublisher $publisher,
     ) {
         $this->sitemapUrlModel = $sitemapUrlModel;
         $this->adapterRegistry = $adapterRegistry;
         $this->websiteDirectory = $websiteDirectory;
         $this->bindingService = $bindingService;
+        $this->publisher = $publisher;
     }
 
     /**
@@ -91,53 +95,62 @@ class WebSitemapData
      */
     public function generateSitemapFiles(int $websiteId): array
     {
+        // TASK-P1D-004-SEO：dev/test 硬门禁 — 不物化可索引 sitemap
+        $gate = new StoreModeSeoHardGate();
+        if ($gate->isHardNoIndexMode()) {
+            return [
+                'success' => true,
+                'canonical' => ['success' => true, 'total_urls' => 0, 'total_files' => 0, 'hard_gate' => true],
+                'platforms' => [],
+                'total_urls' => 0,
+                'total_files' => 0,
+                'website_code' => '',
+                'platform_count' => 0,
+                'submission_ready' => false,
+                'hard_gate' => true,
+                'message' => (string)__('Store mode hard gate：dev/test 禁止生成可索引 Sitemap'),
+            ];
+        }
+
         // 获取站点信息
         $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
         $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
-        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
+        $baseUrl = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
         
         // 按模块分组获取 URL
         $groupedUrls = $this->sitemapUrlModel->getActiveUrlsByWebsiteGrouped($websiteId);
         
-        if (empty($groupedUrls)) {
+        if ($baseUrl === '') {
+            throw new \InvalidArgumentException((string)__('站点 %{1} 缺少可用基础 URL', $websiteId));
+        }
+
+        $canonical = $this->publisher->publish(
+            $websiteId,
+            $websiteCode,
+            $baseUrl,
+            $groupedUrls,
+            'canonical',
+            AtomicSitemapPublisher::STANDARD_MAX_URLS,
+            AtomicSitemapPublisher::STANDARD_MAX_BYTES,
+        );
+        if (empty($canonical['success'])) {
             return [
+                'success' => false,
+                'canonical' => $canonical,
                 'platforms' => [],
                 'total_urls' => 0,
+                'total_files' => 0,
                 'website_code' => $websiteCode,
-                'error' => 'no_urls',
-                'message' => __('该站点没有 URL 数据，请先点击"同步所有 Provider"按钮生成 URL'),
+                'error' => (string)($canonical['error'] ?? 'canonical_generation_failed'),
+                'message' => (string)($canonical['message'] ?? __('Canonical Sitemap 生成失败')),
+                'retryable' => !empty($canonical['retryable']),
             ];
         }
-        
-        // 获取站点绑定的适配器
+
         $adapters = $this->getWebsiteAdapters($websiteId);
-        
-        if (empty($adapters)) {
-            // 计算总 URL 数
-            $totalUrls = 0;
-            foreach ($groupedUrls as $urls) {
-                $totalUrls += count($urls);
-            }
-            
-            return [
-                'platforms' => [],
-                'total_urls' => $totalUrls,
-                'website_code' => $websiteCode,
-                'error' => 'no_seo_account',
-                'message' => __('该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往"站点管理"或"SEO管理 > 账户管理"绑定 SEO 账户。', $totalUrls),
-            ];
-        }
-        
         $platformResults = [];
-        $totalUrls = 0;
-        $totalFiles = 0;
-        
-        // 计算总 URL 数
-        foreach ($groupedUrls as $urls) {
-            $totalUrls += count($urls);
-        }
-        
-        // 调用各适配器生成 sitemap
+        $totalUrls = (int)($canonical['total_urls'] ?? 0);
+        $totalFiles = (int)($canonical['total_files'] ?? 0);
         foreach ($adapters as $platformCode => $adapter) {
             $result = $adapter->generateSitemapFiles(
                 $websiteId,
@@ -152,11 +165,17 @@ class WebSitemapData
         }
         
         return [
+            'success' => true,
+            'canonical' => $canonical,
             'platforms' => $platformResults,
             'total_urls' => $totalUrls,
             'total_files' => $totalFiles,
             'website_code' => $websiteCode,
             'platform_count' => count($adapters),
+            'submission_ready' => $adapters !== [],
+            'message' => $adapters === []
+                ? __('Canonical Sitemap 已生成；该站点尚未绑定可提交的 SEO 账户')
+                : __('Canonical Sitemap 与平台副本已生成'),
         ];
     }
 
@@ -172,7 +191,7 @@ class WebSitemapData
         
         $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
         $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
-        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
+        $baseUrl = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
         
         // 获取账户和平台信息
         $accountsInfo = $this->bindingService->getSitemapSubmitAccounts($websiteId);
@@ -190,8 +209,8 @@ class WebSitemapData
                 continue;
             }
             
-            // 获取平台索引 URL
-            $sitemapUrl = $adapter->getIndexUrl($baseUrl, $websiteCode);
+            // 平台账户默认提交唯一 canonical 索引，避免公开集合重复。
+            $sitemapUrl = $this->getCanonicalIndexUrl($baseUrl, $websiteCode);
             
             // 获取账户配置
             $accountConfig = (array)($info['account_config'] ?? []);
@@ -210,16 +229,9 @@ class WebSitemapData
     {
         $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
         $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
-        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
+        $baseUrl = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
         
-        $adapters = $this->getWebsiteAdapters($websiteId);
-        
-        if (!empty($adapters)) {
-            $firstAdapter = reset($adapters);
-            return $firstAdapter->getIndexUrl($baseUrl, $websiteCode);
-        }
-        
-        return null;
+        return $baseUrl === '' ? null : $this->getCanonicalIndexUrl($baseUrl, $websiteCode);
     }
 
     /**
@@ -234,7 +246,7 @@ class WebSitemapData
         
         $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
         $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
-        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
+        $baseUrl = rtrim($this->websiteDirectory->effectivePublicBaseUrl($website), '/');
         
         return $adapter->getIndexUrl($baseUrl, $websiteCode);
     }
@@ -268,54 +280,44 @@ class WebSitemapData
             return [];
         }
 
-        $result = ['platforms' => []];
+        $result = ['canonical' => null, 'platforms' => [], 'targets' => []];
 
         $platformDirs = glob($siteDir . '/*', GLOB_ONLYDIR);
         foreach ($platformDirs as $platformDir) {
             $platformCode = basename($platformDir);
             $adapter = $this->adapterRegistry->getAdapter($platformCode);
-            
-            $platformData = [
+            $manifestPath = $platformDir . '/.manifest.json';
+            $manifest = is_file($manifestPath)
+                ? json_decode((string)file_get_contents($manifestPath), true)
+                : null;
+            $platformData = is_array($manifest) ? $manifest : [
                 'platform_code' => $platformCode,
                 'platform_name' => $adapter ? $adapter->getPlatformName() : ucfirst($platformCode),
                 'platform_color' => $adapter ? $adapter->getPlatformColor() : '#6c757d',
                 'index' => null,
-                'modules' => [],
+                'buckets' => [],
             ];
+            $platformData['platform_code'] = $platformCode;
+            $platformData['platform_name'] = $adapter ? $adapter->getPlatformName() : ($platformCode === 'canonical' ? __('Canonical') : ucfirst($platformCode));
+            $platformData['platform_color'] = $adapter ? $adapter->getPlatformColor() : ($platformCode === 'canonical' ? '#2563eb' : '#6c757d');
 
             // 检查平台索引
             $indexPath = $platformDir . '/sitemap.xml';
             if (file_exists($indexPath)) {
-                $platformData['index'] = [
+                $platformData['index'] = array_replace(is_array($platformData['index'] ?? null) ? $platformData['index'] : [], [
                     'filename' => 'sitemap.xml',
                     'path' => $indexPath,
                     'size' => filesize($indexPath),
                     'modified' => filemtime($indexPath),
-                ];
+                ]);
             }
 
-            // 扫描模块文件
-            $sitemapFiles = glob($platformDir . '/sitemap_*.xml');
-            $moduleGroups = [];
-            
-            foreach ($sitemapFiles as $file) {
-                $filename = basename($file);
-                if (preg_match('/^sitemap_([a-z]+)_(\d+)\.xml$/', $filename, $matches)) {
-                    $moduleName = $matches[1];
-                    if (!isset($moduleGroups[$moduleName])) {
-                        $moduleGroups[$moduleName] = [];
-                    }
-                    $moduleGroups[$moduleName][] = [
-                        'filename' => $filename,
-                        'path' => $file,
-                        'size' => filesize($file),
-                        'modified' => filemtime($file),
-                    ];
-                }
+            $result['targets'][$platformCode] = $platformData;
+            if ($platformCode === 'canonical') {
+                $result['canonical'] = $platformData;
+            } else {
+                $result['platforms'][$platformCode] = $platformData;
             }
-            
-            $platformData['modules'] = $moduleGroups;
-            $result['platforms'][$platformCode] = $platformData;
         }
 
         return $result;
@@ -410,5 +412,10 @@ class WebSitemapData
         $pow = min($pow, count($units) - 1);
         $bytes /= pow(1024, $pow);
         return round($bytes, $precision) . ' ' . $units[$pow];
+    }
+
+    private function getCanonicalIndexUrl(string $baseUrl, string $websiteCode): string
+    {
+        return rtrim($baseUrl, '/') . '/sitemaps/' . rawurlencode($websiteCode) . '/canonical/sitemap.xml';
     }
 }

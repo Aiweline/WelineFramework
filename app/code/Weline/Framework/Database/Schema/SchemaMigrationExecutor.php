@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Schema;
 
+use Weline\Framework\Database\Connection\Adapter\Pgsql\PgsqlIndexName;
+use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
+use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector as SqliteConnector;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
-use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
 use Weline\Framework\Setup\Model\Migration;
 use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\DataObject\DataObject;
@@ -15,7 +17,7 @@ use Weline\Framework\Setup\Model\MigrationBackup;
 /**
  * 执行 SchemaDiffOp 列表：生成 DDL/rollback、记录 Migration、DROP 前备份、派发 table_ddl_before/after。
  */
-final class SchemaMigrationExecutor
+final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
 {
     public const EVENT_TABLE_DDL_BEFORE = 'Weline_Framework_Schema::table_ddl_before';
     public const EVENT_TABLE_DDL_AFTER = 'Weline_Framework_Schema::table_ddl_after';
@@ -56,15 +58,38 @@ final class SchemaMigrationExecutor
         $moduleSchemaFingerprints = is_array($context['module_schema_fingerprints'] ?? null)
             ? $context['module_schema_fingerprints']
             : [];
+        $moduleSchemaFingerprintCandidates = is_array($context['module_schema_fingerprint_candidates'] ?? null)
+            ? $context['module_schema_fingerprint_candidates']
+            : [];
+        $checkpointRuntimeQualifiers = is_array($context['checkpoint_runtime_qualifiers'] ?? null)
+            ? array_values(array_filter(
+                array_map('strval', $context['checkpoint_runtime_qualifiers']),
+                static fn(string $qualifier): bool => $qualifier !== '',
+            ))
+            : [];
         $operationId = trim((string)($context['operation_id'] ?? ''));
+        $forceSchemaRebind = !empty($context['force_schema_rebind']);
         $batchIds = [];
         $sequences = [];
-        $checkpointState = $this->prepareSchemaCheckpoints($moduleVersions, $moduleSchemaFingerprints);
+        $checkpointState = $this->prepareSchemaCheckpoints(
+            $moduleVersions,
+            $moduleSchemaFingerprints,
+            $moduleSchemaFingerprintCandidates,
+            $forceSchemaRebind,
+        );
 
-        usort($ops, function (SchemaDiffOp $a, SchemaDiffOp $b): int {
+        $sqlitePrimaryKeyTransferTables = $this->sqlitePrimaryKeyTransferTables($connector, $ops);
+        usort($ops, function (SchemaDiffOp $a, SchemaDiffOp $b) use ($sqlitePrimaryKeyTransferTables): int {
             $cmp = strcmp($a->tableName, $b->tableName);
             if ($cmp !== 0) {
                 return $cmp;
+            }
+            if (isset($sqlitePrimaryKeyTransferTables[$a->tableName])) {
+                $pa = $this->sqlitePrimaryKeyTransferPriority($a);
+                $pb = $this->sqlitePrimaryKeyTransferPriority($b);
+                if ($pa !== $pb) {
+                    return $pa <=> $pb;
+                }
             }
             $pa = self::KIND_PRIORITY[$a->kind] ?? 99;
             $pb = self::KIND_PRIORITY[$b->kind] ?? 99;
@@ -99,14 +124,19 @@ final class SchemaMigrationExecutor
             $fingerprints = is_array($tableFingerprints[$op->tableName] ?? null)
                 ? $tableFingerprints[$op->tableName]
                 : [];
-            $declaredFingerprint = (string)($moduleSchemaFingerprints[$moduleName][$op->tableName]
-                ?? $fingerprints['after']
-                ?? '');
             $currentCheckpoint = $checkpointState[$moduleName]['current'] ?? null;
             $previousCheckpoint = $checkpointState[$moduleName]['previous'] ?? null;
+            $declaredFingerprint = SchemaCheckpointIdentity::fingerprint(
+                (array)($checkpointState[$moduleName]['tables'] ?? []),
+                $op->tableName,
+                $checkpointRuntimeQualifiers,
+            ) ?? (string)($fingerprints['after'] ?? '');
             if ($currentCheckpoint === null && is_array($previousCheckpoint)) {
-                $fingerprints['before'] = (string)($previousCheckpoint['tables'][$op->tableName]
-                    ?? hash('sha256', 'absent'));
+                $fingerprints['before'] = SchemaCheckpointIdentity::fingerprint(
+                    (array)($previousCheckpoint['tables'] ?? []),
+                    $op->tableName,
+                    $checkpointRuntimeQualifiers,
+                ) ?? hash('sha256', 'absent');
             }
             if ($declaredFingerprint !== '') {
                 $fingerprints['after'] = $declaredFingerprint;
@@ -131,9 +161,14 @@ final class SchemaMigrationExecutor
             } catch (\Throwable $e) {
                 throw $e;
             }
+            if ($migrationId <= 0) {
+                throw new \RuntimeException(__(
+                    'Schema DDL 审计写入失败（migration_id=0），已中止执行：module=%{1} table=%{2} kind=%{3}',
+                    [$moduleName, $op->tableName, $op->kind]
+                ));
+            }
             try {
-                if ($migrationId > 0
-                    && in_array($op->kind, [SchemaDiffOp::KIND_DROP_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
+                if (in_array($op->kind, [SchemaDiffOp::KIND_DROP_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
                     && $this->backupService !== null) {
                     /** @var ColumnDefinition $col */
                     $col = $op->payload;
@@ -151,7 +186,7 @@ final class SchemaMigrationExecutor
                 $this->dispatchBefore($op);
 
                 if ($op->kind === SchemaDiffOp::KIND_CREATE_TABLE && $op->payload instanceof TableSchema) {
-                    $this->createTableViaAdapter($connector, $op->tableName, $op->payload);
+                    $this->createTableViaAdapter($connector, $op->tableName, $op->payload, true);
                 } else {
                     $sqliteRebuild = str_contains($forwardSql, '/* WELINE_SQLITE_REBUILD */');
                     $ddl = str_replace('/* WELINE_SQLITE_REBUILD */', '', $forwardSql);
@@ -167,24 +202,6 @@ final class SchemaMigrationExecutor
                             try {
                                 $connector->query($sql)->fetch();
                             } catch (\Throwable $e) {
-                                if ($this->shouldHealDocumentCatalogNamePidDuplicate($op, $e)) {
-                                    $this->dedupeDocumentCatalogNamePid(
-                                        $connector,
-                                        $op->tableName,
-                                        $this->shouldCoalesceDocumentCatalogPidDuringDedupe($op),
-                                    );
-                                    $connector->query($sql)->fetch();
-                                    continue;
-                                }
-                                if ($this->shouldHealDocumentModuleFileDuplicate($op, $e)) {
-                                    $this->dedupeDocumentModuleFile($connector, $op->tableName);
-                                    $connector->query($sql)->fetch();
-                                    continue;
-                                }
-                                if ($this->healPgsqlConstraintBackedIndexDrop($connector, $op, $e)) {
-                                    $connector->query($sql)->fetch();
-                                    continue;
-                                }
                                 $colName = ($op->payload instanceof \Weline\Framework\Database\Schema\ColumnDefinition)
                                     ? $op->payload->name : '';
                                 $ctx = "table={$op->tableName} kind={$op->kind}" . ($colName !== '' ? " col={$colName}" : '');
@@ -206,9 +223,9 @@ final class SchemaMigrationExecutor
                     }
                 }
 
+                $this->assertIndexPostcondition($connector, $op);
                 $this->dispatchAfter($op);
-                if ($migrationId > 0
-                    && in_array($op->kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
+                if (in_array($op->kind, [SchemaDiffOp::KIND_ADD_COLUMN, SchemaDiffOp::KIND_MODIFY_COLUMN], true)
                     && $op->payload instanceof ColumnDefinition) {
                     $this->restorePreviouslyRolledBackColumnData(
                         $moduleName,
@@ -219,7 +236,12 @@ final class SchemaMigrationExecutor
                         $op->modelClass,
                     );
                 }
-                $this->migrationModel->updateStatus(Migration::STATUS_INSTALLED);
+                if (!$this->migrationModel->updateStatus(Migration::STATUS_INSTALLED)) {
+                    throw new \RuntimeException(__(
+                        'Schema DDL 已执行但状态写回失败（仍为 running）：module=%{1} table=%{2} migration_id=%{3}',
+                        [$moduleName, $op->tableName, (string)$migrationId]
+                    ));
+                }
             } catch (\Throwable $e) {
                 $this->markMigrationFailed($migrationId);
                 throw $e;
@@ -237,6 +259,67 @@ final class SchemaMigrationExecutor
     }
 
     /**
+     * SQLite cannot add a PRIMARY KEY column. A legacy primary key must be
+     * demoted (or removed) before the replacement key is added by table rebuild.
+     *
+     * @param list<SchemaDiffOp> $ops
+     * @return array<string, true>
+     */
+    private function sqlitePrimaryKeyTransferTables(ConnectorInterface $connector, array $ops): array
+    {
+        if (strtolower((string)$connector->getConfigProvider()->getDbType()) !== 'sqlite') {
+            return [];
+        }
+        $adds = [];
+        $removals = [];
+        foreach ($ops as $op) {
+            if ($op->kind === SchemaDiffOp::KIND_ADD_COLUMN
+                && $op->payload instanceof ColumnDefinition
+                && $op->payload->primaryKey) {
+                $adds[$op->tableName] = true;
+            }
+            if ($this->isPrimaryKeyRemoval($op)) {
+                $removals[$op->tableName] = true;
+            }
+        }
+
+        return array_intersect_key($adds, $removals);
+    }
+
+    private function sqlitePrimaryKeyTransferPriority(SchemaDiffOp $op): int
+    {
+        if ($op->kind === SchemaDiffOp::KIND_DROP_FOREIGN_KEY) {
+            return 0;
+        }
+        if ($op->kind === SchemaDiffOp::KIND_DROP_INDEX) {
+            return 1;
+        }
+        if ($this->isPrimaryKeyRemoval($op)) {
+            return 2;
+        }
+        if ($op->kind === SchemaDiffOp::KIND_ADD_COLUMN
+            && $op->payload instanceof ColumnDefinition
+            && $op->payload->primaryKey) {
+            return 3;
+        }
+
+        return 10 + (self::KIND_PRIORITY[$op->kind] ?? 99);
+    }
+
+    private function isPrimaryKeyRemoval(SchemaDiffOp $op): bool
+    {
+        if ($op->kind === SchemaDiffOp::KIND_DROP_COLUMN
+            && $op->payload instanceof ColumnDefinition) {
+            return $op->payload->primaryKey;
+        }
+        return $op->kind === SchemaDiffOp::KIND_MODIFY_COLUMN
+            && $op->payload instanceof ColumnDefinition
+            && $op->rollbackPayload instanceof ColumnDefinition
+            && $op->rollbackPayload->primaryKey
+            && !$op->payload->primaryKey;
+    }
+
+    /**
      * Validate immutable checkpoints before executing DDL. For a first upgrade
      * to a version, the previous checkpoint supplies the logical "before"
      * fingerprint; same-version drift keeps the physical fingerprint so the
@@ -244,10 +327,15 @@ final class SchemaMigrationExecutor
      *
      * @param array<string, string> $moduleVersions
      * @param array<string, array<string, string>> $moduleSchemaFingerprints
+     * @param array<string, list<array<string, string>>> $moduleSchemaFingerprintCandidates
      * @return array<string, array{version: string, tables: array<string, string>, current: ?array, previous: ?array}>
      */
-    private function prepareSchemaCheckpoints(array $moduleVersions, array $moduleSchemaFingerprints): array
-    {
+    private function prepareSchemaCheckpoints(
+        array $moduleVersions,
+        array $moduleSchemaFingerprints,
+        array $moduleSchemaFingerprintCandidates = [],
+        bool $forceSchemaRebind = false,
+    ): array {
         $state = [];
         foreach ($moduleVersions as $moduleName => $moduleVersion) {
             $moduleName = trim((string)$moduleName);
@@ -258,6 +346,55 @@ final class SchemaMigrationExecutor
             $tables = is_array($moduleSchemaFingerprints[$moduleName] ?? null)
                 ? $moduleSchemaFingerprints[$moduleName]
                 : [];
+            $candidates = is_array($moduleSchemaFingerprintCandidates[$moduleName] ?? null)
+                ? $moduleSchemaFingerprintCandidates[$moduleName]
+                : [];
+            try {
+                $existing = $this->migrationModel->getSchemaCheckpoint($moduleName, $moduleVersion);
+            } catch (SchemaCheckpointDataException $exception) {
+                if (!$forceSchemaRebind) {
+                    throw $exception;
+                }
+                $this->supersedeSchemaCheckpointForRebind(
+                    $moduleName,
+                    $moduleVersion,
+                    'invalid-checkpoint',
+                );
+                $existing = null;
+            }
+            if ($candidates !== [] && $existing !== null) {
+                $matched = null;
+                foreach ($candidates as $candidate) {
+                    if (!is_array($candidate)) {
+                        continue;
+                    }
+                    $checksum = $this->migrationModel->schemaCheckpointChecksum(
+                        $candidate,
+                        (int)$existing['format'],
+                    );
+                    if (hash_equals((string)$existing['checksum'], $checksum)) {
+                        $matched = $candidate;
+                        break;
+                    }
+                }
+                if ($matched !== null) {
+                    $tables = (array)$existing['tables'];
+                }
+            }
+            if ($forceSchemaRebind && $existing !== null) {
+                    $expectedChecksum = $this->migrationModel->schemaCheckpointChecksum(
+                        $tables,
+                        (int)$existing['format'],
+                    );
+                    if (!hash_equals((string)$existing['checksum'], $expectedChecksum)) {
+                        $this->supersedeSchemaCheckpointForRebind(
+                            $moduleName,
+                            $moduleVersion,
+                            'checksum-mismatch',
+                        );
+                        $existing = null;
+                    }
+            }
             $current = $this->migrationModel->assertSchemaCheckpointCompatible(
                 $moduleName,
                 $moduleVersion,
@@ -274,6 +411,27 @@ final class SchemaMigrationExecutor
         }
 
         return $state;
+    }
+
+    private function supersedeSchemaCheckpointForRebind(
+        string $moduleName,
+        string $moduleVersion,
+        string $reason,
+    ): void {
+        $superseded = $this->migrationModel->supersedeSchemaCheckpoint(
+            $moduleName,
+            $moduleVersion,
+            'force-schema-rebind:' . $reason,
+        );
+        if (function_exists('w_log_warning')) {
+            w_log_warning(sprintf(
+                'Schema checkpoint rebind: module=%s version=%s reason=%s superseded_rows=%d',
+                $moduleName,
+                $moduleVersion,
+                $reason,
+                $superseded,
+            ));
+        }
     }
 
     private function markMigrationFailed(int $migrationId): void
@@ -322,7 +480,7 @@ final class SchemaMigrationExecutor
             return;
         }
 
-        $items = $this->migrationModel->reset()
+        $items = (clone $this->migrationModel)->reset()
             ->where(Migration::schema_fields_MODULE, $moduleName)
             ->where(Migration::schema_fields_FILE, 'schema_diff')
             ->where(Migration::schema_fields_SCHEMA_TABLE_NAME, $tableName)
@@ -390,6 +548,64 @@ final class SchemaMigrationExecutor
         $this->eventsManager->dispatch(self::EVENT_TABLE_DDL_AFTER, $data);
     }
 
+    private function assertIndexPostcondition(ConnectorInterface $connector, SchemaDiffOp $op): void
+    {
+        if (!$op->payload instanceof IndexDefinition
+            || !in_array($op->kind, [SchemaDiffOp::KIND_ADD_INDEX, SchemaDiffOp::KIND_DROP_INDEX], true)) {
+            return;
+        }
+
+        $databaseType = strtolower($connector->getConfigProvider()->getDbType());
+        $formattedTable = $connector->formatTableName($op->tableName);
+        if ($op->kind === SchemaDiffOp::KIND_ADD_INDEX) {
+            $actual = $this->findPhysicalIndex($connector, $op->tableName, $op->payload);
+            if ($actual !== null
+                && IndexDefinitionContract::equals($op->payload, $actual, $databaseType)) {
+                return;
+            }
+            throw new \RuntimeException(__(
+                '表 %{1} 的索引 %{2} 新增后未通过物理定义回读',
+                [$formattedTable, $op->payload->name],
+            ));
+        }
+
+        $rows = $connector->getTableIndexes($op->tableName);
+        if ($databaseType === 'pgsql') {
+            // DROP ops are produced from concrete physical PG rows.  Check
+            // exactly that target, not every backward-compatible candidate.
+            $physicalTarget = PgsqlIndexName::rawPhysical($op->payload->name);
+            foreach ($rows as $row) {
+                if ((string)($row['name'] ?? '') !== $physicalTarget) {
+                    continue;
+                }
+                throw new \RuntimeException(__(
+                    'PostgreSQL 表 %{1} 的索引 %{2} 删除后仍然存在',
+                    [$formattedTable, $op->payload->name],
+                ));
+            }
+            return;
+        }
+
+        $expectedIdentity = IndexDefinitionContract::physicalIdentity(
+            $connector,
+            $op->tableName,
+            $op->payload->name,
+        );
+        foreach ($rows as $row) {
+            $actualName = trim((string)($row['name'] ?? ''));
+            if ($actualName === '') {
+                continue;
+            }
+            if (strtolower($actualName) === strtolower($op->payload->name)
+                || IndexDefinitionContract::physicalIdentity($connector, $op->tableName, $actualName) === $expectedIdentity) {
+                throw new \RuntimeException(__(
+                    '表 %{1} 的索引 %{2} 删除后仍然存在',
+                    [$formattedTable, $op->payload->name],
+                ));
+            }
+        }
+    }
+
     /** 按 ";\n" 拆分 DDL，供需多条语句的方言（如 Pgsql 自增列 SET DEFAULT）使用 */
     private function splitDdlStatements(string $sql): array
     {
@@ -401,46 +617,6 @@ final class SchemaMigrationExecutor
             return [$normalized];
         }
         return explode(";\n", $normalized);
-    }
-
-    /**
-     * PostgreSQL：唯一约束会生成“索引”，DROP INDEX 会报 2BP01；需先 DROP CONSTRAINT。
-     * 若 DDL 中 ALTER 未命中（约束在其它表、或名不一致），根据错误信息补一刀后重试原语句。
-     */
-    private function healPgsqlConstraintBackedIndexDrop(ConnectorInterface $connector, SchemaDiffOp $op, \Throwable $e): bool
-    {
-        if ($op->kind !== SchemaDiffOp::KIND_DROP_INDEX || !$op->payload instanceof IndexDefinition) {
-            return false;
-        }
-        if ($connector->getConfigProvider()->getDbType() !== 'pgsql') {
-            return false;
-        }
-        $msg = $e->getMessage();
-        if (!str_contains($msg, 'cannot drop index') || !str_contains($msg, 'because constraint')) {
-            return false;
-        }
-        $constraintTable = null;
-        $constraintName = null;
-        if (preg_match(
-            '/cannot drop index\s+(\S+)\s+because constraint\s+(\S+)\s+on table\s+(\S+)\s+requires it/i',
-            $msg,
-            $m
-        )) {
-            $constraintName = trim($m[2], '"`');
-            $constraintTable = trim($m[3], '"`');
-        }
-        if ($constraintTable === null || $constraintTable === '' || $constraintName === null || $constraintName === '') {
-            return false;
-        }
-        $qt = $connector->quoteTable($constraintTable);
-        $qn = $connector->quoteIdentifier($constraintName);
-        $healSql = "ALTER TABLE {$qt} DROP CONSTRAINT IF EXISTS {$qn} CASCADE";
-        try {
-            $connector->query($healSql)->fetch();
-        } catch (\Throwable) {
-            return false;
-        }
-        return true;
     }
 
     private function moduleNameFromClass(?string $modelClass): string
@@ -464,7 +640,7 @@ final class SchemaMigrationExecutor
             case SchemaDiffOp::KIND_ADD_COLUMN:
                 /** @var ColumnDefinition $col */
                 $col = $op->payload;
-                return $connector->buildAlterAddColumnSql($table, $this->colToArray($col));
+                return $connector->buildAlterAddColumnSql($table, $this->declarativeColToArray($col));
             case SchemaDiffOp::KIND_DROP_COLUMN:
                 /** @var ColumnDefinition $col */
                 $col = $op->payload;
@@ -508,10 +684,16 @@ final class SchemaMigrationExecutor
             case SchemaDiffOp::KIND_ADD_COLUMN:
                 /** @var ColumnDefinition $col */
                 $col = $op->payload;
+                if ($connector instanceof SqliteConnector) {
+                    return $connector->buildAlterDropProjectedColumnSql($table, $col->name);
+                }
                 return $connector->buildAlterDropColumnSql($table, $col->name);
             case SchemaDiffOp::KIND_DROP_COLUMN:
                 /** @var ColumnDefinition $col */
                 $col = $op->payload;
+                if ($connector instanceof SqliteConnector) {
+                    return $connector->buildAlterAddProjectedColumnSql($table, $this->colToArray($col));
+                }
                 return $connector->buildAlterAddColumnSql($table, $this->colToArray($col));
             case SchemaDiffOp::KIND_MODIFY_COLUMN:
                 $oldCol = $op->rollbackPayload instanceof ColumnDefinition ? $op->rollbackPayload : null;
@@ -526,6 +708,12 @@ final class SchemaMigrationExecutor
             case SchemaDiffOp::KIND_DROP_INDEX:
                 /** @var IndexDefinition $idx */
                 $idx = $op->payload;
+                if ($connector instanceof PgsqlConnector) {
+                    return $connector->buildRestorePhysicalIndexSql(
+                        $table,
+                        $this->idxToArray($idx),
+                    );
+                }
                 return $connector->buildAddIndexSql($table, $this->idxToArray($idx));
             case SchemaDiffOp::KIND_ADD_FOREIGN_KEY:
                 /** @var ForeignKeyDefinition $fk */
@@ -552,73 +740,118 @@ final class SchemaMigrationExecutor
     }
 
     /**
-     * 使用 connector->createTable() API 创建表，由各适配器处理方言（COMMENT、类型映射等）
+     * Index/契约编排留在 Executor；PRIMARY KEY / AUTO_INCREMENT 等方言规则委托各适配器 createTableFromSchema。
      */
-    private function createTableViaAdapter(ConnectorInterface $connector, string $tableName, TableSchema $payload): void
-    {
-        /** @var CreateInterface $create */
-        $create = $connector->createTable();
-        $create->createTable($tableName, $payload->comment);
+    private function createTableViaAdapter(
+        ConnectorInterface $connector,
+        string $tableName,
+        TableSchema $payload,
+        bool $rejectExisting = false,
+    ): void {
+        if ($rejectExisting && $connector->tableExist($tableName)) {
+            throw new \RuntimeException(__(
+                '表 %{1} 在 Schema prepare 后已出现，拒绝用过期 CREATE 计划接管既有表',
+                [$tableName],
+            ));
+        }
 
-        $pkColumns = [];
+        $indexIdentity = static fn(string $indexName): string => IndexDefinitionContract::physicalIdentity(
+            $connector,
+            $tableName,
+            $indexName,
+        );
+        IndexDefinitionContract::assertAdapterLimits($connector, $payload->indexes);
+        IndexDefinitionContract::assertDeclaredNames($payload->indexes, $indexIdentity);
+        $targetIndexes = $payload->indexes;
+        $explicitSingleUniqueColumns = IndexDefinitionContract::explicitSingleUniqueColumnMap($payload->indexes);
+        $reservedImplicitIndexNames = IndexDefinitionContract::reservedIdentities(
+            $indexIdentity,
+            $payload->indexes,
+        );
         foreach ($payload->columns as $col) {
-            if ($col->primaryKey) {
-                $pkColumns[] = $col->name;
+            if (!$col->unique || $col->primaryKey || isset($explicitSingleUniqueColumns[$col->name])) {
+                continue;
             }
-        }
-        $hasCompositePk = count($pkColumns) > 1;
-        $isSqlite = $connector->getConfigProvider()->getDbType() === 'sqlite';
-
-        foreach ($payload->columns as $col) {
-            $opts = [];
-            if ($col->primaryKey && !$hasCompositePk) {
-                $opts[] = 'PRIMARY KEY';
-            }
-            if ($col->autoIncrement && !($isSqlite && $hasCompositePk)) {
-                $opts[] = 'AUTO_INCREMENT';
-            }
-            if (!$col->nullable && !$col->primaryKey) {
-                $opts[] = 'NOT NULL';
-            }
-            if ($col->default !== null) {
-                $d = $col->default;
-                if (is_string($d) && strtoupper($d) === 'CURRENT_TIMESTAMP') {
-                    $opts[] = 'DEFAULT CURRENT_TIMESTAMP';
-                } elseif (is_string($d)) {
-                    $opts[] = "DEFAULT '" . str_replace("'", "''", $d) . "'";
-                } else {
-                    $opts[] = "DEFAULT {$d}";
-                }
-            }
-            if ($col->unique && !$col->primaryKey) {
-                $opts[] = 'UNIQUE';
-            }
-            $options = implode(' ', $opts);
-            $create->addColumn($col->name, $col->type, $col->length, $options, $col->comment);
-        }
-
-        if ($hasCompositePk) {
-            $quoted = array_map(fn(string $n) => '"' . str_replace('"', '""', $n) . '"', $pkColumns);
-            $create->addConstraints('PRIMARY KEY (' . implode(', ', $quoted) . ')');
-        }
-
-        foreach ($payload->indexes as $idx) {
-            $create->addIndex($idx->type, $idx->name, $idx->columns, $idx->comment, $idx->method);
-        }
-
-        foreach ($payload->foreignKeys as $fk) {
-            $create->addForeignKey(
-                $fk->name,
-                implode(',', $fk->columns),
-                $connector->formatTableName($fk->referencesTable),
-                implode(',', $fk->referencesColumns),
-                $fk->onDeleteCascade,
-                $fk->onUpdateCascade,
+            $implicitName = IndexDefinitionContract::resolveImplicitName(
+                $tableName,
+                $col->name,
+                $reservedImplicitIndexNames,
+                $indexIdentity,
+            );
+            $reservedImplicitIndexNames[strtolower($implicitName)] = true;
+            $reservedImplicitIndexNames[$indexIdentity($implicitName)] = true;
+            $targetIndexes[] = new IndexDefinition(
+                name: $implicitName,
+                columns: [$col->name],
+                type: 'UNIQUE',
+                comment: $col->comment,
             );
         }
 
-        $create->addAdditional('');
-        $create->create();
+        $connector->createTableFromSchema($tableName, [
+            'comment' => $payload->comment,
+            'columns' => array_map(fn (ColumnDefinition $col): array => $this->declarativeColToArray($col), $payload->columns),
+            'indexes' => array_map(fn (IndexDefinition $idx): array => $this->idxToArray($idx), $targetIndexes),
+            'foreignKeys' => array_map(fn (ForeignKeyDefinition $fk): array => $this->fkToArray($fk), $payload->foreignKeys),
+        ]);
+        $this->ensureCreateIndexes($connector, $tableName, $targetIndexes);
+    }
+
+    /** @param list<IndexDefinition> $targetIndexes */
+    private function ensureCreateIndexes(
+        ConnectorInterface $connector,
+        string $tableName,
+        array $targetIndexes,
+    ): void {
+        $databaseType = strtolower($connector->getConfigProvider()->getDbType());
+        foreach ($targetIndexes as $expected) {
+            $actual = $this->findPhysicalIndex($connector, $tableName, $expected);
+            if ($actual !== null) {
+                if (!IndexDefinitionContract::equals($expected, $actual, $databaseType)) {
+                    throw new \RuntimeException(__(
+                        '表 %{1} 的索引 %{2} 创建后物理定义不一致',
+                        [$tableName, $expected->name],
+                    ));
+                }
+                continue;
+            }
+
+            $physicalTable = $connector->formatTableName($tableName);
+            $connector->query($connector->buildAddIndexSql($physicalTable, $this->idxToArray($expected)))->fetch();
+            $actual = $this->findPhysicalIndex($connector, $tableName, $expected);
+            if ($actual === null || !IndexDefinitionContract::equals($expected, $actual, $databaseType)) {
+                throw new \RuntimeException(__(
+                    '表 %{1} 的索引 %{2} 补建后未通过物理回读',
+                    [$tableName, $expected->name],
+                ));
+            }
+        }
+    }
+
+    private function findPhysicalIndex(
+        ConnectorInterface $connector,
+        string $tableName,
+        IndexDefinition $expected,
+    ): ?IndexDefinition {
+        $expectedIdentity = IndexDefinitionContract::physicalIdentity($connector, $tableName, $expected->name);
+        foreach ($connector->getTableIndexes($tableName) as $row) {
+            $actualName = trim((string)($row['name'] ?? ''));
+            if ($actualName === '') {
+                continue;
+            }
+            $rawIdentity = strtolower($actualName);
+            $mappedIdentity = IndexDefinitionContract::physicalIdentity($connector, $tableName, $actualName);
+            if ($expectedIdentity !== $rawIdentity && $expectedIdentity !== $mappedIdentity) {
+                continue;
+            }
+            return new IndexDefinition(
+                name: $actualName,
+                columns: array_values(array_map('strval', (array)($row['columns'] ?? []))),
+                type: (string)($row['type'] ?? (!empty($row['unique']) ? 'UNIQUE' : 'DEFAULT')),
+                method: (string)($row['method'] ?? 'BTREE'),
+            );
+        }
+        return null;
     }
 
     /** @return array{name:string,type:string,length?:int|string|null,nullable:bool,primaryKey:bool,autoIncrement:bool,default?:mixed,comment:string,unique:bool} */
@@ -637,7 +870,24 @@ final class SchemaMigrationExecutor
         ];
     }
 
-    /** @return array{name:string,columns:list<string>,type:string,method:string} */
+    /**
+     * Declarative UNIQUE ownership lives in explicit or stable implicit indexes.
+     * Keeping it on the column as well would create a second constraint-owned
+     * index on SQLite and make a cold install require another SchemaDiff pass.
+     *
+     * @return array{name:string,type:string,length?:int|string|null,nullable:bool,primaryKey:bool,autoIncrement:bool,default?:mixed,comment:string,unique:bool}
+     */
+    private function declarativeColToArray(ColumnDefinition $col): array
+    {
+        $definition = $this->colToArray($col);
+        if (!$col->primaryKey) {
+            $definition['unique'] = false;
+        }
+
+        return $definition;
+    }
+
+    /** @return array{name:string,columns:list<string>,type:string,method:string,comment:string} */
     private function idxToArray(IndexDefinition $idx): array
     {
         return [
@@ -645,6 +895,7 @@ final class SchemaMigrationExecutor
             'columns' => $idx->columns,
             'type' => $idx->type,
             'method' => $idx->method,
+            'comment' => $idx->comment,
         ];
     }
 
@@ -659,121 +910,6 @@ final class SchemaMigrationExecutor
             'onDeleteCascade' => $fk->onDeleteCascade,
             'onUpdateCascade' => $fk->onUpdateCascade,
         ];
-    }
-
-    private function shouldHealDocumentCatalogNamePidDuplicate(SchemaDiffOp $op, \Throwable $e): bool
-    {
-        if (!\str_contains($op->tableName, 'developer_workspace_document_catalog')) {
-            return false;
-        }
-        if ($op->kind === SchemaDiffOp::KIND_ADD_INDEX && $op->payload instanceof IndexDefinition) {
-            if ($op->payload->name !== 'idx_unique_name_pid') {
-                return false;
-            }
-        } elseif (
-            $op->kind === SchemaDiffOp::KIND_MODIFY_COLUMN
-            && $op->payload instanceof ColumnDefinition
-        ) {
-            if ($op->payload->name !== 'pid') {
-                return false;
-            }
-        } else {
-            return false;
-        }
-
-        $message = \strtolower($e->getMessage());
-        return \str_contains($message, 'unique violation')
-            || \str_contains($message, 'duplicate')
-            || \str_contains($message, 'could not create unique index');
-    }
-
-    private function shouldHealDocumentModuleFileDuplicate(SchemaDiffOp $op, \Throwable $e): bool
-    {
-        if (!\str_contains($op->tableName, 'developer_workspace_document')) {
-            return false;
-        }
-        if (\str_contains($op->tableName, 'developer_workspace_document_catalog')) {
-            return false;
-        }
-        if ($op->kind !== SchemaDiffOp::KIND_ADD_INDEX || !$op->payload instanceof IndexDefinition) {
-            return false;
-        }
-        if ($op->payload->name !== 'idx_module_file_unique') {
-            return false;
-        }
-
-        $message = \strtolower($e->getMessage());
-        return \str_contains($message, 'unique violation')
-            || \str_contains($message, 'duplicate')
-            || \str_contains($message, 'could not create unique index');
-    }
-
-    private function shouldCoalesceDocumentCatalogPidDuringDedupe(SchemaDiffOp $op): bool
-    {
-        return $op->kind === SchemaDiffOp::KIND_MODIFY_COLUMN
-            && $op->payload instanceof ColumnDefinition
-            && $op->payload->name === 'pid';
-    }
-
-    private function dedupeDocumentCatalogNamePid(
-        ConnectorInterface $connector,
-        string $tableName,
-        bool $coalescePid = false,
-    ): int
-    {
-        $table = $connector->quoteTable($tableName);
-        $partitionPid = $coalescePid ? 'COALESCE(pid, 0)' : 'pid';
-        $orderBy = $coalescePid
-            ? 'CASE WHEN pid IS NULL THEN 1 ELSE 0 END ASC, id ASC'
-            : 'id ASC';
-        $sql = "DELETE FROM {$table} AS t
-                USING (
-                    SELECT id, ROW_NUMBER() OVER (
-                        PARTITION BY name, {$partitionPid}
-                        ORDER BY {$orderBy}
-                    ) AS rn
-                    FROM {$table}
-                ) AS d
-                WHERE t.id = d.id AND d.rn > 1";
-        $result = $connector->query($sql)->fetch();
-        if (\is_array($result) && isset($result['affected_rows'])) {
-            return (int) $result['affected_rows'];
-        }
-        if (\is_array($result) && isset($result[0]['affected_rows'])) {
-            return (int) $result[0]['affected_rows'];
-        }
-
-        return -1;
-    }
-
-    private function dedupeDocumentModuleFile(ConnectorInterface $connector, string $tableName): int
-    {
-        $table = $connector->quoteTable($tableName);
-        $id = $connector->quoteIdentifier('id');
-        $moduleName = $connector->quoteIdentifier('module_name');
-        $filePath = $connector->quoteIdentifier('file_path');
-        $sql = "DELETE FROM {$table}
-                WHERE {$id} IN (
-                    SELECT {$id}
-                    FROM (
-                        SELECT {$id}, ROW_NUMBER() OVER (
-                            PARTITION BY {$moduleName}, {$filePath}
-                            ORDER BY {$id} ASC
-                        ) AS rn
-                        FROM {$table}
-                        WHERE {$moduleName} IS NOT NULL AND {$filePath} IS NOT NULL
-                    ) AS d
-                    WHERE d.rn > 1
-                )";
-        $result = $connector->query($sql)->fetch();
-        if (\is_array($result) && isset($result['affected_rows'])) {
-            return (int) $result['affected_rows'];
-        }
-        if (\is_array($result) && isset($result[0]['affected_rows'])) {
-            return (int) $result[0]['affected_rows'];
-        }
-
-        return -1;
     }
 
 }

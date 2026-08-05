@@ -406,11 +406,21 @@ final class BinQueryGateway
      */
     private function normalizeParamValue(mixed $value, array $rule): mixed
     {
+        $type = \strtolower((string)($rule['type'] ?? 'mixed'));
+
+        // WQB1 保留 JS 数字/布尔类型；声明为 string 时接受标量并规范化（如 media connector 的 tree/init）。
+        if ($type === 'string' && (\is_int($value) || \is_float($value) || \is_bool($value))) {
+            if (\is_bool($value)) {
+                return $value ? '1' : '0';
+            }
+
+            return (string)$value;
+        }
+
         if (!\is_string($value)) {
             return $value;
         }
 
-        $type = \strtolower((string)($rule['type'] ?? 'mixed'));
         $trimmed = \trim($value);
         if (($type === 'int' || $type === 'integer') && \preg_match('/^-?\d+$/', $trimmed) === 1) {
             return (int)$trimmed;

@@ -72,20 +72,53 @@ class ModelSelect implements TaglibInterface
                 $dataAttrsStr = ' ' . implode(' ', $dataParts);
             }
             
-            // 输出 HTML（使用解析后的 id 值）
-            $html[] = '<div class="position-relative ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '"' . $dataAttrsStr . '>';
+            // 输出 HTML：实色下拉 + 打开时抬高层级，避免 Bootstrap 后续列盖住下拉
+            $html[] = '<style id="weline-ai-model-select-style">';
+            $html[] = '.weline-ai-model-select{position:relative;}';
+            $html[] = '.weline-ai-model-select.is-open{z-index:2000;}';
+            $html[] = '.weline-ai-model-select-dropdown{';
+            $html[] = 'position:absolute;left:0;min-width:100%;width:max(100%,280px);z-index:2001;display:none;padding:0.5rem;';
+            $html[] = 'background-color:#ffffff;';
+            $html[] = 'color:#212529;';
+            $html[] = 'border:1px solid #ced4da;';
+            $html[] = 'border-radius:0.375rem;';
+            $html[] = 'box-shadow:0 12px 28px rgba(0,0,0,.45);';
+            $html[] = '}';
+            $html[] = '.weline-ai-model-select-dropdown.is-dark{';
+            $html[] = 'background-color:#0b1220;';
+            $html[] = 'color:#e6eef8;';
+            $html[] = 'border-color:#64748b;}';
+            $html[] = '.weline-ai-model-select-search{margin-bottom:0.5rem;}';
+            $html[] = '.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-search{';
+            $html[] = 'background-color:#0f172a;color:#e6eef8;border-color:rgba(148,163,184,0.25);}';
+            $html[] = '.weline-ai-model-select-list{';
+            $html[] = 'max-height:260px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;';
+            $html[] = 'scrollbar-width:thin;scrollbar-color:#4c5b73 rgba(15,23,42,0.35);';
+            $html[] = 'border:1px solid rgba(148,163,184,0.22);border-radius:0.25rem;';
+            $html[] = 'background-color:#ffffff;}';
+            $html[] = '.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-list{';
+            $html[] = 'background-color:#0b1220;}';
+            $html[] = '.weline-ai-model-select-list::-webkit-scrollbar{width:8px;}';
+            $html[] = '.weline-ai-model-select-list::-webkit-scrollbar-track{background:rgba(15,23,42,0.35);border-radius:4px;}';
+            $html[] = '.weline-ai-model-select-list::-webkit-scrollbar-thumb{background:#4c5b73;border-radius:4px;}';
+            $html[] = '.weline-ai-model-select-item{color:inherit;cursor:pointer;';
+            $html[] = 'border-bottom:1px solid rgba(148,163,184,0.18);}';
+            $html[] = '.weline-ai-model-select-item:last-child{border-bottom:none;}';
+            $html[] = '.weline-ai-model-select-item:hover{background-color:rgba(85,110,230,.12);}';
+            $html[] = '.weline-ai-model-select-item.active{background-color:rgba(85,110,230,.18);color:#556ee6;}';
+            $html[] = '.weline-ai-model-select-dropdown.is-dark .weline-ai-model-select-item.active{color:#8ea2ff;}';
+            $html[] = '</style>';
+            $html[] = '<div class="position-relative weline-ai-model-select ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '"' . $dataAttrsStr . '>';
             $html[] = '  <button type="button" class="btn btn-outline-secondary w-100 text-start" id="<?= htmlspecialchars($Taglib__id) ?>_trigger" style="height: 38px;">';
             $html[] = '    <span id="<?= htmlspecialchars($Taglib__id) ?>_display"><?php if($Taglib__display!==' . "''" . '): echo htmlspecialchars($Taglib__display); else: ?>' . htmlspecialchars(__('使用默认模型')) . '<?php endif; ?></span>';
             $html[] = '  </button>';
-            $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" style="display:none; position:absolute; left:0; right:0; top:0; z-index:1060;"' . $dataAttrsStr . '>';
-            $html[] = '    <input type="text" class="form-control mb-2" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
+            $html[] = '  <div id="<?= htmlspecialchars($Taglib__id) ?>_container" class="weline-ai-model-select-dropdown"' . $dataAttrsStr . '>';
+            $html[] = '    <input type="text" class="form-control weline-ai-model-select-search" id="<?= htmlspecialchars($Taglib__id) ?>_search" placeholder="' . htmlspecialchars($placeholder) . '" autocomplete="off">';
             $html[] = '    <input type="hidden" id="<?= htmlspecialchars($Taglib__id) ?>_code" name="<?= htmlspecialchars($Taglib__name) ?>" value="<?= htmlspecialchars($Taglib__value) ?>"' . $dataAttrsStr . '>';
-            $html[] = '    <div class="border rounded shadow bg-white" style="max-height:300px; overflow-y:auto; position:relative;">';
-            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_loading" style="padding:1rem; text-align:center; display:none;"></div>';
-            $html[] = '      <div id="<?= htmlspecialchars($Taglib__id) ?>_list" style="padding:0.25rem;"></div>';
-            $html[] = '    </div>';
+            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_loading" style="padding:1rem; text-align:center; display:none;"></div>';
+            $html[] = '    <div id="<?= htmlspecialchars($Taglib__id) ?>_list" class="weline-ai-model-select-list" style="padding:0.25rem;"></div>';
             $html[] = '  </div>';
-            $html[] = '  <small class="text-muted d-block mt-1">' . __('提示：点击选择AI模型，输入关键词搜索（800ms防抖）') . '</small>';
+            $html[] = '  <small class="text-muted d-block mt-1">' . __('提示：点击选择AI模型，输入关键词搜索') . '</small>';
             $html[] = '</div>';
 
             // 脚本：数据加载 + 搜索 + 选中回填
@@ -152,8 +185,7 @@ class ModelSelect implements TaglibInterface
      if(!code){ return; }
      const text = modelText(model);
      const row = document.createElement("div");
-     row.className = "p-2 border-bottom model-item";
-     row.style.cursor = "pointer";
+     row.className = "p-2 border-bottom model-item weline-ai-model-select-item";
      row.dataset.code = code;
      row.dataset.text = text;
      row.textContent = text;
@@ -170,8 +202,7 @@ class ModelSelect implements TaglibInterface
        try{ hidden.dispatchEvent(new Event('change')); }catch(e){}
        try{ window.AiModelSelectSelected = window.AiModelSelectSelected||{}; window.AiModelSelectSelected[id]=this.dataset.code; }catch(e){}
        display.textContent = this.dataset.text;
-       box.style.display = "none";
-       trigger.style.display = "block";
+       try{ closeDropdown(); }catch(e){ box.style.display = "none"; trigger.style.display = "block"; }
        list.querySelectorAll(".model-item").forEach(function(li){ li.classList.remove("active"); });
        this.classList.add("active");
      });
@@ -196,50 +227,143 @@ class ModelSelect implements TaglibInterface
  }
 JS;
             $html[] = <<<JS
-function firstLoad(){
-  loading.style.display = "block";
-  getAiApi()
-    .then(function(aiApi){ return aiApi.listModels({}); })
-    .then(res=>{
-      loading.style.display = "none";
-      cache = Array.isArray(res) ? res : ((res&&res.data) ? res.data : []);
-      render(cache);
-      // 渲染完成后，如果有初始值，尝试设置显示文本
-      if(hidden.value && cache && cache.length > 0){
-        const matched = cache.find(function(m){ return modelCode(m) === hidden.value; });
-        if(matched && (!display.textContent || display.textContent.trim() === '' || display.textContent === '{$t_default_model}')){
-          display.textContent = modelText(matched);
-        }
-      }
-    })
-    .catch(()=>{
-      loading.style.display = "none";
-      renderStatus("p-2 text-danger", loadFailText);
-    });
+let loadPromise = null;
+function normalizeModels(res){
+  if(Array.isArray(res)){ return res; }
+  if(res && Array.isArray(res.data)){ return res.data; }
+  if(res && res.data && Array.isArray(res.data.data)){ return res.data.data; }
+  return [];
 }
+function applyFilter(kw){
+  kw = String(kw || "").toLowerCase().trim();
+  if(!cache){ return; }
+  if(!kw){ render(cache); return; }
+  const data = cache.filter(function(m){
+    const t = ((m.name||"")+" "+(m.supplier||"")+" "+modelCode(m)).toLowerCase();
+    return t.indexOf(kw) !== -1;
+  });
+  render(data);
+}
+function ensureLoaded(){
+  if(cache){ return Promise.resolve(cache); }
+  if(loadPromise){ return loadPromise; }
+  loading.style.display = "block";
+  loadPromise = getAiApi()
+    .then(function(aiApi){ return aiApi.listModels({}); })
+    .then(function(res){
+      loading.style.display = "none";
+      cache = normalizeModels(res);
+      loadPromise = null;
+      return cache;
+    })
+    .catch(function(){
+      loading.style.display = "none";
+      loadPromise = null;
+      renderStatus("p-2 text-danger", loadFailText);
+      throw new Error("load failed");
+    });
+  return loadPromise;
+}
+function isDarkTheme(){
+  const root = document.documentElement;
+  const body = document.body;
+  return root.getAttribute("data-bs-theme") === "dark"
+    || root.getAttribute("data-theme-mode") === "dark"
+    || root.getAttribute("data-layout-mode") === "dark"
+    || (body && (body.getAttribute("data-bs-theme") === "dark" || body.getAttribute("data-layout-mode") === "dark"));
+}
+function paintShell(){
+  const dark = isDarkTheme();
+  const bg = dark ? "#0b1220" : "#ffffff";
+  const fg = dark ? "#e6eef8" : "#212529";
+  box.classList.toggle("is-dark", dark);
+  box.style.setProperty("background-color", bg, "important");
+  box.style.setProperty("background-image", "none", "important");
+  box.style.setProperty("opacity", "1", "important");
+  box.style.color = fg;
+  box.style.border = dark ? "1px solid #64748b" : "1px solid #ced4da";
+  box.style.boxShadow = "0 16px 40px rgba(0,0,0,.65)";
+  list.style.setProperty("background-color", bg, "important");
+  list.style.color = fg;
+  if(search){
+    search.style.setProperty("background-color", dark ? "#111827" : "#ffffff", "important");
+    search.style.color = fg;
+  }
+}
+function placeFixed(){
+  const rect = trigger.getBoundingClientRect();
+  const width = Math.max(rect.width, 300);
+  let left = rect.left;
+  if(left + width > window.innerWidth - 8){ left = Math.max(8, window.innerWidth - width - 8); }
+  box.style.position = "fixed";
+  box.style.top = (rect.bottom + 6) + "px";
+  box.style.left = left + "px";
+  box.style.right = "auto";
+  box.style.width = width + "px";
+  box.style.minWidth = width + "px";
+  box.style.zIndex = "20000";
+  box.style.display = "block";
+}
+function openDropdown(e){
+  if(e){ e.preventDefault(); e.stopPropagation(); }
+  const root = trigger.closest(".weline-ai-model-select");
+  if(root){ root.classList.add("is-open"); }
+  if(box.parentElement !== document.body){
+    box._welineOriginParent = box.parentElement;
+    document.body.appendChild(box);
+  }
+  paintShell();
+  placeFixed();
+  ensureLoaded().then(function(){ applyFilter(search.value); paintShell(); }).catch(function(){});
+  setTimeout(function(){ try{ search.focus(); search.select(); }catch(err){} }, 30);
+  document.removeEventListener("click", closeOutside);
+  document.removeEventListener("keydown", esc);
+  window.removeEventListener("resize", placeFixed);
+  window.removeEventListener("scroll", placeFixed, true);
+  setTimeout(function(){
+    document.addEventListener("click", closeOutside);
+    document.addEventListener("keydown", esc);
+    window.addEventListener("resize", placeFixed);
+    window.addEventListener("scroll", placeFixed, true);
+  }, 0);
+}
+function closeDropdown(){
+  box.style.display = "none";
+  trigger.style.display = "block";
+  const root = trigger.closest(".weline-ai-model-select");
+  if(root){ root.classList.remove("is-open"); }
+  if(box._welineOriginParent && box.parentElement === document.body){
+    box._welineOriginParent.appendChild(box);
+  }
+  document.removeEventListener("click", closeOutside);
+  document.removeEventListener("keydown", esc);
+  window.removeEventListener("resize", placeFixed);
+  window.removeEventListener("scroll", placeFixed, true);
+}
+function closeOutside(ev){
+  if(!(box.contains(ev.target) || trigger.contains(ev.target))){ closeDropdown(); }
+}
+function esc(e){
+  if(e.key === "Escape"){ closeDropdown(); }
+}
+const debounce=(fn,t)=>{let timer=null;return (...a)=>{clearTimeout(timer);timer=setTimeout(()=>fn.apply(null,a),t);}};
+const doFilter = debounce(function(){ applyFilter(search.value); }, 200);
+trigger.addEventListener("click", openDropdown);
+search.addEventListener("mousedown", function(e){ e.stopPropagation(); });
+search.addEventListener("click", function(e){ e.stopPropagation(); });
+search.addEventListener("keydown", function(e){ e.stopPropagation(); if(e.key === "Escape"){ closeDropdown(); } });
+search.addEventListener("input", function(){ doFilter(); });
 JS;
-            $html[] = <<<'JS'
-const debounce=(fn,t)=>{let id=null;return (...a)=>{clearTimeout(id);id=setTimeout(()=>fn.apply(null,a),t);}};
-JS;
-            $html[] = 'const doFilter = debounce(function(kw){ kw=(kw||"").toLowerCase().trim(); if(!kw){ render(cache||[]); return;} var data=(cache||[]).filter(function(m){ var t=((m.name||"")+" "+(m.supplier||"")+" "+modelCode(m)); return t.toLowerCase().indexOf(kw)!==-1; }); render(data); },800);';
-            $html[] = 'trigger.addEventListener("click", function(e){ e.stopPropagation(); box.style.top=(trigger.offsetHeight+6)+"px"; box.style.width="100%"; box.style.display="block"; firstLoad(); setTimeout(()=>search.focus(),50); });';
-            $html[] = 'search.addEventListener("input", function(){ doFilter(this.value); });';
-            $html[] = 'function closeOutside(ev){ if(!(box.contains(ev.target)||trigger.contains(ev.target))){ box.style.display="none"; trigger.style.display="block"; document.removeEventListener("click", closeOutside); document.removeEventListener("keydown", esc); }}';
-            $html[] = 'function esc(e){ if(e.key==="Escape"){ box.style.display="none"; trigger.style.display="block"; document.removeEventListener("click", closeOutside); document.removeEventListener("keydown", esc); }}';
-            $html[] = 'trigger.addEventListener("click", function(){ setTimeout(function(){ document.addEventListener("click", closeOutside); document.addEventListener("keydown", esc); }, 0); });';
             // 页面加载时，如果有初始值，自动加载并设置显示文本（无论当前显示文本是什么）
             $html[] = 'if(hidden.value){';
-            $html[] = '  getAiApi().then(function(aiApi){ return aiApi.listModels({}); }).then(res=>{';
-            $html[] = '    const models = Array.isArray(res) ? res : ((res&&res.data) ? res.data : []);';
+            $html[] = '  ensureLoaded().then(function(models){';
             $html[] = '    const matched = models.find(function(m){ return modelCode(m) === hidden.value; });';
             $html[] = '    if(matched){';
             $html[] = '      const matchedCode = modelCode(matched);';
             $html[] = '      const txt = modelText(matched);';
-            $html[] = '      // 如果显示文本为空、为默认值，或者与匹配的模型不一致，则更新显示文本';
             $html[] = '      if(!display.textContent || display.textContent.trim() === "" || display.textContent === "' . $t_default_model . '" || display.textContent !== txt){';
             $html[] = '        display.textContent = txt;';
             $html[] = '      }';
-            $html[] = '      // 确保隐藏字段的值正确设置';
             $html[] = '      if(hidden.value !== matchedCode){';
             $html[] = '        hidden.value = matchedCode;';
             $html[] = '        try{ hidden.setAttribute("value", matchedCode); }catch(e){}';

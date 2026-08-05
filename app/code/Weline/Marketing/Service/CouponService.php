@@ -32,12 +32,53 @@ class CouponService
      */
     public function createCoupon(array $data): Coupon
     {
+        $ruleId = (int)($data[Coupon::schema_fields_RULE_ID] ?? 0);
+        /** @var Rule $rule */
+        $rule = ObjectManager::getInstance(Rule::class);
+        $rule->load($ruleId);
+        if ($ruleId <= 0 || !$rule->getId()) {
+            throw new \InvalidArgumentException((string)__('优惠券必须绑定有效营销规则'));
+        }
+
+        $type = trim((string)($data[Coupon::schema_fields_TYPE] ?? ''));
+        if (!in_array($type, [
+            Coupon::TYPE_PERCENTAGE,
+            Coupon::TYPE_FIXED_AMOUNT,
+            Coupon::TYPE_FREE_SHIPPING,
+            Coupon::TYPE_GIFT,
+        ], true)) {
+            throw new \InvalidArgumentException((string)__('优惠券类型无效'));
+        }
+        $status = trim((string)($data[Coupon::schema_fields_STATUS] ?? Coupon::STATUS_ACTIVE));
+        if (!in_array($status, [
+            Coupon::STATUS_ACTIVE,
+            Coupon::STATUS_INACTIVE,
+            Coupon::STATUS_EXPIRED,
+            Coupon::STATUS_EXHAUSTED,
+        ], true)) {
+            throw new \InvalidArgumentException((string)__('优惠券状态无效'));
+        }
+
+        $data[Coupon::schema_fields_RULE_ID] = $ruleId;
+        $data[Coupon::schema_fields_TYPE] = $type;
+        $data[Coupon::schema_fields_STATUS] = $status;
+        $data[Coupon::schema_fields_CODE] = strtoupper(trim((string)($data[Coupon::schema_fields_CODE] ?? '')));
+        $data[Coupon::schema_fields_CREATED_AT] = $data[Coupon::schema_fields_CREATED_AT] ?? date('Y-m-d H:i:s');
+        $data[Coupon::schema_fields_UPDATED_AT] = date('Y-m-d H:i:s');
+
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
         
         // 如果没有提供代码，自动生成
         if (empty($data['code'])) {
             $data['code'] = $this->generateCouponCode();
+        }
+
+        /** @var Coupon $existing */
+        $existing = ObjectManager::getInstance(Coupon::class);
+        $existing->load(Coupon::schema_fields_CODE, $data[Coupon::schema_fields_CODE]);
+        if ($existing->getId()) {
+            throw new \DomainException((string)__('优惠券代码已存在'));
         }
 
         $coupon->setData($data);
@@ -249,4 +290,3 @@ class CouponService
         ];
     }
 }
-

@@ -37,9 +37,11 @@ interface CreateInterface
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/8/31 20:36
      * 参数区：
-     * @return bool
+     * @param bool $withImplicitTimestampColumns 旧建表 API 是否自动补 create_time/update_time；
+     *                                           声明式 TableSchema 必须传 false
+     * @return mixed
      */
-    public function create(): mixed;
+    public function create(bool $withImplicitTimestampColumns = true): mixed;
 
     /**
      * @DESC          # 添加字段

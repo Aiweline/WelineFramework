@@ -28,4 +28,9 @@
           parent="Weline_Backend::i18n_group"
           icon="mdi mdi-translate"
           order="40"/>
+
+    <menu source="Weline_I18n::i18n_language_requests" name="i18n_language_requests" title="语言申请" action="/i18n/backend/language-requests"
+          parent="Weline_Backend::i18n_group"
+          icon="mdi mdi-translate-variant"
+          order="50"/>
 </menus>

@@ -78,6 +78,39 @@
 - 适配器开发指南
 - 扩展开发示例
 
+## Website 表单扩展契约
+
+Geo 通过 `Weline_Geo::website_save_after` 订阅
+`Weline_Websites::website_save_after`。它在 Website 核心数据、域名、货币、语言和两项
+start-page SystemConfig 已写入、但外层主库事务尚未提交时执行。
+
+- 表单字段必须放在 `post_data.extensions.geo`；该区块缺失或为空时不修改 Geo 配置。
+- 事件数据只在 `website_id` 字段缺失或值为 `null` 时表示无站点上下文。
+- `website_id=0` 是合法的系统默认站点；负数、小数或其他非整数值会抛出，不得以真假值过滤 ID 0。
+- Website 后台表单 Hook 必须为数字站点 ID 添加 `website_` DOM 前缀，并让每个 `label[for]` 精确匹配动态字段 ID；因此零号网站使用 `website_0_geo_protocol_*`，可被 Bootstrap 折叠组件和辅助技术安全引用。
+- Website 后台表单读取 Geo 配置时同样接受 `website_id=0`；只有站点身份字段完全缺失时才使用新增表单的默认值。
+- Observer 只保存该精确站点的 `llms_enabled`、`feed_enabled`、`auto_push`、
+  `feed_id` 和 `llms_intro`；不查首个站点，不跨站 fallback。
+- Observer 使用默认 `failure=critical`。任何 Geo 写入异常都必须上抛，使 Website 整单回滚；不得捕获后继续返回站点保存成功。
+- 外部 Feed 推送、通知或网络请求不属于该事件，应在数据库提交后由独立流程执行。
+
+```php
+[
+    'website_id' => 0,
+    'post_data' => [
+        'extensions' => [
+            'geo' => [
+                'llms_enabled' => '1',
+                'feed_enabled' => '1',
+                'auto_push' => '1',
+                'feed_id' => 12,
+                'llms_intro' => 'Example',
+            ],
+        ],
+    ],
+]
+```
+
 ---
 
 ## 🔗 相关链接

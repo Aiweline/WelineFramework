@@ -19,7 +19,7 @@ $totalPages = (int)($total_pages ?? 0);
 $keyword = $keyword ?? '';
 ?>
 <!-- 页面标题 -->
-<div class="row">
+<div class="row" data-testid="acl-ip-whitelist-management">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18"><lang>IP白名单</lang></h4>
@@ -92,7 +92,7 @@ $keyword = $keyword ?? '';
                             $itemId = $itemData['id'] ?? 0;
                             $isActive = (int)($itemData['is_active'] ?? 0);
                             ?>
-                            <tr>
+                            <tr data-testid="acl-ip-whitelist-row" data-ip="<?= htmlspecialchars($itemData['ip'] ?? '') ?>">
                                 <td><?= $itemId ?></td>
                                 <td><?= htmlspecialchars($itemData['ip'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($itemData['description'] ?? '-') ?></td>
@@ -204,6 +204,7 @@ $keyword = $keyword ?? '';
                     </div>
                     <div class="mb-3">
                         <div class="form-check">
+                            <input type="hidden" name="is_active" value="0">
                             <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" checked>
                             <label class="form-check-label" for="is_active">
                                 <lang>启用</lang>
@@ -283,27 +284,65 @@ $keyword = $keyword ?? '';
         event.preventDefault();
         var formData = new FormData(event.target);
         var id = formData.get('id');
+        var form = event.target;
+        form.dataset.ipWhitelistState = 'submitting';
+        delete form.dataset.ipWhitelistError;
+        if (id === '0') {
+            var runCreate = function(api) {
+                return api.resource('acl').createIpWhitelist({
+                    ip: String(formData.get('ip') || ''),
+                    description: String(formData.get('description') || ''),
+                    is_active: formData.getAll('is_active').indexOf('1') !== -1
+                });
+            };
+            var createPromise = (window.Weline && window.Weline.load)
+                ? window.Weline.load('api').then(runCreate)
+                : Promise.resolve(runCreate(window.Weline.Api));
+            createPromise.then(function(result) {
+                var data = result && result.data && result.success === undefined ? result.data : result;
+                if (data && data.success) {
+                    form.dataset.ipWhitelistState = 'created';
+                    BackendToast.success(data.message);
+                    bootstrap.Modal.getInstance(document.getElementById('ipWhitelistModal')).hide();
+                    setTimeout(function() { location.reload(); }, 250);
+                    return;
+                }
+                form.dataset.ipWhitelistState = 'failed';
+                form.dataset.ipWhitelistError = String(data && data.message || '<?= __('操作失败') ?>');
+                BackendToast.error(form.dataset.ipWhitelistError);
+            }).catch(function(error) {
+                form.dataset.ipWhitelistState = 'failed';
+                form.dataset.ipWhitelistError = String(error && error.message || error || '<?= __('操作失败') ?>');
+                BackendToast.error(form.dataset.ipWhitelistError);
+            });
+            return;
+        }
         var url = id === '0' 
             ? '<?= $this->getBackendUrl('*/backend/ip-whitelist/add') ?>'
             : '<?= $this->getBackendUrl('*/backend/ip-whitelist/edit') ?>';
         
-        fetch(url, {
+        bqAdmin['acl'](url, {
             method: 'POST',
             body: formData
         })
-        .then(function(response) { return response.json(); })
+        .then(function(response){ return response; })
         .then(function(data) {
             if (data.success) {
+                form.dataset.ipWhitelistState = 'updated';
                 BackendToast.success(data.message);
                 bootstrap.Modal.getInstance(document.getElementById('ipWhitelistModal')).hide();
                 setTimeout(function() {
                     location.reload();
                 }, 1000);
             } else {
+                form.dataset.ipWhitelistState = 'failed';
+                form.dataset.ipWhitelistError = String(data.message || '');
                 BackendToast.error(data.message);
             }
         })
         .catch(function(error) {
+            form.dataset.ipWhitelistState = 'failed';
+            form.dataset.ipWhitelistError = String(error && error.message || error || '');
             BackendToast.error('<?= __('操作失败') ?>');
         });
     };
@@ -317,7 +356,7 @@ $keyword = $keyword ?? '';
             
             var url = '<?= $this->getBackendUrl('*/backend/ip-whitelist/toggle') ?>';
             var opts = { method: 'POST', body: formData };
-            window.Weline.Api.request(url, opts)
+            bqAdmin['acl'](url, opts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
@@ -344,7 +383,7 @@ $keyword = $keyword ?? '';
             
             var url = '<?= $this->getBackendUrl('*/backend/ip-whitelist/delete') ?>';
             var opts = { method: 'POST', body: formData };
-            window.Weline.Api.request(url, opts)
+            bqAdmin['acl'](url, opts)
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {

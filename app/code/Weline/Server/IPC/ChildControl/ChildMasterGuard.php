@@ -63,7 +63,11 @@ class ChildMasterGuard
             return false;
         }
 
-        $now = \microtime(true);
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            $this->lastExitReason = 'Master guard monotonic clock is invalid';
+            return true;
+        }
         if (!$force && ($now - $this->lastCheckAt) < $this->checkIntervalSec) {
             return false;
         }
@@ -89,54 +93,21 @@ class ChildMasterGuard
             return $this->isMasterPidMissing() ? "Master PID {$this->masterPid} missing" : '';
         }
 
-        $lease = $this->strictLeaseFreshness
-            ? $this->leaseManager->readProtected($this->leaseFile)
-            : $this->leaseManager->read($this->leaseFile);
-        if ($lease === null) {
-            return 'Master lease file missing or invalid: ' . $this->leaseFile;
-        }
-
-        $state = (string)($lease['state'] ?? '');
-        if ($state !== MasterLeaseManager::STATE_RUNNING) {
-            return "Master lease state={$state}; expected running";
-        }
-
-        $leasePid = (int)($lease['master_pid'] ?? 0);
-        if ($this->masterPid > 0 && $leasePid !== $this->masterPid) {
-            return "Master lease PID mismatch: lease={$leasePid}, expected={$this->masterPid}";
-        }
-
-        $leaseToken = (string)($lease['master_token'] ?? '');
-        if ($leaseToken === '' || !\hash_equals($leaseToken, $this->masterToken)) {
-            return 'Master lease token mismatch';
-        }
-
-        $leaseInstance = (string)($lease['instance'] ?? '');
-        if ($this->instance !== '' && $leaseInstance !== $this->instance) {
-            return "Master lease instance mismatch: lease={$leaseInstance}, expected={$this->instance}";
-        }
-
-        $leaseEpoch = (int)($lease['master_epoch'] ?? 0);
-        if ($this->masterEpoch > 0 && $leaseEpoch > 0 && $leaseEpoch !== $this->masterEpoch) {
-            return "Master lease epoch mismatch: lease={$leaseEpoch}, expected={$this->masterEpoch}";
-        }
-
-        $updatedAt = (float)($lease['updated_at'] ?? 0.0);
-        $age = \microtime(true) - $updatedAt;
-        $leaseFresh = $updatedAt > 0.0
-            && $age >= -5.0
-            && $age <= MasterLeaseManager::HEARTBEAT_STALE_SEC;
-        if ($leaseFresh) {
+        $validation = $this->leaseManager->validateProtectedChildCredential(
+            $this->leaseFile,
+            $this->instance,
+            $this->masterPid,
+            $this->masterEpoch,
+            $this->masterToken,
+        );
+        if (($validation['authorized'] ?? false) === true) {
             return '';
         }
-        if ($this->strictLeaseFreshness) {
-            return 'Master lease heartbeat stale';
-        }
-        if ($this->masterPid <= 0 || $this->isMasterPidMissing()) {
-            return 'Master lease heartbeat stale and Master PID missing';
-        }
 
-        return '';
+        $reason = \trim((string)($validation['reason'] ?? ''));
+        return $reason !== ''
+            ? $reason
+            : 'Master lease identity or heartbeat is not authorized';
     }
 
 

@@ -19,7 +19,7 @@
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
     <div class="dt-demo-layout">
-        <section>
+        <section weline-code="datatable.test.form.section_1">
             <w:d-form id="demo-standalone-form"
                       model="Weline\DataTable\Model\TestUser"
                       scope="demo-standalone-user"
@@ -30,7 +30,7 @@
                       include_fields="name,email,phone,status"
                       show-trigger-button="false"></w:d-form>
         </section>
-        <section>
+        <section weline-code="datatable.test.form.section_2">
             <w:d-table id="demo-standalone-table"
                        model="Weline\DataTable\Model\TestUser"
                        scope="demo-standalone-user"

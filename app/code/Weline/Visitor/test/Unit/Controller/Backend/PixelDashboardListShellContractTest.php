@@ -70,6 +70,10 @@ final class PixelDashboardListShellContractTest extends TestCase
         $index = (string)\file_get_contents($root . '/view/templates/Backend/PixelDashboard/index.phtml');
         self::assertStringContainsString('pixel-dashboard/list', $index);
         self::assertStringContainsString('<lang>事件列表</lang>', $index);
+        self::assertStringContainsString('w:websites:website:select', $index);
+        self::assertStringContainsString('index-filter-website', $index);
+        self::assertStringNotContainsString('<select name="websiteId"', $index);
+        self::assertStringContainsString('assignWebsiteSelectOptions', $controller);
     }
 
     public function testShortHyphenRouteContractDocumentedInTemplates(): void

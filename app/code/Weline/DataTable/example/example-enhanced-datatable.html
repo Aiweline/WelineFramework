@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weline DataTable 增强版示例</title>
+    <link rel="stylesheet" href="view/statics/css/datatable.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .demo-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+        .demo-header {
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .demo-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .demo-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        .demo-content {
+            padding: 30px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .feature-card {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+        }
+        .feature-card h3 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feature-card p {
+            color: #6b7280;
+            line-height: 1.6;
+        }
+        .demo-table {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-header">
+            <h1 class="demo-title">🚀 Weline DataTable 增强版</h1>
+            <p class="demo-subtitle">现代化数据表格组件 - 美观、智能、高效</p>
+        </div>
+        
+        <div class="demo-content">
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3><i class="fas fa-palette" style="color: #3b82f6;"></i>主题配置</h3>
+                    <p>支持自定义表格主题，包括颜色、字体、显示选项等，让表格更符合您的品牌风格。</p>
+                </div>
+                <div class="feature-card">
+                    <h3><i class="fas fa-star" style="color: #f59e0b;"></i>重要列标注</h3>
+                    <p>点击小旗子标记重要列，支持重要数据视图切换，快速聚焦关键信息。</p>
+                </div>
+                <div class="feature-card">
+                    <h3><i class="fas fa-download" style="color: #10b981;"></i>智能导出</h3>
+                    <p>支持Excel、CSV、JSON格式导出，前端分页获取数据，显示进度条，减少服务器压力。</p>
+                </div>
+                <div class="feature-card">
+                    <h3><i class="fas fa-mobile-alt" style="color: #8b5cf6;"></i>响应式设计</h3>
+                    <p>完美适配移动端，触摸友好的交互设计，支持深色模式。</p>
+                </div>
+            </div>
+
+            <!-- 示例数据表格 -->
+            <div class="demo-table">
+                <div class="w-datatable">
+                    <!-- 工具栏 -->
+                    <div class="w-datatable-toolbar">
+                        <div class="w-toolbar-left">
+                            <div class="w-toolbar-title">
+                                <i class="fas fa-table"></i>
+                                <h3>用户管理表格</h3>
+                            </div>
+                            <div class="w-toolbar-actions">
+                                <button type="button" class="w-toolbar-btn primary" title="字段配置">
+                                    <i class="fas fa-cog"></i>
+                                    <span>字段配置</span>
+                                </button>
+                                <button type="button" class="w-toolbar-btn success" title="刷新数据">
+                                    <i class="fas fa-sync-alt"></i>
+                                    <span>刷新</span>
+                                </button>
+                                <button type="button" class="w-toolbar-btn warning" data-w-action="important-view" title="只显示重要数据">
+                                    <i class="fas fa-star"></i>
+                                    <span>只显示重要数据</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="w-toolbar-right">
+                            <div class="w-reset-group">
+                                <div class="w-dropdown">
+                                    <button type="button" class="w-dropdown-toggle" data-w-toggle="dropdown" title="重置配置">
+                                        <i class="fas fa-undo"></i>
+                                        <span class="w-btn-text">重置</span>
+                                    </button>
+                                    <ul class="w-dropdown-menu">
+                                        <li>
+                                            <button type="button" class="w-dropdown-item" title="重置表头字段配置">
+                                                <i class="fas fa-columns"></i>
+                                                <span>重置表头</span>
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button type="button" class="w-dropdown-item" title="重置筛选字段配置">
+                                                <i class="fas fa-filter"></i>
+                                                <span>重置筛选</span>
+                                            </button>
+                                        </li>
+                                        <li><hr class="w-dropdown-divider"></li>
+                                        <li>
+                                            <button type="button" class="w-dropdown-item" title="重置全部配置">
+                                                <i class="fas fa-trash"></i>
+                                                <span>全部重置</span>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="w-toolbar-actions">
+                                <button type="button" class="w-toolbar-btn" data-w-action="theme-config" title="主题配置">
+                                    <i class="fas fa-palette"></i>
+                                    <span>主题</span>
+                                </button>
+                                <div class="w-dropdown">
+                                    <button type="button" class="w-toolbar-btn dropdown-toggle" data-w-toggle="dropdown" title="导出数据">
+                                        <i class="fas fa-download"></i>
+                                        <span>导出</span>
+                                    </button>
+                                    <ul class="w-dropdown-menu">
+                                        <li>
+                                            <button type="button" class="w-dropdown-item" title="导出为Excel">
+                                                <i class="fas fa-file-excel"></i>
+                                                <span>导出Excel</span>
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button type="button" class="w-dropdown-item" title="导出为CSV">
+                                                <i class="fas fa-file-csv"></i>
+                                                <span>导出CSV</span>
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button type="button" class="w-dropdown-item" title="导出为JSON">
+                                                <i class="fas fa-file-code"></i>
+                                                <span>导出JSON</span>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="w-quick-stats">
+                                <div class="w-stat-item">
+                                    <i class="fas fa-list"></i>
+                                    <span class="w-stat-label">总数</span>
+                                    <span class="w-stat-value">1,234</span>
+                                </div>
+                                <div class="w-stat-item">
+                                    <i class="fas fa-eye"></i>
+                                    <span class="w-stat-label">显示</span>
+                                    <span class="w-stat-value">20</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 表格主体 -->
+                    <table class="table" id="demo-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-field="id">
+                                    <div class="w-header-content">
+                                        <span class="w-header-text">ID</span>
+                                        <div class="w-header-actions">
+                                            <button type="button" class="w-important-flag" title="标记为重要列" onclick="event.stopPropagation();">
+                                                <i class="fas fa-star"></i>
+                                            </button>
+                                            <i class="fas fa-sort sort-icon"></i>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable" data-field="name">
+                                    <div class="w-header-content">
+                                        <span class="w-header-text">姓名</span>
+                                        <div class="w-header-actions">
+                                            <button type="button" class="w-important-flag active" title="标记为重要列" onclick="event.stopPropagation();">
+                                                <i class="fas fa-star"></i>
+                                            </button>
+                                            <i class="fas fa-sort sort-icon"></i>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable" data-field="email">
+                                    <div class="w-header-content">
+                                        <span class="w-header-text">邮箱</span>
+                                        <div class="w-header-actions">
+                                            <button type="button" class="w-important-flag" title="标记为重要列" onclick="event.stopPropagation();">
+                                                <i class="fas fa-star"></i>
+                                            </button>
+                                            <i class="fas fa-sort sort-icon"></i>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable" data-field="status">
+                                    <div class="w-header-content">
+                                        <span class="w-header-text">状态</span>
+                                        <div class="w-header-actions">
+                                            <button type="button" class="w-important-flag active" title="标记为重要列" onclick="event.stopPropagation();">
+                                                <i class="fas fa-star"></i>
+                                            </button>
+                                            <i class="fas fa-sort sort-icon"></i>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="sortable" data-field="created_at">
+                                    <div class="w-header-content">
+                                        <span class="w-header-text">创建时间</span>
+                                        <div class="w-header-actions">
+                                            <button type="button" class="w-important-flag" title="标记为重要列" onclick="event.stopPropagation();">
+                                                <i class="fas fa-star"></i>
+                                            </button>
+                                            <i class="fas fa-sort sort-icon"></i>
+                                        </div>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td class="w-important-column">张三</td>
+                                <td>zhangsan@example.com</td>
+                                <td class="w-important-column"><span class="badge badge-success">活跃</span></td>
+                                <td>2024-01-15 10:30:00</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td class="w-important-column">李四</td>
+                                <td>lisi@example.com</td>
+                                <td class="w-important-column"><span class="badge badge-warning">待审核</span></td>
+                                <td>2024-01-14 15:45:00</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td class="w-important-column">王五</td>
+                                <td>wangwu@example.com</td>
+                                <td class="w-important-column"><span class="badge badge-danger">禁用</span></td>
+                                <td>2024-01-13 09:20:00</td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td class="w-important-column">赵六</td>
+                                <td>zhaoliu@example.com</td>
+                                <td class="w-important-column"><span class="badge badge-success">活跃</span></td>
+                                <td>2024-01-12 14:10:00</td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td class="w-important-column">钱七</td>
+                                <td>qianqi@example.com</td>
+                                <td class="w-important-column"><span class="badge badge-info">新用户</span></td>
+                                <td>2024-01-11 11:55:00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- 分页 -->
+                    <div class="w-pagination">
+                        <div class="w-pagination-info">
+                            显示第 1-5 条，共 1,234 条记录
+                        </div>
+                        <div class="w-pagination-controls">
+                            <button type="button" class="w-pagination-btn" disabled>上一页</button>
+                            <button type="button" class="w-pagination-btn active">1</button>
+                            <button type="button" class="w-pagination-btn">2</button>
+                            <button type="button" class="w-pagination-btn">3</button>
+                            <button type="button" class="w-pagination-btn">下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主题配置面板 -->
+    <div class="w-theme-config">
+        <div class="w-theme-config-header">
+            <h4 class="w-theme-config-title">
+                <i class="fas fa-palette"></i>
+                表格主题配置
+            </h4>
+        </div>
+        <div class="w-theme-config-body">
+            <div class="w-theme-section">
+                <div class="w-theme-section-title">显示选项</div>
+                <div class="w-theme-option">
+                    <label>显示斑马纹</label>
+                    <input type="checkbox" id="theme-zebra" checked>
+                </div>
+                <div class="w-theme-option">
+                    <label>显示悬停效果</label>
+                    <input type="checkbox" id="theme-hover" checked>
+                </div>
+                <div class="w-theme-option">
+                    <label>显示排序图标</label>
+                    <input type="checkbox" id="theme-sort" checked>
+                </div>
+            </div>
+            <div class="w-theme-section">
+                <div class="w-theme-section-title">颜色主题</div>
+                <div class="w-theme-option">
+                    <label>主色调</label>
+                    <input type="color" id="theme-primary" value="#3b82f6">
+                </div>
+                <div class="w-theme-option">
+                    <label>表头背景</label>
+                    <input type="color" id="theme-header" value="#f8fafc">
+                </div>
+                <div class="w-theme-option">
+                    <label>行悬停色</label>
+                    <input type="color" id="theme-hover-color" value="#f1f5f9">
+                </div>
+            </div>
+            <div class="w-theme-section">
+                <div class="w-theme-section-title">字体设置</div>
+                <div class="w-theme-option">
+                    <label>字体大小</label>
+                    <select id="theme-font-size">
+                        <option value="0.875rem">小</option>
+                        <option value="1rem" selected>中</option>
+                        <option value="1.125rem">大</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出进度模态框 -->
+    <div class="w-export-modal">
+        <div class="w-export-content">
+            <h3 class="w-export-title">正在导出数据</h3>
+            <p class="w-export-subtitle">请勿关闭窗口，否则可能导致导出失败</p>
+            
+            <div class="w-export-progress">
+                <div class="w-progress-bar">
+                    <div class="w-progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="w-progress-text">准备中...</div>
+            </div>
+            
+            <div class="w-export-status">
+                <i class="fas fa-spinner fa-spin loading"></i>
+                <span class="w-export-status-text">正在获取数据...</span>
+            </div>
+            
+            <div class="w-export-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span class="w-export-warning-text">导出过程中请勿关闭此窗口</span>
+            </div>
+            
+            <div class="w-export-actions">
+                <button type="button" class="w-export-btn secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="view/statics/js/datatable-manager.js"></script>
+    <script>
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            DataTableManager.initDropdowns();
+            DataTableManager.initThemeConfig();
+            DataTableManager.initImportantFlags();
+        });
+
+        // 绑定导出按钮事件
+        document.addEventListener('click', function(e) {
+            const dropdownItem = e.target.closest('.w-dropdown-item');
+            if (dropdownItem) {
+                const text = dropdownItem.textContent;
+                if (text.includes('Excel')) {
+                    DataTableManager.exportData('demo-table', 'excel');
+                } else if (text.includes('CSV')) {
+                    DataTableManager.exportData('demo-table', 'csv');
+                } else if (text.includes('JSON')) {
+                    DataTableManager.exportData('demo-table', 'json');
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

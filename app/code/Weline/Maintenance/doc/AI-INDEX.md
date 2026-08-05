@@ -32,7 +32,8 @@
 - `Model`：ORM 数据模型与字段 schema。字段结构用 #[Col]/#[Index] 后执行 setup:upgrade。 文件数：1
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：1
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：3
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：2
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
+- `extends`：模块扩展声明。优先使用 extends/module/{Module}/... 的当前约定。 文件数：1
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：3
 - `view/statics`：静态资源源文件。浏览器业务请求必须走 Weline.Api.*。 文件数：0
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：4
@@ -42,7 +43,9 @@
 
 - 存在 `view/templates`，说明有模块模板源文件；主题覆盖要走 Theme 路径解析规则。
 - 存在 `view/tpl`，这是编译/生成产物面，禁止直接修改。
+- 存在 `extends/module`，优先使用当前扩展约定，不要回退到旧式随意扩展路径。
 - 存在 `i18n`，新增用户可见文案时同步 `zh_Hans_CN.csv` 与 `en_US.csv`。
+- 识别到 QueryProvider 相关 PHP 文件：extends/module/Weline_Framework/Query/MaintenanceAdminQueryProvider.php；前端/跨模块读数据先查 query 帮助。
 
 ## doc 目录
 

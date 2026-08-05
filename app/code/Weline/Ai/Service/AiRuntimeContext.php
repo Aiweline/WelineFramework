@@ -58,6 +58,7 @@ final class AiRuntimeContext
     {
         $params = [
             'thinking_mode' => true,
+            'thinking' => ['type' => 'enabled'],
         ];
         $reasoningEffort = \trim($reasoningEffort);
         if ($reasoningEffort !== '') {
@@ -65,6 +66,20 @@ final class AiRuntimeContext
         }
 
         return $params;
+    }
+
+    /**
+     * Disable provider thinking/CoT so max_tokens is reserved for the final answer.
+     *
+     * @return array<string, mixed>
+     */
+    public static function disabledThinkingParams(): array
+    {
+        return [
+            'thinking_mode' => false,
+            'thinking' => ['type' => 'disabled'],
+            'reasoning_effort' => 'none',
+        ];
     }
 
     private function __construct()

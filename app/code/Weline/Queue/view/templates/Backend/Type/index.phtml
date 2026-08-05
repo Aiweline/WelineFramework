@@ -107,6 +107,19 @@
     color: var(--backend-color-text-inverse, #fff);
 }
 
+.weline-queue-type-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.weline-queue-type-btn[aria-busy="true"] i {
+    animation: queue-type-spin 0.8s linear infinite;
+}
+
+@keyframes queue-type-spin {
+    to { transform: rotate(360deg); }
+}
+
 .weline-queue-type-class {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 0.75rem;
@@ -142,10 +155,19 @@
     opacity: 0.3;
     margin-bottom: var(--backend-spacing-md, 15px);
 }
+
+@media (prefers-reduced-motion: reduce) {
+    .weline-queue-type-btn,
+    .weline-queue-type-btn[aria-busy="true"] i {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+    }
+}
 </style>
 
 <!-- start page title -->
-<div class='row'>
+<div class='row' data-testid="queue-type-management">
     <div class='col-12'>
         <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
             <h4 class='mb-sm-0'>
@@ -275,26 +297,13 @@
                                                     <lang>启用</lang>
                                                 </button>
                                             </if>
-                                            <block class='Weline\Component\Block\OffCanvas'
-                                                   template='Weline_Component::off-canvas.phtml'
-                                                   title='查看详情'
-                                                   cache='0'
-                                                   id='view_queue_type_detail'
-                                                   action='*/backend/type/show'
-                                                   vars="type"
-                                                   action-params="{id:type.type_id}"
-                                                   target-tag='button'
-                                                   target-button-text='详情'
-                                                   icon='mdi mdi-eye'
-                                                   target-button-class='weline-queue-type-btn weline-queue-type-btn--view'
-                                                   flush='1'
-                                                   save='0'
-                                                   close-button-show='1'
-                                                   close-button-text='关闭'
-                                                   direction='right'
-                                                   class-names='w-50'
-                                                   off-canvas-body-style=''
-                                            />
+                                            <button type="button"
+                                                    class="weline-queue-type-btn weline-queue-type-btn--view weline-queue-type-view-btn"
+                                                    data-id="{{type.type_id}}"
+                                                    title="@lang(查看详情)">
+                                                <i class="mdi mdi-eye" aria-hidden="true"></i>
+                                                <lang>详情</lang>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -309,54 +318,153 @@
     </div>
 </div>
 
+<block class='Weline\Component\Block\OffCanvas'
+       template='Weline_Component::off-canvas.phtml'
+       title='查看详情'
+       cache='0'
+       id='queue_type_shared_view'
+       action='*/backend/type/show'
+       target-tag='button'
+       target-button-text=''
+       icon='mdi mdi-eye'
+       target-button-class='d-none weline-queue-type-shared-view-trigger'
+       flush='1'
+       save='0'
+       close-button-show='1'
+       close-button-text='关闭'
+       direction='right'
+       class-names='w-50'
+       off-canvas-body-style=''
+/>
+
 <script>
 (function() {
     'use strict';
-    
-    var enableUrl = "@backend-url('*/backend/type/enable')";
-    var disableUrl = "@backend-url('*/backend/type/disable')";
-    
-    function handleTypeAction(button) {
-        var action = button.getAttribute('data-action');
-        var typeId = button.getAttribute('data-id');
-        var typeName = button.getAttribute('data-name');
-        
-        var actionText = action === 'enable' ? '@lang(启用)' : '@lang(禁用)';
-        var confirmMsg = '@lang(确定要)' + actionText + '@lang(队列类型)' + ' "' + typeName + '" @lang(吗？)';
-        
-        BackendConfirm.show(confirmMsg, {
-            title: actionText + '@lang(确认)',
-            confirmText: actionText,
-            cancelText: '@lang(取消)',
-            type: action === 'enable' ? 'success' : 'warning'
-        }).then(function(confirmed) {
-            if (!confirmed) return;
-            
-            var url = action === 'enable' ? enableUrl : disableUrl;
-            url += '?id=' + typeId;
-            
-            if (window.showLoading) showLoading();
-            
-            fetch(url, {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
+
+    var queueText = <?= json_encode([
+        'enable' => (string)__('启用'),
+        'disable' => (string)__('禁用'),
+        'networkError' => (string)__('网络错误，请检查网络后重试')
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var queueAdminPromise = null;
+
+    async function getQueueAdmin() {
+        if (!queueAdminPromise) {
+            queueAdminPromise = (async function() {
+                if (!window.Weline || typeof Weline.load !== 'function') {
+                    throw new Error(queueText.networkError);
                 }
-            })
-            .then(function(response) {
-                return response.text();
-            })
-            .then(function() {
-                BackendToast.success(actionText + '@lang(成功，页面即将刷新...)');
+                var api = await Weline.load('api');
+                return api.resource('queue_admin');
+            })().catch(function(error) {
+                queueAdminPromise = null;
+                throw error;
+            });
+        }
+        return queueAdminPromise;
+    }
+
+    async function setTypeEnabled(typeId, enabled) {
+        var api = await getQueueAdmin();
+        if (!api || typeof api.setTypeEnabled !== 'function') {
+            throw new Error(queueText.networkError);
+        }
+        return api.setTypeEnabled({ type_id: typeId, enabled: enabled }, {
+            keepBusinessResult: true,
+            silent: true
+        });
+    }
+
+    function setButtonBusy(button, busy) {
+        var icon = button ? button.querySelector('i') : null;
+        if (!button) return;
+        if (busy) {
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            if (icon) {
+                button.dataset.queueOriginalIcon = icon.getAttribute('class') || '';
+                icon.setAttribute('class', 'mdi mdi-loading');
+            }
+            return;
+        }
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        if (icon && button.dataset.queueOriginalIcon) {
+            icon.setAttribute('class', button.dataset.queueOriginalIcon);
+            delete button.dataset.queueOriginalIcon;
+        }
+    }
+
+    function openTypeOffcanvas(typeId) {
+        var id = parseInt(String(typeId || ''), 10);
+        var trigger = document.querySelector('.weline-queue-type-shared-view-trigger');
+        if (!Number.isFinite(id) || id <= 0 || !trigger) {
+            BackendToast.error(queueText.networkError);
+            return;
+        }
+        var targetSelector = trigger.getAttribute('data-bs-target') || '';
+        var panel = targetSelector ? document.querySelector(targetSelector) : null;
+        var iframe = panel ? panel.querySelector('iframe[data-src]') : null;
+        if (!panel || !iframe) {
+            BackendToast.error(queueText.networkError);
+            return;
+        }
+        var baseSrc = iframe.getAttribute('data-queue-type-base-src') || iframe.getAttribute('data-src') || '';
+        if (!baseSrc) {
+            BackendToast.error(queueText.networkError);
+            return;
+        }
+        iframe.setAttribute('data-queue-type-base-src', baseSrc);
+        var url = new URL(baseSrc, window.location.origin);
+        url.searchParams.set('id', String(id));
+        iframe.setAttribute('data-src', url.toString());
+        iframe.removeAttribute('src');
+        trigger.click();
+    }
+
+    async function handleTypeAction(button) {
+        var action = button.getAttribute('data-action');
+        var typeId = parseInt(button.getAttribute('data-id') || '0', 10);
+        var typeName = button.getAttribute('data-name');
+        var enabled = action === 'enable';
+        var actionText = enabled ? queueText.enable : queueText.disable;
+
+        if (!Number.isFinite(typeId) || typeId <= 0) {
+            BackendToast.error(queueText.networkError);
+            return;
+        }
+
+        var confirmed = false;
+        try {
+            confirmed = await BackendConfirm.show(actionText + ' · ' + String(typeName || typeId), {
+                title: actionText,
+                confirmText: actionText,
+                type: enabled ? 'success' : 'warning'
+            });
+        } catch (error) {
+            BackendToast.error(error && error.message ? error.message : queueText.networkError);
+            return;
+        }
+        if (!confirmed) return;
+
+        setButtonBusy(button, true);
+        if (window.showLoading) showLoading();
+        try {
+            var result = await setTypeEnabled(typeId, enabled);
+            if (result && result.success) {
+                BackendToast.success(result.msg);
                 setTimeout(function() {
                     window.location.reload();
-                }, 1000);
-            })
-            .catch(function(error) {
-                if (window.hideLoading) hideLoading();
-                BackendToast.error('@lang(操作失败：)' + error.message);
-            });
-        });
+                }, 600);
+            } else {
+                BackendToast.error((result && result.msg) || queueText.networkError);
+            }
+        } catch (error) {
+            BackendToast.error(error && error.message ? error.message : queueText.networkError);
+        } finally {
+            setButtonBusy(button, false);
+            if (window.hideLoading) hideLoading();
+        }
     }
     
     function init() {
@@ -364,6 +472,12 @@
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
                 handleTypeAction(this);
+            });
+        });
+        document.querySelectorAll('.weline-queue-type-view-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                openTypeOffcanvas(this.getAttribute('data-id'));
             });
         });
     }

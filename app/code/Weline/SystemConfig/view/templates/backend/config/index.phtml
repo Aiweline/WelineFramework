@@ -10,6 +10,9 @@
  * @var string $locale
  * @var array $fallback_scopes
  * @var string $post_url
+ * @var array $target_scope
+ * @var array $scope_catalog
+ * @var int $expected_grant_version
  */
 $modules = $modules ?? [];
 $tree = $tree ?? ['modules' => []];
@@ -19,10 +22,102 @@ $search = (string)($search ?? '');
 $scope = (string)($scope ?? 'default.default.default');
 $locale = (string)($locale ?? 'default');
 $fallbackScopes = $fallback_scopes ?? [];
+$targetScope = is_array($target_scope ?? null) ? $target_scope : [];
+$scopeCatalog = is_array($scope_catalog ?? null) ? $scope_catalog : [];
+$targetWebsite = (string)($targetScope['website_code'] ?? 'default');
+$targetStore = (string)($targetScope['store_code'] ?? '');
+$targetChannel = (string)($targetScope['channel_code'] ?? '');
+$targetKind = (string)($targetScope['kind'] ?? 'global');
+$expectedGrantVersion = (int)($expected_grant_version ?? 0);
+$wscWebsiteValue = $targetKind === 'global' ? '' : $targetWebsite;
+$wscModuleFilterEmpty = (string)__('全部模块');
+$wscModuleFilterPlaceholder = (string)__('搜索模块名称');
+$wscWebsiteEmpty = (string)__('Global（全部站点）');
+$wscWebsitePlaceholder = (string)__('搜索站点名称或编码');
+$wscStoreEmpty = (string)__('Website 层');
+$wscStorePlaceholder = (string)__('搜索 Store');
+$wscChannelEmpty = (string)__('Store 层');
+$wscChannelPlaceholder = (string)__('搜索 Channel');
+$wscLocaleEmpty = (string)__('default');
+$wscLocalePlaceholder = (string)__('搜索语言或代码...');
+$wscModuleOptions = [];
+foreach ($modules as $moduleRow) {
+    if (!is_array($moduleRow)) {
+        continue;
+    }
+    $moduleName = (string)($moduleRow['module'] ?? '');
+    if ($moduleName === '') {
+        continue;
+    }
+    $wscModuleOptions[] = [
+        'value' => $moduleName,
+        'label' => $moduleName,
+    ];
+}
+$wscModuleOptionsJson = json_encode($wscModuleOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$wscWebsiteOptions = [];
+$wscStoreOptions = [];
+$wscChannelOptions = [];
+foreach ($scopeCatalog as $websiteOpt) {
+    if (!is_array($websiteOpt)) {
+        continue;
+    }
+    $wCode = (string)($websiteOpt['code'] ?? '');
+    if ($wCode === '') {
+        continue;
+    }
+    $wName = (string)($websiteOpt['name'] ?? $wCode);
+    $wscWebsiteOptions[] = [
+        'value' => $wCode,
+        'label' => $wName . ' (' . $wCode . ')',
+        'meta' => $wCode,
+        'website_id' => (int)($websiteOpt['website_id'] ?? 0),
+    ];
+    if ($targetKind === 'global' || $wCode !== $targetWebsite) {
+        continue;
+    }
+    foreach (($websiteOpt['stores'] ?? []) as $storeOpt) {
+        if (!is_array($storeOpt)) {
+            continue;
+        }
+        $sCode = (string)($storeOpt['code'] ?? '');
+        if ($sCode === '') {
+            continue;
+        }
+        $sName = (string)($storeOpt['name'] ?? $sCode);
+        $wscStoreOptions[] = [
+            'value' => $sCode,
+            'label' => $sName,
+            'meta' => $sCode,
+        ];
+        if ($sCode !== $targetStore) {
+            continue;
+        }
+        foreach (($storeOpt['channels'] ?? []) as $channelOpt) {
+            if (!is_array($channelOpt)) {
+                continue;
+            }
+            $cCode = (string)($channelOpt['code'] ?? '');
+            if ($cCode === '') {
+                continue;
+            }
+            $cName = (string)($channelOpt['name'] ?? $cCode);
+            $wscChannelOptions[] = [
+                'value' => $cCode,
+                'label' => $cName,
+                'meta' => $cCode,
+            ];
+        }
+    }
+}
+$wscWebsiteOptionsJson = json_encode($wscWebsiteOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$wscStoreOptionsJson = json_encode($wscStoreOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$wscChannelOptionsJson = json_encode($wscChannelOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 $postUrl = (string)($post_url ?? '');
 if ($postUrl === '') {
     $postUrl = (string)$this->getBackendUrl('weline_systemconfig/backend/config');
 }
+$formKeyHtml = method_exists($this, 'getFormKey') ? (string)$this->getFormKey($postUrl) : '';
 $guideData = is_array($this->getData('guide')) ? $this->getData('guide') : [];
 $assignedGuideParams = is_array($guide_params ?? null) ? $guide_params : [];
 $decodeGuideDisplay = static function (string $value): string {
@@ -243,6 +338,17 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
         --wsc-soft: #f6f8fb;
     }
 
+    /* 不匹配 Bootstrap 的 data:image checkbox 规则，兼容严格 img-src 'self'。 */
+    .weline-system-config-page .wsc-native-check {
+        width: 1rem;
+        height: 1rem;
+        accent-color: #0bb197;
+    }
+
+    .weline-system-config-page .form-switch .wsc-native-check {
+        width: 2rem;
+    }
+
     .weline-system-config-page .card {
         border: 1px solid var(--wsc-border);
         border-radius: 14px;
@@ -251,10 +357,35 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
 
     .wsc-filter-form {
         display: grid;
-        grid-template-columns: minmax(220px, 1.4fr) minmax(130px, .7fr) minmax(220px, 1fr) minmax(150px, .75fr) minmax(220px, 1fr) 54px;
-        gap: 16px;
+        grid-template-columns: minmax(180px, 1.1fr) minmax(110px, .6fr) minmax(120px, .7fr) minmax(120px, .7fr) minmax(120px, .7fr) minmax(120px, .7fr) minmax(180px, 1fr) 54px;
+        gap: 12px;
         align-items: end;
     }
+
+    .wsc-target-banner {
+        border: 1px solid #c7d2fe;
+        background: #eef2ff;
+        color: #312e81;
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-bottom: 16px;
+        font-size: 13px;
+    }
+
+    .wsc-badge {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-right: 4px;
+    }
+    .wsc-badge--exact { background: #dcfce7; color: #166534; }
+    .wsc-badge--fallback { background: #e0e7ff; color: #3730a3; }
+    .wsc-badge--default { background: #f3f4f6; color: #4b5563; }
+    .wsc-badge--locked { background: #fee2e2; color: #991b1b; }
+    .wsc-badge--suppressed { background: #ffedd5; color: #9a3412; }
+    .wsc-badge--override { background: #fef9c3; color: #854d0e; }
 
     .wsc-filter-action .btn {
         width: 54px;
@@ -267,54 +398,6 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
         align-items: flex-start;
     }
 
-    .wsc-sidebar {
-        position: sticky;
-        top: 92px;
-    }
-
-    .wsc-module-list {
-        max-height: 460px;
-        overflow-y: auto;
-        padding-right: 2px;
-    }
-
-    .wsc-module-list .list-group-item {
-        border-color: var(--wsc-border);
-        padding: 12px 14px;
-    }
-
-    .wsc-module-link {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        min-width: 0;
-    }
-
-    .wsc-module-name {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .wsc-module-count {
-        flex: 0 0 auto;
-        min-width: 28px;
-        padding: 4px 8px;
-        border-radius: 999px;
-        background: #eef2f7;
-        color: #475467;
-        font-weight: 700;
-        text-align: center;
-    }
-
-    .wsc-module-list .active .wsc-module-count {
-        background: rgba(255, 255, 255, 0.24);
-        color: #fff;
-    }
-
-    .wsc-scope-list code,
     .wsc-code,
     .wsc-field-key {
         white-space: normal;
@@ -835,12 +918,6 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
         }
     }
 
-    @media (max-width: 1199.98px) {
-        .wsc-sidebar {
-            position: static;
-        }
-    }
-
     @media (max-width: 767.98px) {
         .wsc-guide-card .card-body {
             grid-template-columns: 1fr;
@@ -870,7 +947,7 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
     }
 </style>
 
-<div class="weline-system-config-page">
+<div class="weline-system-config-page" data-testid="system-config-management">
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -949,21 +1026,24 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <form method="get" class="wsc-filter-form">
+                <w:form method="get" class="wsc-filter-form" id="wsc-filter-form">
                     <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
                         <input type="hidden" name="<?= htmlspecialchars($guideParamKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$guideParamValue, ENT_QUOTES, 'UTF-8') ?>">
                     <?php endforeach; ?>
                     <div>
                         <label class="form-label"><lang>模块</lang></label>
-                        <select name="module" class="form-select">
-                            <option value=""><lang>全部模块</lang></option>
-                            <?php foreach ($modules as $module): ?>
-                                <?php $moduleName = (string)($module['module'] ?? ''); ?>
-                                <option value="<?= htmlspecialchars($moduleName) ?>" <?= $selectedModule === $moduleName ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($moduleName) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <w:module-manager:module:select
+                            id="wsc-filter-module"
+                            name="module"
+                            value="selectedModule"
+                            options="wscModuleOptionsJson"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="wscModuleFilterEmpty"
+                            placeholder="wscModuleFilterPlaceholder"
+                            form="wsc-filter-form"
+                            on-change="var f=document.getElementById('wsc-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                        />
                     </div>
                     <div>
                         <label class="form-label"><lang>区域</lang></label>
@@ -973,12 +1053,63 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                         </select>
                     </div>
                     <div>
-                        <label class="form-label"><lang>Scope</lang></label>
-                        <input name="scope" class="form-control" value="<?= htmlspecialchars($scope) ?>" placeholder="default.default.default">
+                        <label class="form-label"><lang>Website</lang></label>
+                        <w:websites:website:select
+                            id="wsc-website-code"
+                            name="website_code"
+                            value="wscWebsiteValue"
+                            options="wscWebsiteOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="wscWebsiteEmpty"
+                            placeholder="wscWebsitePlaceholder"
+                            form="wsc-filter-form"
+                            on-change="var s=document.getElementById('wsc-store-code');var c=document.getElementById('wsc-channel-code');if(s){s.value='';}if(c){c.value='';}var f=document.getElementById('wsc-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                        />
+                    </div>
+                    <div>
+                        <label class="form-label"><lang>Store</lang></label>
+                        <w:websites:store:select
+                            id="wsc-store-code"
+                            name="store_code"
+                            value="targetStore"
+                            options="wscStoreOptionsJson"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="wscStoreEmpty"
+                            placeholder="wscStorePlaceholder"
+                            form="wsc-filter-form"
+                            on-change="var c=document.getElementById('wsc-channel-code');if(c){c.value='';}var f=document.getElementById('wsc-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                        />
+                    </div>
+                    <div>
+                        <label class="form-label"><lang>Channel</lang></label>
+                        <w:websites:channel:select
+                            id="wsc-channel-code"
+                            name="channel_code"
+                            value="targetChannel"
+                            options="wscChannelOptionsJson"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="wscChannelEmpty"
+                            placeholder="wscChannelPlaceholder"
+                            form="wsc-filter-form"
+                            on-change="var f=document.getElementById('wsc-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                        />
                     </div>
                     <div>
                         <label class="form-label"><lang>Locale</lang></label>
-                        <input name="locale" class="form-control" value="<?= htmlspecialchars($locale) ?>" placeholder="default">
+                        <w:i18n:language:select
+                            id="wsc-locale"
+                            name="locale"
+                            value="locale"
+                            allow-empty="true"
+                            empty-text="wscLocaleEmpty"
+                            search-placeholder="wscLocalePlaceholder"
+                            show-reference="false"
+                            on-change="wscOnLocaleChange"
+                        />
                     </div>
                     <div class="wsc-filter-search">
                         <label class="form-label"><lang>搜索</lang></label>
@@ -989,52 +1120,36 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                             <i class="mdi mdi-magnify"></i>
                         </button>
                     </div>
-                </form>
+                </w:form>
+                <script>
+                    window.wscOnLocaleChange = (function () {
+                        var ready = false;
+                        window.setTimeout(function () {
+                            ready = true;
+                        }, 0);
+                        return function () {
+                            if (!ready) {
+                                return;
+                            }
+                            var f = document.getElementById('wsc-filter-form');
+                            if (!f) {
+                                return;
+                            }
+                            if (f.requestSubmit) {
+                                f.requestSubmit();
+                            } else {
+                                f.submit();
+                            }
+                        };
+                    })();
+                </script>
             </div>
         </div>
     </div>
 </div>
 
 <div class="row wsc-shell">
-    <div class="col-xxl-2 col-xl-3 col-lg-4">
-        <div class="wsc-sidebar">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title mb-3"><lang>模块</lang></h5>
-                <div class="list-group list-group-flush wsc-module-list">
-                    <a class="list-group-item list-group-item-action <?= $selectedModule === '' ? 'active' : '' ?>"
-                       href="<?= $configUrl(['area' => $selectedArea, 'scope' => $scope, 'locale' => $locale, 'search' => $search]) ?>">
-                        <span class="wsc-module-link"><span class="wsc-module-name"><lang>全部模块</lang></span></span>
-                    </a>
-                    <?php foreach ($modules as $module): ?>
-                        <?php $moduleName = (string)($module['module'] ?? ''); ?>
-                        <a class="list-group-item list-group-item-action <?= $selectedModule === $moduleName ? 'active' : '' ?>"
-                           href="<?= $configUrl(['module' => $moduleName, 'area' => $selectedArea, 'scope' => $scope, 'locale' => $locale, 'search' => $search]) ?>">
-                            <div class="wsc-module-link">
-                                <span class="wsc-module-name" title="<?= htmlspecialchars($moduleName) ?>"><?= htmlspecialchars($moduleName) ?></span>
-                                <span class="wsc-module-count"><?= (int)($module['template_count'] ?? 0) ?></span>
-                            </div>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title mb-3"><lang>当前 Scope</lang></h5>
-                <div class="text-muted small mb-2"><?= htmlspecialchars($scope) ?></div>
-                <ol class="mb-0 ps-3 wsc-scope-list">
-                    <?php foreach ($fallbackScopes as $fallbackScope): ?>
-                        <li><code><?= htmlspecialchars((string)$fallbackScope) ?></code></li>
-                    <?php endforeach; ?>
-                </ol>
-            </div>
-        </div>
-        </div>
-    </div>
-
-    <div class="col-xxl-10 col-xl-9 col-lg-8">
+    <div class="col-12">
         <div class="row wsc-stat-grid">
             <div class="col-md-4">
                 <div class="card wsc-stat-card">
@@ -1105,17 +1220,27 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                         <code class="wsc-template-code"><?= htmlspecialchars((string)($template['code'] ?? '')) ?></code>
                                     </div>
 
-                                    <form method="post" action="<?= htmlspecialchars($postUrl) ?>">
+                                    <w:form method="post" action="@var($postUrl)" data-testid="system-config-template-form" data-template-code="<?= htmlspecialchars((string)($template['code'] ?? '')) ?>">
+                                        <?= $formKeyHtml ?>
                                         <input type="hidden" name="form_action" value="save">
                                         <input type="hidden" name="module" value="<?= htmlspecialchars((string)($moduleRow['module'] ?? '')) ?>">
                                         <input type="hidden" name="area" value="<?= htmlspecialchars((string)($areaRow['area'] ?? $selectedArea)) ?>">
                                         <input type="hidden" name="code" value="<?= htmlspecialchars((string)($template['code'] ?? '')) ?>">
                                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+                                        <input type="hidden" name="target_scope" value="<?= htmlspecialchars($scope) ?>">
+                                        <input type="hidden" name="expected_grant_version" value="<?= $expectedGrantVersion ?>">
+                                        <input type="hidden" name="website_code" value="<?= htmlspecialchars($targetWebsite) ?>">
+                                        <input type="hidden" name="store_code" value="<?= htmlspecialchars($targetStore) ?>">
+                                        <input type="hidden" name="channel_code" value="<?= htmlspecialchars($targetChannel) ?>">
                                         <input type="hidden" name="locale" value="<?= htmlspecialchars($locale) ?>">
                                         <input type="hidden" name="search" value="<?= htmlspecialchars($search) ?>">
                                         <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
                                             <input type="hidden" name="<?= htmlspecialchars($guideParamKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$guideParamValue, ENT_QUOTES, 'UTF-8') ?>">
                                         <?php endforeach; ?>
+                                        <div class="wsc-target-banner">
+                                            <lang>显式提交到</lang> <code><?= htmlspecialchars($scope) ?></code>
+                                            （<?= htmlspecialchars($targetKind) ?>）
+                                        </div>
 
                                     <?php foreach (($template['groups'] ?? []) as $group): ?>
                                         <?php
@@ -1202,12 +1327,17 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                                             $baseVersion = (int)($field['base_version'] ?? 0);
                                                             $source = is_array($field['effective_source'] ?? null) ? $field['effective_source'] : null;
                                                             $options = $parseOptions((string)($field['options'] ?? ''));
+                                                            $sourceKind = (string)($field['source_kind'] ?? ($source ? 'fallback' : 'default'));
+                                                            $isLocked = !empty($field['locked']);
+                                                            $isSuppressed = !empty($field['suppressed']);
+                                                            $hasOverride = !empty($field['has_override']);
+                                                            $isSensitiveField = !empty($field['is_sensitive']);
                                                             $fieldGuideTarget = isset($guideKeySet[$fieldKey]);
                                                             $fieldGuideIndex = $fieldGuideTarget ? (int)($guideKeyIndex[$fieldKey] ?? 0) : -1;
                                                             $fieldGuideCurrent = $fieldGuideTarget && $fieldKey === $guideLocate;
                                                             $fieldGuideId = $fieldGuideTarget ? 'wsc-guide-target-' . $fieldGuideIndex : '';
                                                             ?>
-                                                            <tr
+                                                            <tr data-testid="system-config-field" data-config-key="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
                                                                 class="<?= $fieldGuideTarget ? 'wsc-guide-target' : '' ?><?= $fieldGuideCurrent ? ' wsc-guide-target--focused' : '' ?>"
                                                                 <?= $fieldGuideTarget ? ' id="' . htmlspecialchars($fieldGuideId, ENT_QUOTES, 'UTF-8') . '" data-guide-key="' . htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
                                                             >
@@ -1221,6 +1351,12 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                                                         <?php endif; ?>
                                                                     </div>
                                                                     <code class="wsc-field-key"><?= htmlspecialchars($fieldKey) ?></code>
+                                                                    <div class="mt-1">
+                                                                        <span class="wsc-badge wsc-badge--<?= htmlspecialchars($sourceKind) ?>"><?= htmlspecialchars($sourceKind) ?></span>
+                                                                        <?php if ($hasOverride): ?><span class="wsc-badge wsc-badge--override"><lang>覆盖</lang></span><?php endif; ?>
+                                                                        <?php if ($isLocked): ?><span class="wsc-badge wsc-badge--locked"><lang>已锁定</lang></span><?php endif; ?>
+                                                                        <?php if ($isSuppressed): ?><span class="wsc-badge wsc-badge--suppressed"><lang>已压制</lang></span><?php endif; ?>
+                                                                    </div>
                                                                     <input type="hidden" name="base_versions[<?= htmlspecialchars($fieldKey) ?>]" value="<?= $baseVersion ?>">
                                                                 </td>
                                                                 <td>
@@ -1247,7 +1383,7 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                                                     <?php elseif (in_array($fieldType, ['switch', 'checkbox', 'boolean'], true)): ?>
                                                                         <input type="hidden" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="0">
                                                                         <div class="form-check form-switch">
-                                                                            <input class="form-check-input" type="checkbox" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="1" <?= in_array($effectiveValue, ['1', 'true', 'on', 'yes'], true) ? 'checked' : '' ?>>
+                                                                            <input class="wsc-native-check" type="checkbox" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="1" <?= in_array($effectiveValue, ['1', 'true', 'on', 'yes'], true) ? 'checked' : '' ?>>
                                                                         </div>
                                                                     <?php elseif ($fieldType === 'textarea'): ?>
                                                                         <textarea class="form-control form-control-sm" name="values[<?= htmlspecialchars($fieldKey) ?>]" rows="2"><?= htmlspecialchars($effectiveValue) ?></textarea>
@@ -1264,7 +1400,7 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                                                 </td>
                                                                 <td>
                                                                     <div class="form-check">
-                                                                        <input class="form-check-input" type="checkbox" name="inherit_keys[]" value="<?= htmlspecialchars($fieldKey) ?>">
+                                                                        <input class="wsc-native-check" type="checkbox" name="inherit_keys[]" value="<?= htmlspecialchars($fieldKey) ?>">
                                                                     </div>
                                                                 </td>
                                                             </tr>
@@ -1277,14 +1413,26 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                     <?php endforeach; ?>
 
                                         <?php if (!empty($template['fields'])): ?>
+                                            <?php
+                                            $templateHasSensitive = false;
+                                            foreach ($template['fields'] as $tf) {
+                                                if (!empty($tf['is_sensitive']) || !empty($tf['sensitive'])) {
+                                                    $templateHasSensitive = true;
+                                                    break;
+                                                }
+                                            }
+                                            ?>
                                             <div class="wsc-form-actions mt-3">
                                                 <input class="form-control form-control-sm" name="reason" placeholder="<?= __('保存原因') ?>">
+                                                <?php if ($templateHasSensitive): ?>
+                                                    <input class="form-control form-control-sm" type="password" name="reauth_password" autocomplete="current-password" placeholder="<?= __('敏感配置：重新输入登录密码') ?>">
+                                                <?php endif; ?>
                                                 <button class="btn btn-primary btn-sm" type="submit">
                                                     <i class="mdi mdi-content-save-outline me-1"></i><lang>保存配置</lang>
                                                 </button>
                                             </div>
                                         <?php endif; ?>
-                                    </form>
+                                    </w:form>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -1317,13 +1465,19 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                             <td><?= htmlspecialchars((string)($version['created_at'] ?? '')) ?></td>
                                             <td>
                                                 <?php if ($rollbackable): ?>
-                                                    <form method="post" action="<?= htmlspecialchars($postUrl) ?>" class="d-inline">
+                                                    <w:form method="post" action="@var($postUrl)" class="d-inline">
+                                                        <?= $formKeyHtml ?>
                                                         <input type="hidden" name="form_action" value="rollback">
                                                         <input type="hidden" name="version_id" value="<?= (int)($version['version_id'] ?? 0) ?>">
                                                         <input type="hidden" name="module" value="<?= htmlspecialchars((string)($precheck['module'] ?? $moduleRow['module'] ?? '')) ?>">
                                                         <input type="hidden" name="area" value="<?= htmlspecialchars((string)($precheck['area'] ?? $selectedArea)) ?>">
                                                         <input type="hidden" name="code" value="<?= htmlspecialchars((string)($precheck['template_code'] ?? '')) ?>">
                                                         <input type="hidden" name="scope" value="<?= htmlspecialchars($scope) ?>">
+                                                        <input type="hidden" name="target_scope" value="<?= htmlspecialchars($scope) ?>">
+                                                        <input type="hidden" name="expected_grant_version" value="<?= $expectedGrantVersion ?>">
+                                                        <input type="hidden" name="website_code" value="<?= htmlspecialchars($targetWebsite) ?>">
+                                                        <input type="hidden" name="store_code" value="<?= htmlspecialchars($targetStore) ?>">
+                                                        <input type="hidden" name="channel_code" value="<?= htmlspecialchars($targetChannel) ?>">
                                                         <input type="hidden" name="locale" value="<?= htmlspecialchars($locale) ?>">
                                                         <input type="hidden" name="search" value="<?= htmlspecialchars($search) ?>">
                                                         <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
@@ -1332,7 +1486,7 @@ $adapterAction = static function (array $adapter) use ($templateInstance, $adapt
                                                         <button class="btn btn-outline-warning btn-sm" type="submit">
                                                             <i class="mdi mdi-restore me-1"></i><lang>回滚</lang>
                                                         </button>
-                                                    </form>
+                                                    </w:form>
                                                 <?php else: ?>
                                                     <span class="badge bg-secondary"><lang>不可回滚</lang></span>
                                                 <?php endif; ?>

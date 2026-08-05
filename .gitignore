@@ -93,7 +93,6 @@ tests/e2e/.smoke-publish-last.log
 # Codex ????????????
 dev/ai/codex/tasks/**/artifacts/*
 dev/ai/codex/tasks/
-memory/
 
 # PHPUnit cache directory (10+)
 .phpunit.cache/
@@ -126,3 +125,35 @@ memory/
 .codex/skills/.system/**
 !.codex/prompts/
 !.codex/prompts/**
+
+# Local build, cache, backup and test artifacts
+/build/
+**/__pycache__/
+*.py[cod]
+*.orig
+*.bak
+*.swp
+*.swo
+/dev/ai/codex/tmp/
+/dev/ai/code_backup/
+/dev/ai/archive/**/*.log
+/tests/e2e/**/.npm/
+/tests/e2e/**/artifacts/
+/tests/e2e/**/*.log
+/tests/var/codex-tmp/
+
+# Generated module and report artifacts
+/app/code/**/node_modules/
+/app/code/Weline/Server/var/log/*.json
+/app/code/Weline/ThemeFancy/view/statics/assets/libs/**/yarn-error.log
+/app/code/Weline/Visitor/etc/report_catalog.json
+
+# Accidental local file
+/NUL
+
+# Local agent/debug workspaces (do not commit)
+.superpowers/
+/evidence/
+/parent/
+/tests/e2e/tmp-*.mjs
+/joinModel*

@@ -21,6 +21,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Server\Service\Runtime\SystemCpuProbe;
 
 class ScalingDecider
 {
@@ -213,29 +214,9 @@ class ScalingDecider
      */
     private function getDefaultMaxWorkers(): int
     {
-        // 尝试获取 CPU 核心数
-        if (\function_exists('shell_exec')) {
-            // Linux
-            $cores = (int)\shell_exec('nproc 2>/dev/null');
-            if ($cores > 0) {
-                return $cores * 2;
-            }
-
-            // macOS
-            $cores = (int)\shell_exec('sysctl -n hw.ncpu 2>/dev/null');
-            if ($cores > 0) {
-                return $cores * 2;
-            }
-
-            // Windows
-            $cores = (int)\shell_exec('echo %NUMBER_OF_PROCESSORS% 2>nul');
-            if ($cores > 0) {
-                return $cores * 2;
-            }
-        }
-
-        // 默认 4 个
-        return 4;
+        // Historically this policy's fail-safe default was four workers. Keep
+        // that behavior when the bounded CPU probe cannot establish a count.
+        return SystemCpuProbe::logicalCount(2) * 2;
     }
 
     /**

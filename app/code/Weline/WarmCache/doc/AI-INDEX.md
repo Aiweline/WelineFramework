@@ -25,6 +25,7 @@
 - `app/code/Weline/WarmCache/composer.json`
 
 - `Console`：php bin/w 命令入口。新增/变更命令后用真实 CLI 验证。 文件数：1
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：1
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0
 

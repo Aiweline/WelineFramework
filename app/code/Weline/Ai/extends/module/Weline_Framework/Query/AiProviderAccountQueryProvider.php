@@ -99,6 +99,12 @@ final class AiProviderAccountQueryProvider implements QueryProviderInterface
             'graph' => false,
             'cost' => 1,
             'auth' => 'backend',
+            'backend_acl' => [
+                'kind' => 'source',
+                'source_id' => $mode === 'read'
+                    ? 'Weline_Ai::ai_provider_list'
+                    : 'Weline_Ai::ai_provider_account',
+            ],
             'params' => $params,
             'returns' => ['type' => 'array'],
         ];

@@ -22,10 +22,17 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_user_id', columns: ['user_id'])]
 #[Index(name: 'idx_created_at', columns: ['created_at'])]
 #[Index(name: 'idx_account_created', columns: ['account_id', 'created_at'])]
+#[Index(name: 'uniq_request_key', columns: ['request_key'], type: 'UNIQUE')]
 class UsageRecord extends Model
 {
     public const schema_table = 'ai_provider_usage_record';
     public const schema_primary_key = 'id';
+
+    public const REQUEST_IDENTITY_CANONICAL = 'canonical';
+    public const REQUEST_IDENTITY_LEGACY_DUPLICATE = 'legacy_duplicate';
+    public const REQUEST_IDENTITY_LEGACY_CONFLICT = 'legacy_conflict';
+    public const REQUEST_IDENTITY_LEGACY_CONFLICT_DUPLICATE = 'legacy_conflict_duplicate';
+    public const REQUEST_IDENTITY_LEGACY_MISSING = 'legacy_missing';
 
     public array $_unit_primary_keys = ['id'];
     public array $_index_sort_keys = ['id', 'account_id', 'created_at'];
@@ -42,6 +49,10 @@ class UsageRecord extends Model
     public const schema_fields_MODEL_NAME = 'model_name';
     #[Col(type: 'varchar', length: 100, nullable: true, comment: '请求ID')]
     public const schema_fields_REQUEST_ID = 'request_id';
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: '请求ID的SHA-256幂等键')]
+    public const schema_fields_REQUEST_KEY = 'request_key';
+    #[Col(type: 'varchar', length: 32, nullable: true, comment: '请求幂等身份迁移状态')]
+    public const schema_fields_REQUEST_IDENTITY_STATUS = 'request_identity_status';
     #[Col(type: 'int', nullable: true, comment: '用户ID')]
     public const schema_fields_USER_ID = 'user_id';
     #[Col(type: 'varchar', length: 100, nullable: true, comment: '用户名')]
@@ -72,6 +83,8 @@ class UsageRecord extends Model
     public const schema_fields_STATUS = 'status';
     #[Col(type: 'text', nullable: true, comment: '错误信息')]
     public const schema_fields_ERROR_MESSAGE = 'error_message';
+    #[Col(type: 'int', length: 1, nullable: false, default: 0, comment: '余额状态：0待认领、1已扣减、2事务内已认领')]
+    public const schema_fields_BALANCE_APPLIED = 'balance_applied';
     #[Col(type: 'int', nullable: true, default: 0, comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
 

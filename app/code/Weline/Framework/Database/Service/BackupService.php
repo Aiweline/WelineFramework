@@ -58,6 +58,7 @@ class BackupService
                 MigrationBackup::schema_fields_BACKUP_TYPE => MigrationBackup::TYPE_TABLE,
                 MigrationBackup::schema_fields_BACKUP_SCOPE => $this->normalizeBackupScope($backupScope),
                 MigrationBackup::schema_fields_OPERATION_ID => $operationId,
+                MigrationBackup::schema_fields_RETENTION_STATE => MigrationBackup::RETENTION_PROTECTED,
                 MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
             ])->save();
 
@@ -94,7 +95,7 @@ class BackupService
             $query = $conn->getQuery()->clearQuery()
                 ->table($rawTable)
                 ->fields($fields)
-                ->where($columnName, '', '!=')
+                ->where($columnName, null, 'IS NOT NULL')
                 ->select();
             $data = $query->fetch();
 
@@ -117,6 +118,7 @@ class BackupService
                 MigrationBackup::schema_fields_COLUMN_NAME => $columnName,
                 MigrationBackup::schema_fields_BACKUP_SCOPE => $this->normalizeBackupScope($scope),
                 MigrationBackup::schema_fields_OPERATION_ID => $operationId,
+                MigrationBackup::schema_fields_RETENTION_STATE => MigrationBackup::RETENTION_PROTECTED,
                 MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
             ])->save();
 
@@ -336,6 +338,7 @@ class BackupService
                     MigrationBackup::schema_fields_OPERATION_ID
                 ),
                 MigrationBackup::schema_fields_SOURCE_BACKUP_ID => (int)$backup->getId(),
+                MigrationBackup::schema_fields_RETENTION_STATE => MigrationBackup::RETENTION_PROTECTED,
                 MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
             ])->save();
         } else {
@@ -460,6 +463,7 @@ class BackupService
                     MigrationBackup::schema_fields_OPERATION_ID
                 ),
                 MigrationBackup::schema_fields_SOURCE_BACKUP_ID => (int)$backup->getId(),
+                MigrationBackup::schema_fields_RETENTION_STATE => MigrationBackup::RETENTION_PROTECTED,
                 MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
             ])->save();
         } else {
@@ -687,6 +691,7 @@ class BackupService
                 MigrationBackup::schema_fields_BACKUP_TYPE => MigrationBackup::TYPE_STRUCTURE,
                 MigrationBackup::schema_fields_BACKUP_SCOPE => $this->normalizeBackupScope($backupScope),
                 MigrationBackup::schema_fields_OPERATION_ID => $operationId,
+                MigrationBackup::schema_fields_RETENTION_STATE => MigrationBackup::RETENTION_PROTECTED,
                 MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
             ])->save();
 
@@ -900,11 +905,14 @@ class BackupService
 
     private function saveBackupChunk(string $tableName, array $chunk, int $migrationId, int $chunkIndex): void
     {
-        $this->backupModel->reset()->setData([
+        (clone $this->backupModel)->reset()->setData([
             MigrationBackup::schema_fields_MIGRATION_ID => $migrationId,
             MigrationBackup::schema_fields_TABLE_NAME => "{$tableName}:chunk:{$chunkIndex}",
             MigrationBackup::schema_fields_BACKUP_DATA => json_encode($chunk, JSON_UNESCAPED_UNICODE),
             MigrationBackup::schema_fields_BACKUP_TYPE => MigrationBackup::TYPE_CHUNK,
+            MigrationBackup::schema_fields_BACKUP_SCOPE => MigrationBackup::SCOPE_UPGRADE,
+            MigrationBackup::schema_fields_OPERATION_ID => '',
+            MigrationBackup::schema_fields_RETENTION_STATE => MigrationBackup::RETENTION_PROTECTED,
             MigrationBackup::schema_fields_CREATED_AT => date('Y-m-d H:i:s')
         ])->save();
     }

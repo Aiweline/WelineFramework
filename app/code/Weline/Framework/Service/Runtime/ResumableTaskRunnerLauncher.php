@@ -35,6 +35,7 @@ final class ResumableTaskRunnerLauncher implements ResumableTaskRunnerLauncherIn
             throw new ResumableTaskRuntimeUnavailableException('Runtime task disappeared before Runner launch.');
         }
 
+        $policy = ResumableTaskPolicyHydrator::fromArray((array)($row['policy'] ?? []));
         $generation = (int)$row['fencing_generation'] + 1;
         $runnerId = 'runner-' . bin2hex(random_bytes(12));
         $process = RuntimeProcessIdentity::forTask($taskId, $generation);
@@ -44,6 +45,7 @@ final class ResumableTaskRunnerLauncher implements ResumableTaskRunnerLauncherIn
             $process->launchId,
             $process->processName,
             $recovery,
+            $policy->runnerLeaseSeconds,
         );
         if ((int)$reserved['fencing_generation'] !== $generation) {
             throw new ResumableTaskRuntimeUnavailableException('Runtime Runner reservation was superseded.');

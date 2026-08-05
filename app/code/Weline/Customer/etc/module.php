@@ -9,6 +9,7 @@ return [
         'Weline_Frontend' => '*',
     ],
     "optional" => [
+        'Weline_Captcha' => '*',
         'Weline_Currency' => '*',
         'Weline_I18n' => '*',
         'Weline_Order' => '*',

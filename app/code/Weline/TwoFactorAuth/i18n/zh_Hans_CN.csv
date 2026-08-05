@@ -195,3 +195,4 @@ TOTP账户,TOTP账户
 "The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
 "Please enter the verification code.","Please enter the verification code."
 "Verification code is incorrect.","Verification code is incorrect."
+"""Code data loaded.""","Code data loaded."

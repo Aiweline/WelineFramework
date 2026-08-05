@@ -22,13 +22,24 @@ final class SessionCookieNameResolver
 
     public static function resolve(?string $host = null): string
     {
+        return self::resolveFor(self::LEGACY_NAME, $host);
+    }
+
+    /** Resolve a host cookie name for the active request authority. */
+    public static function resolveFor(string $legacyName, ?string $host = null): string
+    {
+        $legacyName = trim($legacyName);
+        if ($legacyName === '') {
+            return '';
+        }
+
         $host = $host ?? self::currentHost();
         $port = self::extractPort($host);
         if ($port === null || $port === 80 || $port === 443) {
-            return self::LEGACY_NAME;
+            return $legacyName;
         }
 
-        return self::LEGACY_NAME . '_' . $port;
+        return $legacyName . '_' . $port;
     }
 
     /**

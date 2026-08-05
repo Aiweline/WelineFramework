@@ -38,11 +38,12 @@
             if (!this.container) {
                 this.container = document.createElement('div');
                 this.container.className = 'backend-toast-container';
+                // Toast 必须高于所有弹层（OffCanvas 200020、各模块模态框 10050+），否则会被遮住
                 this.container.style.cssText = `
                     position: fixed;
                     top: 80px;
                     right: 20px;
-                    z-index: 9999;
+                    z-index: 2147483001;
                     display: flex;
                     flex-direction: column;
                     gap: 10px;
@@ -189,7 +190,7 @@
                     position: fixed;
                     inset: 0;
                     background: rgba(0, 0, 0, 0.5);
-                    z-index: 10000;
+                    z-index: 12050;
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -307,7 +308,7 @@
                     position: fixed;
                     inset: 0;
                     background: rgba(0, 0, 0, 0.5);
-                    z-index: 10000;
+                    z-index: 12050;
                     display: flex;
                     align-items: center;
                     justify-content: center;

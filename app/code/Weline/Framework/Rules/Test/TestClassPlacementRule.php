@@ -87,7 +87,7 @@ class TestClassPlacementRule implements RuleInterface
      */
     public function getDescription(): string
     {
-        return __('测试类（继承自 PHPUnit\\Framework\\TestCase 或 Weline\\Framework\\UnitTest\\TestCore，或类名包含 Test）不应放在业务代码目录（Model、Controller、Block、Helper、Observer、Plugin、Console、View、Taglib、Api）下。测试类应放在专门的测试目录（如 Test、UnitTest、Tests、tests）下。');
+        return __('测试类（继承自 PHPUnit\\Framework\\TestCase 或 Weline\\Framework\\Test\\TestCore，或类名包含 Test）不应放在业务代码目录（Model、Controller、Block、Helper、Observer、Plugin、Console、View、Taglib、Api）下。测试类应放在专门的测试目录（如 Test、UnitTest、Tests、tests）下。');
     }
     
     /**
@@ -225,7 +225,7 @@ class TestClassPlacementRule implements RuleInterface
         while ($parentClass) {
             $parentName = $parentClass->getName();
             if ($parentName === 'PHPUnit\Framework\TestCase' || 
-                $parentName === 'Weline\Framework\UnitTest\TestCore') {
+                $parentName === 'Weline\Framework\Test\TestCore') {
                 return true;
             }
             $parentClass = $parentClass->getParentClass();
@@ -306,10 +306,10 @@ class TestClassPlacementRule implements RuleInterface
      * 
      * 检测规则（按优先级）：
      * 1. 检查是否继承自 PHPUnit\Framework\TestCase（完整命名空间）
-     * 2. 检查是否继承自 Weline\Framework\UnitTest\TestCore（完整命名空间）
+     * 2. 检查是否继承自 Weline\Framework\Test\TestCore（完整命名空间）
      * 3. 检查是否继承自 TestCore（可能是 use 导入的）
      * 4. 检查是否继承自 TestCase（可能是 use 导入的）
-     * 5. 检查是否有 use PHPUnit\Framework\TestCase 或 use Weline\Framework\UnitTest\TestCore，且类名包含 Test
+     * 5. 检查是否有 use PHPUnit\Framework\TestCase 或 use Weline\Framework\Test\TestCore，且类名包含 Test
      * 
      * @param string $filePath 文件路径
      * @param string $className 类名
@@ -335,15 +335,15 @@ class TestClassPlacementRule implements RuleInterface
             return true;
         }
         
-        // 2. 检查是否继承自 Weline\Framework\UnitTest\TestCore（完整命名空间）
-        if (preg_match('/extends\s+\\\\?Weline\\\\Framework\\\\UnitTest\\\\TestCore\b/', $content)) {
+        // 2. 检查是否继承自 Weline\Framework\Test\TestCore（完整命名空间；兼容旧 UnitTest）
+        if (preg_match('/extends\s+\\\\?Weline\\\\Framework\\\\(?:Test|UnitTest)\\\\TestCore\b/', $content)) {
             return true;
         }
         
         // 3. 检查是否有 use 语句导入测试基类
         // 注意：需要匹配完整的 use 语句，包括可能的别名
         $hasUseTestCase = preg_match('/use\s+\\\\?PHPUnit\\\\Framework\\\\TestCase(?:\s+as\s+\w+)?\s*;/', $content);
-        $hasUseTestCore = preg_match('/use\s+\\\\?Weline\\\\Framework\\\\UnitTest\\\\TestCore(?:\s+as\s+\w+)?\s*;/', $content);
+        $hasUseTestCore = preg_match('/use\s+\\\\?Weline\\\\Framework\\\\(?:Test|UnitTest)\\\\TestCore(?:\s+as\s+\w+)?\s*;/', $content);
         
         // 4. 如果导入了测试基类，检查是否继承
         if ($hasUseTestCase && preg_match('/extends\s+TestCase\b/', $content)) {
@@ -358,7 +358,7 @@ class TestClassPlacementRule implements RuleInterface
         // 额外检查：即使没有 use 语句，也检查是否直接继承 TestCore（可能是完整命名空间）
         // 这种情况应该已经被第2条规则捕获，但为了保险再检查一次
         if (preg_match('/extends\s+TestCore\b/', $content) && 
-            (preg_match('/use\s+.*TestCore/', $content) || preg_match('/Weline\\\\Framework\\\\UnitTest\\\\TestCore/', $content))) {
+            (preg_match('/use\s+.*TestCore/', $content) || preg_match('/Weline\\\\Framework\\\\(?:Test|UnitTest)\\\\TestCore/', $content))) {
             return true;
         }
         

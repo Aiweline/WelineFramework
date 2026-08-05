@@ -10,6 +10,7 @@ use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 use Weline\Server\Supervisor\SupervisorRuntime;
 use Weline\Server\Supervisor\SupervisorServer;
 use Weline\Server\Supervisor\SupervisorSession;
+use Weline\Server\Service\MasterChildCredentialStore;
 
 final class HybridControlPlaneServer implements ControlPlaneServerInterface
 {
@@ -91,7 +92,20 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             // Hybrid mode treats the Orchestrator capability gate as the only
             // authority allowed to ACK READY. The Supervisor only transports it.
             $this->supervisorServer ??= new SupervisorServer($this->supervisorRuntime, deferReadyAck: true);
-            $this->supervisorServer->setHelloAuthSecret($this->supervisorAuthSecret);
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $this->supervisorAuthSecret) === 1) {
+                $expectedInstanceCode = $this->expectedInstanceCode;
+                $this->supervisorServer->setHelloAuthSecretResolver(
+                    static function (array $message) use ($expectedInstanceCode): string {
+                        return (new MasterChildCredentialStore())
+                            ->resolveSupervisorHelloCredential($message, $expectedInstanceCode);
+                    },
+                );
+            } else {
+                // Standalone Supervisor harnesses may still supply a local
+                // non-WLS secret. A real Master token is always 64 hex and can
+                // never enter this compatibility branch.
+                $this->supervisorServer->setHelloAuthSecret($this->supervisorAuthSecret);
+            }
             $this->supervisorServer->onPassthroughMessage(function (array $message, int $sessionId): void {
                 $this->enqueueSupervisorPassthroughMessage($message, $sessionId);
             });

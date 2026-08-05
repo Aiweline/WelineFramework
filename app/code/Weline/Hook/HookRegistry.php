@@ -336,7 +336,7 @@ class HookRegistry
             $fileCount = 0;
             foreach ($iterator as $file) {
                 /** @var \SplFileInfo $file */
-                if ($file->isFile() && $file->getExtension() === 'phtml') {
+                if (self::isHookImplementationFile($file)) {
                     $relativePath = str_replace($hooksDir . DS, '', $file->getPathname());
                     $relativePath = str_replace(['/', '\\'], DS, $relativePath);
                     $relativePathWithoutExt = str_replace('.phtml', '', $relativePath);
@@ -633,6 +633,19 @@ class HookRegistry
     }
     
     /**
+     * 只将真实的 phtml 文件视为 Hook 实现。
+     *
+     * macOS 在非原生文件系统上可能生成以 ._ 开头的 AppleDouble 资源叉伴生文件。
+     * 它们不是模板，也不能进入 Hook 元数据解析。
+     */
+    private static function isHookImplementationFile(\SplFileInfo $file): bool
+    {
+        return $file->isFile()
+            && $file->getExtension() === 'phtml'
+            && !str_starts_with($file->getBasename(), '._');
+    }
+
+    /**
      * 解析Hook文件中的元数据（优先级、排序顺序、solo等）
      * 支持从文件注释中提取：
      * - @hook-priority 200
@@ -796,7 +809,7 @@ class HookRegistry
             $fileCount = 0;
             foreach ($iterator as $file) {
                 /** @var \SplFileInfo $file */
-                if ($file->isFile() && $file->getExtension() === 'phtml') {
+                if (self::isHookImplementationFile($file)) {
                     // 目录层级结构格式：从目录结构提取Hook名称
                     // 文件路径格式：view/hooks/Weline_Backend/backend/partials/head/before.phtml
                     // Hook名称格式：Weline_Backend::backend::partials::head::before

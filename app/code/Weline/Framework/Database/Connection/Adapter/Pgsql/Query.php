@@ -20,6 +20,7 @@ use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Transaction\TransactionCoordinator;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -1594,6 +1595,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             foreach (self::query_vars as $query_field => $query_var) {
                 $this->$query_field = $query_var;
             }
+            $this->resetQueryRuntimeState();
+            $this->PDOStatement = null;
+            $this->batch = false;
         }
         return $this;
     }
@@ -1603,19 +1607,31 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         foreach (self::init_vars as $init_field => $init_var) {
             $this->$init_field = $init_var;
         }
+        $this->resetQueryRuntimeState();
+        $this->_unit_primary_keys = [];
         $this->PDOStatement = null;
+        $this->batch = false;
         return $this;
     }
 
     public function beginTransaction(): void
     {
-        $link = $this->getLink();
-        if (!$link->inTransaction()) {
-            $link->beginTransaction();
-        }
+        TransactionCoordinator::beginQuery($this, function (): void {
+            $link = $this->getLink();
+            if (!$link->inTransaction()) {
+                $link->beginTransaction();
+            }
+        });
     }
 
     public function rollBack(): void
+    {
+        TransactionCoordinator::rollBackQuery($this, function (): void {
+            $this->rollBackPhysical();
+        });
+    }
+
+    private function rollBackPhysical(): void
     {
         $pdo = $this->getLink();
         try {
@@ -1678,10 +1694,18 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function commit(): void
     {
-        $link = $this->getLink();
-        if ($link->inTransaction()) {
-            $link->commit();
-        }
+        TransactionCoordinator::commitQuery(
+            $this,
+            function (): void {
+                $link = $this->getLink();
+                if ($link->inTransaction()) {
+                    $link->commit();
+                }
+            },
+            function (): void {
+                $this->rollBackPhysical();
+            }
+        );
     }
 
     /**
@@ -2563,9 +2587,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             } else {
                 // 单个命令，但在 prepare 时可能失败（作为备用检测）
                 // 在父类调用 prepare 之前，先尝试 prepare 看看是否会失败
-                
+
                 try {
-                    $testStmt = $this->preparePgsql($this->sql);
+                    $testStmt = $this->PDOStatement ?? $this->preparePgsql($this->sql);
                     if ($testStmt === false) {
                         $errorInfo = $this->getLink()->errorInfo();
                         if (($errorInfo[0] ?? '') === '42601' && 
@@ -2606,6 +2630,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                                 $this->sql = '';
                             }
                         }
+                    }
+                    if ($testStmt !== false && $this->PDOStatement === null) {
+                        $this->PDOStatement = $testStmt;
                     }
                 } catch (\PDOException $e) {
                     // prepare 时抛出异常，检查是否是多个命令错误
@@ -2813,7 +2840,17 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             } else {
                 // 单个命令，正常执行
                 try {
-                    $this->PDOStatement = $this->preparePgsql($this->sql);
+                    if ($this->PDOStatement === null) {
+                        $statement = $this->preparePgsql($this->sql);
+                        if ($statement === false) {
+                            $errorInfo = $this->getLink()->errorInfo();
+                            throw new \PDOException(
+                                $errorInfo[2] ?? 'SQL preparation failed',
+                                (int)($errorInfo[0] ?? 0)
+                            );
+                        }
+                        $this->PDOStatement = $statement;
+                    }
                     $this->PDOStatement->execute($this->bound_values);
                 } catch (\PDOException $e) {
                     throw $e;
@@ -2843,13 +2880,21 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 }
             }
         } catch (\PDOException $e) {
-            // PostgreSQL：任意 SQL 失败后连接进入 aborted 状态，必须 ROLLBACK 才能恢复；
-            // 否则后续操作（含 BEGIN）均报 25P02。在 rethrow 前统一 rollBack 以恢复连接。
+            // PostgreSQL 会在语句失败后把当前物理事务置为 aborted；恢复动作必须由
+            // 创建该事务或 SAVEPOINT 的唯一边界执行。此处保留原始 PDOException，
+            // 并只标记协调器 rollback-only（不消费嵌套深度、不做物理回滚）：
+            // Model/TransactionCoordinator 会恰好回滚一次；withSavepoint 则需要先看到
+            // 原始 SQLSTATE（例如 23505）再 ROLLBACK TO SAVEPOINT。适配器在这里主动
+            // 调用逻辑 rollBack 会消耗嵌套深度，随后造成二次回滚、异常被改写，甚至
+            // 提前结束外层事务。
             if (ConnectionPool::isDisconnectException($e)) {
                 $this->markCurrentConnectionUnhealthy();
                 if ($this->shouldRetryDisconnectedRead($e)) {
                     $this->disconnectRetryAttempted = true;
                     if ($this->reconnectAfterDisconnect($e)) {
+                        // Prepared statements are bound to the disconnected PDO.
+                        // A successful reconnect must prepare once on the new link.
+                        $this->PDOStatement = null;
                         try {
                             return $this->fetch($model_class);
                         } finally {
@@ -2859,7 +2904,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     $this->disconnectRetryAttempted = false;
                 }
             }
-            $this->rollBack();
+            TransactionCoordinator::markQueryRollbackOnly($this, $e);
             throw $e;
         }
     }
@@ -2907,6 +2952,13 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         } else {
             $data = $this->collectStatementResultSets($this->PDOStatement, $fetchRowLimit);
         }
+        // PDOStatement::rowCount() must be captured before closeCursor() and
+        // before the statement reference is released. UPDATE/DELETE CAS paths
+        // rely on this value to distinguish a successful write from a stale
+        // predicate; reading it after cleanup makes every write look stale.
+        $affectedRowCount = in_array($this->fetch_type, ['update', 'delete'], true)
+            ? $this->PDOStatement->rowCount()
+            : 0;
         $this->PDOStatement->closeCursor();
         $this->PDOStatement = null;
         $this->batch = false;
@@ -3003,12 +3055,12 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         $result = count($validData);
                     } else {
                         // RETURNING 但没有有效数据，使用 rowCount()
-                        $rowCount = $this->PDOStatement ? $this->PDOStatement->rowCount() : 0;
+                        $rowCount = $affectedRowCount;
                         $result = $rowCount > 0 ? $rowCount : false;
                     }
                 } else {
                     // 没有使用 RETURNING 子句，直接使用 rowCount() 判断受影响的行数
-                    $rowCount = $this->PDOStatement ? $this->PDOStatement->rowCount() : 0;
+                    $rowCount = $affectedRowCount;
                     // rowCount() > 0 表示成功，返回受影响的行数；否则返回 false
                     $result = $rowCount > 0 ? $rowCount : false;
                 }
@@ -3097,27 +3149,26 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
 
         $stmt = $this->PDOStatement;
-        $needExecute = ($stmt === null && !empty($this->sql));
-        if ($needExecute) {
-            try {
-                if ($this->hasMultipleSqlCommands($this->sql)) {
-                    throw new DbException(__('fetchIterator 不支持多语句 SQL，请使用单条 SELECT'));
-                }
-                $stmt = $this->preparePgsql($this->sql);
-                if ($stmt === false || !$stmt->execute($this->bound_values)) {
-                    $err = $this->getLink()->errorInfo();
-                    throw new DbException($err[2] ?? 'Execute failed');
-                }
-                $this->PDOStatement = $stmt;
-            } catch (\PDOException $e) {
-                $this->rollBack();
-                throw $e;
-            }
-        }
-        if ($stmt === null) {
-            return;
-        }
+        $primaryFailure = null;
         try {
+            if ($this->hasMultipleSqlCommands($this->sql)) {
+                throw new DbException(__('fetchIterator 不支持多语句 SQL，请使用单条 SELECT'));
+            }
+            if ($stmt === null && !empty($this->sql)) {
+                $stmt = $this->preparePgsql($this->sql);
+            }
+            if ($stmt === false || $stmt === null) {
+                if ($stmt === false) {
+                    $err = $this->getLink()->errorInfo();
+                    throw new DbException($err[2] ?? 'Prepare failed');
+                }
+                return;
+            }
+            $this->PDOStatement = $stmt;
+            if (!$stmt->execute($this->bound_values)) {
+                $err = $this->getLink()->errorInfo();
+                throw new DbException($err[2] ?? 'Execute failed');
+            }
             if ($batchSize === 1) {
                 while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
                     if ($model_class && is_array($row)) {
@@ -3143,17 +3194,50 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     yield $batch;
                 }
             }
+        } catch (\Throwable $e) {
+            $primaryFailure = $e;
+            if ($e instanceof \PDOException) {
+                // 与 fetch() 一致：生成器不拥有外层事务或 SAVEPOINT，必须保留
+                // 原始 SQLSTATE 并由创建边界执行唯一一次回滚。
+                TransactionCoordinator::markQueryRollbackOnly($this, $e);
+            }
+            throw $e;
         } finally {
-            if ($this->PDOStatement !== null) {
-                $this->PDOStatement->closeCursor();
-                $this->PDOStatement = null;
+            $this->cleanupFetchIteratorState($primaryFailure);
+        }
+    }
+
+    private function cleanupFetchIteratorState(?\Throwable $primaryFailure): void
+    {
+        $cleanupFailure = null;
+        $statement = $this->PDOStatement;
+        $this->PDOStatement = null;
+
+        if ($statement !== null) {
+            try {
+                $statement->closeCursor();
+            } catch (\Throwable $exception) {
+                $cleanupFailure = $exception;
             }
-            $this->fetch_type = '';
-            $this->batch = false;
+        }
+
+        $this->fetch_type = '';
+        $this->batch = false;
+        try {
             $this->clearQuery();
-            if ($this->table_alias !== 'main_table') {
+        } catch (\Throwable $exception) {
+            $cleanupFailure ??= $exception;
+        }
+        if ($this->table_alias !== 'main_table') {
+            try {
                 $this->alias('main_table');
+            } catch (\Throwable $exception) {
+                $cleanupFailure ??= $exception;
             }
+        }
+
+        if ($primaryFailure === null && $cleanupFailure !== null) {
+            throw $cleanupFailure;
         }
     }
     

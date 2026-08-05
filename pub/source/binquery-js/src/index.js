@@ -122,11 +122,12 @@ class BinaryCodec {
 }
 
 export class BinQueryClient {
-  constructor({ endpoint, apiKey, area = 'frontend', cache = 'auto' }) {
+  constructor({ endpoint, apiKey, area = 'frontend', cache = 'auto', debug = undefined }) {
     this.endpoint = endpoint;
     this.apiKey = apiKey;
     this.area = area;
     this.cache = cache;
+    this.debug = debug === undefined ? detectDevMode() : !!debug;
     this.codec = new BinaryCodec();
     this.operationDocs = new Map();
   }
@@ -143,6 +144,7 @@ export class BinQueryClient {
       apiKey: config.apiKey,
       area: config.area || 'frontend',
       cache: config.cache ?? 'auto',
+      debug: config.debug,
     });
     await client.request({ type: 'connect' });
     return client;
@@ -214,6 +216,7 @@ export class BinQueryClient {
   }
 
   async request(payload, query = {}) {
+    const startedAt = this.debug && typeof performance !== 'undefined' ? performance.now() : 0;
     const body = this.codec.encodePacket({ area: this.area, ...payload });
     const url = new URL(this.endpoint);
     for (const [key, value] of Object.entries(query)) {
@@ -231,6 +234,15 @@ export class BinQueryClient {
     });
     const bytes = new Uint8Array(await response.arrayBuffer());
     const decoded = this.codec.decodePacket(bytes);
+    if (this.debug) {
+      logDevTrace(payload, {
+        ok: !!(decoded && decoded.ok === true),
+        status: response.status,
+        data: decoded?.data,
+        error: decoded?.error || null,
+        request_id: decoded?.request_id || '',
+      }, url.href, startedAt);
+    }
     if (!decoded || decoded.ok !== true) {
       throw new Error(decoded?.error?.message || `BinQuery request failed with HTTP ${response.status}.`);
     }
@@ -262,6 +274,69 @@ export class BinQueryClient {
     }));
     return `wq1.${this.area}.${provider}.${operation}.${hash.slice(0, 24)}`;
   }
+}
+
+function detectDevMode() {
+  const globalObject = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (globalObject.DEV === true || globalObject.WELINE_ENV === 'DEV') {
+    return true;
+  }
+  try {
+    const hostname = globalObject.location && globalObject.location.hostname;
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function summarizePayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return 'unknown';
+  }
+  if (payload.type === 'call') {
+    return `call ${payload.provider}.${payload.operation}`;
+  }
+  if (payload.type === 'graph') {
+    return 'graph';
+  }
+  if (payload.type === 'connect') {
+    return 'connect';
+  }
+  if (payload.type === 'query') {
+    return `query ${payload.what || ''}`.trim();
+  }
+  return String(payload.type || 'request');
+}
+
+function cloneLogValue(value) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_error) {
+    return value;
+  }
+}
+
+function logDevTrace(requestPayload, responseMeta, endpoint, startedAt) {
+  if (typeof console === 'undefined') {
+    return;
+  }
+  const durationMs = startedAt
+    ? Math.max(0, Math.round(performance.now() - startedAt))
+    : 0;
+  const ok = !!(responseMeta && responseMeta.ok === true);
+  const status = responseMeta && responseMeta.status ? ` ${responseMeta.status}` : '';
+  const label = `[Weline.BinQuery] ${ok ? '✓' : '✗'} ${summarizePayload(requestPayload)}${status} · ${durationMs}ms`;
+  const requestLog = cloneLogValue(requestPayload || {});
+  const responseLog = cloneLogValue(responseMeta || {});
+  if (typeof console.groupCollapsed === 'function') {
+    console.groupCollapsed(label);
+    console.log('endpoint:', endpoint);
+    console.log('request:', requestLog);
+    console.log('response:', responseLog);
+    console.groupEnd();
+    return;
+  }
+  console.log(label, { endpoint, request: requestLog, response: responseLog });
 }
 
 function concatBytes(parts) {

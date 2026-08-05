@@ -34,7 +34,16 @@ class State extends DataObject
 
     private static string $allowedLanguageCodeScope = '';
 
-    /** @var array{currency: string, language: string}|null 单次请求路径前缀解析缓存 */
+    /**
+     * @var array{
+     *     currency: string,
+     *     language: string,
+     *     area_offset: int,
+     *     consumed: int,
+     *     remaining: list<string>,
+     *     canonical: list<string>
+     * }|null 单次请求路径前缀解析缓存
+     */
     private static ?array $pathLocalizationCache = null;
 
     private static bool $pathLocalizationResolving = false;
@@ -84,28 +93,33 @@ class State extends DataObject
 
     /**
      * 获取当前语言
-     * 优先级：URL 路径解析的 SERVER 变量 > Cookie > 默认值
-     * 
+     * 优先级：URL 路径段 / PATH_LANG > Cookie > env > 网站默认语言
+     *
+     * 站点未启用的语言码（例如 Cookie 残留 ar_*，但 WebsiteLanguage 仅有 zh_Hans_CN）
+     * 一律拒绝并回落到网站默认，避免语言切换器显示幽灵短码（如 AR）且无法切回。
+     *
      * @return string
      */
     public static function getLang(): string
     {
-        // 优先从 URL 路径解析的变量中读取（从路径配置的 URL）
-        $lang = self::detectLanguageFromRequestPath();
-        if (!empty($lang)) {
-            return $lang;
+        $pathLang = self::detectLanguageFromRequestPath();
+        if ($pathLang !== '' && self::isAllowedLanguageCode($pathLang)) {
+            return self::normalizeLanguageSegment($pathLang);
         }
 
-        $lang = \w_env('user.lang');
-        // 如果 w_env 中没有，从 Cookie 读取
+        // 无路径语言段时：Cookie 优先于 w_env，避免常驻进程残留 user.lang 压过用户偏好。
+        $lang = Cookie::get('WELINE_USER_LANG');
         if (empty($lang)) {
-            $lang = Cookie::get('WELINE_USER_LANG');
+            $lang = Cookie::get('WELINE-WEBSITE-LANG');
         }
-        // 默认网站语言
         if (empty($lang)) {
-            $lang = Cookie::get('WELINE-WEBSITE-LANG', 'zh_Hans_CN');
+            $lang = \w_env('user.lang');
         }
-        return $lang;
+        if (!empty($lang) && self::isAllowedLanguageCode((string)$lang)) {
+            return self::normalizeLanguageSegment((string)$lang);
+        }
+
+        return self::resolveWebsiteDefaultLanguage();
     }
 
     /**
@@ -184,57 +198,110 @@ class State extends DataObject
 
     private static function detectLanguageFromRequestPath(): string
     {
-        return self::resolveRequestPathLocalization()['language'];
+        $fromSegments = self::resolveRequestPathLocalization()['language'];
+        if ($fromSegments !== '') {
+            return $fromSegments;
+        }
+
+        // Url::detectLanguage / SEO 改写会剥掉路径中的语言段；PATH_LANG 必须仍作路由最高优先。
+        try {
+            $locked = \trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', ''));
+            if ($locked !== '') {
+                return self::normalizeLanguageSegment($locked);
+            }
+        } catch (\Throwable) {
+        }
+
+        $locked = \trim((string)($_SERVER['WELINE_URL_PATH_LANG'] ?? ''));
+        if ($locked !== '') {
+            return self::normalizeLanguageSegment($locked);
+        }
+
+        return '';
     }
 
     /**
      * 解析路径本地化前缀：可选 area 后，currency / language 可单独出现，也可任意顺序组合。
      *
+     * 只按路径段形状识别，不读取 allowed language/currency 配置。
+     * area 只允许作为第一段精确命中；remaining 不含 area/本地化段，
+     * canonical 保留 area 原值并将本地化段固定为 currency -> language。
+     *
      * @param list<string> $segments
-     * @return array{currency: string, language: string}
+     * @return array{
+     *     currency: string,
+     *     language: string,
+     *     area_offset: int,
+     *     consumed: int,
+     *     remaining: list<string>,
+     *     canonical: list<string>
+     * }
      */
     public static function resolveLocalizationFromPathSegments(array $segments): array
     {
-        if ($segments === []) {
-            return ['currency' => '', 'language' => ''];
-        }
-
-        if (\count($segments) > 3) {
-            $segments = \array_slice($segments, 0, 3);
-        }
+        $segments = \array_values(\array_map(
+            static fn(mixed $segment): string => (string)$segment,
+            $segments
+        ));
 
         $index = 0;
-        if (isset($segments[$index]) && Env::isAreaRoutePathSegment($segments[$index])) {
+        $areaOffset = 0;
+        if (isset($segments[$index]) && Env::getAreaByRoutePrefix($segments[$index]) !== null) {
             $index++;
+            $areaOffset = 1;
         }
 
         $currency = '';
         $language = '';
-        $localizationSegments = 0;
-        while (isset($segments[$index]) && $localizationSegments < 2) {
+        $consumed = 0;
+        while (isset($segments[$index]) && $consumed < 2) {
             $segment = (string)$segments[$index];
             if ($currency === '' && self::isCurrencySegmentCandidate($segment)) {
                 $currency = strtoupper($segment);
                 $index++;
-                $localizationSegments++;
+                $consumed++;
                 continue;
             }
 
             if ($language === '' && self::isLanguageSegmentCandidate($segment)) {
                 $language = self::normalizeLanguageSegment($segment);
                 $index++;
-                $localizationSegments++;
+                $consumed++;
                 continue;
             }
 
             break;
         }
 
-        return ['currency' => $currency, 'language' => $language];
+        $remaining = \array_slice($segments, $areaOffset + $consumed);
+        $canonical = $areaOffset === 1 ? [$segments[0]] : [];
+        if ($currency !== '') {
+            $canonical[] = $currency;
+        }
+        if ($language !== '') {
+            $canonical[] = $language;
+        }
+        $canonical = \array_merge($canonical, $remaining);
+
+        return [
+            'currency' => $currency,
+            'language' => $language,
+            'area_offset' => $areaOffset,
+            'consumed' => $consumed,
+            'remaining' => $remaining,
+            'canonical' => $canonical,
+        ];
     }
 
     /**
-     * @return array{currency: string, language: string}
+     * @return array{
+     *     currency: string,
+     *     language: string,
+     *     area_offset: int,
+     *     consumed: int,
+     *     remaining: list<string>,
+     *     canonical: list<string>
+     * }
      */
     private static function resolveRequestPathLocalization(): array
     {
@@ -243,7 +310,14 @@ class State extends DataObject
         }
 
         if (self::$pathLocalizationResolving) {
-            return ['currency' => '', 'language' => ''];
+            return [
+                'currency' => '',
+                'language' => '',
+                'area_offset' => 0,
+                'consumed' => 0,
+                'remaining' => [],
+                'canonical' => [],
+            ];
         }
 
         self::$pathLocalizationResolving = true;
@@ -265,6 +339,64 @@ class State extends DataObject
     {
         self::$pathLocalizationCache = null;
         self::$pathLocalizationResolving = false;
+        self::$allowedLanguageCodeMap = null;
+        self::$allowedLanguageCodeScope = '';
+        self::$allowedCurrencyCodeMap = null;
+        self::$allowedCurrencyCodeScope = '';
+    }
+
+    /**
+     * 网站默认语言：website.language / WELINE_WEBSITE_LANGUAGE / WebsiteData，再回落到站点允许列表首项。
+     */
+    public static function resolveWebsiteDefaultLanguage(): string
+    {
+        $candidates = [];
+        try {
+            $candidates[] = trim((string)\w_env('website.language', ''));
+        } catch (\Throwable) {
+        }
+        try {
+            $candidates[] = trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_LANGUAGE', ''));
+        } catch (\Throwable) {
+        }
+        try {
+            $candidates[] = trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE-WEBSITE-LANG', ''));
+        } catch (\Throwable) {
+        }
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $candidates[] = trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? ''));
+            }
+        } catch (\Throwable) {
+        }
+
+        $allowedMap = self::resolveAllowedLanguageCodeMap();
+        foreach ($candidates as $candidate) {
+            $code = self::normalizeLanguageSegment((string)$candidate);
+            if ($code === '' || !self::isLanguageSegmentCandidate($code)) {
+                continue;
+            }
+            if ($allowedMap !== [] && !isset($allowedMap[strtolower($code)])) {
+                continue;
+            }
+
+            return $code;
+        }
+
+        if ($allowedMap !== []) {
+            try {
+                $codes = ObjectManager::getInstance(LocalizationProviderRegistry::class)->preferredLanguageCodes();
+                foreach ($codes as $code) {
+                    $code = self::normalizeLanguageSegment((string)$code);
+                    if ($code !== '' && self::isLanguageSegmentCandidate($code)) {
+                        return $code;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return 'zh_Hans_CN';
     }
 
     /**

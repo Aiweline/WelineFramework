@@ -43,4 +43,23 @@ class ProviderTimeoutPolicyTest extends TestCase
         $this->assertSame(120, ProviderTimeoutPolicy::resolveLowSpeedTime(900));
         $this->assertSame(ProviderTimeoutPolicy::DEFAULT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime(0));
     }
+
+    public function testRequestLowSpeedOverrideIsExplicitAndBoundedByRequestTimeout(): void
+    {
+        $this->assertSame(120, ProviderTimeoutPolicy::resolveRequestLowSpeedTime([], 600));
+        $this->assertSame(600, ProviderTimeoutPolicy::resolveRequestLowSpeedTime(['low_speed_time' => 600], 600));
+        $this->assertSame(600, ProviderTimeoutPolicy::resolveRequestLowSpeedTime(['low_speed_time' => 900], 600));
+        $this->assertSame(30, ProviderTimeoutPolicy::resolveRequestLowSpeedTime(['low_speed_time' => 1], 600));
+        $this->assertSame(0, ProviderTimeoutPolicy::resolveRequestLowSpeedTime(['low_speed_time' => 0], 600));
+    }
+
+    public function testStreamLowSpeedOverrideIsExplicitAndBoundedByStreamTimeout(): void
+    {
+        $this->assertSame(120, ProviderTimeoutPolicy::resolveStreamLowSpeedTime([], 600));
+        $this->assertSame(600, ProviderTimeoutPolicy::resolveStreamLowSpeedTime(['low_speed_time' => 600], 600));
+        $this->assertSame(600, ProviderTimeoutPolicy::resolveStreamLowSpeedTime(['low_speed_time' => 900], 600));
+        $this->assertSame(30, ProviderTimeoutPolicy::resolveStreamLowSpeedTime(['low_speed_time' => 1], 600));
+        $this->assertSame(0, ProviderTimeoutPolicy::resolveStreamLowSpeedTime(['low_speed_time' => 0], 600));
+        $this->assertSame(900, ProviderTimeoutPolicy::resolveStreamLowSpeedTime(['low_speed_time' => 900], 0));
+    }
 }

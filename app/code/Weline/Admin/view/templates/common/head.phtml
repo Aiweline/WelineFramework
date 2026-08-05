@@ -3,9 +3,9 @@
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
-// 使用 w_env() 获取语言和货币，替代直接访问 $_SERVER
-$currentLang = \w_env('user.lang', 'zh_Hans_CN');
-$currentCurrency = \w_env('user.currency', 'CNY');
+// 语言/货币以 State::getLang/getCurrency 为准（路由语言段最高优先），勿直接读可能过期的 w_env。
+$currentLang = \Weline\Framework\App\State::getLang() ?: 'zh_Hans_CN';
+$currentCurrency = \Weline\Framework\App\State::getCurrency() ?: 'CNY';
 $backendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('admin'));
 $restFrontendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api'));
 $restBackendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api_admin'));
@@ -54,6 +54,19 @@ endif;
 <!-- App Css-->
 <link href="<?= $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/css/app' . ($themeConfig->getThemeModel() ? '-' . $themeConfig->getThemeModel() : '') . '.min.css') ?>"
       rel="stylesheet" type="text/css"/>
+
+<!-- Bootstrap 的 checkbox/radio 背景使用 data:image；严格 CSP 下改用浏览器原生控件。 -->
+<style>
+    .form-check-input {
+        -webkit-appearance: auto;
+        appearance: auto;
+        background-image: none !important;
+        accent-color: #0bb197;
+    }
+    .form-switch .form-check-input {
+        width: 2em;
+    }
+</style>
 <?php
 // 始终加载主题基础变量CSS（所有变量的默认值）
 // 注意：必须先加载 _colors.css（定义所有 --backend-* 颜色变量）

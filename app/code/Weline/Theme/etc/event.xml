@@ -143,6 +143,14 @@
                   sort="10"/>
     </event>
 
+    <event name="Weline_Dashboard::layout_identity_ready">
+        <observer name="Weline_Theme::apply_dashboard_view_default_injections"
+                  instance="Weline\Theme\Observer\ApplyDashboardViewDefaultInjections"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <event name="Weline_Framework_Runtime::worker_bootstrap_after">
         <observer name="Weline_Theme::worker_bootstrap_warmup"
                   instance="Weline\Theme\Observer\WorkerBootstrapWarmup"
@@ -174,6 +182,21 @@
                   disabled="false"
                   shared="true"
                   sort="0"/>
+    </event>
+
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="theme_resource_changed"
+                  instance="Weline\Theme\Observer\ResourceChanged"
+                  delivery="async"
+                  retry="standard"
+                  coalesce="latest"
+                  timeout="60"
+                  disabled="false"
+                  shared="true"
+                  sort="100"/>
     </event>
 
 </config>

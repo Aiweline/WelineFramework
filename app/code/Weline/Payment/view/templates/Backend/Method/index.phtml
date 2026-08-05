@@ -5,7 +5,7 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
+<div class="row" data-testid="payment-method-management">
     <div class="col-12">
         <div class="page-title-box">
             <h4 class="page-title">
@@ -25,9 +25,19 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="mdi mdi-credit-card me-2"></i><?= __('支付方式管理') ?>
-                </h4>
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                    <h4 class="card-title mb-0">
+                        <i class="mdi mdi-credit-card me-2"></i><?= __('支付方式管理') ?>
+                    </h4>
+                    <?php if (!empty($can_register_providers)): ?>
+                        <button type="button" class="btn btn-primary btn-sm" id="payment-method-sync-providers"
+                                data-testid="payment-method-sync-providers"
+                                data-target-scope="<?= htmlspecialchars((string)($target_scope ?? 'global'), ENT_QUOTES) ?>"
+                                data-grant-version="<?= (int)($expected_grant_version ?? 0) ?>">
+                            <i class="mdi mdi-sync me-1"></i><?= __('同步支付提供商') ?>
+                        </button>
+                    <?php endif; ?>
+                </div>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -64,7 +74,10 @@
                                         </td>
                                         <td><?= htmlspecialchars($method->getData('sort_order')) ?></td>
                                         <td>
-                                            <a href="<?= $this->getUrl('*/backend/method/edit', ['code' => $method->getData('code')]) ?>" 
+                                            <a href="<?= $this->getUrl('*/backend/method/edit', [
+                                                'code' => $method->getData('code'),
+                                                'target_scope' => $target_scope,
+                                            ]) ?>"
                                                class="btn btn-sm btn-primary">
                                                 <i class="mdi mdi-eye-outline"></i> <?= __('查看配置') ?>
                                             </a>
@@ -79,3 +92,37 @@
         </div>
     </div>
 </div>
+<?php if (!empty($can_register_providers)): ?>
+<script>
+(function () {
+    'use strict';
+    document.addEventListener('DOMContentLoaded', function () {
+        var button = document.getElementById('payment-method-sync-providers');
+        if (!button) return;
+        button.addEventListener('click', function () {
+            button.disabled = true;
+            button.dataset.state = 'pending';
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                .then(function (api) {
+                    return api.resource('payment').registerProviders({
+                        target_scope: button.dataset.targetScope,
+                        expected_grant_version: button.dataset.grantVersion
+                    });
+                })
+                .then(function (data) {
+                    if (!data || data.success === false) throw new Error((data && data.message) || 'provider_sync_failed');
+                    button.dataset.state = 'success';
+                    button.dataset.registered = String(data.providers_registered || 0);
+                    if (typeof BackendToast !== 'undefined') BackendToast.success('<?= __('支付提供商同步成功') ?>');
+                })
+                .catch(function (error) {
+                    button.dataset.state = 'error';
+                    console.error('Payment provider sync failed:', error);
+                    if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('支付提供商同步失败') ?>');
+                })
+                .finally(function () { button.disabled = false; });
+        });
+    });
+})();
+</script>
+<?php endif; ?>

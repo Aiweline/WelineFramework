@@ -12,7 +12,7 @@ class Index extends FrontendController
 {
     public function index(): string
     {
-        $cart = $this->cartService()->summary();
+        $cart = $this->cartService()->storefrontSummary();
         $isEmpty = (bool)($cart['is_empty'] ?? true);
 
         $this->layoutType = $isEmpty ? 'cart.empty' : 'cart.default';
@@ -40,4 +40,3 @@ class Index extends FrontendController
         return ObjectManager::getInstance(CartService::class);
     }
 }
-

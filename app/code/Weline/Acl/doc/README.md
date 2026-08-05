@@ -26,6 +26,23 @@ Weline Acl (Access Control List) 是系统的权限控制模块，提供了基�
 - 动态菜单生成
 - 权限过滤
 
+后台菜单和 Controller 使用统一 source 语法：
+
+`Vendor_Module::tag1:tag2:code`
+
+最后一段是叶子资源 code，前面的段是有序 ACL 标签。统一通过
+`Weline\Framework\Authorization\Resource\SourceIdParser` 解析或生成；模块菜单来自
+`etc/backend/menu.xml`，Controller/action 权限来自
+`#[Weline\Framework\Acl\Acl]`，不存在额外的 `acl.xml` 注册面。
+
+角色可以获得精确叶子资源或标签路径授权。标签路径在 ACL 同步时展开为已存在、已启用的
+具体资源；`AclTag` 的名称、说明、颜色和排序仅用于展示，不产生权限。父菜单只负责拓扑与
+祖先可见性，不能代替叶子 Controller/action 授权。
+
+验收必须同时证明：无权限角色看不到菜单，且手工输入 URL 仍被拒绝；有权限角色能看到
+菜单并到达真实页面。QueryProvider、后台任务和运维操作同样使用精确 source，不从父菜单、
+路由前缀或标签元数据推断权限。
+
 跨模块读取后台菜单树或权限分配树时，只能依赖
 `Weline\Acl\Api\ResourceTreeServiceInterface`；角色参数使用
 `Weline\Acl\Api\RoleIdentityInterface`。旧 `Service/ResourceTreeServiceInterface` 仅保留
@@ -40,6 +57,58 @@ ORM 或 Query Builder。
 `Weline\Acl\Api\Authorization\AccessMode`。角色查询统一使用
 `Weline\Acl\Api\Role\RoleCatalogInterface`，结果是只读 `RoleRecord`，不会暴露
 Role ORM、查询条件或可变请求状态。
+
+## 对象 Scope ACL（P1B-004）
+
+对象级授权与路由 RBAC / API `ScopeCatalogInterface` **分离**：
+
+- 动作矩阵：`ObjectAction`（list/view/create/update/delete/physical-delete/refund/fulfill/export/import/unlock/replay/reconcile/all-sites）
+- 判定服务：`ObjectAuthorizationServiceInterface`（default-deny；先动作后 Scope 交集）
+- 授权表：`weline_acl_object_scope_grant`（`ObjectScopeGrant`）
+- All Sites：独立 `is_all_sites=1` 授权，**永远只读**（list/view/export）；禁止写动作
+- 禁止 `Store=*` / `Channel=*` 通配写授权；`website_id=0` 是合法默认站
+- 提交重鉴权：`authorizeForSubmit(..., expectedGrantVersion)`；预览后撤权或版本变化必须失败
+- 超管 `role_id=1` **不**隐式获得对象写权限
+- Catalog 读：`websites.getStoreCatalogV1` / `getSalesChannelCatalogV1` 在后台会话下按对象 LIST 过滤，无权限返回空列表（不泄漏存在性）
+
+后台 Controller 与 QueryProvider 统一依赖
+`BackendObjectAuthorizationGuardInterface`。Guard 从当前后台身份解析角色：
+身份缺失、禁用或非法时一律 fail-closed；查询拒绝固定返回
+`403 object_scope_access_denied`，不得把角色、授权行或 Scope 判定原因暴露给调用方。
+读列表使用无审计的 `isAllowed()` 做投影前过滤；提交使用
+`requireForSubmit()`，并在真正持久化前校验当前授权版本。提交允许与拒绝都会写入脱敏审计，
+审计只保留动作、阶段、Scope 类型、Scope 摘要和授权版本。
+`SecurityLog` 会把底层保存结果收敛为布尔值并捕获底层 `Throwable`；审计存储异常不得把
+已经完成的拒绝判定升级为 WLS `500`，也不得改变授权决定。
+每次安全审计必须使用新的 Model 实例并显式写入 `created_at`，避免容器共享实例携带上一次
+写入状态。Payment repair 使用 `reconcile` 写动作，并对操作者与独立审批者分别执行
+`authorizeForSubmit(..., expectedGrantVersion)`；两次判定都会留下对象授权审计。
+
+```php
+use Weline\Acl\Api\Authorization\ObjectAction;
+use Weline\Acl\Api\Authorization\ObjectAuthorizationServiceInterface;
+use Weline\Framework\Runtime\ScopeIdentity;
+
+/** @var ObjectAuthorizationServiceInterface $auth */
+$ok = $auth->isObjectActionAllowed(
+    $roleId,
+    ObjectAction::UPDATE,
+    ScopeIdentity::store(0, 'default', 'default', 'normal'),
+);
+$submit = $auth->authorizeForSubmit(
+    $roleId,
+    ObjectAction::UPDATE,
+    ScopeIdentity::website(0, 'default'),
+    $expectedGrantVersion,
+);
+```
+
+非 HTTP 路由传输（例如站内 Worker QueryProvider）按 ACL `source_id` 判定时，使用
+`Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface::isSourceAllowed()`。
+该契约只做精确 source 匹配：资源必须存在、启用且属于后台；普通角色还必须有精确
+`RoleAccess.source_id`，不做父级、前缀、route 或菜单可见性推断。超级管理员也只在资源
+真实存在并启用后放行，因此 descriptor 拼错 source 会 fail-closed。不要用
+`AuthorizationServiceInterface::isRouteAllowed()` 代替它；旧 route API 对未保护路由具有白名单语义。
 
 安装期角色写入使用 `Weline\Acl\Api\Role\RoleAdministrationInterface`；依赖模块只提交
 role id、名称和说明，不得直接实例化 ACL Role Model。`RoleRecord` 同时实现
@@ -289,3 +358,7 @@ foreach ($testCases as $case) {
 - 权限数据内存缓存
 - 减少重复查询
 - 优化权限检查算法
+
+## 多资源编目
+
+详见 [multi-resource-catalog.md](./multi-resource-catalog.md)：Query/task 投影、`resource_type`、标签整包赋权、`kind=self` 例外与 compile→upgrade 命令链。

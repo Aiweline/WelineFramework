@@ -170,4 +170,30 @@ final class PixelPathExplorationServiceTest extends TestCase
         self::assertStringContainsString('Top 落地页 → 次页', $detail);
         self::assertStringContainsString('Top 路径序列', $detail);
     }
+
+    public function testBuildForWebsiteSurfacesInvalidWebsiteId(): void
+    {
+        $result = $this->service->buildForWebsite(
+            -2,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static fn(): array => []
+        );
+
+        self::assertSame('invalid website_id', $result['error']);
+    }
+
+    public function testBuildForWebsiteSwallowsQueryErrorsWithoutThrowing(): void
+    {
+        $result = $this->service->buildForWebsite(
+            3,
+            new DateTimeImmutable('2026-07-20 00:00:00'),
+            new DateTimeImmutable('2026-07-26 23:59:59'),
+            static function (): array {
+                throw new \RuntimeException('flat column missing');
+            }
+        );
+
+        self::assertSame('flat column missing', $result['error']);
+    }
 }

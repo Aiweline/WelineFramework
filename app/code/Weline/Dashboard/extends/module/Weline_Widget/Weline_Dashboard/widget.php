@@ -17,6 +17,7 @@ return [
         'default_injections' => [[
             'layout_type' => 'dashboard',
             'layout_option' => 'default',
+            'default_view' => 'default',
             'target_type' => 'website',
             'slot' => 'dashboard-summary',
             'area' => 'content',
@@ -46,6 +47,7 @@ return [
         'default_injections' => [[
             'layout_type' => 'dashboard',
             'layout_option' => 'default',
+            'default_view' => 'default',
             'target_type' => 'website',
             'slot' => 'dashboard-analysis',
             'area' => 'content',
@@ -75,6 +77,7 @@ return [
         'default_injections' => [[
             'layout_type' => 'dashboard',
             'layout_option' => 'default',
+            'default_view' => 'default',
             'target_type' => 'website',
             'slot' => 'dashboard-side',
             'area' => 'content',
@@ -104,6 +107,7 @@ return [
         'default_injections' => [[
             'layout_type' => 'dashboard',
             'layout_option' => 'default',
+            'default_view' => 'default',
             'target_type' => 'website',
             'slot' => 'dashboard-detail',
             'area' => 'content',

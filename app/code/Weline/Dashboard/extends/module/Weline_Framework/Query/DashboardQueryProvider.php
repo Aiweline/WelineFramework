@@ -226,43 +226,73 @@ class DashboardQueryProvider implements QueryProviderInterface
             'name' => __('Dashboard 报表视图'),
             'description' => __('管理后台 Dashboard 的站点范围、个人私有视图、公开视图和默认视图。'),
             'module' => 'Weline_Dashboard',
-            'operations' => [
-                ['name' => 'listWebsites', 'description' => __('列出站点'), 'frontend' => true, 'mode' => 'read', 'params' => []],
-                ['name' => 'listViews', 'description' => __('列出当前用户可见视图'), 'frontend' => true, 'mode' => 'read', 'params' => [
+            'operations' => \array_map(
+                static fn(array $operation): array => $operation + [
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Backend::dashboard',
+                    ],
+                ],
+                [
+                ['name' => 'listWebsites', 'description' => __('列出站点'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:listWebsites'], 'mode' => 'read', 'params' => []],
+                ['name' => 'listViews', 'description' => __('列出当前用户可见视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:listViews'], 'mode' => 'read', 'params' => [
                     ['name' => 'website_id', 'type' => 'int', 'required' => false],
                 ]],
-                ['name' => 'getView', 'description' => __('读取视图'), 'frontend' => true, 'mode' => 'read', 'params' => [
+                ['name' => 'getView', 'description' => __('读取视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:getView'], 'mode' => 'read', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'createView', 'description' => __('创建个人视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'createView', 'description' => __('创建个人视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:createView'], 'mode' => 'edit', 'params' => [
                     ['name' => 'website_id', 'type' => 'int', 'required' => true],
                     ['name' => 'name', 'type' => 'string', 'required' => true],
                     ['name' => 'visibility', 'type' => 'string', 'required' => false],
                 ]],
-                ['name' => 'renameView', 'description' => __('重命名视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'renameView', 'description' => __('重命名视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:renameView'], 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                     ['name' => 'name', 'type' => 'string', 'required' => true],
                 ]],
-                ['name' => 'publishView', 'description' => __('公开视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'publishView', 'description' => __('公开视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:publishView'], 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'privatizeView', 'description' => __('转为私有视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'privatizeView', 'description' => __('转为私有视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:privatizeView'], 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'duplicateView', 'description' => __('复制可见视图为我的私有视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'duplicateView', 'description' => __('复制可见视图为我的私有视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:duplicateView'], 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                     ['name' => 'name', 'type' => 'string', 'required' => false],
                 ]],
-                ['name' => 'setDefaultView', 'description' => __('设置站点默认视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'setDefaultView', 'description' => __('设置站点默认视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:setDefaultView'], 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'saveLayout', 'description' => __('保存并发布当前 Dashboard 布局'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'saveLayout', 'description' => __('保存并发布当前 Dashboard 布局'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:saveLayout'], 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-                ['name' => 'deleteView', 'description' => __('删除我的视图'), 'frontend' => true, 'mode' => 'edit', 'params' => [
+                ['name' => 'deleteView', 'description' => __('删除我的视图'), 'frontend' => true, 'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Dashboard::query:deleteView'], 'mode' => 'edit', 'params' => [
                     ['name' => 'view_id', 'type' => 'int', 'required' => true],
                 ]],
-            ],
+                ],
+            ),
         ];
     }
 }

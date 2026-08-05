@@ -24,7 +24,7 @@
     </div>
 
     <div class="dt-demo-layout">
-        <section data-testid="dt-dependency-form-wrap">
+        <section data-testid="dt-dependency-form-wrap" weline-code="datatable.test.dt_dependency_form_wrap">
             <w:d-form id="demo-dependency-form"
                       model="Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o"
                       scope="demo-dependency-flow"
@@ -94,7 +94,7 @@
             </w:d-form>
         </section>
 
-        <section data-testid="dt-dependency-table-wrap">
+        <section data-testid="dt-dependency-table-wrap" weline-code="datatable.test.dt_dependency_table_wrap">
             <w:d-table id="demo-dependency-table"
                        model="Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o"
                        join="left o on u.id = o.user_id"

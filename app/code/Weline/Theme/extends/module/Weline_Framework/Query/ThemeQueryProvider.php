@@ -758,6 +758,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         if (!str_starts_with($path, '/theme/backend/theme-editor/')
             && !str_starts_with($path, '/theme/backend/virtual-theme/')
             && !str_starts_with($path, '/theme/backend/widget/paramrender/')
+            && !str_starts_with($path, '/theme/backend/config/')
             && !str_starts_with($path, '/weline/eav/api/options')
         ) {
             return null;
@@ -826,7 +827,7 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/weline/eav/api/options' => $this->eavOptionsQuery()->queryOptions($requestParams),
                 '/weline/eav/api/options/attributes' => $this->eavOptionsQuery()->queryAttributes($requestParams),
                 '/weline/eav/api/options/entities' => $this->eavOptionsQuery()->queryEntities(),
-                default => null,
+                default => $this->dispatchThemeConfigController($path, $method, $requestParams),
             };
         } catch (\Throwable $e) {
             if (method_exists($e, 'getBody')) {
@@ -1023,6 +1024,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             '/theme/backend/theme-editor/',
             '/theme/backend/virtual-theme/',
             '/theme/backend/widget/paramrender/form',
+            '/theme/backend/config/',
             '/weline/eav/api/options',
         ] as $allowedPrefix) {
             if ($normalizedPath === $allowedPrefix || str_starts_with($normalizedPath, $allowedPrefix)) {
@@ -1031,6 +1033,45 @@ class ThemeQueryProvider implements QueryProviderInterface
         }
 
         throw new \InvalidArgumentException('Editor request path is not allowed.');
+    }
+
+    /**
+     * @param array<string, mixed> $requestParams
+     */
+    private function dispatchThemeConfigController(string $path, string $method, array $requestParams): mixed
+    {
+        if (!preg_match('#^/theme/backend/config/([a-z0-9_-]+)/([a-zA-Z0-9_-]+)$#', $path, $matches)) {
+            return null;
+        }
+
+        $controllerSegment = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $matches[1])));
+        $actionSegment = $matches[2];
+        $class = 'Weline\\Theme\\Controller\\Backend\\Config\\' . $controllerSegment;
+        if (!class_exists($class)) {
+            return null;
+        }
+
+        $candidates = [$actionSegment];
+        $normalized = str_replace('-', '', $actionSegment);
+        $candidates[] = $normalized;
+        $candidates[] = 'get' . ucfirst($normalized);
+        $candidates[] = 'post' . ucfirst($normalized);
+        if (strtoupper($method) === 'POST') {
+            array_unshift($candidates, 'post' . ucfirst($normalized));
+        } else {
+            array_unshift($candidates, 'get' . ucfirst($normalized));
+        }
+
+        $controller = ObjectManager::getInstance($class);
+        $this->injectRequestIntoController($controller);
+        foreach (array_unique($candidates) as $candidate) {
+            if (!method_exists($controller, $candidate)) {
+                continue;
+            }
+            return $controller->{$candidate}();
+        }
+
+        return null;
     }
 
     private function normalizeEditorRequestPath(string $path): string
@@ -1143,6 +1184,8 @@ class ThemeQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'scanThemeLayoutsByType',
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Theme::theme_visual_editor'],
                     'mode' => 'read',
                     'graph' => true,
                     'description' => __('扫描当前主题中指定类型的布局选项'),
@@ -1154,6 +1197,8 @@ class ThemeQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'listVirtualLayoutOptions',
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Theme::theme_visual_editor'],
                     'mode' => 'read',
                     'graph' => true,
                     'description' => __('列出 Theme 虚拟布局选项'),
@@ -1349,6 +1394,8 @@ class ThemeQueryProvider implements QueryProviderInterface
                     'name' => 'editorRequest',
                     'description' => __('Theme editor signed backend request bridge'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Theme::theme_visual_editor'],
                     'mode' => 'write',
                     'params' => [
                         ['name' => 'url', 'type' => 'string', 'required' => true, 'max_length' => 2048],
@@ -1361,6 +1408,8 @@ class ThemeQueryProvider implements QueryProviderInterface
                     'name' => 'setBackendThemeMode',
                     'description' => __('同步后台亮色/暗色模式'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'self'],
                     'mode' => 'write',
                     'params' => [
                         ['name' => 'mode', 'type' => 'string', 'required' => true, 'description' => __('light 或 dark')],
@@ -1372,6 +1421,8 @@ class ThemeQueryProvider implements QueryProviderInterface
                     'name' => 'activateTheme',
                     'description' => __('按区域激活主题'),
                     'frontend' => true,
+                    'auth' => 'backend',
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Theme::theme_list'],
                     'mode' => 'write',
                     'params' => [
                         ['name' => 'theme_id', 'type' => 'int', 'required' => true],

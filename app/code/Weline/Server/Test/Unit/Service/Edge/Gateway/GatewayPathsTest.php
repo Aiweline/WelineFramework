@@ -89,6 +89,35 @@ final class GatewayPathsTest extends TestCase
         }
     }
 
+    public function testFilesystemRootsCannotBecomeTheHostGatewayHome(): void
+    {
+        \putenv('WLS_GATEWAY_TEST_MODE=1');
+        \putenv('WLS_GATEWAY_LISTEN_HTTP=21080');
+        \putenv('WLS_GATEWAY_LISTEN_HTTPS=21443');
+        foreach ([
+            '/',
+            'C:\\',
+            "\\\\server\\",
+            "\\\\server\\share\\",
+            "\\\\?\\C:\\",
+            "\\\\?\\UNC\\server\\share\\",
+            "\\\\?\\UNC\\server\\",
+            "\\\\.\\C:\\",
+            "\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\",
+        ] as $filesystemRoot) {
+            \putenv('WLS_GATEWAY_HOME=' . $filesystemRoot);
+            try {
+                (new GatewayPaths())->home();
+                self::fail('A filesystem root must not become the gateway home.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    'filesystem root',
+                    \strtolower($exception->getMessage()),
+                );
+            }
+        }
+    }
+
     private function removeTree(string $root): void
     {
         if (!\is_dir($root) || \is_link($root)) {

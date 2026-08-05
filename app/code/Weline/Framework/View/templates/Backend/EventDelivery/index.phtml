@@ -1,0 +1,332 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$currentWebsiteId = isset($current_website_id) ? (int)$current_website_id : null;
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<style>
+    .event-delivery-shell {
+        --ed-border: color-mix(in srgb, currentColor 18%, transparent);
+        --ed-muted: color-mix(in srgb, currentColor 66%, transparent);
+        --ed-danger: #c92a2a;
+        --ed-danger-soft: color-mix(in srgb, var(--ed-danger) 10%, transparent);
+    }
+    .event-delivery-shell .ed-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .event-delivery-shell .ed-metric {
+        border: 1px solid var(--ed-border);
+        border-radius: .75rem;
+        padding: 1rem;
+        background: var(--bs-card-bg, var(--bs-body-bg, #fff));
+    }
+    .event-delivery-shell .ed-metric-label {
+        color: var(--ed-muted);
+        font-size: .78rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .event-delivery-shell .ed-metric-value {
+        display: block;
+        margin-top: .25rem;
+        font-size: 1.35rem;
+        font-weight: 750;
+        overflow-wrap: anywhere;
+    }
+    .event-delivery-shell .ed-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(10rem, 1fr) minmax(9rem, .8fr) minmax(9rem, .8fr) auto;
+        gap: .75rem;
+        align-items: end;
+    }
+    .event-delivery-shell .ed-status {
+        border-left: .25rem solid currentColor;
+        border-radius: .35rem;
+        margin: 1rem 0;
+        padding: .75rem 1rem;
+    }
+    .event-delivery-shell .ed-status[data-kind="error"] { color: var(--ed-danger); background: var(--ed-danger-soft); }
+    .event-delivery-shell .ed-status[data-kind="success"] { color: #198754; background: color-mix(in srgb, #198754 10%, transparent); }
+    .event-delivery-shell .ed-status[data-kind="loading"] { color: #0d6efd; background: color-mix(in srgb, #0d6efd 9%, transparent); }
+    .event-delivery-shell .ed-status[hidden],
+    .event-delivery-shell .ed-empty[hidden] { display: none !important; }
+    .event-delivery-shell .ed-table td,
+    .event-delivery-shell .ed-table th { vertical-align: middle; }
+    .event-delivery-shell .ed-code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: .82rem;
+        overflow-wrap: anywhere;
+    }
+    .event-delivery-shell .ed-badge {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 700;
+        padding: .2rem .55rem;
+    }
+    .event-delivery-shell .ed-badge[data-status="dead"] { color: var(--ed-danger); }
+    .event-delivery-shell .ed-badge[data-status="succeeded"] { color: #198754; }
+    .event-delivery-shell .ed-badge[data-status="running"],
+    .event-delivery-shell .ed-badge[data-status="queued"] { color: #0d6efd; }
+    .event-delivery-shell .ed-empty {
+        color: var(--ed-muted);
+        padding: 3rem 1rem;
+        text-align: center;
+    }
+    .event-delivery-shell .ed-pagination {
+        align-items: center;
+        display: flex;
+        gap: .5rem;
+        justify-content: flex-end;
+        margin-top: 1rem;
+    }
+    .ed-modal[hidden] { display: none !important; }
+    .ed-modal {
+        align-items: center;
+        background: rgba(0, 0, 0, .5);
+        display: flex;
+        inset: 0;
+        justify-content: center;
+        padding: 1rem;
+        position: fixed;
+        z-index: 1060;
+    }
+    .ed-modal-panel {
+        background: var(--bs-body-bg, #fff);
+        border-radius: .85rem;
+        box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, .28);
+        max-height: calc(100vh - 2rem);
+        max-width: 64rem;
+        overflow: auto;
+        padding: 1.25rem;
+        width: 100%;
+    }
+    .ed-modal-header {
+        align-items: center;
+        border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+        padding-bottom: .85rem;
+    }
+    .ed-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem 1.25rem;
+    }
+    .ed-detail-grid dt { color: color-mix(in srgb, currentColor 66%, transparent); font-size: .78rem; }
+    .ed-detail-grid dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
+    .ed-payload {
+        background: color-mix(in srgb, currentColor 5%, transparent);
+        border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+        border-radius: .5rem;
+        max-height: 20rem;
+        overflow: auto;
+        padding: .85rem;
+        white-space: pre-wrap;
+    }
+    .ed-replay-box {
+        background: color-mix(in srgb, #fd7e14 9%, transparent);
+        border: 1px solid color-mix(in srgb, #fd7e14 42%, transparent);
+        border-radius: .65rem;
+        margin-top: 1rem;
+        padding: 1rem;
+    }
+    @media (max-width: 900px) {
+        .event-delivery-shell .ed-summary,
+        .event-delivery-shell .ed-detail-grid { grid-template-columns: 1fr; }
+        .event-delivery-shell .ed-filter-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 560px) {
+        .event-delivery-shell .ed-filter-grid { grid-template-columns: 1fr; }
+        .event-delivery-shell .ed-pagination { justify-content: stretch; }
+        .event-delivery-shell .ed-pagination .btn { flex: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .event-delivery-shell *, .ed-modal * { scroll-behavior: auto !important; transition: none !important; }
+    }
+</style>
+
+<div class="event-delivery-shell" id="event-delivery-app"
+     data-provider="async_event_delivery"
+     data-current-website-id="<?= $currentWebsiteId === null ? '' : $escape($currentWebsiteId) ?>"
+     data-text-loading="<?= $escape(__('正在读取 Delivery…')) ?>"
+     data-text-load-error="<?= $escape(__('Delivery 读取失败，请稍后重试。')) ?>"
+     data-text-empty="<?= $escape(__('当前筛选范围内没有 Delivery。')) ?>"
+     data-text-detail-error="<?= $escape(__('Delivery 详情读取失败。')) ?>"
+     data-text-replay-error="<?= $escape(__('重放请求失败，原 dead 记录未被修改。')) ?>"
+     data-text-replay-success="<?= $escape(__('已创建新的重放 Outbox；原 dead 记录保持不变。')) ?>"
+     data-text-replay-loading="<?= $escape(__('正在创建新的重放 Outbox…')) ?>"
+     data-text-invalid-reason="<?= $escape(__('请输入 1–500 字节的重放原因。')) ?>"
+     data-text-invalid-website="<?= $escape(__('网站 ID 必须是非负整数。')) ?>"
+     data-text-view-detail="<?= $escape(__('查看详情')) ?>"
+     data-text-page="<?= $escape(__('第 %{1} / %{2} 页', ['%{1}', '%{2}'])) ?>"
+     data-text-total="<?= $escape(__('共 %{1} 条', ['%{1}'])) ?>"
+     data-text-current-website="<?= $escape(__('当前网站 #%{1}', ['%{1}'])) ?>"
+     data-text-all-websites="<?= $escape(__('全部已授权网站')) ?>"
+     data-text-reason-bytes="<?= $escape(__('已输入 %{1} / 500 字节', ['%{1}'])) ?>"
+     data-text-status-dead="<?= $escape(__('死信')) ?>"
+     data-text-status-pending="<?= $escape(__('待处理')) ?>"
+     data-text-status-provisioning="<?= $escape(__('建件中')) ?>"
+     data-text-status-queued="<?= $escape(__('已入队')) ?>"
+     data-text-status-running="<?= $escape(__('执行中')) ?>"
+     data-text-status-retry-wait="<?= $escape(__('等待重试')) ?>"
+     data-text-status-succeeded="<?= $escape(__('已成功')) ?>"
+     data-text-status-superseded="<?= $escape(__('已被替代')) ?>"
+     data-text-status-skipped="<?= $escape(__('已跳过')) ?>"
+     data-label-delivery-id="<?= $escape(__('Delivery ID')) ?>"
+     data-label-outbox-id="<?= $escape(__('Outbox ID')) ?>"
+     data-label-event-name="<?= $escape(__('事件名称')) ?>"
+     data-label-event-id="<?= $escape(__('事件 ID')) ?>"
+     data-label-observer="<?= $escape(__('Observer')) ?>"
+     data-label-website="<?= $escape(__('网站')) ?>"
+     data-label-resource="<?= $escape(__('资源')) ?>"
+     data-label-status="<?= $escape(__('状态')) ?>"
+     data-label-attempt="<?= $escape(__('尝试次数')) ?>"
+     data-label-transport="<?= $escape(__('Transport')) ?>"
+     data-label-queue="<?= $escape(__('Queue ID')) ?>"
+     data-label-error-code="<?= $escape(__('错误码')) ?>"
+     data-label-error="<?= $escape(__('错误摘要（已转义）')) ?>"
+     data-label-terminal-reason="<?= $escape(__('终态原因')) ?>"
+     data-label-replay-of="<?= $escape(__('重放源 Delivery')) ?>"
+     data-label-replay-by="<?= $escape(__('重放发起人')) ?>"
+     data-label-replay-at="<?= $escape(__('重放发起时间')) ?>"
+     data-label-created-at="<?= $escape(__('创建时间')) ?>"
+     data-label-updated-at="<?= $escape(__('更新时间')) ?>"
+     data-label-finished-at="<?= $escape(__('结束时间')) ?>">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-1 font-size-18"><lang>异步事件死信运维</lang></h4>
+                    <p class="text-muted mb-0"><lang>按网站范围查看脱敏投递记录，并以新事件安全重放死信。</lang></p>
+                </div>
+                <button type="button" class="btn btn-outline-primary" id="ed-refresh">
+                    <i class="mdi mdi-refresh me-1" aria-hidden="true"></i><lang>刷新</lang>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ed-summary" aria-label="<?= $escape(__('Delivery 摘要')) ?>">
+        <div class="ed-metric">
+            <span class="ed-metric-label"><lang>当前筛选总数</lang></span>
+            <strong class="ed-metric-value" id="ed-total">—</strong>
+        </div>
+        <div class="ed-metric">
+            <span class="ed-metric-label"><lang>网站范围</lang></span>
+            <strong class="ed-metric-value" id="ed-scope-label">—</strong>
+        </div>
+        <div class="ed-metric">
+            <span class="ed-metric-label"><lang>当前状态</lang></span>
+            <strong class="ed-metric-value" id="ed-status-label">—</strong>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="ed-filter-grid">
+                <div>
+                    <label class="form-label" for="ed-status"><lang>投递状态</lang></label>
+                    <select class="form-select" id="ed-status">
+                        <option value="dead"><lang>死信</lang></option>
+                        <option value="pending"><lang>待处理</lang></option>
+                        <option value="provisioning"><lang>建件中</lang></option>
+                        <option value="queued"><lang>已入队</lang></option>
+                        <option value="running"><lang>执行中</lang></option>
+                        <option value="retry_wait"><lang>等待重试</lang></option>
+                        <option value="succeeded"><lang>已成功</lang></option>
+                        <option value="superseded"><lang>已被替代</lang></option>
+                        <option value="skipped"><lang>已跳过</lang></option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="ed-scope"><lang>查询范围</lang></label>
+                    <select class="form-select" id="ed-scope">
+                        <option value="current"><lang>当前网站</lang></option>
+                        <option value="all" disabled><lang>全部网站（需要单独权限）</lang></option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="ed-website"><lang>网站 ID</lang></label>
+                    <input class="form-control" id="ed-website" type="number" min="0" step="1"
+                           value="<?= $currentWebsiteId === null ? '' : $escape($currentWebsiteId) ?>">
+                </div>
+                <button type="button" class="btn btn-primary" id="ed-apply">
+                    <i class="mdi mdi-filter-outline me-1" aria-hidden="true"></i><lang>应用筛选</lang>
+                </button>
+            </div>
+
+            <div class="ed-status" id="ed-message" role="status" aria-live="polite" hidden></div>
+
+            <div class="table-responsive" id="ed-table-wrap">
+                <table class="table table-hover align-middle ed-table mb-0">
+                    <thead class="table-light">
+                    <tr>
+                        <th scope="col"><lang>Delivery</lang></th>
+                        <th scope="col"><lang>网站</lang></th>
+                        <th scope="col"><lang>资源</lang></th>
+                        <th scope="col"><lang>Observer</lang></th>
+                        <th scope="col"><lang>状态 / 原因</lang></th>
+                        <th scope="col"><lang>更新时间</lang></th>
+                        <th scope="col" class="text-end"><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody id="ed-rows"></tbody>
+                </table>
+            </div>
+            <div class="ed-empty" id="ed-empty" hidden>
+                <i class="mdi mdi-email-check-outline d-block mb-2" style="font-size:2.5rem" aria-hidden="true"></i>
+                <span><lang>当前筛选范围内没有 Delivery。</lang></span>
+            </div>
+            <div class="ed-pagination">
+                <button type="button" class="btn btn-outline-secondary" id="ed-prev"><lang>上一页</lang></button>
+                <span id="ed-page-label" aria-live="polite">—</span>
+                <button type="button" class="btn btn-outline-secondary" id="ed-next"><lang>下一页</lang></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="ed-modal" id="ed-detail-modal" role="dialog" aria-modal="true"
+     aria-labelledby="ed-detail-title" hidden>
+    <div class="ed-modal-panel" tabindex="-1">
+        <div class="ed-modal-header">
+            <div>
+                <h5 id="ed-detail-title" class="mb-1"><lang>Delivery 详情</lang></h5>
+                <div class="text-muted ed-code" id="ed-detail-subtitle"></div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-ed-close>
+                <span aria-hidden="true">×</span><span class="visually-hidden"><lang>关闭</lang></span>
+            </button>
+        </div>
+        <div class="ed-status" id="ed-detail-message" role="status" aria-live="polite" hidden></div>
+        <dl class="ed-detail-grid" id="ed-detail-fields"></dl>
+        <h6 class="mt-4"><lang>脱敏 Payload</lang></h6>
+        <pre class="ed-payload ed-code" id="ed-payload"></pre>
+        <div class="ed-replay-box" id="ed-replay-box" hidden>
+            <h6><lang>创建一次安全重放</lang></h6>
+            <p class="mb-2"><lang>系统将创建全新的 event_id 与 Outbox，目标仅为原 Observer；原 dead 记录不会改变。</lang></p>
+            <label class="form-label" for="ed-replay-reason"><lang>重放原因</lang></label>
+            <textarea class="form-control" id="ed-replay-reason" rows="3" maxlength="500"
+                      placeholder="<?= $escape(__('请输入可审计的重放原因（必填）')) ?>"></textarea>
+            <div class="d-flex align-items-center justify-content-between mt-2 gap-2">
+                <small class="text-muted" id="ed-reason-count"><?= $escape(__('已输入 0 / 500 字节')) ?></small>
+                <button type="button" class="btn btn-danger" id="ed-replay" disabled>
+                    <i class="mdi mdi-replay me-1" aria-hidden="true"></i><lang>创建新重放</lang>
+                </button>
+            </div>
+        </div>
+        <div class="d-flex justify-content-end mt-3">
+            <button type="button" class="btn btn-secondary" data-ed-close><lang>关闭</lang></button>
+        </div>
+    </div>
+</div>
+
+<script src="@static(Weline_Framework::js/event-delivery.js)?v=20260722-r5" defer></script>

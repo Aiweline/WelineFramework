@@ -67,4 +67,87 @@ final class SchedulerSystemTest extends TestCase
         $this->assertGreaterThanOrEqual(8, $elapsed);
         $this->assertLessThan(50, $elapsed);
     }
+
+    public function testNestedSchedulerCanYieldCurrentFiberToSuppressedParent(): void
+    {
+        $parentWaits = [];
+        SchedulerSystem::enableScheduler();
+        SchedulerSystem::setWaitDispatcher(
+            static function (string $type, array $params) use (&$parentWaits): void {
+                $parentWaits[] = ['type' => $type, 'fiber' => $params['fiber'] ?? null];
+            }
+        );
+
+        $restoreParent = SchedulerSystem::suppressGlobalSchedulerMomentarily();
+        SchedulerSystem::enableScheduler();
+        SchedulerSystem::setWaitDispatcher(static function (): void {
+        });
+
+        $yielded = null;
+        $fiber = new \Fiber(static function () use (&$yielded): void {
+            $yielded = SchedulerSystem::yieldToSuppressedScheduler();
+        });
+        $fiber->start();
+
+        self::assertTrue($fiber->isSuspended());
+        self::assertSame('yield', $parentWaits[0]['type'] ?? null);
+        self::assertSame($fiber, $parentWaits[0]['fiber'] ?? null);
+
+        $fiber->resume();
+        self::assertTrue($fiber->isTerminated());
+        self::assertTrue($yielded);
+
+        SchedulerSystem::disableScheduler();
+        $restoreParent();
+        self::assertTrue(SchedulerSystem::isSchedulerActive());
+    }
+
+    public function testGenericYieldUsesFrameOwnedByCurrentFiberAfterNestedFiberReturnsControl(): void
+    {
+        $workerWaits = [];
+        $nestedWaits = [];
+        SchedulerSystem::enableScheduler();
+        SchedulerSystem::setWaitDispatcher(
+            static function (string $type, array $params) use (&$workerWaits): void {
+                $workerWaits[] = ['type' => $type, 'fiber' => $params['fiber'] ?? null];
+            }
+        );
+
+        $requestFiber = new \Fiber(static function () use (&$nestedWaits): void {
+            $restoreWorker = SchedulerSystem::suppressGlobalSchedulerMomentarily();
+            SchedulerSystem::enableScheduler();
+            SchedulerSystem::setWaitDispatcher(static function (): void {
+            });
+
+            $nestedFiber = new \Fiber(static function () use (&$nestedWaits): void {
+                $restoreRequest = SchedulerSystem::suppressGlobalSchedulerMomentarily();
+                SchedulerSystem::enableScheduler();
+                SchedulerSystem::setWaitDispatcher(
+                    static function (string $type, array $params) use (&$nestedWaits): void {
+                        $nestedWaits[] = ['type' => $type, 'fiber' => $params['fiber'] ?? null];
+                    }
+                );
+                \Fiber::suspend();
+                SchedulerSystem::disableScheduler();
+                $restoreRequest();
+            });
+            $nestedFiber->start();
+
+            SchedulerSystem::yield();
+
+            $nestedFiber->resume();
+            SchedulerSystem::disableScheduler();
+            $restoreWorker();
+        });
+        $requestFiber->start();
+
+        self::assertTrue($requestFiber->isSuspended());
+        self::assertSame('yield', $workerWaits[0]['type'] ?? null);
+        self::assertSame($requestFiber, $workerWaits[0]['fiber'] ?? null);
+        self::assertSame([], $nestedWaits);
+
+        $requestFiber->resume();
+        self::assertTrue($requestFiber->isTerminated());
+        self::assertTrue(SchedulerSystem::isSchedulerActive());
+    }
 }

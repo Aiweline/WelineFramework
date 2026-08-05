@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Form\FormRenderer;
 use Weline\Widget\Api\Param\ParamFormRendererInterface;
 use Weline\Widget\Ui\ParamType\ArrayType;
 use Weline\Widget\Ui\ParamType\BoolType;
@@ -131,14 +132,17 @@ class ParamTypeRenderer implements ParamFormRendererInterface
                 </div>
             ';
         }
-        return '
-            <form class="w-param-form" data-layout-id="' . htmlspecialchars((string)$layoutId) . '" data-auto-save="1">
+        return FormRenderer::open([
+                'class' => 'w-param-form',
+                'data-layout-id' => (string)$layoutId,
+                'data-auto-save' => '1',
+                'intent' => 'widget.parameters',
+            ]) . '
                 ' . $groupsHtml . '
                 <div class="w-param-actions">
                     <button type="button" class="w-param-btn w-param-btn-outline-danger w-param-btn-delete-widget" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>
                 </div>
-            </form>
-        ';
+            ' . FormRenderer::close();
     }
 
     private function renderFormWithOptions(int|string $layoutId, array $params, array $config, array $options): string
@@ -175,12 +179,15 @@ class ParamTypeRenderer implements ParamFormRendererInterface
 
         $actionsBlock = $actionsHtml !== '' ? '<div class="w-param-actions">' . $actionsHtml . '</div>' : '';
 
-        return '
-            <form class="' . htmlspecialchars($formClass) . '" data-layout-id="' . htmlspecialchars((string)$layoutId) . '" data-auto-save="' . ($autoSave ? '1' : '0') . '">
+        return FormRenderer::open([
+                'class' => $formClass,
+                'data-layout-id' => (string)$layoutId,
+                'data-auto-save' => $autoSave ? '1' : '0',
+                'intent' => 'widget.parameters',
+            ]) . '
                 ' . $groupsHtml . '
                 ' . $actionsBlock . '
-            </form>
-        ';
+            ' . FormRenderer::close();
     }
 
     private function groupFields(array $params): array

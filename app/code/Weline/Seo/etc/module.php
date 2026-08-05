@@ -2,11 +2,13 @@
 
 return [
     "name" => 'Weline_Seo',
-    "version" => '1.1.0',
+    "version" => '1.2.4',
     "requires" => [
         'Weline_Ai' => '*',
         'Weline_Backend' => '*',
         'Weline_UrlManager' => '*',
+        'Weline_I18n' => '*',
+        'Weline_Queue' => '*',
     ],
     "optional" => [
         'Weline_Websites' => '*',

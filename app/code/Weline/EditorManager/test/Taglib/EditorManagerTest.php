@@ -5,7 +5,7 @@ namespace Weline\EditorManager\test\Taglib;
 use Weline\EditorManager\Taglib\EditorManager;
 use Weline\EditorManager\test\NoReturn;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class EditorManagerTest extends TestCore
 {

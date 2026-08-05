@@ -59,4 +59,53 @@ final class EdgeRuntimeDecisionTest extends TestCase
             reason: 'Unavailable.',
         );
     }
+
+    public function testLegacySchemaFourLeaseMustBeReallocated(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('public port lease is invalid');
+
+        new EdgeRuntimeDecision(
+            adapter: EdgeAdapterInterface::NAME_WLS,
+            requestedMode: GatewayStartupDecision::MODE_AUTO,
+            mode: GatewayStartupDecision::MODE_WLS,
+            scope: EdgeRuntimeDecision::SCOPE_PROJECT,
+            source: 'test',
+            reason: 'Gateway unavailable.',
+            fallbackReason: 'PORT_TAKEN',
+            fallbackPort: 24567,
+            portLease: [
+                'schema_version' => 4,
+                'port' => 24567,
+                'state' => 'RESERVED',
+                'lease_id' => \str_repeat('a', 32),
+                'instance' => 'default',
+                'bind_host' => '127.0.0.1',
+            ],
+        );
+    }
+
+    public function testStartupRequiresTrustedControlButCanReplayWhileDataPlaneRecovers(): void
+    {
+        $method = new \ReflectionMethod(
+            GatewayStartupDecision::class,
+            'shouldJoinTrustedGateway',
+        );
+
+        self::assertTrue($method->invoke(
+            null,
+            GatewayStartupDecision::MODE_AUTO,
+            true,
+        ));
+        self::assertTrue($method->invoke(
+            null,
+            GatewayStartupDecision::MODE_GATEWAY,
+            true,
+        ));
+        self::assertFalse($method->invoke(
+            null,
+            GatewayStartupDecision::MODE_AUTO,
+            false,
+        ));
+    }
 }

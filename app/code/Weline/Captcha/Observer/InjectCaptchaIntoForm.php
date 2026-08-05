@@ -20,7 +20,7 @@ final class InjectCaptchaIntoForm implements ObserverInterface
         if (!\is_array($attributes)) {
             return;
         }
-        $mode = (string)($attributes['captcha'] ?? 'auto');
+        $mode = (string)($attributes['captcha'] ?? 'off');
         if ($mode === 'off' || ($mode === 'auto' && (string)($attributes['method'] ?? '') !== 'post')) {
             return;
         }

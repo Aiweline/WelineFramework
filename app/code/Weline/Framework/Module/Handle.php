@@ -40,7 +40,7 @@ class Handle implements HandleInterface, RegisterInterface
      * @var bool
      */
     private static bool $deferRegistryUpdate = false;
-    
+
     /**
      * 设置是否延迟注册表更新
      * 在系统升级开始时调用 setDeferRegistryUpdate(true)
@@ -204,11 +204,9 @@ class Handle implements HandleInterface, RegisterInterface
      */
     public function register(string $type, string $module_name, array|string $param, string $version = '', string $description = '', array $dependencies = []): mixed
     {
-        // 重新加载模块列表，确保获取最新的模块状态（特别是在重装场景下）
-        // 优化：在延迟模式下（批量升级时），使用缓存的模块列表，避免重复文件IO
-        // 遵循SOLID原则：通过状态标志控制行为，减少不必要的IO操作
-        $forceReload = !self::$deferRegistryUpdate;
-        $this->modules = Env::getInstance()->getModuleList($forceReload);
+        // 每次注册都读取刚落盘的模块列表。注册安装器可能跨事件作用域取得不同
+        // Handle 实例；依赖实例内存会让后序模块用旧快照覆盖前序版本。
+        $this->modules = Env::getInstance()->getModuleList(true);
         
         // 检测依赖
         foreach ($dependencies as $dependency) {
@@ -294,13 +292,22 @@ class Handle implements HandleInterface, RegisterInterface
                 $module->setStatus(false);
                 $this->printer->warning(str_pad($module->getName(), 45) . __('已禁用！'));
             } else {
-                $old_version = $this->modules[$module->getName()]['version'] ?? '1.0.0';
-                $module['upgrading'] = $this->helper->isUpgrade($old_version, $module->getVersion());
+                $oldEntry = $this->modules[$module->getName()] ?? [];
+                $old_version = (string)($oldEntry['version'] ?? '1.0.0');
+                // setup_version：上次脚本成功完成的版本；缺省时回退为旧 version（历史兼容）
+                $setup_version = (string)($oldEntry['setup_version'] ?? $old_version);
+                $needsUpgrade = $this->helper->isUpgrade($setup_version, $module->getVersion())
+                    || $this->helper->isUpgrade($old_version, $module->getVersion());
+                $module['upgrading'] = $needsUpgrade;
+                $module['setup_version'] = $setup_version;
+                if ($needsUpgrade) {
+                    $module['pending_setup_upgrade'] = true;
+                }
                 $this->setupModel($module);
             }
         } else {
             $this->printer->setup(__("扩展%{1}安装中...", $module->getName()));
-            // 全新安装
+            // 全新安装：setup_version 待 Install 成功后再推进
             $module->setStatus(true);
             $module['installing'] = true;
             $this->modules[$module->getName()] = $module->getData();
@@ -423,23 +430,31 @@ class Handle implements HandleInterface, RegisterInterface
         if (isset($module['upgrading']) and $module['upgrading']) {
             // 是否更新模块：是则加载模块下的Setup模块下的文件进行更新
             $old_version = $this->old_modules[$module->getName()]['version'] ?? '1.0.0';
-            if ($this->helper->isUpgrade($old_version, $module->getVersion())) {
-                $this->printer->note(__('扩展 %{1} 升级中...', $module->getName()));
-                $this->printer->setup(__('升级 %{1} 到 %{2}', [$old_version, $module->getVersion()]));
+            $from_setup = (string)($this->modules[$module->getName()]['setup_version']
+                ?? $this->old_modules[$module->getName()]['setup_version']
+                ?? $old_version);
+            if ($this->helper->isUpgrade($from_setup, $module->getVersion())
+                || $this->helper->isUpgrade($old_version, $module->getVersion())) {
+                $this->printer->note(__('扩展 %{1} 升级中...', [$module->getName()]));
+                $this->printer->setup(__('升级 %{1} 到 %{2}', [$from_setup, $module->getVersion()]));
 
                 foreach (\Weline\Framework\Setup\Data\DataInterface::upgrade_FILES as $upgrade_FILE) {
                     $setup_file = $setup_dir . DS . $upgrade_FILE . '.php';
                     if (file_exists($setup_file)) {
                         $setup = ObjectManager::getInstance($setup_namespace . $upgrade_FILE);
-                        $this->setup_data->setModuleContext($this->setup_context);
-                        $result = $setup->setup($this->setup_data, $this->setup_context);
+                        $this->setup_data->setModuleContext($setup_context);
+                        $result = $setup->setup($this->setup_data, $setup_context);
                         $this->printer->note("{$result}");
                     }
                 }
             }
             // Phase 7：不再调用 ModelManager::update(setup/upgrade)，表结构由 SchemaDiffStage、业务初始化由 Setup/Upgrade.php 负责
             $module->unsetData('upgrading');
+            $module->unsetData('pending_setup_upgrade');
+            $module['setup_version'] = $module->getVersion();
             $this->modules[$module->getName()] = $module->getData();
+            unset($this->modules[$module->getName()]['upgrading'], $this->modules[$module->getName()]['pending_setup_upgrade']);
+            $this->modules[$module->getName()]['setup_version'] = $module->getVersion();
             $this->printer->success(str_pad($module->getName(), 45) . __('已更新！'));
         }
         # 安装
@@ -462,6 +477,19 @@ class Handle implements HandleInterface, RegisterInterface
             // Phase 7：不再调用 ModelManager::update(install)，表结构由 SchemaDiffStage、业务初始化由 Setup/Install.php 负责
             $this->printer->success(str_pad($module->getName(), 45) . __('已安装！'));
             $module->unsetData('installing');
+            $module['setup_version'] = $module->getVersion();
+            // setupInstall() reloads the persisted module list into this array
+            // before running Install.php. Clear the same successful-install flag
+            // from that write source, otherwise updateModules() below restores
+            // installing=true and the next setup run executes Install.php again.
+            unset($this->modules[$module->getName()]['installing']);
+            $this->modules[$module->getName()]['setup_version'] = $module->getVersion();
+            $this->modules[$module->getName()] = array_merge(
+                $this->modules[$module->getName()] ?? [],
+                $module->getData()
+            );
+            unset($this->modules[$module->getName()]['installing']);
+            $this->modules[$module->getName()]['setup_version'] = $module->getVersion();
         } elseif (defined('DEV') && DEV && isset($module['dev_force_run_install']) && $module['dev_force_run_install']) {
             // 开发环境：强制执行 Install.php 的 setup()，不修改模块状态，使 Setup 内初始化/种子数据可被更新
             $this->printer->setup(__('开发环境：重跑安装脚本 %{1}...', [$module->getName()]));
@@ -498,10 +526,15 @@ class Handle implements HandleInterface, RegisterInterface
             'module_version' => $module->getVersion(),
             'module_description' => $module->getDescription()
         ], '__construct');
+        $this->modules = Env::getInstance()->getModuleList();
+        $from_setup = (string)($this->modules[$module->getName()]['setup_version']
+            ?? $this->old_modules[$module->getName()]['setup_version']
+            ?? $this->old_modules[$module->getName()]['version']
+            ?? '1.0.0');
         $setup_dir = $module->getBasePath() . \Weline\Framework\Setup\Data\DataInterface::dir;
         $setup_namespace = $module->getNamespacePath() . '\\' . ucfirst(\Weline\Framework\Setup\Data\DataInterface::dir) . '\\';
         if (is_dir($setup_dir) && DEV) {
-            $this->printer->setup(__('升级 %{1} 到 %{2}', [$module->getVersion(), $module->getVersion()]));
+            $this->printer->setup(__('升级 %{1} 到 %{2}', [$from_setup, $module->getVersion()]));
         }
         foreach (\Weline\Framework\Setup\Data\DataInterface::upgrade_FILES as $upgrade_FILE) {
             $setup_file = $setup_dir . DS . $upgrade_FILE . '.php';
@@ -512,6 +545,19 @@ class Handle implements HandleInterface, RegisterInterface
                 $this->printer->note(__("{$result}"));
             }
         }
+        // 脚本成功后推进 setup_version，并清除 upgrading 标志（不得依赖下次 register）
+        $module->unsetData('upgrading');
+        $module->unsetData('pending_setup_upgrade');
+        $module['setup_version'] = $module->getVersion();
+        if (!isset($this->modules[$module->getName()]) || !is_array($this->modules[$module->getName()])) {
+            $this->modules[$module->getName()] = $module->getData();
+        } else {
+            $this->modules[$module->getName()] = array_merge($this->modules[$module->getName()], $module->getData());
+        }
+        unset($this->modules[$module->getName()]['upgrading'], $this->modules[$module->getName()]['pending_setup_upgrade']);
+        $this->modules[$module->getName()]['setup_version'] = $module->getVersion();
+        $this->modules[$module->getName()]['version'] = $module->getVersion();
+        $this->helper->updateModules($this->modules);
         return $module;
     }
 

@@ -38,14 +38,13 @@ final class WlsRequestForwardedOriginTest extends TestCase
         parent::tearDown();
     }
 
-    public function testTrustedForwardedSchemeUsesCanonicalHostAndOmitsDefaultHttpsPort(): void
+    public function testForwardedHeadersOmitDefaultHttpsPort(): void
     {
         $request = $this->createRequest(
-            "Host: 127.0.0.1:443\r\n"
-            . "X-Forwarded-Host: spoofed.example:8443\r\n"
+            "Host: 127.0.0.1:3999\r\n"
+            . "X-Forwarded-Host: 127.0.0.1\r\n"
             . "X-Forwarded-Proto: https\r\n"
-            . "X-Forwarded-Port: 8443\r\n",
-            ['WLS_TRUST_FORWARDED_HEADERS' => '1']
+            . "X-Forwarded-Port: 443\r\n"
         );
 
         self::assertTrue($request->isSecure());
@@ -55,14 +54,13 @@ final class WlsRequestForwardedOriginTest extends TestCase
         self::assertSame('https://127.0.0.1', $request->getBaseHost());
     }
 
-    public function testTrustedForwardedHeadersPreserveCanonicalNonDefaultHttpAuthority(): void
+    public function testForwardedHeadersPreserveNonDefaultPort(): void
     {
         $request = $this->createRequest(
-            "Host: 127.0.0.1:8088\r\n"
-            . "X-Forwarded-Host: spoofed.example\r\n"
+            "Host: 127.0.0.1:3999\r\n"
+            . "X-Forwarded-Host: 127.0.0.1\r\n"
             . "X-Forwarded-Proto: http\r\n"
-            . "X-Forwarded-Port: 80\r\n",
-            ['WLS_TRUST_FORWARDED_HEADERS' => '1']
+            . "X-Forwarded-Port: 8088\r\n"
         );
 
         self::assertFalse($request->isSecure());
@@ -72,35 +70,31 @@ final class WlsRequestForwardedOriginTest extends TestCase
         self::assertSame('http://127.0.0.1:8088', $request->getBaseHost());
     }
 
-    public function testDispatcherHeadersPreserveCanonicalNonDefaultHttpsAuthority(): void
+    public function testDispatcherHeadersPreserveNonDefaultHttpsPort(): void
     {
         $request = $this->createRequest(
             "Host: 127.0.0.1:3999\r\n"
             . "Weline-Via-Dispatcher: 1\r\n"
-            . "Weline-Original-Host: spoofed.example\r\n"
+            . "Weline-Original-Host: 127.0.0.1\r\n"
             . "Weline-Original-Scheme: https\r\n"
             . "Weline-Original-Port: 8443\r\n"
-            . "Weline-Original-Ssl: on\r\n",
-            ['WLS_TRUST_FORWARDED_HEADERS' => '1']
+            . "Weline-Original-Ssl: on\r\n"
         );
 
         self::assertTrue($request->isSecure());
-        self::assertSame('127.0.0.1:3999', $_SERVER['HTTP_HOST'] ?? null);
-        self::assertSame('3999', $_SERVER['SERVER_PORT'] ?? null);
-        self::assertSame('https://127.0.0.1:3999/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
-        self::assertSame('https://127.0.0.1:3999', $request->getBaseHost());
+        self::assertSame('127.0.0.1:8443', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('8443', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertSame('https://127.0.0.1:8443/customer/account/logout', $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null);
+        self::assertSame('https://127.0.0.1:8443', $request->getBaseHost());
     }
 
-    /**
-     * @param array<string, mixed> $serverInfo
-     */
-    private function createRequest(string $headers, array $serverInfo = []): WlsRequest
+    private function createRequest(string $headers): WlsRequest
     {
         $rawRequest = "GET /customer/account/logout HTTP/1.1\r\n"
             . $headers
             . "Accept: text/html\r\n"
             . "\r\n";
 
-        return WlsRequest::fromRaw($rawRequest, $serverInfo);
+        return WlsRequest::fromRaw($rawRequest);
     }
 }

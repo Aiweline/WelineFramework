@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Cart::cart_inspection" name="cart_inspection" title="购物车检查"
+          action="cart/backend/inspection/index" parent="Weline_Backend::order_group"
+          icon="mdi mdi-cart-search" order="15"/>
+</menus>

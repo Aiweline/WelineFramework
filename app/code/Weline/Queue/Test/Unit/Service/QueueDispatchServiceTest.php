@@ -18,8 +18,6 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('queue:run --id=', $buildMethodSource);
         self::assertStringContainsString("private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';", $source);
         self::assertStringContainsString("'queue.worker.memory_limit'", $source);
-        self::assertStringContainsString('Processer::createDetachedPhpArgv', $source);
-        self::assertStringContainsString('buildQueueRunArgv', $source);
     }
 
     public function testQueueRunCommandAppliesClassMemoryLimitWhenStartedManually(): void
@@ -35,13 +33,16 @@ final class QueueDispatchServiceTest extends TestCase
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Console/Queue/Run.php');
         $executeSource = $this->extractPrivateMethodSource($source, 'execute');
-        $preserveSource = $this->extractPrivateMethodSource($source, 'shouldPreserveQueueStateAfterExecute');
+        $serviceSource = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $completeSource = $this->extractPrivateMethodSource($serviceSource, 'completeQueueWorkerSafely');
 
-        self::assertStringContainsString('shouldPreserveQueueStateAfterExecute($queue)', $executeSource);
-        self::assertStringContainsString('$queue::status_pending', $preserveSource);
-        self::assertStringContainsString('$queue::status_error', $preserveSource);
-        self::assertStringContainsString('$queue::status_stop', $preserveSource);
-        self::assertStringContainsString('$queue->isFinished()', $preserveSource);
+        self::assertStringContainsString('completeQueueWorkerSafely(', $executeSource);
+        self::assertStringContainsString('Queue::status_pending', $completeSource);
+        self::assertStringContainsString('Queue::status_error', $completeSource);
+        self::assertStringContainsString('Queue::status_stop', $completeSource);
+        self::assertStringContainsString('$queue->isFinished()', $completeSource);
+        self::assertStringContainsString('Queue::schema_fields_DISPATCH_TOKEN => null', $completeSource);
+        self::assertStringNotContainsString('->save()', $executeSource);
     }
 
     public function testQueueSchedulerConcurrencyIsConfigurable(): void
@@ -72,7 +73,7 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('$queue->isFinished()', $reconcileMethodSource);
 
         $finishedOffset = \strpos($reconcileMethodSource, '$queue->isFinished()');
-        $pendingOffset = \strpos($reconcileMethodSource, 'setStatus($queue::status_pending)');
+        $pendingOffset = \strpos($reconcileMethodSource, 'Queue::schema_fields_status => Queue::status_pending');
         self::assertNotFalse($finishedOffset);
         self::assertNotFalse($pendingOffset);
         self::assertLessThan(
@@ -99,52 +100,78 @@ final class QueueDispatchServiceTest extends TestCase
         );
     }
 
-    public function testQueueQueryProviderCanCreateOrTakeoverWithoutImmediateSchedulerWake(): void
+    public function testQueueQueryProviderSupportsDeferredCreateAndExplicitDispatch(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/QueueQueryProvider.php');
+        $executeMethodSource = $this->extractPrivateMethodSource($source, 'execute');
+        $createMethodSource = $this->extractPrivateMethodSource($source, 'createQueue');
+        $dispatchMethodSource = $this->extractPrivateMethodSource($source, 'dispatchQueue');
+
+        self::assertSame(
+            1,
+            \substr_count($executeMethodSource, "'dispatch' => \$this->dispatchQueue(\$params)"),
+            'Queue must expose one explicit dispatch operation.'
+        );
+        self::assertStringContainsString(
+            "!\\array_key_exists('dispatch', \$params) || (bool)\$params['dispatch']",
+            $createMethodSource
+        );
+        self::assertStringContainsString(
+            '$this->transactions->afterCommit(',
+            $createMethodSource
+        );
+        self::assertStringContainsString('$this->maybeDispatchAutoQueue($committed)', $createMethodSource);
+        self::assertSame(1, \substr_count($dispatchMethodSource, 'maybeDispatchAutoQueue($queue)'));
+        self::assertStringContainsString('refreshCreateResultAfterOwnedCommit($result)', $source);
+    }
+
+    public function testQueueQueryProviderUpdateAndTakeoverRequireExplicitDispatch(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/QueueQueryProvider.php');
+        $updateMethodSource = $this->extractPrivateMethodSource($source, 'updateQueue');
+        $takeoverMethodSource = $this->extractPrivateMethodSource($source, 'takeoverQueue');
+        $dispatchMethodSource = $this->extractPrivateMethodSource($source, 'dispatchQueue');
+
+        self::assertStringNotContainsString('maybeDispatchAutoQueue(', $updateMethodSource);
+        self::assertStringNotContainsString('maybeDispatchAutoQueue(', $takeoverMethodSource);
+        self::assertStringContainsString('$this->maybeDispatchAutoQueue($queue)', $dispatchMethodSource);
+    }
+
+    public function testQueueQueryProviderCreateOnlyAcceptsPendingStatus(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/QueueQueryProvider.php');
         $createMethodSource = $this->extractPrivateMethodSource($source, 'createQueue');
-        $takeoverMethodSource = $this->extractPrivateMethodSource($source, 'takeoverQueue');
-        $wakeGateSource = $this->extractPrivateMethodSource($source, 'shouldWakeScheduler');
 
-        self::assertStringContainsString('if ($this->shouldWakeScheduler($params))', $createMethodSource);
-        self::assertStringContainsString('if ($this->shouldWakeScheduler($params))', $takeoverMethodSource);
-        self::assertStringContainsString("'wake_scheduler'", $wakeGateSource);
-        self::assertStringContainsString("'dispatch'", $wakeGateSource);
-        self::assertStringContainsString("'auto_dispatch'", $wakeGateSource);
-        self::assertStringContainsString("['0', 'false', 'no', 'off']", $wakeGateSource);
-        self::assertStringContainsString('return true;', $wakeGateSource);
+        self::assertStringContainsString('$status !== Queue::status_pending', $createMethodSource);
+        self::assertStringContainsString('公开 Queue create 只允许 status=pending', $createMethodSource);
+        self::assertStringNotContainsString('VALID_STATUSES', $source);
+        self::assertStringContainsString("'description' => __('仅允许 pending')", $source);
     }
 
-    public function testQueueQueryProviderWakesSchedulerWhenUpdateResetsAutoPendingQueue(): void
-    {
-        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/QueueQueryProvider.php');
-        $updateMethodSource = $this->extractPrivateMethodSource($source, 'updateQueue');
-        $dispatchableSource = $this->extractPrivateMethodSource($source, 'isQueueDispatchableForScheduler');
-
-        self::assertStringContainsString('if ($this->shouldWakeScheduler($params) && $this->isQueueDispatchableForScheduler($queue))', $updateMethodSource);
-        self::assertStringContainsString('$this->wakeSystemScheduler($queue);', $updateMethodSource);
-        self::assertStringContainsString('!$queue->isFinished()', $dispatchableSource);
-        self::assertStringContainsString('$queue->getAuto()', $dispatchableSource);
-        self::assertStringContainsString('$queue->getStatus() === Queue::status_pending', $dispatchableSource);
-    }
-
-    public function testQueueQueryProviderUpdateKeepsQueueIdBeforeReloadingFreshRow(): void
+    public function testQueueQueryProviderUpdateUsesPendingCasBeforeSuccessEvent(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/QueueQueryProvider.php');
         $updateMethodSource = $this->extractPrivateMethodSource($source, 'updateQueue');
 
-        $saveOffset = \strpos($updateMethodSource, '$queue->save();');
         $idOffset = \strpos($updateMethodSource, '$queueId = (int)$queue->getId();');
-        $loadOffset = \strpos($updateMethodSource, '$queue->clearData()->load($queueId);');
-        $returnOffset = \strpos($updateMethodSource, "'queue_id' => \$queueId");
+        $casOffset = \strpos($updateMethodSource, 'updatePendingQueueSafely($queueId, $updates)');
+        $freshDataOffset = \strpos($updateMethodSource, "\$result['data']");
+        $afterCommitOffset = \strpos($updateMethodSource, '$this->transactions->afterCommit(');
+        $eventOffset = \strpos($updateMethodSource, "dispatch('Weline_Queue::edit'");
+        $returnOffset = \strrpos($updateMethodSource, "'queue_id' => \$queueId");
 
-        self::assertNotFalse($saveOffset);
         self::assertNotFalse($idOffset);
-        self::assertNotFalse($loadOffset);
+        self::assertNotFalse($casOffset);
+        self::assertNotFalse($freshDataOffset);
+        self::assertNotFalse($afterCommitOffset);
+        self::assertNotFalse($eventOffset);
         self::assertNotFalse($returnOffset);
-        self::assertLessThan($idOffset, $saveOffset);
-        self::assertLessThan($loadOffset, $idOffset);
-        self::assertLessThan($returnOffset, $loadOffset);
+        self::assertLessThan($casOffset, $idOffset);
+        self::assertLessThan($freshDataOffset, $casOffset);
+        self::assertLessThan($afterCommitOffset, $freshDataOffset);
+        self::assertLessThan($eventOffset, $afterCommitOffset);
+        self::assertLessThan($returnOffset, $eventOffset);
+        self::assertStringNotContainsString('$queue->save();', $updateMethodSource);
         self::assertStringNotContainsString('clearData()->load((int)$queue->getId())', $updateMethodSource);
     }
 
@@ -153,19 +180,21 @@ final class QueueDispatchServiceTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
         $reconcileMethodSource = $this->extractPrivateMethodSource($source, 'reconcileRunningQueues');
 
-        $pidAliveOffset = \strpos($reconcileMethodSource, 'Processer::isRunningByPid($queuePid)');
-        $managedOffset = \strpos($reconcileMethodSource, 'Processer::isManagedProcessRunning($queuePid');
+        $pidAliveOffset = \strpos($reconcileMethodSource, 'probeQueueProcessState($queuePid)');
+        $managedOffset = \strpos($reconcileMethodSource, 'isManagedQueueWorkerRunning(');
 
         self::assertNotFalse($pidAliveOffset);
         self::assertNotFalse($managedOffset);
         self::assertLessThan(
             $managedOffset,
             $pidAliveOffset,
-            'Stale PID detection must check raw PID liveness before managed-process identity matching.'
+            'Reconcile must obtain a fresh three-state process result before managed identity matching.'
         );
+        self::assertStringNotContainsString('Processer::isRunningByPid', $reconcileMethodSource);
         self::assertStringContainsString('队列记录的 PID %{1} 已不存在', $source);
         self::assertStringContainsString('队列记录的 PID %{1} 仍存在', $source);
-        self::assertStringContainsString('setProcess($this->appendProcessMessage($queue->getProcess(), $message))', $reconcileMethodSource);
+        self::assertStringContainsString('updateQueueSnapshotIf($queue', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_process => $this->appendProcessMessage', $reconcileMethodSource);
     }
 
     public function testRecoverableDeadWorkersAreReturnedToSchedulerInsteadOfMarkedError(): void
@@ -173,19 +202,19 @@ final class QueueDispatchServiceTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
         $reconcileMethodSource = $this->extractPrivateMethodSource($source, 'reconcileRunningQueues');
 
-        $recoverOffset = \strpos($reconcileMethodSource, 'shouldRecoverDeadWorker($queue, $queuePid, $output)');
-        $errorOffset = \strpos($reconcileMethodSource, 'setStatus($queue::status_error)');
+        $recoverOffset = \strpos($reconcileMethodSource, 'deadWorkerRecoveryPatch($queue, $queuePid, $output)');
+        $errorOffset = \strpos($reconcileMethodSource, 'Queue::schema_fields_status => Queue::status_error');
 
         self::assertNotFalse($recoverOffset, 'dead-worker recovery contract must be checked before terminal error handling');
         self::assertNotFalse($errorOffset, 'generic dead-worker error path missing');
         self::assertLessThan($errorOffset, $recoverOffset);
         self::assertStringContainsString('deadWorkerRecoveryMessage($queue, $queuePid, $output)', $reconcileMethodSource);
-        self::assertStringContainsString('setStatus($queue::status_pending)', $reconcileMethodSource);
-        self::assertStringContainsString('setFinished(false)', $reconcileMethodSource);
-        self::assertStringContainsString('setPid(0)', $reconcileMethodSource);
-        self::assertStringContainsString('setData(Queue::schema_fields_start_at, null)', $reconcileMethodSource);
-        self::assertStringContainsString('setData(Queue::schema_fields_end_at, null)', $reconcileMethodSource);
-        self::assertStringContainsString('setResult($message)', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_status => Queue::status_pending', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_finished => 0', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_pid => 0', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_start_at => null', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_end_at => null', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_result => $message', $reconcileMethodSource);
     }
 
     public function testRecoverableNoPidRunningQueuesMustPassRecoveryContract(): void
@@ -194,9 +223,9 @@ final class QueueDispatchServiceTest extends TestCase
         $reconcileMethodSource = $this->extractPrivateMethodSource($source, 'reconcileRunningQueues');
 
         $recoverableOffset = \strpos($reconcileMethodSource, 'resolveDeadWorkerRecoverableQueue($queue) instanceof DeadWorkerRecoverableQueueInterface');
-        $contractOffset = \strpos($reconcileMethodSource, 'shouldRecoverDeadWorker($queue, 0, $output)');
-        $errorOffset = \strpos($reconcileMethodSource, 'marked error to avoid repeated AI dispatch');
-        $genericNoPidOffset = \strrpos($reconcileMethodSource, 'setStatus($queue::status_pending)');
+        $contractOffset = \strpos($reconcileMethodSource, 'deadWorkerRecoveryPatch($queue, 0, $output)');
+        $errorOffset = \strpos($reconcileMethodSource, '可恢复队列处于 running 但没有 PID');
+        $genericNoPidOffset = \strrpos($reconcileMethodSource, 'Queue::schema_fields_status => Queue::status_pending');
 
         self::assertNotFalse($recoverableOffset);
         self::assertNotFalse($contractOffset);
@@ -205,8 +234,8 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertLessThan($contractOffset, $recoverableOffset);
         self::assertLessThan($errorOffset, $contractOffset);
         self::assertLessThan($genericNoPidOffset, $errorOffset);
-        self::assertStringContainsString('setStatus($queue::status_error)', $reconcileMethodSource);
-        self::assertStringContainsString('setFinished(true)', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_status => Queue::status_error', $reconcileMethodSource);
+        self::assertStringContainsString('Queue::schema_fields_finished => 1', $reconcileMethodSource);
     }
 
     public function testDeadWorkerRecoveryUsesQueueTypeContract(): void
@@ -214,21 +243,27 @@ final class QueueDispatchServiceTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
         $resolverSource = $this->extractPrivateMethodSource($source, 'resolveDeadWorkerRecoverableQueue');
         $decisionSource = $this->extractPrivateMethodSource($source, 'shouldRecoverDeadWorker');
+        $patchSource = $this->extractPrivateMethodSource($source, 'deadWorkerRecoveryPatch');
 
         self::assertStringContainsString('DeadWorkerRecoverableQueueInterface', $source);
+        self::assertStringContainsString('DeadWorkerRecoveryPatchQueueInterface', $source);
         self::assertStringContainsString('ObjectManager::getInstance($queueClass)', $resolverSource);
         self::assertStringContainsString('resolveQueueClass($queue)', $resolverSource);
         self::assertStringContainsString('instanceof DeadWorkerRecoverableQueueInterface', $resolverSource);
         self::assertStringContainsString('->shouldRecoverDeadWorker($queue, $deadPid, $workerOutput)', $decisionSource);
+        self::assertStringContainsString('Queue::schema_fields_content', $patchSource);
+        self::assertStringContainsString('array_diff(', $patchSource);
+        self::assertStringNotContainsString('->save()', $patchSource);
     }
 
     private function extractPrivateMethodSource(string $source, string $methodName): string
     {
-        $methodOffset = \strpos($source, 'private function ' . $methodName);
-        if ($methodOffset === false) {
-            $methodOffset = \strpos($source, 'public function ' . $methodName);
-        }
-        self::assertNotFalse($methodOffset, $methodName . ' missing');
+        $methodPattern = '/\\b(?:private|protected|public)\\s+function\\s+'
+            . \preg_quote($methodName, '/')
+            . '\\s*\\(/';
+        $matched = \preg_match($methodPattern, $source, $matches, \PREG_OFFSET_CAPTURE);
+        self::assertSame(1, $matched, $methodName . ' missing');
+        $methodOffset = $matches[0][1];
         $nextPrivateMethodOffset = \strpos($source, 'private function ', $methodOffset + 1);
         $nextPublicMethodOffset = \strpos($source, 'public function ', $methodOffset + 1);
         $methodOffsets = \array_filter(

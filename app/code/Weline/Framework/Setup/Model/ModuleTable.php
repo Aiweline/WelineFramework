@@ -18,6 +18,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '模块模型表')]
 #[Index(name: 'UNIQUE_MODEL', columns: ['model'], type: 'UNIQUE')]
 #[Index(name: 'UNIQUE_NAME', columns: ['name'], type: 'UNIQUE')]
+#[Index(name: 'UNIQUE_NAME_MODEL', columns: ['name', 'model'], type: 'UNIQUE')]
 class ModuleTable extends Model
 {
     public const schema_table = 'weline_module_table';

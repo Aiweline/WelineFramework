@@ -1,15 +1,26 @@
 ﻿网站保存后,"After site is saved"
-网站保存后触发，可用于更新缓存、通知等相关操作。,"Triggered after site is saved, can be used for cache updates, notifications, and related operations."
+网站保存后触发，可用于更新缓存、通知等相关操作。,网站保存后触发，可用于更新缓存、通知等相关操作。
 域名购买成功,"Domain Purchase Success"
 "域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。","Triggered after a domain is successfully purchased. Can be used for notifications, auto DNS resolution, certificate requests, etc. Data includes domain, order_id, website_id, auto_create_site."
 域名池解析偏离本站,"Domain pool resolution deviates from this site"
 "域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。","Triggered when the domain resolution result deviates from this site (e.g., DNS pointing changes), used to send notifications to alert the administrator."
 "一站式配置 - 绑定 DNS","One-stop configuration - Bind DNS"
 "一站式配置执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录。","Triggered when the one-stop configuration performs the DNS binding step, where observers can create zones/records."
+站点,Site
+本地域名就绪查询器不支持的操作：%{1},本地域名就绪查询器不支持的操作：%{1}
+"AI 建站本地域名就绪检查","AI 建站本地域名就绪检查"
+"检查本地域名解析与通配证书；默认可自动写入 hosts/证书，失败后再人工协助","检查本地域名解析与通配证书；默认可自动写入 hosts/证书，失败后再人工协助"
+"检查一个 *.weline.test 域名是否可以启动 AI 建站","检查一个 *.weline.test 域名是否可以启动 AI 建站"
+"合并已准备域名池和 AI 候选并逐个只读复核","合并已准备域名池和 AI 候选并逐个只读复核"
+"确认后自动写入本机 hosts 与通配证书，并复检域名就绪状态","确认后自动写入本机 hosts 与通配证书，并复检域名就绪状态"
 域名配置编排服务暂不可用：%{1},"Domain configuration orchestration service temporarily unavailable: %{1}"
 "Websites 查询器不支持的操作：%{1}","Operations not supported by Websites query: %{1}"
 域名与网站查询,"Domain and site lookup"
 提供域名注册商、账号管理、域名列表、可用性检查、购买及一站式配置编排等能力,"Provides domain registrar, account management, domain list, availability check, purchase, and one-stop configuration orchestration capabilities"
+"受控的 AI 建站工作台命令","受控的 AI 建站工作台命令"
+创建或删除网站审计备份,创建或删除网站审计备份
+"Legacy controller bridge via bin-query","Legacy controller bridge via bin-query"
+"AI 润色一句话建站需求","AI 润色一句话建站需求"
 获取所有可用的域名注册商适配器,"Get all available domain registrar adapters"
 获取已配置的注册商账号列表,"Get configured registrar account list"
 按状态过滤,"Filter by status"
@@ -60,6 +71,9 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|none
 根据代码获取站点信息,根据代码获取站点信息
 获取所有站点列表,"Get all site list"
 "获取已启用的站点域名，无独立域名时回退到站点 URL","获取已启用的站点域名，无独立域名时回退到站点 URL"
+"获取站点绑定的域名（含协议、子路径、主域名标记），供 SEO/协议入口枚举公开 origin","获取站点绑定的域名（含协议、子路径、主域名标记），供 SEO/协议入口枚举公开 origin"
+"站点 ID；省略则返回全部活跃绑定","站点 ID；省略则返回全部活跃绑定"
+"域名状态，默认 active","域名状态，默认 active"
 获取站点关联的语言代码列表,"Fetch list of site-associated language codes"
 "获取域名池列表（用于 SSL/建站选择）","Get domain pool list (for SSL/website selection)"
 "获取域名 DNS 记录（查询层自动同步域名池）","Retrieved domain DNS records (query layer auto-syncs domain pool)"
@@ -67,6 +81,15 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|none
 "解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）","Parse the DNS provider code to be used for ACME challenges (same origin as addAcmeTxtRecord, used for certificate module polling duration, etc.)"
 "与 addAcmeTxtRecord 写入的 TXT 完全一致的全名 FQDN（证书模块 dns_get_record 轮询须查此名，避免通配符/多级子域与 _acme-challenge.{domain} 简单拼接不一致）","The full name FQDN that is exactly the same as the TXT written by addAcmeTxtRecord (the certificate module dns_get_record polling must check this name to avoid inconsistencies between wildcards/multi-level subdomains and simple splicing of _acme-challenge.{domain})"
 "删除 ACME DNS-01 验证 TXT 记录","Delete ACME DNS-01 verification TXT record"
+"按 Website 读取 Store Catalog v1（后台 LIST ACL 过滤）","按 Website 读取 Store Catalog v1（后台 LIST ACL 过滤）"
+"Website ID（含 0=default）","Website ID（含 0=default）"
+"按 Store 读取 SalesChannel Catalog v1（后台 LIST ACL 过滤）","按 Store 读取 SalesChannel Catalog v1（后台 LIST ACL 过滤）"
+"Store ID","Store ID"
+店铺不存在,店铺不存在
+"Catalog 参数必须且只能包含 %{1}","Catalog 参数必须且只能包含 %{1}"
+"Catalog 参数 %{1} 必须是规范整数","Catalog 参数 %{1} 必须是规范整数"
+"Catalog 参数 %{1} 超出允许范围","Catalog 参数 %{1} 超出允许范围"
+"Website %{1} 缺少 code","Website %{1} 缺少 code"
 注册商代码和账号名称不能为空,"Registrar code and account name cannot be empty"
 未找到注册商适配器：%{1},"Registrar adapter not found: %{1}"
 请填写必填字段：%{1},"Fill in required fields: %{1}"
@@ -106,6 +129,44 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "domain 和 record_id 不能为空","domain and record_id cannot be empty"
 "无法解析域名的 DNS 管理账户","Unable to resolve the DNS management account for the domain"
 "由查询层 DNS 同步自动写入","Automatically written by query layer DNS synchronization"
+"AI 服务不可用，无法润色需求","AI service is unavailable; cannot polish the requirement"
+备份文件名不能为空,备份文件名不能为空
+备份已删除,备份已删除
+不支持的备份操作：%{1},不支持的备份操作：%{1}
+无效的网站ID,"Invalid website ID"
+需要登录,"Login Required"
+备份创建成功,"Backup created successfully"
+备份%{1}失败：,备份%{1}失败：
+网站语言申请查询器不支持的操作：%{1},网站语言申请查询器不支持的操作：%{1}
+网站语言申请分配,网站语言申请分配
+读取当前网站已就绪的语言申请，并幂等加入站点语言。,读取当前网站已就绪的语言申请，并幂等加入站点语言。
+"列出当前网站尚未分配的 ready 语言申请。","列出当前网站尚未分配的 ready 语言申请。"
+"在同一事务中幂等加入站点语言并标记申请为 assigned。","在同一事务中幂等加入站点语言并标记申请为 assigned。"
+请选择要加入站点的语言,请选择要加入站点的语言
+所选语言已加入或尚未就绪,所选语言已加入或尚未就绪
+站点语言已加入,站点语言已加入
+"缺少网站 ID","缺少网站 ID"
+"网站 ID 无效","网站 ID 无效"
+网站不存在,"Site does not exist"
+网站代码无效,网站代码无效
+请先登录后台,请先登录后台
+"AI 建站域名查询器不支持的操作：%{1}","AI 建站域名查询器不支持的操作：%{1}"
+"AI 建站域名推荐","AI 建站域名推荐"
+"提供域名推荐、脱敏购买账户和可用性检查；购买只由 Websites 队列执行","提供域名推荐、脱敏购买账户和可用性检查；购买只由 Websites 队列执行"
+"通过已配置的 AI 场景根据建站描述推荐域名候选","通过已配置的 AI 场景根据建站描述推荐域名候选"
+获取可购买正式域名的脱敏注册商账户,获取可购买正式域名的脱敏注册商账户
+使用所选购买账户检查一个公开域名是否可购买,使用所选购买账户检查一个公开域名是否可购买
+域名方式只能选择本地测试或正式购买。,域名方式只能选择本地测试或正式购买。
+请先描述建站目标，或先输入偏好域名。,"Please describe the website goal first, or enter a preferred domain name."
+尚未配置可购买正式域名的注册商账户。,尚未配置可购买正式域名的注册商账户。
+域名购买账户已加载。,域名购买账户已加载。
+请选择域名购买账户并填写公开域名。,请选择域名购买账户并填写公开域名。
+域名当前可以购买。,域名当前可以购买。
+域名当前不可购买。,域名当前不可购买。
+"AI 域名场景暂不可用，已使用明确标记的备用方案生成本地候选 %{domain}；不会购买真实域名。","AI 域名场景暂不可用，已使用明确标记的备用方案生成本地候选 %{domain}；不会购买真实域名。"
+"AI 域名场景暂不可用，已使用明确标记的备用候选；不会检查可用性或购买域名。","AI 域名场景暂不可用，已使用明确标记的备用候选；不会检查可用性或购买域名。"
+"AI 已推荐本地联调域名 %{domain}；不会购买真实域名。","AI 已推荐本地联调域名 %{domain}；不会购买真实域名。"
+"AI 已生成域名建议；不会检查可用性或购买域名。","AI 已生成域名建议；不会检查可用性或购买域名。"
 "AI 建站工作台","AI website building workbench"
 "根据描述自动购买域名、DNS 解析、HTTPS 申请、创建站点。支持理解用户意图并推荐合适域名。","Automatically purchase domain names, DNS resolution, HTTPS application, and site creation based on the description. Supports understanding user intent and recommending suitable domain names."
 "AI 提供者工厂未注入","AI 提供者工厂未注入"
@@ -122,6 +183,13 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "输入站点构建目标与期望效果，让 AI 给出方案并执行。","Enter the site build goal and expected outcome, and let AI provide a plan and execute it."
 请帮我把一个博客站点搭起来，包含分类页与文章详情页。,"Help me set up a blog site, including category pages and article detail pages."
 系统会输出落地方案与后续构建进度/结果。,"The system will output the implementation plan along with subsequent build progress/results."
+"AI 建站域名语义标签推荐","AI 建站域名语义标签推荐"
+"根据建站目标生成可用于域名的 ASCII 语义标签，不负责后缀、可用性、购买或绑定。","根据建站目标生成可用于域名的 ASCII 语义标签，不负责后缀、可用性、购买或绑定。"
+建站描述或偏好域名至少需要填写一项。,建站描述或偏好域名至少需要填写一项。
+"AI 建站域名语义标签参数","AI 建站域名语义标签参数"
+精品咖啡品牌域名标签,精品咖啡品牌域名标签
+"只生成语义标签，由 Websites 服务端决定域名后缀。","只生成语义标签，由 Websites 服务端决定域名后缀。"
+为上海精品咖啡工作室制作预约品牌站,为上海精品咖啡工作室制作预约品牌站
 "AI 建站工作台场景适配器","AI website building workbench scene adapter"
 "用于 AI 建站工作台（website_builder）场景的零改造适配器，支持为该场景配置默认模型。","Zero-modification adapter for the AI website builder (website_builder) scenario, supporting configuration of a default model for this scenario."
 建站请求示例,"Site building request example"
@@ -209,6 +277,15 @@ id属性不能为空,"The id attribute cannot be empty"
 搜索服务商...,"Search Service Provider..."
 请选择服务商,"Please select a service provider"
 未找到匹配服务商,"Matching service provider not found"
+"Store 层","Store level"
+"搜索 Channel","Search Channel"
+"未找到匹配 Channel","No matching Channel"
+未找到匹配站点,"No matching website found"
+请选择站点,"Please select a website"
+搜索站点名称或编码,"Search site name or code"
+"Website 层","Website level"
+"搜索 Store","Search Store"
+"未找到匹配 Store","No matching Store"
 基本信息,"Basic information"
 从域名池选择已就绪的域名（可多选）；选择后网站代码与网站名称将自动填充,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code and site name will be auto-filled"
 高级选项,"Advanced options"
@@ -233,6 +310,24 @@ id属性不能为空,"The id attribute cannot be empty"
 "在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。","Dynamically append tab content panels in the domain management page. Used together with the tabs Hook to inject corresponding Tab content."
 网站编辑表单扩展区,"Website edit form extension area"
 "在网站编辑表单核心配置之后追加模块配置区。SEO/GEO 等模块应通过此 Hook 注入字段，Website 模块不直接依赖业务模块。","Append module configuration area after the core configuration of the website editor form. Modules like SEO/GEO should inject fields through this Hook, and the Website module does not directly depend on business modules."
+"Scope Token 暂时无法签发","Scope Token 暂时无法签发"
+"当前前台操作必须使用绑定商城 Scope 的 Worker Session","当前前台操作必须使用绑定商城 Scope 的 Worker Session"
+"Worker Scope 绑定已过期或时间窗口无效","Worker Scope 绑定已过期或时间窗口无效"
+"当前商城 Scope 的切流授权已撤销，请重新加载页面","当前商城 Scope 的切流授权已撤销，请重新加载页面"
+"Worker Scope 必须是完整 Channel Scope","Worker Scope 必须是完整 Channel Scope"
+"Worker Scope 指向的店铺已进入墓碑生命周期","Worker Scope 指向的店铺已进入墓碑生命周期"
+"Worker Scope 指向的店铺当前不可用","Worker Scope 指向的店铺当前不可用"
+"Worker Scope 指向的销售渠道当前不可用","Worker Scope 指向的销售渠道当前不可用"
+"Worker Scope 请求 Host 无效","Worker Scope 请求 Host 无效"
+"Worker Scope 绑定与当前 Host 不一致","Worker Scope 绑定与当前 Host 不一致"
+"当前请求已冻结为其他商城 Scope","当前请求已冻结为其他商城 Scope"
+"Worker Scope 无法安装到当前请求","Worker Scope 无法安装到当前请求"
+"Scope Token 已过期，请重新加载页面","Scope Token 已过期，请重新加载页面"
+"Scope Token 与当前请求上下文冲突","Scope Token 与当前请求上下文冲突"
+"Scope Token 验证服务暂不可用","Scope Token 验证服务暂不可用"
+"Scope Token 无效","Scope Token 无效"
+"Scope Token 与当前 Website/Store/Channel 事实不一致","Scope Token 与当前 Website/Store/Channel 事实不一致"
+"商城 Scope 目录暂不可用","商城 Scope 目录暂不可用"
 Weline（本地）,"Weline (local)"
 "本地开发与 E2E 用内置供应商；免对外支付，订单状态机与线上对齐。","Local Development & E2E: Use built-in provider; no external payments required, order state machine aligned with production."
 证书签发后更新配置订单状态失败：%{1},"Failed to update configuration order status after certificate issuance: %{1}"
@@ -243,7 +338,27 @@ Weline（本地）,"Weline (local)"
 "语言 %{1} 不被当前网站允许","Language %{1} is not allowed by the current site"
 "货币 %{1} 不被当前网站允许","Currency %{1} is not allowed on the current site"
 域名购买成功后续生命周期步骤失败：%{1},"Subsequent lifecycle steps failed after successful domain purchase: %{1}"
+系统正在升级维护，请稍后再试。,系统正在升级维护，请稍后再试。
 更新证书状态失败：%{1},"Update certificate status failed: %{1}"
+当前请求没有匹配到可用网站,当前请求没有匹配到可用网站
+网站请求未能安装完整商城范围,网站请求未能安装完整商城范围
+网站请求未能产生规范路由剩余路径,网站请求未能产生规范路由剩余路径
+站点解析事件载荷无效,站点解析事件载荷无效
+"缺少可信请求 URL，已拒绝解析商城范围","缺少可信请求 URL，已拒绝解析商城范围"
+当前请求的商城范围已冻结，站点身份冲突,当前请求的商城范围已冻结，站点身份冲突
+商城范围元数据与已冻结上下文不一致,商城范围元数据与已冻结上下文不一致
+站点范围解析失败,站点范围解析失败
+"可信请求 URL 无效","可信请求 URL 无效"
+"网站入口 URL 配置无效","网站入口 URL 配置无效"
+"请求 URL 与已命中的网站入口不一致","请求 URL 与已命中的网站入口不一致"
+"站点记录缺少 website_id（0 仅在显式存在时合法）","站点记录缺少 website_id（0 仅在显式存在时合法）"
+"站点 website_id 必须是规范非负整数","站点 website_id 必须是规范非负整数"
+站点请求上下文不完整或不规范,站点请求上下文不完整或不规范
+网站入口路径配置无效,网站入口路径配置无效
+"可信请求 URL 路径无效","可信请求 URL 路径无效"
+"站点或域名记录缺少显式 website_id","站点或域名记录缺少显式 website_id"
+"站点或域名记录包含无效 website_id：%{1}","站点或域名记录包含无效 website_id：%{1}"
+"当前 Host/URI 同优先级匹配到多个网站，已拒绝请求","当前 Host/URI 同优先级匹配到多个网站，已拒绝请求"
 清除域名池证书状态失败：%{1},"Failed to clear domain pool certificate status: %{1}"
 "同步 HTTPS 状态失败：%{1}","Sync HTTPS status failed: %{1}"
 "Amazon Web Services Route 53 域名注册服务，支持域名注册、DNS 管理和健康检查。","Amazon Web Services Route 53 domain registration service, supporting domain registration, DNS management, and health checks."
@@ -704,16 +819,66 @@ Weline（本地）,"Weline (local)"
 请上传证书文件或粘贴证书内容,"Please upload the certificate file or paste the certificate content"
 "没有需要清理的 DNS 服务商域名","No DNS provider domains to clean up"
 "清理完成：共删除 %{1} 个误同步的域名（来自 %{2} 个 DNS 服务商账户）","Cleanup Complete: Deleted %{1} incorrectly synced domains (from %{2} DNS provider accounts)"
+域名服务,"Domain Service"
+"mdi mdi-domain","mdi mdi-domain"
+域名服务管理,域名服务管理
+域名管理首页,域名管理首页
+域名列表,"Domain list"
+"mdi mdi-format-list-bulleted","mdi mdi-format-list-bulleted"
+查看域名列表,查看域名列表
+同步域名,同步域名
+"mdi mdi-sync","mdi mdi-sync"
+从域名商获取域名列表,从域名商获取域名列表
+导入域名,"Import Domain"
+"mdi mdi-import","mdi mdi-import"
+导入域名到本地,导入域名到本地
+"DNS 记录","DNS 记录"
+"mdi mdi-dns","mdi mdi-dns"
+"查看 DNS 解析记录","查看 DNS 解析记录"
+"编辑 DNS","编辑 DNS"
+"添加/编辑 DNS 解析记录","添加/编辑 DNS 解析记录"
+批量添加DNS记录,"Batch add DNS records"
+批量为域名添加DNS解析记录,批量为域名添加DNS解析记录
+解析检测,解析检测
+"mdi mdi-check-network","mdi mdi-check-network"
+检测域名解析状态,检测域名解析状态
+自动解析,自动解析
+"mdi mdi-auto-fix","mdi mdi-auto-fix"
+自动添加解析到本服务器,自动添加解析到本服务器
+转存域名池,"Dump domain pool"
+"mdi mdi-database-export","mdi mdi-database-export"
+将根域名转存到域名池,将根域名转存到域名池
+批量设置账户,"Batch set account"
+"mdi mdi-account-multiple-check","mdi mdi-account-multiple-check"
+"批量设置域名的 DNS/CDN 管理账户","批量设置域名的 DNS/CDN 管理账户"
+切换DNS服务账户,切换DNS服务账户
+"mdi mdi-swap-horizontal","mdi mdi-swap-horizontal"
+"为根域名切换 DNS 服务账户并迁移记录","为根域名切换 DNS 服务账户并迁移记录"
+获取DNS账户列表,获取DNS账户列表
+"获取支持 DNS 管理的账户列表","获取支持 DNS 管理的账户列表"
+批量取消拉取,批量取消拉取
+"mdi mdi-database-remove","mdi mdi-database-remove"
+从本地移除已同步的域名,从本地移除已同步的域名
+按账户取消拉取,按账户取消拉取
+"mdi mdi-account-remove","mdi mdi-account-remove"
+删除指定账户下的所有域名,删除指定账户下的所有域名
+手动新建域名,手动新建域名
+"mdi mdi-plus-circle","mdi mdi-plus-circle"
+"手动新建域名并可直接处理 HTTPS","手动新建域名并可直接处理 HTTPS"
+清理DNS服务商域名,清理DNS服务商域名
+"mdi mdi-broom","mdi mdi-broom"
+清理误同步的DNS服务商域名,清理误同步的DNS服务商域名
+网站目录行必须是网站模型或数组,网站目录行必须是网站模型或数组
+"网站目录行缺少 website_id","The website directory row is missing website_id"
+网站ID必须是非负规范整数,网站ID必须是非负规范整数
 请至少选择一个域名,"Please select at least one domain"
 "该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）","The domain root path is already used by site 「%{1}」. Please use a subpath (e.g. /shop)"
 "该地址 %{1} 已被站点「%{2}」使用","The address %{1} is already used by site 「%{2}」"
 网站保存失败，未能获取网站ID,"Failed to save site, unable to retrieve site ID"
+网站保存后快照不存在,网站保存后快照不存在
 网站添加成功,"Website added successfully"
 "网站添加失败: %{1}","Failed to add site: %{1}"
-网站ID不能为空,"Site ID cannot be empty"
-网站不存在,"Site does not exist"
-"保存关联货币失败: %{1}","Failed to save associated currency: %{1}"
-"保存关联语言失败: %{1}","Failed to save associated language: %{1}"
+网站ID与当前编辑目标不一致,网站ID与当前编辑目标不一致
 网站更新成功,"Site updated successfully"
 站点名称不能为空,"Site Name cannot be empty"
 站点代码不能为空,"Site Code cannot be empty"
@@ -726,26 +891,56 @@ Weline（本地）,"Weline (local)"
 网站删除成功,"Site deleted successfully"
 "网站删除失败: %{1}","Failed to delete site: %{1}"
 首页入口路由无效,"Invalid homepage entry route"
+网站身份无效,网站身份无效
+前台首页入口配置删除失败,前台首页入口配置删除失败
+后台首页入口配置删除失败,后台首页入口配置删除失败
+前台首页入口配置保存失败,前台首页入口配置保存失败
+后台首页入口配置保存失败,后台首页入口配置保存失败
+"website_id 不能为负数","website_id cannot be negative"
+"网站资源变更必须包含 before 或 after 快照","网站资源变更必须包含 before 或 after 快照"
+"网站资源变更缺少 website code","网站资源变更缺少 website code"
 当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新,"No language pack translation is available for the current language. Please go to the i18n module to update the regional language for the %{1} language."
+网站管理,"Website management"
+"mdi mdi-web","mdi mdi-web"
+网站列表,"Site List"
+"mdi mdi-view-list","mdi mdi-view-list"
+添加网站,添加网站
+"mdi mdi-plus","mdi mdi-plus"
+"mdi mdi-pencil","mdi mdi-pencil"
+快速创建站点,快速创建站点
+删除网站,删除网站
+"mdi mdi-delete","mdi mdi-delete"
+"空白 Store","空白 Store"
+站点目录拉取,站点目录拉取
+他店继承,他店继承
+跳过既有商品,跳过既有商品
+仅更新所选字段包,仅更新所选字段包
+"Store 复制向导","Store 复制向导"
+"mdi mdi-content-copy","mdi mdi-content-copy"
+从目录/他店复制经营投影,从目录/他店复制经营投影
+打开复制向导,打开复制向导
+"mdi mdi-wizard-hat","mdi mdi-wizard-hat"
 加载维护模式失败：%{1},"Failed to load maintenance mode: %{1}"
 无效的请求方法,"Invalid request method"
-无效的网站ID,"Invalid website ID"
 维护模式状态已更新,"Maintenance mode status updated"
 更新失败：%{1},"Update failed: %{1}"
+网站维护模式,"Website maintenance mode"
+查看网站维护模式,查看网站维护模式
+切换网站维护模式,切换网站维护模式
 加载备份管理失败：%{1},"Failed to load backup management: %{1}"
-备份已删除,备份已删除
-备份创建成功,"Backup created successfully"
 备份创建失败：%{1},"Backup creation failed: %{1}"
 下载备份失败：%{1},下载备份失败：%{1}
+网站备份,"Site Backup"
+查看网站备份,查看网站备份
+创建网站备份,创建网站备份
 网站服务,"Website Service"
 "AI 建站工作区","AI website building workspace"
 需要登录或会话令牌无效,"Login required or session token is invalid"
 会话不存在或无访问权限,"Session Does Not Exist or No Access Permission"
 参数无效,"Invalid parameter"
-需要登录,"Login Required"
+"PageBuilder AI 建站请从「页面构建 → AI 建站 V2 工作台」进入。Website AI 建站与 PageBuilder 已彻底分开，只共用 AI 调用，不再互相跳转。","PageBuilder AI 建站请从「页面构建 → AI 建站 V2 工作台」进入。Website AI 建站与 PageBuilder 已彻底分开，只共用 AI 调用，不再互相跳转。"
 "Unknown or disabled provider: %{code}","Unknown or disabled provider: %{code}"
 "Failed to create workspace: %{message}","Failed to create workspace: %{message}"
-请先描述建站目标，或先输入偏好域名。,"Please describe the website goal first, or enter a preferred domain name."
 "本地演示模式下，AI 找到可用域名：%{domain}","In local demo mode, AI found an available domain: %{domain}"
 检测实时可用性前，请先选择服务商账号。,"Please select a service provider account before checking real-time availability."
 请先输入目标域名。,"Please enter the target domain name first."
@@ -892,6 +1087,68 @@ Cookie政策,"Cookie Policy"
 博客分类,"Blog Category"
 博客文章,"Blog Article"
 自定义页面,"Custom Page"
+"AI Site Workbench","AI Site Workbench"
+"mdi mdi-robot","mdi mdi-robot"
+"Coordinate domain, website, and workspace site building","Coordinate domain, website, and workspace site building"
+"AI site workbench hub","AI site workbench hub"
+"AI Site Workspace","AI Site Workspace"
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+"View and edit resumable AI site workspaces","View and edit resumable AI site workspaces"
+"AI Site State JSON","AI Site State JSON"
+"mdi mdi-code-json","mdi mdi-code-json"
+"Read workspace state JSON","Read workspace state JSON"
+"AI Site Domain Lifecycle Status","AI Site Domain Lifecycle Status"
+"Read domain lifecycle status for workspace top-bar","Read domain lifecycle status for workspace top-bar"
+"AI Site Stage Info","AI Site Stage Info"
+"mdi mdi-information-outline","mdi mdi-information-outline"
+"Read current stage and available stages","Read current stage and available stages"
+"Create AI Site Workspace","Create AI Site Workspace"
+"Create a resumable AI site workspace","Create a resumable AI site workspace"
+"Recommend Available Domain","Recommend Available Domain"
+"Recommend an available domain for the quick-start flow","Recommend an available domain for the quick-start flow"
+"Check Domain Availability","Check Domain Availability"
+"mdi mdi-shield-search","mdi mdi-shield-search"
+"Check a specific domain availability for quick-start flow","Check a specific domain availability for quick-start flow"
+"Recommend Available Domain SSE","Recommend Available Domain SSE"
+"mdi mdi-access-point","mdi mdi-access-point"
+"Stream domain recommendation checks","Stream domain recommendation checks"
+"Merge Workspace Scope","Merge Workspace Scope"
+"mdi mdi-database-plus-outline","mdi mdi-database-plus-outline"
+"Merge workspace scope JSON","Merge workspace scope JSON"
+"Replace Workspace Scope","Replace Workspace Scope"
+"mdi mdi-database-edit-outline","mdi mdi-database-edit-outline"
+"Replace workspace scope JSON","Replace workspace scope JSON"
+"Set Workspace Stage","Set Workspace Stage"
+"mdi mdi-flag-checkered","mdi mdi-flag-checkered"
+"Update the current workspace stage","Update the current workspace stage"
+"Delete Workspace Session","Delete Workspace Session"
+"mdi mdi-delete-outline","mdi mdi-delete-outline"
+"Delete a resumable AI site workspace","Delete a resumable AI site workspace"
+"Save Virtual Theme","Save Virtual Theme"
+"mdi mdi-palette","mdi mdi-palette"
+"Save current virtual theme into database","Save current virtual theme into database"
+"Save Page Type Layout","Save Page Type Layout"
+"mdi mdi-file-document-edit-outline","mdi mdi-file-document-edit-outline"
+"Save one page-type layout JSON into virtual theme","Save one page-type layout JSON into virtual theme"
+"Save Virtual Component","Save Virtual Component"
+"mdi mdi-view-quilt-plus","mdi mdi-view-quilt-plus"
+"Save AI component into virtual theme","Save AI component into virtual theme"
+"Generate Virtual Theme SSE","Generate Virtual Theme SSE"
+"Auto-generate virtual theme from brief","Auto-generate virtual theme from brief"
+"Append Workspace Message","Append Workspace Message"
+"mdi mdi-message-plus-outline","mdi mdi-message-plus-outline"
+"Append a note or message to the workspace","Append a note or message to the workspace"
+"Start Domain Purchase","Start Domain Purchase"
+"mdi mdi-cart-arrow-down","mdi mdi-cart-arrow-down"
+"Queue a non-blocking workbench domain purchase","Queue a non-blocking workbench domain purchase"
+"Workspace SSE Stream","Workspace SSE Stream"
+"Stream workspace events","Stream workspace events"
+"Workbench Domain Purchase SSE","Workbench Domain Purchase SSE"
+"mdi mdi-access-point-network","mdi mdi-access-point-network"
+"Run a non-blocking workbench domain purchase stream","Run a non-blocking workbench domain purchase stream"
+"Trigger Site Build","Trigger Site Build"
+"mdi mdi-play","mdi mdi-play"
+"Trigger the site building flow","Trigger the site building flow"
 全部,All
 待处理,"To process"
 购买中,Purchasing
@@ -900,6 +1157,22 @@ CDN,CDN
 SSL,SSL
 已完成,Completed
 失败,Failed
+商店已创建,商店已创建
+创建商店失败：%{1},创建商店失败：%{1}
+渠道已创建,渠道已创建
+创建渠道失败：%{1},创建渠道失败：%{1}
+"Scope 数据读取失败：%{1}","Scope 数据读取失败：%{1}"
+"%{1} 不能为空且最多 %{2} 字符","%{1} 不能为空且最多 %{2} 字符"
+"%{1} 必须是正整数","%{1} 必须是正整数"
+"%{1} 必须是非负整数","%{1} 必须是非负整数"
+商店管理,商店管理
+"管理 Store","管理 Store"
+渠道管理,渠道管理
+"管理 Sales Channel","管理 Sales Channel"
+创建商店,创建商店
+"创建 Store","创建 Store"
+创建渠道,创建渠道
+"创建 Sales Channel","创建 Sales Channel"
 "域名 %{1} 已存在于域名池中","Domain %{1} already exists in the domain pool"
 "API 添加：%{1}","API added: %{1}"
 子域名添加成功,"Subdomain added successfully"
@@ -910,6 +1183,18 @@ SSL,SSL
 解析异常：%{1},"Parse Exception: %{1}"
 检测失败：%{1},"Detection failed: %{1}"
 "parent_domain_id 不能为空","parent_domain_id cannot be empty"
+域名池API,域名池API
+域名池数据查询接口,域名池数据查询接口
+获取域名池列表,获取域名池列表
+获取域名池数据列表,获取域名池数据列表
+添加子域名,添加子域名
+添加子域名到域名池,添加子域名到域名池
+删除子域名,删除子域名
+从域名池删除子域名,从域名池删除子域名
+检测解析,"Check resolution."
+检测域名池解析状态,检测域名池解析状态
+按根域名查询,按根域名查询
+按根域名ID获取子域名,按根域名ID获取子域名
 请选择域名商账号,"Select a registrar account"
 跳过购买（使用已有域名）,"Skipped purchase (using existing domain)"
 "开始购买域名: %{1}","Starting domain purchase: %{1}"
@@ -933,6 +1218,9 @@ SSL,SSL
 "跳过 SSL 证书申请","Skipped SSL certificate application"
 一站式配置完成！,"One-stop configuration complete!"
 "配置过程发生错误: %{1}","An error occurred during configuration: %{1}"
+配置API,配置API
+一站式配置API,一站式配置API
+配置进度流,配置进度流
 "Login required","Login required"
 "Please provide a site request or reference URL first","Please provide a site request or reference URL first"
 "Invalid draft revision payload","Invalid draft revision payload"
@@ -940,6 +1228,7 @@ SSL,SSL
 "Invalid plan stream parameters","Invalid plan stream parameters"
 "Plan generation started","Plan generation started"
 "Loaded current draft plan","Loaded current draft plan"
+"Failed to persist plan version","Failed to persist plan version"
 "Plan generation failed","Plan generation failed"
 "Plan generation finished","Plan generation finished"
 "Invalid plan confirmation request","Invalid plan confirmation request"
@@ -954,6 +1243,35 @@ SSL,SSL
 "Please select a domain before creating a workspace session","Please select a domain before creating a workspace session"
 "Failed to create workspace session: %{message}","Failed to create workspace session: %{message}"
 "Workspace session created","Workspace session created"
+"AI Site Plan Flow","AI Site Plan Flow"
+"mdi mdi-sitemap","mdi mdi-sitemap"
+"Draft-first AI site planning flow","Draft-first AI site planning flow"
+"Generate Draft Site Plan","Generate Draft Site Plan"
+"mdi mdi-lightning-bolt-outline","mdi mdi-lightning-bolt-outline"
+"Create or update a site planning draft","Create or update a site planning draft"
+"Polish Site Brief","Polish Site Brief"
+"Polish the one-sentence site requirement","Polish the one-sentence site requirement"
+"Revise Draft Site Plan","Revise Draft Site Plan"
+"mdi mdi-comment-edit-outline","mdi mdi-comment-edit-outline"
+"Revise an existing site planning draft","Revise an existing site planning draft"
+"Stream Draft Site Plan","Stream Draft Site Plan"
+"Stream site plan generation","Stream site plan generation"
+"Stream Draft Site Plan SSE","Stream Draft Site Plan SSE"
+"Stream site plan generation via SSE endpoint","Stream site plan generation via SSE endpoint"
+"Confirm Draft Site Plan","Confirm Draft Site Plan"
+"mdi mdi-check-circle-outline","mdi mdi-check-circle-outline"
+"Confirm the latest generated plan draft","Confirm the latest generated plan draft"
+"List Local Pool Domains For Draft","List Local Pool Domains For Draft"
+"mdi mdi-database-search-outline","mdi mdi-database-search-outline"
+"List local domain pool options for the site plan draft","List local domain pool options for the site plan draft"
+"Reserve Local Pool Domain","Reserve Local Pool Domain"
+"mdi mdi-lock-outline","mdi mdi-lock-outline"
+"Reserve a local pool domain for the site plan draft","Reserve a local pool domain for the site plan draft"
+"Select Draft Domain","Select Draft Domain"
+"Persist a domain choice on the current site plan draft","Persist a domain choice on the current site plan draft"
+"Create Session From Draft","Create Session From Draft"
+"mdi mdi-rocket-launch-outline","mdi mdi-rocket-launch-outline"
+"Create the formal site builder session from a confirmed draft","Create the formal site builder session from a confirmed draft"
 正常,Active
 处理中,Processing
 已过期,Expired
@@ -965,40 +1283,107 @@ SSL,SSL
 申请中,Applying
 有效,Valid
 申请错误,"Application error"
-站点,Site
+网站删除必须经过拥有者事务边界,网站删除必须经过拥有者事务边界
+"删除网站前必须提供有效 Website ID","删除网站前必须提供有效 Website ID"
+删除网站前必须加载明确的网站记录,"Load an explicit website record before deleting it"
+要删除的网站不存在,要删除的网站不存在
+网站删除身份不一致,网站删除身份不一致
+"网站仍有 Store 或 SalesChannel 引用，不允许物理删除","网站仍有 Store 或 SalesChannel 引用，不允许物理删除"
+店铺代码不能为空,店铺代码不能为空
+"店铺代码不能超过 %{1} 个字符","Store code cannot exceed %{1} characters"
+店铺名称不能为空,店铺名称不能为空
+"店铺名称不能超过 %{1} 个字符","Store name cannot exceed %{1} characters"
+"非法店铺模式：%{1}（仅允许 normal|dev|test）","非法店铺模式：%{1}（仅允许 normal|dev|test）"
+"店铺必须显式归属 Website（website_id=0 是合法默认站）","店铺必须显式归属 Website（website_id=0 是合法默认站）"
+"店铺创建后不允许迁移到其他 Website","店铺创建后不允许迁移到其他 Website"
+"店铺默认标记只能是 0 或 1","店铺默认标记只能是 0 或 1"
+"店铺状态只能是 0 或 1","店铺状态只能是 0 或 1"
+"默认店铺必须同时满足 code=default 且 is_default=1","默认店铺必须同时满足 code=default 且 is_default=1"
+"默认店铺的 store_mode 必须为 normal","默认店铺的 store_mode 必须为 normal"
+默认店铺不允许停用,默认店铺不允许停用
+"店铺模式创建后不可变更：%{1} → %{2} 被拒绝","店铺模式创建后不可变更：%{1} → %{2} 被拒绝"
+默认店铺代码不允许修改,默认店铺代码不允许修改
+"店铺独立入口 URL 必须是不含账号、查询或片段的规范 http/https 地址","店铺独立入口 URL 必须是不含账号、查询或片段的规范 http/https 地址"
+"店铺 ID 必须是正整数","Store ID must be a positive integer"
+"店铺父 Website 在更新锁定期间发生变化","店铺父 Website 在更新锁定期间发生变化"
+要更新的店铺不存在,要更新的店铺不存在
+"店铺所属 Website 不存在","店铺所属 Website 不存在"
+新店铺不允许伪造墓碑生命周期,新店铺不允许伪造墓碑生命周期
+已转为墓碑的店铺不允许普通保存或重新启用,已转为墓碑的店铺不允许普通保存或重新启用
+店铺生命周期状态与墓碑时间不一致,店铺生命周期状态与墓碑时间不一致
+普通保存不允许修改店铺墓碑字段,普通保存不允许修改店铺墓碑字段
+渠道代码不能为空,渠道代码不能为空
+"渠道代码不能超过 %{1} 个字符","SalesChannel code cannot exceed %{1} characters"
+渠道名称不能为空,渠道名称不能为空
+"渠道名称不能超过 %{1} 个字符","SalesChannel name cannot exceed %{1} characters"
+"渠道必须显式归属 Website（website_id=0 是合法默认站）","渠道必须显式归属 Website（website_id=0 是合法默认站）"
+渠道必须归属一个明确的店铺,渠道必须归属一个明确的店铺
+"渠道创建后不允许迁移到其他 Website 或店铺","渠道创建后不允许迁移到其他 Website 或店铺"
+"渠道 website_id 必须与所属店铺一致","渠道 website_id 必须与所属店铺一致"
+"渠道默认标记只能是 0 或 1","渠道默认标记只能是 0 或 1"
+"渠道状态只能是 0 或 1","渠道状态只能是 0 或 1"
+"默认渠道必须同时满足 code=default 且 is_default=1","默认渠道必须同时满足 code=default 且 is_default=1"
+默认渠道不允许停用,默认渠道不允许停用
+默认渠道代码不允许修改,默认渠道代码不允许修改
+销售渠道删除必须经过拥有者事务边界,销售渠道删除必须经过拥有者事务边界
+渠道父店铺在删除锁定期间发生变化,渠道父店铺在删除锁定期间发生变化
+默认渠道不允许删除,默认渠道不允许删除
+渠道所属店铺不存在,渠道所属店铺不存在
+非活动店铺下不允许新增、更新或删除销售渠道,非活动店铺下不允许新增、更新或删除销售渠道
+"渠道 ID 必须是正整数","渠道 ID 必须是正整数"
+要更新的渠道不存在,要更新的渠道不存在
+渠道父店铺在更新锁定期间发生变化,渠道父店铺在更新锁定期间发生变化
+删除渠道前必须加载明确的渠道记录,删除渠道前必须加载明确的渠道记录
+"删除渠道前必须提供有效渠道 ID","删除渠道前必须提供有效渠道 ID"
+要删除的渠道不存在,要删除的渠道不存在
+"Store / SalesChannel 目录","Store / SalesChannel Directory"
 访问入口,"Access entry"
 "语言 / 货币","Language / Currency"
 操作,Actions
 暂无网站数据,"No website data"
+只读,Read-only
+"暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","No Store/Channel directory is available. Run setup:upgrade to restore the default directory."
+默认,Default
+"此 Store 暂无 SalesChannel","This Store has no SalesChannel"
 未生成访问地址,"No access URL generated"
 主,host
 货币,Currency
 语言,Language
 访问,Visit
-默认,Default
+正式,Normal
+开发,Development
+测试,Test
+活动,Active
+墓碑,Tombstone
+"Store 与 SalesChannel 只读目录","Read-only Store and SalesChannel directory"
+"%{1} 个 Store","%{1} Store(s)"
+启用,Enable
+停用,Disabled
+"SalesChannel 列表","SalesChannel list"
 访问网站,"Visit Website"
 您确定要删除此网站吗？,"Are you sure you want to delete this site?"
 删除,Delete
-网站管理,"Website management"
 后台,Backend
 使用说明,Instructions
 网站,Website
 代表一个独立站点，可配置多个域名、语言与货币,"Represents an independent site, can configure multiple domains, languages, and currencies"
+"Store / SalesChannel","Store / SalesChannel"
+列表只读展示站点下的店铺模式、生命周期与销售渠道，不在此处修改目录。,"The list shows Store mode, lifecycle, and SalesChannel data as read-only; the directory cannot be modified here."
 关联域名,"Associated Domain"
 一个网站可绑定多个域名，主域名用于默认访问,"A website can be bound to multiple domain names, and the main domain name is used for default access."
 编辑/删除,Edit/Delete
 在操作列中可编辑网站或删除（请谨慎操作）,"In the action column, you can edit the website or delete it (please proceed with caution)"
-网站列表,"Site List"
+搜索网站,搜索网站
 搜索,Search
 清除,Clear
 搜索名称、代码或URL,"Search name, code, or URL"
-正在搜索...,Searching...
-服务器返回的不是有效的JSON数据,"Server did not return valid JSON data"
-搜索失败,"Search Failed"
-搜索出错，请刷新页面重试,"Search error, please refresh the page and try again"
 可由选择域名自动生成（域名转下划线），可修改,"Auto-generated from first selected domain (dots to underscores)"
 网站子路径,"Site Subpath"
 可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。,"Optional; leave blank to use the domain root path directly; if filled in, it will apply to all currently selected domains."
+"Store / SalesChannel 只读目录","Read-only Store / SalesChannel Directory"
+"此处仅展示目录。Store 模式、生命周期与 SalesChannel 不会随 Website 表单保存而修改。","This directory is read-only. Store mode, lifecycle, and SalesChannel data are not changed when the Website form is saved."
+"保存 Website 后，系统会在升级与站点保存流程中建立默认 Store 和 SalesChannel。","After the Website is saved, the upgrade and website-save flows create its default Store and SalesChannel."
+"当前 Website 暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","This Website has no Store/Channel directory. Run setup:upgrade to restore the default directory."
 选择域名,"Select Domain"
 从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above."
 默认时区,"Default Time Zone"
@@ -1013,11 +1398,60 @@ SSL,SSL
 继承全局首页配置,"Inherit global homepage configuration"
 选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
 "已选择 %{1} 个域名","%{1} domains selected"
+"Store 商品复制向导","Store 商品复制向导"
+"三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
+持久化事务模式,持久化事务模式
+复制范围,复制范围
+入口,入口
+"目标 Website","目标 Website"
+"目标 Store","目标 Store"
+"来源 Website","来源 Website"
+"来源 Store","来源 Store"
+"分类 ID","分类 ID"
+"排除分类 ID","排除分类 ID"
+复制分类下商品,复制分类下商品
+重复复制策略,重复复制策略
+字段包,字段包
+"显式复制库存数量（不勾选时目标 on_hand=0）","显式复制库存数量（不勾选时目标 on_hand=0）"
+创建草稿并预览,创建草稿并预览
+提交复制,提交复制
+取消草稿,取消草稿
+预览与提交结果,预览与提交结果
+"正在加载 Website/Store 选项…","正在加载 Website/Store 选项…"
+分类,分类
+商品,商品
+Offer,Offer
+"创建 / 跳过 / 更新","创建 / 跳过 / 更新"
+复制库存数量,复制库存数量
+契约要点,契约要点
+"分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。","分类树：勾父默认含子孙；excluded_category_ids 取消完整子树；include_products 控制是否带品。"
+"库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。","库存：含 inventory 包时默认 on_hand=0；仅 inventory_copy_qty=true 才复制数量。"
+"跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。","跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。"
+"同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。","同来源重复复制：默认 skip；update_selected_fields 只更新勾选字段包，不删未选字段。"
+详细契约见,详细契约见
+复制服务暂不可用，请刷新页面后重试,复制服务暂不可用，请刷新页面后重试
+"Website/Store 选项加载失败","Website/Store 选项加载失败"
+请选择复制范围，然后创建草稿并预览,请选择复制范围，然后创建草稿并预览
+正在创建草稿并计算预览…,正在创建草稿并计算预览…
+预览已就绪，请核对统计后提交,预览已就绪，请核对统计后提交
+复制预览失败,复制预览失败
+"正在原子提交目录、Store 覆盖与库存…","正在原子提交目录、Store 覆盖与库存…"
+复制提交成功,复制提交成功
+复制提交失败,复制提交失败
+正在取消草稿…,正在取消草稿…
+草稿已取消,草稿已取消
+取消草稿失败,取消草稿失败
+"请选择目标 Website 与 Store","请选择目标 Website 与 Store"
+"当前入口需要选择来源 Website 与 Store","当前入口需要选择来源 Website 与 Store"
+"当前入口需要选择来源 Website","当前入口需要选择来源 Website"
+"该 Website 没有可用 Store","该 Website 没有可用 Store"
+草稿,草稿
+错误码,错误码
+逗号分隔；留空表示全部分类,逗号分隔；留空表示全部分类
+逗号分隔；排除所选分类及完整子树,逗号分隔；排除所选分类及完整子树
 Other,Other
 "DNS 服务商","DNS service provider"
-域名列表,"Domain list"
 刷新服务器IP,"Refresh Server IP"
-导入域名,"Import Domain"
 批量转存域名池,"Batch transfer domain pool"
 只转存解析到本服务器的域名，跳过IP不匹配的,"Only transfer domains resolved to this server, skip those with IP mismatch"
 批量转存（检查IP）,"Batch Transfer (Check IP)"
@@ -1079,7 +1513,6 @@ DNS服务商,"DNS service provider"
 "如：ns1.example.com,ns2.example.com","e.g.: ns1.example.com,ns2.example.com"
 "多个 Nameserver 用英文逗号分隔","Multiple Nameservers separated by commas"
 确认切换,"Confirm Switch"
-批量添加DNS记录,"Batch add DNS records"
 为选中的域名批量添加相同的DNS解析记录。,"Add the same DNS resolution records in batches to the selected domain names."
 使用本服务器公网IP,"Use the public IP of this server"
 记录类型,"Record Type"
@@ -1093,7 +1526,6 @@ DNS服务商,"DNS service provider"
 选择供应商,"Select Supplier"
 选择账户,"Select Account"
 正在切换…,Switching...
-批量设置账户,"Batch set account"
 "为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。","Set up a DNS/CDN management account for the selected domain name. Leave it blank to not modify this item."
 "DNS 管理账户","DNS management account"
 "用于管理 DNS 解析记录的账户","Account used to manage DNS resolution records"
@@ -1142,9 +1574,7 @@ DNS服务商,"DNS service provider"
 检测于,"Detected at"
 连通性,Connectivity
 注册,Register
-转存域名池,"Dump domain pool"
 DNS管理,"DNS management"
-检测解析,"Check resolution."
 "共 0 条本地域名","0 local domains"
 条,items
 第,No.
@@ -1332,7 +1762,6 @@ DNS管理,"DNS management"
 订单号,"Order No."
 数量,Count
 时间,Time
-域名服务,"Domain Service"
 域名池,"Domain Pool"
 域名商管理,"Registrar Management"
 域名购买,"Domain Purchase"
@@ -1347,7 +1776,6 @@ DNS管理,"DNS management"
 域名商渠道,"Registrar Provider"
 请选择域名商,"Select a registrar"
 如：主账号、生产环境,"e.g. Primary Account, Production"
-启用,Enable
 添加域名商账号,"Add Registrar Account"
 编辑域名商账号,"Edit Registrar Account"
 （不修改请留空）,"(Leave blank if no changes)"
@@ -1405,6 +1833,11 @@ Windows,Windows
 返回入口,"Return to Entry"
 "状态 JSON","Status JSON"
 打开预览,"Open preview"
+本页只需完成这一件事,"Complete this one task on this page"
+选择页面并开始生成,"Select pages and start generation"
+生成中,Generating
+正在生成虚拟主题与页面,"Generating virtual theme and pages"
+进度会显示在下方，完成后页面会自动刷新。,"Progress appears below; the page refreshes when finished."
 当前阶段,"Current stage"
 "网站 ID","Website ID"
 Provider,Provider
@@ -1486,11 +1919,32 @@ Provider,Provider
 购买进行中,"Purchase in progress"
 重新执行,Re-execute
 等待生成,"Waiting for generation"
+需求与域名,"Requirements and domain"
+确认建站目标、语言和域名。,"Confirm the website goal, languages, and domain."
+页面与主题,"Pages and theme"
+选择页面类型并生成可编辑主题。,"Choose page types and generate an editable theme."
+预览与完成,"Preview and finish"
+检查页面效果，满意后完成交付。,"Review the pages and complete delivery when they are ready."
+下一步：确认信息并进入页面生成,"Next: Confirm the information and generate pages"
+域名已经准备完成。确认当前信息后，系统会带你选择页面类型并生成可编辑主题。,"The domain is ready. Confirm the current information, then choose page types and generate an editable theme."
+确认并继续,"Confirm and continue"
+下一步：完成域名准备,"Next: Complete domain setup"
+先启动域名准备流程；完成后再进入页面生成。,"Start domain setup first, then continue to page generation when it completes."
+下一步：检查并编辑生成结果,"Next: Review and edit the generated result"
+主题和页面已生成，打开可视化编辑器检查内容与布局；需要时可返回本页调整。,"The theme and pages are ready. Open the visual editor to review content and layout, and return here when adjustments are needed."
+下一步：确认页面方案,"Next: Confirm the page plan"
+确认页面类型和主题方向后，系统会自动生成虚拟主题与页面布局。,"Confirm the page types and theme direction, then the system will generate the virtual theme and page layouts."
+下一步：预览并验收站点,"Next: Preview and review the website"
+打开预览检查首页、转化入口和联系信息；不满意可返回页面生成继续调整。,"Open the preview to review the homepage, conversion paths, and contact details. Return to page generation if changes are needed."
+打开站点预览,"Open website preview"
+当前任务：等待预览环境就绪,"Current task: Wait for the preview environment"
+域名或预览环境仍在准备中。你可以查看状态，或返回页面生成继续调整。,"The domain or preview environment is still being prepared. Check its status or return to page generation to make changes."
+查看域名准备状态,"View domain setup status"
+建站流程进度,"Website building progress"
 待确认,"To confirm"
 待启动,"To start"
 准备启动域名购买,"Preparing to start domain purchase"
 阶段更新,"Phase update"
-确认并继续,"Confirm and continue"
 返回上一步,"Go back to previous step"
 "例如：简约科技 / 品牌信任感 / 高对比行动按钮","e.g., Minimalist Tech / Brand Trust / High-Contrast Call-to-Action Buttons"
 组件名称,"Component Name"
@@ -1544,6 +1998,9 @@ Provider,Provider
 正在自动生成虚拟主题...,"Auto-generating virtual theme..."
 虚拟主题自动生成完成,"Virtual theme auto-generation complete"
 虚拟主题自动生成失败,"Virtual theme auto-generation failed"
+当前任务：等待主题生成完成,"Current task: Wait for theme generation"
+"AI 正在生成虚拟主题与页面布局，进度实时显示在下方。","AI is generating the virtual theme and page layouts. Progress appears below in real time."
+页面类型已保存，开始生成虚拟主题,"Page types saved. Starting virtual theme generation."
 "AI 正在处理，请等待完成后再操作。","AI is processing, please wait for completion before continuing."
 请至少选择一个页面类型,"Please select at least one page type"
 确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
@@ -1625,7 +2082,6 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 "AI 规划完成，正在进入虚拟主题编辑...","AI planning completed, entering virtual theme editing..."
 规划已完成，请手动点击“先保存成工作区”进入下一步。,"Planning completed. Please manually click ""Save as Workspace First"" to proceed."
 将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。,"Will automatically start the domain purchase and display progress (does not block subsequent virtual theme processes)."
-网站维护模式,"Website maintenance mode"
 提示,Prompt
 开启维护模式后，前台将显示维护页面，但后台仍可正常访问。,"After enabling maintenance mode, the frontend will display a maintenance page, but the backend will remain accessible."
 网站ID,"Site ID"
@@ -1634,7 +2090,7 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 维护中,"Under maintenance"
 关闭维护模式,"Close maintenance mode"
 开启维护模式,"Enable Maintenance Mode"
-网站备份,"Site Backup"
+更新失败,更新失败
 完整备份包含,完整备份包含
 "站点基础资料、所有 website_id 关联数据、可定位的站点媒体/静态文件、manifest 元信息和 SHA-256 校验清单。","站点基础资料、所有 website_id 关联数据、可定位的站点媒体/静态文件、manifest 元信息和 SHA-256 校验清单。"
 备份范围,备份范围
@@ -1669,8 +2125,72 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 确定要删除这个备份吗？删除后无法从列表恢复。,确定要删除这个备份吗？删除后无法从列表恢复。
 删除备份失败,删除备份失败
 后台请求组件不可用，请刷新页面后重试。,后台请求组件不可用，请刷新页面后重试。
+"Website Scope 管理工作台","Website Scope 管理工作台"
+切换网站,切换网站
+商店代码,商店代码
+商店名称,商店名称
+模式,模式
+"独立 URL","独立 URL"
+所属商店,所属商店
+请选择商店,请选择商店
+渠道代码,渠道代码
+渠道名称,渠道名称
+AI建站域名准备队列,AI建站域名准备队列
+"域名准备与 AI Plan/Build 并行；域名未完成时只阻断 Publish。","域名准备与 AI Plan/Build 并行；域名未完成时只阻断 Publish。"
+"域名准备队列缺少请求 ID 或执行令牌。","域名准备队列缺少请求 ID 或执行令牌。"
+域名准备请求不存在、已失败或执行令牌无效。,域名准备请求不存在、已失败或执行令牌无效。
+域名准备完成。,域名准备完成。
+"域名准备进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。","域名准备进程异常退出，Scheduler 将自动恢复（第 %{1}/%{2} 次）。"
+"等待 macOS 管理员批准 %{1} 的 hosts 配置；Scheduler 将自动复检。","等待 macOS 管理员批准 %{1} 的 hosts 配置；Scheduler 将自动复检。"
+域名注册REST接口,域名注册REST接口
+"Websites 域名注册 REST V1 接口","Websites 域名注册 REST V1 接口"
 "REST 添加：%{1}","REST 添加：%{1}"
+域名池REST接口,域名池REST接口
+"Websites 域名池 REST V1 接口","Websites 域名池 REST V1 接口"
+域名池列表,域名池列表
+新增域名池,新增域名池
+删除域名池,删除域名池
+编排REST接口,编排REST接口
+"Websites 编排 REST V1 接口","Websites 编排 REST V1 接口"
+启动编排,启动编排
+查询编排状态,查询编排状态
 "无法获取本机公网 IPv4，请在 env 中配置 server.public_ip 或确保网络可访问外网 IP 检测接口","Cannot detect public IPv4; set server.public_ip or fix outbound network"
+"店铺代码在同一 Website 下不唯一","Store code is not unique within the Website"
+"店铺 ID","Store ID"
+"店铺 ID 不唯一","Store ID is not unique"
+"同一 Website 存在多个默认店铺","Multiple default Stores exist within the same Website"
+"code=default 的店铺缺少默认标记","The Store with code=default is missing the default flag"
+店铺目录查询结果必须是数组,"The Store Catalog query result must be an array"
+店铺目录包含非法数据行,"The Store Catalog contains an invalid data row"
+"店铺 %{1} 的 Website ID 与查询范围不一致","Store %{1} has a Website ID outside the requested scope"
+"店铺 %{1} 的代码不是规范值","Store %{1} has a non-canonical code"
+"店铺 %{1} 缺少名称","Store %{1} is missing a name"
+"店铺 %{1} 的模式无效：%{2}","Store %{1} has an invalid mode: %{2}"
+"店铺 %{1} 的生命周期状态无效：%{2}","Store %{1} has an invalid lifecycle status: %{2}"
+店铺目录数据缺少字段：%{1},"The Store Catalog row is missing field: %{1}"
+"店铺 %{1} 的墓碑时间字段无效","Store %{1} has an invalid tombstone timestamp"
+"活动店铺 %{1} 不允许存在墓碑时间","Active Store %{1} cannot have a tombstone timestamp"
+"墓碑店铺 %{1} 必须处于停用状态","Tombstoned Store %{1} must be disabled"
+"店铺目录存在重复 ID：%{1}","The Store Catalog contains duplicate ID: %{1}"
+"Website %{1} 的店铺代码重复：%{2}","Website %{1} contains duplicate Store code: %{2}"
+"Website %{1} 存在多个默认店铺","Website %{1} contains multiple default Stores"
+"店铺 %{1} 的 default 代码与默认标记不一致","Store %{1} has inconsistent default code and flag values"
+"Website %{1} 的默认店铺不允许进入墓碑生命周期","The default Store for Website %{1} cannot enter the tombstone lifecycle"
+"Website %{1} 的默认店铺必须为 normal 且启用","The default Store for Website %{1} must be normal and enabled"
+"店铺 %{1} 缺少 URL 字段","Store %{1} is missing the URL field"
+"店铺 %{1} 的 URL 字段无效","Store %{1} has an invalid URL field"
+"店铺目录字段 %{1} 超出整数范围","Store Catalog field %{1} is outside the integer range"
+"店铺目录字段 %{1} 必须是规范整数","Store Catalog field %{1} must be a canonical integer"
+"店铺目录字段 %{1} 必须大于或等于 %{2}","Store Catalog field %{1} must be greater than or equal to %{2}"
+"店铺目录字段 %{1} 不能大于 %{2}","Store Catalog field %{1} cannot exceed %{2}"
+"店铺目录字段 %{1} 必须是字符串","Store Catalog field %{1} must be a string"
+"店铺目录字段 %{1} 只能是 0 或 1","Store Catalog field %{1} must be either 0 or 1"
+"墓碑店铺 %{1} 缺少有效 UTC 墓碑时间","Tombstoned Store %{1} is missing a valid UTC tombstone timestamp"
+"Website ID 不能为负数","Website ID cannot be negative"
+"Website ID 不能大于 %{1}","Website ID cannot exceed %{1}"
+"%{1} 不能大于 %{2}","%{1} cannot exceed %{2}"
+"店铺目录引用了不存在的父 Website：%{1}","The Store Catalog references a missing parent Website: %{1}"
+"父 Website ID 与店铺目录查询范围不一致：%{1}","Parent Website ID does not match the Store Catalog query scope: %{1}"
 "Domain %{1} uses the .localhost loopback suffix and does not need hosts injection","Domain %{1} uses the .localhost loopback suffix and does not need hosts injection"
 "Only managed local WLS domains are allowed for automatic hosts injection","Only managed local WLS domains are allowed for automatic hosts injection"
 "Weline Server is required for automatic hosts injection","Weline Server is required for automatic hosts injection"
@@ -1686,6 +2206,32 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 "Reusing existing %{1} wildcard certificate","Reusing existing %{1} wildcard certificate"
 "Failed to ensure %{1} wildcard certificate","Failed to ensure %{1} wildcard certificate"
 "阶段：已建站 (site_live)","Phase: Site Live"
+渠道代码在同一店铺下不唯一,"SalesChannel code is not unique within the Store"
+"销售渠道 ID","SalesChannel ID"
+"渠道 ID 不唯一","SalesChannel ID is not unique"
+同一店铺存在多个默认渠道,"Multiple default SalesChannels exist within the same Store"
+"code=default 的渠道缺少默认标记","The SalesChannel with code=default is missing the default flag"
+销售渠道目录查询结果必须是数组,"The SalesChannel Catalog query result must be an array"
+销售渠道目录包含非法数据行,"The SalesChannel Catalog contains an invalid data row"
+"销售渠道 %{1} 的店铺 ID 与查询范围不一致","SalesChannel %{1} has a Store ID outside the requested scope"
+"销售渠道 %{1} 与父店铺的 Website 归属不一致","SalesChannel %{1} does not belong to the parent Store's Website"
+"销售渠道 %{1} 的代码不是规范值","SalesChannel %{1} has a non-canonical code"
+"销售渠道 %{1} 缺少名称","SalesChannel %{1} is missing a name"
+"销售渠道 %{1} 的父店铺生命周期状态无效","SalesChannel %{1} has an invalid parent Store lifecycle status"
+"销售渠道目录存在重复 ID：%{1}","The SalesChannel Catalog contains duplicate ID: %{1}"
+"店铺 %{1} 的销售渠道代码重复：%{2}","Store %{1} contains duplicate SalesChannel code: %{2}"
+"店铺 %{1} 存在多个默认销售渠道","Store %{1} contains multiple default SalesChannels"
+"销售渠道 %{1} 的 default 代码与默认标记不一致","SalesChannel %{1} has inconsistent default code and flag values"
+"店铺 %{1} 的默认销售渠道必须启用","The default SalesChannel for Store %{1} must be enabled"
+销售渠道引用了不存在的父店铺：%{1},"The SalesChannel references a missing parent Store: %{1}"
+"父店铺 ID 与销售渠道查询范围不一致：%{1}","Parent Store ID does not match the SalesChannel Catalog query scope: %{1}"
+销售渠道目录数据缺少字段：%{1},"The SalesChannel Catalog row is missing field: %{1}"
+"销售渠道目录字段 %{1} 超出整数范围","SalesChannel Catalog field %{1} is outside the integer range"
+"销售渠道目录字段 %{1} 必须是规范整数","SalesChannel Catalog field %{1} must be a canonical integer"
+"销售渠道目录字段 %{1} 必须大于或等于 %{2}","SalesChannel Catalog field %{1} must be greater than or equal to %{2}"
+"销售渠道目录字段 %{1} 不能大于 %{2}","SalesChannel Catalog field %{1} cannot exceed %{2}"
+"销售渠道目录字段 %{1} 必须是字符串","SalesChannel Catalog field %{1} must be a string"
+"销售渠道目录字段 %{1} 只能是 0 或 1","SalesChannel Catalog field %{1} must be either 0 or 1"
 "Websites 配置查询不支持的操作：%{1}","Websites Configuration Query Unsupported Operation: %{1}"
 启动配置流程：购买域名,"Startup configuration process: Purchase domain name"
 "域名商账号 ID","Domain registrar account ID"
@@ -1724,13 +2270,50 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 根域字段已从子域回填：%{1}（子域均可建站）,"Root domain field has been backfilled from subdomain: %{1} (all subdomains can host sites)"
 "阿里云域名 API HTTP %{code}：%{body}","Alibaba Cloud Domain API HTTP %{code}: %{body}"
 "阿里云 API 返回异常：%{1}","Alibaba Cloud API returned an error: %{1}"
+AI建站域名准备,AI建站域名准备
+店铺代码和名称不能为空,店铺代码和名称不能为空
+店铺代码已存在：%{1},店铺代码已存在：%{1}
+店铺写入后无法通过目录回读,店铺写入后无法通过目录回读
+"销售渠道所属店铺不存在或 Website 不匹配","销售渠道所属店铺不存在或 Website 不匹配"
+销售渠道代码和名称不能为空,销售渠道代码和名称不能为空
+销售渠道代码已存在：%{1},销售渠道代码已存在：%{1}
+销售渠道写入后无法通过目录回读,销售渠道写入后无法通过目录回读
+"website_id 不能为负","website_id 不能为负"
 开发环境模拟证书已签发：%{domain},"Development environment simulation certificate issued: %{domain}"
+删除店铺前必须加载明确的店铺记录,删除店铺前必须加载明确的店铺记录
+"删除店铺前必须提供有效店铺 ID","删除店铺前必须提供有效店铺 ID"
+"Store 缺少可验证的 website_id","Store 缺少可验证的 website_id"
+"店铺父 Website 在墓碑锁定期间发生变化","店铺父 Website 在墓碑锁定期间发生变化"
+店铺墓碑更新发生并发冲突,店铺墓碑更新发生并发冲突
+要删除的店铺不存在,要删除的店铺不存在
+店铺墓碑回读身份不一致,店铺墓碑回读身份不一致
+默认店铺不允许删除,默认店铺不允许删除
+店铺墓碑状态不完整,店铺墓碑状态不完整
+"Store 引用了非法 website_id","Store 引用了非法 website_id"
+"无法为店铺墓碑解析所属 Website","无法为店铺墓碑解析所属 Website"
+"无法为店铺墓碑解析 Website code","无法为店铺墓碑解析 Website code"
 "HTTP 可访问（%{1} 重定向）","HTTP accessible (%{1} redirect)"
 "HTTP 可访问（%{1}）","HTTP accessible (%{1})"
 "HTTPS 可连通（未校验证书，%{1} 重定向）","HTTPS connectable (unverified certificate, %{1} redirect)"
 "HTTPS 可连通（未校验证书，%{1}）","HTTPS connectable (unverified certificate, %{1})"
 无法连接,"Unable to connect"
 "curl 初始化失败","curl initialization failed"
+"Scope Kernel 切流三元组无效","Scope Kernel 切流三元组无效"
+"Scope Kernel 切流店铺模式无效","Scope Kernel 切流店铺模式无效"
+"Scope Kernel 首次 allowlist 切流仅允许 dev/test 店铺","Scope Kernel 首次 allowlist 切流仅允许 dev/test 店铺"
+"Scope Kernel 切流配置暂不可用","Scope Kernel 切流配置暂不可用"
+"Scope Token 请求协议无效","Scope Token 请求协议无效"
+"Scope Token allowlist/on 切流仅允许 HTTPS","Scope Token allowlist/on 切流仅允许 HTTPS"
+"Scope Kernel 切流配置无效：%{1}","Scope Kernel 切流配置无效：%{1}"
+站点绑定请求不存在。,站点绑定请求不存在。
+站点绑定执行令牌不匹配。,站点绑定执行令牌不匹配。
+购买结果已存在，但域名没有绑定到站点；为避免重复扣费，请先核对域名订单。,购买结果已存在，但域名没有绑定到站点；为避免重复扣费，请先核对域名订单。
+"等待 macOS 管理员批准 hosts 配置已超时；请确认系统弹窗后再明确重试。","等待 macOS 管理员批准 hosts 配置已超时；请确认系统弹窗后再明确重试。"
+正在准备域名并绑定站点。,正在准备域名并绑定站点。
+"正在等待 macOS 管理员批准本地域名 hosts 配置。","正在等待 macOS 管理员批准本地域名 hosts 配置。"
+域名准备完成，但没有找到有效的站点绑定记录。,域名准备完成，但没有找到有效的站点绑定记录。
+域名准备与站点绑定完成。,域名准备与站点绑定完成。
+域名准备失败：%{1},域名准备失败：%{1}
 准备中,Preparing
 "DNS 解析中","DNS resolution in progress"
 验证中,Verifying
@@ -1740,6 +2323,20 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 排队中,Queuing
 "Starting plan generation","Starting plan generation"
 "Plan generation completed","Plan generation completed"
+请先输入一句话需求,"Please enter a one-sentence requirement first"
+润色完成,"Polish completed"
+润色失败：模型未返回内容,"Polish failed: model returned empty content"
+润色失败：%{1},"Polish failed: %{1}"
+"Local demo mode: building a deterministic site plan...","Local demo mode: building a deterministic site plan..."
+"Local demo landing site for %{title}","Local demo landing site for %{title}"
+"Trustworthy, conversion-focused, modern","Trustworthy, conversion-focused, modern"
+"Clean cards, soft shadows, mobile-first","Clean cards, soft shadows, mobile-first"
+"official site","official site"
+download,download
+"No reference URLs provided.","No reference URLs provided."
+"References: %{list}","References: %{list}"
+"Prefer a short brandable domain; local .weline.test is fine for demo.","Prefer a short brandable domain; local .weline.test is fine for demo."
+"Demo plan generated in local fake mode","Demo plan generated in local fake mode"
 "AI service is not available for plan generation","AI service is not available for plan generation"
 "AI plan generation failed: %{message}","AI plan generation failed: %{message}"
 已接入,Connected
@@ -1815,8 +2412,48 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 域名购买、解析与证书流程已完成,"Domain purchase, resolution, and certificate process completed"
 域名接入流程失败,"Domain onboarding process failed"
 域名接入流程进行中,"Domain onboarding process in progress"
+"未知 Site Builder 工作台命令：%{1}","未知 Site Builder 工作台命令：%{1}"
+"Site Builder 工作台不接受通用传输参数","Site Builder 工作台不接受通用传输参数"
+"Site Builder 工作台操作失败","Site Builder 工作台操作失败"
+方案修订参数无效,方案修订参数无效
+请先填写建站需求或参考地址,请先填写建站需求或参考地址
+方案草稿不存在,方案草稿不存在
+开始生成方案,开始生成方案
+方案未能持久化,方案未能持久化
+请先生成方案,请先生成方案
+方案已确认,方案已确认
+本地域名池参数无效,本地域名池参数无效
+域名选择参数无效,域名选择参数无效
+域名已保存,域名已保存
+请先确认方案并选择域名,请先确认方案并选择域名
+工作区会话已创建,工作区会话已创建
+已生成本地域名建议,已生成本地域名建议
+请填写域名,请填写域名
+测试域名可用,测试域名可用
+域名可用性检查失败,域名可用性检查失败
+会话不存在或无权限,会话不存在或无权限
+保存工作区范围失败,保存工作区范围失败
+阶段参数无效,阶段参数无效
+消息参数无效,消息参数无效
+虚拟主题已生成,虚拟主题已生成
+虚拟主题生成失败,虚拟主题生成失败
 "provider_code 不能为空","provider_code cannot be empty"
 "admin_user_id 必须大于 0","admin_user_id must be greater than 0"
+"本地测试域名必须是单标签 *.weline.test。","本地测试域名必须是单标签 *.weline.test。"
+没有可检查的本地测试域名。,没有可检查的本地测试域名。
+已找到可直接启动建站的本地测试域名。,已找到可直接启动建站的本地测试域名。
+本地候选域名尚未完成解析与证书准备。,本地候选域名尚未完成解析与证书准备。
+"准备本地域名需要明确确认后再写入 hosts / 证书。","准备本地域名需要明确确认后再写入 hosts / 证书。"
+"正在等待 macOS 管理员批准精确 hosts 映射。","正在等待 macOS 管理员批准精确 hosts 映射。"
+"本机 hosts 自动写入失败；可点击协助处理或由管理员手动准备。","Automatic hosts write failed. Click Assist or ask an administrator to prepare hosts."
+请在本机终端执行：%{command},"Run this command on the local machine: %{command}"
+"本地通配证书自动准备失败；请确认 WLS 已启动后点击协助处理。","Local wildcard certificate preparation failed. Confirm WLS is running, then click Assist."
+"本地域名已自动完成 hosts 与证书准备，可以启动 AI 建站。","本地域名已自动完成 hosts 与证书准备，可以启动 AI 建站。"
+已尝试自动准备，但系统复检仍未通过；请点击协助处理。,已尝试自动准备，但系统复检仍未通过；请点击协助处理。
+本地测试域名尚未通过系统解析。,本地测试域名尚未通过系统解析。
+本地测试域名解析到了非回环地址，已阻止启动。,本地测试域名解析到了非回环地址，已阻止启动。
+"本地 *.weline.test 通配证书未激活或已过期。","本地 *.weline.test 通配证书未激活或已过期。"
+本地测试域名解析与通配证书均已就绪。,本地测试域名解析与通配证书均已就绪。
 已入池,Pooled
 入池,"Add to Pool"
 解析,Parse
@@ -1846,12 +2483,47 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 无法创建网站备份目录。,无法创建网站备份目录。
 "备份数据 JSON 编码失败。","备份数据 JSON 编码失败。"
 "健康检查同步根域/池失败 domain_id=%{1}：%{2}","Health check sync root domain/pool failed domain_id=%{1}: %{2}"
+"website_id 不能为负数（0 是合法默认站）","website_id 不能为负数（0 是合法默认站）"
+默认店铺在锁定复核期间消失,默认店铺在锁定复核期间消失
+默认店铺补种失败,默认店铺补种失败
+默认店铺并发补种后无法回读,默认店铺并发补种后无法回读
+"默认渠道补种缺少有效 store_id","默认渠道补种缺少有效 store_id"
+默认渠道,默认渠道
+默认渠道补种失败,默认渠道补种失败
+默认渠道并发补种后无法回读,默认渠道并发补种后无法回读
+"默认渠道补种读取到无效 store_id","默认渠道补种读取到无效 store_id"
+"既有默认店铺不满足 default/normal/启用/active 不变量","既有默认店铺不满足 default/normal/启用/active 不变量"
+"既有默认渠道不满足父 Scope/default/启用不变量","既有默认渠道不满足父 Scope/default/启用不变量"
+"补种目标 Website 不存在","补种目标 Website 不存在"
+默认店铺,默认店铺
 证书管理：无记录（待申请）,"Certificate management: No records (pending application)"
 证书管理：异常,"Certificate management: Error"
 证书管理：已过期,"Certificate management: Expired"
 证书管理：申请中,"Certificate management: Applying"
 证书管理：有效,"Certificate management: Valid"
 证书管理：待处理,"Certificate management: Pending"
+等待系统调度域名准备任务。,等待系统调度域名准备任务。
+"发布后的首页页面 ID 不能为空。","发布后的首页页面 ID 不能为空。"
+"尚未找到当前 AI 建站会话的域名绑定。","尚未找到当前 AI 建站会话的域名绑定。"
+域名绑定尚未完成，不能登记站点首页。,域名绑定尚未完成，不能登记站点首页。
+检测到历史默认站点绑定，正在为当前会话重新创建独立站点。,检测到历史默认站点绑定，正在为当前会话重新创建独立站点。
+创建域名准备队列失败。,创建域名准备队列失败。
+域名准备任务已排队，等待系统调度。,域名准备任务已排队，等待系统调度。
+域名准备任务执行失败，请明确重试。,域名准备任务执行失败，请明确重试。
+域名准备任务重试失败，请稍后再试。,域名准备任务重试失败，请稍后再试。
+域名准备任务已重新排队，等待系统调度。,域名准备任务已重新排队，等待系统调度。
+默认语言格式无效。,默认语言格式无效。
+请求来源模块无效。,请求来源模块无效。
+必须由已登录的后台管理员发起域名准备。,必须由已登录的后台管理员发起域名准备。
+"来源会话公开 ID 不能为空。","来源会话公开 ID 不能为空。"
+"幂等命令 ID 不能为空。","幂等命令 ID 不能为空。"
+当前站点绑定不支持域名模式：%{1},当前站点绑定不支持域名模式：%{1}
+目标域名格式无效。,目标域名格式无效。
+"测试模式必须使用 *.weline.test 本地域名。","测试模式必须使用 *.weline.test 本地域名。"
+正式购买模式必须选择可公开注册的域名。,正式购买模式必须选择可公开注册的域名。
+正式购买前必须选择域名购买账户。,正式购买前必须选择域名购买账户。
+正式域名购买需要明确确认。,正式域名购买需要明确确认。
+"同一幂等命令 ID 的站点绑定参数不一致。","同一幂等命令 ID 的站点绑定参数不一致。"
 账户未启用,"Account not enabled"
 账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）,"The domain registrar associated with account ""%{1}"" does not exist or is not configured (registrar_id=%{2})"
 账户「%{1}」的域名商适配器「%{2}」未注册,"The domain registrar adapter ""%{2}"" for account ""%{1}"" is not registered."
@@ -1885,6 +2557,7 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 未在远程找到要导入的域名,"Domain to import not found on remote"
 "导入完成：新增 %{1}，已存在 %{2}，入池 %{3}，已绑定 DNS/CDN 账户","Import complete: Added %{1}, already exists %{2}, added to pool %{3}, bound DNS/CDN account"
 导入失败：%{1},"Import failed: %{1}"
+请求绑定的网站不存在。,请求绑定的网站不存在。
 "Combination of keywords with hyphen for readability","Combination of keywords with hyphen for readability"
 "Short brandable name, easy to type and remember","Short brandable name, easy to type and remember"
 "Direct keyword-based domain, clear and descriptive","Direct keyword-based domain, clear and descriptive"
@@ -2043,6 +2716,44 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 "已跳过 SSL，流程完成","SSL skipped; process completed"
 证书申请成功,"Certificate application successful"
 域名商账号未配置,"Domain registrar account not configured"
+"网站快照缺少 code","网站快照缺少 code"
+"测试模式必须使用单标签 *.weline.test 域名。","测试模式必须使用单标签 *.weline.test 域名。"
+"本地测试域名 hosts 准备失败。","本地测试域名 hosts 准备失败。"
+本地测试域名证书准备失败。,本地测试域名证书准备失败。
+不支持的域名准备模式。,不支持的域名准备模式。
+上次购买结果尚未确认，为避免重复扣费，必须先在域名管理中核对。,上次购买结果尚未确认，为避免重复扣费，必须先在域名管理中核对。
+目标域名当前不可购买。,目标域名当前不可购买。
+域名购买失败。,域名购买失败。
+域名池保存后无法取得有效记录。,域名池保存后无法取得有效记录。
+目标域名已绑定到其他站点，不能自动改绑。,目标域名已绑定到其他站点，不能自动改绑。
+域名记录保存后未能验证站点绑定。,域名记录保存后未能验证站点绑定。
+域名池状态与站点绑定不一致。,域名池状态与站点绑定不一致。
+站点范围上下文无效,站点范围上下文无效
+"可信请求 URL 无效，已拒绝解析店铺范围","可信请求 URL 无效，已拒绝解析店铺范围"
+"店铺入口 URL 配置无效，已拒绝解析店铺范围","店铺入口 URL 配置无效，已拒绝解析店铺范围"
+"当前 Origin/URI 匹配到多个同优先级店铺，已拒绝请求","当前 Origin/URI 匹配到多个同优先级店铺，已拒绝请求"
+"当前请求命中的店铺与已冻结 Website 归属不一致","当前请求命中的店铺与已冻结 Website 归属不一致"
+当前请求命中的店铺已进入墓碑生命周期,当前请求命中的店铺已进入墓碑生命周期
+当前请求命中的店铺生命周期无效,当前请求命中的店铺生命周期无效
+当前请求命中的店铺已停用,当前请求命中的店铺已停用
+当前站点缺少可用的默认店铺,当前站点缺少可用的默认店铺
+站点路由剩余路径无效,站点路由剩余路径无效
+当前店铺缺少可用的默认销售渠道,当前店铺缺少可用的默认销售渠道
+请求的范围断言格式无效,请求的范围断言格式无效
+"请求的范围与可信 Host/URI 不一致","请求的范围与可信 Host/URI 不一致"
+站点、域名或首页页面无效。,"Invalid website, domain, or home page."
+目标域名尚未绑定到当前站点。,"The target domain is not bound to the current website."
+找不到域名所属站点。,"The website associated with the domain could not be found."
+目标域名无法建立独立首页配置。,"A dedicated home-page configuration cannot be created for the target domain."
+保存站点首页入口失败。,"Failed to save the website home-page entry."
+"保存站点 scope 首页入口失败。","保存站点 scope 首页入口失败。"
+"Storefront Scope Token 必须使用完整 Channel Scope","Storefront Scope Token 必须使用完整 Channel Scope"
+"Scope Token 时钟无效","Scope Token 时钟无效"
+"Scope Token Host 无效","Scope Token Host 无效"
+"Scope Token Host 端口无效","Scope Token Host 端口无效"
+网站缓存失效延迟作用域只能在活动事务中开启,"Deferred website cache invalidation can only begin inside an active transaction"
+待失效的网站不存在：%{1},"The website to invalidate does not exist: %{1}"
+未知网站缓存组件：%{1},"Unknown website cache component: %{1}"
 "无法获取服务器公网 IP","Unable to get server public IP"
 "域名商不支持 DNS 管理","Domain registrar does not support DNS management"
 没有可添加的解析记录,"No DNS records to add"
@@ -2184,7 +2895,35 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 本地演示：已生成模拟生命周期状态,"Local demo: simulated lifecycle status generated"
 "生命周期订单已完成，联动更新根域状态：%{1} → active","Lifecycle order completed, updating root domain status: %{1} → active"
 "生命周期脏数据修复：已同步根域 %{1} 条，已补标完成 %{2} 条","Lifecycle dirty data fix: %{1} root domains synced, %{2} items re-tagged"
+"Scope Token keyring 缺少 active key","Scope Token keyring 缺少 active key"
+"Scope Token keyring 必须是有效普通文件","Scope Token keyring 必须是有效普通文件"
+"Windows 下文件 ACL 无法在 PHP 内可靠验证，请使用进程密钥注入","Windows 下文件 ACL 无法在 PHP 内可靠验证，请使用进程密钥注入"
+"Scope Token keyring 必须是 owner-only 普通文件","Scope Token keyring 必须是 owner-only 普通文件"
+"Scope Token keyring 文件所有者无效","Scope Token keyring 文件所有者无效"
+"Scope Token keyring 无法打开","Scope Token keyring 无法打开"
+"Scope Token keyring 在读取期间发生替换","Scope Token keyring 在读取期间发生替换"
+"Scope Token keyring 内容无效","Scope Token keyring 内容无效"
+"Scope Token 进程密钥注入无效","Scope Token 进程密钥注入无效"
+"Scope Token keyring 未配置绝对路径","Scope Token keyring 未配置绝对路径"
+"Scope Token keyring JSON 无效","Scope Token keyring JSON 无效"
+"Scope Token keyring 元数据字段无效","Scope Token keyring 元数据字段无效"
+"Scope Token keyring 元数据无效","Scope Token keyring 元数据无效"
+"Scope Token keyring kid 无效","Scope Token keyring kid 无效"
+"Scope Token keyring key 字段无效","Scope Token keyring key 字段无效"
+"Scope Token keyring key 无效","Scope Token keyring key 无效"
+"Scope Token keyring 轮换时间窗口无效","Scope Token keyring 轮换时间窗口无效"
+"Scope Token keyring 不允许多个 kid 共用密钥","Scope Token keyring 不允许多个 kid 共用密钥"
+"Scope Token active_kid 未指向 active key","Scope Token active_kid 未指向 active key"
+"Scope Token keyring version 不允许回退","Scope Token keyring version 不允许回退"
+"Scope Token keyring 同版本内容不一致","Scope Token keyring 同版本内容不一致"
+默认网站初始化后无法回读,默认网站初始化后无法回读
 "默认站点 ID %{1} 已被站点 %{2} 占用，无法迁移 default 站点。","Default website ID %{1} is already occupied by website %{2}; unable to migrate the default website."
+域名购买账户不存在。,域名购买账户不存在。
+域名购买账户已停用。,域名购买账户已停用。
+所选账户不支持域名购买。,所选账户不支持域名购买。
+域名可用性检查失败：%{1},域名可用性检查失败：%{1}
+域名可用性服务返回了无效结果。,域名可用性服务返回了无效结果。
+域名注册商不存在。,域名注册商不存在。
 "[NS 与配置 DNS 账户不一致] 域名 %{1}：公网识别为 %{2}，配置的 DNS 账户服务商为 %{3}（account_id=%{4}）。公网 NS：%{5}。请运营核对注册商 NS 或等待切换传播；此检查只做告警，不会在这里直接改 NS。","[NS is inconsistent with the configured DNS account] Domain name %{1}: The public network is identified as %{2}, and the configured DNS account service provider is %{3} (account_id=%{4}). Public network NS: %{5}. Please check the registrar NS or wait for the switch to propagate; this check is only for warning, and the NS will not be changed directly here."
 "[NS 自愈策略] 已为域名 %{1} 写入 dns_switch_pending=1（冷却内单次排队），将由 DnsCdnAutoSwitch 执行切换。","[NS self-healing policy] dns_switch_pending=1 has been written for the domain name %{1} (single queue within cooldown), the switch will be performed by DnsCdnAutoSwitch."
 "DNS 解析与子域入池","DNS resolution and subdomain pooling"
@@ -2316,6 +3055,8 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 域名生命周期轮询失败：%{error},"Domain lifecycle polling failed: %{error}"
 域名池证书健康（每日）,"Domain pool certificate health (daily)"
 "每日校验池内已签发证书 PEM；与 SSL 表续期通知节拍一致","Daily check the PEM of issued certificates in the pool; consistent with the SSL table renewal notification cadence"
+"用法：scope:migrate-p1a preflight|apply|verify|rollback [--database=mig_clone_*]","用法：scope:migrate-p1a preflight|apply|verify|rollback [--database=mig_clone_*]"
+"MIG-P1A Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1A Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）"
 "开始 v1.6.0 域名池数据迁移...","Starting v1.6.0 domain pool data migration..."
 （试运行模式，不会实际修改数据）,"(Dry-run mode, data will not be actually modified)"
 "步骤 1: 为根域名生成子域名到域名池...","Step 1: Generating subdomains for the root domain into the domain pool..."
@@ -2341,3 +3082,25 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","处理完成：%d 条非法记录"
+网站关联数据写入后、主事务提交前触发，用于同库关键扩展；异常会回滚整个网站保存。,网站关联数据写入后、主事务提交前触发，用于同库关键扩展；异常会回滚整个网站保存。
+"网站 code 不能为空","网站 code 不能为空"
+"异步准备本地测试域名，或在明确确认后购买正式域名；完成前不得启动 AI 规划。","异步准备本地测试域名，或在明确确认后购买正式域名；完成前不得启动 AI 规划。"
+本地测试域名尚未准备完成：%{1},本地测试域名尚未准备完成：%{1}
+本地测试域名尚未准备完成。,本地测试域名尚未准备完成。
+网站ID不能为空,网站ID不能为空
+"保存关联货币失败: %{1}","保存关联货币失败: %{1}"
+"保存关联语言失败: %{1}","保存关联语言失败: %{1}"
+站点首页已保存，但运行中实例缓存刷新失败。,站点首页已保存，但运行中实例缓存刷新失败。
+"三入口共用 ProductCopyService；提交前先 preview。库存默认 0，需显式勾选才复制数量。","三入口共用 ProductCopyService；提交前先 preview。库存默认 0，需显式勾选才复制数量。"
+"分类树：勾父默认含子孙；可用 excluded_category_ids 取消子树；include_products 控制是否带品。","分类树：勾父默认含子孙；可用 excluded_category_ids 取消子树；include_products 控制是否带品。"
+"同来源重复复制：默认 skip；或 update_selected_fields 只更新勾选字段包，不删未选字段。","同来源重复复制：默认 skip；或 update_selected_fields 只更新勾选字段包，不删未选字段。"
+"当前 commit 以 memory/harness 契约为准；Repository 适配器就绪前，完整写库提交的 Browser 验收记为 BLOCKED_ADAPTER。","当前 commit 以 memory/harness 契约为准；Repository 适配器就绪前，完整写库提交的 Browser 验收记为 BLOCKED_ADAPTER。"
+"按网站读取店铺目录 v1","Read the Store Catalog by Website (v1)"
+"按店铺读取销售渠道目录 v1","Read the SalesChannel Catalog by Store (v1)"
+"网站 ID；0 是合法的系统默认站点","Website ID; 0 is the valid system default Website"
+目录查询缺少必填参数：%{1},"Missing required Catalog query parameter: %{1}"
+目录查询只允许参数：%{1},"The Catalog query only accepts this parameter: %{1}"
+"目录查询参数 %{1} 超出整数范围","Catalog query parameter %{1} is outside the integer range"
+"目录查询参数 %{1} 必须是规范整数","Catalog query parameter %{1} must be a canonical integer"
+"目录查询参数 %{1} 必须大于或等于 %{2}","Catalog query parameter %{1} must be greater than or equal to %{2}"
+"目录查询参数 %{1} 不能大于 %{2}","Catalog query parameter %{1} cannot exceed %{2}"

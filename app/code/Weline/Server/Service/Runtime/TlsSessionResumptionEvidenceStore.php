@@ -24,6 +24,8 @@ final class TlsSessionResumptionEvidenceStore
     private const CALLBACK_CLEAN_P99_LIMIT_US = 5000;
     private const CALLBACK_FAULT_MIN_GET_SAMPLES = 16;
     private const MAX_EVIDENCE_FILES = 64;
+    private const MAX_EVIDENCE_TREE_ENTRIES = 256;
+    private const MAX_EVIDENCE_TREE_DEPTH = 1;
     private const MAX_PERFORMANCE_REPORTS = 16;
     private const MAX_EVIDENCE_BYTES = 1_048_576;
     private const PRODUCTION_RESUMPTION_TLS_P95_LIMIT_MS = 50.0;
@@ -676,7 +678,7 @@ final class TlsSessionResumptionEvidenceStore
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         ) . PHP_EOL;
         if (\is_file($path)) {
-            $existing = @\file_get_contents($path);
+            $existing = $this->boundedStableFile($path, self::MAX_EVIDENCE_BYTES);
             if ($existing !== $json) {
                 throw new \RuntimeException('Immutable TLS evidence path already contains different bytes.');
             }
@@ -735,7 +737,9 @@ final class TlsSessionResumptionEvidenceStore
         if (\is_link($path)) {
             throw new \RuntimeException('TLS evidence target became a symbolic link.');
         }
-        $existing = \is_file($path) ? @\file_get_contents($path) : false;
+        $existing = \is_file($path)
+            ? $this->boundedStableFile($path, self::MAX_EVIDENCE_BYTES)
+            : false;
         if ($existing !== $json) {
             throw new \RuntimeException('Immutable TLS evidence target already exists with different bytes.');
         }
@@ -1446,7 +1450,7 @@ final class TlsSessionResumptionEvidenceStore
             if (!\is_file($path) || \is_link($path) || \filesize($path) > self::MAX_EVIDENCE_BYTES) {
                 throw new \RuntimeException('TLS evidence performance report is missing or unsafe: ' . $relativePath);
             }
-            $raw = @\file_get_contents($path);
+            $raw = $this->boundedStableFile($path, self::MAX_EVIDENCE_BYTES);
             if (!\is_string($raw) || \strlen($raw) > self::MAX_EVIDENCE_BYTES) {
                 throw new \RuntimeException(
                     'TLS evidence performance report exceeds its safe byte limit: ' . $relativePath
@@ -2042,20 +2046,115 @@ final class TlsSessionResumptionEvidenceStore
 
     private function boundedProcFile(string $path, int $maxBytes): ?string
     {
+        if ($maxBytes < 1 || \str_contains($path, "\0") || \is_link($path)) {
+            return null;
+        }
+        $before = @\lstat($path);
+        if (!\is_array($before)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($before['nlink'] ?? 0) !== 1
+        ) {
+            return null;
+        }
         $handle = @\fopen($path, 'rb');
         if (!\is_resource($handle)) {
             return null;
         }
         try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened)
+                || (int)($opened['dev'] ?? -1) !== (int)($before['dev'] ?? -2)
+                || (int)($opened['ino'] ?? -1) !== (int)($before['ino'] ?? -2)
+                || ((((int)($opened['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($opened['nlink'] ?? 0) !== 1
+            ) {
+                return null;
+            }
             $content = @\stream_get_contents($handle, $maxBytes + 1);
         } finally {
             @\fclose($handle);
         }
-        if (!\is_string($content) || \strlen($content) > $maxBytes) {
+        $after = @\lstat($path);
+        if (!\is_string($content)
+            || \strlen($content) > $maxBytes
+            || !\is_array($after)
+            || \is_link($path)
+            || (int)($after['dev'] ?? -1) !== (int)($before['dev'] ?? -2)
+            || (int)($after['ino'] ?? -1) !== (int)($before['ino'] ?? -2)
+        ) {
             return null;
         }
 
         return $content;
+    }
+
+    /**
+     * Strict immutable-artifact reader. Unlike procfs reads, evidence files
+     * must retain their exact identity and metadata throughout the read.
+     */
+    private function boundedStableFile(string $path, int $maxBytes): ?string
+    {
+        if ($maxBytes < 1 || \str_contains($path, "\0") || \is_link($path)) {
+            return null;
+        }
+        $before = @\lstat($path);
+        if (!$this->isStableRegularFileStat($before, $maxBytes)) {
+            return null;
+        }
+        $handle = @\fopen($path, 'rb');
+        if (!\is_resource($handle)) {
+            return null;
+        }
+        $opened = null;
+        $openedAfter = null;
+        $content = null;
+        try {
+            $opened = @\fstat($handle);
+            if (!$this->sameStableFileStat($before, $opened, $maxBytes)) {
+                return null;
+            }
+            $content = @\stream_get_contents($handle, $maxBytes + 1);
+            $openedAfter = @\fstat($handle);
+        } finally {
+            @\fclose($handle);
+        }
+        $after = @\lstat($path);
+        if (!\is_string($content)
+            || \strlen($content) > $maxBytes
+            || \strlen($content) !== (int)($opened['size'] ?? -1)
+            || !$this->sameStableFileStat($opened, $openedAfter, $maxBytes)
+            || !$this->sameStableFileStat($opened, $after, $maxBytes)
+            || \is_link($path)
+        ) {
+            return null;
+        }
+
+        return $content;
+    }
+
+    private function isStableRegularFileStat(mixed $stat, int $maxBytes): bool
+    {
+        return \is_array($stat)
+            && ((((int)($stat['mode'] ?? 0)) & 0170000) === 0100000)
+            && (int)($stat['nlink'] ?? 0) === 1
+            && (int)($stat['size'] ?? -1) >= 0
+            && (int)($stat['size'] ?? -1) <= $maxBytes;
+    }
+
+    private function sameStableFileStat(mixed $expected, mixed $actual, int $maxBytes): bool
+    {
+        if (!$this->isStableRegularFileStat($expected, $maxBytes)
+            || !$this->isStableRegularFileStat($actual, $maxBytes)
+        ) {
+            return false;
+        }
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if ((int)($expected[$field] ?? -1) !== (int)($actual[$field] ?? -2)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -2709,20 +2808,28 @@ final class TlsSessionResumptionEvidenceStore
         }
         $paths = [];
         try {
-            $directories = [$directory];
+            $directories = [[$directory, 0]];
+            $visitedEntries = 0;
             while ($directories !== []) {
-                $current = \array_shift($directories);
-                if (!\is_string($current) || \is_link($current)) {
+                $next = \array_shift($directories);
+                $current = \is_array($next) ? ($next[0] ?? null) : null;
+                $depth = \is_array($next) ? ($next[1] ?? null) : null;
+                if (!\is_string($current) || !\is_int($depth) || \is_link($current)) {
                     continue;
                 }
                 $iterator = new \FilesystemIterator($current, \FilesystemIterator::SKIP_DOTS);
                 foreach ($iterator as $entry) {
+                    if (++$visitedEntries > self::MAX_EVIDENCE_TREE_ENTRIES) {
+                        return ['paths' => [], 'overflow' => true];
+                    }
                     if ($entry->isLink()) {
                         continue;
                     }
                     if ($recursive && $entry->isDir()) {
-                        if ((bool)\preg_match('/^[a-f0-9]{64}$/D', $entry->getFilename())) {
-                            $directories[] = $entry->getPathname();
+                        if ($depth < self::MAX_EVIDENCE_TREE_DEPTH
+                            && (bool)\preg_match('/^[a-f0-9]{64}$/D', $entry->getFilename())
+                        ) {
+                            $directories[] = [$entry->getPathname(), $depth + 1];
                         }
                         continue;
                     }
@@ -2738,7 +2845,7 @@ final class TlsSessionResumptionEvidenceStore
                 }
             }
         } catch (\UnexpectedValueException) {
-            return ['paths' => [], 'overflow' => false];
+            return ['paths' => [], 'overflow' => true];
         }
         \sort($paths, SORT_STRING);
 
@@ -2755,7 +2862,7 @@ final class TlsSessionResumptionEvidenceStore
         if (!\is_int($size) || $size <= 0 || $size > self::MAX_EVIDENCE_BYTES) {
             return null;
         }
-        $raw = @\file_get_contents($path);
+        $raw = $this->boundedStableFile($path, self::MAX_EVIDENCE_BYTES);
         if (!\is_string($raw) || $raw === '' || \strlen($raw) > self::MAX_EVIDENCE_BYTES) {
             return null;
         }

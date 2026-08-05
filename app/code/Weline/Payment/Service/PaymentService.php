@@ -7,8 +7,6 @@ namespace Weline\Payment\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Api\Data\Actor;
 use Weline\Payment\Api\Data\AvailabilityRequest;
-use Weline\Payment\Api\Data\CallbackRequest;
-use Weline\Payment\Api\Data\CallbackResult;
 use Weline\Payment\Api\Data\PaymentOperationRequest;
 use Weline\Payment\Api\Data\PaymentRequest;
 use Weline\Payment\Api\Data\PaymentResult;
@@ -95,6 +93,7 @@ class PaymentService
             ->setData(PaymentTransaction::schema_fields_AMOUNT, $amount)
             ->setData(PaymentTransaction::schema_fields_CURRENCY, $currency)
             ->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_PENDING)
+            ->setData(PaymentTransaction::schema_fields_SCOPE, $scope['scope'])
             ->setRequestData($orderData)
             ->save();
 
@@ -133,59 +132,15 @@ class PaymentService
     }
 
     /**
+     * @deprecated Callback writes are fail-closed. Use PaymentCallbackReceiver
+     * with a persisted endpoint_code; only the P2F-004 inbox consumer may
+     * advance payment state.
+     *
      * @param array<string, mixed> $callbackData
      */
     public function handleCallback(string $methodCode, array $callbackData): ?PaymentTransaction
     {
-        $paymentMethod = $this->methodManager->getMethodByCode($methodCode);
-        if (!$paymentMethod) {
-            throw new \RuntimeException(__('支付方式 %{code} 不存在', ['code' => $methodCode]));
-        }
-
-        $provider = $this->methodManager->getProviderInstance($paymentMethod);
-        if (!$provider) {
-            throw new \RuntimeException(__('支付提供商实例化失败'));
-        }
-
-        $callbackRequest = CallbackRequest::fromArray([
-            CallbackRequest::FIELD_PROVIDER_CODE => $provider->getProviderCode(),
-            CallbackRequest::FIELD_PAYLOAD => $callbackData,
-            CallbackRequest::FIELD_SIGNATURE => (string) ($callbackData['signature'] ?? $callbackData['sign'] ?? ''),
-            CallbackRequest::FIELD_RECEIVED_AT => date('Y-m-d H:i:s'),
-        ]);
-
-        $verified = $provider->verifyCallback($callbackRequest);
-        if (!$verified->isVerified()) {
-            throw new \RuntimeException((string) ($verified->getData(CallbackResult::FIELD_MESSAGE) ?: __('签名验证失败')));
-        }
-        $event = $provider->parseCallback($callbackRequest);
-
-        $transactionNo = (string) ($event->getData(CallbackResult::FIELD_TRANSACTION_CODE)
-            ?: $callbackData['transaction_no']
-            ?? $callbackData['out_trade_no']
-            ?? $callbackData['provider_reference']
-            ?? '');
-        if ($transactionNo === '') {
-            throw new \RuntimeException(__('回调数据中缺少交易号'));
-        }
-
-        /** @var PaymentTransaction $transaction */
-        $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
-        if (!$transaction->getId()) {
-            throw new \RuntimeException(__('交易记录不存在: %{no}', ['no' => $transactionNo]));
-        }
-
-        $transition = (string) ($event->getData(CallbackResult::FIELD_STATUS_TRANSITION) ?: '');
-        $transaction->setCallbackData($callbackData)
-            ->setData(PaymentTransaction::schema_fields_STATUS, $this->mapCallbackStatus($transition))
-            ->save();
-        if ($transaction->isSuccess()) {
-            $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
-                ->save();
-        }
-
-        return $transaction;
+        throw new \RuntimeException('payment_callback_endpoint_required');
     }
 
     public function queryPaymentStatus(string $transactionNo): ?PaymentTransaction
@@ -267,16 +222,6 @@ class PaymentService
             PaymentResult::STATUS_FAILED,
             PaymentResult::STATUS_UNSUPPORTED => PaymentTransaction::STATUS_FAILED,
             PaymentResult::STATUS_PROCESSING => PaymentTransaction::STATUS_PROCESSING,
-            default => PaymentTransaction::STATUS_PENDING,
-        };
-    }
-
-    private function mapCallbackStatus(string $transition): string
-    {
-        return match (strtolower($transition)) {
-            'paid', 'captured', 'authorized', 'success', 'succeeded' => PaymentTransaction::STATUS_SUCCESS,
-            'failed', 'cancelled', 'canceled', 'expired' => PaymentTransaction::STATUS_FAILED,
-            'processing' => PaymentTransaction::STATUS_PROCESSING,
             default => PaymentTransaction::STATUS_PENDING,
         };
     }

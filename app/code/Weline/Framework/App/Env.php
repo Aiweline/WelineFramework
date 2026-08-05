@@ -156,10 +156,17 @@ class Env extends DataObject
             'currency' => 'CNY',
         ],
         'db' => [
-            'default' => 'sqlite',
+            'default' => 'pgsql',
             'master' => [
-                'type' => 'sqlite',
-                'path' => APP_PATH . 'etc/db.sqlite',
+                'type' => 'pgsql',
+                'hostname' => '127.0.0.1',
+                'hostport' => '5432',
+                'database' => 'weline',
+                'username' => 'weline',
+                'password' => 'weline',
+                'prefix' => 'w_',
+                'charset' => 'utf8',
+                'collate' => 'utf8_general_ci',
             ],
             'slaves' => [],
         ],
@@ -197,6 +204,7 @@ class Env extends DataObject
             'headers' => [
                 'csp_report_only' => '',
                 'csp' => '',
+                'cors_origins' => '',
             ],
             'view' => [
                 'assign_params_mode' => 'all',
@@ -379,17 +387,10 @@ class Env extends DataObject
         $this->dependencies = [];
         self::$module_configs = [];
 
-        // 检查环境配置文件是否存在，不存在则创建
+        // 检查环境配置文件是否存在，不存在则原子创建
         if (!is_file(self::path_ENV_FILE)) {
-            $file = new File();
-            try {
-                $file->open(self::path_ENV_FILE, $file::mode_w_add);
-                $text = '<?php return ' . w_var_export([], true) . '; ?>';
-                $file->write($text);
-                $file->close();
-            } catch (Exception $e) {
-                $file->close();
-                throw new Exception(__('错误：%{1}', $e->getMessage()));
+            if (!$this->writeConfigFileAtomically([], self::path_ENV_FILE)) {
+                throw new Exception(__('无法创建环境配置文件：%{1}', self::path_ENV_FILE));
             }
         }
         // 合并默认配置与环境配置文件内容
@@ -948,40 +949,189 @@ class Env extends DataObject
         if ($key === 'cache') {
             self::$mergedCacheConfig = null;
         }
-        // 如果键包含点，则处理嵌套设置
-        if (str_contains($key, '.')) {
-            $keys = explode('.', $key);
-            $lastKey = array_pop($keys);
-            $config = &$this->persistentConfig;
 
-            // 遍历键路径，创建或设置中间层级数组
-            foreach ($keys as $k) {
-                if (!isset($config[$k]) || !is_array($config[$k])) {
-                    $config[$k] = [];
-                }
-                $config = &$config[$k];
-            }
-
-            // 设置最终值
-            $config[$lastKey] = $value;
-        } else {
-            // 处理单一层级设置
-            $this->persistentConfig[$key] = $value;
-        }
-
-        // 更新缓存的配置文件
-        $this->rebuildEffectiveConfig();
-
-        try {
-            $file = new File();
-            $file->open(self::path_ENV_FILE, $file::mode_w);
-            $text = '<?php return ' . w_var_export($this->persistentConfig, true) . ';';
-            $file->write($text);
-            $file->close();
-            return true;
-        } catch (Exception $exception) {
+        $lock = $this->acquireConfigWriteLock();
+        if (!\is_resource($lock)) {
             return false;
         }
+
+        try {
+            $diskConfig = $this->readPersistentConfigForWrite();
+            if ($diskConfig === null) {
+                return false;
+            }
+
+            $nextConfig = \array_replace_recursive(self::default_CONFIG, $diskConfig);
+            $this->assignConfigValue($nextConfig, $key, $value);
+            if (!$this->writeConfigFileAtomically($nextConfig, self::path_ENV_FILE)) {
+                return false;
+            }
+
+            $this->persistentConfig = $nextConfig;
+            $this->rebuildEffectiveConfig();
+            return true;
+        } finally {
+            \flock($lock, \LOCK_UN);
+            \fclose($lock);
+        }
+    }
+
+    /**
+     * Replace the complete persistent environment through the same atomic writer.
+     *
+     * @param array<string, mixed> $config
+     */
+    public function replacePersistentConfig(array $config): bool
+    {
+        $lock = $this->acquireConfigWriteLock();
+        if (!\is_resource($lock)) {
+            return false;
+        }
+
+        try {
+            $nextConfig = \array_replace_recursive(self::default_CONFIG, $config);
+            if (!$this->writeConfigFileAtomically($nextConfig, self::path_ENV_FILE)) {
+                return false;
+            }
+
+            $this->persistentConfig = $nextConfig;
+            $this->rebuildEffectiveConfig();
+            return true;
+        } finally {
+            \flock($lock, \LOCK_UN);
+            \fclose($lock);
+        }
+    }
+
+    /**
+     * @return resource|false
+     */
+    private function acquireConfigWriteLock()
+    {
+        $lock = @\fopen(self::path_ENV_FILE . '.lock', 'c+b');
+        if (!\is_resource($lock)) {
+            return false;
+        }
+        if (!@\flock($lock, \LOCK_EX)) {
+            \fclose($lock);
+            return false;
+        }
+        return $lock;
+    }
+
+    /**
+     * Return null for an existing empty/invalid file so a writer cannot silently
+     * replace local deployment settings with framework defaults.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function readPersistentConfigForWrite(): ?array
+    {
+        if (!\is_file(self::path_ENV_FILE)) {
+            return [];
+        }
+        if ((int) @\filesize(self::path_ENV_FILE) <= 0) {
+            return null;
+        }
+
+        try {
+            $config = include self::path_ENV_FILE;
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return \is_array($config) ? $config : null;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function assignConfigValue(array &$config, string $key, mixed $value): void
+    {
+        if (!\str_contains($key, '.')) {
+            $config[$key] = $value;
+            return;
+        }
+
+        $keys = \explode('.', $key);
+        $lastKey = \array_pop($keys);
+        $cursor = &$config;
+        foreach ($keys as $segment) {
+            if (!isset($cursor[$segment]) || !\is_array($cursor[$segment])) {
+                $cursor[$segment] = [];
+            }
+            $cursor = &$cursor[$segment];
+        }
+        $cursor[$lastKey] = $value;
+    }
+
+    /**
+     * Stage a complete PHP config next to the target, flush it, then atomically
+     * replace the target. Readers therefore observe either the old or new file,
+     * never a file truncated by an opening "w" mode.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function writeConfigFileAtomically(array $config, string $targetPath): bool
+    {
+        $directory = \dirname($targetPath);
+        $temporaryPath = @\tempnam($directory, '.env.php.');
+        if (!\is_string($temporaryPath) || $temporaryPath === '') {
+            return false;
+        }
+
+        $handle = @\fopen($temporaryPath, 'wb');
+        if (!\is_resource($handle)) {
+            @\unlink($temporaryPath);
+            return false;
+        }
+
+        $text = '<?php return ' . w_var_export($config, true) . ';';
+        $written = 0;
+        $length = \strlen($text);
+        $writeSucceeded = true;
+        try {
+            while ($written < $length) {
+                $bytes = @\fwrite($handle, \substr($text, $written));
+                if (!\is_int($bytes) || $bytes <= 0) {
+                    $writeSucceeded = false;
+                    break;
+                }
+                $written += $bytes;
+            }
+            if ($writeSucceeded && !@\fflush($handle)) {
+                $writeSucceeded = false;
+            }
+            if ($writeSucceeded && \function_exists('fsync') && !@\fsync($handle)) {
+                $writeSucceeded = false;
+            }
+        } finally {
+            \fclose($handle);
+        }
+
+        if (!$writeSucceeded) {
+            @\unlink($temporaryPath);
+            return false;
+        }
+
+        $permissions = @\fileperms($targetPath);
+        if (\is_int($permissions)) {
+            @\chmod($temporaryPath, $permissions & 0777);
+        }
+        if (!@\rename($temporaryPath, $targetPath)) {
+            @\unlink($temporaryPath);
+            return false;
+        }
+
+        // Atomic replacement changes the inode while retaining the same path.
+        // Long-lived workers and CLI test processes may otherwise keep serving
+        // the previously compiled env.php from OPcache immediately after write.
+        \clearstatcache(true, $targetPath);
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate($targetPath, true);
+        }
+
+        return true;
     }
 
     /**
@@ -1036,14 +1186,14 @@ class Env extends DataObject
     public function getDbConfig(): array
     {
         $sandboxEnabled = $this->isSandboxMode();
-        if ($sandboxEnabled || DEBUG) {
+        if ($sandboxEnabled) {
             $sandbox_db = $this->config['sandbox_db'] ?? [];
             if ($sandbox_db) {
                 return $sandbox_db;
             } else {
-                # 默认使用Sqlite
+                # 仅显式沙盒隔离开发允许回退 SQLite
                 $driver_type = 'sqlite';
-                $path = BP . ($sandboxEnabled ? 'sandbox' : 'debug') . '.db.sqlite';
+                $path = BP . 'sandbox.db.sqlite';
                 $db_conf['type'] = $driver_type;
                 $db_conf['path'] = $path;
                 return $db_conf;
@@ -1053,12 +1203,9 @@ class Env extends DataObject
         if ($db_conf) {
             return $db_conf;
         }
-        # 默认使用Sqlite
-        $driver_type = 'sqlite';
-        $path = APP_PATH . 'etc/db.sqlite';
-        $db_conf['type'] = $driver_type;
-        $db_conf['path'] = $path;
-        return $db_conf;
+
+        # 主运行时默认 PostgreSQL；SQLite 只能由 sandbox_db 或显式配置启用
+        return self::default_CONFIG['db'];
     }
 
     /**

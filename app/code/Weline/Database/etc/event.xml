@@ -3,9 +3,12 @@
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
     <!--
-      迁移只由 setup:upgrade 完成后的单一权威观察器执行。
-      module_upgrade 的载荷是 modules[]，不再同时执行第二遍迁移。
+      迁移在 SchemaDiff 之后、ModuleSetup 之前由 Upgrade 派发 upgrade_migrations 执行。
+      upgrade_after 携带 migrations_already_run=true 时跳过，避免双跑。
     -->
+    <event name="Weline_Framework_Setup::upgrade_migrations">
+        <observer name="Weline_Database::setup_upgrade_migrations" instance="Weline\Database\Observer\SetupUpgradeObserver" disabled="false" shared="true" sort="0"/>
+    </event>
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Database::setup_upgrade" instance="Weline\Database\Observer\SetupUpgradeObserver" disabled="false" shared="true" sort="0"/>
     </event>

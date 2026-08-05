@@ -34,8 +34,8 @@ use Weline\Server\Security\GlobalRateLimiter;
 use Weline\Server\Service\MainLoopUnblockedLogConfig;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Server\Service\Policy\DispatcherPolicyControl;
+use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\Runtime\RoutingPolicyRegistry;
-use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\StatusLogService;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
@@ -270,6 +270,7 @@ class Dispatcher
     private int $masterPid = 0;
     private int $orchestratorEpoch = 0;
     private string $orchestratorLaunchId = '';
+    private string $hostLeaseId = '';
     private string $helloAuthSecret = '';
     private ?ChildMasterGuard $masterGuard = null;
     
@@ -746,6 +747,18 @@ class Dispatcher
     {
         $this->orchestratorEpoch = $epoch;
         $this->orchestratorLaunchId = $launchId;
+    }
+
+    public function setHostLeaseId(string $leaseId): void
+    {
+        $leaseId = \strtolower(\trim($leaseId));
+        if ($leaseId !== ''
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $leaseId) !== 1
+        ) {
+            throw new \InvalidArgumentException('Dispatcher host lease identity is invalid.');
+        }
+        $this->hostLeaseId = $leaseId;
+        DispatcherPolicyControl::setHostLeaseId($leaseId);
     }
 
     public function setHelloAuthSecret(string $secret): void
@@ -1958,7 +1971,7 @@ class Dispatcher
             0,
             $this->port,
             $this->orchestratorEpoch,
-            $this->orchestratorLaunchId
+            $this->orchestratorLaunchId,
         );
         if ($sent) {
             $this->ipcClient->flushPendingWrites(0.05);
@@ -3322,12 +3335,12 @@ HTML;
 
         if ($body === null) {
             $body = 'ACME challenge not found';
-            $this->writeAcmeHttpResponseAndClose($clientSocket, '404 Not Found', $body, (string)$request['method'] === 'HEAD');
+            $this->writeAcmeHttpResponseAndClose($clientSocket, '404 Not Found', $body);
             $this->log("ACME HTTP-01 challenge not found: host={$host}, token={$request['token']}, client={$clientIp}, connId={$connId}", 'WARN');
             return true;
         }
 
-        $this->writeAcmeHttpResponseAndClose($clientSocket, '200 OK', $body, (string)$request['method'] === 'HEAD');
+        $this->writeAcmeHttpResponseAndClose($clientSocket, '200 OK', $body);
         $this->log("ACME HTTP-01 challenge served by Dispatcher: host={$host}, token={$request['token']}, client={$clientIp}, connId={$connId}", 'ROUTE');
         return true;
     }
@@ -3352,11 +3365,29 @@ HTML;
 
         $target = (string)$m[2];
         try {
-            $parsedPath = \parse_url($target, \PHP_URL_PATH);
+            $parts = \parse_url($target);
         } catch (\ValueError) {
             return null;
         }
-        $path = \is_string($parsedPath) && $parsedPath !== '' ? $parsedPath : '/';
+        if (!\is_array($parts) || \str_starts_with($target, '//')) {
+            return null;
+        }
+        $scheme = \strtolower((string)($parts['scheme'] ?? ''));
+        $targetHost = (string)($parts['host'] ?? '');
+        if (($scheme === '' && $targetHost !== '')
+            || ($scheme !== ''
+                && (!\in_array($scheme, ['http', 'https'], true)
+                    || $targetHost === ''
+                    || isset($parts['user'])
+                    || isset($parts['pass'])
+                    || isset($parts['fragment'])))
+            || ($scheme === '' && !\str_starts_with($target, '/'))
+        ) {
+            return null;
+        }
+        $path = \is_string($parts['path'] ?? null) && (string)$parts['path'] !== ''
+            ? (string)$parts['path']
+            : '/';
 
         if (\preg_match(
             '#^/\.well-known/acme-challenge/([A-Za-z0-9_-]{1,256})/?$#D',
@@ -3403,99 +3434,93 @@ HTML;
 
     private function extractHttpHostForAcme(string $raw, string $target): string
     {
-        $host = '';
+        $targetHost = '';
         if (\preg_match('/^https?:\/\//i', $target)) {
-            $parsedHost = \parse_url($target, \PHP_URL_HOST);
-            if (\is_string($parsedHost)) {
-                $host = $parsedHost;
+            try {
+                $targetParts = \parse_url($target);
+            } catch (\ValueError) {
+                return '';
+            }
+            if (\is_array($targetParts)) {
+                $targetHost = $this->normalizeAcmeAuthorityHost(
+                    (string)($targetParts['host'] ?? ''),
+                );
             }
         }
 
-        if ($host === '' && \preg_match('/(?:^|\r\n)Host:\s*([^\r\n]+)/i', $raw, $m)) {
-            $host = \trim((string)$m[1]);
-        }
-
-        $host = \trim($host);
-        if ($host === '') {
+        $headerHost = '';
+        $hostCount = \preg_match_all('/(?:^|\r\n)Host:[ \t]*([^\r\n]*)/i', $raw, $matches);
+        if ($hostCount === false || $hostCount > 1) {
             return '';
         }
-
-        if ($host[0] === '[' && \preg_match('/^\[([^\]]+)\]/', $host, $m)) {
-            $host = (string)$m[1];
-        } elseif (\strpos($host, ':') !== false) {
-            $host = \explode(':', $host, 2)[0];
+        if ($hostCount === 1) {
+            $headerHost = $this->normalizeAcmeAuthorityHost((string)$matches[1][0]);
         }
-
-        return \strtolower(\rtrim(\trim($host), '.'));
-    }
-
-    private function resolveAcmeHttp01ChallengeBody(string $host, string $token): ?string
-    {
-        $dir = \rtrim(BP, \DIRECTORY_SEPARATOR)
-            . \DIRECTORY_SEPARATOR . 'generated'
-            . \DIRECTORY_SEPARATOR . 'acme-http01'
-            . \DIRECTORY_SEPARATOR;
-        if (!\is_dir($dir)) {
-            return null;
-        }
-
-        $checked = [];
-        if ($host !== '') {
-            $file = $dir . SslCertificateService::domainToAcmeChallengeFilename($host) . '.json';
-            $checked[$file] = true;
-            $body = $this->readAcmeHttp01ChallengeFile($file, $token);
-            if ($body !== null) {
-                return $body;
-            }
-        }
-
-        $files = \glob($dir . '*.json') ?: [];
-        foreach ($files as $file) {
-            if (isset($checked[$file])) {
-                continue;
-            }
-            $body = $this->readAcmeHttp01ChallengeFile((string)$file, $token);
-            if ($body !== null) {
-                return $body;
-            }
-        }
-
-        return null;
-    }
-
-    private function readAcmeHttp01ChallengeFile(string $file, string $token): ?string
-    {
-        if (!\is_file($file)) {
-            return null;
-        }
-
-        $json = @\file_get_contents($file);
-        if ($json === false || $json === '') {
-            return null;
-        }
-
-        $data = \json_decode($json, true);
-        if (!\is_array($data)
-            || (string)($data['token'] ?? '') !== $token
-            || !isset($data['keyAuth'])
-            || !\is_string($data['keyAuth'])
-            || (int)($data['expires_at'] ?? ((int)@\filemtime($file) + 900)) <= \time()
+        if ($targetHost !== ''
+            && $headerHost !== ''
+            && !\hash_equals($targetHost, $headerHost)
         ) {
-            return null;
+            return '';
         }
-
-        return $data['keyAuth'];
+        return $targetHost !== '' ? $targetHost : $headerHost;
     }
 
-    private function writeAcmeHttpResponseAndClose($clientSocket, string $status, string $body, bool $headOnly): void
+    private function normalizeAcmeAuthorityHost(string $host): string
     {
-        $responseBody = $headOnly ? '' : $body;
+        $host = \trim($host);
+        if ($host === ''
+            || \strlen($host) > 255
+            || \preg_match('/[\x00-\x20\x7f,\\\\\/@]/', $host) === 1
+        ) {
+            return '';
+        }
+        try {
+            $authority = \parse_url('http://' . $host);
+        } catch (\ValueError) {
+            return '';
+        }
+        if (!\is_array($authority)
+            || !\is_string($authority['host'] ?? null)
+            || (isset($authority['port'])
+                && ((int)$authority['port'] < 1 || (int)$authority['port'] > 65535))
+        ) {
+            return '';
+        }
+        try {
+            return ProjectAcmeHttp01ChallengeStore::normalizeExactDomain(
+                (string)$authority['host'],
+            );
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function resolveAcmeHttp01ChallengeBody(
+        string $host,
+        string $token,
+        ?string $directory = null,
+    ): ?string
+    {
+        $dir = $directory ?? (
+            \rtrim(BP, \DIRECTORY_SEPARATOR)
+                . \DIRECTORY_SEPARATOR . 'generated'
+                . \DIRECTORY_SEPARATOR . 'acme-http01'
+        );
+        return ProjectAcmeHttp01ChallengeStore::resolvePublishedChallenge(
+            $dir,
+            $host,
+            $token,
+        );
+    }
+
+    private function writeAcmeHttpResponseAndClose($clientSocket, string $status, string $body): void
+    {
         $response = "HTTP/1.1 {$status}\r\n"
             . "Content-Type: text/plain; charset=UTF-8\r\n"
             . "Cache-Control: no-store\r\n"
             . 'Content-Length: ' . \strlen($body) . "\r\n"
             . "Connection: close\r\n\r\n"
-            . $responseBody;
+            . $body;
 
         $toWrite = \strlen($response);
         $written = 0;

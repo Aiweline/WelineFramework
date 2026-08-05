@@ -66,13 +66,8 @@ class SetupUpgradeBeforeExecutePlugin
                 if (!$this->isProcessRunning($pid)) {
                     // 进程已不存在，删除锁文件
                     $shouldDelete = true;
-                } elseif (isset($lockInfo['time'])) {
-                    // 检查锁文件创建时间，如果是昨天的，也删除（可能是僵尸进程）
-                    $lockTime = strtotime($lockInfo['time']);
-                    if ($lockTime < $yesterday) {
-                        $shouldDelete = true;
-                    }
                 }
+                // PID 仍存活时即使锁时间超过 1 天也不删除（长时升级合法）
             } else {
                 // 锁文件信息无效，检查文件修改时间
                 $fileTime = @filemtime($lockFile);

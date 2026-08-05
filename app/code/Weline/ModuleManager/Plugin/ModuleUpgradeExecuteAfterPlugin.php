@@ -30,7 +30,10 @@ class ModuleUpgradeExecuteAfterPlugin
         # 模型
         /**@var Module $moduleModel */
         $moduleModel = ObjectManager::getInstance(Module::class);
-        $moduleModel->query("truncate table {$moduleModel->getTable()}");
+        $moduleModel->query("truncate table {$moduleModel->getTable()}")->fetch();
+        if ((clone $moduleModel)->reset()->total() !== 0) {
+            throw new \RuntimeException(__('模块注册表清空后仍有残留数据，已中止重建'));
+        }
         # 写入数据库
         foreach ($modules as $module) {
             $module['base_path'] = str_replace(BP, '', $module['base_path']);
@@ -38,7 +41,7 @@ class ModuleUpgradeExecuteAfterPlugin
             $module['status'] = $module['status'] ? 1 : 0;
             $moduleModel->clearData()
                 ->setModelFieldsData($module)
-                ->save(true, Module::schema_fields_NAME);
+                ->save();
             try {
                 $state = $this->rollbackManager->getModuleState((string)$module['name']);
                 $blockers = (array)($state['blockers'] ?? []);

@@ -21,10 +21,15 @@ class WebsiteAccountEnablement extends Block
         parent::__init();
 
         $website = (array)($this->getData('website') ?? []);
-        $websiteId = (int)($this->getData('website_id') ?? $website['website_id'] ?? $website['id'] ?? 0);
+        $hasWebsiteIdentity = $this->hasData('website_id')
+            || array_key_exists('website_id', $website)
+            || array_key_exists('id', $website);
+        $websiteId = $hasWebsiteIdentity
+            ? (int)($this->getData('website_id') ?? $website['website_id'] ?? $website['id'])
+            : -1;
         $scope = trim((string)($this->getData('scope') ?? ''));
 
-        if ($websiteId > 0 && $website === []) {
+        if ($websiteId >= 0 && $website === []) {
             /** @var SeoWebsiteDirectory $websiteDirectory */
             $websiteDirectory = ObjectManager::getInstance(SeoWebsiteDirectory::class);
             $resolvedWebsite = $websiteDirectory->getWebsiteById($websiteId);
@@ -43,7 +48,7 @@ class WebsiteAccountEnablement extends Block
 
         /** @var SeoWebsiteAccountBindingService $bindingService */
         $bindingService = ObjectManager::getInstance(SeoWebsiteAccountBindingService::class);
-        $bindingsMap = $websiteId > 0 ? $bindingService->getBindingMapByWebsite($websiteId) : [];
+        $bindingsMap = $websiteId >= 0 ? $bindingService->getBindingMapByWebsite($websiteId) : [];
 
         /** @var SeoPlatformCapabilityService $platformCapabilityService */
         $platformCapabilityService = ObjectManager::getInstance(SeoPlatformCapabilityService::class);

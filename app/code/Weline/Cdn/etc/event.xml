@@ -99,4 +99,19 @@
                   shared="true"
                   sort="10"/>
     </event>
+
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="cdn_resource_changed"
+                  instance="Weline\Cdn\Observer\ResourceChanged"
+                  delivery="async"
+                  retry="standard"
+                  coalesce="latest"
+                  timeout="30"
+                  disabled="false"
+                  shared="true"
+                  sort="100"/>
+    </event>
 </config>

@@ -17,6 +17,7 @@ class Sitemap extends FrontendController
 
     public function index(): Response
     {
-        return Response::text($this->renderer->render(), 200, 'application/xml; charset=utf-8');
+        $result = $this->renderer->render();
+        return Response::text($result['body'], $result['status'], 'application/xml; charset=utf-8');
     }
 }

@@ -212,6 +212,39 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         $trees = $treeService->getAclAssignmentTree($role);
         $this->assign('trees', $trees);
 
+        /** @var \Weline\Acl\Model\Acl $aclModel */
+        $aclModel = ObjectManager::getInstance(\Weline\Acl\Model\Acl::class);
+        $allRows = $aclModel->reset()->select()->fetchArray();
+        $selected = [];
+        $accessRows = ObjectManager::getInstance(\Weline\Acl\Model\RoleAccess::class)
+            ->reset()
+            ->where(\Weline\Acl\Model\RoleAccess::schema_fields_ROLE_ID, (int)$role->getId())
+            ->select()
+            ->fetchArray();
+        foreach ($accessRows as $accessRow) {
+            $selected[(string)$accessRow[\Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID]] = true;
+        }
+        $tagTree = \Weline\Acl\Service\Resource\AclResourcePresentation::buildTagTree($allRows, $selected);
+        $this->assign('tag_tree', $tagTree);
+        $this->assign('selected_source_ids', array_keys($selected));
+        $this->assign(
+            'tag_path_leaves',
+            \Weline\Acl\Service\Resource\AclResourcePresentation::buildTagPathLeaves($allRows)
+        );
+
+        /** @var \Weline\Acl\Model\RoleTagGrant $grantModel */
+        $grantModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleTagGrant::class);
+        $tagGrants = [];
+        if ((int)$role->getId() !== 1) {
+            foreach ($grantModel->reset()
+                ->where(\Weline\Acl\Model\RoleTagGrant::schema_fields_ROLE_ID, (int)$role->getId())
+                ->select()
+                ->fetchArray() as $grant) {
+                $tagGrants[] = (string)$grant[\Weline\Acl\Model\RoleTagGrant::schema_fields_TAG_PATH];
+            }
+        }
+        $this->assign('tag_grants', $tagGrants);
+
         // 从已构建的树中直接提取统计、模块列表和类型列表，避免重复查询
         $statistics = [];
         $moduleSet = [];
@@ -229,6 +262,17 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
             ];
         }
         $this->assign('tree_statistics', $statistics);
+        // 标签维度的叶子类型（query/task/operation）也纳入类型筛选，保证两个维度都能按类型过滤
+        foreach ($allRows as $row) {
+            $rowType = (string)($row['type'] ?? '');
+            if (\in_array($rowType, ['query', 'task', 'operation'], true)) {
+                $typeSet[$rowType] = true;
+                $rowModule = (string)($row['module'] ?? (explode('::', (string)($row['source_id'] ?? ''))[0] ?? ''));
+                if ($rowModule !== '') {
+                    $moduleSet[$rowModule] = true;
+                }
+            }
+        }
         $this->assign('module_list', array_keys($moduleSet));
         $this->assign('type_list', array_keys($typeSet));
 
@@ -279,8 +323,55 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
             $this->redirect('*/backend/acl/role');
         }
         $acl_ids = $this->request->getPost('ids', []);
-        $acls = [];
+        if (!\is_array($acl_ids)) {
+            $acl_ids = [];
+        }
+        $tag_paths = $this->request->getPost('tag_paths', []);
+        if (!\is_array($tag_paths)) {
+            $tag_paths = [];
+        }
+
+        /** @var \Weline\Acl\Model\Acl $aclModel */
+        $aclModel = ObjectManager::getInstance(\Weline\Acl\Model\Acl::class);
+        $allRows = $aclModel->reset()->select()->fetchArray();
+        $byTagPath = [];
+        foreach ($allRows as $row) {
+            $sourceId = (string)($row[\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID] ?? '');
+            $tags = \Weline\Acl\Service\Resource\AclResourcePresentation::tagsFromSourceId(
+                $sourceId,
+                (string)($row[\Weline\Acl\Model\Acl::schema_fields_RESOURCE_METADATA] ?? ''),
+            );
+            for ($i = 1, $n = \count($tags); $i <= $n; ++$i) {
+                $path = \implode(':', \array_slice($tags, 0, $i));
+                $byTagPath[$path][$sourceId] = true;
+            }
+        }
+
+        $leafSet = [];
         foreach ($acl_ids as $acl_id) {
+            $acl_id = \trim((string)$acl_id);
+            if ($acl_id !== '' && !\str_starts_with($acl_id, 'tag:')) {
+                $leafSet[$acl_id] = true;
+            }
+        }
+        $normalizedTagPaths = [];
+        foreach ($tag_paths as $tagPath) {
+            $tagPath = \trim((string)$tagPath);
+            if ($tagPath === '' || (int)$role_id === 1) {
+                continue;
+            }
+            $normalizedTagPaths[$tagPath] = true;
+            foreach (\array_keys($byTagPath[$tagPath] ?? []) as $sourceId) {
+                $leafSet[$sourceId] = true;
+            }
+        }
+        $finalIds = \Weline\Acl\Service\Resource\AclResourcePresentation::expandMenusAncestors(
+            \array_keys($leafSet),
+            $allRows,
+        );
+
+        $acls = [];
+        foreach ($finalIds as $acl_id) {
             $acls[] = [
                 RoleAccess::schema_fields_ROLE_ID => $role_id,
                 RoleAccess::schema_fields_SOURCE_ID => $acl_id,
@@ -288,17 +379,31 @@ class Role extends \Weline\Framework\App\Controller\BackendPageController
         }
         /**@var RoleAccess $roleAccessModel */
         $roleAccessModel = ObjectManager::getInstance(RoleAccess::class);
+        /** @var \Weline\Acl\Model\RoleTagGrant $grantModel */
+        $grantModel = ObjectManager::getInstance(\Weline\Acl\Model\RoleTagGrant::class);
         $roleAccessModel->beginTransaction();
         try {
             $roleAccessModel->reset()->where(\Weline\Acl\Model\Role::schema_fields_ROLE_ID, $role_id)->delete()->fetch();
             if ($acls) {
                 $roleAccessModel->reset()->insert($acls,[\Weline\Acl\Model\Role::schema_fields_ROLE_ID, \Weline\Acl\Model\RoleAccess::schema_fields_SOURCE_ID])->fetch();
             }
+            $grantModel->reset()->where(\Weline\Acl\Model\RoleTagGrant::schema_fields_ROLE_ID, $role_id)->delete()->fetch();
+            if ((int)$role_id !== 1 && $normalizedTagPaths) {
+                $grantRows = [];
+                foreach (\array_keys($normalizedTagPaths) as $tagPath) {
+                    $grantRows[] = [
+                        \Weline\Acl\Model\RoleTagGrant::schema_fields_ROLE_ID => $role_id,
+                        \Weline\Acl\Model\RoleTagGrant::schema_fields_TAG_PATH => $tagPath,
+                    ];
+                }
+                $grantModel->reset()->insert($grantRows, [
+                    \Weline\Acl\Model\RoleTagGrant::schema_fields_ROLE_ID,
+                    \Weline\Acl\Model\RoleTagGrant::schema_fields_TAG_PATH,
+                ])->fetch();
+            }
             $roleAccessModel->commit();
-            $this->getMessageManager()->addSuccess(__('权限分配成功！'));
-            // 清理权限缓存
             w_cache('acl')->clear();
-            $this->getMessageManager()->addSuccess(__('权限缓存清理成功！'));
+            $this->getMessageManager()->addSuccess(__('权限分配成功，权限缓存已清理。'));
         } catch (\Exception $exception) {
             $roleAccessModel->rollBack();
             if (DEV) {

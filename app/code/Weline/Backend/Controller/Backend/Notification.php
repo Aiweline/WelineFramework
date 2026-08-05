@@ -65,7 +65,7 @@ class Notification extends BackendController
 
         if (!$notification) {
             $this->assign('error', __('通知不存在或无权查看'));
-            return $this->fetch('Weline_Backend::Backend/Notification/error.phtml');
+            return $this->fetch('Weline_Backend::templates/Backend/Notification/error.phtml');
         }
 
         $this->notificationService->markAsRead($userId, $notificationId);

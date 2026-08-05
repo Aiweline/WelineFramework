@@ -5,14 +5,36 @@
 发布到更旧版本需要额外确认。,发布到更旧版本需要额外确认。
 发布成功：%{1},发布成功：%{1}
 发布失败。,发布失败。
+发布管理,发布管理
+"mdi mdi-rocket-launch-outline","mdi mdi-rocket-launch-outline"
+发布控制、历史与核心更新,发布控制、历史与核心更新
+发布控制,发布控制
+"mdi mdi-source-branch-sync","mdi mdi-source-branch-sync"
+"查看 Git 历史并手动发布","查看 Git 历史并手动发布"
+执行发布,执行发布
+"mdi mdi-rocket-launch","mdi mdi-rocket-launch"
+从发布控制触发部署,从发布控制触发部署
 请求方式错误,请求方式错误
 部署配置已保存,部署配置已保存
 部署配置保存失败：%{1},部署配置保存失败：%{1}
 当前站点请求域名,当前站点请求域名
+部署配置,部署配置
+"mdi mdi-source-branch","mdi mdi-source-branch"
+"管理部署仓库、Webhook 与缓存清理配置","管理部署仓库、Webhook 与缓存清理配置"
+查看部署配置,查看部署配置
+查看部署信息配置,查看部署信息配置
+保存部署配置,保存部署配置
+"mdi mdi-content-save","mdi mdi-content-save"
+保存部署信息配置,保存部署信息配置
 请先确认核心更新操作。,请先确认核心更新操作。
 核心更新完成。,核心更新完成。
 备份编号：%{1},备份编号：%{1}
 核心更新失败。,核心更新失败。
+核心更新,核心更新
+"mdi mdi-update","mdi mdi-update"
+"Web 执行框架核心更新","Web 执行框架核心更新"
+执行核心更新,执行核心更新
+"执行 update:core 命令","执行 update:core 命令"
 请先勾选确认框后再执行回滚。,请先勾选确认框后再执行回滚。
 "缺少发布记录 ID。","缺少发布记录 ID。"
 发布记录不存在。,发布记录不存在。
@@ -22,6 +44,14 @@
 回滚到更旧版本需要额外确认。,回滚到更旧版本需要额外确认。
 回滚成功：%{1},回滚成功：%{1}
 回滚失败。,回滚失败。
+发布历史,发布历史
+"mdi mdi-history","mdi mdi-history"
+查看发布历史与版本回滚,查看发布历史与版本回滚
+查看发布历史,查看发布历史
+查看发布历史列表,查看发布历史列表
+回滚发布版本,回滚发布版本
+"mdi mdi-restore","mdi mdi-restore"
+从历史记录回滚版本,从历史记录回滚版本
 "WLS 部署发布","WLS 部署发布"
 "项目发布 Profile 保存失败。","项目发布 Profile 保存失败。"
 发布预检存在阻断项，请先修正标红项。,发布预检存在阻断项，请先修正标红项。
@@ -108,12 +138,49 @@ Composer,Composer
 "Manual release plan was skipped by the current trigger policy; no release was executed.",当前触发策略跳过了手动发布计划，未执行真实发布。
 "Manual release completed.",手动发布已完成。
 "Manual release was skipped by the current trigger policy; no release was executed.",当前触发策略跳过了手动发布，未执行真实发布。
+"WLS 面板部署发布入口","WLS 面板部署发布入口"
+"查看 WLS 部署发布","查看 WLS 部署发布"
+"查看 WLS 面板部署发布","查看 WLS 面板部署发布"
+"View WLS Deploy Overview","View WLS Deploy Overview"
+"mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
+"View WLS Panel deploy overview","View WLS Panel deploy overview"
+"View WLS Deploy Release Path","View WLS Deploy Release Path"
+"View WLS Panel deploy release path","View WLS Panel deploy release path"
+"View WLS Deploy Configuration","View WLS Deploy Configuration"
+"mdi mdi-tune-variant","mdi mdi-tune-variant"
+"View WLS Panel deploy configuration","View WLS Panel deploy configuration"
+"View WLS Deploy Project Profile","View WLS Deploy Project Profile"
+"mdi mdi-clipboard-edit-outline","mdi mdi-clipboard-edit-outline"
+"View WLS Panel deploy project profile","View WLS Panel deploy project profile"
+"View WLS Deploy Preflight","View WLS Deploy Preflight"
+"mdi mdi-shield-check-outline","mdi mdi-shield-check-outline"
+"View WLS Panel deploy preflight","View WLS Panel deploy preflight"
+"View WLS Deploy Webhooks","View WLS Deploy Webhooks"
+"mdi mdi-replay","mdi mdi-replay"
+"View WLS Panel deploy webhooks","View WLS Panel deploy webhooks"
+"View WLS Deploy Releases","View WLS Deploy Releases"
+"View WLS Panel deploy releases","View WLS Panel deploy releases"
+"View WLS Deploy Manual Plan","View WLS Deploy Manual Plan"
+"mdi mdi-clipboard-list-outline","mdi mdi-clipboard-list-outline"
+"View WLS Panel deploy manual plan","View WLS Panel deploy manual plan"
+"保存 WLS 项目发布 Profile","保存 WLS 项目发布 Profile"
+"保存 WLS 面板项目发布 Profile","保存 WLS 面板项目发布 Profile"
+"执行 WLS 项目发布预检","执行 WLS 项目发布预检"
+"mdi mdi-shield-check","mdi mdi-shield-check"
+"执行 WLS 面板项目发布预检","执行 WLS 面板项目发布预检"
+"回放 WLS 发布 Webhook","回放 WLS 发布 Webhook"
+"回放 WLS 面板 Webhook 触发策略","回放 WLS 面板 Webhook 触发策略"
+"执行 WLS 项目发布回滚","执行 WLS 项目发布回滚"
+"执行 WLS 面板项目发布回滚","执行 WLS 面板项目发布回滚"
+"Build WLS manual release plan","Build WLS manual release plan"
+"Build read-only WLS Panel manual release execution plan","Build read-only WLS Panel manual release execution plan"
+"Run WLS project rollback","Run WLS project rollback"
+"Run WLS Panel project rollback","Run WLS Panel project rollback"
 项目仓库地址不合法。,项目仓库地址不合法。
 "Webhook 密钥包含不允许的控制字符。","Webhook 密钥包含不允许的控制字符。"
 已配置，留空表示不修改,已配置，留空表示不修改
 未配置,未配置
 立即复制,立即复制
-部署配置,部署配置
 "后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。","后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。"
 项目仓库,项目仓库
 项目仓库地址,项目仓库地址
@@ -199,7 +266,6 @@ Cloudflare,Cloudflare
 "Cloudflare API Token","Cloudflare API Token"
 保存配置,保存配置
 已复制,已复制
-发布历史,发布历史
 当前版本,当前版本
 尚未发布过,尚未发布过
 正式站回滚前将自动整站备份。,正式站回滚前将自动整站备份。
@@ -369,7 +435,6 @@ pending,等待中
 耗时未知,耗时未知
 "当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。","当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。"
 "暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。","暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。"
-核心更新,核心更新
 等价于命令,等价于命令
 "不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。","不会覆盖 env.php、.env、dev/deploy/.config 及业务模块目录。"
 正式站执行前将自动整站备份。,正式站执行前将自动整站备份。
@@ -381,7 +446,6 @@ pending,等待中
 开始核心更新,开始核心更新
 执行日志,执行日志
 执行中...,执行中...
-发布控制,发布控制
 请先在部署配置中填写项目仓库信息。,请先在部署配置中填写项目仓库信息。
 前往部署配置,前往部署配置
 "正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。","正式站发布前将自动整站备份；发布过程不会覆盖 pub/ 与生成目录。"
@@ -536,10 +600,13 @@ pending,等待中
 "✓ 缓存清理完成","✓ 缓存清理完成"
 "从 Git 仓库增量更新框架核心代码（只更新变化的文件）","从 Git 仓库增量更新框架核心代码（只更新变化的文件）"
 "从 Git 仓库增量更新框架核心代码","从 Git 仓库增量更新框架核心代码"
+"可直接指定分支，如：master；也可使用 -b/--branch","可直接指定分支，如：master；也可使用 -b/--branch"
 "指定分支（未配置默认分支时必填，如：main, master, dev）","指定分支（未配置默认分支时必填，如：main, master, dev）"
 "指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）","指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）"
 "未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像","未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像"
 "仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换","仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换"
+默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新,默认检测当前项目全部已跟踪、未跟踪和子模块变更；存在未提交变更时拒绝更新
+"仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录","仅显式使用 -f/--force 时跳过工作区保护，删除缓存并重新克隆后覆盖目标目录"
 "核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理","核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理"
 "使用自定义仓库（需先配置 .env 或 env.php）","使用自定义仓库（需先配置 .env 或 env.php）"
 "框架核心代码更新（强制模式 - 完整重新下载并覆盖）","框架核心代码更新（强制模式 - 完整重新下载并覆盖）"
@@ -565,6 +632,13 @@ pending,等待中
 "- 跳过文件：%{1} 个（受保护或排除的文件）","- 跳过文件：%{1} 个（受保护或排除的文件）"
 "错误：未检测到 Git","错误：未检测到 Git"
 "✓ Git 检查通过","✓ Git 检查通过"
+"⚠ 已显式启用 -f/--force，跳过本地未提交变更保护","⚠ 已显式启用 -f/--force，跳过本地未提交变更保护"
+"当前项目不是 Git 工作区，跳过未提交变更检查","当前项目不是 Git 工作区，跳过未提交变更检查"
+错误：无法确认当前项目工作区是否干净，已安全取消核心更新,错误：无法确认当前项目工作区是否干净，已安全取消核心更新
+"如确认允许覆盖本地变更，请显式使用 -f/--force","如确认允许覆盖本地变更，请显式使用 -f/--force"
+"✓ 当前项目工作区干净","✓ 当前项目工作区干净"
+"检测到 %{1} 项未提交的本地变更，已拒绝更新核心","检测到 %{1} 项未提交的本地变更，已拒绝更新核心"
+"……另有 %{1} 项未显示","……另有 %{1} 项未显示"
 "检测 GitHub 连通性（ping github.com）...","检测 GitHub 连通性（ping github.com）..."
 "✓ GitHub 可达，使用 GitHub 仓库","✓ GitHub 可达，使用 GitHub 仓库"
 "GitHub 不可达，使用 Gitee 镜像仓库","GitHub 不可达，使用 Gitee 镜像仓库"

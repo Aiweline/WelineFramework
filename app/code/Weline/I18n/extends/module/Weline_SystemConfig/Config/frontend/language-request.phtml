@@ -1,0 +1,19 @@
+<?php
+/**
+ * @meta.title {default="语言支持申请",description="控制网站前台语言切换器中的语言申请入口"}
+ * @meta.description {default="按网站 Scope 开启；表单首次点击才异步加载全球语言目录与人机验证资源。"}
+ * @config.area {frontend}
+ * @config.sort {20}
+ * @config.acl {Weline_I18n::i18n_language_requests}
+ */
+?>
+
+<w:config:group code="i18n_language_request" label="语言支持申请" description="允许访客或登录客户申请当前网站尚未支持的语言。" sort="10">
+    <w:config:field
+        key="i18n/language_request/enabled"
+        label="开放语言支持申请"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+</w:config:group>

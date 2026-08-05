@@ -108,6 +108,7 @@ class CheckoutService
 
         $data = $this->normalizeCheckoutIdentity($data);
         $errors = [];
+        $sellabilityErrorCode = '';
 
         if (!empty($data['is_guest_checkout'])) {
             try {
@@ -135,8 +136,32 @@ class CheckoutService
                 if (empty($item['quantity']) || $item['quantity'] <= 0) {
                     $errors[] = __('订单项 %{1} 的数量必须大于0', [$index + 1]);
                 }
-                if (empty($item['price']) || $item['price'] < 0) {
+                if (!isset($item['price']) || $item['price'] < 0) {
                     $errors[] = __('订单项 %{1} 的价格无效', [$index + 1]);
+                }
+            }
+            if ($errors === [] && \class_exists(\Weline\Cart\Api\CartPriceSellabilityGate::class)) {
+                /** @var \Weline\Cart\Api\CartPriceSellabilityGate $gate */
+                $gate = ObjectManager::getInstance(\Weline\Cart\Api\CartPriceSellabilityGate::class);
+                foreach ($data['items'] as $index => $item) {
+                    if (!\is_array($item)) {
+                        continue;
+                    }
+                    $sell = $gate->assertOrAllow([
+                        'product_id' => (int)($item['product_id'] ?? 0),
+                        'offer_id' => (int)($item['offer_id'] ?? 0),
+                        'website_id' => $data['website_id'] ?? null,
+                        'store_id' => $data['store_id'] ?? null,
+                        'currency' => $data['currency'] ?? '',
+                    ]);
+                    if (($sell['ok'] ?? true) === false) {
+                        $sellabilityErrorCode = (string)($sell['error_code'] ?? 'price_not_sellable');
+                        $sellabilityMessage = (string)($sell['message'] ?? __('该商品暂不可售。'));
+                        $errors[] = $sellabilityMessage !== ''
+                            ? $sellabilityMessage
+                            : (string)__('订单项 %{1} 暂不可售', [$index + 1]);
+                        break;
+                    }
                 }
             }
         }
@@ -150,6 +175,10 @@ class CheckoutService
             'valid' => empty($errors),
             'errors' => $errors
         ];
+        if (!empty($sellabilityErrorCode)) {
+            $result['error_code'] = $sellabilityErrorCode;
+            $result['code'] = $sellabilityErrorCode;
+        }
         
         // 派遣验证后事件
         $afterEvent = [
@@ -229,6 +258,13 @@ class CheckoutService
     public function createOrder(array $data): Order
     {
         $data = $this->normalizeCheckoutIdentity($data);
+
+        // P2D-004：同步 critical 前置门禁；Checkout 不依赖 Order 内部类。
+        $legacyWriterEvent = ['data' => $data];
+        $this->eventsManager->dispatch(
+            'Weline_Checkout::checkout::legacy_writer::assert',
+            $legacyWriterEvent,
+        );
 
         // 验证数据
         $validation = $this->validateCheckout($data);

@@ -5,7 +5,7 @@
  */
 ?>
 <!-- 页面标题 -->
-<div class="row">
+<div class="row" data-testid="queue-list-management">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0">
@@ -104,6 +104,42 @@
         </div>
     </div>
 </div>
+
+<!-- 查看/编辑使用列表区域外的单例 OffCanvas，快照替换后仍保持可用 -->
+<block class='Weline\Component\Block\OffCanvas'
+       template='Weline_Component::off-canvas.phtml'
+       cache='0'
+       id='queue_shared_show'
+       action='*/backend/queue/show'
+       title='查看队列详情'
+       close-button-show='1'
+       close-button-text='关闭'
+       direction='right'
+       class-names='w-75'
+       target-button-text=''
+       target-button-class='d-none weline-queue-shared-show-trigger'
+       target-tag='button'
+       icon='mdi mdi-eye'
+       flush='1'
+       save='0'
+/>
+<block class='Weline\Component\Block\OffCanvas'
+       template='Weline_Component::off-canvas.phtml'
+       cache='0'
+       id='queue_shared_edit'
+       action='*/backend/queue/form'
+       title='编辑队列'
+       close-button-show='1'
+       close-button-text='关闭'
+       direction='right'
+       class-names='w-75'
+       target-button-text=''
+       target-button-class='d-none weline-queue-shared-edit-trigger'
+       target-tag='button'
+       icon='mdi mdi-pencil'
+       flush='1'
+       save='0'
+/>
 
 <!-- 组件样式 -->
 <style>
@@ -353,6 +389,21 @@
     transform: translateY(-1px);
     box-shadow: var(--backend-shadow-sm, 0 2px 4px rgba(0,0,0,0.1));
 }
+.weline-queue-action-btn:disabled,
+.weline-queue-batch-actions .btn:disabled,
+.weline-queue-type-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    transform: none;
+    box-shadow: none;
+}
+.weline-queue-action-btn[aria-busy="true"] i,
+.weline-queue-batch-actions .btn[aria-busy="true"] i {
+    animation: queue-action-spin 0.8s linear infinite;
+}
+@keyframes queue-action-spin {
+    to { transform: rotate(360deg); }
+}
 .weline-queue-empty {
     color: var(--backend-color-text-tertiary, #adb5bd);
 }
@@ -381,6 +432,16 @@
         font-size: 1.25rem;
     }
 }
+@media (prefers-reduced-motion: reduce) {
+    .weline-queue-stat-card,
+    .weline-queue-action-btn,
+    .weline-queue-action-btn[aria-busy="true"] i,
+    .weline-queue-batch-actions .btn[aria-busy="true"] i {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+    }
+}
 </style>
 
 <!-- 组件脚本 -->
@@ -389,31 +450,57 @@
     'use strict';
 
     var config = {
-        apiAction: '<?= $this->getBackendUrl("*/backend/queue/api-action") ?>',
-        apiBatch: '<?= $this->getBackendUrl("*/backend/queue/api-batch") ?>',
-        snapshotUrl: '<?= $this->getBackendUrl("*/backend/queue/snapshot") ?>',
-        baseUrl: '<?= $this->getBackendUrl("*/backend/queue") ?>',
         pollIntervalMs: 10000,
         actionRefreshDelayMs: 600,
         text: {
-            deleteConfirm: '<?= addslashes(__("确定要删除队列「%{1}」吗？此操作不可恢复。")) ?>',
+            deleteConfirm: '<?= addslashes(__("确定要删除队列「%{1}」吗？此操作不可恢复。", ['__QUEUE_NAME__'])) ?>',
             stopConfirm: '<?= addslashes(__("确定要暂停此队列吗？")) ?>',
             continueConfirm: '<?= addslashes(__("确定要继续执行此队列吗？")) ?>',
             retryConfirm: '<?= addslashes(__("确定要重试此队列吗？")) ?>',
             resetConfirm: '<?= addslashes(__("确定要重新执行此队列吗？")) ?>',
-            batchDeleteConfirm: '<?= addslashes(__("确定要删除选中的 %{1} 个队列吗？此操作不可恢复。")) ?>',
-            batchStopConfirm: '<?= addslashes(__("确定要暂停选中的 %{1} 个队列吗？")) ?>',
-            batchContinueConfirm: '<?= addslashes(__("确定要继续执行选中的 %{1} 个队列吗？")) ?>',
+            batchDeleteConfirm: '<?= addslashes(__("确定要删除选中的 %{1} 个队列吗？此操作不可恢复。", ['__QUEUE_COUNT__'])) ?>',
+            batchStopConfirm: '<?= addslashes(__("确定要暂停选中的 %{1} 个队列吗？", ['__QUEUE_COUNT__'])) ?>',
+            batchContinueConfirm: '<?= addslashes(__("确定要继续执行选中的 %{1} 个队列吗？", ['__QUEUE_COUNT__'])) ?>',
             selectRequired: '<?= addslashes(__("请至少选择一个队列")) ?>',
             networkError: '<?= addslashes(__("网络错误，请检查网络后重试")) ?>',
+            apiUnavailable: '<?= addslashes(__("网络错误，请检查网络后重试")) ?>',
             resultCopied: '<?= addslashes(__("队列结果已复制到剪贴板")) ?>',
             resultCopyFailed: '<?= addslashes(__("复制失败，请手动复制")) ?>'
         }
     };
     var snapshotTimer = 0;
+    var mutationRefreshTimer = 0;
     var snapshotInFlight = false;
+    var snapshotRefreshPending = false;
+    var snapshotMutationEpoch = 0;
     var lastSnapshotStatsHtml = '';
     var lastSnapshotListingHtml = '';
+    var lastSnapshotRevision = '';
+    var queueAdminPromise = null;
+
+    async function getQueueAdmin() {
+        if (!queueAdminPromise) {
+            queueAdminPromise = (async function() {
+                if (!window.Weline || typeof Weline.load !== 'function') {
+                    throw new Error(config.text.apiUnavailable);
+                }
+                var api = await Weline.load('api');
+                return api.resource('queue_admin');
+            })().catch(function(error) {
+                queueAdminPromise = null;
+                throw error;
+            });
+        }
+        return queueAdminPromise;
+    }
+
+    async function queueAdminCall(operation, params) {
+        var api = await getQueueAdmin();
+        if (!api || typeof api[operation] !== 'function') {
+            throw new Error(config.text.apiUnavailable);
+        }
+        return api[operation](params || {}, { keepBusinessResult: true, silent: true });
+    }
 
     function getSelectedIds() {
         var ids = [];
@@ -457,27 +544,36 @@
         return !!document.querySelector('.modal.show, .offcanvas.show');
     }
 
-    function buildSnapshotUrl() {
-        var url = new URL(config.snapshotUrl, window.location.origin);
+    function buildSnapshotParams() {
         var currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.forEach(function(value, key) {
-            url.searchParams.set(key, value);
+        var params = {};
+        ['module', 'status', 'q', 'biz_key'].forEach(function(key) {
+            var value = currentUrl.searchParams.get(key);
+            if (value !== null && value !== '') {
+                params[key] = value;
+            }
         });
-        return url.toString();
+        var page = parseInt(currentUrl.searchParams.get('page') || '1', 10);
+        if (Number.isFinite(page) && page > 0) {
+            params.page = page;
+        }
+        var queueId = parseInt(
+            currentUrl.searchParams.get('queue_id') || currentUrl.searchParams.get('id') || '0',
+            10
+        );
+        if (Number.isFinite(queueId) && queueId > 0) {
+            params.queue_id = queueId;
+        }
+        if (lastSnapshotRevision) {
+            params.known_revision = lastSnapshotRevision;
+        }
+        return params;
     }
 
     function cleanupManagedQueueResultModals() {
         document.querySelectorAll('.weline-queue-result-modal[data-live-managed="1"]').forEach(function(modal) {
             if (modal.parentElement) {
                 modal.parentElement.removeChild(modal);
-            }
-        });
-    }
-
-    function cleanupManagedQueueOffcanvases() {
-        document.querySelectorAll('.weline-component-offcanvas[id^="queueshow"], .weline-component-offcanvas[id^="off_canvas_queue_edit"]').forEach(function(panel) {
-            if (panel.parentElement) {
-                panel.parentElement.removeChild(panel);
             }
         });
     }
@@ -522,7 +618,6 @@
         }
         if (listingRegion && typeof payload.listing_html === 'string' && payload.listing_html !== lastSnapshotListingHtml) {
             cleanupManagedQueueResultModals();
-            cleanupManagedQueueOffcanvases();
             listingRegion.innerHTML = sanitizeSnapshotHtml(payload.listing_html);
             lastSnapshotListingHtml = payload.listing_html;
         }
@@ -532,41 +627,70 @@
         portalQueueResultModals();
     }
 
-    function refreshQueueSnapshot(options) {
+    async function refreshQueueSnapshot(options) {
         options = options || {};
-        if (snapshotInFlight && !options.force) {
-            return Promise.resolve(false);
+        if (snapshotInFlight) {
+            if (options.force) {
+                snapshotRefreshPending = true;
+            }
+            return false;
         }
         if (!options.force && shouldPauseSnapshotRefresh()) {
-            return Promise.resolve(false);
+            return false;
         }
 
         snapshotInFlight = true;
-        return fetch(buildSnapshotUrl(), {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'same-origin'
-        }).then(function(response) {
-            if (!response.ok) {
-                throw new Error('HTTP ' + response.status);
-            }
-            return response.json();
-        }).then(function(result) {
+        var requestEpoch = snapshotMutationEpoch;
+        var statsRegion = document.getElementById('weline-queue-stats-region');
+        var listingRegion = document.getElementById('weline-queue-listing-region');
+        if (statsRegion) statsRegion.setAttribute('aria-busy', 'true');
+        if (listingRegion) listingRegion.setAttribute('aria-busy', 'true');
+        try {
+            var result = await queueAdminCall('snapshot', buildSnapshotParams());
             if (result && result.success) {
-                applySnapshot(result);
+                if (requestEpoch !== snapshotMutationEpoch) {
+                    snapshotRefreshPending = true;
+                    return false;
+                }
+                if (result.changed !== false) {
+                    applySnapshot(result);
+                }
+                if (typeof result.revision === 'string') {
+                    lastSnapshotRevision = result.revision;
+                }
                 return true;
             }
+            if (options.showError && typeof BackendToast !== 'undefined') {
+                BackendToast.error((result && result.msg) || config.text.networkError);
+            }
             return false;
-        }).catch(function(error) {
+        } catch (error) {
             if (options.showError && typeof BackendToast !== 'undefined') {
                 BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
             }
             return false;
-        }).finally(function() {
+        } finally {
             snapshotInFlight = false;
-        });
+            if (statsRegion) statsRegion.removeAttribute('aria-busy');
+            if (listingRegion) listingRegion.removeAttribute('aria-busy');
+            if (snapshotRefreshPending) {
+                snapshotRefreshPending = false;
+                window.setTimeout(function() {
+                    refreshQueueSnapshot({ force: true });
+                }, 0);
+            }
+        }
+    }
+
+    function requestQueueMutationRefresh(delayMs) {
+        snapshotMutationEpoch += 1;
+        lastSnapshotRevision = '';
+        if (mutationRefreshTimer) {
+            window.clearTimeout(mutationRefreshTimer);
+        }
+        mutationRefreshTimer = window.setTimeout(function() {
+            refreshQueueSnapshot({ force: true, showError: true });
+        }, typeof delayMs === 'number' ? delayMs : config.actionRefreshDelayMs);
     }
 
     function queueSnapshotRefresh(delayMs) {
@@ -580,39 +704,87 @@
         }, typeof delayMs === 'number' ? delayMs : config.pollIntervalMs);
     }
 
-    function performAction(queueId, action, confirmMsg) {
+    function setButtonBusy(button, busy) {
+        if (!button) {
+            return;
+        }
+        var icon = button.querySelector('i');
+        if (busy) {
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            if (icon && !button.dataset.queueOriginalIcon) {
+                button.dataset.queueOriginalIcon = icon.getAttribute('class') || '';
+                icon.setAttribute('class', 'mdi mdi-loading');
+            }
+            return;
+        }
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        if (icon && button.dataset.queueOriginalIcon) {
+            icon.setAttribute('class', button.dataset.queueOriginalIcon);
+            delete button.dataset.queueOriginalIcon;
+        }
+    }
+
+    function setBatchButtonsBusy(busy) {
+        document.querySelectorAll('.weline-queue-batch-actions button').forEach(function(button) {
+            setButtonBusy(button, busy);
+        });
+    }
+
+    function openQueueOffcanvas(triggerSelector, queueId) {
+        var id = parseInt(String(queueId || ''), 10);
+        var trigger = document.querySelector(triggerSelector);
+        if (!Number.isFinite(id) || id <= 0 || !trigger) {
+            BackendToast.error(config.text.networkError);
+            return;
+        }
+        var targetSelector = trigger.getAttribute('data-bs-target') || '';
+        var panel = targetSelector ? document.querySelector(targetSelector) : null;
+        var iframe = panel ? panel.querySelector('iframe[data-src]') : null;
+        if (!panel || !iframe) {
+            BackendToast.error(config.text.apiUnavailable);
+            return;
+        }
+        var baseSrc = iframe.getAttribute('data-queue-base-src') || iframe.getAttribute('data-src') || '';
+        if (!baseSrc) {
+            BackendToast.error(config.text.apiUnavailable);
+            return;
+        }
+        iframe.setAttribute('data-queue-base-src', baseSrc);
+        var url = new URL(baseSrc, window.location.origin);
+        url.searchParams.set('id', String(id));
+        iframe.setAttribute('data-src', url.toString());
+        iframe.removeAttribute('src');
+        trigger.click();
+    }
+
+    function performAction(queueId, action, confirmMsg, sourceButton) {
         BackendConfirm.show(confirmMsg, {
             type: action === 'delete' ? 'danger' : 'warning'
-        }).then(function(confirmed) {
+        }).then(async function(confirmed) {
             if (!confirmed) return;
-            window.Weline.Api.request(config.apiAction, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ id: queueId, action: action })
-            })
-            .then(function(response) {
-                var result = response.data;
-                if (response.ok && result && result.success) {
+            var id = parseInt(String(queueId || ''), 10);
+            if (!Number.isFinite(id) || id <= 0) {
+                BackendToast.error(config.text.networkError);
+                return;
+            }
+            setButtonBusy(sourceButton, true);
+            try {
+                var result = await queueAdminCall('action', { queue_id: id, action: action });
+                if (result && result.success) {
                     BackendToast.success(result.msg);
-                    if (action === 'delete') {
-                        var row = document.querySelector('tr[data-queue-id="' + queueId + '"]');
-                        if (row) {
-                            row.style.transition = 'opacity 0.3s';
-                            row.style.opacity = '0';
-                            setTimeout(function() { row.remove(); }, 300);
-                        }
-                    }
-                    queueSnapshotRefresh(action === 'delete' ? 350 : config.actionRefreshDelayMs);
+                    requestQueueMutationRefresh(action === 'delete' ? 350 : config.actionRefreshDelayMs);
                 } else {
                     BackendToast.error((result && result.msg) || config.text.networkError);
                 }
-            })
-            .catch(function(error) {
+            } catch (error) {
                 BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
-            });
+            } finally {
+                setButtonBusy(sourceButton, false);
+            }
+        }).catch(function(error) {
+            BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
         });
     }
 
@@ -622,34 +794,43 @@
             BackendToast.warning(config.text.selectRequired);
             return;
         }
-        
-        var msg = confirmMsg.replace('%{1}', ids.length);
-        
+
+        var msg = confirmMsg.replace('__QUEUE_COUNT__', String(ids.length));
+
         BackendConfirm.show(msg, {
             type: action === 'delete' ? 'danger' : 'warning'
-        }).then(function(confirmed) {
+        }).then(async function(confirmed) {
             if (!confirmed) return;
+            var queueIds = ids.map(function(id) {
+                return parseInt(String(id || ''), 10);
+            }).filter(function(id) {
+                return Number.isFinite(id) && id > 0;
+            });
+            if (queueIds.length === 0) {
+                BackendToast.warning(config.text.selectRequired);
+                return;
+            }
             BackendToast.info('<?= addslashes(__("正在执行批量操作...")) ?>');
-            window.Weline.Api.request(config.apiBatch, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ ids: ids, action: action })
-            })
-            .then(function(response) {
-                var result = response.data;
-                if (response.ok && result && result.success) {
+            setBatchButtonsBusy(true);
+            try {
+                var result = await queueAdminCall('batchAction', { queue_ids: queueIds, action: action });
+                if (result && result.partial) {
+                    BackendToast.warning(result.msg || config.text.networkError);
+                } else if (result && result.success) {
                     BackendToast.success(result.msg);
-                    queueSnapshotRefresh(config.actionRefreshDelayMs);
                 } else {
                     BackendToast.error((result && result.msg) || config.text.networkError);
                 }
-            })
-            .catch(function(error) {
+                if (result && Number(result.success_count || 0) > 0) {
+                    requestQueueMutationRefresh(config.actionRefreshDelayMs);
+                }
+            } catch (error) {
                 BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
-            });
+            } finally {
+                setBatchButtonsBusy(false);
+            }
+        }).catch(function(error) {
+            BackendToast.error(config.text.networkError + (error && error.message ? ': ' + error.message : ''));
         });
     }
 
@@ -775,36 +956,50 @@
                 return;
             }
 
+            var showBtn = target.closest('.weline-queue-show-btn');
+            if (showBtn) {
+                event.preventDefault();
+                openQueueOffcanvas('.weline-queue-shared-show-trigger', showBtn.dataset.queueId);
+                return;
+            }
+
+            var editBtn = target.closest('.weline-queue-edit-btn');
+            if (editBtn) {
+                event.preventDefault();
+                openQueueOffcanvas('.weline-queue-shared-edit-trigger', editBtn.dataset.queueId);
+                return;
+            }
+
             var deleteBtn = target.closest('.weline-queue-delete-btn');
             if (deleteBtn) {
                 var queueId = deleteBtn.dataset.queueId;
                 var queueName = deleteBtn.dataset.queueName || queueId;
-                var deleteMsg = config.text.deleteConfirm.replace('%{1}', queueName);
-                performAction(queueId, 'delete', deleteMsg);
+                var deleteMsg = config.text.deleteConfirm.replace('__QUEUE_NAME__', queueName);
+                performAction(queueId, 'delete', deleteMsg, deleteBtn);
                 return;
             }
 
             var stopBtn = target.closest('.weline-queue-stop-btn');
             if (stopBtn) {
-                performAction(stopBtn.dataset.queueId, 'stop', config.text.stopConfirm);
+                performAction(stopBtn.dataset.queueId, 'stop', config.text.stopConfirm, stopBtn);
                 return;
             }
 
             var continueBtn = target.closest('.weline-queue-continue-btn');
             if (continueBtn) {
-                performAction(continueBtn.dataset.queueId, 'continue', config.text.continueConfirm);
+                performAction(continueBtn.dataset.queueId, 'continue', config.text.continueConfirm, continueBtn);
                 return;
             }
 
             var retryBtn = target.closest('.weline-queue-retry-btn');
             if (retryBtn) {
-                performAction(retryBtn.dataset.queueId, 'retry', config.text.retryConfirm);
+                performAction(retryBtn.dataset.queueId, 'retry', config.text.retryConfirm, retryBtn);
                 return;
             }
 
             var resetBtn = target.closest('.weline-queue-reset-btn');
             if (resetBtn) {
-                performAction(resetBtn.dataset.queueId, 'reset', config.text.resetConfirm);
+                performAction(resetBtn.dataset.queueId, 'reset', config.text.resetConfirm, resetBtn);
                 return;
             }
 

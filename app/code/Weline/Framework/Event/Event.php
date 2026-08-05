@@ -94,13 +94,23 @@ class Event extends \Weline\Framework\DataObject\DataObject
     public function getEvenData(string $key = ''): mixed
     {
         $eventData = $this->_getData('data');
-        if ($key and $eventData instanceof DataObject) {
+        if ($key === '') {
+            return $eventData;
+        }
+        if ($eventData instanceof DataObject) {
             return $eventData->getData($key);
         }
-        if (isset($eventData[$key])) {
+        if (\is_array($eventData) && \array_key_exists($key, $eventData)) {
             return $eventData[$key];
         }
-        return $eventData;
+        // Non-array event payloads (e.g. ResourceChange) are stored under the
+        // synthetic "data" wrapper. Observers asking for "data" receive the
+        // payload itself; any other key is undefined.
+        if ($key === 'data') {
+            return $eventData;
+        }
+
+        return null;
     }
 
     private string $name;

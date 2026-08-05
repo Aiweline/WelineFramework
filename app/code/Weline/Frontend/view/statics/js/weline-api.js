@@ -42,6 +42,26 @@
         return {};
     };
 
+    const readScopeBootstrapId = () => {
+        const nodes = document.querySelectorAll('meta[name="weline-worker-scope-bootstrap"]');
+        if (nodes.length === 0) {
+            return '';
+        }
+        if (nodes.length !== 1) {
+            const error = new Error('[Weline.Api] expected exactly one worker Scope bootstrap marker.');
+            error.code = 'scope_bootstrap_invalid';
+            throw error;
+        }
+
+        const bootstrapId = String(nodes[0].getAttribute('content') || '').trim();
+        if (!/^[A-Za-z0-9_-]{43}$/.test(bootstrapId)) {
+            const error = new Error('[Weline.Api] worker Scope bootstrap marker is invalid.');
+            error.code = 'scope_bootstrap_invalid';
+            throw error;
+        }
+        return bootstrapId;
+    };
+
     const normalizeLocale = (value) => {
         const locale = String(value || '').trim();
         return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
@@ -106,7 +126,13 @@
         return url.href;
     };
 
-    const isDevMode = () => !!(window.DEV || window.WELINE_ENV === 'DEV');
+    // DEV / localhost：二进制协议在控制台打印解码后的请求往返，便于排查。
+    const isDevMode = () => !!(
+        window.DEV
+        || window.WELINE_ENV === 'DEV'
+        || window.location.hostname === 'localhost'
+        || window.location.hostname === '127.0.0.1'
+    );
 
     const summarizeApiPayload = (payload) => {
         if (!payload || typeof payload !== 'object') {
@@ -123,6 +149,9 @@
         }
         if (payload.type === 'upload') {
             return `upload ${payload.provider}.${payload.operation}`;
+        }
+        if (payload.type === 'scope-bootstrap') {
+            return 'scope-bootstrap';
         }
         return String(payload.type || 'request');
     };
@@ -281,6 +310,7 @@
             currency: '',
             onHttpError: null,
             requestTimeoutMs: 15000,
+            scopeBootstrapId: '',
         }, apiConfig);
 
         config.workerUrl = withDevCacheBust(sameOriginUrl(apiConfig.workerUrl || getDefaultWorkerUrl(), getDefaultWorkerUrl()));
@@ -295,6 +325,10 @@
             || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || [];
         config.locale = normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || config.locale);
         config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || config.currency, config);
+        // This value is intentionally sourced only from the server-injected
+        // non-executable marker. Runtime/global JavaScript config is not a
+        // trusted Scope authority.
+        config.scopeBootstrapId = readScopeBootstrapId();
         return config;
     };
 
@@ -314,6 +348,11 @@
         client.config.defaultCurrency = freshConfig.defaultCurrency;
         client.config.availableCurrencies = freshConfig.availableCurrencies;
         client.config.area = freshConfig.area;
+        if (client.config.scopeBootstrapId !== freshConfig.scopeBootstrapId) {
+            const error = new Error('[Weline.Api] page Scope changed while the API client was active. Reload the page.');
+            error.code = 'scope_context_conflict';
+            throw error;
+        }
         return client;
     };
 
@@ -432,6 +471,8 @@
             // caller that only subscribes to e.g. `progress` would miss a
             // persisted `completed`/`failed` frame and reconnect forever.
             this.terminalEvents.forEach(type => this._eventTypes.add(type));
+            // Transport auth failures are reconnectable, never task-terminal.
+            this._eventTypes.add('transport_error');
 
             this._onlineHandler = () => this.handleOnline();
             this._offlineHandler = () => this.dispatchLifecycleEvent('offline');
@@ -696,6 +737,14 @@
             }
 
             const forwarded = this.createMessageEvent(event);
+            if (this.isReconnectableTransportEvent(forwarded)) {
+                // Do not emit business `failed`/`transport_error` to callers —
+                // they historically treat `failed` as a durable task terminal.
+                this.closeSource();
+                this.dispatchEvent(this.createEvent('error', event));
+                this.scheduleReconnect();
+                return;
+            }
             this.dispatchEvent(forwarded);
             if (this.isTerminalEvent(forwarded)) {
                 this.markTerminal();
@@ -724,20 +773,53 @@
             this.persistState();
         }
 
-        isTerminalEvent(event) {
-            const type = String(event.type || '').toLowerCase();
-            if (this.terminalEvents.has(type)) {
-                return true;
-            }
-            let payload = event.data;
+        parseEventPayload(event) {
+            let payload = event && event.data;
             if (typeof payload === 'string') {
                 try {
                     payload = JSON.parse(payload);
                 } catch (error) {
-                    return false;
+                    return null;
                 }
             }
             if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                return null;
+            }
+            return payload;
+        }
+
+        isTransportAuthFailurePayload(payload) {
+            if (!payload) {
+                return false;
+            }
+            const code = String(payload.code || payload.error_code || '').trim().toLowerCase();
+            const status = Number(payload.http_status || 0);
+            return code === 'auth_error'
+                || code === 'worker_store_unavailable'
+                || status === 401;
+        }
+
+        isReconnectableTransportEvent(event) {
+            const type = String(event && event.type || '').toLowerCase();
+            if (type === 'transport_error') {
+                return true;
+            }
+            if (type !== 'failed') {
+                return false;
+            }
+            return this.isTransportAuthFailurePayload(this.parseEventPayload(event));
+        }
+
+        isTerminalEvent(event) {
+            if (this.isReconnectableTransportEvent(event)) {
+                return false;
+            }
+            const type = String(event.type || '').toLowerCase();
+            if (this.terminalEvents.has(type)) {
+                return true;
+            }
+            const payload = this.parseEventPayload(event);
+            if (!payload) {
                 return false;
             }
             if (payload.terminal === true) {
@@ -895,6 +977,8 @@
             this.pending = new Map();
             this.devTraces = new Map();
             this.autoRequestsEnabled = false;
+            this.scopeWarmupPromise = null;
+            this.scopeWarmupComplete = false;
 
             this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
             this.handleWorkerError = this.handleWorkerError.bind(this);
@@ -1034,7 +1118,37 @@
             return Promise.reject(new Error('[Weline.Api] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().'));
         }
 
+        warmup() {
+            if (!this.config.scopeBootstrapId) {
+                return Promise.resolve(null);
+            }
+            if (this.scopeWarmupComplete) {
+                return Promise.resolve(null);
+            }
+            if (!this.scopeWarmupPromise) {
+                this.scopeWarmupPromise = this.sendToWorker({
+                    type: 'scope-bootstrap',
+                    options: { silent: true },
+                }).then((result) => {
+                    this.scopeWarmupComplete = true;
+                    return result;
+                }).finally(() => {
+                    if (!this.scopeWarmupComplete) {
+                        this.scopeWarmupPromise = null;
+                    }
+                });
+            }
+            return this.scopeWarmupPromise;
+        }
+
         send(payload) {
+            if (payload && payload.type !== 'scope-bootstrap' && this.config.scopeBootstrapId) {
+                return this.warmup().then(() => this.sendToWorker(payload));
+            }
+            return this.sendToWorker(payload);
+        }
+
+        sendToWorker(payload) {
             this.ensureWorker();
             const messageId = this.buildMessageId();
             return new Promise((resolve, reject) => {
@@ -1071,6 +1185,7 @@
                         currency: this.config.currency,
                         defaultCurrency: this.config.defaultCurrency,
                         availableCurrencies: this.config.availableCurrencies,
+                        scopeBootstrapId: this.config.scopeBootstrapId,
                     },
                 }));
             });
@@ -1286,7 +1401,7 @@
             const summary = summarizeApiPayload(requestPayload);
             const ok = !!(responseMeta && responseMeta.ok === true);
             const status = responseMeta && responseMeta.status ? ` ${responseMeta.status}` : '';
-            const label = `[Weline.Api] ${ok ? '✓' : '✗'} ${summary}${status} · ${durationMs}ms`;
+            const label = `[Weline.BinQuery] ${ok ? '✓' : '✗'} ${summary}${status} · ${durationMs}ms`;
 
             const requestLog = cloneDevLogValue(sanitizePayloadForWorker(requestPayload));
             const responseLog = cloneDevLogValue(responseMeta || {});
@@ -1303,7 +1418,7 @@
         }
 
         logDevError(context, error, detail) {
-            const label = `[Weline.Api] ${context}`;
+            const label = `[Weline.BinQuery] ${context}`;
             const extra = detail && typeof detail === 'object' ? detail : {};
             if (typeof console.groupCollapsed === 'function') {
                 console.groupCollapsed(label);
@@ -1572,6 +1687,7 @@
         markCartEmpty: () => getOrCreateClient().markCartEmpty(),
         enableAutoRequests: () => getOrCreateClient().enableAutoRequests(),
         disableAutoRequests: () => getOrCreateClient().disableAutoRequests(),
+        bootstrapScope: () => getOrCreateClient().warmup(),
         getClient: () => getOrCreateClient(),
         StreamHandle,
     };
@@ -1580,5 +1696,25 @@
     window.Weline = window.Weline || {};
     if (!window.Weline.Api || window.Weline.Api.__fallback === true) {
         window.Weline.Api = ApiModule;
+    }
+
+    try {
+        if (readScopeBootstrapId() !== '') {
+            ApiModule.bootstrapScope().catch((error) => {
+                window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
+                    detail: {
+                        code: error && error.code ? error.code : 'scope_bootstrap_invalid',
+                        status: error && error.status ? error.status : 0,
+                    },
+                }));
+            });
+        }
+    } catch (error) {
+        window.dispatchEvent(new CustomEvent('weline:scope-bootstrap-failed', {
+            detail: {
+                code: error && error.code ? error.code : 'scope_bootstrap_invalid',
+                status: 0,
+            },
+        }));
     }
 })(window);

@@ -215,6 +215,43 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesVisitorPanelBufferStatsAsGuest(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'visitor/rest/v1/panel/buffer-stats',
+            'Panel',
+            'getBufferStats',
+            'Weline\\Visitor\\Api\\Rest\\V1\\Panel'
+        )));
+    }
+
+    public function testMatchesVisitorAnalyticsBufferStatsAsGuest(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'visitor/rest/v1/analytics/buffer-stats',
+            'Analytics',
+            'getBufferStats',
+            'Weline\\Visitor\\Api\\Rest\\V1\\Analytics'
+        )));
+    }
+
+    public function testVisitorPixelPathIsNotGuestFrontendRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        // path-only：禁止传入 Pixel FQCN，否则 controller 回退可能误绿（D-R1）
+        $this->assertFalse($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'visitor/rest/v1/pixel',
+            '',
+            '',
+            ''
+        )));
+    }
+
     public function testDoesNotMatchProtectedDataTableFrontendApiRoute(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();

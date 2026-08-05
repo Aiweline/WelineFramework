@@ -29,8 +29,38 @@ class TranslationQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'translate' => $this->translate($params),
             'batchTranslate' => $this->batchTranslate($params),
+            'testProvider' => $this->testProvider($params),
             default => throw new \InvalidArgumentException((string)__('Unsupported translation operation: %{1}', $operation)),
         };
+    }
+
+    private function testProvider(array $params): array
+    {
+        $providerId = (int)($params['provider_id'] ?? $params['id'] ?? 0);
+        if ($providerId <= 0) {
+            return ['success' => false, 'message' => (string)__('渠道ID不能为空')];
+        }
+
+        try {
+            $provider = ObjectManager::getInstance(TranslationProvider::class);
+            $provider->clear()->load($providerId);
+            if (!$provider->getId()) {
+                return ['success' => false, 'message' => (string)__('渠道不存在')];
+            }
+            $adapter = ObjectManager::getInstance(ProviderFactory::class)->create(
+                (string)$provider->getData(TranslationProvider::schema_fields_PROVIDER_CODE)
+            );
+            if (!$adapter) {
+                return ['success' => false, 'message' => (string)__('未找到渠道适配器')];
+            }
+            $result = $adapter->testConnection($provider);
+            if ($result) {
+                return ['success' => true, 'message' => (string)__('连接测试成功')];
+            }
+            return ['success' => false, 'message' => (string)__('连接测试失败')];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => (string)__('测试失败：%{1}', [$e->getMessage()])];
+        }
     }
 
     private function translate(array $params): array

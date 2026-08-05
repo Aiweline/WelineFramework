@@ -1,0 +1,47 @@
+<?php
+/** @var array<string,mixed> $diagnostics */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$environment = is_array($diagnostics['environment'] ?? null) ? $diagnostics['environment'] : [];
+$current = is_array($diagnostics['current'] ?? null) ? $diagnostics['current'] : [];
+$core = is_array($diagnostics['core'] ?? null) ? $diagnostics['core'] : [];
+?>
+<div class="container-fluid" data-testid="operations-release-diagnostics">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h4 class="mb-1"><lang>发布诊断</lang></h4>
+            <div class="text-muted"><lang>只读查看当前发布标记；不提供发布、回滚或 Webhook 回放操作。</lang></div>
+        </div>
+        <span class="badge bg-secondary"><lang>只读</lang></span>
+    </div>
+
+    <div class="card mb-3"><div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4"><strong><lang>部署模式</lang></strong><div><?= $escape($environment['deploy_mode'] ?? '') ?></div></div>
+            <div class="col-md-4"><strong><lang>发布版本</lang></strong><div><?= $escape($environment['deploy_version'] ?? '') ?></div></div>
+            <div class="col-md-4"><strong>Worker Build ID</strong><div><?= $escape($environment['worker_build_id'] ?? '') ?></div></div>
+        </div>
+    </div></div>
+
+    <div class="card mb-3">
+        <div class="card-header"><lang>当前发布标记</lang></div>
+        <div class="card-body">
+            <?php if (empty($diagnostics['current_marker_present'])): ?>
+                <div class="text-muted"><lang>未找到当前发布标记文件</lang></div>
+            <?php else: ?>
+                <div class="table-responsive"><table class="table table-striped mb-0"><tbody>
+                <?php foreach ($current as $key => $value): ?>
+                    <tr><th><?= $escape($key) ?></th><td><?= $escape($value) ?></td></tr>
+                <?php endforeach; ?>
+                </tbody></table></div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="card"><div class="card-header"><lang>内核版本通知状态</lang></div><div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6"><strong><lang>检查值</lang></strong><div><?= $escape($core['check'] ?? '') ?></div></div>
+            <div class="col-md-3"><strong><lang>通知指纹</lang></strong><div><?= $escape($core['last_notified_fingerprint'] ?? '') ?></div></div>
+            <div class="col-md-3"><strong><lang>通知时间</lang></strong><div><?= $escape($core['last_notified_at'] ?? '') ?></div></div>
+        </div>
+    </div></div>
+</div>

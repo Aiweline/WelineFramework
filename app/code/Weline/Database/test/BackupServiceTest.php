@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Database\test;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Database\Service\BackupService;
 use Weline\Database\Model\MigrationBackup;

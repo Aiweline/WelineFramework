@@ -7,165 +7,141 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\System\IPC\OrphanGuard;
 use Weline\Server\IPC\ChildControl\ChildMasterGuard;
 use Weline\Server\Service\MasterLeaseManager;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 
 final class ChildMasterGuardTest extends TestCase
 {
     /** @var list<string> */
-    private array $leaseFiles = [];
+    private array $instances = [];
 
     protected function tearDown(): void
     {
-        foreach ($this->leaseFiles as $file) {
-            @\unlink($file);
-            @\rmdir(\dirname($file));
+        foreach ($this->instances as $instance) {
+            $path = MasterLeaseManager::pathForInstance($instance);
+            @\unlink($path);
+            @\unlink(MasterLeaseManager::lockPathForInstance($instance));
+            @\rmdir(\dirname($path));
         }
-        $this->leaseFiles = [];
+        $this->instances = [];
     }
 
     public function testOrphanGuardDoesNotTrustConnectedIpcWhenMasterPidIsMissing(): void
     {
         $guard = new OrphanGuard(0, 1, 1, null, 180);
-
-        self::assertTrue($guard->shouldExit($this->missingPid(), true, false, 'UT-Orphan'));
+        self::assertTrue($guard->shouldExit(999_999_999, true, false, 'UT-Orphan'));
     }
 
-    public function testChildMasterGuardExitsWhenLeaseStateIsStopping(): void
+    public function testStrictGuardUsesProtectedSchema2IdentityAndFreshness(): void
     {
-        $guard = $this->guardForLease([
-            'state' => MasterLeaseManager::STATE_STOPPING,
-        ]);
-
-        self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('state=stopping', $guard->getLastExitReason());
-    }
-
-    public function testChildMasterGuardExitsWhenLeaseTokenDoesNotMatch(): void
-    {
-        $guard = $this->guardForLease([
-            'master_token' => 'other-token',
-        ]);
-
-        self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('token mismatch', $guard->getLastExitReason());
-    }
-
-    public function testChildMasterGuardExitsWhenLeasePidOrInstanceDoesNotMatch(): void
-    {
-        $guard = $this->guardForLease([
-            'master_pid' => (int)\getmypid() + 100000,
-        ]);
-
-        self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('PID mismatch', $guard->getLastExitReason());
-
-        $guard = $this->guardForLease([
-            'instance' => 'other-instance',
-        ]);
-
-        self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('instance mismatch', $guard->getLastExitReason());
-    }
-
-    public function testChildMasterGuardAllowsMatchingRunningLease(): void
-    {
-        $guard = $this->guardForLease();
+        $now = 1_000.0;
+        [$manager, $instance, $path, $token] = $this->lease($now);
+        $guard = $this->guard($manager, $instance, $path, $token, true);
 
         self::assertFalse($guard->shouldExit(true));
-        self::assertSame('', $guard->getLastExitReason());
+        $now += MasterLeaseManager::HEARTBEAT_STALE_SEC + 1.0;
+        self::assertTrue($guard->shouldExit(true));
+        self::assertStringContainsString('stale', \strtolower($guard->getLastExitReason()));
     }
 
-    public function testChildMasterGuardTrustsFreshMatchingLeaseBeforeSlowPidProbe(): void
+    public function testCompatibilityGuardMayTolerateStaleHeartbeatButNotBirthOrTokenMismatch(): void
     {
-        $missingPid = $this->missingPid();
-        $path = $this->writeLease([
-            'master_pid' => $missingPid,
-        ]);
-        $guard = new ChildMasterGuard(
-            $missingPid,
+        $now = 2_000.0;
+        $namespace = 'pid:[4026532111]';
+        $birth = 'fixed-birth';
+        [$manager, $instance, $path, $token] = $this->lease($now, $namespace, $birth);
+        $guard = $this->guard($manager, $instance, $path, $token, false);
+
+        $now += MasterLeaseManager::HEARTBEAT_STALE_SEC + 1.0;
+        self::assertFalse($guard->shouldExit(true));
+
+        $wrongToken = $this->guard($manager, $instance, $path, \str_repeat('f', 64), false);
+        self::assertTrue($wrongToken->shouldExit(true));
+
+        $birth = 'reused-pid-birth';
+        self::assertTrue($guard->shouldExit(true));
+        self::assertStringContainsString('owner', \strtolower($guard->getLastExitReason()));
+    }
+
+    public function testStoppingStateAndExpectedIdentityMismatchExit(): void
+    {
+        $now = 3_000.0;
+        [$manager, $instance, $path, $token] = $this->lease($now);
+        $pid = (int)\getmypid();
+
+        $wrongPid = new ChildMasterGuard(
+            $pid + 1,
             $path,
-            'unit-token',
+            $token,
             'UT-Child',
-            'unit-instance',
+            $instance,
             7,
-            0.0
+            0.0,
+            $manager,
+            true,
         );
+        self::assertTrue($wrongPid->shouldExit(true));
 
-        self::assertFalse($guard->shouldExit(true));
-        self::assertSame('', $guard->getLastExitReason());
-        self::assertFalse($guard->shouldExit(true));
-        self::assertSame('', $guard->getLastExitReason());
-        self::assertFalse($guard->shouldExit(true));
-        self::assertSame('', $guard->getLastExitReason());
-    }
-
-    public function testChildMasterGuardExitsWhenLeaseIsStaleAndPidIsMissing(): void
-    {
-        $missingPid = $this->missingPid();
-        $path = $this->writeLease([
-            'master_pid' => $missingPid,
-            'updated_at' => \microtime(true) - MasterLeaseManager::HEARTBEAT_STALE_SEC - 1,
-        ]);
-        $guard = new ChildMasterGuard(
-            $missingPid,
-            $path,
-            'unit-token',
-            'UT-Child',
-            'unit-instance',
-            7,
-            0.0
-        );
-
+        $manager->markStopping($instance, $pid, $token);
+        $guard = $this->guard($manager, $instance, $path, $token, true);
         self::assertTrue($guard->shouldExit(true));
-        self::assertStringContainsString('heartbeat stale', $guard->getLastExitReason());
+        self::assertStringContainsString('not running', \strtolower($guard->getLastExitReason()));
     }
 
-    /**
-     * @param array<string,mixed> $overrides
-     */
-    private function guardForLease(array $overrides = []): ChildMasterGuard
-    {
-        $path = $this->writeLease($overrides);
-
+    private function guard(
+        MasterLeaseManager $manager,
+        string $instance,
+        string $path,
+        string $token,
+        bool $strict,
+    ): ChildMasterGuard {
         return new ChildMasterGuard(
             (int)\getmypid(),
             $path,
-            'unit-token',
+            $token,
             'UT-Child',
-            'unit-instance',
+            $instance,
             7,
-            0.0
+            0.0,
+            $manager,
+            $strict,
         );
     }
 
-    /**
-     * @param array<string,mixed> $overrides
-     */
-    private function writeLease(array $overrides = []): string
+    /** @return array{MasterLeaseManager,string,string,string} */
+    private function lease(
+        float &$now,
+        ?string &$namespace = null,
+        ?string &$birth = null,
+    ): array
     {
-        $dir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-master-lease-ut-' . \bin2hex(\random_bytes(4));
-        self::assertTrue(@\mkdir($dir, 0777, true) || \is_dir($dir));
-        $path = $dir . DIRECTORY_SEPARATOR . 'master_lease.json';
-        $payload = \array_merge([
-            'instance' => 'unit-instance',
-            'master_pid' => (int)\getmypid(),
-            'control_port' => 19191,
-            'master_epoch' => 7,
-            'master_token' => 'unit-token',
-            'state' => MasterLeaseManager::STATE_RUNNING,
-            'updated_at' => \microtime(true),
-        ], $overrides);
+        $namespace ??= 'pid:[4026532001]';
+        $birth ??= 'fixed-birth';
+        $pid = (int)\getmypid();
+        $boot = \str_repeat('7', 64);
+        $runtime = new MasterLeaseRuntimeIdentity(
+            bootIdentityResolver: static fn (): string => $boot,
+            monotonicClock: static function () use (&$now): float {
+                return $now;
+            },
+            processInfoResolver: static function (int $candidate) use ($pid, &$birth): array {
+                return [
+                    'exists' => $candidate === $pid,
+                    'name' => $candidate === $pid ? 'php' : '',
+                    'command' => $candidate === $pid ? 'php bin/w --name=unit-master' : '',
+                    'start_time' => $candidate === $pid ? $birth : '',
+                ];
+            },
+            managedProcessVerifier: static fn (int $candidate, string $instance): bool => $candidate === $pid,
+            pidNamespaceResolver: static function (int $candidate) use ($pid, &$namespace): ?string {
+                return $candidate === $pid ? $namespace : null;
+            },
+        );
+        $manager = new MasterLeaseManager($runtime);
+        $instance = 'child-guard-' . \bin2hex(\random_bytes(5));
+        $this->instances[] = $instance;
+        $token = \str_repeat('a', 64);
+        $path = $manager->writeRunning($instance, $pid, 19191, 7, $token);
 
-        self::assertNotFalse(@\file_put_contents(
-            $path,
-            \json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
-        ));
-        $this->leaseFiles[] = $path;
-
-        return $path;
-    }
-
-    private function missingPid(): int
-    {
-        return 999999999;
+        return [$manager, $instance, $path, $token];
     }
 }

@@ -3,14 +3,27 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Extends\Module\Weline_Framework\Query;
 
+use Weline\Cart\Service\CartCurrentCustomerResolver;
+use Weline\Cart\Service\CartScopeResolver;
 use Weline\Cart\Service\CartService;
+use Weline\Cart\Service\CartV2ConflictException;
+use Weline\Cart\Service\CartV2Service;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class CartQueryProvider implements QueryProviderInterface
 {
+    private readonly CartScopeResolver $scopeResolver;
+
+    private readonly CartCurrentCustomerResolver $currentCustomer;
+
     public function __construct(
-        private readonly CartService $cartService
+        private readonly CartService $cartService,
+        ?CartScopeResolver $scopeResolver = null,
+        ?CartCurrentCustomerResolver $currentCustomer = null,
     ) {
+        $this->scopeResolver = $scopeResolver ?? new CartScopeResolver();
+        $this->currentCustomer = $currentCustomer ?? new CartCurrentCustomerResolver();
     }
 
     public function getProviderName(): string
@@ -24,13 +37,162 @@ class CartQueryProvider implements QueryProviderInterface
             'summary' => $this->success('Cart summary loaded.', $this->cartService->summary()),
             'count' => $this->success('Cart count loaded.', $this->cartCountPayload()),
             'items', 'miniItems' => $this->success('Cart items loaded.', $this->cartItemsPayload($params)),
-            'add' => $this->successFromSummary($this->cartService->add($params)),
+            'add' => $this->successFromSummary($this->cartService->add(
+                $this->withTrustedCustomer($params),
+            )),
+            'addV2' => $this->successFromSummary($this->cartService->add(
+                $this->withTrustedCustomer(
+                    $params + ['provider_code' => $params['provider_code'] ?? 'product'],
+                ),
+            )),
+            'mergeGuest' => $this->mergeGuest($params),
+            'getV2Cart' => $this->getV2Cart($params),
+            'clearV2' => $this->clearV2($params),
+            'issueGuestToken' => $this->issueGuestToken(),
             'update' => $this->successFromSummary($this->cartService->update($params)),
             'remove' => $this->successFromSummary($this->cartService->remove($params)),
             'clear' => $this->successFromSummary($this->cartService->clear()),
             'options' => $this->success('Cart options loaded.', ['options' => []]),
             default => throw new \InvalidArgumentException((string)__('Cart 查询器不支持的 operation：%{1}', $operation)),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function mergeGuest(array $params): array
+    {
+        $v2 = $this->cartService->cartV2();
+        if ($v2 === null) {
+            return $this->success('Cart V2 unavailable.', ['success' => false, 'message' => (string)__('Cart V2 未启用')]);
+        }
+        try {
+            $customerId = $this->currentCustomer->currentCustomerId();
+            if ($customerId === null) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('登录后才能合并游客购物车。'),
+                    'error_code' => CartCurrentCustomerResolver::ERROR_AUTH_REQUIRED,
+                ];
+            }
+            $scope = $this->scopeResolver->fromParams($params);
+            $guestToken = trim((string)($params['guest_token'] ?? ''));
+            if ($guestToken === '') {
+                $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+            }
+            $summary = $v2->mergeGuestIntoCustomer(
+                $scope,
+                $guestToken,
+                $customerId,
+            );
+            return $this->successFromSummary($summary);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e instanceof CartV2ConflictException ? $e->errorCode() : 'cart_merge_failed',
+            ];
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function issueGuestToken(): array
+    {
+        $v2 = $this->cartService->cartV2();
+        $token = $v2?->issueGuestToken() ?? bin2hex(random_bytes(16));
+        Cookie::set(
+            CartV2Service::GUEST_TOKEN_COOKIE,
+            $token,
+            3600 * 24 * 7,
+            [
+                'path' => '/',
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ],
+        );
+        return $this->success('Guest token issued.', ['guest_token' => $token, 'success' => true]);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function getV2Cart(array $params): array
+    {
+        $v2 = $this->cartService->cartV2();
+        if ($v2 === null) {
+            return $this->success('Cart V2 unavailable.', ['success' => false, 'message' => (string)__('Cart V2 未启用')]);
+        }
+        try {
+            $scope = $this->scopeResolver->fromParams($params);
+            $guestToken = isset($params['guest_token']) ? (string)$params['guest_token'] : null;
+            $customerId = $this->currentCustomer->currentCustomerId();
+            if ($customerId === null && ($guestToken === null || trim($guestToken) === '')) {
+                $guestToken = (string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE);
+            }
+            $summary = $v2->getCart($scope, $guestToken, $customerId);
+            return $this->successFromSummary($summary);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e instanceof CartV2ConflictException ? $e->errorCode() : 'cart_get_failed',
+            ];
+        }
+    }
+
+    /**
+     * Clear only the server-owned current Cart V2 for the trusted identity.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function clearV2(array $params): array
+    {
+        $v2 = $this->cartService->cartV2();
+        if ($v2 === null) {
+            return [
+                'success' => false,
+                'message' => (string)__('Cart V2 未启用'),
+                'error_code' => 'cart_v2_unavailable',
+            ];
+        }
+        try {
+            $scope = $this->scopeResolver->fromParams($params);
+            $customerId = $this->currentCustomer->currentCustomerId();
+            $guestToken = $customerId === null
+                ? trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE))
+                : null;
+
+            return $this->successFromSummary(
+                $v2->clearCart($scope, $guestToken, $customerId),
+            );
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e instanceof CartV2ConflictException
+                    ? $e->errorCode()
+                    : 'cart_v2_clear_failed',
+            ];
+        }
+    }
+
+    /**
+     * Browser input can select a guest token, but never a customer cart owner.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function withTrustedCustomer(array $params): array
+    {
+        unset($params['customer_id']);
+        $customerId = $this->currentCustomer->currentCustomerId();
+        if ($customerId !== null) {
+            $params['customer_id'] = $customerId;
+        }
+        return $params;
     }
 
     /**
@@ -167,9 +329,106 @@ class CartQueryProvider implements QueryProviderInterface
                         'sku' => ['type' => 'string', 'max_length' => 80],
                         'image' => ['type' => 'string', 'max_length' => 512],
                         'price' => ['type' => 'number', 'min' => 0],
+                        'provider_code' => ['type' => 'string', 'max_length' => 64],
+                        'global_offer_uuid' => ['type' => 'string', 'max_length' => 64],
+                        'offer_uuid' => ['type' => 'string', 'max_length' => 64],
+                        'offer_id' => ['type' => 'int', 'min' => 1],
+                        'website_id' => ['type' => 'int', 'min' => 0],
+                        'store_id' => ['type' => 'int', 'min' => 0],
+                        'currency' => ['type' => 'string', 'max_length' => 8],
+                        'selection_hash' => ['type' => 'string', 'max_length' => 128],
+                        'guest_token' => ['type' => 'string', 'max_length' => 64],
                     ],
                     'returns' => $commonReturns,
-                    'summary' => 'Add item to cart session',
+                    'summary' => 'Add item to cart session (V1 product_id or V2 OfferIdentity)',
+                ],
+                [
+                    'name' => 'addV2',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        'provider_code' => ['type' => 'string', 'max_length' => 64],
+                        'global_offer_uuid' => ['type' => 'string', 'max_length' => 64],
+                        'qty' => ['type' => 'int', 'min' => 1, 'max' => 999],
+                        'selection' => ['type' => 'array', 'max_items' => 50],
+                        'selection_hash' => ['type' => 'string', 'max_length' => 128],
+                        'guest_token' => ['type' => 'string', 'max_length' => 64],
+                        'website_id' => ['type' => 'int', 'min' => 0],
+                        'website_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_code' => ['type' => 'string', 'max_length' => 64],
+                        'channel_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_mode' => ['type' => 'string', 'max_length' => 32],
+                        'scope' => ['type' => 'array', 'max_items' => 7],
+                        'currency' => ['type' => 'string', 'max_length' => 8],
+                        'legacy_product_id' => ['type' => 'int', 'min' => 1],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Add Cart V2 OfferIdentity line',
+                ],
+                [
+                    'name' => 'mergeGuest',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        'guest_token' => ['type' => 'string', 'max_length' => 64],
+                        'website_id' => ['type' => 'int', 'min' => 0],
+                        'website_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_code' => ['type' => 'string', 'max_length' => 64],
+                        'channel_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_mode' => ['type' => 'string', 'max_length' => 32],
+                        'scope' => ['type' => 'array', 'max_items' => 7],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Merge guest cart into the authenticated customer cart (same Scope)',
+                ],
+                [
+                    'name' => 'getV2Cart',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'cost' => 1,
+                    'params' => [
+                        'guest_token' => ['type' => 'string', 'max_length' => 64],
+                        'website_id' => ['type' => 'int', 'min' => 0],
+                        'website_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_code' => ['type' => 'string', 'max_length' => 64],
+                        'channel_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_mode' => ['type' => 'string', 'max_length' => 32],
+                        'scope' => ['type' => 'array', 'max_items' => 7],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Read the current guest or authenticated customer Cart V2 cart',
+                ],
+                [
+                    'name' => 'issueGuestToken',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [],
+                    'returns' => $commonReturns,
+                    'summary' => 'Issue opaque guest cart token',
+                ],
+                [
+                    'name' => 'clearV2',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        'website_id' => ['type' => 'int', 'min' => 0],
+                        'website_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_code' => ['type' => 'string', 'max_length' => 64],
+                        'channel_code' => ['type' => 'string', 'max_length' => 64],
+                        'store_mode' => ['type' => 'string', 'max_length' => 32],
+                        'scope' => ['type' => 'array', 'max_items' => 7],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Clear the current trusted Cart V2',
                 ],
                 [
                     'name' => 'update',

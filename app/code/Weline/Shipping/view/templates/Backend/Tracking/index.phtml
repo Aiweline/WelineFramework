@@ -9,7 +9,7 @@ $records = $this->getData('records') ?? [];
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
-<div class="row">
+<div class="row" data-testid="shipping-tracking-management">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                             <h4 class="mb-sm-0"><?= __('物流跟踪') ?></h4>
@@ -33,6 +33,7 @@ $embed = $this->getData('embed') ?? false;
                                 <h5 class="card-title mb-0"><?= __('物流跟踪记录列表') ?></h5>
                             </div>
                             <div class="card-body">
+                                <div class="alert alert-info" data-testid="shipping-tracking-read-only"><?= __('物流跟踪记录由发货与承运商查询流程生成，此工作台仅用于审计查看。') ?></div>
                                 <?php if (empty($records)): ?>
                                     <div class="alert alert-info mb-0">
                                         <?= __('当前暂无物流跟踪记录。') ?>
@@ -53,11 +54,11 @@ $embed = $this->getData('embed') ?? false;
                                             <?php /** @var Tracking $record */ ?>
                                             <?php foreach ($records as $record): ?>
                                                 <tr>
-                                                    <td><?= htmlspecialchars($record->getData(Tracking::fields_TRACKING_NUMBER)) ?></td>
-                                                    <td><?= htmlspecialchars($record->getData(Tracking::fields_CARRIER_ID)) ?></td>
+                                                    <td><?= htmlspecialchars($record->getData(Tracking::schema_fields_TRACKING_NUMBER)) ?></td>
+                                                    <td><?= htmlspecialchars($record->getData(Tracking::schema_fields_CARRIER_ID)) ?></td>
                                                     <td><?= htmlspecialchars($record->getStatusLabel()) ?></td>
-                                                    <td><?= htmlspecialchars((string)$record->getData(Tracking::fields_CURRENT_LOCATION)) ?></td>
-                                                    <td><?= htmlspecialchars((string)$record->getData(Tracking::fields_LAST_TRACKED_AT)) ?></td>
+                                                    <td><?= htmlspecialchars((string)$record->getData(Tracking::schema_fields_CURRENT_LOCATION)) ?></td>
+                                                    <td><?= htmlspecialchars((string)$record->getData(Tracking::schema_fields_LAST_TRACKED_AT)) ?></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                             </tbody>

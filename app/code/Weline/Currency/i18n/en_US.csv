@@ -1,4 +1,15 @@
-﻿基准货币代码必须是3位大写字母,"Base currency code must be 3 uppercase letters"
+﻿"Currency 查询器不支持的操作：%{1}","Currency 查询器不支持的操作：%{1}"
+货币管理,"Currency Management"
+"后台货币 CRUD（bin-query）","后台货币 CRUD（bin-query）"
+删除货币,删除货币
+"货币 ID","货币 ID"
+货币ID不能为空,"Currency ID cannot be empty"
+货币不存在,"Currency does not exist"
+不能删除基准货币,"Cannot delete base currency"
+货币已删除,货币已删除
+删除失败：%{1},删除失败：%{1}
+"Currency ResourceChange Observer 只接受 v1 契约","Currency ResourceChange Observer 只接受 v1 契约"
+基准货币代码必须是3位大写字母,"Base currency code must be 3 uppercase letters"
 Cron执行时间不能为空,"Cron execution time cannot be empty"
 配置已保存，需要更新所有货币汇率,"Configuration saved, need to update all currency exchange rates"
 "配置保存成功！已更新 %{1} 个货币的汇率（成功: %{2}, 失败: %{3}）","Configuration saved successfully! Updated exchange rates for %{1} currencies (Success: %{2}, Failed: %{3})"
@@ -20,14 +31,40 @@ API服务暂时不可用，请稍后重试,"API service is temporarily unavailab
 货币汇率更新完成,"Currency exchange rate update completed"
 无效的请求,"Invalid request"
 "更新失败: %{1}","Update failed: %{1}"
+货币配置,"Currency Configuration"
+"mdi mdi-cog","mdi mdi-cog"
+货币模块配置管理,货币模块配置管理
+查看配置,查看配置
+查看货币配置,查看货币配置
+测试API,测试API
+测试汇率API连接,测试汇率API连接
+"mdi mdi-connection","mdi mdi-connection"
+手动导入,"Manual Import"
+手动触发汇率导入,手动触发汇率导入
+"mdi mdi-download","mdi mdi-download"
+更新汇率,更新汇率
+更新所有货币汇率,更新所有货币汇率
+"mdi mdi-refresh","mdi mdi-refresh"
 货币不存在！,"Currency does not exist!"
 保存成功！,"Save successful!"
 "保存失败: %{1}","Save failed: %{1}"
-货币ID不能为空,"Currency ID cannot be empty"
-货币不存在,"Currency does not exist"
-不能删除基准货币,"Cannot delete base currency"
 删除成功！,"Delete successful!"
 "删除失败: %{1}","Delete failed: %{1}"
+"mdi mdi-currency-usd","mdi mdi-currency-usd"
+货币管理功能,货币管理功能
+查看货币列表,查看货币列表
+添加货币,"Add Currency"
+添加货币界面,添加货币界面
+"mdi mdi-plus-circle-outline","mdi mdi-plus-circle-outline"
+编辑货币,"Edit Currency"
+编辑货币界面,编辑货币界面
+"mdi mdi-pencil","mdi mdi-pencil"
+添加货币请求,添加货币请求
+请求添加货币,请求添加货币
+"mdi mdi-content-save","mdi mdi-content-save"
+编辑货币请求,编辑货币请求
+请求编辑货币,请求编辑货币
+"mdi mdi-content-save-edit","mdi mdi-content-save-edit"
 "货币格式错误,示例:2,4","Currency format error, example: 2,4"
 千分位分隔符不能为空,"Thousand separator cannot be empty"
 小数分隔符不能为空,"Decimal separator cannot be empty"
@@ -35,8 +72,6 @@ API服务暂时不可用，请稍后重试,"API service is temporarily unavailab
 货币名称不能为空,"Currency name cannot be empty"
 汇率必须在0到1000000之间,"Exchange rate must be between 0 and 1000000"
 货币符号位置必须是left或right,"Currency symbol position must be left or right"
-货币管理,"Currency Management"
-货币配置,"Currency Configuration"
 系统,System
 配置,Configuration
 货币导入配置,"Currency Import Configuration"
@@ -86,7 +121,6 @@ CNY汇率,"CNY rate"
 选择您商品定价的主要货币,"Choose the primary currency for your product pricing"
 最后导入时间,"Last Import Time"
 保存配置,"Save Configuration"
-手动导入,"Manual Import"
 确认切换基准货币,"Confirm Base Currency Change"
 警告：此操作将影响所有货币汇率数据！,"Warning: This operation will affect all currency exchange rate data!"
 您正在将基准货币从,"You are changing the base currency from"
@@ -133,7 +167,6 @@ API连接测试失败,"API connection test failed"
 导入成功,"Import successful"
 导入失败,"Import failed"
 货币列表,"Currency List"
-添加货币,"Add Currency"
 搜索,Search
 ID,ID
 货币代码,"Currency Code"
@@ -168,7 +201,6 @@ ID,ID
 格式化预览,"Format Preview"
 输入金额后显示预览,"Display preview after entering amount"
 保存,Save
-编辑货币,"Edit Currency"
 Unicode符号或图标路径,"Unicode symbol or icon path"
 API返回数据格式错误,"API return data format error"
 "无法获取货币 %{1} 的汇率","Unable to get exchange rate for currency %{1}"
@@ -180,3 +212,5 @@ API返回数据格式错误,"API return data format error"
 "无法获取新基准货币的汇率: %{1}","Unable to get exchange rate for new base currency: %{1}"
 新基准货币的汇率无效，无法重新计算,"New base currency exchange rate is invalid, cannot recalculate"
 货币汇率无效,"Currency exchange rate is invalid"
+"""Currency 查询器不支持的操作：%{1}""","Currency 查询器不支持的操作：%{1}"
+"""Currency ResourceChange Observer 只接受 v1 契约""","Currency ResourceChange Observer 只接受 v1 契约"

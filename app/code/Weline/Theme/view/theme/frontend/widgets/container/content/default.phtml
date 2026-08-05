@@ -52,7 +52,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                 exclusive="true"
                 position="content"
                 wrapper="section"
-                class="content-slot slot-hero">
+                class="content-slot slot-hero" weline-code="theme.widgets.widget_hero">
             <?php if (!empty($children['hero'])): ?>
                 <?php foreach ($children['hero'] as $child): ?>
                     <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -75,7 +75,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                 multiple="true"
                 position="content"
                 wrapper="section"
-                class="content-slot slot-featured">
+                class="content-slot slot-featured" weline-code="theme.widgets.widget_featured">
             <?php if (!empty($children['featured'])): ?>
                 <?php foreach ($children['featured'] as $child): ?>
                     <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -128,7 +128,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                     position="content"
                     wrapper="section"
                     class="content-slot slot-main"
-                    style="flex: 1;">
+                    style="flex: 1;" weline-code="theme.widgets.widget_main">
                 <?php if (!empty($children['main'])): ?>
                     <?php foreach ($children['main'] as $child): ?>
                         <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">
@@ -179,7 +179,7 @@ if ($layout === 'with-left' || $layout === 'with-right') {
                 multiple="true"
                 position="content"
                 wrapper="section"
-                class="content-slot slot-bottom">
+                class="content-slot slot-bottom" weline-code="theme.widgets.widget_bottom">
             <?php if (!empty($children['bottom'])): ?>
                 <?php foreach ($children['bottom'] as $child): ?>
                     <div class="slot-widget" data-widget-code="<?= htmlspecialchars($child['code']) ?>">

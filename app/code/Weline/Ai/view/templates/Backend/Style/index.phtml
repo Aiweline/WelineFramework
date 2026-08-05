@@ -6,13 +6,6 @@
  */
 $styles = \is_array($styles ?? null) ? $styles : [];
 $adapters = \is_array($adapters ?? null) ? $adapters : [];
-$catalogUrl = $this->getBackendUrl('ai/backend/style/post-catalog');
-$saveUrl = $this->getBackendUrl('ai/backend/style/post-save');
-$deleteUrl = $this->getBackendUrl('ai/backend/style/post-delete');
-$cloneUrl = $this->getBackendUrl('ai/backend/style/post-clone-builtin');
-$matchUrl = $this->getBackendUrl('ai/backend/style/post-match');
-$bindUrl = $this->getBackendUrl('ai/backend/style/post-bind-adapter-style');
-$unbindUrl = $this->getBackendUrl('ai/backend/style/post-unbind-adapter-style');
 $arrayFields = [
     'industry_tags' => __('行业标签'),
     'match_keywords' => __('匹配关键词'),
@@ -75,12 +68,6 @@ $styleI18n = [
     'unbound' => (string)__('手动绑定已移除。'),
     'bindFailed' => (string)__('绑定失败'),
     'unbindFailed' => (string)__('解绑失败'),
-    'matching' => (string)__('正在匹配...'),
-    'matchFailed' => (string)__('匹配失败'),
-    'matchedPrefix' => (string)__('已匹配 '),
-    'scorePrefix' => (string)__('（分数 '),
-    'scoreSuffix' => (string)__('）'),
-    'noMatchingStyle' => (string)__('未找到匹配风格。'),
     'codeLabel' => (string)__('代码'),
     'styleLabel' => (string)__('风格'),
     'sourceLabel' => (string)__('来源'),
@@ -221,13 +208,11 @@ $styleI18n = [
     .weline-ai-style-page .style-detail-card.is-focus-pulse {
         box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16), 0 14px 32px rgba(15, 23, 42, 0.08);
     }
-    .weline-ai-style-page .style-detail-card .card-body,
-    .weline-ai-style-page .style-match-card .card-body {
+    .weline-ai-style-page .style-detail-card .card-body {
         padding: 16px 18px;
     }
     .weline-ai-style-page .style-detail-card .form-label,
-    .weline-ai-style-page .style-filter-card .form-label,
-    .weline-ai-style-page .style-match-card .form-label {
+    .weline-ai-style-page .style-filter-card .form-label {
         color: var(--style-muted) !important;
         font-weight: 700;
         letter-spacing: 0;
@@ -235,8 +220,7 @@ $styleI18n = [
     .weline-ai-style-page .style-detail-card .form-control,
     .weline-ai-style-page .style-detail-card .form-select,
     .weline-ai-style-page .style-filter-card .form-control,
-    .weline-ai-style-page .style-filter-card .form-select,
-    .weline-ai-style-page .style-match-card .form-control {
+    .weline-ai-style-page .style-filter-card .form-select {
         border-color: #cbd5e1;
         border-radius: 6px;
         color: #334155;
@@ -244,8 +228,7 @@ $styleI18n = [
     .weline-ai-style-page .style-detail-card .form-control:focus,
     .weline-ai-style-page .style-detail-card .form-select:focus,
     .weline-ai-style-page .style-filter-card .form-control:focus,
-    .weline-ai-style-page .style-filter-card .form-select:focus,
-    .weline-ai-style-page .style-match-card .form-control:focus {
+    .weline-ai-style-page .style-filter-card .form-select:focus {
         border-color: var(--style-accent);
         box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
     }
@@ -568,18 +551,6 @@ $styleI18n = [
                     </w:form>
                 </div>
             </div>
-
-            <div class="card style-panel style-match-card">
-                <div class="card-header"><strong><?= __('按简介匹配风格') ?></strong></div>
-                <div class="card-body">
-                    <label class="form-label small text-muted mb-1" for="ai-style-match-title"><?= __('站点标题') ?></label>
-                    <input class="form-control form-control-sm mb-2" id="ai-style-match-title" type="text" placeholder="Teen Patti APK">
-                    <label class="form-label small text-muted mb-1" for="ai-style-match-brief"><?= __('简介') ?></label>
-                    <textarea class="form-control form-control-sm mb-2" id="ai-style-match-brief" rows="3" placeholder="<?= __('描述站点和目标市场') ?>"></textarea>
-                    <button class="btn btn-primary btn-sm" type="button" id="ai-style-match-btn"><?= __('匹配风格') ?></button>
-                    <div class="small mt-2" id="ai-style-match-status"></div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -588,13 +559,6 @@ $styleI18n = [
 (function () {
     'use strict';
 
-    var catalogUrl = <?= \json_encode($catalogUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var saveUrl = <?= \json_encode($saveUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var deleteUrl = <?= \json_encode($deleteUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var cloneUrl = <?= \json_encode($cloneUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var matchUrl = <?= \json_encode($matchUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var bindUrl = <?= \json_encode($bindUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var unbindUrl = <?= \json_encode($unbindUrl, JSON_UNESCAPED_SLASHES) ?>;
     var initialItems = <?= \json_encode($styles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '[]' ?>;
     var initialAdapters = <?= \json_encode($adapters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '[]' ?>;
     var i18n = <?= \json_encode($styleI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>;
@@ -633,55 +597,35 @@ $styleI18n = [
         bind: document.getElementById('ai-style-bind-btn'),
         unbind: document.getElementById('ai-style-unbind-btn'),
         bindingHelp: document.getElementById('ai-style-binding-help'),
-        formStatus: document.getElementById('ai-style-form-status'),
-        matchTitle: document.getElementById('ai-style-match-title'),
-        matchBrief: document.getElementById('ai-style-match-brief'),
-        matchBtn: document.getElementById('ai-style-match-btn'),
-        matchStatus: document.getElementById('ai-style-match-status')
+        formStatus: document.getElementById('ai-style-form-status')
     };
 
-    function post(url, data) {
-        var body = new URLSearchParams();
-        Object.keys(data || {}).forEach(function (key) {
-            var value = data[key];
-            if (value && typeof value === 'object') {
-                body.append(key, JSON.stringify(value));
-            } else {
-                body.append(key, String(value == null ? '' : value));
+    function aiOp(operation, data) {
+        var run = function (api) {
+            var resource = api.resource('ai');
+            if (!resource || typeof resource[operation] !== 'function') {
+                return Promise.reject(new Error(i18n.apiUnavailable));
             }
-        });
-        return apiRequest(url, {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: body.toString(),
-            silent: true
-        }).then(function (res) {
-            return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
-        });
-    }
-
-    function apiRequest(url, options) {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
-            return window.Weline.Api.request(url, options);
-        }
-        if (window.Weline && typeof window.Weline.load === 'function') {
-            return window.Weline.load('api').then(function () {
-                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
-                    return window.Weline.Api.request(url, options);
-                }
-                throw new Error(i18n.apiUnavailable);
+            return resource[operation](data || {}).then(function (res) {
+                return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
             });
+        };
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api').then(run);
+        }
+        if (window.Weline && window.Weline.Api) {
+            return Promise.resolve(run(window.Weline.Api));
         }
         return Promise.reject(new Error(i18n.apiUnavailable));
     }
 
     function responseErrorMessage(err, fallback) {
         var data = err && err.response && err.response.data ? err.response.data : null;
-        return (data && (data.message || data.msg)) || (err && err.message) || fallback;
+        var nested = data && data.error ? data.error : null;
+        return (nested && (nested.message || nested.msg))
+            || (data && (data.message || data.msg))
+            || (err && err.message)
+            || fallback;
     }
 
     function formatMessage(template, value) {
@@ -1128,9 +1072,9 @@ $styleI18n = [
     function refreshCatalog() {
         var adapterCode = selectedAdapterCode();
         els.listStatus.textContent = i18n.loading;
-        return post(catalogUrl, {
+        return aiOp('styleCatalog', {
             adapter_code: adapterCode,
-            include_inactive: 1
+            include_inactive: true
         }).then(function (payload) {
             if (!payload || payload.success === false) {
                 throw new Error((payload && payload.message) || i18n.catalogLoadFailed);
@@ -1153,7 +1097,7 @@ $styleI18n = [
 
     function saveCurrent(statusOverride) {
         setStatus(els.formStatus, i18n.saving, false);
-        return post(saveUrl, collectPayload(statusOverride)).then(function (payload) {
+        return aiOp('styleSave', collectPayload(statusOverride)).then(function (payload) {
             if (!payload || payload.success === false) {
                 throw new Error((payload && payload.message) || i18n.saveFailed);
             }
@@ -1171,7 +1115,7 @@ $styleI18n = [
             return;
         }
         setStatus(els.formStatus, i18n.cloning, false);
-        return post(cloneUrl, {code: style.code}).then(function (payload) {
+        return aiOp('styleCloneBuiltin', {code: style.code}).then(function (payload) {
             if (!payload || payload.success === false) {
                 throw new Error((payload && payload.message) || i18n.cloneFailed);
             }
@@ -1202,7 +1146,7 @@ $styleI18n = [
                 return;
             }
             setStatus(els.formStatus, i18n.deleting, false);
-            return post(deleteUrl, {code: style.code}).then(function (payload) {
+            return aiOp('styleDelete', {code: style.code}).then(function (payload) {
                 if (!payload || payload.success === false) {
                     throw new Error((payload && payload.message) || i18n.deleteFailed);
                 }
@@ -1221,7 +1165,7 @@ $styleI18n = [
             return;
         }
         setStatus(els.formStatus, bind ? i18n.binding : i18n.unbinding, false);
-        return post(bind ? bindUrl : unbindUrl, {
+        return aiOp(bind ? 'styleBindAdapter' : 'styleUnbindAdapter', {
             adapter_code: selectedAdapterCode(),
             style_code: style.code
         }).then(function (payload) {
@@ -1232,30 +1176,6 @@ $styleI18n = [
             return refreshCatalog();
         }).catch(function (err) {
             setStatus(els.formStatus, responseErrorMessage(err, bind ? i18n.bindFailed : i18n.unbindFailed), true);
-        });
-    }
-
-    function matchStyle() {
-        setStatus(els.matchStatus, i18n.matching, false);
-        return post(matchUrl, {
-            adapter_code: selectedAdapterCode(),
-            site_title: els.matchTitle.value || '',
-            brief_description: els.matchBrief.value || ''
-        }).then(function (payload) {
-            if (!payload || payload.success === false) {
-                throw new Error((payload && payload.message) || i18n.matchFailed);
-            }
-            var item = payload.item || payload.style || payload.direction || null;
-            if (item && item.code) {
-                state.selectedCode = String(item.code);
-                setStatus(els.matchStatus, i18n.matchedPrefix + item.code + ' ' + i18n.scorePrefix + String(payload.score || 0) + i18n.scoreSuffix, false);
-                renderTable();
-                renderDetail();
-                return;
-            }
-            setStatus(els.matchStatus, payload.reason || i18n.noMatchingStyle, true);
-        }).catch(function (err) {
-            setStatus(els.matchStatus, responseErrorMessage(err, i18n.matchFailed), true);
         });
     }
 
@@ -1302,6 +1222,5 @@ $styleI18n = [
     els.unbind.addEventListener('click', function () {
         bindSelected(false);
     });
-    els.matchBtn.addEventListener('click', matchStyle);
 })();
 </script>

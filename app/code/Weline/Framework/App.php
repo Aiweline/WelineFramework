@@ -1148,6 +1148,11 @@ class App
             }
 
             $value = (string)$value;
+            // 语言/货币每次回写：清掉历史 HttpOnly 残留（JS 无法覆盖同名 HttpOnly Cookie）。
+            if ($key === 'WELINE_USER_LANG' || $key === 'WELINE_USER_CURRENCY') {
+                $cookiesToSet[$key] = $value;
+                continue;
+            }
             if (Cookie::get($key) !== $value) {
                 $cookiesToSet[$key] = $value;
             }

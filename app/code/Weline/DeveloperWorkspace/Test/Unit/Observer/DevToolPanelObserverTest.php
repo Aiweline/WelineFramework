@@ -52,11 +52,12 @@ final class DevToolPanelObserverTest extends TestCase
 
     public function testStoreTracePayloadDoesNotDependOnIsEnabledWhenSpansAlreadyExist(): void
     {
-        $property = new \ReflectionProperty(RequestLifecycleTrace::class, 'spans');
-        $property->setAccessible(true);
-        $property->setValue(null, [
+        $stateMethod = new ReflectionMethod(RequestLifecycleTrace::class, 'state');
+        $stateMethod->setAccessible(true);
+        $state = $stateMethod->invoke(null);
+        $state->spans = [
             ['name' => 'router_start', 'duration_ms' => 1.5, 'category' => 'framework'],
-        ]);
+        ];
 
         $store = $this->createMock(DevToolPayloadStore::class);
         $store->expects(self::once())

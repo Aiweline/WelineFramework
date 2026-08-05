@@ -16,19 +16,64 @@ final class ProviderCooperativeStreamPumpContractTest extends TestCase
         self::assertStringContainsString('$pump->awaitChunk($handleId)', $source);
 
         $streamFull = $this->methodSlice($source, 'public function generateStreamFull', 'public function generateStream');
-        self::assertStringContainsString('$this->executeStreamCurl($ch, $consumeStreamChunk)', $streamFull);
+        self::assertStringContainsString('$this->executeStreamCurl($ch, $consumeStreamChunk, $timeout)', $streamFull);
         self::assertStringNotContainsString('curl_exec($ch);', $streamFull);
         self::assertStringNotContainsString('CURLOPT_WRITEFUNCTION', $streamFull);
 
         $streamApi = $this->methodSlice($source, 'private function callStreamApi', 'private function parseApiErrorResponse');
-        self::assertStringContainsString('$this->executeStreamCurl($ch, $consumeStreamChunk)', $streamApi);
+        self::assertStringContainsString('$this->executeStreamCurl($ch, $consumeStreamChunk, $timeout)', $streamApi);
         self::assertStringNotContainsString('curl_exec($ch);', $streamApi);
         self::assertStringNotContainsString('CURLOPT_WRITEFUNCTION', $streamApi);
 
         $jsonApi = $this->methodSlice($source, 'private function callApiWithRetry', 'private function executeJsonCurl');
-        self::assertStringContainsString('$this->executeJsonCurl($ch)', $jsonApi);
+        self::assertStringContainsString('$this->executeJsonCurl($ch, $timeout)', $jsonApi);
         self::assertStringNotContainsString('curl_exec($ch)', $jsonApi);
         self::assertStringNotContainsString('sleep(self::RETRY_DELAY', $jsonApi);
+    }
+
+    public function testOpenAiJsonRequestCarriesExplicitLowSpeedWindowAcrossRetries(): void
+    {
+        $source = $this->readProviderSource('OpenAiProvider.php');
+        self::assertStringContainsString(
+            'ProviderTimeoutPolicy::resolveRequestLowSpeedTime($params, $timeout)',
+            $source
+        );
+
+        $jsonApi = $this->methodSlice($source, 'private function callApiWithRetry', 'private function executeJsonCurl');
+        self::assertStringContainsString(
+            '$this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime)',
+            $jsonApi
+        );
+        self::assertGreaterThanOrEqual(3, \substr_count($jsonApi, '$lowSpeedTime'));
+    }
+
+    public function testOpenAiStreamCarriesExplicitLowSpeedWindowToCurl(): void
+    {
+        $source = $this->readProviderSource('OpenAiProvider.php');
+        $stream = $this->methodSlice($source, 'public function generateStream', 'private function resolveStructuredReasoningJsonFallback');
+
+        self::assertStringContainsString(
+            'ProviderTimeoutPolicy::resolveStreamLowSpeedTime($params, $timeout)',
+            $stream
+        );
+        self::assertStringContainsString('$streamLowSpeedTime', $stream);
+        self::assertStringContainsString('$streamLowSpeedTime,', $stream);
+    }
+
+    public function testOpenAiPumpGetsHardDeadlineAndOptionalIdleHeartbeat(): void
+    {
+        $source = $this->readProviderSource('OpenAiProvider.php');
+
+        self::assertStringContainsString(
+            '$pump->register($ch, $timeout > 0 ? (float)$timeout : null)',
+            $source
+        );
+        self::assertStringContainsString(
+            "(bool)(\$params['emit_empty_heartbeat'] ?? false)",
+            $source
+        );
+        self::assertStringContainsString('configureEmptyStreamHeartbeat($ch, $callback)', $source);
+        self::assertStringContainsString("callback('')", $source);
     }
 
     public function testAnthropicStreamApiUsesCooperativePumpExecutor(): void

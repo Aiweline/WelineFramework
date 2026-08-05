@@ -1,3 +1,15 @@
+
+function csAdmin(url, options){
+  options=options||{};
+  var body=options.body;
+  if(body && typeof FormData!=='undefined' && body instanceof FormData){
+    var p=new URLSearchParams(); body.forEach(function(v,k){p.append(k,String(v));}); body=p.toString();
+  } else if(body && typeof body!=='string'){ try{body=JSON.stringify(body);}catch(e){body='';} }
+  var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''}); };
+  if(window.Weline&&window.Weline.load) return window.Weline.load('api').then(run);
+  return Promise.resolve(run(window.Weline.Api));
+}
+
 /**
  * 客服工作台JavaScript
  */
@@ -123,8 +135,7 @@ const CustomerServiceConsole = (function() {
      */
     async function refreshSessions() {
         try {
-            const response = await fetch(config.consoleUrl + '/sessions');
-            const data = await response.json();
+            const data = await csAdmin(config.consoleUrl + '/sessions');
             
             if (data.success) {
                 updateSessionList(data.data.sessions, data.data.waiting_sessions);
@@ -222,8 +233,7 @@ const CustomerServiceConsole = (function() {
      */
     async function loadMessages(sessionId) {
         try {
-            const response = await fetch(config.consoleUrl + '/messages?session_id=' + sessionId + '&limit=50&offset=0');
-            const data = await response.json();
+            const data = await csAdmin(config.consoleUrl + '/messages?session_id=' + sessionId + '&limit=50&offset=0');
             
             if (data.success) {
                 renderChatArea(sessionId, data.data);
@@ -316,15 +326,13 @@ const CustomerServiceConsole = (function() {
             formData.append('session_id', state.currentSessionId);
             formData.append('content', content);
             
-            const response = await fetch(config.consoleUrl + '/send-message', {
+            const data = await csAdmin(config.consoleUrl + '/send-message', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: formData
             });
-            
-            const data = await response.json();
             
             if (data.success) {
                 input.value = '';
@@ -402,15 +410,13 @@ const CustomerServiceConsole = (function() {
             const formData = new URLSearchParams();
             formData.append('session_id', sessionId);
             
-            const response = await fetch(config.consoleUrl + '/assign-session', {
+            const data = await csAdmin(config.consoleUrl + '/assign-session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: formData
             });
-            
-            const data = await response.json();
             
             if (data.success) {
                 // 刷新会话列表
@@ -448,15 +454,13 @@ const CustomerServiceConsole = (function() {
             const formData = new URLSearchParams();
             formData.append('session_id', sessionId);
             
-            const response = await fetch(config.consoleUrl + '/close-session', {
+            const data = await csAdmin(config.consoleUrl + '/close-session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: formData
             });
-            
-            const data = await response.json();
             
             if (data.success) {
                 // 刷新会话列表
@@ -490,7 +494,7 @@ const CustomerServiceConsole = (function() {
     async function sendHeartbeat() {
         if (!config.consoleUrl) return;
         try {
-            await fetch(config.consoleUrl + '/heartbeat', {
+            await csAdmin(config.consoleUrl + '/heartbeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: ''
@@ -535,8 +539,7 @@ const CustomerServiceConsole = (function() {
         state.isPolling = true;
         state.pollInterval = setInterval(async () => {
             try {
-                const response = await fetch(config.consoleUrl + '/messages?session_id=' + state.currentSessionId + '&limit=10&offset=0');
-                const data = await response.json();
+                const data = await csAdmin(config.consoleUrl + '/messages?session_id=' + state.currentSessionId + '&limit=10&offset=0');
                 
                 if (data.success && data.data.length > 0) {
                     const messagesContainer = document.getElementById('chat-messages');
@@ -639,4 +642,3 @@ const CustomerServiceConsole = (function() {
         init
     };
 })();
-

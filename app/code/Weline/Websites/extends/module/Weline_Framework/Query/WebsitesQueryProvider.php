@@ -3,8 +3,16 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Extends\Module\Weline_Framework\Query;
 
+use Weline\Acl\Api\Authorization\ObjectAction;
+use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
+use Weline\Websites\Api\Catalog\Data\StoreSummary;
+use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
+use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrar;
@@ -22,10 +30,12 @@ use Weline\Websites\Service\ServerIpService;
 use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\DnsProviderDetector;
 use Weline\Websites\Service\ProvisioningQueryHandler;
+use Weline\Websites\Service\AiWorkbench\SiteBuilderWorkbenchQueryHandler;
 
 class WebsitesQueryProvider implements QueryProviderInterface
 {
     private const DEFAULT_WEBSITE_ID = 0;
+    private const MAX_CATALOG_ID = 2147483647;
 
     public function __construct(
         private readonly DomainRegistrarResolverService $resolver,
@@ -36,6 +46,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
         private readonly WebsiteLanguage $websiteLanguageModel,
         private readonly DnsProviderDetector $dnsProviderDetector,
         private readonly DefaultWebsiteService $defaultWebsiteService,
+        private readonly StoreCatalogInterface $storeCatalog,
+        private readonly SalesChannelCatalogInterface $salesChannelCatalog,
+        private readonly BackendObjectAuthorizationGuardInterface $objectAuthorizationGuard,
     ) {
     }
 
@@ -46,6 +59,12 @@ class WebsitesQueryProvider implements QueryProviderInterface
 
     public function execute(string $operation, array $params = []): mixed
     {
+        if ($operation === 'siteBuilderWorkbench') {
+            /** @var SiteBuilderWorkbenchQueryHandler $handler */
+            $handler = ObjectManager::getInstance(SiteBuilderWorkbenchQueryHandler::class);
+            return $handler->execute($params);
+        }
+
         if (\in_array($operation, ProvisioningQueryHandler::operationNames(), true)) {
             try {
                 $handler = ObjectManager::getInstance(ProvisioningQueryHandler::class);
@@ -60,6 +79,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
         }
 
         return match ($operation) {
+            'polishSiteBrief'        => $this->polishSiteBrief($params),
             'getRegistrars'          => $this->getRegistrars(),
             'getRegistrarAccounts'   => $this->getRegistrarAccounts($params),
             'saveRegistrarAccount'   => $this->saveRegistrarAccount($params),
@@ -83,6 +103,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getWebsiteByCode'       => $this->getWebsiteByCode($params),
             'getWebsiteList'         => $this->getWebsiteList($params),
             'getActiveWebsiteDomains' => $this->getActiveWebsiteDomains($params),
+            'getWebsiteDomains' => $this->getWebsiteDomains($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
             'getDnsRecords'          => $this->getDnsRecords($params),
@@ -91,6 +112,10 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getAcmeChallengeTxtFqdn'  => $this->getAcmeChallengeTxtFqdn($params),
             'removeAcmeTxtRecord'      => $this->removeAcmeTxtRecord($params),
             'getDnsCdnAccounts'      => $this->getDnsCdnAccounts($params),
+            'manageWebsiteBackup'    => $this->manageWebsiteBackup($params),
+            'adminRequest'           => $this->adminRequest($params),
+            'getStoreCatalogV1'      => $this->getStoreCatalogV1($params),
+            'getSalesChannelCatalogV1' => $this->getSalesChannelCatalogV1($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Websites 查询器不支持的操作：%{1}', $operation)
             ),
@@ -105,6 +130,90 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'description' => __('提供域名注册商、账号管理、域名列表、可用性检查、购买及一站式配置编排等能力'),
             'module'      => 'Weline_Websites',
             'operations'  => \array_merge([
+                [
+                    'name'        => 'siteBuilderWorkbench',
+                    'description' => __('受控的 AI 建站工作台命令'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode'        => 'write',
+                    'graph'       => false,
+                    'params'      => [
+                        [
+                            'name' => 'command',
+                            'type' => 'string',
+                            'required' => true,
+                            'enum' => SiteBuilderWorkbenchQueryHandler::COMMANDS,
+                        ],
+                        ['name' => 'payload', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
+                    'name'        => 'manageWebsiteBackup',
+                    'description' => __('创建或删除网站审计备份'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Websites::website_backup_create',
+                    ],
+                    'mode'        => 'write',
+                    'graph'       => false,
+                    'params'      => [
+                        [
+                            'name' => 'action',
+                            'type' => 'string',
+                            'required' => true,
+                            'enum' => ['create', 'delete'],
+                        ],
+                        ['name' => 'website_id', 'type' => 'int', 'required' => false],
+                        [
+                            'name' => 'backup_type',
+                            'type' => 'string',
+                            'required' => false,
+                            'enum' => ['full', 'database', 'files'],
+                        ],
+                        ['name' => 'filename', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'adminRequest',
+                    'description' => __('Legacy controller bridge via bin-query'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Websites::domain_service',
+                    ],
+                    'mode'        => 'write',
+                    'params'      => [
+                        ['name' => 'url', 'type' => 'string', 'required' => true],
+                        ['name' => 'method', 'type' => 'string', 'required' => false],
+                        ['name' => 'headers', 'type' => 'array', 'required' => false],
+                        ['name' => 'body', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'polishSiteBrief',
+                    'description' => __('AI 润色一句话建站需求'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'mode'        => 'write',
+                    'graph'       => false,
+                    'backend_acl' => ['kind' => 'self'],
+                    'params'      => [
+                        ['name' => 'description', 'type' => 'string', 'required' => true, 'max_length' => 8000],
+                        ['name' => 'fake_mode', 'type' => 'string', 'required' => false],
+                        ['name' => 'content_locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'plan_locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'language', 'type' => 'string', 'required' => false],
+                        ['name' => 'default_locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'language_codes', 'type' => 'array|string', 'required' => false],
+                    ],
+                ],
                 [
                     'name'        => 'getRegistrars',
                     'description' => __('获取所有可用的域名注册商适配器'),
@@ -289,6 +398,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 [
+                    'name'        => 'getWebsiteDomains',
+                    'description' => __('获取站点绑定的域名（含协议、子路径、主域名标记），供 SEO/协议入口枚举公开 origin'),
+                    'params'      => [
+                        ['name' => 'website_id', 'type' => 'int', 'required' => false, 'description' => __('站点 ID；省略则返回全部活跃绑定')],
+                        ['name' => 'status', 'type' => 'string', 'required' => false, 'description' => __('域名状态，默认 active')],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
                     'name'        => 'getWebsiteLanguageCodes',
                     'description' => __('获取站点关联的语言代码列表'),
                     'params'      => [
@@ -349,6 +467,89 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'domain_id', 'type' => 'int', 'required' => false],
                     ],
                 ],
+                [
+                    'name'             => 'getStoreCatalogV1',
+                    'description'      => __('按 Website 读取 Store Catalog v1（后台 LIST ACL 过滤）'),
+                    'contract_version' => 'v1',
+                    'mode'             => 'read',
+                    // frontend=true：经后台 Weline.Api / query-bin worker 可达；auth=backend 拒绝前台匿名会话
+                    'frontend'         => true,
+                    'external'         => false,
+                    'graph'            => false,
+                    'auth'             => 'backend',
+                    'backend'          => true,
+                    'backend_acl'      => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Websites::website_list',
+                    ],
+                    'params'           => [
+                        [
+                            'name'        => 'website_id',
+                            'type'        => 'int',
+                            'required'    => true,
+                            'min'         => 0,
+                            'max'         => self::MAX_CATALOG_ID,
+                            'description' => __('Website ID（含 0=default）'),
+                        ],
+                    ],
+                    'returns' => [
+                        'items' => [
+                            'fields' => [
+                                ['name' => 'store_id'],
+                                ['name' => 'website_id'],
+                                ['name' => 'code'],
+                                ['name' => 'name'],
+                                ['name' => 'store_mode'],
+                                ['name' => 'is_default'],
+                                ['name' => 'enabled'],
+                                ['name' => 'lifecycle_status'],
+                                ['name' => 'tombstoned_at'],
+                                ['name' => 'url'],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'name'             => 'getSalesChannelCatalogV1',
+                    'description'      => __('按 Store 读取 SalesChannel Catalog v1（后台 LIST ACL 过滤）'),
+                    'contract_version' => 'v1',
+                    'mode'             => 'read',
+                    // frontend=true：经后台 Weline.Api / query-bin worker 可达；auth=backend 拒绝前台匿名会话
+                    'frontend'         => true,
+                    'external'         => false,
+                    'graph'            => false,
+                    'auth'             => 'backend',
+                    'backend'          => true,
+                    'backend_acl'      => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Websites::website_list',
+                    ],
+                    'params'           => [
+                        [
+                            'name'        => 'store_id',
+                            'type'        => 'int',
+                            'required'    => true,
+                            'min'         => 1,
+                            'max'         => self::MAX_CATALOG_ID,
+                            'description' => __('Store ID'),
+                        ],
+                    ],
+                    'returns' => [
+                        'items' => [
+                            'fields' => [
+                                ['name' => 'channel_id'],
+                                ['name' => 'website_id'],
+                                ['name' => 'store_id'],
+                                ['name' => 'code'],
+                                ['name' => 'name'],
+                                ['name' => 'is_default'],
+                                ['name' => 'enabled'],
+                                ['name' => 'parent_store_lifecycle_status'],
+                                ['name' => 'effective_enabled'],
+                            ],
+                        ],
+                    ],
+                ],
             ], $this->getProvisioningDescriptorOperations()),
         ];
     }
@@ -361,6 +562,113 @@ class WebsitesQueryProvider implements QueryProviderInterface
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Store Catalog v1：仅接受 website_id；后台会话下按对象 LIST 过滤，无权限返回空列表。
+     *
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function getStoreCatalogV1(array $params): array
+    {
+        $websiteId = $this->requireExclusiveCanonicalCatalogId($params, 'website_id', 0, self::MAX_CATALOG_ID);
+        $stores = $this->storeCatalog->byWebsite($websiteId);
+        $websiteCode = $this->resolveWebsiteCode($websiteId);
+        $stores = \array_values(\array_filter(
+            $stores,
+            function (StoreSummary $store) use ($websiteCode): bool {
+                return $this->objectAuthorizationGuard->isAllowed(
+                        ObjectAction::LIST,
+                        ScopeIdentity::store(
+                            $store->websiteId,
+                            $websiteCode,
+                            $store->code,
+                            $store->storeMode,
+                        ),
+                );
+            },
+        ));
+
+        return \array_map(static fn(StoreSummary $store): array => $store->toArray(), $stores);
+    }
+
+    /**
+     * SalesChannel Catalog v1：仅接受 store_id；后台会话下按对象 LIST 过滤，无权限返回空列表。
+     *
+     * @param array<string, mixed> $params
+     * @return list<array<string, mixed>>
+     */
+    private function getSalesChannelCatalogV1(array $params): array
+    {
+        $storeId = $this->requireExclusiveCanonicalCatalogId($params, 'store_id', 1, self::MAX_CATALOG_ID);
+        $parentStore = $this->storeCatalog->byId($storeId);
+        if ($parentStore === null) {
+            // 与 Catalog 服务一致：父级不存在时 byStore 会抛错；此处先校验以保持 fail-closed。
+            throw new \InvalidArgumentException((string)__('店铺不存在'));
+        }
+        $channels = $this->salesChannelCatalog->byStore($storeId);
+        $websiteCode = $this->resolveWebsiteCode($parentStore->websiteId);
+        $channels = \array_values(\array_filter(
+            $channels,
+            function (SalesChannelSummary $channel) use ($websiteCode, $parentStore): bool {
+                return $this->objectAuthorizationGuard->isAllowed(
+                        ObjectAction::LIST,
+                        ScopeIdentity::channel(
+                            $channel->websiteId,
+                            $websiteCode,
+                            $parentStore->code,
+                            $channel->code,
+                            $parentStore->storeMode,
+                        ),
+                );
+            },
+        ));
+
+        return \array_map(static fn(SalesChannelSummary $channel): array => $channel->toArray(), $channels);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function requireExclusiveCanonicalCatalogId(
+        array $params,
+        string $key,
+        int $min,
+        int $max,
+    ): int {
+        if (\count($params) !== 1 || !\array_key_exists($key, $params)) {
+            throw new \InvalidArgumentException((string)__('Catalog 参数必须且只能包含 %{1}', $key));
+        }
+        $raw = $params[$key];
+        if (\is_int($raw)) {
+            $value = $raw;
+        } elseif (\is_string($raw) && \preg_match('/^(0|[1-9]\d*)$/D', $raw) === 1) {
+            $value = (int)$raw;
+        } else {
+            throw new \InvalidArgumentException((string)__('Catalog 参数 %{1} 必须是规范整数', $key));
+        }
+        if ($value < $min || $value > $max) {
+            throw new \InvalidArgumentException((string)__('Catalog 参数 %{1} 超出允许范围', $key));
+        }
+
+        return $value;
+    }
+
+    private function resolveWebsiteCode(int $websiteId): string
+    {
+        if ($websiteId === self::DEFAULT_WEBSITE_ID) {
+            return Website::CODE_DEFAULT;
+        }
+        $website = clone $this->websiteModel;
+        $website->clearQuery();
+        $website->where(Website::schema_fields_ID, $websiteId)->find()->fetch();
+        $code = \trim((string)$website->getCode());
+        if ($code === '') {
+            throw new \RuntimeException((string)__('Website %{1} 缺少 code', $websiteId));
+        }
+
+        return $code;
     }
 
     private function getRegistrars(): array
@@ -983,11 +1291,18 @@ class WebsitesQueryProvider implements QueryProviderInterface
     {
         $limit = \max(1, \min(2000, (int)($params['limit'] ?? 2000)));
         $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
-        $rows = $domainModel->clearQuery()
-            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
-            ->pagination(1, $limit)
-            ->select()
-            ->fetchArray();
+        $rows = self::fetchRowsInBoundedPages(
+            $limit,
+            static function (int $page, int $pageSize) use ($domainModel): array {
+                $pageModel = clone $domainModel;
+                return $pageModel->clearQuery()
+                    ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+                    ->order(WebsiteDomain::schema_fields_DOMAIN, 'ASC')
+                    ->pagination($page, $pageSize)
+                    ->select()
+                    ->fetchArray();
+            }
+        );
 
         $domains = [];
         $seen = [];
@@ -1015,6 +1330,92 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
             $seen[$identity] = true;
             $domains[] = ['domain' => $domain, 'website_id' => $websiteId];
+        }
+
+        return $domains;
+    }
+
+    /**
+     * Bound website domains with public base URLs for SEO / protocol consumers.
+     *
+     * @return list<array{
+     *   domain_id:int,
+     *   website_id:int,
+     *   domain:string,
+     *   sub_path:string,
+     *   is_primary:bool,
+     *   https_enabled:bool,
+     *   status:string,
+     *   base_url:string
+     * }>
+     */
+    private function getWebsiteDomains(array $params): array
+    {
+        $limit = \max(1, \min(2000, (int)($params['limit'] ?? 500)));
+        $status = \trim((string)($params['status'] ?? WebsiteDomain::STATUS_ACTIVE));
+        if ($status === '') {
+            $status = WebsiteDomain::STATUS_ACTIVE;
+        }
+        $websiteIdFilter = \array_key_exists('website_id', $params)
+            ? (int)$params['website_id']
+            : null;
+        if ($websiteIdFilter !== null && $websiteIdFilter < self::DEFAULT_WEBSITE_ID) {
+            return [];
+        }
+
+        $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+        $rows = self::fetchRowsInBoundedPages(
+            $limit,
+            static function (int $page, int $pageSize) use (
+                $domainModel,
+                $status,
+                $websiteIdFilter
+            ): array {
+                $pageModel = clone $domainModel;
+                $query = $pageModel->clearQuery()
+                    ->where(WebsiteDomain::schema_fields_STATUS, $status);
+                if ($websiteIdFilter !== null) {
+                    $query->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteIdFilter);
+                }
+                return $query
+                    ->order(WebsiteDomain::schema_fields_IS_PRIMARY, 'DESC')
+                    ->order(WebsiteDomain::schema_fields_DOMAIN, 'ASC')
+                    ->pagination($page, $pageSize)
+                    ->select()
+                    ->fetchArray();
+            }
+        );
+
+        $domains = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $domain = \strtolower(\trim((string)($row[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+            $websiteId = (int)($row[WebsiteDomain::schema_fields_WEBSITE_ID] ?? self::DEFAULT_WEBSITE_ID);
+            $subPath = \trim((string)($row[WebsiteDomain::schema_fields_SUB_PATH] ?? ''), '/');
+            $identity = $domain . '|' . $subPath . '|' . $websiteId;
+            if ($domain === '' || isset($seen[$identity])) {
+                continue;
+            }
+            $seen[$identity] = true;
+            $httpsEnabled = (bool)($row[WebsiteDomain::schema_fields_HTTPS_ENABLED] ?? false);
+            $scheme = $httpsEnabled ? 'https' : 'http';
+            $baseUrl = $scheme . '://' . $domain;
+            if ($subPath !== '') {
+                $baseUrl .= '/' . $subPath;
+            }
+            $domains[] = [
+                'domain_id' => (int)($row[WebsiteDomain::schema_fields_ID] ?? 0),
+                'website_id' => $websiteId,
+                'domain' => $domain,
+                'sub_path' => $subPath === '' ? '' : '/' . $subPath,
+                'is_primary' => (bool)($row[WebsiteDomain::schema_fields_IS_PRIMARY] ?? false),
+                'https_enabled' => $httpsEnabled,
+                'status' => (string)($row[WebsiteDomain::schema_fields_STATUS] ?? $status),
+                'base_url' => $baseUrl,
+            ];
         }
 
         return $domains;
@@ -1060,20 +1461,31 @@ class WebsitesQueryProvider implements QueryProviderInterface
 
         /** @var DomainPool $pool */
         $pool = ObjectManager::getInstance(DomainPool::class);
-        $pool->clearQuery();
-        if ($status !== null && $status !== '') {
-            $pool->where(DomainPool::schema_fields_STATUS, (string)$status);
-        }
-        if ($rootDomain !== '') {
-            $pool->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain);
-        }
-        if ($excludeSiteCreated) {
-            $pool->where(DomainPool::schema_fields_SITE_CREATED, 0);
-        }
-        $rows = $pool->order(DomainPool::schema_fields_DOMAIN, 'ASC')
-            ->pagination(1, $limit)
-            ->select()
-            ->fetchArray();
+        $rows = self::fetchRowsInBoundedPages(
+            $limit,
+            static function (int $page, int $pageSize) use (
+                $pool,
+                $status,
+                $rootDomain,
+                $excludeSiteCreated
+            ): array {
+                $pageModel = clone $pool;
+                $query = $pageModel->clearQuery();
+                if ($status !== null && $status !== '') {
+                    $query->where(DomainPool::schema_fields_STATUS, (string)$status);
+                }
+                if ($rootDomain !== '') {
+                    $query->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain);
+                }
+                if ($excludeSiteCreated) {
+                    $query->where(DomainPool::schema_fields_SITE_CREATED, 0);
+                }
+                return $query->order(DomainPool::schema_fields_DOMAIN, 'ASC')
+                    ->pagination($page, $pageSize)
+                    ->select()
+                    ->fetchArray();
+            }
+        );
 
         $list = [];
         foreach ($rows as $row) {
@@ -1090,6 +1502,31 @@ class WebsitesQueryProvider implements QueryProviderInterface
             ];
         }
         return $list;
+    }
+
+    /**
+     * Keep public query limits independent from AbstractModel's per-page cap.
+     *
+     * @param callable(int, int): array $fetchPage
+     * @return array<int, mixed>
+     */
+    private static function fetchRowsInBoundedPages(int $limit, callable $fetchPage): array
+    {
+        $rows = [];
+        $page = 1;
+        while (\count($rows) < $limit) {
+            $pageSize = \min(1000, $limit - \count($rows));
+            $batch = $fetchPage($page, $pageSize);
+            if ($batch === []) {
+                break;
+            }
+            $rows = \array_merge($rows, \array_slice($batch, 0, $pageSize));
+            if (\count($batch) < $pageSize) {
+                break;
+            }
+            ++$page;
+        }
+        return $rows;
     }
 
     private function getDnsRecords(array $params): array
@@ -1632,5 +2069,187 @@ class WebsitesQueryProvider implements QueryProviderInterface
         }
 
         return $records;
+    }
+
+    /**
+     * AI polish for the one-sentence site brief.
+     *
+     * Frontend-exposed (works over the frontend query gateway, i.e. no backend
+     * service worker / secure-context requirement) but still backend-authed.
+     *
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function polishSiteBrief(array $params): array
+    {
+        $description = \trim((string)($params['description'] ?? ''));
+        $fakeMode = \in_array(
+            \strtolower(\trim((string)($params['fake_mode'] ?? ''))),
+            ['1', 'true', 'yes', 'on'],
+            true
+        );
+        $contentLocale = \trim((string)(
+            $params['content_locale']
+            ?? $params['language']
+            ?? $params['default_locale']
+            ?? ''
+        ));
+        $planLocale = \trim((string)($params['plan_locale'] ?? ''));
+        $languageCodesRaw = $params['language_codes'] ?? [];
+        if (\is_string($languageCodesRaw)) {
+            $languageCodesRaw = \preg_split('/[\s,]+/', $languageCodesRaw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        }
+        $languageCodes = \is_array($languageCodesRaw) ? $languageCodesRaw : [];
+
+        try {
+            /** @var \Weline\Websites\Service\AiWorkbench\PlanGenerationService $service */
+            $service = ObjectManager::getInstance(\Weline\Websites\Service\AiWorkbench\PlanGenerationService::class);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => (string)__('AI 服务不可用，无法润色需求')];
+        }
+
+        $result = $service->polishDescription($description, $fakeMode, $contentLocale, $planLocale, $languageCodes);
+        $out = [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? ''),
+        ];
+        if (isset($result['description'])) {
+            $out['data'] = [
+                'description' => (string)$result['description'],
+                'content_locale' => (string)($result['content_locale'] ?? $contentLocale),
+                'plan_locale' => (string)($result['plan_locale'] ?? $planLocale),
+                'language_codes' => \is_array($result['language_codes'] ?? null) ? $result['language_codes'] : $languageCodes,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function manageWebsiteBackup(array $params): array
+    {
+        $action = \trim((string)($params['action'] ?? ''));
+        try {
+            /** @var \Weline\Websites\Service\WebsiteBackupService $service */
+            $service = ObjectManager::getInstance(\Weline\Websites\Service\WebsiteBackupService::class);
+            if ($action === 'delete') {
+                $filename = \trim((string)($params['filename'] ?? ''));
+                if ($filename === '') {
+                    return ['success' => false, 'message' => (string)__('备份文件名不能为空')];
+                }
+                $service->deleteBackup($filename);
+                return ['success' => true, 'message' => (string)__('备份已删除')];
+            }
+
+            if ($action !== 'create') {
+                return ['success' => false, 'message' => (string)__('不支持的备份操作：%{1}', $action)];
+            }
+            $websiteId = (int)($params['website_id'] ?? 0);
+            if ($websiteId < Website::ID_DEFAULT) {
+                return ['success' => false, 'message' => (string)__('无效的网站ID')];
+            }
+            $backupType = (string)($params['backup_type'] ?? 'full');
+            $adminId = (int)SessionFactory::getInstance()->createBackendSession()->getUserId();
+            if ($adminId <= 0) {
+                return ['success' => false, 'message' => (string)__('需要登录')];
+            }
+            $backup = $service->createBackup($websiteId, $backupType, $adminId);
+
+            return [
+                'success' => true,
+                'message' => (string)__('备份创建成功'),
+                'data' => ['backup' => $backup],
+            ];
+        } catch (\Throwable $throwable) {
+            $verb = $action === 'delete' ? '删除' : '创建';
+            return [
+                'success' => false,
+                'message' => (string)__('备份%{1}失败：', $verb) . $throwable->getMessage(),
+            ];
+        }
+    }
+
+    /** @param array<string,mixed> $params */
+    private function adminRequest(array $params): mixed
+    {
+        $url = \trim((string)($params['url'] ?? ''));
+        $method = \strtoupper(\trim((string)($params['method'] ?? 'POST'))) ?: 'POST';
+        $headers = \is_array($params['headers'] ?? null) ? $params['headers'] : [];
+        $body = \array_key_exists('body', $params) && $params['body'] !== null ? (string)$params['body'] : '';
+        if ($url === '') {
+            return ['success' => false, 'message' => 'Missing URL'];
+        }
+        $parts = \parse_url($url);
+        $path = (string)($parts['path'] ?? '');
+        $pathLower = \strtolower($path);
+        $normalized = $path;
+        $pos = \strpos($pathLower, '/websites/');
+        if ($pos !== false) {
+            $normalized = \substr($path, $pos);
+        }
+        $area = 'Backend';
+        $controllerSeg = 'Index';
+        $actionSeg = 'index';
+        if (\preg_match('#^/[a-z0-9_-]+/(backend|admin|frontend)/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
+            $area = \ucfirst(\strtolower($mm[1]));
+            $controllerSeg = $mm[2];
+            $actionSeg = $mm[3] ?? 'index';
+        } elseif (\preg_match('#^/[a-z0-9_-]+/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
+            $controllerSeg = $mm[1];
+            $actionSeg = $mm[2] ?? 'index';
+        } else {
+            return ['success' => false, 'message' => 'Unsupported admin path: ' . $normalized];
+        }
+        // 多段控制器名（如 site-builder-plan）需去掉 ucwords 产生的空格才能得到类名。
+        $controllerSeg = \str_replace(' ', '', \ucwords(\str_replace(['-', '_'], ' ', $controllerSeg)));
+        $actionSeg = \str_replace('-', '', $actionSeg);
+        $ns = 'Weline\\Websites\\Controller';
+        $class = $ns . '\\' . $area . '\\' . $controllerSeg;
+        if (!\class_exists($class)) {
+            $classAlt = $ns . '\\' . $controllerSeg;
+            if (\class_exists($classAlt)) {
+                $class = $classAlt;
+            } else {
+                return ['success' => false, 'message' => 'Controller missing: ' . $class];
+            }
+        }
+        $queryParams = [];
+        if (!empty($parts['query'])) {
+            \parse_str((string)$parts['query'], $queryParams);
+        }
+        $bodyParams = [];
+        if ($body !== '') {
+            $ct = '';
+            foreach ($headers as $name => $value) {
+                if (\strtolower((string)$name) === 'content-type') {
+                    $ct = \strtolower((string)$value);
+                    break;
+                }
+            }
+            if (\str_contains($ct, 'application/json') || \str_starts_with(\ltrim($body), '{')) {
+                $decoded = \json_decode($body, true);
+                $bodyParams = \is_array($decoded) ? $decoded : [];
+            } else {
+                \parse_str($body, $bodyParams);
+                if (!\is_array($bodyParams)) {
+                    $bodyParams = [];
+                }
+            }
+        }
+        $candidates = [$actionSeg, 'get' . \ucfirst($actionSeg), 'post' . \ucfirst($actionSeg)];
+        if ($method === 'GET') {
+            \array_unshift($candidates, 'get' . \ucfirst($actionSeg));
+        } else {
+            \array_unshift($candidates, 'post' . \ucfirst($actionSeg));
+        }
+
+        return \Weline\Framework\Service\Query\AdminControllerBridge::invoke(
+            $class,
+            $candidates,
+            $queryParams,
+            $bodyParams,
+            $method,
+            $body
+        );
     }
 }

@@ -27,7 +27,10 @@ final class FrontendWorkerSessionService
     private const STREAM_TICKET_KEY = 'weline_frontend_worker_stream_tickets';
     private const SCOPE_BOOTSTRAP_KEY = 'weline_frontend_worker_scope_bootstraps';
     private const BACKEND_BOOTSTRAP_KEY = 'weline_frontend_worker_backend_bootstraps';
-    private const SESSION_TTL = 600;
+    // Backend pages (AI workbench SSE) stay open far longer than unbound
+    // storefront handshakes. Keep this aligned with Backend BINDING_TTL so
+    // runtime_rotate ticket refresh does not strand a live detached task.
+    private const SESSION_TTL = 7200;
     private const NONCE_TTL = 180;
     private const STREAM_TICKET_TTL = 60;
     private const SCOPE_BOOTSTRAP_TTL = 120;
@@ -474,6 +477,47 @@ final class FrontendWorkerSessionService
                 $deployVersion,
                 $workerBuildId,
                 $now,
+            );
+        });
+    }
+
+    /**
+     * Persist a freshly revalidated backend page attestation onto the existing
+     * worker session so runtime_rotate ticket refresh does not require reload.
+     */
+    public function slideBackendSession(
+        string $token,
+        FrontendWorkerBackendBinding $binding,
+    ): void {
+        if ($token === '') {
+            throw new FrontendQueryException('auth_error', 'Missing worker session token.', 401);
+        }
+
+        $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use (
+            $token,
+            $binding,
+        ): void {
+            $now = $store->now();
+            $this->assertBackendBindingUsable($binding, $now);
+            $payload = $store->find(FrontendWorkerCredentialType::SESSION, $token, null, $now);
+            if (!\is_array($payload)) {
+                throw new FrontendQueryException('auth_error', 'Invalid worker session token.', 401);
+            }
+            $attestedArea = $payload['attested_area'] ?? null;
+            if ($attestedArea !== FrontendWorkerExecutionContext::AREA_BACKEND
+                || !\array_key_exists('backend_binding', $payload)
+                || \array_key_exists('scope_binding', $payload)) {
+                throw new FrontendQueryException('auth_error', 'Worker session authority is invalid.', 401);
+            }
+            $expiresAt = \min($now + self::SESSION_TTL, $binding->expiresAt);
+            $payload['backend_binding'] = $binding->toArray();
+            $payload['expires_at'] = $expiresAt;
+            $store->replaceActive(
+                FrontendWorkerCredentialType::SESSION,
+                $token,
+                null,
+                $payload,
+                $expiresAt,
             );
         });
     }
@@ -1119,7 +1163,14 @@ final class FrontendWorkerSessionService
                     throw new \InvalidArgumentException('Invalid backend binding payload.');
                 }
                 $backendBinding = FrontendWorkerBackendBinding::fromArray($session['backend_binding']);
-                $this->assertBackendBindingUsable($backendBinding, $now);
+                // Live PHP Session revalidation + sliding renew happens in
+                // QueryBin via restoreBinding()/slideBackendSession(). Here we
+                // only reject structurally impossible windows so a near-expiry
+                // rotate can still refresh the attestation.
+                if ($backendBinding->issuedAt > $now
+                    || $backendBinding->expiresAt - $backendBinding->issuedAt > self::SESSION_TTL) {
+                    throw new FrontendQueryException('auth_error', 'Invalid or expired worker backend binding.', 401);
+                }
             } catch (\Throwable) {
                 throw new FrontendQueryException('auth_error', 'Invalid or expired worker backend binding.', 401);
             }

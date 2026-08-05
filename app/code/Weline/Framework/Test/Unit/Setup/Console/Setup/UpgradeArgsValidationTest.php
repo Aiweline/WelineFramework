@@ -38,6 +38,8 @@ class UpgradeArgsValidationTest extends TestCase
             '--stage' => 'schema_diff',
             'skip-env-check' => true,
             '--skip-env-check' => true,
+            'background-optimize' => true,
+            '--background-optimize' => true,
             'help' => true,
             '--help' => true,
             'h' => true,
@@ -49,6 +51,23 @@ class UpgradeArgsValidationTest extends TestCase
         $method->invoke($this->upgrade, $args);
 
         $this->addToAssertionCount(1);
+    }
+
+    public function testOptimizationRunsSynchronouslyByDefaultAndBackgroundRequiresExplicitOptIn(): void
+    {
+        $method = new \ReflectionMethod($this->upgrade, 'shouldRunBackgroundOptimize');
+        $method->setAccessible(true);
+
+        self::assertFalse($method->invoke($this->upgrade, []));
+        self::assertTrue($method->invoke($this->upgrade, ['background-optimize' => true]));
+        self::assertFalse($method->invoke($this->upgrade, [
+            'background-optimize' => true,
+            'sync' => true,
+        ]));
+        self::assertFalse($method->invoke($this->upgrade, [
+            'background-optimize' => true,
+            'skip-background-optimize' => true,
+        ]));
     }
 
     public function testValidateSupportedArgsStillRejectsUnknownPrefixedKey(): void
@@ -65,5 +84,47 @@ class UpgradeArgsValidationTest extends TestCase
         $this->expectExceptionMessage('--unknown-option');
 
         $method->invoke($this->upgrade, $args);
+    }
+
+    public function testRouteOnlyRequestDoesNotImplyModelOrSchemaUpgrade(): void
+    {
+        $method = new \ReflectionMethod($this->upgrade, 'isRouteOnlyUpgradeRequest');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke($this->upgrade, ['route' => true]));
+        self::assertFalse($method->invoke($this->upgrade, ['route' => true, 'model' => true]));
+        self::assertFalse($method->invoke($this->upgrade, ['model' => true]));
+    }
+
+    public function testModuleMetadataNeedsRefreshWhenManifestVersionChanged(): void
+    {
+        $directory = sys_get_temp_dir() . '/weline-upgrade-manifest-' . bin2hex(random_bytes(6));
+        mkdir($directory . '/etc', 0777, true);
+        file_put_contents($directory . '/etc/module.php', <<<'PHP'
+<?php
+return [
+    'name' => 'Weline_Example',
+    'version' => '1.0.1',
+    'requires' => ['Weline_Framework' => '*'],
+];
+PHP);
+
+        try {
+            $method = new \ReflectionMethod($this->upgrade, 'moduleMetadataNeedsRefresh');
+            self::assertTrue($method->invoke(
+                $this->upgrade,
+                ['name' => 'Weline_Example', 'version' => '1.0.0', 'dependencies' => ['Weline_Framework']],
+                $directory . '/register.php',
+            ));
+            self::assertFalse($method->invoke(
+                $this->upgrade,
+                ['name' => 'Weline_Example', 'version' => '1.0.1', 'dependencies' => ['Weline_Framework']],
+                $directory . '/register.php',
+            ));
+        } finally {
+            unlink($directory . '/etc/module.php');
+            rmdir($directory . '/etc');
+            rmdir($directory);
+        }
     }
 }

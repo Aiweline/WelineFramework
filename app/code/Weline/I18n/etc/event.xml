@@ -38,4 +38,27 @@
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_I18n::setup_upgrade_collect_translations" instance="Weline\I18n\Observer\SetupUpgradeCollectTranslations" disabled="false" shared="true" sort="100"/>
     </event>
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="i18n_resource_changed"
+                  instance="Weline\I18n\Observer\ResourceChanged"
+                  delivery="async"
+                  retry="standard"
+                  coalesce="latest"
+                  timeout="30"
+                  disabled="false"
+                  shared="true"
+                  sort="100"/>
+        <observer name="i18n_language_request_ready_sync"
+                  instance="Weline\I18n\Observer\LanguageSupportRequestReadySync"
+                  delivery="async"
+                  retry="standard"
+                  coalesce="latest"
+                  timeout="30"
+                  disabled="false"
+                  shared="true"
+                  sort="110"/>
+    </event>
 </config>

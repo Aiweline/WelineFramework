@@ -10,6 +10,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Session\SessionCookieNameResolver;
 
 class BackendRememberLoginService
 {
@@ -111,13 +112,14 @@ class BackendRememberLoginService
 
     private function clearRememberCookie(Request $request): void
     {
-        Cookie::set('w_ut', '', -1, ['path' => '/']);
-        Cookie::set('w_ut', '', -1, ['path' => '/' . $request->getAreaRouter()]);
+        $rememberCookieName = SessionCookieNameResolver::resolveFor('w_ut');
+        Cookie::set($rememberCookieName, '', -1, ['path' => '/']);
+        Cookie::set($rememberCookieName, '', -1, ['path' => '/' . $request->getAreaRouter()]);
     }
 
     protected function readRememberToken(): string
     {
-        return (string) Cookie::get('w_ut', '');
+        return (string) Cookie::get(SessionCookieNameResolver::resolveFor('w_ut'), '');
     }
 
     protected function createRememberTokenModel(): BackendInteractiveAuthInterface

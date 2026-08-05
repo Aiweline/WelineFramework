@@ -16,6 +16,108 @@ final class DispatcherPolicyControl
 {
     private static string $instanceName = '';
 
+    /** @var array<string,mixed> */
+    private static array $listenerReadiness = [
+        'bound' => false,
+        'host' => '',
+        'port' => 0,
+        'inherited' => false,
+        'host_lease_id' => '',
+    ];
+
+    public static function setHostLeaseId(string $leaseId): void
+    {
+        $leaseId = \strtolower(\trim($leaseId));
+        if ($leaseId !== ''
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $leaseId) !== 1
+        ) {
+            throw new \InvalidArgumentException('Dispatcher host lease identity is invalid.');
+        }
+        $adoptedLeaseId = (string)(self::$listenerReadiness['host_lease_id'] ?? '');
+        if ($adoptedLeaseId !== ''
+            && !\hash_equals($adoptedLeaseId, $leaseId)
+        ) {
+            throw new \InvalidArgumentException(
+                'Dispatcher host lease diverged from its listener adoption proof.'
+            );
+        }
+        self::$listenerReadiness['host_lease_id'] = $leaseId;
+    }
+
+    public static function setListenerReadiness(
+        string $host,
+        int $port,
+        bool $inherited,
+    ): void {
+        $host = \strtolower(\trim($host, " \t\n\r\0\x0B[]"));
+        if ($port < 1
+            || $port > 65535
+            || \filter_var($host, FILTER_VALIDATE_IP) === false
+        ) {
+            throw new \InvalidArgumentException(
+                'Dispatcher listener readiness requires a literal bound endpoint.'
+            );
+        }
+        self::$listenerReadiness = [
+            'bound' => true,
+            'host' => $host,
+            'port' => $port,
+            'inherited' => $inherited,
+            'host_lease_id' => self::$listenerReadiness['host_lease_id'],
+        ];
+    }
+
+    /** @param array<string,mixed> $proof */
+    public static function setWindowsListenerHandoffProof(array $proof): void
+    {
+        $host = \strtolower(\trim((string)($proof['host'] ?? ''), " \t\n\r\0\x0B[]"));
+        $targetPid = (int)($proof['target_pid'] ?? 0);
+        $sourcePid = (int)($proof['source_pid'] ?? 0);
+        $hostLeaseId = \strtolower(\trim((string)($proof['host_lease_id'] ?? '')));
+        $targetBirth = \strtolower(\trim((string)($proof['target_process_birth'] ?? '')));
+        $sourceBirth = \strtolower(\trim((string)($proof['source_process_birth'] ?? '')));
+        if ((self::$listenerReadiness['bound'] ?? false) !== true
+            || !\hash_equals(
+                \Weline\Server\Service\Runtime\WindowsListenerHandoff::TRANSPORT,
+                (string)($proof['mode'] ?? ''),
+            )
+            || ($proof['inherited'] ?? false) !== true
+            || ($proof['continuous_ownership'] ?? false) !== true
+            || !\hash_equals((string)self::$listenerReadiness['host'], $host)
+            || (int)self::$listenerReadiness['port'] !== (int)($proof['port'] ?? 0)
+            || $targetPid !== (int)\getmypid()
+            || $sourcePid <= 0
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $hostLeaseId) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['handoff_id'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)($proof['intent_digest'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)($proof['envelope_digest'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['adoption_nonce'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $targetBirth) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceBirth) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['master_launch_id'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['launch_id'] ?? '')) !== 1
+            || \preg_match('/\Adispatcher#[1-9][0-9]*\z/D', (string)($proof['slot_id'] ?? '')) !== 1
+            || (int)($proof['generation'] ?? 0) <= 0
+            || !\hash_equals(
+                $targetBirth,
+                \Weline\Server\Service\Runtime\WindowsListenerHandoff::processBirthIdentity($targetPid),
+            )
+            || !\hash_equals(
+                $sourceBirth,
+                \Weline\Server\Service\Runtime\WindowsListenerHandoff::processBirthIdentity($sourcePid),
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Dispatcher Windows listener adoption proof is invalid.'
+            );
+        }
+        self::$listenerReadiness = \array_merge(
+            self::$listenerReadiness,
+            $proof,
+            ['host_lease_id' => $hostLeaseId],
+        );
+    }
+
     public static function boot(string $instanceName): string
     {
         self::$instanceName = $instanceName;
@@ -163,7 +265,7 @@ final class DispatcherPolicyControl
      * Dispatcher READY may report only the immutable bundle activated in this
      * process. A compiled/staged candidate is never a readiness fact.
      *
-     * @return array{policy_digest:string}
+     * @return array{policy_digest:string,listen_capabilities:array<string,mixed>}
      */
     public static function readinessSnapshot(): array
     {
@@ -174,7 +276,16 @@ final class DispatcherPolicyControl
             );
         }
 
-        return ['policy_digest' => $digest];
+        if (!self::$listenerReadiness['bound']) {
+            throw new \RuntimeException(
+                'Dispatcher READY requires a verified listening endpoint.'
+            );
+        }
+
+        return [
+            'policy_digest' => $digest,
+            'listen_capabilities' => self::$listenerReadiness,
+        ];
     }
 
     public static function canAcceptConnections(): bool

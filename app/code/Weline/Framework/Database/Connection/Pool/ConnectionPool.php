@@ -20,7 +20,7 @@ class ConnectionPool
     private const IDLE_VALIDATE_SECONDS = 30;
 
     /** 池满时的默认总等待预算；等待期间让出当前 Fiber，禁止创建池外连接。 */
-    private const DEFAULT_ACQUIRE_TIMEOUT_SECONDS = 0.15;
+    private const DEFAULT_ACQUIRE_TIMEOUT_SECONDS = 30.0;
     private const POOL_FULL_WAIT_SLICE_US = 1_000;
 
     /**
@@ -95,6 +95,7 @@ class ConnectionPool
             || \str_contains($message, 'ssl connection has been closed')
             || \str_contains($message, 'connection not open')
             || \str_contains($message, 'lost connection')
+            || \str_contains($message, 'server has gone away')
             || \str_contains($message, 'could not connect to server')
             || \str_contains($message, 'connection refused')
             || \str_contains($message, 'broken pipe')

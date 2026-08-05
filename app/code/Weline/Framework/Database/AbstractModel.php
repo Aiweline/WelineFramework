@@ -17,6 +17,8 @@ use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Helper\Tool;
+use Weline\Framework\Database\Transaction\Exception\RollbackOnlyException;
+use Weline\Framework\Database\Transaction\TransactionCoordinator;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Exception\Core;
@@ -24,6 +26,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\StateManager;
+use Weline\Framework\View\Form\FormRenderer;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Util\SelectFieldListSplitter;
 
@@ -522,7 +525,7 @@ abstract class AbstractModel extends DataObject
                 $this->_bind_query->clearQuery();
             }
             $query = $this->_bind_query->table($tableName)->identity($this->_primary_key);
-        } elseif ($transactionQuery = TransactionContext::queryForModel($this->getConnection(), spl_object_id($this))) {
+        } elseif ($transactionQuery = TransactionContext::queryForModel($this->getConnection(), $this)) {
             if (!$keep_condition) {
                 $transactionQuery->clearQuery();
             }
@@ -570,7 +573,7 @@ abstract class AbstractModel extends DataObject
      */
     public function newQuery(bool $really_new = true): QueryInterface
     {
-        $query = TransactionContext::queryForModel($this->getConnection(), spl_object_id($this))
+        $query = TransactionContext::queryForModel($this->getConnection(), $this)
             ?? $this->getConnection()->getConnector();
         $query->clearQuery();
         if ($really_new) {
@@ -830,22 +833,30 @@ abstract class AbstractModel extends DataObject
         $evenData = new DataObject(['model' => &$this]);
         $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', $evenData);
 
-        $this->getQuery()->beginTransaction();
+        // setData($primaryKey, $value, true) is an explicit identity opt-in.
+        // Preserve falsey-but-valid primary keys (for example Website ID 0)
+        // instead of replacing them with an UPDATE affected-row result.
+        $preservePrimaryIdentity = $this->_primary_key !== ''
+            && array_key_exists($this->_primary_key, $this->unique_data);
+        $query = $this->getQuery();
+        $transactionStarted = false;
         $save_result = false; // 初始化默认值
         try {
+            $query->beginTransaction();
+            $transactionStarted = true;
             if ($this->force_check_flag) {
                 $save_result = $this->checkUpdateOrInsert();
             } else {
-                $save_result = $this->getQuery()->clearQuery()->insert($this->getModelData())->fetch();
+                $save_result = $query->clearQuery()->insert($this->getModelData())->fetch();
             }
             // 确保 save_result 不为 null
             if ($save_result === null) {
                 $save_result = false;
             }
-            if (!$this->getId() && $save_result) {
+            if (!$preservePrimaryIdentity && !$this->getId() && $save_result) {
                 $this->setData($this->_primary_key, $save_result);
             }
-            $this->getQuery()->commit();
+            $query->commit();
 
             // load() 会命中静态 identity map；save 落库后必须失效，否则后续 load 读到旧行
             if ($this->_primary_key) {
@@ -854,12 +865,37 @@ abstract class AbstractModel extends DataObject
                     unset(self::$loadIdentityMap[static::class . '::' . (string)$pk]);
                 }
             }
-        } catch (\Exception $exception) {
-            // 🔧 修复：业务层负责检查事务状态，只有在有活动事务时才回滚
-            $this->getQuery()->rollBack();
+        } catch (RollbackOnlyException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            if (!$transactionStarted) {
+                throw $exception;
+            }
+            $prepareSql = $query->getPrepareSql(false);
+            $executedSql = $query->getSql();
+            // commit/rollback 的物理失败路径可能已经由协调器脱离事务并丢弃坏连接。
+            // 仅活动 owner 事务允许再次 rollback，避免在已关闭 Connector 上重新租 PDO。
+            $connector = $this->getConnection()->getConnector();
+            if (TransactionContext::transactionState($connector) !== null) {
+                try {
+                    TransactionCoordinator::markQueryRollbackOnly($query, $exception);
+                    $query->rollBack();
+                } catch (\Throwable $rollbackFailure) {
+                    unset($rollbackFailure);
+                    if (function_exists('w_log_error')) {
+                        w_log_error(
+                            '[AbstractModel] transaction_control_failed',
+                            ['error_code' => 'model_save_rollback_failed'],
+                            'database_transaction',
+                        );
+                    }
+                }
+            }
             $msg = __('保存数据出错! ');
-            $msg .= __('消息: %{1}', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %{1}', $this->getQuery()->getPrepareSql(false)) . PHP_EOL . __('执行SQL: %{1}', $this->getQuery()->getSql());
-            throw new Exception($msg);
+            $msg .= __('消息: %{1}', $exception->getMessage()) . PHP_EOL . __('预编译SQL: %{1}', $prepareSql) . PHP_EOL . __('执行SQL: %{1}', $executedSql);
+            throw new Exception($msg, 0, $exception);
+        } finally {
+            $query->clearQuery();
         }
 
         // save之后事件
@@ -1634,6 +1670,13 @@ PAGELISTHTML;
         $params['pageSize'] = $this->pagination['pageSize'];
         $query = http_build_query($params);
         $form_url = $queryUrl . $query_flag . $query;
+        $paginationJumpFormOpen = FormRenderer::open([
+            'action' => $form_url,
+            'method' => 'get',
+            'class' => 'btn-group',
+            'intent' => 'pagination.jump',
+        ]);
+        $paginationJumpFormClose = FormRenderer::close();
 
         $this->pagination['html'] = <<<PAGINATION
 <nav aria-label='...'>
@@ -1661,10 +1704,10 @@ PAGELISTHTML;
                                        href='#'>{$total_page}</a>
                                 </li>
                                 <li class='page-item'>
-                                      <form action="{$form_url}" method="get" class="btn-group">
+                                      {$paginationJumpFormOpen}
                                         <input type="text" class="page-link" name="page" placeholder="{$please_input_page_number}">
                                         <button type="submit" class="btn btn-primary page-link">{$turn_to_page}</button>
-                                      </form>
+                                      {$paginationJumpFormClose}
                                 </li>
                             </ul>
                         </nav>
@@ -1821,7 +1864,7 @@ PAGINATION;
             # 新增更新依赖主键
             $this->setId($check_result[$this->_primary_key]);
             $is_addition_identity = false;
-            if (empty($this->unique_data[$this->_primary_key])) {
+            if (!array_key_exists($this->_primary_key, $this->unique_data)) {
                 $this->unique_data[$this->_primary_key] = $check_result[$this->_primary_key];
                 $is_addition_identity = true;
             }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Runtime;
 
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+
 use Weline\Server\Session\Server\SessionProtocol;
 
 /**
@@ -958,11 +960,19 @@ final class TlsSessionCacheClient
         if ($sharedToken !== null) {
             return $sharedToken;
         }
-        if (!\is_file($this->tokenFilePath)) {
+        if (!\file_exists($this->tokenFilePath) && !\is_link($this->tokenFilePath)) {
             return null;
         }
-        $content = @\file_get_contents($this->tokenFilePath);
-        if (!\is_string($content) || $content === '') {
+        try {
+            $content = GatewayProjectStateFilesystem::read(
+                $this->tokenFilePath,
+                4096,
+                'TLS session-cache token',
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($content === '') {
             return null;
         }
         $token = \explode(':', \trim($content), 2)[0] ?? '';

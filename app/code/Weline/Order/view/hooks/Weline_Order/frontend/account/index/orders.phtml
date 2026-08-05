@@ -1,0 +1,71 @@
+<?php
+/**
+ * Default account orders panel（MOD-P2F-006 / TEST-BROWSER-02）.
+ *
+ * Hook: Weline_Order::frontend::account::index::orders
+ *
+ * Group 默认汇总；partial（退款/状态分叉）展开子 Order。
+ * 必须挂在 Customer account.sidebar / account.sidebar.content，禁止独立个人中心页。
+ *
+ * @hook-priority 160
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+use Weline\Order\Service\AccountCheckoutGroupPresenter;
+
+/** @var list<array<string, mixed>> $accountCheckoutGroups 由站点 Order 模块注入；缺省演示空态 */
+$accountCheckoutGroups = $accountCheckoutGroups ?? [];
+$presenter = new AccountCheckoutGroupPresenter();
+?>
+<div class="account-orders"
+     data-account-orders="true"
+     data-account-layout="customer-sidebar"
+     aria-labelledby="account-orders-title">
+    <header class="account-orders__header">
+        <h2 id="account-orders-title"><?= __('我的订单') ?></h2>
+        <p class="account-orders__hint"><?= __('默认按结账组汇总；部分退款或状态分叉时展开明细') ?></p>
+    </header>
+<?php if ($accountCheckoutGroups === []): ?>
+    <p class="account-orders__empty" data-orders-empty="true" role="status"><?= __('暂无订单') ?></p>
+<?php else: ?>
+    <ul class="account-orders__groups" data-orders-groups="true" role="list">
+    <?php foreach ($accountCheckoutGroups as $group): ?>
+        <?php $view = $presenter->present($group); ?>
+        <li class="account-orders__group"
+            data-group-uuid="<?= htmlspecialchars((string) $view['group_uuid'], ENT_QUOTES, 'UTF-8') ?>"
+            data-view="<?= htmlspecialchars((string) $view['view'], ENT_QUOTES, 'UTF-8') ?>"
+            data-partial="<?= !empty($view['partial']) ? '1' : '0' ?>"
+            aria-label="<?= htmlspecialchars((string) $view['summary_line'], ENT_QUOTES, 'UTF-8') ?>">
+            <div class="account-orders__summary" data-group-summary="true">
+                <strong><?= htmlspecialchars((string) $view['display_number'], ENT_QUOTES, 'UTF-8') ?></strong>
+                <span><?= htmlspecialchars((string) $view['summary_line'], ENT_QUOTES, 'UTF-8') ?></span>
+                <?php foreach (($view['refund_semantics'] ?? []) as $label): ?>
+                    <span class="account-orders__badge" data-refund-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+                <?php foreach (($view['invoice_semantics'] ?? []) as $label): ?>
+                    <span class="account-orders__badge" data-invoice-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+                <?php foreach (($view['fulfillment_semantics'] ?? []) as $label): ?>
+                    <span class="account-orders__badge" data-fulfillment-semantic="true"><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+            </div>
+            <?php if (!empty($view['partial']) && !empty($view['orders'])): ?>
+            <ul class="account-orders__partial"
+                data-partial-expanded="true"
+                role="list"
+                aria-label="<?= __('订单明细') ?>">
+                <?php foreach ($view['orders'] as $order): ?>
+                <li data-order-uuid="<?= htmlspecialchars((string) $order['order_uuid'], ENT_QUOTES, 'UTF-8') ?>">
+                    <span><?= htmlspecialchars((string) $order['display_number'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <span data-refund-label="true"><?= htmlspecialchars((string) $order['refund_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <span data-invoice-label="true"><?= htmlspecialchars((string) $order['invoice_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <span data-fulfillment-label="true"><?= htmlspecialchars((string) $order['fulfillment_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php endif; ?>
+        </li>
+    <?php endforeach; ?>
+    </ul>
+<?php endif; ?>
+</div>

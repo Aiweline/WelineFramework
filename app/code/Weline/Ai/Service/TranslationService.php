@@ -152,10 +152,13 @@ class TranslationService
         $originalTargetLocale = $targetLocale;
         $targetLocale = $this->i18nIntegration->validateAndGetLocale($targetLocale);
         
-        // 获取翻译模型
-        $defaultModel = $this->defaultModelManager->getDefaultModel('translation');
+        // 优先使用独立翻译模型；未配置时回退到已配置的通用默认模型。
+        // 这样 I18n 的中立翻译事件在可用 AI 服务已存在时仍可完成工作，
+        // 而不要求每个调用方重复维护一份 translation 专用配置。
+        $defaultModel = $this->defaultModelManager->getDefaultModel('translation')
+            ?: $this->defaultModelManager->getDefaultModel('default');
         if (!$defaultModel) {
-            throw new Exception(__('未配置翻译默认模型'));
+            throw new Exception(__('未配置翻译或通用默认模型'));
         }
         $modelCode = $defaultModel->getData(\Weline\Ai\Model\AiModel::schema_fields_MODEL_CODE);
         
@@ -430,6 +433,8 @@ class TranslationService
             'zh-CN' => 'Chinese',
             'zh-Hans-CN' => 'Chinese',
             'en-US' => 'English',
+            'bn-IN' => 'Bengali',
+            'bn-BD' => 'Bengali',
             'ja-JP' => 'Japanese',
             'ko-KR' => 'Korean',
             'fr-FR' => 'French',
@@ -450,6 +455,8 @@ class TranslationService
         $langMap = [
             'zh' => 'Chinese',
             'en' => 'English',
+            'bn' => 'Bengali',
+            'hi' => 'Hindi',
             'ja' => 'Japanese',
             'ko' => 'Korean',
             'fr' => 'French',

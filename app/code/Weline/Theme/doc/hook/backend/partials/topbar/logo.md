@@ -4,7 +4,7 @@
 
 - **Hook 名称**：`Weline_Theme::backend::partials::topbar::logo`
 - **显示名称**：后台 Topbar Logo
-- **功能说明**：覆盖后台顶部栏的 Logo 区域。可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm；未实现时使用 Admin 默认静态 Logo。
+- **功能说明**：覆盖后台顶部栏的 Logo 区域。默认由 Theme 实现：读取 SiteBrand/`logo_dark`/`logo_light`/`logo_sm`；`logo_sm` 为空时回退到 `resolveIconUrl()`（站点图标/主题默认 icon），不再回退 `logo_dark`。
 
 ## 使用方法
 

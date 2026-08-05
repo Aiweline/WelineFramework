@@ -11,7 +11,7 @@ namespace Weline\Framework\Module\test;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Helper\Scanner;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class TestScanner extends TestCore
 {

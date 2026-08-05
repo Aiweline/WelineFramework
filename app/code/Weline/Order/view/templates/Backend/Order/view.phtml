@@ -22,16 +22,16 @@ if (!$order) {
 }
 
 $orderData = is_object($order) ? $order->getData() : $order;
-$orderId = $orderData[Order::fields_ID] ?? 0;
+$orderId = $orderData[Order::schema_fields_ID] ?? 0;
 ?>
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('订单详情') ?> - <?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?></h4>
+            <h4 class="mb-sm-0"><?= __('订单详情') ?> - <?= htmlspecialchars($orderData[Order::schema_fields_ORDER_NUMBER] ?? '') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
                     <li class="breadcrumb-item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('order/backend/order/index') ?>"><?= __('订单管理') ?></a></li>
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('weline_order/backend/order/index') ?>"><?= __('订单管理') ?></a></li>
                     <li class="breadcrumb-item active"><?= __('订单详情') ?></li>
                 </ol>
             </div>
@@ -59,13 +59,13 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                         <table class="table table-borderless">
                             <tr>
                                 <th width="150"><?= __('订单号') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_ORDER_NUMBER] ?? '') ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_ORDER_NUMBER] ?? '') ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('订单状态') ?>:</th>
                                 <td>
                                     <?php
-                                    $status = $orderData[Order::fields_STATUS] ?? '';
+                                    $status = $orderData[Order::schema_fields_STATUS] ?? '';
                                     $statusText = Order::getStatusLabel($status);
                                     $statusClass = Order::getStatusClassByCode($status);
                                     ?>
@@ -74,15 +74,15 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                             </tr>
                             <tr>
                                 <th><?= __('客户姓名') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_NAME] ?? '') ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_NAME] ?? '') ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('客户邮箱') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_EMAIL] ?? '') ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_EMAIL] ?? '') ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('客户电话') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_CUSTOMER_PHONE] ?? '') ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_PHONE] ?? '') ?></td>
                             </tr>
                         </table>
                     </div>
@@ -90,27 +90,27 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                         <table class="table table-borderless">
                             <tr>
                                 <th width="150"><?= __('订单总额') ?>:</th>
-                                <td><strong><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_GRAND_TOTAL] ?? 0), 2) ?></strong></td>
+                                <td><strong><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_GRAND_TOTAL] ?? 0), 2) ?></strong></td>
                             </tr>
                             <tr>
                                 <th><?= __('商品小计') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_SUBTOTAL] ?? 0), 2) ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_SUBTOTAL] ?? 0), 2) ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('运费') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_SHIPPING_AMOUNT] ?? 0), 2) ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_SHIPPING_AMOUNT] ?? 0), 2) ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('税费') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_TAX_AMOUNT] ?? 0), 2) ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_TAX_AMOUNT] ?? 0), 2) ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('折扣') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::fields_DISCOUNT_AMOUNT] ?? 0), 2) ?></td>
+                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($orderData[Order::schema_fields_DISCOUNT_AMOUNT] ?? 0), 2) ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('创建时间') ?>:</th>
-                                <td><?= $orderData[Order::fields_CREATED_AT] ?? '' ?></td>
+                                <td><?= $orderData[Order::schema_fields_CREATED_AT] ?? '' ?></td>
                             </tr>
                         </table>
                     </div>
@@ -120,7 +120,7 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                 <?php if (!empty($availableTransitions)): ?>
                     <div class="mt-3">
                         <h6><?= __('状态操作') ?>:</h6>
-                        <w:form method="post" action="@var($this->getBackendUrl('order/backend/order/updateStatus'))" class="d-inline">
+                        <w:form method="post" action="@var($this->getBackendUrl('weline_order/backend/order/updateStatus'))" class="d-inline">
                             <input type="hidden" name="order_id" value="<?= $orderId ?>">
                             <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                             <select name="status" class="form-select d-inline-block" style="width: auto;">
@@ -164,11 +164,11 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                                     $itemData = is_object($item) ? $item->getData() : $item;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($itemData[OrderItem::fields_PRODUCT_NAME] ?? '') ?></td>
-                                        <td><?= htmlspecialchars($itemData[OrderItem::fields_PRODUCT_SKU] ?? '') ?></td>
-                                        <td><?= number_format((float)($itemData[OrderItem::fields_QTY_ORDERED] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::fields_PRICE] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($orderData[Order::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::fields_ROW_TOTAL] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($itemData[OrderItem::schema_fields_PRODUCT_NAME] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($itemData[OrderItem::schema_fields_PRODUCT_SKU] ?? '') ?></td>
+                                        <td><?= number_format((float)($itemData[OrderItem::schema_fields_QTY_ORDERED] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::schema_fields_PRICE] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($orderData[Order::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($itemData[OrderItem::schema_fields_ROW_TOTAL] ?? 0), 2) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -206,11 +206,11 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                                     $paymentData = is_object($payment) ? $payment->getData() : $payment;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_PAYMENT_METHOD] ?? '') ?></td>
-                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($paymentData[\Weline\Order\Model\OrderPayment::fields_AMOUNT] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_TRANSACTION_ID] ?? '') ?></td>
-                                        <td><span class="badge bg-success"><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::fields_STATUS] ?? '') ?></span></td>
-                                        <td><?= $paymentData[\Weline\Order\Model\OrderPayment::fields_PAID_AT] ?? '' ?></td>
+                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_PAYMENT_METHOD] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_AMOUNT] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_TRANSACTION_ID] ?? '') ?></td>
+                                        <td><span class="badge bg-success"><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_STATUS] ?? '') ?></span></td>
+                                        <td><?= $paymentData[\Weline\Order\Model\OrderPayment::schema_fields_PAID_AT] ?? '' ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -248,11 +248,11 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                                     $shipmentData = is_object($shipment) ? $shipment->getData() : $shipment;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_TRACKING_NUMBER] ?? '') ?></td>
-                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_CARRIER] ?? '') ?></td>
-                                        <td><span class="badge bg-info"><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::fields_STATUS] ?? '') ?></span></td>
-                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::fields_SHIPPED_AT] ?? '' ?></td>
-                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::fields_DELIVERED_AT] ?? '' ?></td>
+                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_TRACKING_NUMBER] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_CARRIER] ?? '') ?></td>
+                                        <td><span class="badge bg-info"><?= htmlspecialchars($shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_STATUS] ?? '') ?></span></td>
+                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_SHIPPED_AT] ?? '' ?></td>
+                                        <td><?= $shipmentData[\Weline\Order\Model\OrderShipment::schema_fields_DELIVERED_AT] ?? '' ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -289,10 +289,10 @@ $orderId = $orderData[Order::fields_ID] ?? 0;
                                     $hData = is_object($h) ? $h->getData() : $h;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::fields_STATUS] ?? '') ?></td>
-                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::fields_COMMENT] ?? '') ?></td>
-                                        <td><?= !empty($hData[\Weline\Order\Model\OrderHistory::fields_IS_CUSTOMER_NOTIFIED]) ? __('是') : __('否') ?></td>
-                                        <td><?= $hData[\Weline\Order\Model\OrderHistory::fields_CREATED_AT] ?? '' ?></td>
+                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::schema_fields_STATUS] ?? '') ?></td>
+                                        <td><?= htmlspecialchars($hData[\Weline\Order\Model\OrderHistory::schema_fields_COMMENT] ?? '') ?></td>
+                                        <td><?= !empty($hData[\Weline\Order\Model\OrderHistory::schema_fields_IS_CUSTOMER_NOTIFIED]) ? __('是') : __('否') ?></td>
+                                        <td><?= $hData[\Weline\Order\Model\OrderHistory::schema_fields_CREATED_AT] ?? '' ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>

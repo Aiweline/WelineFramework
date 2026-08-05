@@ -164,6 +164,51 @@ final class GatewayBackendCapabilityStateStoreTest extends TestCase
         self::assertNotEmpty(\glob($file . '.corrupt-*') ?: []);
     }
 
+    public function testHostRebootAndMonotonicRegressionRestartFullRecoveryWindow(): void
+    {
+        $now = 4000.0;
+        $file = $this->stateFile();
+        $bootA = \str_repeat('a', 64);
+        $healthy = $this->observation('shared_session', 'authenticated_session_runtime');
+        $store = new GatewayBackendCapabilityStateStore(
+            $file,
+            static function () use (&$now): float {
+                return $now;
+            },
+            30,
+            $bootA,
+        );
+        self::assertSame('isolated', $store->stabilize($healthy)['mode']);
+        $now = 4030.0;
+        self::assertSame('shared_session', $store->stabilize($healthy)['mode']);
+
+        $now = 10.0;
+        $afterBoot = new GatewayBackendCapabilityStateStore(
+            $file,
+            static function () use (&$now): float {
+                return $now;
+            },
+            30,
+            \str_repeat('b', 64),
+        );
+        self::assertSame('isolated', $afterBoot->stabilize($healthy)['mode']);
+        $now = 39.9;
+        self::assertSame('isolated', $afterBoot->stabilize($healthy)['mode']);
+        $now = 40.0;
+        self::assertSame('shared_session', $afterBoot->stabilize($healthy)['mode']);
+
+        $now = 5.0;
+        self::assertSame(
+            'isolated',
+            $afterBoot->stabilize($healthy)['mode'],
+            'A negative monotonic age must reset the complete qualification window.',
+        );
+        $now = 34.9;
+        self::assertSame('isolated', $afterBoot->stabilize($healthy)['mode']);
+        $now = 35.0;
+        self::assertSame('shared_session', $afterBoot->stabilize($healthy)['mode']);
+    }
+
     /** @return array<string,mixed> */
     private function observation(string $mode, string $reason): array
     {

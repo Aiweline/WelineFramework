@@ -31,6 +31,15 @@ class Set extends \Weline\Framework\App\Controller\BackendController
         $this->set = $set;
     }
 
+    public function __init()
+    {
+        parent::__init();
+        // OffCanvas / iframe / embed 外部嵌入时用空白布局，避免嵌套后台顶栏侧栏
+        if ($this->request->isIframe() || $this->request->getParam('embed') === '1') {
+            $this->layoutType = 'default.blank';
+        }
+    }
+
     function index()
     {
         $this->set->loadLocalDescription()

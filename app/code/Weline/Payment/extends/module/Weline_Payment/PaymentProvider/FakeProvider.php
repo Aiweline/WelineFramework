@@ -276,24 +276,52 @@ final class FakeProvider implements ProviderInterface
 
     public function verifyCallback(CallbackRequest $request): CallbackResult
     {
+        $secret = (string) ($request->getData('verification_secret') ?? '');
+        $signature = (string) ($request->getSignature() ?? '');
+        $raw = $request->getRawBody();
+
+        // When a verification secret is supplied (V2 webhook path), require HMAC.
+        if ($secret !== '') {
+            if ($raw === '' || $signature === '') {
+                return CallbackResult::fromArray([
+                    'verified' => false,
+                    'message' => 'missing signature or raw body',
+                ]);
+            }
+            $expected = hash_hmac('sha256', $raw, $secret);
+            if (!hash_equals($expected, $signature)) {
+                return CallbackResult::fromArray([
+                    'verified' => false,
+                    'message' => 'invalid signature',
+                ]);
+            }
+        }
+
+        $payload = $request->getPayload();
+
         return CallbackResult::fromArray([
             'verified' => true,
-            'event_type' => 'fake.payment.updated',
-            'provider_event_id' => 'FAKE-EVENT-' . date('YmdHis'),
+            'event_type' => (string) ($payload['event_type'] ?? 'fake.payment.updated'),
+            'provider_event_id' => (string) ($payload['provider_event_id'] ?? ''),
         ]);
     }
 
     public function parseCallback(CallbackRequest $request): CallbackResult
     {
         $payload = $request->getPayload();
+        if ($payload === [] && $request->getRawBody() !== '') {
+            $decoded = json_decode($request->getRawBody(), true);
+            $payload = \is_array($decoded) ? $decoded : [];
+        }
 
         return CallbackResult::fromArray([
             'verified' => true,
             'event_type' => (string) ($payload['event_type'] ?? 'fake.payment.updated'),
-            'provider_event_id' => (string) ($payload['provider_event_id'] ?? 'FAKE-EVENT-' . date('YmdHis')),
+            'provider_event_id' => (string) ($payload['provider_event_id'] ?? ''),
             'intent_code' => (string) ($payload['intent_code'] ?? ''),
             'transaction_code' => (string) ($payload['transaction_no'] ?? $payload['provider_reference'] ?? ''),
             'status_transition' => (string) ($payload['status'] ?? 'paid'),
+            'schema_version' => (string) ($payload['schema_version'] ?? '1'),
         ]);
     }
 

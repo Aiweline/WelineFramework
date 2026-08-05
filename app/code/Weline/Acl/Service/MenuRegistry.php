@@ -59,7 +59,7 @@ final class MenuRegistry implements MenuRegistryInterface
         $row = [
             Acl::schema_fields_SOURCE_ID => $sourceId,
             Acl::schema_fields_SOURCE_NAME => (string)($data['title'] ?? $data['name'] ?? $sourceId),
-            Acl::schema_fields_ROUTE => (string)($data['route'] ?? ''),
+            Acl::schema_fields_ROUTE => strtolower(trim((string)($data['route'] ?? ''), '/')),
             Acl::schema_fields_ROUTER => '',
             Acl::schema_fields_ICON => (string)($data['icon'] ?? ''),
             Acl::schema_fields_ORDER => (int)($data['order'] ?? 0),

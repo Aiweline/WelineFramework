@@ -52,6 +52,21 @@ final class ScopedConfigRepository implements ScopedConfigRepositoryInterface
         return $this->config->resolveConfig($key, $module, $area, $scope, $locale, $default);
     }
 
+    public function resolveTypedConfig(
+        string $key,
+        string $module,
+        string $area,
+        \Weline\Framework\Runtime\ScopeIdentity $identity,
+        ?string $locale = null,
+        mixed $default = null,
+    ): \Weline\SystemConfig\Api\Scope\ConfigScopeValue {
+        if (\func_num_args() >= 6) {
+            return $this->config->resolveTypedConfig($key, $module, $area, $identity, $locale, $default);
+        }
+
+        return $this->config->resolveTypedConfig($key, $module, $area, $identity, $locale);
+    }
+
     public function getConfigVersions(
         string $module,
         string $area,

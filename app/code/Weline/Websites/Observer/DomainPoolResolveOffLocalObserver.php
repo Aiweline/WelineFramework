@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Weline Websites - 域名池解析偏离本站观察者
  *
  * 监听 Weline_Websites::domain_pool::resolve_off_local 事件，
- * 通过 w_msg 向订阅用户发送通知。
+ * 以 scoped urgent 写链通知对象 Scope 授权用户；无授权仅留审计。
  *
  * @author Aiweline
  * @email aiweline@qq.com
@@ -13,8 +13,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Observer;
 
+use Weline\Backend\Service\ScopedUrgentNotifier;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 
 class DomainPoolResolveOffLocalObserver implements ObserverInterface
 {
@@ -44,15 +47,25 @@ class DomainPoolResolveOffLocalObserver implements ObserverInterface
             'expected' => $expectedIp ?: __('未知'),
         ]);
 
-        if (\function_exists('w_msg')) {
-            w_msg('domain_pool_resolve_off_local', 'warning', $title, $content, [
-                'metadata' => [
-                    'domain' => $domain,
-                    'pool_id' => $poolId,
-                    'resolved_ip' => $resolvedIp,
-                    'expected_ip' => $expectedIp,
-                ],
-            ]);
-        }
+        /** @var ScopedUrgentNotifier $notifier */
+        $notifier = ObjectManager::getInstance(ScopedUrgentNotifier::class);
+        // 域名池是站群基础设施：落默认站 website Scope（0/default），由对象 ACL 裁剪收件人。
+        $scope = ScopeIdentity::website(0, 'default');
+        $notifier->emit(
+            'domain_pool_resolve_off_local',
+            $title,
+            $content,
+            $scope,
+            'domain_pool_off_local:' . \strtolower($domain),
+            [
+                'domain' => $domain,
+                'pool_id' => $poolId,
+                'resolved_ip' => $resolvedIp,
+                'expected_ip' => $expectedIp,
+                'source_module' => 'Weline_Websites',
+            ],
+            null,
+            'ri-error-warning-line',
+        );
     }
 }

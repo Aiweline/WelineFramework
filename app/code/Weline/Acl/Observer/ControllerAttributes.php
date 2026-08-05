@@ -487,8 +487,9 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         }
 
         // pgsql 等迁移后的表常丢失列 DEFAULT；批量 insert 若显式写入 null 会触发 NOT NULL
+        // Controller #[Acl] collection: default origin is controller_attribute (not menu_xml).
         if (!isset($aclData[Acl::schema_fields_ACL_ORIGIN]) || $aclData[Acl::schema_fields_ACL_ORIGIN] === null || $aclData[Acl::schema_fields_ACL_ORIGIN] === '') {
-            $aclData[Acl::schema_fields_ACL_ORIGIN] = Acl::acl_origin_menu_xml;
+            $aclData[Acl::schema_fields_ACL_ORIGIN] = Acl::acl_origin_controller_attribute;
         }
         if (!isset($aclData[Acl::schema_fields_ACCESS_MODE]) || $aclData[Acl::schema_fields_ACCESS_MODE] === null || $aclData[Acl::schema_fields_ACCESS_MODE] === '') {
             $aclData[Acl::schema_fields_ACCESS_MODE] = Acl::ACCESS_MODE_EDIT;

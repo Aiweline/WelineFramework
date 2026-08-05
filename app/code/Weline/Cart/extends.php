@@ -18,5 +18,17 @@ return [
                 ],
             ],
         ],
+        'CartItemSnapshotProviderV2' => [
+            'path' => 'extends/module/Weline_Cart/CartItemSnapshotProviderV2',
+            'interface' => 'Weline\Cart\Api\CartItemSnapshotProviderV2Interface',
+            'description' => 'Cart V2：按 provider code O(1) 映射；OfferIdentity + Scope + selection 快照。',
+            'required' => false,
+            'multiple' => true,
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Cart/CartItemSnapshotProviderV2/{ProviderName}.php',
+                ],
+            ],
+        ],
     ],
 ];

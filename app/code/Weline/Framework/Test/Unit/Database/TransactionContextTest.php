@@ -21,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Database\Transaction\Exception\RollbackOnlyException;
 
 final class TransactionContextTest extends TestCase
 {
@@ -79,7 +80,12 @@ final class TransactionContextTest extends TestCase
         $connector->beginTransaction();
         $connector->query("INSERT INTO transaction_probe (value) VALUES ('discarded')")->fetch();
         $connector->rollBack();
-        $connector->commit();
+        try {
+            $connector->commit();
+            self::fail('The outer commit must reject a transaction marked rollback-only.');
+        } catch (RollbackOnlyException $exception) {
+            self::assertInstanceOf(RollbackOnlyException::class, $exception);
+        }
 
         self::assertFalse($connector->getWrappedConnection()->inTransaction());
         self::assertSame(0, (int)($connector->query('SELECT COUNT(*) AS count FROM transaction_probe')->fetch()[0]['count'] ?? -1));

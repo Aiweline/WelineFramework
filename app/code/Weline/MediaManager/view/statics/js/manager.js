@@ -43,67 +43,119 @@
         return str;
     }
 
+    /**
+     * Iframe media pickers never receive a backend bootstrap meta (only top-level
+     * document navigations mint one). Reuse the same-origin parent page's already
+     * attested Backend Worker API, matching Queue/AI OffCanvas.
+     */
+    function resolveBackendApiHost() {
+        if (window.parent && window.parent !== window) {
+            try {
+                if (
+                    window.parent.location.origin === window.location.origin
+                    && window.parent.Weline
+                    && (
+                        typeof window.parent.Weline.load === 'function'
+                        || window.parent.Weline.Api
+                    )
+                ) {
+                    return window.parent;
+                }
+            } catch (_error) {
+                // Cross-origin parents must never receive or proxy backend authority.
+            }
+        }
+        return window;
+    }
+
+    function mmResource(op, params) {
+        var run = function(api){ return api.resource('media_manager')[op](params || {}); };
+        var host = resolveBackendApiHost();
+        if (host.Weline && typeof host.Weline.load === 'function') {
+            return host.Weline.load('api').then(run);
+        }
+        return Promise.resolve(run(host.Weline && host.Weline.Api));
+    }
+
+    function readFileAsBase64Entry(file) {
+        return new Promise(function(resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function() {
+                var result = String(reader.result || '');
+                var idx = result.indexOf(',');
+                resolve({
+                    name: file.name || 'upload.bin',
+                    type: file.type || 'application/octet-stream',
+                    size: file.size || 0,
+                    data: idx >= 0 ? result.slice(idx + 1) : result
+                });
+            };
+            reader.onerror = function() {
+                reject(reader.error || new Error('read failed'));
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function formDataToConnectorPayload(formData, uploadQuery) {
+        var payload = {};
+        var fileReads = [];
+        formData.forEach(function(value, key) {
+            if (typeof File !== 'undefined' && value instanceof File) {
+                fileReads.push(readFileAsBase64Entry(value));
+                return;
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, key)) {
+                var prev = payload[key];
+                payload[key] = Array.isArray(prev) ? prev.concat([value]) : [prev, value];
+            } else {
+                payload[key] = value;
+            }
+        });
+        if (uploadQuery) {
+            String(uploadQuery).split('&').forEach(function(pair) {
+                var kv = pair.split('=');
+                if (!kv[0]) return;
+                var k = decodeURIComponent(kv[0]);
+                var v = decodeURIComponent(kv[1] || '');
+                if (payload[k] === undefined || payload[k] === '') {
+                    payload[k] = v;
+                }
+            });
+        }
+        return Promise.all(fileReads).then(function(files) {
+            if (files.length) {
+                payload.upload_base64 = files;
+                if (!payload.cmd) {
+                    payload.cmd = 'upload';
+                }
+            }
+            return payload;
+        });
+    }
+
     function api(params, onDone, onErr, options) {
         var isUpload = params instanceof FormData;
-        var url = CONNECTOR;
         var opts = options || {};
+        var prepare = isUpload
+            ? formDataToConnectorPayload(params, opts.uploadQuery)
+            : Promise.resolve(params || {});
         if (isUpload) {
-            opts.method = 'POST';
-            opts.body = params;
-            // Linux 下 multipart 有时未正确解析出 target，导致上传到根目录；把 cmd/target 同时放在 URL 上兜底
-            if (opts.uploadQuery) {
-                url += (url.indexOf('?') >= 0 ? '&' : '?') + opts.uploadQuery;
-            }
-        } else {
-            var q = [];
-            for (var k in params) {
-                if (params.hasOwnProperty(k)) {
-                    var v = params[k];
-                    if (Array.isArray(v)) {
-                        v.forEach(function (item) { q.push(encodeURIComponent(k + '[]') + '=' + encodeURIComponent(item)); });
-                    } else {
-                        q.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
-                    }
-                }
-            }
-            url += (url.indexOf('?') >= 0 ? '&' : '?') + q.join('&');
-            opts.method = 'GET';
+            updateUploadProgress(10);
         }
-        var xhr = new XMLHttpRequest();
-        var timedOut = false;
-        xhr.open(opts.method, url, true);
-        xhr.timeout = 30000;
-        if (!isUpload) {
-            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-        }
-        xhr.ontimeout = function () {
-            timedOut = true;
-            (onErr || showError)(t('requestTimeout'));
-        };
-        xhr.onload = function () {
-            if (timedOut) return;
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    if (data.error) {
-                        (onErr || showError)(Array.isArray(data.error) ? data.error.join(', ') : data.error);
-                    } else {
-                        onDone && onDone(data);
-                    }
-                } catch (e) {
-                    (onErr || showError)(t('invalidJson'));
-                }
+        prepare.then(function(payload) {
+            if (isUpload) updateUploadProgress(40);
+            return mmResource('connector', payload);
+        }).then(function(data){
+            if (isUpload) updateUploadProgress(100);
+            if (data && data.error) {
+                (onErr || showError)(Array.isArray(data.error) ? data.error.join(', ') : data.error);
             } else {
-                (onErr || showError)('HTTP ' + xhr.status);
+                onDone && onDone(data);
             }
-        };
-        xhr.onerror = function () { if (!timedOut) (onErr || showError)(t('networkError')); };
-        if (isUpload && xhr.upload) {
-            xhr.upload.onprogress = function (ev) {
-                if (ev.lengthComputable) updateUploadProgress(Math.round(ev.loaded / ev.total * 100));
-            };
-        }
-        xhr.send(opts.body || null);
+        }).catch(function(err){
+            (onErr || showError)((err && err.message) || t('networkError'));
+        });
     }
 
     function showError(msg) {
@@ -252,9 +304,7 @@
         var select = qs('#mmf-storage-select');
         if (!select || !CONNECTOR) return;
 
-        var url = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=storages';
-        fetch(url)
-            .then(function(res) { return res.json(); })
+        mmResource('connector', { cmd: 'storages' })
             .then(function(data) {
                 if (data.storages && Array.isArray(data.storages)) {
                     select.innerHTML = '';
@@ -497,16 +547,14 @@
 
     function loadSubtree(parentHash, placeholder, toggle) {
         toggle.textContent = '...';
-        api({ cmd: 'open', target: parentHash, tree: 1 }, function (err, data) {
-            if (err) {
-                toggle.textContent = '\u25B6';
-                return;
-            }
-            if (data.files) {
-                data.files.forEach(function (f) {
+        // cmd=tree：只拉直接子目录；勿传 tree 数字标志（WQB1 会保留为 int，与 string 契约冲突）
+        api({ cmd: 'tree', target: parentHash }, function (data) {
+            var nodes = data && (data.tree || data.files) ? (data.tree || data.files) : [];
+            nodes.forEach(function (f) {
+                if (f && f.hash) {
                     TREE[f.hash] = f;
-                });
-            }
+                }
+            });
             var kids = [];
             for (var h in TREE) {
                 var f = TREE[h];
@@ -522,6 +570,9 @@
             toggle.textContent = '\u25BC';
             EXPANDED_NODES[parentHash] = true;
             bindTreeEvents();
+        }, function (err) {
+            toggle.textContent = '\u25B6';
+            showError(err);
         });
     }
 
@@ -1706,6 +1757,190 @@
                 renderAiRefPicker();
             });
         }
+        bindAiPromptDraft();
+        var clearPromptBtn = qs('#mmf-ai-btn-clear-prompt');
+        if (clearPromptBtn) clearPromptBtn.addEventListener('click', clearAiPromptDraft);
+        var polishBtn = qs('#mmf-ai-btn-polish');
+        if (polishBtn) polishBtn.addEventListener('click', polishAiPrompt);
+    }
+
+    var AI_PROMPT_DRAFT_KEY = 'mmf-ai-draw-prompt-draft-v1';
+    var AI_PROMPT_DRAFT_TIMER = null;
+    var AI_PROMPT_POLISHING = false;
+
+    function aiPromptDraftKey() {
+        return AI_PROMPT_DRAFT_KEY + (STORAGE_KEY ? (':' + STORAGE_KEY) : '');
+    }
+
+    function readAiPromptDraft() {
+        try {
+            var raw = localStorage.getItem(aiPromptDraftKey());
+            if (!raw) return null;
+            var data = JSON.parse(raw);
+            if (!data || typeof data !== 'object') return null;
+            return data;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function writeAiPromptDraft() {
+        var promptEl = qs('#mmf-ai-prompt');
+        var batchEl = qs('#mmf-ai-batch-prompts');
+        var countEl = qs('#mmf-ai-batch-count');
+        var sizeEl = qs('#mmf-ai-size');
+        var formatEl = qs('#mmf-ai-format');
+        var payload = {
+            prompt: promptEl ? String(promptEl.value || '') : '',
+            batch_prompts: batchEl ? String(batchEl.value || '') : '',
+            batch_count: countEl ? String(countEl.value || '2') : '2',
+            size: sizeEl ? String(sizeEl.value || '') : '',
+            output_format: formatEl ? String(formatEl.value || '') : '',
+            updated_at: Date.now()
+        };
+        try {
+            if (!payload.prompt && !payload.batch_prompts) {
+                localStorage.removeItem(aiPromptDraftKey());
+            } else {
+                localStorage.setItem(aiPromptDraftKey(), JSON.stringify(payload));
+            }
+        } catch (e) {}
+    }
+
+    function scheduleAiPromptDraftSave() {
+        if (AI_PROMPT_DRAFT_TIMER) clearTimeout(AI_PROMPT_DRAFT_TIMER);
+        AI_PROMPT_DRAFT_TIMER = setTimeout(function () {
+            AI_PROMPT_DRAFT_TIMER = null;
+            writeAiPromptDraft();
+        }, 250);
+    }
+
+    function restoreAiPromptDraft() {
+        var draft = readAiPromptDraft();
+        var promptEl = qs('#mmf-ai-prompt');
+        if (promptEl) {
+            promptEl.placeholder = t('aiPromptPlaceholder') || '';
+            if (draft && typeof draft.prompt === 'string') {
+                promptEl.value = draft.prompt;
+            }
+        }
+        if (!draft) return;
+        var batchEl = qs('#mmf-ai-batch-prompts');
+        if (batchEl && typeof draft.batch_prompts === 'string') {
+            batchEl.value = draft.batch_prompts;
+        }
+        var countEl = qs('#mmf-ai-batch-count');
+        if (countEl && draft.batch_count) {
+            countEl.value = draft.batch_count;
+        }
+        var sizeEl = qs('#mmf-ai-size');
+        if (sizeEl && draft.size) {
+            sizeEl.value = draft.size;
+        }
+        var formatEl = qs('#mmf-ai-format');
+        if (formatEl && draft.output_format) {
+            formatEl.value = draft.output_format;
+        }
+    }
+
+    function clearAiPromptDraft() {
+        if (isAiGenerating() || AI_PROMPT_POLISHING) return;
+        var promptEl = qs('#mmf-ai-prompt');
+        var batchEl = qs('#mmf-ai-batch-prompts');
+        if (promptEl) promptEl.value = '';
+        if (batchEl) batchEl.value = '';
+        try { localStorage.removeItem(aiPromptDraftKey()); } catch (e) {}
+        clearAiPromptError();
+        if (promptEl) promptEl.focus();
+    }
+
+    function bindAiPromptDraft() {
+        ['#mmf-ai-prompt', '#mmf-ai-batch-prompts', '#mmf-ai-batch-count', '#mmf-ai-size', '#mmf-ai-format'].forEach(function (sel) {
+            var el = qs(sel);
+            if (!el || el.__mmfDraftBound) return;
+            el.__mmfDraftBound = true;
+            el.addEventListener('input', scheduleAiPromptDraftSave);
+            el.addEventListener('change', scheduleAiPromptDraftSave);
+            if (sel === '#mmf-ai-prompt') {
+                el.addEventListener('input', clearAiPromptError);
+            }
+        });
+    }
+
+    function toPlainText(msg) {
+        var text = String(msg == null ? '' : msg);
+        if (text.indexOf('<') === -1) return text.trim();
+        var holder = document.createElement('div');
+        holder.innerHTML = text;
+        return String(holder.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function setAiPromptError(msg) {
+        var el = qs('#mmf-ai-prompt-error');
+        if (!el) return;
+        var text = toPlainText(msg);
+        el.textContent = text;
+        el.style.display = text ? 'block' : 'none';
+    }
+
+    function clearAiPromptError() {
+        setAiPromptError('');
+    }
+
+    function setAiPolishBusy(busy) {
+        AI_PROMPT_POLISHING = !!busy;
+        var btn = qs('#mmf-ai-btn-polish');
+        if (btn) {
+            btn.classList.toggle('is-loading', AI_PROMPT_POLISHING);
+            btn.disabled = AI_PROMPT_POLISHING || isAiGenerating();
+            btn.textContent = AI_PROMPT_POLISHING ? t('aiPromptPolishing') : t('aiPromptPolish');
+        }
+        var clearBtn = qs('#mmf-ai-btn-clear-prompt');
+        if (clearBtn) clearBtn.disabled = AI_PROMPT_POLISHING || isAiGenerating();
+        var promptEl = qs('#mmf-ai-prompt');
+        if (promptEl && !isAiGenerating()) promptEl.disabled = AI_PROMPT_POLISHING;
+    }
+
+    function polishAiPrompt() {
+        if (isAiGenerating() || AI_PROMPT_POLISHING) return;
+        var promptEl = qs('#mmf-ai-prompt');
+        var prompt = promptEl ? String(promptEl.value || '').trim() : '';
+        if (!prompt) {
+            setAiPromptError(t('aiNoPrompt'));
+            showError(t('aiNoPrompt'));
+            return;
+        }
+        clearAiPromptError();
+        setAiPolishBusy(true);
+        setAiStatus(t('aiPromptPolishing'), 'running');
+        mmResource('polishPrompt', { prompt: prompt }).then(function (res) {
+            var body = res && res.data && typeof res.data.prompt === 'string' ? res.data
+                : (res && typeof res.prompt === 'string' ? res : null);
+            var polished = body && typeof body.prompt === 'string' ? String(body.prompt).trim() : '';
+            var ok = !!(res && res.success !== false && polished);
+            if (!ok) {
+                throw new Error((res && res.message) || t('aiPromptPolishFailed'));
+            }
+            if (promptEl) {
+                promptEl.value = polished;
+                writeAiPromptDraft();
+                promptEl.focus();
+            }
+            clearAiPromptError();
+            setAiStatus(t('aiPromptPolishDone'), 'ready');
+        }).catch(function (err) {
+            var msg = err && err.message ? err.message : t('aiPromptPolishFailed');
+            if (window.WelineApiBusiness && typeof window.WelineApiBusiness.formatApiError === 'function') {
+                msg = window.WelineApiBusiness.formatApiError(err, msg);
+            } else if (window.Weline && window.Weline.ApiBusiness && typeof window.Weline.ApiBusiness.formatApiError === 'function') {
+                msg = window.Weline.ApiBusiness.formatApiError(err, msg);
+            }
+            setAiPromptError(msg);
+            showError(toPlainText(msg));
+            setAiStatus('', '');
+        }).finally(function () {
+            setAiPolishBusy(false);
+        });
     }
 
     function isAiGenerating() {
@@ -1722,13 +1957,15 @@
         setAiPreviewLoading(AI_GENERATING);
         setAiStatus(AI_GENERATING ? t('aiRunningHint') : '', AI_GENERATING ? 'running' : '');
 
-        ['#mmf-ai-btn-generate', '#mmf-ai-btn-continue', '#mmf-ai-btn-save'].forEach(function (sel) {
+        ['#mmf-ai-btn-generate', '#mmf-ai-btn-continue', '#mmf-ai-btn-save', '#mmf-ai-btn-polish', '#mmf-ai-btn-clear-prompt'].forEach(function (sel) {
             var el = qs(sel);
             if (!el) return;
             if (AI_GENERATING) {
                 el.disabled = true;
             } else if (sel === '#mmf-ai-btn-save') {
                 el.disabled = !AI_GENERATIONS.length;
+            } else if (sel === '#mmf-ai-btn-polish' || sel === '#mmf-ai-btn-clear-prompt') {
+                el.disabled = AI_PROMPT_POLISHING;
             } else {
                 el.disabled = false;
             }
@@ -1789,13 +2026,7 @@
 
     function refreshAiDrawConfig() {
         if (!CONFIG.aiDrawConfigUrl) return;
-        fetch(CONFIG.aiDrawConfigUrl, {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function (res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.json();
-        }).then(function (res) {
+        mmResource('config', {}).then(function (res) {
             var data = res && res.data ? res.data : res;
             updateAiConfigBanner(data || {});
         }).catch(function () {});
@@ -2063,11 +2294,8 @@
         var overlay = qs('#mmf-ai-draw-overlay');
         if (overlay) overlay.classList.add('visible');
         refreshAiDrawConfig();
-        var prompt = qs('#mmf-ai-prompt');
-        if (prompt) {
-            prompt.value = '';
-            prompt.placeholder = t('aiPromptPlaceholder') || '';
-        }
+        clearAiPromptError();
+        restoreAiPromptDraft();
         var history = qs('#mmf-ai-history');
         var historyWrap = qs('#mmf-ai-history-wrap');
         if (history) history.innerHTML = '';
@@ -2257,26 +2485,18 @@
         setAiSaveEnabled(false);
         setAiPreviewLoading(true);
         AI_STREAM_TERMINAL = false;
-        AI_STREAM_CONTROLLER = new AbortController();
-        fetch(CONFIG.aiDrawStreamUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(payload),
-            credentials: 'same-origin',
-            signal: AI_STREAM_CONTROLLER.signal
-        }).then(function (res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return consumeSseResponse(res, handleAiSseEvent);
-        }).then(function () {
+        AI_STREAM_CONTROLLER = { aborted: false, abort: function(){ this.aborted = true; } };
+        mmResource('generate', payload).then(function (res) {
+            if (AI_STREAM_CONTROLLER && AI_STREAM_CONTROLLER.aborted) return;
+            var events = (res && res.events) || [];
+            events.forEach(function (item) {
+                handleAiSseEvent(item.event || 'message', item.data);
+            });
             if (!AI_STREAM_TERMINAL) {
                 reportAiError(t('aiStreamDisconnected'));
             }
         }).catch(function (err) {
-            if (err && err.name === 'AbortError') return;
+            if (AI_STREAM_CONTROLLER && AI_STREAM_CONTROLLER.aborted) return;
             reportAiError(err && err.message ? err.message : t('networkError'));
         }).finally(function () {
             AI_STREAM_CONTROLLER = null;
@@ -2679,61 +2899,9 @@
             }
             return normalizeApiJsonPayload(body);
         };
-        if (typeof window.fetch === 'function') {
-            window.fetch(url, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(payload)
-            }).then(function (res) {
-                return res.text().then(function (text) {
-                    return parseResponse(res, text);
-                });
-            }).then(finishOk).catch(handleErr);
-            return;
-        }
-        if (window.Weline && window.Weline.Api) {
-            var apiCall = null;
-            if (typeof window.Weline.Api.post === 'function') {
-                apiCall = window.Weline.Api.post(url, payload);
-            } else if (typeof window.Weline.Api.request === 'function') {
-                apiCall = window.Weline.Api.request(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: payload
-                });
-            }
-            if (apiCall && typeof apiCall.then === 'function') {
-                apiCall.then(function (res) {
-                    finishOk(normalizeApiJsonPayload(res && res.data !== undefined ? res.data : res));
-                }).catch(function (err) {
-                    var msg = err && err.message ? String(err.message) : '';
-                    if (/Response terminate with status 200/i.test(msg) && err.response && err.response.data) {
-                        finishOk(normalizeApiJsonPayload(err.response.data));
-                        return;
-                    }
-                    handleErr(err);
-                });
-                return;
-            }
-        }
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-        xhr.onload = function () {
-            try {
-                finishOk(parseResponse({ ok: xhr.status >= 200 && xhr.status < 300 }, xhr.responseText));
-            } catch (e) {
-                handleErr(e);
-            }
-        };
-        xhr.onerror = function () { handleErr(new Error(t('networkError'))); };
-        xhr.send(JSON.stringify(payload));
+        mmResource('save', payload).then(function(body){
+            finishOk(normalizeApiJsonPayload(body && body.data !== undefined ? body : body));
+        }).catch(handleErr);
     }
 
     /* ─── util ───────────────────────────────────────────────────────── */

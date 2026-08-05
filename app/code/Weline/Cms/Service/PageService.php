@@ -12,6 +12,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
@@ -55,7 +56,9 @@ class PageService
         private readonly PathGroup $pathGroupModel,
         private readonly Url $url,
         private readonly Request $request,
-        private readonly ?EventsManager $eventsManager = null
+        private readonly ?EventsManager $eventsManager = null,
+        private ?PageLocaleService $pageLocaleService = null,
+        private ?PageSlugService $pageSlugService = null,
     ) {
     }
 
@@ -175,6 +178,13 @@ class PageService
      */
     public function savePage(array $data): Page
     {
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        if (!$transactions->isActive($this->pageModel->getConnection())) {
+            return $transactions->run(
+                $this->pageModel->getConnection(),
+                fn(): Page => $this->savePage($data),
+            );
+        }
         $pageId = (int)($data['page_id'] ?? $data['id'] ?? 0);
         $group = $this->resolvePathGroupInput($data);
         if ($group !== null) {
@@ -203,11 +213,6 @@ class PageService
             : $this->ensurePathGroup($website, $pathParts['path_group'], $pathGroupAlias);
         $pathGroupAlias = $group->getAlias() !== '' ? $group->getAlias() : $pathGroupAlias;
 
-        $this->assertUniqueIdentifier($identifier, (int)$website['website_id'], $pageId);
-        if ($status === Page::STATUS_PUBLISHED) {
-            $this->assertRouteAvailableForPublish($identifier);
-        }
-
         $page = clone $this->pageModel;
         $previousData = [];
         if ($pageId > 0) {
@@ -222,9 +227,50 @@ class PageService
         $page->setData(Page::schema_fields_WEBSITE_CODE, (string)$website['website_code']);
         $page->setData(Page::schema_fields_PATH_GROUP, $pathParts['path_group']);
         $page->setData(Page::schema_fields_PATH_GROUP_ALIAS, $pathGroupAlias);
-        $page->setData(Page::schema_fields_SLUG, $pathParts['slug']);
+
+        $localeService = $this->pageLocaleService ??= ObjectManager::getInstance(PageLocaleService::class);
+        $localeContext = $localeService->prepareWriteLocales(
+            $page,
+            (string)($data['locale_code'] ?? $data['locale'] ?? ''),
+            (string)($data['source_locale'] ?? ''),
+        );
+        $localeTitles = $localeService->normalizeSubmittedTitles(
+            $data['locale_titles'] ?? $data['locale_titles_json'] ?? [],
+            $localeContext['supported_locales'],
+        );
+        $localeTitles[$localeContext['locale_code']] = $title;
+        $submittedSourceTitle = trim((string)($localeTitles[$localeContext['source_locale']] ?? ''));
+        if ($submittedSourceTitle !== '') {
+            $page->setData(Page::schema_fields_TITLE, $submittedSourceTitle);
+        }
+        if ($localeContext['locale_code'] === $localeContext['source_locale']) {
+            $page->setData(Page::schema_fields_TITLE, $title);
+        } elseif ($pageId <= 0) {
+            throw new \InvalidArgumentException((string)__('新建 CMS 页面时必须先保存源语言标题。'));
+        }
+        $page->setSourceLocale($localeContext['source_locale']);
+
+        $slugService = $this->pageSlugService ??= new PageSlugService($this->pageModel);
+        $slugDecision = $slugService->resolveForSave(
+            $page,
+            $page->getTitle(),
+            (string)($data['slug'] ?? $pathParts['slug']),
+            $pathParts['path_group'],
+            (int)$website['website_id'],
+            $status,
+            (string)($data['slug_mode'] ?? ''),
+        );
+        $identifier = $slugDecision['identifier'];
+        $page->setData(Page::schema_fields_SLUG, $slugDecision['slug']);
         $page->setData(Page::schema_fields_IDENTIFIER, $identifier);
-        $page->setData(Page::schema_fields_TITLE, $title);
+        $page->setSlugMode($slugDecision['mode']);
+        $page->setSlugSourceHash($slugDecision['source_hash']);
+
+        $this->assertUniqueIdentifier($identifier, (int)$website['website_id'], $pageId);
+        if ($status === Page::STATUS_PUBLISHED) {
+            $this->assertRouteAvailableForPublish($identifier);
+        }
+
         $page->setData(Page::schema_fields_STATUS, $status);
         $page->setData(Page::schema_fields_SCOPE, $scope);
         if (array_key_exists('deleted_at', $data)) {
@@ -240,11 +286,47 @@ class PageService
             $page = $savedPage;
         }
 
+        $titleOrigin = trim((string)($data['title_origin'] ?? ''));
+        if ($titleOrigin === '') {
+            $titleOrigin = $pageId <= 0
+                && $localeContext['locale_code'] === $localeContext['source_locale']
+                ? \Weline\Cms\Model\PageLocale::ORIGIN_SOURCE
+                : \Weline\Cms\Model\PageLocale::ORIGIN_MANUAL;
+        }
+        $sourceTitleHash = hash('sha256', $page->getTitle());
+        foreach ($localeTitles as $locale => $localizedTitle) {
+            $isCurrentLocale = $locale === $localeContext['locale_code'];
+            $isSourceLocale = $locale === $localeContext['source_locale'];
+            $localeService->upsertTitle(
+                $page,
+                $locale,
+                $localizedTitle,
+                $isCurrentLocale
+                    ? $titleOrigin
+                    : ($isSourceLocale
+                        ? \Weline\Cms\Model\PageLocale::ORIGIN_SOURCE
+                        : \Weline\Cms\Model\PageLocale::ORIGIN_MANUAL),
+                $isCurrentLocale && trim((string)($data['source_hash'] ?? '')) !== ''
+                    ? trim((string)$data['source_hash'])
+                    : ($isSourceLocale ? hash('sha256', $localizedTitle) : $sourceTitleHash),
+                $localeContext['supported_locales'],
+            );
+        }
+
         $this->clearThemeRuntimeCaches('cms_page_save_' . $page->getPageId());
         $this->dispatchPageChanged(
             $page,
             $this->resolvePageChangeAction($page, $previousData, $pageId <= 0),
             $previousData
+        );
+        $previous = clone $this->pageModel;
+        $previous->clearData()->setData($previousData);
+        ObjectManager::getInstance(CmsPageResourceChangePublisher::class)->publish(
+            $page,
+            $this->resolvePageChangeAction($page, $previousData, $pageId <= 0),
+            $previousData,
+            $this->buildPublicUrl($page),
+            $previousData !== [] && $previous->getIdentifier() !== '' ? $this->buildPublicUrl($previous) : '',
         );
 
         return $page;
@@ -253,7 +335,6 @@ class PageService
     public function createDraftPage(?string $scope = null, string $layoutOption = 'default', array $siteParams = []): Page
     {
         $scope = $this->normalizeScope($scope);
-        $suffix = date('YmdHis') . '-' . substr(bin2hex(random_bytes(4)), 0, 8);
         $group = $this->resolvePathGroupInput($siteParams);
         if ($group !== null) {
             $siteParams['website_id'] = $group->getWebsiteId();
@@ -277,7 +358,8 @@ class PageService
             'website_code' => $website['website_code'],
             'path_group' => $group->getPathGroup(),
             'path_group_alias' => $group->getAlias(),
-            'slug' => $suffix,
+            'slug' => 'page',
+            'slug_mode' => Page::SLUG_MODE_AUTO,
             'scope' => $scope,
             'status' => Page::STATUS_DRAFT,
         ]);
@@ -363,6 +445,13 @@ class PageService
 
     public function softDeletePage(int $pageId): Page
     {
+        $transactions = ObjectManager::getInstance(TransactionCoordinatorInterface::class);
+        if (!$transactions->isActive($this->pageModel->getConnection())) {
+            return $transactions->run(
+                $this->pageModel->getConnection(),
+                fn(): Page => $this->softDeletePage($pageId),
+            );
+        }
         $page = $this->getPageModel($pageId, true);
         if ($page === null) {
             throw new \InvalidArgumentException((string)__('CMS 页面不存在。'));
@@ -374,6 +463,15 @@ class PageService
         $page->save();
         $this->clearThemeRuntimeCaches('cms_page_delete_' . $page->getPageId());
         $this->dispatchPageChanged($page, 'delete', is_array($previousData) ? $previousData : []);
+        $previous = clone $this->pageModel;
+        $previous->clearData()->setData(is_array($previousData) ? $previousData : []);
+        ObjectManager::getInstance(CmsPageResourceChangePublisher::class)->publish(
+            $page,
+            'delete',
+            is_array($previousData) ? $previousData : [],
+            '',
+            $previous->getIdentifier() !== '' ? $this->buildPublicUrl($previous) : '',
+        );
 
         return $page;
     }
@@ -1734,10 +1832,8 @@ class PageService
     {
         $model = clone $this->pageModel;
         $query = $model->clearData()->reset()
-            ->where(Page::schema_fields_IDENTIFIER, $identifier);
-        if ($websiteId > 0) {
-            $query->where(Page::schema_fields_WEBSITE_ID, $websiteId);
-        }
+            ->where(Page::schema_fields_IDENTIFIER, $identifier)
+            ->where(Page::schema_fields_WEBSITE_ID, $websiteId);
         if ($currentPageId > 0) {
             $query->where(Page::schema_fields_ID, $currentPageId, '!=');
         }

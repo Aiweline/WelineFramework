@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Runtime;
 
+use Weline\Framework\Runtime\Resumable\TaskLivenessMode;
 use Weline\Framework\Runtime\Resumable\TaskPolicy;
 
 /** @internal Maps the persisted policy snapshot back to its immutable DTO. */
@@ -28,6 +29,7 @@ final class ResumableTaskPolicyHydrator
             eventCoalesceIntervalMilliseconds: self::positive($data, 'event_coalesce_interval_milliseconds', $defaults->eventCoalesceIntervalMilliseconds),
             eventCoalesceMaxBytes: self::positive($data, 'event_coalesce_max_bytes', $defaults->eventCoalesceMaxBytes),
             recoveryEnabled: array_key_exists('recovery_enabled', $data) ? (bool)$data['recovery_enabled'] : $defaults->recoveryEnabled,
+            livenessMode: TaskLivenessMode::tryFrom((string)($data['liveness_mode'] ?? '')) ?? $defaults->livenessMode,
         );
     }
 

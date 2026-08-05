@@ -8,7 +8,7 @@ use Weline\DataTable\Helper\TableContext;
 use Weline\DataTable\Taglib\Field;
 use Weline\DataTable\Taglib\Form;
 use Weline\DataTable\Taglib\Table;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class TaglibFrontendContractTest extends TestCore
 {

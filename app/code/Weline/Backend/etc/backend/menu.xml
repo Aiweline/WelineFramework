@@ -21,6 +21,47 @@
         <menu source="Weline_Backend::shipping_group" name="shipping_group" title="配送管理" icon="mdi mdi-truck-delivery-outline" order="500"/>
         <menu source="Weline_Backend::payment_group" name="payment_group" title="支付管理" icon="mdi mdi-credit-card-outline" order="600"/>
         <menu source="Weline_Backend::currency_group" name="currency_group" title="货币管理" icon="mdi mdi-currency-usd" order="700"/>
+        <menu source="Weline_Backend::contact" name="contact" title="联系人"
+              action="system/backend/contact/index" parent="Weline_Backend::customer_group"
+              icon="mdi mdi-account-box-outline" order="20"/>
+        <menu source="Weline_Backend::commerce:catalog:group"
+              name="commerce_catalog_group"
+              title="商品与目录"
+              icon="mdi mdi-package-variant-closed"
+              order="800"/>
+        <menu source="Weline_Backend::commerce:inventory:group"
+              name="commerce_inventory_group"
+              title="库存与仓储"
+              icon="mdi mdi-warehouse"
+              order="810"/>
+        <menu source="Weline_Backend::commerce:tax-search:group"
+              name="commerce_tax_search_group"
+              title="税务与搜索"
+              icon="mdi mdi-file-search-outline"
+              order="820"/>
+        <menu source="Weline_Backend::commerce:partner:group"
+              name="commerce_partner_group"
+              title="合作伙伴"
+              icon="mdi mdi-account-switch-outline"
+              order="830"/>
+        <menu source="Weline_Backend::commerce:operations:group"
+              name="commerce_operations_group"
+              title="运营工具"
+              icon="mdi mdi-monitor-dashboard"
+              order="840">
+            <menu source="Weline_Backend::commerce:operations:migration-diagnostics"
+                  name="commerce_migration_diagnostics"
+                  title="迁移诊断"
+                  action="system/backend/operations-diagnostics/migration"
+                  icon="mdi mdi-database-search-outline"
+                  order="90"/>
+            <menu source="Weline_Backend::commerce:operations:release-diagnostics"
+                  name="commerce_release_diagnostics"
+                  title="发布诊断"
+                  action="system/backend/operations-diagnostics/release"
+                  icon="mdi mdi-rocket-launch-outline"
+                  order="100"/>
+        </menu>
     </menu>
     
     <!-- ==================== 4. 系统管理 ==================== -->
@@ -39,7 +80,6 @@
             <menu source="Weline_Backend::notification_settings" name="notification_settings" title="消息通知" icon="mdi mdi-bell-outline" order="50">
                 <menu source="Weline_Backend::notification" name="notification" title="通知中心" action="*/backend/notification" icon="mdi mdi-bell-badge-outline" order="5"/>
                 <menu source="Weline_Backend::notification_subscription" name="notification_subscription" title="我的订阅" action="*/backend/notificationsubscription" icon="mdi mdi-bell-cog-outline" order="10"/>
-                <menu source="Weline_Backend::contact" name="contact" title="联系人" action="*/backend/contact" icon="mdi mdi-account-box-outline" order="20"/>
                 <menu source="Weline_Backend::notification_channel" name="notification_channel" title="渠道配置" action="*/backend/notificationchannel" icon="mdi mdi-tune-variant" order="30"/>
             </menu>
         </menu>

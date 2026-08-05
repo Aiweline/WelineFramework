@@ -4,9 +4,20 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Extends\Module\Weline_Framework\Query;
 
+use Weline\Cart\Api\CheckoutCartSnapshotInterface;
+use Weline\Cart\Service\CartV2ConflictException;
+use Weline\Cart\Service\CartV2Service;
+use Weline\Checkout\Service\CheckoutGroupSubmitService;
 use Weline\Checkout\Service\CheckoutIdentityService;
 use Weline\Checkout\Service\CheckoutService;
+use Weline\Checkout\Service\CheckoutV2ConflictException;
 use Weline\Checkout\Service\PaymentService;
+use Weline\Customer\Api\Auth\CustomerAccountFacadeInterface;
+use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 
@@ -15,12 +26,21 @@ use Weline\Framework\Session\SessionFactory;
  */
 class CheckoutQueryProvider implements QueryProviderInterface
 {
+    private ?CheckoutCartSnapshotInterface $checkoutCartSnapshots;
+
+    private ?CustomerAccountFacadeInterface $customerAccounts;
+
     public function __construct(
         private readonly CheckoutService $checkoutService,
         private readonly PaymentService $paymentService,
         private readonly SessionFactory $sessionFactory,
         private readonly CheckoutIdentityService $checkoutIdentityService,
+        private readonly CheckoutGroupSubmitService $checkoutGroupSubmitService,
+        ?CheckoutCartSnapshotInterface $checkoutCartSnapshots = null,
+        ?CustomerAccountFacadeInterface $customerAccounts = null,
     ) {
+        $this->checkoutCartSnapshots = $checkoutCartSnapshots;
+        $this->customerAccounts = $customerAccounts;
     }
 
     public function getProviderName(): string
@@ -33,8 +53,207 @@ class CheckoutQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'getData' => $this->getData($params),
             'placeOrder', 'createOrder' => $this->placeOrder($params),
+            'freezeQuote' => $this->freezeQuote($params),
+            'submitV2' => $this->submitV2($params),
             default => throw new \InvalidArgumentException((string)__('结账接口不支持该操作：%{1}', $operation)),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function freezeQuote(array $params): array
+    {
+        try {
+            $address = \is_array($params['address'] ?? null) ? $params['address'] : [];
+            $clientHints = \is_array($params['client_hints'] ?? null) ? $params['client_hints'] : [];
+            // Allow top-level money fields as client hints for rejection tests.
+            foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'grand_total', 'grand_total_minor'] as $moneyKey) {
+                if (\array_key_exists($moneyKey, $params) && !\array_key_exists($moneyKey, $clientHints)) {
+                    $clientHints[$moneyKey] = $params[$moneyKey];
+                }
+            }
+            foreach (['lines', 'scope', 'website_id', 'store_id', 'currency', 'config_version', 'customer_id'] as $forgedFact) {
+                if (\array_key_exists($forgedFact, $params)) {
+                    $clientHints[$forgedFact] = $params[$forgedFact];
+                }
+            }
+
+            $scopeIdentity = $this->currentScope();
+            $customerId = $this->currentCustomerId();
+            $guestToken = $customerId === null
+                ? trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE))
+                : null;
+            $cart = $this->cartSnapshots()->freeze($scopeIdentity, $guestToken, $customerId);
+            $currency = strtoupper(trim((string)($cart['currency'] ?? '')));
+            $runtimeCurrency = strtoupper(trim(RequestContext::getWelineUserCurrency()));
+            if ($runtimeCurrency !== '' && $currency !== $runtimeCurrency) {
+                throw new CheckoutV2ConflictException(
+                    'checkout_cart_currency_conflict',
+                    __('购物车币种与当前请求币种不一致'),
+                    ['cart_currency' => $currency, 'runtime_currency' => $runtimeCurrency],
+                );
+            }
+            $scope = $scopeIdentity->toArray() + [
+                'store_id' => RequestContext::getWelineStoreId(),
+                'channel_id' => RequestContext::getWelineChannelId(),
+            ];
+            $payload = $this->checkoutGroupSubmitService->freezeAndQuote(
+                lines: $cart['lines'],
+                address: $address,
+                scope: $scope,
+                serviceCode: (string)($params['service_code'] ?? ''),
+                currency: $currency,
+                configVersion: '',
+                clientHints: $clientHints,
+                customerId: $customerId,
+                cartHash: (string)$cart['cart_hash'],
+            );
+
+            return [
+                'success' => true,
+                'quote_token' => (string)($payload['quote_token'] ?? ''),
+                'config_version' => (string)($payload['config_version'] ?? ''),
+                'currency' => (string)($payload['currency'] ?? ''),
+                'data' => $payload,
+            ];
+        } catch (CartV2ConflictException|CheckoutV2ConflictException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode(),
+                'context' => $e->context(),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => 'checkout_freeze_failed',
+            ];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function submitV2(array $params): array
+    {
+        try {
+            $clientHints = \is_array($params['client_hints'] ?? null) ? $params['client_hints'] : [];
+            foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'grand_total', 'grand_total_minor'] as $moneyKey) {
+                if (\array_key_exists($moneyKey, $params) && !\array_key_exists($moneyKey, $clientHints)) {
+                    $clientHints[$moneyKey] = $params[$moneyKey];
+                }
+            }
+            $expectedConfig = \array_key_exists('expected_config_version', $params)
+                ? (string)$params['expected_config_version']
+                : null;
+            $expectedTaxHash = \array_key_exists('expected_tax_rule_set_hash', $params)
+                ? (string)$params['expected_tax_rule_set_hash']
+                : null;
+            $result = $this->checkoutGroupSubmitService->submit(
+                quoteToken: (string)($params['quote_token'] ?? ''),
+                idempotencyKey: (string)($params['idempotency_key'] ?? ('idem_' . bin2hex(random_bytes(8)))),
+                clientHints: $clientHints,
+                customerId: $this->currentCustomerId(),
+                expectedConfigVersion: $expectedConfig,
+                expectedTaxRuleSetHash: $expectedTaxHash,
+            );
+
+            // The Order/CheckoutSession transaction is already committed at
+            // this point. Cart cleanup is a best-effort, identity-bound
+            // follow-up and must never turn a successfully created order into
+            // a client-visible submit failure.
+            try {
+                w_query('cart', 'clearV2');
+            } catch (\Throwable) {
+            }
+
+            return [
+                'success' => true,
+                'checkout_group_uuid' => $result->checkoutGroupUuid,
+                'order_uuids' => $result->orderUuids,
+                'replayed' => $result->replayed,
+                'data' => $result->toArray(),
+            ];
+        } catch (CheckoutV2ConflictException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode(),
+                'context' => $e->context(),
+            ];
+        } catch (\Weline\Order\Api\OrderFacadeConflictException $e) {
+            // OrderFacade 冲突（idempotency hash / writer gate 等）原样透出错误码
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode(),
+                'context' => $e->context(),
+            ];
+        } catch (\Weline\Inventory\Api\InventoryConflictException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode(),
+                'context' => $e->context(),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => 'checkout_submit_v2_failed',
+            ];
+        }
+    }
+
+    private function currentScope(): ScopeIdentity
+    {
+        $scope = RequestContext::scopeIdentity();
+        if (!$scope instanceof ScopeIdentity || $scope->isGlobal()) {
+            throw new CheckoutV2ConflictException(
+                'checkout_scope_unavailable',
+                __('当前请求没有可结账的 Storefront Scope'),
+            );
+        }
+
+        return $scope;
+    }
+
+    private function currentCustomerId(): ?int
+    {
+        $identity = $this->customerAccounts()->current();
+        $customerId = (int)($identity?->getId() ?? 0);
+
+        return $customerId > 0 ? $customerId : null;
+    }
+
+    private function cartSnapshots(): CheckoutCartSnapshotInterface
+    {
+        if ($this->checkoutCartSnapshots instanceof CheckoutCartSnapshotInterface) {
+            return $this->checkoutCartSnapshots;
+        }
+        $resolved = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CheckoutCartSnapshotInterface::class);
+        if (!$resolved instanceof CheckoutCartSnapshotInterface) {
+            throw new \RuntimeException('checkout_cart_snapshot_provider_missing');
+        }
+        return $this->checkoutCartSnapshots = $resolved;
+    }
+
+    private function customerAccounts(): CustomerAccountFacadeInterface
+    {
+        if ($this->customerAccounts instanceof CustomerAccountFacadeInterface) {
+            return $this->customerAccounts;
+        }
+        $resolved = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CustomerAccountFacadeInterface::class);
+        if (!$resolved instanceof CustomerAccountFacadeInterface) {
+            throw new \RuntimeException('checkout_customer_account_provider_missing');
+        }
+        return $this->customerAccounts = $resolved;
     }
 
     /**
@@ -51,6 +270,12 @@ class CheckoutQueryProvider implements QueryProviderInterface
         $cart = $this->loadCartSummary();
         $items = \is_array($cart['items'] ?? null) ? $cart['items'] : [];
         $currency = (string)($cart['currency'] ?? 'CNY');
+        $shippingMethods = $this->loadShippingMethods($shippingAddress);
+        $paymentMethods = $this->loadPaymentMethods($params + [
+            'currency' => $currency,
+            'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
+        ]);
+        $html = $this->htmlRenderer();
 
         return $this->ok((string)__('结账信息已加载'), [
             'currency' => $currency,
@@ -69,12 +294,32 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'item_count' => (int)($cart['item_count'] ?? \count($items)),
             ],
             'items' => $items,
-            'shipping_methods' => $this->loadShippingMethods($shippingAddress),
-            'payment_methods' => $this->loadPaymentMethods($params + [
-                'currency' => $currency,
-                'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
-            ]),
+            'shipping_methods' => $shippingMethods,
+            'payment_methods' => $paymentMethods,
+            // P2E-003：服务端 HTML；JS 只注入，不 createElement 拼商品/选项 DOM
+            'items_html' => $html->renderItems($items, $currency, (string)__('购物车为空，请先加入商品。')),
+            'shipping_methods_html' => $html->renderMethodOptions(
+                $shippingMethods,
+                'shipping_method',
+                $currency,
+                (string)__('暂无可用配送方式。'),
+                showPrice: true,
+            ),
+            'payment_methods_html' => $html->renderMethodOptions(
+                $paymentMethods,
+                'payment_method',
+                $currency,
+                (string)__('暂无可用支付方式。'),
+                showPrice: false,
+            ),
         ]);
+    }
+
+    private function htmlRenderer(): \Weline\Checkout\Service\CheckoutHtmlRenderer
+    {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Checkout\Service\CheckoutHtmlRenderer::class
+        );
     }
 
     /**
@@ -107,6 +352,20 @@ class CheckoutQueryProvider implements QueryProviderInterface
             throw new \RuntimeException((string)__('购物车为空，请先加入商品。'));
         }
 
+        $currency = (string)($cart['currency'] ?? 'CNY');
+        $sellability = $this->assertCartItemsSellable($items, $params + ['currency' => $currency]);
+        if (($sellability['ok'] ?? true) === false) {
+            $errorCode = (string)($sellability['error_code'] ?? 'price_not_sellable');
+
+            return [
+                'success' => false,
+                'message' => (string)($sellability['message'] ?? __('该商品暂不可售。')),
+                'error_code' => $errorCode,
+                'code' => $errorCode,
+                'error_detail' => \is_array($sellability['detail'] ?? null) ? $sellability['detail'] : [],
+            ];
+        }
+
         $shippingAmount = $this->resolveShippingAmount($shippingMethod, $shippingAddress);
         $orderItems = [];
         foreach ($items as $item) {
@@ -114,6 +373,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             $price = (float)($item['price'] ?? 0);
             $orderItems[] = [
                 'product_id' => (int)($item['product_id'] ?? $item['id'] ?? 0),
+                'offer_id' => (int)($item['offer_id'] ?? 0),
                 'product_name' => (string)($item['name'] ?? $item['product_name'] ?? ''),
                 'sku' => (string)($item['sku'] ?? ''),
                 'quantity' => $qty,
@@ -137,7 +397,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'tax_amount' => 0.0,
             'discount_amount' => 0.0,
             'payment_method' => $paymentMethod,
-            'currency' => (string)($cart['currency'] ?? 'CNY'),
+            'currency' => $currency,
         ]);
 
         $orderId = (int)$order->getId();
@@ -185,30 +445,38 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function loadCartSummary(): array
     {
-        try {
-            $result = w_query('cart', 'summary');
-        } catch (\Throwable) {
-            return [
-                'items' => [],
-                'subtotal' => 0.0,
-                'grand_total' => 0.0,
-                'currency' => 'CNY',
-                'is_empty' => true,
-                'item_count' => 0,
-            ];
+        return ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPageViewModel::class)
+            ->currentCart();
+    }
+
+    /**
+     * Price cleared / missing 可售闸门（复用 Cart API；无 Offer 放行）。
+     *
+     * @param list<array<string, mixed>> $items
+     * @param array<string, mixed> $scopeParams
+     * @return array{ok:bool,error_code?:string,message?:string,detail?:array<string,mixed>}
+     */
+    private function assertCartItemsSellable(array $items, array $scopeParams): array
+    {
+        /** @var \Weline\Cart\Api\CartPriceSellabilityGate $gate */
+        $gate = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Cart\Api\CartPriceSellabilityGate::class
+        );
+
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $result = $gate->assertOrAllow($scopeParams + [
+                'product_id' => (int)($item['product_id'] ?? $item['id'] ?? 0),
+                'offer_id' => (int)($item['offer_id'] ?? 0),
+            ]);
+            if (($result['ok'] ?? true) === false) {
+                return $result;
+            }
         }
 
-        if (!\is_array($result)) {
-            return [
-                'items' => [],
-                'subtotal' => 0.0,
-                'is_empty' => true,
-            ];
-        }
-
-        $nested = \is_array($result['data'] ?? null) ? $result['data'] : [];
-
-        return $nested + $result;
+        return ['ok' => true];
     }
 
     /**
@@ -440,6 +708,38 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Alias of placeOrder',
+                ],
+                [
+                    'name' => 'freezeQuote',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        'address' => ['type' => 'array', 'required' => false],
+                        'service_code' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'client_hints' => ['type' => 'array', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Freeze the server-owned current Cart and create one Shipping Quote session',
+                ],
+                [
+                    'name' => 'submitV2',
+                    'frontend' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'quote_token' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'idempotency_key' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'expected_config_version' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'expected_tax_rule_set_hash' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                        'client_hints' => ['type' => 'array', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Submit frozen Checkout V2 quote (config version must match)',
                 ],
             ],
         ];

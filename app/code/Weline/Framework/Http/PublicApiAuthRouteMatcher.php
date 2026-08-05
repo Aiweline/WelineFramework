@@ -81,6 +81,7 @@ class PublicApiAuthRouteMatcher
     private const GUEST_FRONTEND_PATH_PATTERNS = [
         'visitor/rest/v1/statistics',
         'visitor/rest/v1/analytics',
+        'visitor/rest/v1/panel',
         'api/rest/v1/weshop/checkout/methods',
         'api/rest/v1/weshop/cart/add',
         'api/rest/v1/weshop/cart/options',

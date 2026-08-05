@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\Setup\Db\Service;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\Setup\Db\Service\FieldBackupService;
 use Weline\Framework\Database\DbManager;
 use Weline\Framework\Output\Cli\Printing;

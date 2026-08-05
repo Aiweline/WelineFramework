@@ -255,7 +255,7 @@ if ($isFakeMode) {
             </button>
         </div>
 
-        <section class="payment-methods__result" data-payment-result hidden>
+        <section class="payment-methods__result" data-payment-result hidden weline-code="payment.payment_methods.section_1">
             <div class="payment-methods__result-status" data-payment-result-title></div>
             <dl class="payment-methods__result-list">
                 <div>
@@ -278,7 +278,7 @@ if ($isFakeMode) {
             <p data-payment-result-message></p>
         </section>
 
-        <section class="payment-methods__more">
+        <section class="payment-methods__more" weline-code="payment.payment_methods.section_2">
             <h4><?= __('More') ?></h4>
             <div class="payment-methods__asset-grid">
                 <?php foreach ($fakeUnavailableItems as $item): ?>

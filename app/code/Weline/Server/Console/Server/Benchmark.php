@@ -19,6 +19,7 @@ use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Edge\Gateway\GatewayHostManager;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
+use Weline\Server\Service\Edge\Gateway\GatewayRuntimeServingProjection;
 use Weline\Server\Service\Edge\Gateway\GatewayStartupDecision;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 use Weline\Server\Service\Runtime\HttpProtocolCapabilityProbe;
@@ -179,7 +180,7 @@ class Benchmark extends CommandAbstract
         $benchmarkContext['http_version_auto_strategy'] = $httpVersion !== 'auto'
             ? 'explicit'
             : match ($benchmarkTargetSurface) {
-                'public_edge' => 'select only a Managed Nginx protocol with live runtime verification, then require the observed response version to match',
+                'public_edge' => 'select only a shared-gateway or project-managed Nginx protocol with live runtime verification, then require the observed response version to match',
                 'wls_endpoint' => (string)($serverConfig['edge_adapter'] ?? '') === 'wls'
                     ? 'select verified in-process pure WLS HTTP/2, then fall back to HTTP/1.1'
                     : 'use HTTP/1.1 for the explicitly selected internal Nginx backend',
@@ -721,6 +722,27 @@ class Benchmark extends CommandAbstract
         $publicMatches = [];
         $backendMatches = [];
         foreach ($runningInstances as $name => $target) {
+            if ((string)($target['target_endpoint_role'] ?? '') === 'host_gateway_public'
+                && (int)($target['port'] ?? 0) === $port
+                && (bool)($target['ssl'] ?? false)
+                && $this->endpointHostMatchesTarget(
+                    (string)($target['host'] ?? ''),
+                    $host,
+                )
+                && ($authorityHost === null
+                    || \strcasecmp(
+                        $authorityHost,
+                        (string)($target['authority_host'] ?? ''),
+                    ) === 0)
+            ) {
+                $candidate = $target;
+                $candidate['host'] = $host;
+                $candidate['port'] = $port;
+                $candidate['ssl'] = true;
+                $candidate['target_surface'] = 'public_edge';
+                $candidate['target_endpoint_role'] = 'host_gateway_public';
+                $publicMatches[$name] = $candidate;
+            }
             $managed = \is_array($target['managed_nginx'] ?? null) ? $target['managed_nginx'] : [];
             foreach ([
                 [
@@ -732,6 +754,11 @@ class Benchmark extends CommandAbstract
                 if ($publicEndpoint['port'] !== $port
                     || ($sslRequested && !$publicEndpoint['ssl'])
                     || !$this->endpointHostMatchesTarget((string)($target['host'] ?? ''), $host)
+                    || ($authorityHost !== null
+                        && \strcasecmp(
+                            $authorityHost,
+                            (string)($target['authority_host'] ?? ''),
+                        ) !== 0)
                 ) {
                     continue;
                 }
@@ -847,7 +874,11 @@ class Benchmark extends CommandAbstract
             }
             $this->printer->note(__('手动端口唯一匹配到运行实例 [%{1}] 的 %{2}，报告将使用该实例的 schema v%{3} 运行时元数据。', [
                 $name,
-                $publicMatches !== [] ? __('Managed Nginx 公网入口') : __('内部 HTTP/1.1 回源'),
+                $publicMatches !== []
+                    ? ((string)($target['target_endpoint_role'] ?? '') === 'host_gateway_public'
+                        ? __('WLS 2.0 网关公网入口')
+                        : __('Managed Nginx 公网入口'))
+                    : __('内部 HTTP/1.1 回源'),
                 (string)($target['runtime_metadata']['endpoint_schema_version'] ?? 0),
             ]));
             return $target;
@@ -955,7 +986,7 @@ class Benchmark extends CommandAbstract
         $gatewayRuntime = \is_array($endpoint['gateway'] ?? null)
             ? $endpoint['gateway']
             : [];
-        if ((string)($gatewayRuntime['mode'] ?? '') === 'gateway') {
+        if ($this->runtimeGatewayIsServing($endpoint)) {
             $publicTarget = $this->resolveHostGatewayPublicTarget(
                 $name,
                 $endpointHost,
@@ -1001,22 +1032,44 @@ class Benchmark extends CommandAbstract
                 ],
             ];
         }
+        $fallbackEndpoint = $this->runtimeFallbackServingEndpoint($endpoint);
+        if ($fallbackEndpoint !== null) {
+            $connectHost = $this->normalizeConnectHost((string)$fallbackEndpoint['connect_host']);
+            $authorityHost = (string)$fallbackEndpoint['authority_host'];
+            $fallbackHttpsPort = (int)$fallbackEndpoint['port'];
+            return [
+                'host' => $connectHost,
+                'authority_host' => $authorityHost,
+                'port' => $fallbackHttpsPort,
+                'ssl' => true,
+                'target_surface' => 'wls_endpoint',
+                'target_endpoint_role' => 'gateway_fallback_public',
+                'explicit_transport_resolve' => \strcasecmp($authorityHost, $connectHost) !== 0,
+                'endpoint_host' => $connectHost,
+                'instance' => $name,
+                'worker_count' => (int)($endpoint['count'] ?? $endpoint['worker_count'] ?? 0),
+                'runtime_metadata' => $runtimeMetadata,
+                'edge_adapter' => $edgeAdapter,
+                'http_protocol_selection' => $selection->toArray(),
+                'managed_nginx' => [],
+                'wls_backend' => [
+                    'host' => $connectHost,
+                    'port' => $fallbackHttpsPort,
+                    'ssl' => true,
+                ],
+            ];
+        }
         if ($edgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS) {
-            $connectHost = $this->normalizeConnectHost($endpointHost);
-            $authorityHost = $this->normalizeAuthorityHost(
-                (string)($endpoint['public_host'] ?? $endpoint['ssl_domain'] ?? ''),
-                $connectHost,
+            $pureWlsEndpoint = $this->runtimeExplicitPureWlsServingEndpoint($endpoint);
+            if ($pureWlsEndpoint === null) {
+                return null;
+            }
+            $connectHost = $this->normalizeConnectHost(
+                (string)$pureWlsEndpoint['connect_host'],
             );
-            $fallbackHttpsPort = (string)($gatewayRuntime['fallback_state'] ?? '')
-                === 'DEGRADED_WLS'
-                ? (int)($gatewayRuntime['public_https'] ?? 0)
-                : 0;
-            $sslEnabled = $fallbackHttpsPort > 0
-                ? true
-                : (bool)($endpoint['ssl_enabled'] ?? false);
-            $publicPort = $fallbackHttpsPort >= 1 && $fallbackHttpsPort <= 65535
-                ? $fallbackHttpsPort
-                : $port;
+            $authorityHost = (string)$pureWlsEndpoint['authority_host'];
+            $sslEnabled = (bool)$pureWlsEndpoint['https'];
+            $publicPort = (int)$pureWlsEndpoint['port'];
 
             return [
                 'host' => $connectHost,
@@ -1024,9 +1077,7 @@ class Benchmark extends CommandAbstract
                 'port' => $publicPort,
                 'ssl' => $sslEnabled,
                 'target_surface' => 'wls_endpoint',
-                'target_endpoint_role' => $fallbackHttpsPort > 0
-                    ? 'gateway_fallback_public'
-                    : 'pure_wls_public',
+                'target_endpoint_role' => 'pure_wls_public',
                 'explicit_transport_resolve' => \strcasecmp($authorityHost, $connectHost) !== 0,
                 'endpoint_host' => $connectHost,
                 'instance' => $name,
@@ -1041,6 +1092,11 @@ class Benchmark extends CommandAbstract
                     'ssl' => $sslEnabled,
                 ],
             ];
+        }
+        if (!GatewayRuntimeServingProjection::isExplicitLegacyManagedNginx($endpoint)) {
+            // A gateway tenant with no current authenticated serving projection
+            // is unknown, not a legacy project Nginx or a private backend.
+            return null;
         }
         if ((bool)($endpoint['ssl_enabled'] ?? false)) {
             return null;
@@ -1102,7 +1158,10 @@ class Benchmark extends CommandAbstract
         $launchId = \strtolower(\trim((string)($gatewayRuntime['launch_id'] ?? '')));
         $instanceGeneration = (int)($gatewayRuntime['instance_generation'] ?? 0);
         if (!\hash_equals(GatewayPaths::PROTOCOL, (string)($gatewayRuntime['protocol'] ?? ''))
-            || \preg_match('/\A[a-f0-9-]{36}\z/D', $projectUuid) !== 1
+            || \preg_match(
+                '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                $projectUuid,
+            ) !== 1
             || !\hash_equals($instanceName, $gatewayInstance)
             || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayEpoch) !== 1
             || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
@@ -1159,6 +1218,30 @@ class Benchmark extends CommandAbstract
         return (new GatewayHostManager())->status(2.0);
     }
 
+    /** @param array<string,mixed> $endpoint */
+    protected function runtimeGatewayIsServing(array $endpoint): bool
+    {
+        return GatewayRuntimeServingProjection::gatewayIsServing($endpoint);
+    }
+
+    /**
+     * @param array<string,mixed> $endpoint
+     * @return array{bind_host:string,connect_host:string,authority_host:string,port:int}|null
+     */
+    protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
+    {
+        return GatewayRuntimeServingProjection::fallbackServingEndpoint($endpoint);
+    }
+
+    /**
+     * @param array<string,mixed> $endpoint
+     * @return array{origin:string,bind_host:string,connect_host:string,authority_host:string,port:int,https:bool}|null
+     */
+    protected function runtimeExplicitPureWlsServingEndpoint(array $endpoint): ?array
+    {
+        return GatewayRuntimeServingProjection::explicitPureWlsServingEndpoint($endpoint);
+    }
+
     /**
      * @param array<string,mixed> $status
      * @return array<string,mixed>|null
@@ -1175,8 +1258,22 @@ class Benchmark extends CommandAbstract
         $statusProject = \strtolower(\trim((string)($status['project_uuid'] ?? '')));
         $statusEpoch = \strtolower(\trim((string)($status['epoch'] ?? '')));
         $publicHttps = (int)($status['public_https'] ?? 0);
+        $instances = $status['instances'] ?? null;
+        $routes = $status['active_routes'] ?? null;
+        $activeConfigDigest = \strtolower(\trim((string)(
+            $status['active_config_digest'] ?? ''
+        )));
+        $requestDigest = \strtolower(\trim((string)(
+            $status['request_digest'] ?? ''
+        )));
+        $nonCertificateDigest = \strtolower(\trim((string)(
+            $status['non_certificate_desired_digest'] ?? ''
+        )));
         if (!(bool)($status['ok'] ?? false)
             || !(bool)($status['ready'] ?? false)
+            || !(bool)($status['project_ready'] ?? false)
+            || (string)($status['state'] ?? '') === 'DATA_PLANE_DOWN'
+            || ($status['publication_exact'] ?? false) !== true
             || !(bool)($status['release_ready'] ?? false)
             || !(bool)($status['broker_ready'] ?? false)
             || !(bool)($status['supervisor_ready'] ?? false)
@@ -1188,28 +1285,48 @@ class Benchmark extends CommandAbstract
             || !\hash_equals(GatewayPaths::SECURITY_PROFILE, (string)($status['security_profile'] ?? ''))
             || !\hash_equals($projectUuid, $statusProject)
             || !\hash_equals($gatewayEpoch, $statusEpoch)
+            || (int)($status['active_config_generation'] ?? 0) < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $activeConfigDigest) !== 1
+            || (int)($status['project_generation'] ?? 0) < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $requestDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $nonCertificateDigest) !== 1
             || $publicHttps < 1
             || $publicHttps > 65535
+            || !\is_array($instances)
+            || !\array_is_list($instances)
+            || \count($instances) > 64
+            || !\is_array($routes)
+            || !\array_is_list($routes)
+            || \count($routes) > 256
         ) {
             return null;
         }
 
-        $instanceActive = false;
-        foreach ((array)($status['instances'] ?? []) as $instance) {
+        $instanceMatches = [];
+        foreach ($instances as $instance) {
             if (!\is_array($instance)
                 || !\hash_equals($instanceName, (string)($instance['instance_id'] ?? ''))
             ) {
                 continue;
             }
-            $instanceActive = (string)($instance['status'] ?? '') === 'ACTIVE'
-                && (int)($instance['generation'] ?? 0) === $instanceGeneration;
-            break;
+            $instanceMatches[] = $instance;
         }
-        if (!$instanceActive) {
+        $activeInstance = $instanceMatches[0] ?? null;
+        if (\count($instanceMatches) !== 1
+            || !\is_array($activeInstance)
+            || (string)($activeInstance['status'] ?? '') !== 'ACTIVE'
+            || (int)($activeInstance['generation'] ?? 0) !== $instanceGeneration
+            || !\hash_equals(
+                $launchId,
+                \strtolower(\trim((string)($activeInstance['launch_id'] ?? ''))),
+            )
+            || (int)($activeInstance['master_epoch'] ?? 0) < 1
+        ) {
             return null;
         }
 
-        foreach ((array)($status['routes'] ?? []) as $route) {
+        $routeObservations = [];
+        foreach ($routes as $route) {
             if (!\is_array($route)
                 || (string)($route['status'] ?? '') !== 'ACTIVE'
                 || !\hash_equals($projectUuid, \strtolower((string)($route['project_uuid'] ?? '')))
@@ -1237,6 +1354,8 @@ class Benchmark extends CommandAbstract
             if ((int)($identity['generation'] ?? 0) !== $instanceGeneration
                 || !\hash_equals($launchId, \strtolower((string)($identity['launch_id'] ?? '')))
                 || (int)($identity['master_epoch'] ?? 0) < 1
+                || (int)$identity['master_epoch']
+                    !== (int)$activeInstance['master_epoch']
                 || !(bool)($certificate['valid'] ?? false)
                 || (int)($certificate['generation'] ?? 0) < 1
                 || \preg_match('/\A[a-f0-9]{64}\z/D', $certificateDigest) !== 1
@@ -1246,13 +1365,18 @@ class Benchmark extends CommandAbstract
                 continue;
             }
 
-            return [
+            $routeObservations[] = [
                 'protocol' => GatewayPaths::PROTOCOL,
                 'implementation_level' => GatewayPaths::IMPLEMENTATION_LEVEL,
                 'security_profile' => GatewayPaths::SECURITY_PROFILE,
                 'epoch' => $statusEpoch,
                 'gateway_generation' => (int)($status['generation'] ?? 0),
+                'active_config_generation' => (int)$status['active_config_generation'],
+                'active_config_digest' => $activeConfigDigest,
                 'project_uuid' => $projectUuid,
+                'project_generation' => (int)$status['project_generation'],
+                'request_digest' => $requestDigest,
+                'non_certificate_desired_digest' => $nonCertificateDigest,
                 'instance_id' => $instanceName,
                 'instance_generation' => $instanceGeneration,
                 'launch_id' => $launchId,
@@ -1266,7 +1390,9 @@ class Benchmark extends CommandAbstract
             ];
         }
 
-        return null;
+        return \count($routeObservations) === 1
+            ? $routeObservations[0]
+            : null;
     }
 
     private function gatewayDomainCoversAuthority(string $domain, string $authorityHost): bool
@@ -1546,7 +1672,12 @@ class Benchmark extends CommandAbstract
             'implementation_level',
             'security_profile',
             'epoch',
+            'active_config_generation',
+            'active_config_digest',
             'project_uuid',
+            'project_generation',
+            'request_digest',
+            'non_certificate_desired_digest',
             'instance_id',
             'instance_generation',
             'launch_id',
@@ -3849,7 +3980,6 @@ class Benchmark extends CommandAbstract
             }
         }
         if ($endpointPolicyBound
-            && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
             && $requestedTargetSurface === 'public_edge'
             && $targetHostGateway !== []
         ) {
@@ -3869,6 +3999,14 @@ class Benchmark extends CommandAbstract
                     'Host gateway identity or active project route changed while the benchmark target was being bound';
             }
         }
+        $managedNginxTarget = $endpointPolicyBound
+            && $endpointEdgeAdapter
+                === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+            && $requestedTargetSurface === 'public_edge'
+            && $targetHostGateway === [];
+        $hostGatewayTarget = $endpointPolicyBound
+            && $requestedTargetSurface === 'public_edge'
+            && $targetHostGateway !== [];
         $httpProtocolCapabilities = (new HttpProtocolCapabilityProbe())->snapshot(
             $endpointEdgeValid ? $endpointEdgeAdapter : null,
             $endpointSelection,
@@ -3994,41 +4132,32 @@ class Benchmark extends CommandAbstract
             'http_default_fallback' => \array_slice($verifiedTargetProtocols, 1),
             'http3_data_plane_enabled' => $endpointPolicyBound
                 && $requestedTargetSurface === 'public_edge'
-                && (bool)($managedNginx['http3_runtime_verified'] ?? false),
+                && ((bool)($managedNginx['http3_runtime_verified'] ?? false)
+                    || (bool)($hostGatewayEdge['http3_runtime_verified'] ?? false)),
             'managed_nginx_generation_required' =>
-                $endpointPolicyBound
-                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-                && $requestedTargetSurface === 'public_edge'
-                && $targetHostGateway === [],
+                $managedNginxTarget,
             'managed_nginx_expected_generation' =>
-                $endpointPolicyBound
-                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-                && $requestedTargetSurface === 'public_edge'
-                && $targetHostGateway === []
+                $managedNginxTarget
                     ? (string)($targetManagedNginx['owner_config_generation'] ?? '')
                     : '',
             '_managed_nginx_owner_observation' =>
-                $endpointPolicyBound
-                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-                && $requestedTargetSurface === 'public_edge'
-                && $targetHostGateway === []
+                $managedNginxTarget
                     ? $targetManagedNginx : [],
             'host_gateway_identity_required' =>
-                $endpointPolicyBound
-                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-                && $requestedTargetSurface === 'public_edge'
-                && $targetHostGateway !== [],
+                $hostGatewayTarget,
             '_host_gateway_observation' =>
-                $endpointPolicyBound
-                && $endpointEdgeAdapter === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
-                && $requestedTargetSurface === 'public_edge'
+                $hostGatewayTarget
                     ? $targetHostGateway : [],
-            'http3_data_plane_reason' => $endpointEdgeAdapter
-                === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
-                    ? 'Pure WLS HTTP/3 is unavailable; use managed Nginx.'
+            'http3_data_plane_reason' => $hostGatewayTarget
+                ? (string)($targetPolicy['http3_reason']
+                    ?? 'Host gateway HTTP/3 is not runtime verified.')
+                : ($endpointEdgeAdapter
+                    === \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_WLS
+                    ? 'Pure WLS HTTP/3 is unavailable; use a gateway Nginx edge.'
                     : ($requestedTargetSurface === 'public_edge'
-                        ? (string)($targetPolicy['http3_reason'] ?? 'Managed Nginx HTTP/3 is not runtime verified.')
-                        : 'Managed Nginx owns public HTTP/3; the internal WLS backend is HTTP/1.1 only.'),
+                        ? (string)($targetPolicy['http3_reason']
+                            ?? 'Managed Nginx HTTP/3 is not runtime verified.')
+                        : 'Managed Nginx owns public HTTP/3; the internal WLS backend is HTTP/1.1 only.')),
             'http_protocol_capabilities' => $httpProtocolCapabilities,
             'instance_name' => (string)($serverConfig['instance'] ?? ''),
             'target_attribution' => $targetAttribution,
@@ -4155,7 +4284,7 @@ class Benchmark extends CommandAbstract
                     ? $capabilities['endpoint_policy_binding']
                     : [];
                 $surfaceLabel = $targetSurface === 'public_edge'
-                    ? __('Managed Nginx 公网入口')
+                    ? __('Nginx 公网入口（共享网关或项目托管）')
                     : ((string)($binding['edge_adapter'] ?? '') === 'wls'
                         ? __('纯 WLS 公网入口')
                         : __('内部 WLS HTTP/1.1 回源'));

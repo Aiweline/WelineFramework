@@ -1,3 +1,12 @@
+<?php
+/**
+ * w-delete — bin-query 删除确认
+ *
+ * 必填（兼容窗后）：data-provider + data-operation
+ * 参数：data-params JSON 或 w-var-* 属性
+ * 废弃：w-url / w-ajax / href 业务 Controller（兼容窗内警告；remove_by=2026-08-08）
+ */
+?>
 <style>
     .w-delete-confirm {
         position: fixed;
@@ -29,62 +38,47 @@
 </style>
 <script>
     (function () {
-        // 显示消息提示
         const showMessage = (element, message, type = 'success') => {
             const rect = element.getBoundingClientRect();
             const msg = document.createElement('div');
             msg.className = `w-delete-message w-delete-${type}`;
             msg.textContent = message;
-
-            // 先添加到DOM中获取实际尺寸
             msg.style.visibility = 'hidden';
             msg.style.position = 'absolute';
             document.body.appendChild(msg);
 
-            // 获取实际尺寸
             const msgWidth = msg.offsetWidth;
             const msgHeight = msg.offsetHeight;
             const viewportWidth = document.documentElement.clientWidth;
             const viewportHeight = document.documentElement.clientHeight;
 
-            // 计算最佳位置
             let left, top;
-            
-            // 水平方向自适应
             const triggerRight = rect.right + window.scrollX;
             const triggerLeft = rect.left + window.scrollX;
-            
+
             if (triggerRight + msgWidth + 20 > viewportWidth) {
-                // 右边空间不够，尝试左边
                 if (triggerLeft - msgWidth - 20 > 10) {
                     left = triggerLeft - msgWidth - 10;
                 } else {
-                    // 左右都不够，居中显示
                     left = Math.max(10, (viewportWidth - msgWidth) / 2);
                 }
             } else {
-                // 右边有足够空间
                 left = Math.min(viewportWidth - msgWidth - 10, triggerLeft + 10);
             }
-            
-            // 垂直方向自适应
+
             const triggerTop = rect.top + window.scrollY;
             const triggerBottom = rect.bottom + window.scrollY;
-            
+
             if (triggerBottom + msgHeight + 20 > viewportHeight + window.scrollY) {
-                // 下方空间不够，显示在上方
                 if (triggerTop - msgHeight - 20 > window.scrollY) {
                     top = triggerTop - msgHeight - 10;
                 } else {
-                    // 上下都不够，显示在视口中央
                     top = Math.max(window.scrollY + 20, (viewportHeight - msgHeight) / 2 + window.scrollY);
                 }
             } else {
-                // 下方有足够空间
                 top = triggerBottom + 10;
             }
 
-            // 应用位置并显示
             Object.assign(msg.style, {
                 left: `${left}px`,
                 top: `${top}px`,
@@ -94,7 +88,6 @@
             setTimeout(() => msg.remove(), 3000);
         };
 
-        // 显示确认对话框
         const showConfirm = (element, message) => {
             return new Promise(resolve => {
                 const rect = element.getBoundingClientRect();
@@ -108,72 +101,55 @@
                 </div>
             `;
 
-                // 先添加到DOM中获取实际尺寸
                 confirmBox.style.visibility = 'hidden';
                 confirmBox.style.position = 'absolute';
                 document.body.appendChild(confirmBox);
 
-                // 获取实际尺寸
                 const boxWidth = confirmBox.offsetWidth;
                 const boxHeight = confirmBox.offsetHeight;
                 const viewportWidth = document.documentElement.clientWidth;
                 const viewportHeight = document.documentElement.clientHeight;
-                
-                // 计算最佳位置
+
                 let left, top;
-                
-                // 水平方向自适应
                 const triggerRight = rect.right + window.scrollX;
                 const triggerLeft = rect.left + window.scrollX;
-                
+
                 if (triggerRight + boxWidth + 20 > viewportWidth) {
-                    // 右边空间不够，尝试左边
                     if (triggerLeft - boxWidth - 20 > 10) {
                         left = triggerLeft - boxWidth - 10;
                     } else {
-                        // 左右都不够，居中显示
                         left = Math.max(10, (viewportWidth - boxWidth) / 2);
                     }
                 } else {
-                    // 右边有足够空间
                     left = Math.min(viewportWidth - boxWidth - 10, triggerLeft + 10);
                 }
-                
-                // 垂直方向自适应
+
                 const triggerTop = rect.top + window.scrollY;
                 const triggerBottom = rect.bottom + window.scrollY;
-                
+
                 if (triggerBottom + boxHeight + 20 > viewportHeight + window.scrollY) {
-                    // 下方空间不够，显示在上方
                     if (triggerTop - boxHeight - 20 > window.scrollY) {
                         top = triggerTop - boxHeight - 10;
                     } else {
-                        // 上下都不够，显示在视口中央
                         top = Math.max(window.scrollY + 20, (viewportHeight - boxHeight) / 2 + window.scrollY);
                     }
                 } else {
-                    // 下方有足够空间
                     top = triggerBottom + 10;
                 }
 
-                // 应用位置并显示
                 Object.assign(confirmBox.style, {
                     left: `${left}px`,
                     top: `${top}px`,
                     visibility: 'visible'
                 });
 
-                // 事件处理
-                const handleConfirm = () => {
-                    cleanup();
-                    resolve(true);
+                const cleanup = () => {
+                    confirmBox.remove();
+                    document.removeEventListener('click', handleClickOutside);
                 };
 
-                const handleCancel = () => {
-                    cleanup();
-                    resolve(false);
-                };
-
+                const handleConfirm = () => { cleanup(); resolve(true); };
+                const handleCancel = () => { cleanup(); resolve(false); };
                 const handleClickOutside = (e) => {
                     if (!confirmBox.contains(e.target) && !element.contains(e.target)) {
                         cleanup();
@@ -181,103 +157,100 @@
                     }
                 };
 
-                const cleanup = () => {
-                    confirmBox.remove();
-                    document.removeEventListener('click', handleClickOutside);
-                };
-
-                // 绑定事件
                 confirmBox.querySelector('.confirm-btn').addEventListener('click', handleConfirm);
                 confirmBox.querySelector('.cancel-btn').addEventListener('click', handleCancel);
                 document.addEventListener('click', handleClickOutside);
-
-                document.body.appendChild(confirmBox);
             });
         };
 
-        // 执行删除请求
-        const welineRequestJson = async (url, requestOptions) => {
-            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.request !== 'function') {
-                throw new Error('Weline.Api.request is unavailable.');
+        const collectParams = (element) => {
+            const params = {};
+            const raw = element.getAttribute('data-params');
+            if (raw) {
+                try { Object.assign(params, JSON.parse(raw) || {}); } catch (e) {}
             }
-            requestOptions = requestOptions || {};
-            const response = await window.Weline.Api.request(url, Object.assign({}, requestOptions, {
-                headers: Object.assign({'Accept': 'application/json'}, requestOptions.headers || {}),
-                silent: true
-            }));
-            if (response && typeof response.json === 'function') {
-                return response.json();
+            Array.from(element.attributes).forEach(attr => {
+                if (attr.name.startsWith('w-var-')) {
+                    params[attr.name.replace('w-var-', '')] = attr.value;
+                }
+                if (attr.name.startsWith('data-') &&
+                    ['data-provider', 'data-operation', 'data-params', 'data-msg'].indexOf(attr.name) === -1) {
+                    const key = attr.name.replace(/^data-/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+                    if (key !== 'provider' && key !== 'operation' && key !== 'params') {
+                        // keep kebab as underscore for QP params when data-account-id style
+                    }
+                }
+            });
+            // Prefer explicit data-*-id style as snake_case keys commonly used by QP
+            Array.from(element.attributes).forEach(attr => {
+                if (!attr.name.startsWith('data-')) return;
+                if (['data-provider', 'data-operation', 'data-params'].indexOf(attr.name) !== -1) return;
+                const snake = attr.name.slice(5).replace(/-/g, '_');
+                if (snake && params[snake] === undefined) {
+                    params[snake] = attr.value;
+                }
+            });
+            return params;
+        };
+
+        const callResource = async (provider, operation, params) => {
+            if (!window.Weline) {
+                throw new Error('Weline.Api is unavailable.');
             }
-            return response;
+            const api = typeof window.Weline.load === 'function'
+                ? await window.Weline.load('api')
+                : window.Weline.Api;
+            const resource = api.resource(provider);
+            if (!resource || typeof resource[operation] !== 'function') {
+                throw new Error('Unknown operation: ' + provider + '.' + operation);
+            }
+            return resource[operation](params || {});
         };
 
         const performDelete = async (element) => {
             const form = element.closest('form');
-            const url = element.getAttribute('w-url') || element.getAttribute('w-ajax') || element.getAttribute('href');
-            const method = element.getAttribute('w-method') || 'DELETE';
+            const provider = String(element.getAttribute('data-provider') || '').trim();
+            const operation = String(element.getAttribute('data-operation') || '').trim();
+            const legacyUrl = element.getAttribute('w-url') || element.getAttribute('w-ajax') || element.getAttribute('href');
 
-            // 提取所有 w-var-xxx 属性作为 POST 参数
-            const postData = {};
-            Array.from(element.attributes).forEach(attr => {
-                if (attr.name.startsWith('w-var-')) {
-                    const key = attr.name.replace('w-var-', '');
-                    postData[key] = attr.value;
-                }
-            });
+            // Compat window: remove_by=2026-08-08
+            if ((!provider || !operation) && legacyUrl) {
+                console.warn('[w-delete] deprecated w-url/href; use data-provider + data-operation. remove_by=2026-08-08', element);
+            }
 
             try {
-                if (form) {
+                if (form && !provider) {
                     form.submit();
                     return;
                 }
-
-                const fetchOptions = { method };
-                if (method.toUpperCase() === 'POST' || method.toUpperCase() === 'PUT' || method.toUpperCase() === 'PATCH') {
-                    fetchOptions.headers = { 'Content-Type': 'application/json' };
-                    fetchOptions.body = JSON.stringify(postData);
-                } else if (Object.keys(postData).length > 0) {
-                    // GET/DELETE等方式，将参数拼接到URL
-                    const urlObj = new URL(url, window.location.origin);
-                    Object.entries(postData).forEach(([k, v]) => urlObj.searchParams.append(k, v));
-                    fetchOptions.method = method;
-                    return performDeleteWithUrl(urlObj.toString(), fetchOptions, element);
+                if (!provider || !operation) {
+                    showMessage(element, __('缺少 data-provider / data-operation'), 'error');
+                    return;
                 }
 
-                const data = await welineRequestJson(url, fetchOptions);
-
-                if (data.success) {
-                    showMessage(element, __('删除成功'), 'success');
+                const params = collectParams(element);
+                const data = await callResource(provider, operation, params);
+                const ok = data && data.success !== false;
+                if (ok) {
+                    showMessage(element, (data && data.message) || __('删除成功'), 'success');
                     if (element.closest('tr')) {
                         element.closest('tr').remove();
                     }
                 } else {
-                    showMessage(element, data.message || __('删除失败'), 'error');
+                    const errText = (window.Weline && window.Weline.ApiBusiness)
+                        ? window.Weline.ApiBusiness.formatApiError({ response: { data: data } }, (data && data.message) || __('删除失败'))
+                        : ((data && data.message) || __('删除失败'));
+                    showMessage(element, errText, 'error');
                 }
             } catch (error) {
                 console.error('Delete error:', error);
-                showMessage(element, __('删除请求失败'), 'error');
+                const errText = (window.Weline && window.Weline.ApiBusiness)
+                    ? window.Weline.ApiBusiness.formatApiError(error, __('删除请求失败'))
+                    : __('删除请求失败');
+                showMessage(element, errText, 'error');
             }
         };
 
-        // 辅助函数：GET/DELETE等方式带参数
-        const performDeleteWithUrl = async (url, fetchOptions, element) => {
-            try {
-                const data = await welineRequestJson(url, fetchOptions);
-                if (data.success) {
-                    showMessage(element, __('删除成功'), 'success');
-                    if (element.closest('tr')) {
-                        element.closest('tr').remove();
-                    }
-                } else {
-                    showMessage(element, data.message || __('删除失败'), 'error');
-                }
-            } catch (error) {
-                console.error('Delete error:', error);
-                showMessage(element, __('删除请求失败'), 'error');
-            }
-        };
-
-        // 事件委托处理点击
         document.addEventListener('click', async (event) => {
             let deleteBtn = event.target.closest('[w-delete="true"]');
             if (!deleteBtn) {
@@ -288,7 +261,6 @@
             event.preventDefault();
             event.stopPropagation();
 
-            // 确认删除
             const confirmed = await showConfirm(
                 deleteBtn,
                 deleteBtn.getAttribute('w-msg') || __('确认删除吗？')
@@ -297,6 +269,6 @@
             if (confirmed) {
                 await performDelete(deleteBtn);
             }
-        }, true); // 使用捕获阶段，阻止冒泡提前触发
+        }, true);
     })();
 </script>

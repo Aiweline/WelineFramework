@@ -73,6 +73,14 @@ final class ResumableTaskStore
             ResumableTask::schema_fields_ACL_JSON => $this->encodeJson($record['acl'] ?? $record['acl_json'] ?? []),
             ResumableTask::schema_fields_POLICY_JSON => $this->encodeJson($record['policy'] ?? $record['policy_json'] ?? []),
             ResumableTask::schema_fields_STATUS => trim((string)($record['status'] ?? 'starting')) ?: 'starting',
+            // PostgreSQL (and any schema without Col defaults applied) rejects
+            // NULL for these NOT NULL columns. Keep the model defaults explicit
+            // so task start never collapses into a generic RUNTIME_UNAVAILABLE.
+            ResumableTask::schema_fields_FAILURE_CODE => '',
+            ResumableTask::schema_fields_TERMINATION_REASON => '',
+            ResumableTask::schema_fields_RUNNER_PID => 0,
+            ResumableTask::schema_fields_RUNNER_IDENTITY => '',
+            ResumableTask::schema_fields_CANCEL_INTENT_ID => '',
             ResumableTask::schema_fields_MAX_ATTEMPTS => max(1, (int)($record['max_attempts'] ?? 4)),
             ResumableTask::schema_fields_ATTEMPT => max(0, (int)($record['attempt'] ?? 0)),
             ResumableTask::schema_fields_FENCING_GENERATION => max(0, (int)($record['fencing_generation'] ?? 0)),
@@ -190,6 +198,7 @@ final class ResumableTaskStore
         string $launchId,
         string $processName,
         bool $recovery = false,
+        int $launchLeaseSeconds = 15,
     ): array {
         $task = $this->requireTaskModel($taskId);
         $status = (string)$task->getData(ResumableTask::schema_fields_STATUS);
@@ -217,6 +226,7 @@ final class ResumableTaskStore
         }
 
         $generation = $expectedGeneration + 1;
+        $now = time();
         $this->updateTaskCas($taskId, $expectedGeneration, $status, [
             ResumableTask::schema_fields_FENCING_GENERATION => $generation,
             ResumableTask::schema_fields_ATTEMPT => $attempt,
@@ -226,10 +236,14 @@ final class ResumableTaskStore
             ResumableTask::schema_fields_RUNNER_LAUNCH_ID => $launchId,
             ResumableTask::schema_fields_RUNNER_PROCESS_NAME => $processName,
             ResumableTask::schema_fields_RUNNER_LIVE_COMMAND => null,
-            ResumableTask::schema_fields_EXECUTION_LEASE_UNTIL => null,
-            ResumableTask::schema_fields_HEARTBEAT_AT => null,
+            ResumableTask::schema_fields_EXECUTION_LEASE_UNTIL => date(
+                'Y-m-d H:i:s',
+                $now + max(1, $launchLeaseSeconds),
+            ),
+            ResumableTask::schema_fields_HEARTBEAT_AT => date('Y-m-d H:i:s', $now),
             ResumableTask::schema_fields_RUNNER_LEASE_RELEASED => 0,
-            ResumableTask::schema_fields_STARTED_AT => $task->getData(ResumableTask::schema_fields_STARTED_AT) ?: date('Y-m-d H:i:s'),
+            ResumableTask::schema_fields_STARTED_AT => $task->getData(ResumableTask::schema_fields_STARTED_AT)
+                ?: date('Y-m-d H:i:s', $now),
         ]);
 
         $reserved = $this->requireTaskModel($taskId);
@@ -270,6 +284,7 @@ final class ResumableTaskStore
                 ResumableTask::schema_fields_RUNNER_PID => $pid,
                 ResumableTask::schema_fields_RUNNER_LIVE_COMMAND => $liveCommand,
                 ResumableTask::schema_fields_RUNNER_IDENTITY => hash('sha256', $liveCommand),
+                ResumableTask::schema_fields_RUNNER_LEASE_RELEASED => 0,
             ], $runnerId, $launchId);
             return true;
         } catch (ResumableTaskStoreException) {
@@ -316,6 +331,7 @@ final class ResumableTaskStore
                 ResumableTask::schema_fields_EXECUTION_LEASE_UNTIL => date('Y-m-d H:i:s', $now + max(1, $leaseSeconds)),
                 ResumableTask::schema_fields_RECOVERY_STOP_REQUESTED => 0,
                 ResumableTask::schema_fields_STOP_DEADLINE_AT => null,
+                ResumableTask::schema_fields_RUNNER_LEASE_RELEASED => 0,
             ], $runnerId, $launchId);
         } catch (ResumableTaskStoreException) {
             return null;
@@ -793,15 +809,23 @@ final class ResumableTaskStore
         }
 
         $now = time();
-        $lease->setData([
+        $nowSql = date('Y-m-d H:i:s', $now);
+        $leaseData = [
             ResumableTaskLease::schema_fields_TASK_ID => $taskId,
             ResumableTaskLease::schema_fields_LEASE_ID => $leaseId,
             ResumableTaskLease::schema_fields_OWNER_AREA => (string)($owner['area'] ?? ''),
             ResumableTaskLease::schema_fields_OWNER_PRINCIPAL => (string)($owner['principal'] ?? ''),
             ResumableTaskLease::schema_fields_SUBSCRIPTION_ID => $subscriptionId,
-            ResumableTaskLease::schema_fields_LAST_SEEN_AT => date('Y-m-d H:i:s', $now),
+            ResumableTaskLease::schema_fields_LAST_SEEN_AT => $nowSql,
             ResumableTaskLease::schema_fields_EXPIRES_AT => date('Y-m-d H:i:s', $now + max(1, $ttlSeconds)),
-        ]);
+            ResumableTaskLease::schema_fields_UPDATED_AT => $nowSql,
+        ];
+        // PostgreSQL schemas without Col defaults reject NULL for NOT NULL
+        // timestamp columns on first insert.
+        if (!$lease->getId()) {
+            $leaseData[ResumableTaskLease::schema_fields_CREATED_AT] = $nowSql;
+        }
+        $lease->setData($leaseData);
         $lease->save();
         return $this->leaseRow($lease);
     }
@@ -956,6 +980,8 @@ final class ResumableTaskStore
             ResumableTaskEffect::schema_fields_EFFECT_KEY => $effectKey,
             ResumableTaskEffect::schema_fields_STATUS => 'reserved',
             ResumableTaskEffect::schema_fields_EXTERNAL_IDEMPOTENCY_KEY => $taskId . ':' . $effectKey,
+            // PostgreSQL without applied Col defaults rejects NULL here.
+            ResumableTaskEffect::schema_fields_EXTERNAL_REFERENCE => '',
             ResumableTaskEffect::schema_fields_ATTEMPT => (int)$task->getData(ResumableTask::schema_fields_ATTEMPT),
             ResumableTaskEffect::schema_fields_FENCING_GENERATION => $generation,
         ]);

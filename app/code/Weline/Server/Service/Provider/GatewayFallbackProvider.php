@@ -9,6 +9,7 @@ use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Edge\PureWlsPublicOrigin;
+use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
 use Weline\Server\Service\MasterProcess;
 
 /**
@@ -30,6 +31,7 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
         private readonly string $publicOrigin = '',
         private readonly bool $inheritedListener = false,
         private readonly bool $runtimeEnabled = false,
+        private readonly string $hostLeaseId = '',
     ) {
     }
 
@@ -88,6 +90,9 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
         if ($this->port < 20000 || $this->port > 29999) {
             throw new \RuntimeException('Gateway fallback port must be inside 20000-29999.');
         }
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $this->hostLeaseId) !== 1) {
+            throw new \RuntimeException('Gateway fallback requires its exact host port lease identity.');
+        }
         if (!\is_file($this->certificate) || !\is_file($this->privateKey)
             || \is_link($this->certificate) || \is_link($this->privateKey)
         ) {
@@ -107,8 +112,6 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
             (string)$this->port,
             (string)$instanceId,
             $context->instanceName,
-            '--ssl-cert=' . $this->certificate,
-            '--ssl-key=' . $this->privateKey,
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
             '--memory-limit=' . $context->getWorkerMemoryLimit(),
@@ -118,8 +121,13 @@ final class GatewayFallbackProvider extends AbstractServiceProvider
             '--public-origin=' . $publicOrigin,
             '--wls-loop-driver=' . $context->runtimeSelection->eventLoopDriver,
             '--gateway-fallback',
+            '--gateway-host-lease-id=' . $this->hostLeaseId,
             '--defer-ssl',
         ];
+        $arguments = \array_merge(
+            $arguments,
+            ServingManifestRuntimeFence::workerArguments($context),
+        );
         if ($this->inheritedListener) {
             if (\PHP_OS_FAMILY === 'Windows') {
                 throw new \RuntimeException(

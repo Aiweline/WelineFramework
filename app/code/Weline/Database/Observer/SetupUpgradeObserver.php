@@ -55,9 +55,17 @@ class SetupUpgradeObserver implements ObserverInterface
     {
         // 检查是否是部分更新模式（仅更新路由或模型）
         $eventData = $event->getData();
+        $operationId = trim((string)($eventData['operation_id'] ?? ''));
+        if (strlen($operationId) > 64) {
+            throw new \InvalidArgumentException(__('operation_id 长度不能超过 64 字符'));
+        }
         $isPartialUpgrade = $eventData['is_partial_upgrade'] ?? false;
         $routeOnly = $eventData['route_only'] ?? false;
         $modelOnly = $eventData['model_only'] ?? false;
+        $migrationsAlreadyRun = !empty($eventData['migrations_already_run']);
+        if ($migrationsAlreadyRun) {
+            $this->printing->info("文件迁移已在 ModuleSetup 前执行，跳过 upgrade_after 二次迁移，仅提交版本游标");
+        }
         
         // 如果是仅更新路由模式，跳过数据库迁移（数据库迁移应该在完整升级或仅更新模型时执行）
         if ($routeOnly) {
@@ -95,23 +103,55 @@ class SetupUpgradeObserver implements ObserverInterface
                 RegistryProgress::module('Database migration module check', $moduleIndex, count($activeModules), $moduleName);
 
                 try {
-                    // 获取模块的待执行迁移
-                    $pendingMigrations = $this->getMigrationService()->getPendingMigrations($moduleName);
-                    
-                    $lastMigration = '';
-                    if (empty($pendingMigrations)) {
-                        $this->printing->info("模块 {$moduleName} 没有待执行的迁移");
+                    $lastSuccessfulMigration = null;
+                    if ($migrationsAlreadyRun) {
+                        $this->printing->info("模块 {$moduleName} 文件迁移已执行，跳过二次扫描");
                     } else {
-                        $this->printing->info("模块 {$moduleName} 发现 " . count($pendingMigrations) . " 个待执行的迁移");
-                        $count = count($pendingMigrations);
-                        $result = $this->executeModuleMigrations($moduleName, $pendingMigrations);
-                        $lastMigration = (string)($pendingMigrations[$count - 1]['filename'] ?? '');
-                        $totalMigrations += $count;
-                        $totalSuccess += $result['success'];
+                        // 获取模块的待执行迁移
+                        $pendingMigrations = $this->getMigrationService()->getPendingMigrations($moduleName);
+                        if (empty($pendingMigrations)) {
+                            $this->printing->info("模块 {$moduleName} 没有待执行的迁移");
+                        } else {
+                            $this->printing->info("模块 {$moduleName} 发现 " . count($pendingMigrations) . " 个待执行的迁移");
+                            $count = count($pendingMigrations);
+                            $result = $this->executeModuleMigrations(
+                                $moduleName,
+                                $pendingMigrations,
+                                $operationId,
+                            );
+                            $lastSuccessfulMigration = $result['last_migration'];
+                            $totalMigrations += $count;
+                            $totalSuccess += $result['success'];
+                        }
                     }
 
-                    $runtimeVersion = (string)(Env::getInstance()->getModuleInfo($moduleName)['version'] ?? '');
-                    $this->getVersionService()->reconcileSuccessfulSetup($moduleName, $runtimeVersion, $lastMigration);
+                    $moduleInfo = Env::getInstance()->getModuleInfo($moduleName) ?? [];
+                    // 仅用已完成脚本版本推进 DB 游标，避免 version 超前于 setup_version。
+                    // upgrade_migrations 位于 ModuleSetup 之前；存在 pending 标志时必须延后到
+                    // upgrade_after，再用 ModuleSetup 已提交的 setup_version 完成 reconcile。
+                    $targetVersion = (string)($moduleInfo['version'] ?? '');
+                    $runtimeVersion = $this->resolveCompletedSetupVersion($moduleInfo);
+                    if ($runtimeVersion === null) {
+                        $databaseVersion = $this->getVersionService()->getModuleVersionString($moduleName);
+                        if (
+                            $targetVersion !== ''
+                            && $databaseVersion !== null
+                            && version_compare($databaseVersion, $targetVersion, '>')
+                        ) {
+                            throw new \RuntimeException(__(
+                                '模块 %{1} 数据库版本游标 %{2} 高于目标代码版本 %{3}，已阻止继续升级',
+                                [$moduleName, $databaseVersion, $targetVersion]
+                            ));
+                        }
+                        $this->printing->info("模块 {$moduleName} Setup 脚本尚未完成，版本游标延后至 upgrade_after 提交");
+                        unset($pendingMigrations);
+                        continue;
+                    }
+                    $this->getVersionService()->reconcileSuccessfulSetup(
+                        $moduleName,
+                        $runtimeVersion,
+                        $lastSuccessfulMigration,
+                    );
                     unset($pendingMigrations);
                 } catch (\Throwable $e) {
                     $this->printing->error("模块 {$moduleName} 迁移执行异常: " . $e->getMessage());
@@ -144,6 +184,28 @@ class SetupUpgradeObserver implements ObserverInterface
             $this->printing->error("系统升级迁移执行失败: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * 返回已经由 ModuleSetup 成功提交的版本；pending/installing 状态不得推进 DB 游标。
+     */
+    private function resolveCompletedSetupVersion(array $moduleInfo): ?string
+    {
+        if (
+            !empty($moduleInfo['installing'])
+            || !empty($moduleInfo['upgrading'])
+            || !empty($moduleInfo['pending_setup_upgrade'])
+        ) {
+            return null;
+        }
+
+        $setupVersion = trim((string)($moduleInfo['setup_version'] ?? ''));
+        if ($setupVersion !== '') {
+            return $setupVersion;
+        }
+
+        $targetVersion = trim((string)($moduleInfo['version'] ?? ''));
+        return $targetVersion !== '' ? $targetVersion : null;
     }
     
     /**
@@ -182,12 +244,16 @@ class SetupUpgradeObserver implements ObserverInterface
      * 
      * @param string $moduleName
      * @param array $pendingMigrations
-     * @return array
+     * @return array{success: int, failed: int, last_migration: ?string}
      */
-    private function executeModuleMigrations(string $moduleName, array $pendingMigrations): array
-    {
+    private function executeModuleMigrations(
+        string $moduleName,
+        array $pendingMigrations,
+        string $operationId = '',
+    ): array {
         $successCount = 0;
         $failCount = 0;
+        $lastSuccessfulMigration = null;
         
         foreach ($pendingMigrations as $migration) {
             try {
@@ -195,13 +261,15 @@ class SetupUpgradeObserver implements ObserverInterface
                 
                 $result = $this->getMigrationService()->upgradeMigration(
                     $moduleName,
-                    $migration['file']
+                    $migration['file'],
+                    $operationId,
                 );
                 
                 if (!$result) {
                     throw new \RuntimeException(__('迁移返回失败状态: %{1}', $migration['filename']));
                 }
                 $successCount++;
+                $lastSuccessfulMigration = (string)$migration['filename'];
                 $this->printing->success("  ✓ 迁移成功: {$migration['filename']}");
                 
             } catch (\Throwable $e) {
@@ -213,7 +281,8 @@ class SetupUpgradeObserver implements ObserverInterface
         
         return [
             'success' => $successCount,
-            'failed' => $failCount
+            'failed' => $failCount,
+            'last_migration' => $lastSuccessfulMigration,
         ];
     }
 }

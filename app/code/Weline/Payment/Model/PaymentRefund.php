@@ -17,6 +17,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_payment_refund_status', columns: ['status'])]
 #[Index(name: 'idx_payment_refund_provider', columns: ['provider_code', 'provider_refund_id'])]
 #[Index(name: 'idx_payment_refund_created_at', columns: ['created_at'])]
+#[Index(name: 'uniq_payment_refund_case_uuid', columns: ['refund_case_uuid'], type: 'UNIQUE')]
+#[Index(name: 'uniq_payment_refund_payable_idem', columns: ['payable_type', 'payable_id', 'idempotency_key'], type: 'UNIQUE')]
 class PaymentRefund extends Model
 {
     public const schema_table = 'weline_payment_refund';
@@ -30,6 +32,16 @@ class PaymentRefund extends Model
     public const STATUS_FAILED = 'failed';
     public const STATUS_UNSUPPORTED = 'unsupported';
     public const STATUS_CANCELLED = 'cancelled';
+    /** Channel fine status（MOD-P2F-005）：占用额度直至权威终态. */
+    public const STATUS_UNKNOWN = 'unknown';
+    public const STATUS_LATE_SUCCESS_REVIEW = 'refund_late_success_review';
+
+    public const CHANNEL_NOT_SUBMITTED = 'not_submitted';
+    public const CHANNEL_SUBMITTED = 'submitted';
+    public const CHANNEL_PENDING = 'pending';
+    public const CHANNEL_SUCCEEDED = 'succeeded';
+    public const CHANNEL_FAILED = 'failed';
+    public const CHANNEL_UNKNOWN = 'unknown';
 
     #[Col('bigint', 20, primaryKey: true, autoIncrement: true, nullable: false, comment: 'Refund ID')]
     public const schema_fields_ID = 'refund_id';
@@ -71,10 +83,18 @@ class PaymentRefund extends Model
     public const schema_fields_PRECISION = 'precision';
     #[Col('varchar', 32, nullable: false, default: 'requested', comment: 'Refund status')]
     public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 32, nullable: false, default: self::CHANNEL_NOT_SUBMITTED, comment: 'Channel fine status (not_submitted|submitted|pending|succeeded|failed|unknown)')]
+    public const schema_fields_CHANNEL_STATUS = 'channel_status';
+    #[Col('varchar', 36, nullable: true, comment: 'Linked RefundCase UUID')]
+    public const schema_fields_REFUND_CASE_UUID = 'refund_case_uuid';
     #[Col('varchar', 160, nullable: true, comment: 'Provider refund ID')]
     public const schema_fields_PROVIDER_REFUND_ID = 'provider_refund_id';
     #[Col('varchar', 128, nullable: true, comment: 'Idempotency key')]
     public const schema_fields_IDEMPOTENCY_KEY = 'idempotency_key';
+    #[Col('char', 64, nullable: true, comment: 'Idempotent request hash')]
+    public const schema_fields_REQUEST_HASH = 'request_hash';
+    #[Col('int', 11, nullable: false, default: 0, comment: 'Refund channel CAS version')]
+    public const schema_fields_VERSION = 'version';
     #[Col('text', nullable: true, comment: 'Provider response JSON')]
     public const schema_fields_PROVIDER_RESPONSE = 'provider_response';
     #[Col('text', nullable: true, comment: 'Metadata JSON')]
@@ -112,6 +132,8 @@ class PaymentRefund extends Model
             self::STATUS_APPROVED,
             self::STATUS_PROCESSING,
             self::STATUS_PENDING,
+            self::STATUS_UNKNOWN,
+            self::STATUS_LATE_SUCCESS_REVIEW,
         ], true);
     }
 
@@ -127,6 +149,7 @@ class PaymentRefund extends Model
             self::STATUS_FAILED,
             self::STATUS_UNSUPPORTED,
             self::STATUS_CANCELLED,
+            self::STATUS_LATE_SUCCESS_REVIEW,
         ], true);
     }
 

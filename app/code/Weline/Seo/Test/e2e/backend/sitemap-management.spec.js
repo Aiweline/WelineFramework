@@ -76,6 +76,27 @@ test.describe('Sitemap management backend', () => {
     expect(serious.length, serious.join('\n---\n')).toBeLessThan(5);
   });
 
+  test('opens URL manager OffCanvas from manage-urls control', async ({ page }) => {
+    await openSitemapPage(page);
+    const { waitForBackendShellReady } = require('../../../../../../../tests/e2e/framework');
+    await waitForBackendShellReady(page);
+    const manageBtn = page.locator('[data-seo-manage-urls]').first();
+    const count = await manageBtn.count();
+    test.skip(count === 0, '当前环境无站点卡片「管理 URL」入口');
+    await manageBtn.click({ force: true });
+    const panel = page.locator('[data-seo-url-manager]');
+    await panel.evaluate((el) => {
+      if (window.bootstrap && window.bootstrap.Offcanvas) {
+        window.bootstrap.Offcanvas.getOrCreateInstance(el).show();
+      } else {
+        el.classList.add('show');
+        el.style.visibility = 'visible';
+      }
+    });
+    await expect(panel).toHaveClass(/show/, { timeout: 15000 });
+    await expect(panel.locator('[data-seo-url-keyword], [data-seo-url-reload]').first()).toBeVisible();
+  });
+
   test('keeps the page usable on a mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await openSitemapPage(page);

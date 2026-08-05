@@ -28,7 +28,7 @@ class IpWhitelist extends BackendController
     {
         try {
             /** @var IpWhitelistModel $whitelistModel */
-            $whitelistModel = ObjectManager::getInstance(IpWhitelistModel::class);
+            $whitelistModel = ObjectManager::getInstance(IpWhitelistModel::class, [], false);
             
             // 获取查询参数
             $page = (int)($this->request->getGet('page') ?? 1);
@@ -44,7 +44,10 @@ class IpWhitelist extends BackendController
             }
             
             $query->order(IpWhitelistModel::schema_fields_CREATED_AT, 'DESC');
-            $collection = $query->pagination($page, $limit);
+            $collection = $query
+                ->pagination($page, $limit)
+                ->select()
+                ->fetch();
             
             $items = $collection->getItems();
             $total = $collection->getTotal();
@@ -79,7 +82,7 @@ class IpWhitelist extends BackendController
     #[Acl('Weline_Acl::ip_whitelist_add', '添加IP白名单', 'mdi-plus', '添加IP白名单')]
     public function add(): string
     {
-        if ($this->isPost()) {
+        if ($this->request->isPost()) {
             try {
                 $ip = trim($this->request->getPost('ip', ''));
                 $description = trim($this->request->getPost('description', ''));
@@ -94,15 +97,19 @@ class IpWhitelist extends BackendController
                     return $this->jsonResponse(false, __('IP地址格式不正确'));
                 }
                 
-                /** @var IpWhitelistModel $whitelistModel */
-                $whitelistModel = ObjectManager::getInstance(IpWhitelistModel::class);
-                
                 // 检查是否已存在
-                $existing = $whitelistModel->reset()->where(IpWhitelistModel::schema_fields_IP, $ip)->load();
+                /** @var IpWhitelistModel $existing */
+                $existing = ObjectManager::getInstance(IpWhitelistModel::class, [], false);
+                $existing->reset()
+                    ->where(IpWhitelistModel::schema_fields_IP, $ip)
+                    ->find()
+                    ->fetch();
                 if ($existing->getId()) {
                     return $this->jsonResponse(false, __('该IP地址已存在'));
                 }
-                
+
+                /** @var IpWhitelistModel $whitelistModel */
+                $whitelistModel = ObjectManager::getInstance(IpWhitelistModel::class, [], false);
                 $whitelistModel->setData(IpWhitelistModel::schema_fields_IP, $ip);
                 $whitelistModel->setData(IpWhitelistModel::schema_fields_DESCRIPTION, $description);
                 $whitelistModel->setData(IpWhitelistModel::schema_fields_IS_ACTIVE, $isActive);
@@ -131,7 +138,7 @@ class IpWhitelist extends BackendController
     {
         $id = (int)$this->request->getParam('id', 0);
         
-        if ($this->isPost()) {
+        if ($this->request->isPost()) {
             try {
                 $ip = trim($this->request->getPost('ip', ''));
                 $description = trim($this->request->getPost('description', ''));
@@ -147,7 +154,7 @@ class IpWhitelist extends BackendController
                 }
                 
                 /** @var IpWhitelistModel $whitelistModel */
-                $whitelistModel = ObjectManager::getInstance(IpWhitelistModel::class);
+                $whitelistModel = ObjectManager::getInstance(IpWhitelistModel::class, [], false);
                 $whitelistModel->load($id);
                 
                 if (!$whitelistModel->getId()) {
@@ -155,10 +162,13 @@ class IpWhitelist extends BackendController
                 }
                 
                 // 检查IP是否被其他记录使用
-                $existing = $whitelistModel->reset()
+                /** @var IpWhitelistModel $existing */
+                $existing = ObjectManager::getInstance(IpWhitelistModel::class, [], false);
+                $existing->reset()
                     ->where(IpWhitelistModel::schema_fields_IP, $ip)
                     ->where(IpWhitelistModel::schema_fields_ID, $id, '!=')
-                    ->load();
+                    ->find()
+                    ->fetch();
                 if ($existing->getId()) {
                     return $this->jsonResponse(false, __('该IP地址已被其他记录使用'));
                 }
@@ -310,4 +320,3 @@ class IpWhitelist extends BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 }
-

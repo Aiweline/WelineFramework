@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Runtime;
 
+use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+
 /**
  * PHP 8.6 OpenSSL external session-cache callbacks for WLS defer-SSL streams.
  *
@@ -307,6 +309,11 @@ final class TlsSessionCacheRuntime
     {
         $this->contextOptions = [];
         $this->certificateDigests = [];
+        // Session objects retain the SSL_CTX which created them. Keeping them
+        // locally after an exact manifest switch would keep the retired
+        // certificate context reachable even though no new handshake can use
+        // the old SNI map.
+        $this->localSessions = [];
     }
 
     /** @return array<string, mixed> */
@@ -730,11 +737,20 @@ final class TlsSessionCacheRuntime
         if (isset($this->certificateDigests[$cacheKey])) {
             return $this->certificateDigests[$cacheKey];
         }
-        if (!\is_file($certificatePath) || !\is_readable($certificatePath)) {
-            throw new \RuntimeException('TLS session context certificate is unavailable.');
+        try {
+            $pem = GatewayProjectStateFilesystem::read(
+                $certificatePath,
+                4 * 1024 * 1024,
+                'TLS session context certificate',
+            );
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'TLS session context certificate could not be read safely.',
+                0,
+                $throwable,
+            );
         }
-        $pem = @\file_get_contents($certificatePath);
-        if (!\is_string($pem) || $pem === '' || \strlen($pem) > 4194304) {
+        if ($pem === '') {
             throw new \RuntimeException('TLS session context certificate could not be read safely.');
         }
         // Hash the complete leaf certificate identity, not only its public key.

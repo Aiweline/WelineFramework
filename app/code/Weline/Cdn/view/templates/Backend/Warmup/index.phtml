@@ -72,7 +72,7 @@ $escapeAttr = static function (mixed $value): string {
 <?php endif; ?>
 
 <!-- 操作栏 -->
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3" data-testid="cdn-warmup-management">
     <div>
         <button type="button" class="btn btn-success" data-cdn-warmup-action="execute">
             <i class="mdi mdi-play"></i> <?= __('执行预热') ?>
@@ -168,7 +168,9 @@ $escapeAttr = static function (mixed $value): string {
                                         <button type="button" class="btn btn-<?= $url->getData('enabled') ? 'warning' : 'success' ?>" 
                                                 data-cdn-warmup-action="toggle-enable"
                                                 data-url-id="<?= $escapeAttr($url->getData('warmup_url_id')) ?>"
-                                                data-enabled="<?= $url->getData('enabled') ? '0' : '1' ?>">
+                                                data-enabled="<?= $url->getData('enabled') ? '0' : '1' ?>"
+                                                data-state="idle"
+                                                data-message="">
                                             <i class="mdi mdi-<?= $url->getData('enabled') ? 'close' : 'check' ?>"></i> 
                                             <?= $url->getData('enabled') ? __('禁用') : __('启用') ?>
                                         </button>
@@ -279,10 +281,9 @@ $escapeAttr = static function (mixed $value): string {
                 confirmButtonColor: '#28a745'
             }).then(function(result) {
                 if (result.isConfirmed) {
-                    window.Weline.Api.request(executeUrl, { method: 'POST' })
-                    .then(function(response) {
-                        var data = response.data;
-                        if (response.ok && data && data.success) {
+                    Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api).then(function(api){ return api.resource('cdn').executeWarmup({}); })
+                    .then(function(data) {
+                        if (data && data.success !== false) {
                             Swal.fire({
                                 icon: 'success',
                                 title: '<?= __('成功') ?>',
@@ -312,42 +313,61 @@ $escapeAttr = static function (mixed $value): string {
         },
         
         toggleEnable: function(id, enabled) {
-            window.Weline.Api.request(toggleEnableUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ id: id, enabled: enabled }).toString()
-            })
-            .then(function(response) {
-                var data = response.data;
-                if (response.ok && data && data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: data.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(function() { location.reload(); });
+            var trigger = document.querySelector('[data-cdn-warmup-action="toggle-enable"][data-url-id="' + id + '"]');
+            if (trigger) {
+                trigger.dataset.state = 'saving';
+                trigger.dataset.message = '';
+            }
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('cdn').toggleWarmupEnable({ id: Number(id), enabled: Number(enabled) }); })
+            .then(function(data) {
+                if (data && data.success !== false) {
+                    if (trigger) {
+                        trigger.dataset.state = 'saved';
+                        trigger.dataset.message = data.message || '';
+                    }
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<?= __('成功') ?>',
+                            text: data.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(function() { location.reload(); });
+                    } else if (window.BackendToast && typeof window.BackendToast.success === 'function') {
+                        window.BackendToast.success(data.message);
+                    }
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('操作失败') ?>',
-                        text: data.message,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
+                    if (trigger) {
+                        trigger.dataset.state = 'error';
+                        trigger.dataset.message = data && data.message ? data.message : '<?= __('操作失败') ?>';
+                    }
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '<?= __('操作失败') ?>',
+                            text: data.message,
+                            confirmButtonText: '<?= __('确定') ?>'
+                        });
+                    } else if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+                        window.BackendToast.error(data.message);
+                    }
+                }
+            })
+            .catch(function(error) {
+                if (trigger) {
+                    trigger.dataset.state = 'error';
+                    trigger.dataset.message = error && error.message ? error.message : String(error);
                 }
             });
         },
         
         deleteUrl: function(id) {
             confirmAction('<?= __('确定要删除此URL吗？') ?>', function() {
-                window.Weline.Api.request(deleteUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ id: id }).toString()
-                })
-                .then(function(response) {
-                    var data = response.data;
-                    if (response.ok && data && data.success) {
+                Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                .then(function(api){ return api.resource('cdn').deleteWarmupUrl({ id: id }); })
+                .then(function(data) {
+                    if (data && data.success !== false) {
                         Swal.fire({
                             icon: 'success',
                             title: '<?= __('成功') ?>',

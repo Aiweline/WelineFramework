@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Integration\Service\Edge\Gateway;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayCredentialStore;
+use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 
 /**
@@ -2194,6 +2195,8 @@ C;
     private function startBroker(): void
     {
         $run = $this->home . DIRECTORY_SEPARATOR . 'runtime/run';
+        $fencing = $this->home . DIRECTORY_SEPARATOR
+            . 'trust/broker-fencing-token';
         self::assertTrue(\mkdir($run, 0700, true));
         $this->startProcess('broker', [
             $this->broker,
@@ -2207,13 +2210,13 @@ C;
             '--lock-file',
             $run . DIRECTORY_SEPARATOR . 'broker.lock',
             '--fencing-file',
-            $run . DIRECTORY_SEPARATOR . 'fencing-token',
+            $fencing,
             '--home',
             $this->home,
         ]);
         $this->waitForSocket($run . DIRECTORY_SEPARATOR . 'admin.sock', 10.0);
         $this->waitForSocket($run . DIRECTORY_SEPARATOR . 'project.sock', 10.0);
-        $this->waitForFile($run . DIRECTORY_SEPARATOR . 'fencing-token', 10.0);
+        $this->waitForFile($fencing, 10.0);
     }
 
     /** @return resource */
@@ -2224,6 +2227,9 @@ C;
             $this->controller,
             '--home=' . $this->home,
             '--broker-internal=unix://' . $this->paths->controllerSocketFile(),
+            '--broker-fencing-file=' . $this->home
+                . DIRECTORY_SEPARATOR . 'trust/broker-fencing-token',
+            '--host-boot-id=' . GatewayHostBootIdentity::current(),
         ], $environment);
     }
 

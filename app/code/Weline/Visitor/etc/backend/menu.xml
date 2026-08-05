@@ -2,19 +2,51 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    
+
     <!-- 访问信息 - 归入开发者 > 调试工具 -->
     <menu source="Weline_Visitor::system_frontend" name="visitor_frontend" title="访问信息" action="frontend"
           is_backend="1"
           parent="Weline_Backend::debug_tools" icon="mdi mdi-web" order="40"/>
 
-    <!-- B03：流量渠道列表（ACL 与 Controller 同源） -->
-    <menu source="Weline_Visitor::traffic_channel"
-          name="visitor_traffic_channel"
-          title="流量渠道"
-          action="visitor/backend/traffic-channel/index"
+    <!-- 像素分析 - 归入应用与扩展 > 数据工具（与 Controller #[Acl] 同源） -->
+    <menu source="Weline_Visitor::pixel_dashboard"
+          name="visitor_pixel_group"
+          title="像素分析"
           is_backend="1"
           parent="Weline_Backend::data_tools_group"
-          icon="mdi mdi-bullhorn-outline"
-          order="45"/>
+          icon="mdi mdi-chart-timeline-variant"
+          order="40">
+
+        <menu source="Weline_Visitor::pixel_dashboard_index"
+              name="visitor_pixel_dashboard"
+              title="事件看板"
+              action="visitor/backend/pixel-dashboard/index"
+              is_backend="1"
+              icon="mdi mdi-view-dashboard-outline"
+              order="10"/>
+
+        <menu source="Weline_Visitor::pixel_dashboard_list"
+              name="visitor_pixel_list"
+              title="热表明细"
+              action="visitor/backend/pixel-dashboard/list"
+              is_backend="1"
+              icon="mdi mdi-table"
+              order="20"/>
+
+        <menu source="Weline_Visitor::pixel_dashboard_archive_list"
+              name="visitor_pixel_archive_list"
+              title="冷归档明细"
+              action="visitor/backend/pixel-dashboard/archive-list"
+              is_backend="1"
+              icon="mdi mdi-archive-outline"
+              order="30"/>
+
+        <menu source="Weline_Visitor::traffic_channel"
+              name="visitor_traffic_channel"
+              title="流量渠道"
+              action="visitor/backend/traffic-channel/index"
+              is_backend="1"
+              icon="mdi mdi-bullhorn-outline"
+              order="40"/>
+    </menu>
 </menus>

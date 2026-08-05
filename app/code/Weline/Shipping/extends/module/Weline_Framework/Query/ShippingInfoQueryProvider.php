@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace Weline\Shipping\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Shipping\Api\Quote\ShippingQuoteServiceInterface;
 use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\Region;
 use Weline\Shipping\Model\ShippingService as ShippingServiceModel;
@@ -13,10 +15,14 @@ use Weline\Shipping\Service\ShippingServiceManager;
 
 class ShippingInfoQueryProvider implements QueryProviderInterface
 {
+    private ?ShippingQuoteServiceInterface $quoteService;
+
     public function __construct(
         private readonly ShippingServiceManager $serviceManager,
-        private readonly RegionService $regionService
+        private readonly RegionService $regionService,
+        ?ShippingQuoteServiceInterface $quoteService = null,
     ) {
+        $this->quoteService = $quoteService;
     }
 
     public function getProviderName(): string
@@ -28,8 +34,73 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getByLocation' => $this->getByLocation($params),
+            'listQuoteOptions', 'quote' => $this->quoteOps($operation, $params),
             default => throw new \InvalidArgumentException('Shipping info query provider does not support operation: ' . $operation),
         };
+    }
+
+    /**
+     * Minor-unit Quote API surface（MOD-P2E-002）.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function quoteOps(string $operation, array $params): array
+    {
+        try {
+            $svc = $this->quoteService();
+            $configVersion = \array_key_exists('config_version', $params)
+                ? (string)$params['config_version']
+                : $svc->activeConfigVersion();
+            $request = new \Weline\Shipping\Api\Quote\ShippingQuoteRequest(
+                scope: \is_array($params['scope'] ?? null) ? $params['scope'] : [],
+                address: \is_array($params['address'] ?? null) ? $params['address'] : [],
+                lines: \is_array($params['lines'] ?? null) ? $params['lines'] : [],
+                currency: (string)($params['currency'] ?? 'CNY'),
+                currencyPrecision: (int)($params['currency_precision'] ?? 2),
+                configVersion: $configVersion,
+                serviceCode: isset($params['service_code']) ? (string)$params['service_code'] : null,
+            );
+            if ($operation === 'listQuoteOptions') {
+                return [
+                    'success' => true,
+                    'code' => 200,
+                    'data' => ['options' => $svc->listOptions($request)],
+                ];
+            }
+            $serviceCode = trim((string)($params['service_code'] ?? ''));
+            $quote = $svc->quote($request, $serviceCode);
+            return [
+                'success' => true,
+                'code' => 200,
+                'data' => $quote->toArray(),
+            ];
+        } catch (\Throwable $e) {
+            $code = $e instanceof \Weline\Shipping\Service\ShippingQuoteConflictException
+                ? $e->errorCode()
+                : 'shipping_quote_failed';
+            return [
+                'success' => false,
+                'code' => 400,
+                'message' => $e->getMessage(),
+                'error_code' => $code,
+                'data' => [],
+            ];
+        }
+    }
+
+    private function quoteService(): ShippingQuoteServiceInterface
+    {
+        if ($this->quoteService instanceof ShippingQuoteServiceInterface) {
+            return $this->quoteService;
+        }
+        $resolved = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(ShippingQuoteServiceInterface::class);
+        if (!$resolved instanceof ShippingQuoteServiceInterface) {
+            throw new \RuntimeException('shipping_quote_provider_missing');
+        }
+
+        return $this->quoteService = $resolved;
     }
 
     private function getByLocation(array $params): array
@@ -167,6 +238,41 @@ class ShippingInfoQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Get shipping info by location',
+                ],
+                [
+                    'name' => 'listQuoteOptions',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 3,
+                    'cache_ttl' => 0,
+                    'params' => [
+                        'address' => ['type' => 'array', 'required' => true],
+                        'lines' => ['type' => 'array', 'required' => true],
+                        'currency' => ['type' => 'string', 'required' => true, 'max_length' => 3],
+                        'currency_precision' => ['type' => 'int', 'required' => false, 'min' => 0, 'max' => 6],
+                        'config_version' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'List active database-backed Shipping Quote options in minor units',
+                ],
+                [
+                    'name' => 'quote',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 3,
+                    'cache_ttl' => 0,
+                    'params' => [
+                        'address' => ['type' => 'array', 'required' => true],
+                        'lines' => ['type' => 'array', 'required' => true],
+                        'currency' => ['type' => 'string', 'required' => true, 'max_length' => 3],
+                        'currency_precision' => ['type' => 'int', 'required' => false, 'min' => 0, 'max' => 6],
+                        'config_version' => ['type' => 'string', 'required' => false, 'max_length' => 64],
+                        'service_code' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Create one database-backed Shipping Quote in minor units',
                 ],
             ],
         ];

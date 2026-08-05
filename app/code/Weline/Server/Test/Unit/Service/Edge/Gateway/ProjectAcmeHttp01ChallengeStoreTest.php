@@ -25,6 +25,40 @@ final class ProjectAcmeHttp01ChallengeStoreTest extends TestCase
         $this->removeTree($this->directory);
     }
 
+    public function testExplicitFilesystemRootIsRejectedAtConstruction(): void
+    {
+        $root = \realpath(\sys_get_temp_dir());
+        self::assertIsString($root);
+        $filesystemRoot = \preg_match('/\A([A-Za-z]:)[\\\\\/]/D', $root, $match) === 1
+            ? $match[1] . DIRECTORY_SEPARATOR
+            : DIRECTORY_SEPARATOR;
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot be a filesystem root');
+        new ProjectAcmeHttp01ChallengeStore($filesystemRoot);
+    }
+
+    public function testStoreRecognizesExtendedWindowsFilesystemRoots(): void
+    {
+        $store = $this->store();
+        $method = new \ReflectionMethod($store, 'isFilesystemRoot');
+        foreach ([
+            'C:\\',
+            '\\\\server\\',
+            '\\\\server\\share\\',
+            '\\\\?\\C:\\',
+            '\\\\?\\UNC\\server\\share\\',
+            '\\\\?\\UNC\\server\\',
+            '\\\\.\\C:\\',
+        ] as $path) {
+            self::assertTrue($method->invoke($store, $path), $path);
+        }
+        self::assertFalse($method->invoke(
+            $store,
+            '\\\\?\\UNC\\server\\share\\project',
+        ));
+    }
+
     public function testLegacyProjectionMigratesThroughAuthorizedRouteDomain(): void
     {
         $token = 'TOKEN_legacy';

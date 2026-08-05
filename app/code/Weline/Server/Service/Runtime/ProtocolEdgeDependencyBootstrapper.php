@@ -6,6 +6,8 @@ namespace Weline\Server\Service\Runtime;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+use Weline\Server\Service\Edge\Gateway\GatewayBoundedTreeWalker;
 
 /**
  * Verifies only the explicitly configured Caddy compatibility edge before WLS
@@ -18,7 +20,14 @@ final class ProtocolEdgeDependencyBootstrapper
     private const INSTALL_LOCK_TIMEOUT_SECONDS = 30;
     private const PROBE_TIMEOUT_SECONDS = 20;
     private const HTTP3_LIVE_PROBE_TIMEOUT_SECONDS = 5;
-    private const MAX_OUTPUT_BYTES = 1048576;
+    private const WINDOWS_CADDY_DOWNLOAD_TIMEOUT_SECONDS = 120;
+    private const WINDOWS_CADDY_READ_TIMEOUT_SECONDS = 15;
+    private const WINDOWS_CADDY_MAX_REDIRECTS = 5;
+    private const WINDOWS_CADDY_MAX_ARCHIVE_BYTES = 134_217_728;
+    private const WINDOWS_CADDY_MAX_EXECUTABLE_BYTES = 268_435_456;
+    private const WINDOWS_CADDY_MAX_ARCHIVE_ENTRIES = 256;
+    private const WINDOWS_CADDY_MAX_BACKUPS = 4;
+    private const WINDOWS_CADDY_MAX_RUNTIME_ENTRIES = 4096;
     private const WINDOWS_CADDY_VERSION = '2.11.4';
     private const WINDOWS_CADDY_BASE_URL = 'https://github.com/caddyserver/caddy/releases/download/v'
         . self::WINDOWS_CADDY_VERSION;
@@ -178,10 +187,6 @@ final class ProtocolEdgeDependencyBootstrapper
      */
     private function probeHttp3Listener(string $binary): array
     {
-        if (!\function_exists('proc_open')) {
-            return ['success' => false, 'output' => 'proc_open is unavailable for the HTTP/3 live probe.'];
-        }
-
         $directory = \rtrim(\sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR
             . 'wls-caddy-http3-probe-' . \bin2hex(\random_bytes(6));
         if (!@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
@@ -191,6 +196,10 @@ final class ProtocolEdgeDependencyBootstrapper
         $configPath = $directory . DIRECTORY_SEPARATOR . 'caddy.json';
         $config = [
             'admin' => ['disabled' => true],
+            'storage' => [
+                'module' => 'file_system',
+                'root' => $directory . DIRECTORY_SEPARATOR . 'data',
+            ],
             'apps' => [
                 'http' => [
                     'servers' => [
@@ -211,121 +220,60 @@ final class ProtocolEdgeDependencyBootstrapper
             ],
         ];
         $payload = \json_encode($config, \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
-        if (@\file_put_contents($configPath, $payload) === false) {
+        if (@\file_put_contents($configPath, $payload, LOCK_EX) !== \strlen($payload)) {
             @\rmdir($directory);
             return ['success' => false, 'output' => 'Unable to write the HTTP/3 live-probe configuration.'];
         }
+        @\chmod($configPath, 0600);
 
-        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
-        $environment = \getenv();
-        $environment = \is_array($environment) ? $environment : [];
-        $environment['XDG_CONFIG_HOME'] = $directory . DIRECTORY_SEPARATOR . 'config';
-        $environment['XDG_DATA_HOME'] = $directory . DIRECTORY_SEPARATOR . 'data';
-        if (PHP_OS_FAMILY === 'Windows') {
-            $environment['APPDATA'] = $environment['XDG_CONFIG_HOME'];
-            $environment['LOCALAPPDATA'] = $environment['XDG_DATA_HOME'];
+        try {
+            $result = GatewayBoundedCommandRunner::run(
+                [$binary, 'run', '--config', $configPath],
+                (float)self::HTTP3_LIVE_PROBE_TIMEOUT_SECONDS,
+                $directory,
+                false,
+            );
+            $output = (string)($result['output'] ?? '');
+            $listenerReady = \str_contains($output, 'enabling HTTP/3 listener');
+            $serverReady = \str_contains($output, 'serving initial configuration');
+            $code = (int)($result['code'] ?? 125);
+            $runnerValid = $code === 0 || $code === 124;
+        } catch (\Throwable $throwable) {
+            $output = $throwable->getMessage();
+            $listenerReady = false;
+            $serverReady = false;
+            $runnerValid = false;
         }
-
-        $process = @\proc_open([
-            $binary,
-            'run',
-            '--config',
-            $configPath,
-        ], [
-            0 => ['file', $null, 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, $directory, $environment, ['bypass_shell' => true]);
-        if (!\is_resource($process)) {
-            @\unlink($configPath);
-            @\rmdir($directory);
-            return ['success' => false, 'output' => 'Unable to launch Caddy for the HTTP/3 live probe.'];
+        try {
+            $this->removeBoundedProbeTree($directory);
+        } catch (\Throwable $throwable) {
+            $runnerValid = false;
+            $output .= "\nHTTP/3 probe cleanup failed: " . $throwable->getMessage();
         }
-
-        foreach ([1, 2] as $index) {
-            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
-                \stream_set_blocking($pipes[$index], false);
-            }
-        }
-
-        $output = '';
-        $listenerReady = false;
-        $serverReady = false;
-        $deadlineNanoseconds = \hrtime(true)
-            + (self::HTTP3_LIVE_PROBE_TIMEOUT_SECONDS * 1_000_000_000);
-        while (\hrtime(true) < $deadlineNanoseconds) {
-            $read = [];
-            foreach ([1, 2] as $index) {
-                if (isset($pipes[$index]) && \is_resource($pipes[$index]) && !\feof($pipes[$index])) {
-                    $read[] = $pipes[$index];
-                }
-            }
-            if ($read !== []) {
-                $write = null;
-                $except = null;
-                @\stream_select($read, $write, $except, 0, 100000);
-                foreach ($read as $pipe) {
-                    $chunk = (string)(@\fread($pipe, 8192) ?: '');
-                    if ($chunk !== '' && \strlen($output) < self::MAX_OUTPUT_BYTES) {
-                        $output .= \substr($chunk, 0, self::MAX_OUTPUT_BYTES - \strlen($output));
-                    }
-                }
-            }
-
-            $listenerReady = $listenerReady || \str_contains($output, 'enabling HTTP/3 listener');
-            $serverReady = $serverReady || \str_contains($output, 'serving initial configuration');
-            if ($listenerReady && $serverReady) {
-                break;
-            }
-            $status = \proc_get_status($process);
-            if (!($status['running'] ?? false)) {
-                break;
-            }
-        }
-
-        $status = \proc_get_status($process);
-        if ($status['running'] ?? false) {
-            @\proc_terminate($process);
-            $terminateDeadlineNanoseconds = \hrtime(true) + 1_000_000_000;
-            do {
-                SchedulerSystem::usleep(50000);
-                $status = \proc_get_status($process);
-            } while (($status['running'] ?? false) && \hrtime(true) < $terminateDeadlineNanoseconds);
-            if (($status['running'] ?? false) && PHP_OS_FAMILY !== 'Windows') {
-                @\proc_terminate($process, 9);
-            }
-        }
-
-        foreach ([1, 2] as $index) {
-            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
-                $chunk = (string)(@\stream_get_contents($pipes[$index]) ?: '');
-                if ($chunk !== '' && \strlen($output) < self::MAX_OUTPUT_BYTES) {
-                    $output .= \substr($chunk, 0, self::MAX_OUTPUT_BYTES - \strlen($output));
-                }
-                @\fclose($pipes[$index]);
-            }
-        }
-        @\proc_close($process);
-
-        $removeTree = static function (string $path) use (&$removeTree): void {
-            if (\is_dir($path) && !\is_link($path)) {
-                foreach ((array)@\scandir($path) as $entry) {
-                    if ($entry === '.' || $entry === '..') {
-                        continue;
-                    }
-                    $removeTree($path . DIRECTORY_SEPARATOR . $entry);
-                }
-                @\rmdir($path);
-                return;
-            }
-            @\unlink($path);
-        };
-        $removeTree($directory);
 
         return [
-            'success' => $listenerReady && $serverReady,
+            'success' => $runnerValid && $listenerReady && $serverReady,
             'output' => $this->tail($output),
         ];
+    }
+
+    private function removeBoundedProbeTree(string $directory): void
+    {
+        if (!\is_dir($directory) || \is_link($directory)) {
+            throw new \RuntimeException('HTTP/3 probe directory identity is unsafe.');
+        }
+        $records = GatewayBoundedTreeWalker::collect($directory, true, true);
+        foreach ($records as $record) {
+            GatewayBoundedTreeWalker::revalidate($record);
+            $removed = $record['directory']
+                ? @\rmdir($record['path'])
+                : @\unlink($record['path']);
+            if (!$removed) {
+                throw new \RuntimeException(
+                    'Unable to remove HTTP/3 probe artifact: ' . $record['path'],
+                );
+            }
+        }
     }
 
     /**
@@ -350,53 +298,11 @@ final class ProtocolEdgeDependencyBootstrapper
         }
 
         if (PHP_OS_FAMILY === 'Windows') {
-            // Prefer the project-local, fixed-digest package. It needs no
-            // administrator rights and selects native ARM64 on Windows ARM,
-            // instead of relying on an x64 package-manager shim.
-            $verified = $this->installVerifiedWindowsCaddy($selection);
-            if ($verified['success']) {
-                return $verified;
-            }
-            $fallbackOutput = [$verified['output']];
-
-            $winget = $this->findExecutable('winget');
-            if ($winget !== '') {
-                $install = $this->run([
-                    $winget,
-                    'install',
-                    '--id',
-                    'CaddyServer.Caddy',
-                    '--exact',
-                    '--silent',
-                    '--accept-package-agreements',
-                    '--accept-source-agreements',
-                ], self::INSTALL_TIMEOUT_SECONDS);
-                if ($install['success']) {
-                    return $install;
-                }
-                $fallbackOutput[] = $install['output'];
-            }
-            $choco = $this->findExecutable('choco');
-            if ($choco !== '') {
-                $install = $this->run([$choco, 'install', 'caddy', '-y'], self::INSTALL_TIMEOUT_SECONDS);
-                if ($install['success']) {
-                    return $install;
-                }
-                $fallbackOutput[] = $install['output'];
-            }
-            $scoop = $this->findExecutable('scoop');
-            if ($scoop !== '') {
-                $install = $this->run([$scoop, 'install', 'caddy'], self::INSTALL_TIMEOUT_SECONDS);
-                if ($install['success']) {
-                    return $install;
-                }
-                $fallbackOutput[] = $install['output'];
-            }
-
-            return [
-                'success' => false,
-                'output' => $this->tail(\implode(PHP_EOL, \array_filter($fallbackOutput, 'strlen'))),
-            ];
+            // Windows installation is deliberately project-local and pinned by
+            // an immutable release digest. Falling through to winget/choco/
+            // scoop would silently replace that trust contract with a mutable
+            // host package and may also require host-wide elevation.
+            return $this->installVerifiedWindowsCaddy($selection);
         }
 
         if (PHP_OS_FAMILY === 'Linux') {
@@ -463,6 +369,28 @@ final class ProtocolEdgeDependencyBootstrapper
             return ['success' => false, 'output' => 'Managed Caddy runtime directory is not writable: ' . $directory];
         }
 
+        try {
+            $recovery = $this->recoverInterruptedWindowsBinary($managedBinary, $selection);
+            if ($recovery !== null) {
+                return $recovery;
+            }
+            $this->cleanupWindowsTransientFiles(
+                $directory,
+                $packageName,
+                \basename($managedBinary),
+            );
+            $this->pruneWindowsBackups(
+                $managedBinary,
+                self::WINDOWS_CADDY_MAX_BACKUPS - 1,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'output' => 'Managed Caddy runtime cleanup failed closed: '
+                    . $throwable->getMessage(),
+            ];
+        }
+
         $token = \bin2hex(\random_bytes(8));
         $archive = $directory . DIRECTORY_SEPARATOR . $packageName . '.download-' . $token;
         $candidate = $managedBinary . '.install-' . $token . '.exe';
@@ -477,16 +405,28 @@ final class ProtocolEdgeDependencyBootstrapper
                 return ['success' => false, 'output' => 'Unable to open the verified Caddy archive.'];
             }
             $entryName = '';
+            $entrySize = -1;
+            $matchingEntries = 0;
+            if ($zip->numFiles < 1 || $zip->numFiles > self::WINDOWS_CADDY_MAX_ARCHIVE_ENTRIES) {
+                $zip->close();
+                return ['success' => false, 'output' => 'Verified Caddy archive has an unsafe entry count.'];
+            }
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $entry = (string)$zip->getNameIndex($index);
                 if (\strtolower(\basename(\str_replace('\\', '/', $entry))) === 'caddy.exe') {
+                    $stat = $zip->statIndex($index);
                     $entryName = $entry;
-                    break;
+                    $entrySize = \is_array($stat) ? (int)($stat['size'] ?? -1) : -1;
+                    ++$matchingEntries;
                 }
             }
-            if ($entryName === '') {
+            if ($entryName === ''
+                || $matchingEntries !== 1
+                || $entrySize < 1
+                || $entrySize > self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES
+            ) {
                 $zip->close();
-                return ['success' => false, 'output' => 'Verified Caddy archive does not contain caddy.exe.'];
+                return ['success' => false, 'output' => 'Verified Caddy archive has no unique bounded caddy.exe entry.'];
             }
 
             $source = $zip->getStream($entryName);
@@ -502,17 +442,28 @@ final class ProtocolEdgeDependencyBootstrapper
                 return ['success' => false, 'output' => 'Unable to extract the verified Caddy executable.'];
             }
             try {
-                $bytes = \stream_copy_to_stream($source, $destination);
-                @\fflush($destination);
+                $bytes = \stream_copy_to_stream($source, $destination, $entrySize + 1);
+                $persisted = @\fflush($destination)
+                    && (!\function_exists('fsync') || @\fsync($destination));
             } finally {
                 @\fclose($source);
                 @\fclose($destination);
                 $zip->close();
             }
-            if (!\is_int($bytes) || $bytes <= 0) {
-                return ['success' => false, 'output' => 'Verified Caddy executable is empty.'];
+            if (!\is_int($bytes) || $bytes !== $entrySize || !$persisted) {
+                return ['success' => false, 'output' => 'Verified Caddy executable extraction exceeded its declared bounds or was not persisted.'];
             }
             @\chmod($candidate, 0755);
+
+            try {
+                $candidateProof = $this->stableRegularFileProof(
+                    $candidate,
+                    self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES,
+                    'extracted Caddy executable',
+                );
+            } catch (\Throwable $throwable) {
+                return ['success' => false, 'output' => $throwable->getMessage()];
+            }
 
             $probe = $this->probe($candidate, $selection);
             if (!$probe['success']) {
@@ -522,7 +473,12 @@ final class ProtocolEdgeDependencyBootstrapper
                 ];
             }
 
-            $publish = $this->publishWindowsBinary($candidate, $managedBinary, $token);
+            $publish = $this->publishWindowsBinary(
+                $candidate,
+                $managedBinary,
+                $token,
+                $candidateProof,
+            );
             if (!$publish['success']) {
                 return $publish;
             }
@@ -567,19 +523,18 @@ final class ProtocolEdgeDependencyBootstrapper
     /** @return array{success:bool,output:string} */
     private function downloadVerifiedFile(string $url, string $target, string $expectedHash): array
     {
-        $context = \stream_context_create([
-            'http' => [
-                'follow_location' => 1,
-                'max_redirects' => 5,
-                'timeout' => 120,
-                'user_agent' => 'WelineFramework-WLS/' . PHP_VERSION,
-            ],
-            'ssl' => [
-                'verify_peer' => true,
-                'verify_peer_name' => true,
-            ],
-        ]);
-        $source = @\fopen($url, 'rb', false, $context);
+        $deadline = $this->monotonicSeconds()
+            + self::WINDOWS_CADDY_DOWNLOAD_TIMEOUT_SECONDS;
+        try {
+            $opened = $this->openBoundedHttpsDownload($url, $deadline);
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'output' => 'Unable to open the verified dependency package: '
+                    . $throwable->getMessage(),
+            ];
+        }
+        $source = $opened['stream'] ?? null;
         $destination = @\fopen($target, 'xb');
         if (!\is_resource($source) || !\is_resource($destination)) {
             if (\is_resource($source)) {
@@ -590,43 +545,597 @@ final class ProtocolEdgeDependencyBootstrapper
             }
             return ['success' => false, 'output' => 'Unable to download the verified dependency package over HTTPS.'];
         }
+        $bytes = 0;
+        $hash = \hash_init('sha256');
+        $failure = '';
         try {
-            $bytes = \stream_copy_to_stream($source, $destination);
-            @\fflush($destination);
+            while (!@\feof($source)) {
+                $remaining = $deadline - $this->monotonicSeconds();
+                if ($remaining <= 0.0) {
+                    $failure = 'Verified dependency package download exceeded its total deadline.';
+                    break;
+                }
+                @\stream_set_timeout(
+                    $source,
+                    (int)\max(1, \min(
+                        self::WINDOWS_CADDY_READ_TIMEOUT_SECONDS,
+                        \ceil($remaining),
+                    )),
+                );
+                $chunk = @\fread($source, 65_536);
+                $metadata = @\stream_get_meta_data($source);
+                if (!\is_string($chunk)
+                    || (\is_array($metadata) && ($metadata['timed_out'] ?? false) === true)
+                ) {
+                    $failure = 'Verified dependency package download stalled or failed.';
+                    break;
+                }
+                if ($chunk === '') {
+                    if (@\feof($source)) {
+                        break;
+                    }
+                    continue;
+                }
+                $bytes += \strlen($chunk);
+                if ($bytes > self::WINDOWS_CADDY_MAX_ARCHIVE_BYTES) {
+                    $failure = 'Verified dependency package exceeds its fixed archive-size limit.';
+                    break;
+                }
+                \hash_update($hash, $chunk);
+                $offset = 0;
+                while ($offset < \strlen($chunk)) {
+                    $written = @\fwrite($destination, \substr($chunk, $offset));
+                    if (!\is_int($written) || $written < 1) {
+                        $failure = 'Unable to persist the verified dependency package.';
+                        break 2;
+                    }
+                    $offset += $written;
+                }
+            }
+            if ($failure === ''
+                && (!@\fflush($destination)
+                    || (\function_exists('fsync') && !@\fsync($destination)))
+            ) {
+                $failure = 'Unable to durably persist the verified dependency package.';
+            }
         } finally {
             @\fclose($source);
             @\fclose($destination);
         }
-        if (!\is_int($bytes) || $bytes <= 0) {
+        if ($failure !== '') {
+            return ['success' => false, 'output' => $failure];
+        }
+        if ($bytes <= 0) {
             return ['success' => false, 'output' => 'Verified dependency package download was empty.'];
         }
 
-        $actualHash = \hash_file('sha256', $target);
-        if (!\is_string($actualHash) || !\hash_equals($expectedHash, \strtolower($actualHash))) {
+        $actualHash = \hash_final($hash);
+        $persistedSize = @\filesize($target);
+        if (!\is_int($persistedSize)
+            || $persistedSize !== $bytes
+            || !\hash_equals($expectedHash, \strtolower($actualHash))
+        ) {
             return ['success' => false, 'output' => 'Dependency package SHA-256 mismatch; installation refused.'];
         }
 
         return ['success' => true, 'output' => 'Dependency package digest verified.'];
     }
 
-    /** @return array{success:bool,output:string} */
-    private function publishWindowsBinary(string $candidate, string $target, string $token): array
+    /** @return array{stream:resource,url:string} */
+    private function openBoundedHttpsDownload(string $url, float $deadline): array
     {
+        $current = $url;
+        for ($redirect = 0; $redirect <= self::WINDOWS_CADDY_MAX_REDIRECTS; ++$redirect) {
+            $parts = \parse_url($current);
+            if (!\is_array($parts)
+                || !\hash_equals('https', \strtolower((string)($parts['scheme'] ?? '')))
+                || \trim((string)($parts['host'] ?? '')) === ''
+                || isset($parts['user'])
+                || isset($parts['pass'])
+                || isset($parts['fragment'])
+                || (isset($parts['port']) && (int)$parts['port'] !== 443)
+            ) {
+                throw new \RuntimeException('Verified dependency redirects must remain on canonical HTTPS URLs.');
+            }
+            $remaining = $deadline - $this->monotonicSeconds();
+            if ($remaining <= 0.0) {
+                throw new \RuntimeException('Verified dependency download exceeded its total deadline.');
+            }
+            $context = \stream_context_create([
+                'http' => [
+                    'follow_location' => 0,
+                    'ignore_errors' => true,
+                    'timeout' => (int)\max(1, \min(
+                        self::WINDOWS_CADDY_READ_TIMEOUT_SECONDS,
+                        \ceil($remaining),
+                    )),
+                    'user_agent' => 'WelineFramework-WLS/' . PHP_VERSION,
+                ],
+                'ssl' => [
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                    'SNI_enabled' => true,
+                ],
+            ]);
+            $http_response_header = [];
+            $stream = @\fopen($current, 'rb', false, $context);
+            $headers = isset($http_response_header) && \is_array($http_response_header)
+                ? $http_response_header
+                : [];
+            $status = 0;
+            $location = '';
+            foreach ($headers as $header) {
+                if (\preg_match('/\AHTTP\/\S+\s+([0-9]{3})\b/i', (string)$header, $match) === 1) {
+                    $status = (int)$match[1];
+                } elseif (\stripos((string)$header, 'Location:') === 0) {
+                    $location = \trim(\substr((string)$header, 9));
+                }
+            }
+            if ($status >= 200 && $status < 300 && \is_resource($stream)) {
+                return ['stream' => $stream, 'url' => $current];
+            }
+            if (\is_resource($stream)) {
+                @\fclose($stream);
+            }
+            if ($status < 300 || $status > 399 || $location === '') {
+                throw new \RuntimeException('Verified dependency HTTPS endpoint returned an invalid response.');
+            }
+            if ($redirect >= self::WINDOWS_CADDY_MAX_REDIRECTS) {
+                throw new \RuntimeException('Verified dependency download exceeded its redirect limit.');
+            }
+            $current = $this->resolveHttpsRedirect($current, $location);
+        }
+
+        throw new \RuntimeException('Verified dependency redirect resolution failed.');
+    }
+
+    private function resolveHttpsRedirect(string $base, string $location): string
+    {
+        if ($location === ''
+            || \preg_match('/[\x00-\x20\x7f]/', $location) === 1
+        ) {
+            throw new \RuntimeException('Verified dependency redirect location is malformed.');
+        }
+        if (\preg_match('/\Ahttps:\/\//i', $location) === 1) {
+            return $location;
+        }
+        if (\str_starts_with($location, '//')
+            || \preg_match('/\A[A-Za-z][A-Za-z0-9+.-]*:/D', $location) === 1
+        ) {
+            throw new \RuntimeException('Verified dependency redirect attempted a protocol change.');
+        }
+        $parts = \parse_url($base);
+        if (!\is_array($parts) || !isset($parts['host'])) {
+            throw new \RuntimeException('Verified dependency redirect base is invalid.');
+        }
+        $authority = 'https://' . $parts['host'];
+        if (isset($parts['port'])) {
+            $authority .= ':' . (int)$parts['port'];
+        }
+        if (\str_starts_with($location, '/')) {
+            return $authority . $location;
+        }
+        $path = (string)($parts['path'] ?? '/');
+        return $authority . \substr($path, 0, (int)\strrpos($path, '/') + 1) . $location;
+    }
+
+    private function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
+    /**
+     * @param array{sha256:string,size:int} $expectedCandidate
+     * @return array{success:bool,output:string}
+     */
+    private function publishWindowsBinary(
+        string $candidate,
+        string $target,
+        string $token,
+        array $expectedCandidate,
+    ): array {
+        try {
+            $candidateProof = $this->stableRegularFileProof(
+                $candidate,
+                self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES,
+                'probed Caddy executable',
+            );
+        } catch (\Throwable $throwable) {
+            return ['success' => false, 'output' => $throwable->getMessage()];
+        }
+        if ($candidateProof !== $expectedCandidate) {
+            return [
+                'success' => false,
+                'output' => 'The probed Caddy executable changed before publication.',
+            ];
+        }
+
         $backup = '';
-        if (\is_file($target)) {
-            $backup = $target . '.backup-' . \gmdate('YmdHis') . '-' . $token;
+        $targetProof = null;
+        $targetStatus = @\lstat($target);
+        if (\is_array($targetStatus)) {
+            try {
+                $targetProof = $this->stableRegularFileProof(
+                    $target,
+                    self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES,
+                    'existing managed Caddy executable',
+                );
+            } catch (\Throwable $throwable) {
+                return ['success' => false, 'output' => $throwable->getMessage()];
+            }
+            $backup = $target . '.backup-' . \gmdate('YmdHis') . '-' . $token
+                . '-' . $targetProof['sha256'];
+            if (\file_exists($backup) || \is_link($backup)) {
+                return [
+                    'success' => false,
+                    'output' => 'Managed Caddy backup target already exists or is unsafe.',
+                ];
+            }
             if (!@\rename($target, $backup)) {
                 return ['success' => false, 'output' => 'Unable to preserve the existing managed Caddy binary.'];
             }
+        } elseif (\file_exists($target) || \is_link($target)) {
+            return [
+                'success' => false,
+                'output' => 'Managed Caddy target is linked, special, or indeterminate.',
+            ];
         }
         if (@\rename($candidate, $target)) {
-            return ['success' => true, 'output' => 'Managed Caddy binary published atomically.'];
+            try {
+                $published = $this->stableRegularFileProof(
+                    $target,
+                    self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES,
+                    'published managed Caddy executable',
+                );
+                if ($published === $expectedCandidate) {
+                    return [
+                        'success' => true,
+                        'output' => 'Managed Caddy binary published atomically.',
+                    ];
+                }
+            } catch (\Throwable) {
+                // The exact rollback result below is the publication authority.
+            }
+
+            return $this->restoreWindowsBinary(
+                $target,
+                $backup,
+                $targetProof,
+                $token,
+                'Published Caddy executable failed its post-rename identity check.',
+            );
         }
-        if ($backup !== '' && !\is_file($target)) {
-            @\rename($backup, $target);
+        return $this->restoreWindowsBinary(
+            $target,
+            $backup,
+            $targetProof,
+            $token,
+            'Unable to atomically publish the managed Caddy binary.',
+        );
+    }
+
+    /** @return array{success:bool,output:string}|null */
+    private function recoverInterruptedWindowsBinary(
+        string $target,
+        HttpProtocolSelection $selection,
+    ): ?array {
+        $targetState = @\lstat($target);
+        if (\is_array($targetState)) {
+            if (\is_link($target)
+                || ((((int)($targetState['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($targetState['nlink'] ?? 0) !== 1
+            ) {
+                return [
+                    'success' => false,
+                    'output' => 'Managed Caddy recovery refused a linked or special target.',
+                ];
+            }
+            return null;
+        }
+        if (\file_exists($target) || \is_link($target)) {
+            return [
+                'success' => false,
+                'output' => 'Managed Caddy recovery could not determine the target identity.',
+            ];
         }
 
-        return ['success' => false, 'output' => 'Unable to atomically publish the managed Caddy binary.'];
+        $pattern = '/\A' . \preg_quote(\basename($target), '/')
+            . '\.backup-[0-9]{14}-[a-f0-9]{16}-([a-f0-9]{64})\z/D';
+        $backups = [];
+        foreach (GatewayBoundedTreeWalker::collect(
+            \dirname($target),
+            false,
+            false,
+            self::WINDOWS_CADDY_MAX_RUNTIME_ENTRIES,
+        ) as $record) {
+            $matches = [];
+            if (!$record['directory']
+                && (int)$record['depth'] === 1
+                && \preg_match($pattern, \basename((string)$record['path']), $matches) === 1
+            ) {
+                $record['expected_sha256'] = (string)$matches[1];
+                $backups[] = $record;
+            }
+        }
+        \usort(
+            $backups,
+            static fn (array $left, array $right): int =>
+                \strcmp((string)$right['path'], (string)$left['path']),
+        );
+        foreach ($backups as $record) {
+            try {
+                GatewayBoundedTreeWalker::revalidate($record);
+                $proof = $this->stableRegularFileProof(
+                    (string)$record['path'],
+                    self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES,
+                    'managed Caddy recovery backup',
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!\hash_equals((string)$record['expected_sha256'], $proof['sha256'])) {
+                continue;
+            }
+            $probe = $this->probe((string)$record['path'], $selection);
+            if (!$probe['success']) {
+                continue;
+            }
+            if (!@\rename((string)$record['path'], $target)) {
+                return [
+                    'success' => false,
+                    'output' => 'Unable to restore the verified managed Caddy recovery backup.',
+                ];
+            }
+            try {
+                $restored = $this->stableRegularFileProof(
+                    $target,
+                    self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES,
+                    'restored managed Caddy executable',
+                );
+            } catch (\Throwable $throwable) {
+                return [
+                    'success' => false,
+                    'output' => 'Managed Caddy recovery publication could not be verified: '
+                        . $throwable->getMessage(),
+                ];
+            }
+            if ($restored !== $proof) {
+                return [
+                    'success' => false,
+                    'output' => 'Managed Caddy recovery publication changed after atomic restore.',
+                ];
+            }
+            $restoredProbe = $this->probe($target, $selection);
+            if (!$restoredProbe['success']) {
+                return [
+                    'success' => false,
+                    'output' => 'Restored managed Caddy executable failed its capability probe: '
+                        . $restoredProbe['output'],
+                ];
+            }
+            return [
+                'success' => true,
+                'output' => 'Recovered the last verified managed Caddy binary after an interrupted publication.',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{sha256:string,size:int}|null $expectedBackup
+     * @return array{success:bool,output:string}
+     */
+    private function restoreWindowsBinary(
+        string $target,
+        string $backup,
+        ?array $expectedBackup,
+        string $token,
+        string $failure,
+    ): array {
+        $failed = $target . '.failed-' . $token;
+        if (\file_exists($failed) || \is_link($failed)) {
+            return [
+                'success' => false,
+                'output' => $failure . ' Rollback staging path is already occupied.',
+            ];
+        }
+        if (\file_exists($target) || \is_link($target)) {
+            if (\is_link($target) || !\is_file($target) || !@\rename($target, $failed)) {
+                return [
+                    'success' => false,
+                    'output' => $failure . ' The failed target could not be isolated.',
+                ];
+            }
+        }
+        if ($backup !== '') {
+            if ($expectedBackup === null
+                || !\is_file($backup)
+                || \is_link($backup)
+                || !@\rename($backup, $target)
+            ) {
+                return [
+                    'success' => false,
+                    'output' => $failure . ' The previous managed Caddy binary could not be restored.',
+                ];
+            }
+            try {
+                $restored = $this->stableRegularFileProof(
+                    $target,
+                    self::WINDOWS_CADDY_MAX_EXECUTABLE_BYTES,
+                    'restored managed Caddy executable',
+                );
+            } catch (\Throwable $throwable) {
+                return [
+                    'success' => false,
+                    'output' => $failure . ' Restored target verification failed: '
+                        . $throwable->getMessage(),
+                ];
+            }
+            if ($restored !== $expectedBackup) {
+                return [
+                    'success' => false,
+                    'output' => $failure . ' Restored target content does not match the preserved binary.',
+                ];
+            }
+        }
+        if ((\file_exists($failed) || \is_link($failed)) && !@\unlink($failed)) {
+            return [
+                'success' => false,
+                'output' => $failure . ' Rollback succeeded but failed-target cleanup did not.',
+            ];
+        }
+
+        return [
+            'success' => false,
+            'output' => $failure . ($backup !== '' ? ' Previous binary restored.' : ''),
+        ];
+    }
+
+    private function cleanupWindowsTransientFiles(
+        string $directory,
+        string $packageName,
+        string $binaryLeaf,
+    ): void {
+        $downloadPattern = '/\A' . \preg_quote($packageName, '/')
+            . '\.download-[a-f0-9]{16}\z/D';
+        $candidatePattern = '/\A' . \preg_quote($binaryLeaf, '/')
+            . '\.install-[a-f0-9]{16}\.exe\z/D';
+        foreach (GatewayBoundedTreeWalker::collect(
+            $directory,
+            false,
+            false,
+            self::WINDOWS_CADDY_MAX_RUNTIME_ENTRIES,
+        ) as $record) {
+            if ($record['directory'] || (int)$record['depth'] !== 1) {
+                continue;
+            }
+            $leaf = \basename((string)$record['path']);
+            if (\preg_match($downloadPattern, $leaf) !== 1
+                && \preg_match($candidatePattern, $leaf) !== 1
+            ) {
+                continue;
+            }
+            GatewayBoundedTreeWalker::revalidate($record);
+            if (!@\unlink((string)$record['path'])) {
+                throw new \RuntimeException(
+                    'Unable to remove stale installer artifact: ' . $leaf
+                );
+            }
+        }
+    }
+
+    private function pruneWindowsBackups(string $target, int $keep): void
+    {
+        if ($keep < 0 || $keep >= self::WINDOWS_CADDY_MAX_BACKUPS) {
+            throw new \InvalidArgumentException('Managed Caddy backup bound is invalid.');
+        }
+        $directory = \dirname($target);
+        $pattern = '/\A' . \preg_quote(\basename($target), '/')
+            . '\.backup-[0-9]{14}-[a-f0-9]{16}(?:-[a-f0-9]{64})?\z/D';
+        $backups = [];
+        foreach (GatewayBoundedTreeWalker::collect(
+            $directory,
+            false,
+            false,
+            self::WINDOWS_CADDY_MAX_RUNTIME_ENTRIES,
+        ) as $record) {
+            if (!$record['directory']
+                && (int)$record['depth'] === 1
+                && \preg_match($pattern, \basename((string)$record['path'])) === 1
+            ) {
+                $backups[] = $record;
+            }
+        }
+        \usort(
+            $backups,
+            static fn (array $left, array $right): int =>
+                \strcmp((string)$left['path'], (string)$right['path']),
+        );
+        while (\count($backups) > $keep) {
+            $record = \array_shift($backups);
+            if (!\is_array($record)) {
+                break;
+            }
+            GatewayBoundedTreeWalker::revalidate($record);
+            if (!@\unlink((string)$record['path'])) {
+                throw new \RuntimeException(
+                    'Unable to prune an old managed Caddy backup.'
+                );
+            }
+        }
+    }
+
+    /** @return array{sha256:string,size:int} */
+    private function stableRegularFileProof(
+        string $file,
+        int $maximumBytes,
+        string $label,
+    ): array {
+        $before = @\lstat($file);
+        if (!\is_array($before)
+            || \is_link($file)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($before['nlink'] ?? 0) !== 1
+            || (int)($before['size'] ?? -1) < 1
+            || (int)$before['size'] > $maximumBytes
+        ) {
+            throw new \RuntimeException($label . ' is linked, special, or outside bounds.');
+        }
+        $handle = @\fopen($file, 'rb');
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to open ' . $label . '.');
+        }
+        try {
+            $opened = @\fstat($handle);
+            if (!\is_array($opened) || !$this->sameFileState($before, $opened)) {
+                throw new \RuntimeException($label . ' changed before hashing.');
+            }
+            $hash = \hash_init('sha256');
+            $consumed = 0;
+            while ($consumed < (int)$opened['size']) {
+                $chunk = @\fread(
+                    $handle,
+                    \min(1_048_576, (int)$opened['size'] - $consumed),
+                );
+                if (!\is_string($chunk) || $chunk === '') {
+                    throw new \RuntimeException($label . ' ended before its declared size.');
+                }
+                $consumed += \strlen($chunk);
+                \hash_update($hash, $chunk);
+            }
+            $extra = @\fread($handle, 1);
+            $after = @\fstat($handle);
+            $pathAfter = @\lstat($file);
+            if ($extra !== ''
+                || !\is_array($after)
+                || !\is_array($pathAfter)
+                || !$this->sameFileState($opened, $after)
+                || !$this->sameFileState($after, $pathAfter)
+            ) {
+                throw new \RuntimeException($label . ' changed while being hashed.');
+            }
+            return [
+                'sha256' => \hash_final($hash),
+                'size' => $consumed,
+            ];
+        } finally {
+            @\fclose($handle);
+        }
+    }
+
+    /** @param array<string|int,mixed> $left @param array<string|int,mixed> $right */
+    private function sameFileState(array $left, array $right): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $left)
+                || !\array_key_exists($field, $right)
+                || (int)$left[$field] !== (int)$right[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function findExecutable(string $name): string
@@ -659,17 +1168,79 @@ final class ProtocolEdgeDependencyBootstrapper
         if (!\is_dir($directory) && !@\mkdir($directory, 0755, true) && !\is_dir($directory)) {
             return null;
         }
-        $handle = @\fopen($directory . DS . 'protocol_edge_dependency_install.lock', 'c+');
+        if (\is_link($directory) || !\is_dir($directory)) {
+            return null;
+        }
+        $path = $directory . DS . 'protocol_edge_dependency_install.lock';
+        $handle = false;
+        $created = false;
+        for ($attempt = 0; $attempt < 8; ++$attempt) {
+            $before = @\lstat($path);
+            $created = false;
+            if (\is_array($before)) {
+                if (\is_link($path)
+                    || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+                    || (int)($before['nlink'] ?? 0) !== 1
+                ) {
+                    return null;
+                }
+                $handle = @\fopen($path, 'r+b');
+            } else {
+                if (\file_exists($path) || \is_link($path)) {
+                    return null;
+                }
+                $handle = @\fopen($path, 'x+b');
+                $created = \is_resource($handle);
+            }
+            if (!\is_resource($handle)) {
+                SchedulerSystem::usleep(2000);
+                continue;
+            }
+            $opened = @\fstat($handle);
+            $pathStatus = @\lstat($path);
+            if (!\is_array($opened)
+                || !\is_array($pathStatus)
+                || \is_link($path)
+                || ((((int)($opened['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($opened['nlink'] ?? 0) !== 1
+                || (!$created
+                    && (!\is_array($before)
+                        || !$this->sameFileState($before, $opened)))
+                || !$this->sameFileState($opened, $pathStatus)
+            ) {
+                @\fclose($handle);
+                return null;
+            }
+            if (!@\chmod($path, 0600)) {
+                @\fclose($handle);
+                return null;
+            }
+            break;
+        }
         if (!\is_resource($handle)) {
             return null;
         }
 
-        $deadline = \microtime(true) + self::INSTALL_LOCK_TIMEOUT_SECONDS;
+        $deadline = $this->monotonicSeconds() + self::INSTALL_LOCK_TIMEOUT_SECONDS;
         do {
             if (@\flock($handle, \LOCK_EX | \LOCK_NB)) {
-                return $handle;
+                $opened = @\fstat($handle);
+                $pathStatus = @\lstat($path);
+                if (\is_array($opened)
+                    && \is_array($pathStatus)
+                    && !\is_link($path)
+                    && $this->sameFileState($opened, $pathStatus)
+                ) {
+                    if ($created) {
+                        @\fflush($handle);
+                        \function_exists('fsync') && @\fsync($handle);
+                    }
+                    return $handle;
+                }
+                @\flock($handle, \LOCK_UN);
+                break;
             }
-            if (\microtime(true) >= $deadline) {
+            if ($this->monotonicSeconds() >= $deadline) {
                 break;
             }
             SchedulerSystem::usleep(50000);
@@ -691,75 +1262,36 @@ final class ProtocolEdgeDependencyBootstrapper
         ?array $environment = null,
     ): array
     {
-        if (!\function_exists('proc_open')) {
-            return ['success' => false, 'exit_code' => 127, 'output' => 'proc_open is unavailable.', 'timed_out' => false];
+        if ($environment !== null) {
+            return [
+                'success' => false,
+                'exit_code' => 127,
+                'output' => 'Custom dependency-process environments are not supported.',
+                'timed_out' => false,
+            ];
         }
-        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
-        $process = @\proc_open($command, [
-            0 => ['file', $null, 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ], $pipes, $workingDirectory ?? (\defined('BP') ? BP : null), $environment, ['bypass_shell' => true]);
-        if (!\is_resource($process)) {
-            return ['success' => false, 'exit_code' => 126, 'output' => 'Unable to launch dependency process.', 'timed_out' => false];
+        try {
+            $result = GatewayBoundedCommandRunner::run(
+                $command,
+                (float)$timeoutSeconds,
+                $workingDirectory ?? (\defined('BP') ? BP : null),
+                false,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'exit_code' => 126,
+                'output' => $throwable->getMessage(),
+                'timed_out' => false,
+            ];
         }
-
-        foreach ([1, 2] as $index) {
-            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
-                \stream_set_blocking($pipes[$index], false);
-            }
-        }
-        $startedAt = \microtime(true);
-        $output = '';
-        $timedOut = false;
-        $lastStatus = ['running' => true, 'exitcode' => -1];
-        while (true) {
-            $lastStatus = \proc_get_status($process);
-            $read = [];
-            foreach ([1, 2] as $index) {
-                if (isset($pipes[$index]) && \is_resource($pipes[$index]) && !\feof($pipes[$index])) {
-                    $read[] = $pipes[$index];
-                }
-            }
-            if ($read !== []) {
-                $write = null;
-                $except = null;
-                @\stream_select($read, $write, $except, 0, 200000);
-                foreach ($read as $pipe) {
-                    $chunk = (string)(@\fread($pipe, 8192) ?: '');
-                    if ($chunk !== '' && \strlen($output) < self::MAX_OUTPUT_BYTES) {
-                        $output .= \substr($chunk, 0, self::MAX_OUTPUT_BYTES - \strlen($output));
-                    }
-                }
-            }
-            if (!($lastStatus['running'] ?? false)) {
-                break;
-            }
-            if ((\microtime(true) - $startedAt) >= $timeoutSeconds) {
-                $timedOut = true;
-                @\proc_terminate($process);
-                break;
-            }
-        }
-        foreach ([1, 2] as $index) {
-            if (isset($pipes[$index]) && \is_resource($pipes[$index])) {
-                $chunk = (string)(@\stream_get_contents($pipes[$index]) ?: '');
-                if ($chunk !== '' && \strlen($output) < self::MAX_OUTPUT_BYTES) {
-                    $output .= \substr($chunk, 0, self::MAX_OUTPUT_BYTES - \strlen($output));
-                }
-                @\fclose($pipes[$index]);
-            }
-        }
-        $closeCode = @\proc_close($process);
-        $exitCode = $timedOut
-            ? 124
-            : ((int)($lastStatus['exitcode'] ?? -1) >= 0 ? (int)$lastStatus['exitcode'] : (int)$closeCode);
+        $exitCode = (int)($result['code'] ?? 125);
 
         return [
-            'success' => !$timedOut && $exitCode === 0,
+            'success' => $exitCode === 0,
             'exit_code' => $exitCode,
-            'output' => $output,
-            'timed_out' => $timedOut,
+            'output' => (string)($result['output'] ?? ''),
+            'timed_out' => $exitCode === 124,
         ];
     }
 

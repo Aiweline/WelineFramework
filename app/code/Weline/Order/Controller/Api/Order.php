@@ -80,7 +80,7 @@ class Order extends BackendRestController
             
             $orders = $this->orderService->getOrderList($filters);
             
-            return $this->success(__('获取订单列表成功'), [
+            return $this->success(\__('获取订单列表成功'), [
                 'orders' => $orders,
                 'filters' => $filters,
             ]);
@@ -99,7 +99,7 @@ class Order extends BackendRestController
             $orderId = (int)$this->request->getParam('id');
             
             if (!$orderId) {
-                return $this->error(__('订单ID不能为空'), '', 400);
+                return $this->error(\__('订单ID不能为空'), '', 400);
             }
             
             $order = $this->orderService->getOrder($orderId);
@@ -122,7 +122,7 @@ class Order extends BackendRestController
             $currentStatus = $order->getData(\Weline\Order\Model\Order::schema_fields_STATUS);
             $availableTransitions = $this->stateMachine->getAvailableTransitions($currentStatus);
             
-            return $this->success(__('获取订单详情成功'), [
+            return $this->success(\__('获取订单详情成功'), [
                 'order' => $order->getData(),
                 'items' => array_map(function($item) {
                     return $item->getData();
@@ -159,12 +159,12 @@ class Order extends BackendRestController
             $data = $this->request->getBodyParams();
             
             if (empty($data)) {
-                return $this->error(__('订单数据不能为空'), '', 400);
+                return $this->error(\__('订单数据不能为空'), '', 400);
             }
             
             $order = $this->orderService->createOrder($data);
             
-            return $this->success(__('订单创建成功'), [
+            return $this->success(\__('订单创建成功'), [
                 'order_id' => $order->getId(),
                 'order_number' => $order->getData(\Weline\Order\Model\Order::schema_fields_ORDER_NUMBER),
             ], 201);
@@ -184,16 +184,16 @@ class Order extends BackendRestController
             $data = $this->request->getBodyParams();
             
             if (!$orderId) {
-                return $this->error(__('订单ID不能为空'), '', 400);
+                return $this->error(\__('订单ID不能为空'), '', 400);
             }
             
             if (empty($data)) {
-                return $this->error(__('更新数据不能为空'), '', 400);
+                return $this->error(\__('更新数据不能为空'), '', 400);
             }
             
             $order = $this->orderService->updateOrder($orderId, $data);
             
-            return $this->success(__('订单更新成功'), [
+            return $this->success(\__('订单更新成功'), [
                 'order_id' => $order->getId(),
             ]);
             
@@ -213,12 +213,12 @@ class Order extends BackendRestController
             $reason = $data['reason'] ?? '';
             
             if (!$orderId) {
-                return $this->error(__('订单ID不能为空'), '', 400);
+                return $this->error(\__('订单ID不能为空'), '', 400);
             }
             
             $this->orderService->cancelOrder($orderId, $reason);
             
-            return $this->success(__('订单取消成功'));
+            return $this->success(\__('订单取消成功'));
             
         } catch (\Exception $e) {
             return $this->error($e->getMessage(), '', 500);
@@ -238,12 +238,12 @@ class Order extends BackendRestController
             $notifyCustomer = (bool)($data['notify_customer'] ?? false);
             
             if (!$orderId || !$newStatus) {
-                return $this->error(__('参数错误'), '', 400);
+                return $this->error(\__('参数错误'), '', 400);
             }
             
             $this->stateMachine->transition($orderId, $newStatus, $comment, $notifyCustomer);
             
-            return $this->success(__('订单状态更新成功'));
+            return $this->success(\__('订单状态更新成功'));
             
         } catch (\Exception $e) {
             return $this->error($e->getMessage(), '', 500);
@@ -260,12 +260,12 @@ class Order extends BackendRestController
             $orderId = (int)($data['order_id'] ?? 0);
             
             if (!$orderId) {
-                return $this->error(__('订单ID不能为空'), '', 400);
+                return $this->error(\__('订单ID不能为空'), '', 400);
             }
             
             $payment = $this->paymentService->processPayment($orderId, $data);
             
-            return $this->success(__('支付处理成功'), [
+            return $this->success(\__('支付处理成功'), [
                 'payment_id' => $payment->getId(),
             ]);
             
@@ -284,12 +284,12 @@ class Order extends BackendRestController
             $orderId = (int)($data['order_id'] ?? 0);
             
             if (!$orderId) {
-                return $this->error(__('订单ID不能为空'), '', 400);
+                return $this->error(\__('订单ID不能为空'), '', 400);
             }
             
             $shipment = $this->fulfillmentService->createShipment($orderId, $data);
             
-            return $this->success(__('发货记录创建成功'), [
+            return $this->success(\__('发货记录创建成功'), [
                 'shipment_id' => $shipment->getId(),
             ]);
             
@@ -308,12 +308,12 @@ class Order extends BackendRestController
             $orderId = (int)($data['order_id'] ?? 0);
             
             if (!$orderId) {
-                return $this->error(__('订单ID不能为空'), '', 400);
+                return $this->error(\__('订单ID不能为空'), '', 400);
             }
             
             $refund = $this->refundService->createRefund($orderId, $data);
             
-            return $this->success(__('退款申请创建成功'), [
+            return $this->success(\__('退款申请创建成功'), [
                 'refund_id' => $refund->getId(),
             ]);
             
@@ -332,12 +332,12 @@ class Order extends BackendRestController
             $orderId = (int)($data['order_id'] ?? 0);
             
             if (!$orderId) {
-                return $this->error(__('订单ID不能为空'), '', 400);
+                return $this->error(\__('订单ID不能为空'), '', 400);
             }
             
             $invoice = $this->invoiceService->generateInvoice($orderId);
             
-            return $this->success(__('发票生成成功'), [
+            return $this->success(\__('发票生成成功'), [
                 'invoice_id' => $invoice->getId(),
                 'invoice_number' => $invoice->getData(\Weline\Order\Model\OrderInvoice::schema_fields_INVOICE_NUMBER),
             ]);

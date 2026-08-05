@@ -64,7 +64,7 @@ class IntegrationTest extends TestCase
         
         $logger->flush();
         
-        $logFile = $this->testLogDir . DIRECTORY_SEPARATOR . 'integration_test.log';
+        $logFile = $this->logFileForChannel('integration_test');
         $this->assertFileExists($logFile);
         
         $content = file_get_contents($logFile);
@@ -88,7 +88,7 @@ class IntegrationTest extends TestCase
         
         $logger->flush();
         
-        $logFile = $this->testLogDir . DIRECTORY_SEPARATOR . 'context_test.log';
+        $logFile = $this->logFileForChannel('context_test');
         $content = file_get_contents($logFile);
         
         $this->assertStringContainsString('User john performed login', $content);
@@ -129,7 +129,7 @@ class IntegrationTest extends TestCase
         
         $logger->flush();
         
-        $logFile = $this->testLogDir . DIRECTORY_SEPARATOR . 'filter_test.log';
+        $logFile = $this->logFileForChannel('filter_test');
         
         if (file_exists($logFile)) {
             $content = file_get_contents($logFile);
@@ -153,6 +153,10 @@ class IntegrationTest extends TestCase
         w_log_exception($exception, 'Exception test', 'exception_test');
         
         LoggerFactory::flushAll();
+
+        $logFile = $this->logFileForChannel('exception_test');
+        $this->assertFileExists($logFile);
+        $this->assertStringContainsString('Exception test', (string)file_get_contents($logFile));
     }
 
     /**
@@ -171,11 +175,24 @@ class IntegrationTest extends TestCase
         LoggerFactory::flushAll();
         
         foreach ($channels as $channel) {
-            $logFile = $this->testLogDir . DIRECTORY_SEPARATOR . "{$channel}.log";
+            $logFile = $this->logFileForChannel($channel);
             $this->assertFileExists($logFile);
             
             $content = file_get_contents($logFile);
             $this->assertStringContainsString("Message for {$channel}", $content);
         }
+    }
+
+    private function logFileForChannel(string $channel): string
+    {
+        if ($channel === 'app') {
+            return $this->testLogDir . DIRECTORY_SEPARATOR . 'info.log';
+        }
+        if (in_array($channel, ['auth', 'payment', 'api'], true)) {
+            return $this->testLogDir . DIRECTORY_SEPARATOR . $channel
+                . DIRECTORY_SEPARATOR . $channel . '.log';
+        }
+        return $this->testLogDir . DIRECTORY_SEPARATOR . 'other'
+            . DIRECTORY_SEPARATOR . $channel . '.log';
     }
 }

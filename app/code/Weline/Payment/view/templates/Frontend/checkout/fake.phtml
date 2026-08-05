@@ -10,7 +10,7 @@ $this->setData('payment_fake_mode', true);
         <p><?= __('Used by browser verification only.') ?></p>
     </header>
 
-    <section class="weline-payment-fake__surface">
+    <section class="weline-payment-fake__surface" weline-code="payment.fake.section_1">
         <?php include BP . '/app/code/Weline/Payment/view/templates/Frontend/checkout/payment-methods.phtml'; ?>
     </section>
 </main>

@@ -22,6 +22,9 @@ class WebsiteBackupService
         'var/export',
     ];
 
+    /** @var list<array{table:string,class:string}>|null */
+    private static ?array $websiteScopedTablesCache = null;
+
     public function __construct(private Website $website)
     {
     }
@@ -266,6 +269,9 @@ class WebsiteBackupService
      */
     private function discoverWebsiteScopedTables(): array
     {
+        if (self::$websiteScopedTablesCache !== null) {
+            return self::$websiteScopedTablesCache;
+        }
         $base = \defined('APP_CODE_PATH')
             ? \rtrim((string)APP_CODE_PATH, '\\/')
             : \rtrim((string)BP, '\\/') . \DIRECTORY_SEPARATOR . 'app' . \DIRECTORY_SEPARATOR . 'code';
@@ -291,12 +297,18 @@ class WebsiteBackupService
                 continue;
             }
 
-            $class = \str_replace(\DIRECTORY_SEPARATOR, '\\', \substr($relative, 0, -4));
-            if (!\class_exists($class)) {
+            $source = @\file_get_contents($file->getPathname());
+            if (!\is_string($source)
+                || !\str_contains($source, self::WEBSITE_FIELD)
+                || !\str_contains($source, 'schema_table')) {
                 continue;
             }
 
+            $class = \str_replace(\DIRECTORY_SEPARATOR, '\\', \substr($relative, 0, -4));
             try {
+                if (!\class_exists($class)) {
+                    continue;
+                }
                 $reflection = new \ReflectionClass($class);
                 if (!$reflection->isSubclassOf(Model::class)) {
                     continue;
@@ -335,7 +347,7 @@ class WebsiteBackupService
         ];
         \ksort($tables);
 
-        return \array_values($tables);
+        return self::$websiteScopedTablesCache = \array_values($tables);
     }
 
     /**

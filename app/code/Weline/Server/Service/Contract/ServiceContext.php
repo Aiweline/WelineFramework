@@ -106,10 +106,12 @@ class ServiceContext
         }
 
         if ($sslEnabled
-            && ($sslCert === '' || $sslKey === '' || $runtimeSelection->sslEngine !== 'stream')
+            && ($sslCert === ''
+                || $sslKey === ''
+                || $runtimeSelection->sslEngine !== 'stream')
         ) {
             throw new \InvalidArgumentException(
-                'Pure WLS HTTPS requires certificate/key material and the PHP Stream SSL engine.'
+                'Pure WLS HTTPS requires certificate/key material plus the PHP Stream SSL engine.'
             );
         }
         if (!$sslEnabled && ($sslCert !== '' || $sslKey !== '')) {

@@ -15,13 +15,14 @@ use Weline\Framework\Container\ContainerRuntime;
  */
 final class WorkerReadinessState
 {
-    public const READINESS_PROTOCOL_VERSION = 7;
+    public const READINESS_PROTOCOL_VERSION = 8;
     public const CAPABILITY_DYNAMIC_FIRST_RENDER_PROOF = 'dynamic_first_render_proof_v1';
     public const CAPABILITY_COMPILED_CONTAINER_DIGEST = 'compiled_container_digest_v1';
     public const CAPABILITY_HTTP3_QUIC_READY = 'http3_quic_ready_v3';
     public const CAPABILITY_HTTP3_LINUX_EBPF_ROUTE = 'http3_linux_ebpf_route_v1';
     public const CAPABILITY_HTTP3_TLS_TICKET_RING = 'http3_tls_ticket_ring_v1';
     public const CAPABILITY_CACHE_NAMESPACE_INVALIDATION = 'cache_namespace_invalidation_v1';
+    public const CAPABILITY_EXACT_TLS_MANIFEST_RELOAD = 'exact_tls_manifest_reload_v1';
 
     private static string $topology = '';
     private static string $policyDigest = '';
@@ -64,6 +65,8 @@ final class WorkerReadinessState
     private static int $inheritedFd = 0;
     private static string $eventLoop = '';
     private static string $sslEngine = '';
+    /** @var array<string,mixed> */
+    private static array $windowsListenerHandoffProof = [];
     private static string $http3Mode = '';
     private static bool $http3ListenerBound = false;
     private static bool $http3DatagramChannelReady = false;
@@ -80,6 +83,9 @@ final class WorkerReadinessState
     private static array $http3Route = [];
     private static string $http3ActivationId = '';
     private static int $namespaceAuthorityClock = 0;
+    private static int $servingManifestGeneration = 0;
+    private static string $servingManifestDigest = '';
+    private static int $servingManifestRouteCount = -1;
 
     public static function reset(string $topology): void
     {
@@ -96,6 +102,7 @@ final class WorkerReadinessState
         self::$inheritedFd = 0;
         self::$eventLoop = '';
         self::$sslEngine = '';
+        self::$windowsListenerHandoffProof = [];
         self::$http3Mode = '';
         self::$http3ListenerBound = false;
         self::$http3DatagramChannelReady = false;
@@ -111,6 +118,33 @@ final class WorkerReadinessState
         self::$http3Route = [];
         self::$http3ActivationId = '';
         self::$namespaceAuthorityClock = 0;
+        self::$servingManifestGeneration = 0;
+        self::$servingManifestDigest = '';
+        self::$servingManifestRouteCount = -1;
+    }
+
+    /**
+     * Bind READY to the exact immutable TLS serving snapshot loaded by this
+     * process.  A TLS worker must publish this proof before it can be admitted
+     * by Master; otherwise a process started during a certificate transaction
+     * could become READY later with an obsolete manifest.
+     */
+    public static function markServingManifest(
+        int $generation,
+        string $digest,
+        int $routeCount,
+    ): void {
+        $digest = \strtolower(\trim($digest));
+        if ($generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+            || $routeCount < 0
+            || $routeCount > 4096
+        ) {
+            throw new \InvalidArgumentException('Invalid TLS serving manifest readiness proof.');
+        }
+        self::$servingManifestGeneration = $generation;
+        self::$servingManifestDigest = $digest;
+        self::$servingManifestRouteCount = $routeCount;
     }
 
     public static function markListenerBound(
@@ -139,6 +173,55 @@ final class WorkerReadinessState
         self::$reusePortBound = false;
         self::$sharedListener = false;
         self::$inheritedFd = 0;
+        self::$windowsListenerHandoffProof = [];
+    }
+
+    /** @param array<string,mixed> $proof */
+    public static function setWindowsListenerHandoffProof(array $proof): void
+    {
+        $targetPid = (int)($proof['target_pid'] ?? 0);
+        $sourcePid = (int)($proof['source_pid'] ?? 0);
+        $targetBirth = \strtolower(\trim((string)($proof['target_process_birth'] ?? '')));
+        $sourceBirth = \strtolower(\trim((string)($proof['source_process_birth'] ?? '')));
+        if (!\hash_equals(
+                WindowsListenerHandoff::TRANSPORT,
+                (string)($proof['mode'] ?? ''),
+            )
+            || ($proof['bound'] ?? false) !== true
+            || ($proof['inherited'] ?? false) !== true
+            || ($proof['continuous_ownership'] ?? false) !== true
+            || $targetPid !== (int)\getmypid()
+            || $sourcePid <= 0
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['host_lease_id'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['handoff_id'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)($proof['intent_digest'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)($proof['envelope_digest'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['adoption_nonce'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $targetBirth) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $sourceBirth) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['master_launch_id'] ?? '')) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)($proof['launch_id'] ?? '')) !== 1
+            || \preg_match('/\A[A-Za-z0-9_.:#-]{1,128}\z/D', (string)($proof['slot_id'] ?? '')) !== 1
+            || (int)($proof['generation'] ?? 0) <= 0
+            || (int)($proof['port'] ?? 0) < 1
+            || (int)($proof['port'] ?? 0) > 65535
+            || \filter_var((string)($proof['host'] ?? ''), FILTER_VALIDATE_IP) === false
+            || !\hash_equals(
+                $targetBirth,
+                WindowsListenerHandoff::processBirthIdentity($targetPid),
+            )
+            || !\hash_equals(
+                $sourceBirth,
+                WindowsListenerHandoff::processBirthIdentity($sourcePid),
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Worker Windows listener adoption proof is invalid.'
+            );
+        }
+        $proof['handoff_transport'] = (string)$proof['mode'];
+        unset($proof['mode']);
+        self::$windowsListenerHandoffProof = $proof;
     }
 
     /** @param array<string,int|string> $routeStatus */
@@ -334,6 +417,7 @@ final class WorkerReadinessState
                 self::CAPABILITY_HTTP3_LINUX_EBPF_ROUTE,
                 self::CAPABILITY_HTTP3_TLS_TICKET_RING,
                 self::CAPABILITY_CACHE_NAMESPACE_INVALIDATION,
+                self::CAPABILITY_EXACT_TLS_MANIFEST_RELOAD,
             ],
             'topology' => self::$topology,
             'policy_digest' => self::$policyDigest,
@@ -341,7 +425,7 @@ final class WorkerReadinessState
             'warmup_state' => self::$warmupState,
             'homepage_fpc' => self::$homepageFpcProof,
             'dynamic_first_render' => self::$dynamicFirstRenderProof,
-            'listen_capabilities' => [
+            'listen_capabilities' => \array_merge([
                 'bound' => self::$listenerBound,
                 'reuseport' => self::$reusePortBound,
                 'mode' => self::$listenerMode,
@@ -367,8 +451,11 @@ final class WorkerReadinessState
                     'activation_id' => self::$http3ActivationId,
                     'route' => self::$http3Route,
                 ],
-            ],
+            ], self::$windowsListenerHandoffProof),
             'namespace_authority_clock' => self::$namespaceAuthorityClock,
+            'serving_manifest_generation' => self::$servingManifestGeneration,
+            'serving_manifest_digest' => self::$servingManifestDigest,
+            'serving_manifest_route_count' => self::$servingManifestRouteCount,
         ];
     }
 

@@ -4,11 +4,16 @@
  * @var array $campaigns
  * @var \Weline\Framework\Pagination\Pagination $pagination
  */
+$escapeHtml = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
 ?>
-<div class="marketing-campaign-list">
+<div class="marketing-campaign-list" data-testid="marketing-campaign-management">
     <h1><?= __('促销活动列表') ?></h1>
     <div class="toolbar">
-        <a href="<?= $this->getUrl('marketing/backend/campaign/getAdd') ?>" class="btn btn-primary"><?= __('添加活动') ?></a>
+        <a href="<?= $this->getBackendUrl('marketing/backend/campaign/getAdd') ?>" class="btn btn-primary" data-testid="marketing-campaign-create"><?= __('添加活动') ?></a>
     </div>
     <table class="table">
         <thead>
@@ -27,8 +32,8 @@
             <?php foreach ($campaigns as $campaign): ?>
             <tr>
                 <td><?= $campaign['id'] ?></td>
-                <td><?= $this->escapeHtml($campaign['name']) ?></td>
-                <td><?= $this->escapeHtml($campaign['status']) ?></td>
+                <td><?= $escapeHtml($campaign['name']) ?></td>
+                <td><?= $escapeHtml($campaign['status']) ?></td>
                 <td><?= $campaign['start_date'] ?></td>
                 <td><?= $campaign['end_date'] ?></td>
                 <td><?= $campaign['budget'] ?? '-' ?></td>
@@ -42,4 +47,3 @@
     </table>
     <?= $this->getChildHtml('pagination') ?>
 </div>
-

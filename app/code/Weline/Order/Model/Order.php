@@ -23,6 +23,8 @@ use Weline\Framework\DataObject\DataObject;
 #[Index(name: 'idx_source_module', columns: ['source_module'])]
 #[Index(name: 'idx_business_code', columns: ['business_code'])]
 #[Index(name: 'idx_created_at', columns: ['created_at'])]
+#[Index(name: 'uk_order_uuid', columns: ['order_uuid'], type: 'UNIQUE')]
+#[Index(name: 'idx_order_checkout_group_uuid', columns: ['checkout_group_uuid'])]
 class Order extends Model
 {
     public const schema_table = 'weline_order';
@@ -82,6 +84,32 @@ class Order extends Model
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('timestamp', comment: '更新时间')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+
+    // P2D-002 additive identity / group linkage（不破坏既有列）
+    #[Col('varchar', 36, nullable: true, comment: 'Order UUID')]
+    public const schema_fields_ORDER_UUID = 'order_uuid';
+    #[Col('varchar', 36, nullable: true, comment: 'Checkout group UUID')]
+    public const schema_fields_CHECKOUT_GROUP_UUID = 'checkout_group_uuid';
+    #[Col('int', 11, nullable: true, default: 0, comment: 'Website ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
+    #[Col('int', 11, nullable: true, default: 0, comment: 'Store ID')]
+    public const schema_fields_STORE_ID = 'store_id';
+    #[Col('text', nullable: true, comment: 'Money snapshot JSON')]
+    public const schema_fields_MONEY_SNAPSHOT_JSON = 'money_snapshot_json';
+    #[Col('text', nullable: true, comment: 'Catalog snapshot JSON')]
+    public const schema_fields_CATALOG_SNAPSHOT_JSON = 'catalog_snapshot_json';
+    #[Col('text', nullable: true, comment: 'Scope snapshot JSON')]
+    public const schema_fields_SCOPE_SNAPSHOT_JSON = 'scope_snapshot_json';
+    #[Col('text', nullable: true, comment: 'Tax snapshot JSON')]
+    public const schema_fields_TAX_SNAPSHOT_JSON = 'tax_snapshot_json';
+    #[Col('text', nullable: true, comment: 'Shipping snapshot JSON')]
+    public const schema_fields_SHIPPING_SNAPSHOT_JSON = 'shipping_snapshot_json';
+    #[Col('tinyint', 1, nullable: false, default: 0, comment: 'Is shipping charge owner')]
+    public const schema_fields_IS_SHIPPING_CHARGE_OWNER = 'is_shipping_charge_owner';
+    #[Col('varchar', 64, nullable: true, comment: 'Checkout split key')]
+    public const schema_fields_SPLIT_KEY = 'split_key';
+    #[Col('int', 11, nullable: false, default: 0, comment: 'Order state CAS version')]
+    public const schema_fields_STATE_VERSION = 'state_version';
     
     // 订单状态常量
     public const STATUS_PENDING = 'pending';
@@ -177,20 +205,20 @@ class Order extends Model
         
         // 回退到翻译文件
         $translationKey = 'order_status_' . $status;
-        $translated = __($translationKey);
+        $translated = \__($translationKey);
         if ($translated !== $translationKey) {
             return $translated;
         }
         
         // 最后回退到硬编码映射
         return match($status) {
-            self::STATUS_PENDING => __('待处理'),
-            self::STATUS_PROCESSING => __('处理中'),
-            self::STATUS_PAID => __('已支付'),
-            self::STATUS_FULFILLED => __('已发货'),
-            self::STATUS_COMPLETED => __('已完成'),
-            self::STATUS_CANCELLED => __('已取消'),
-            self::STATUS_REFUNDED => __('已退款'),
+            self::STATUS_PENDING => \__('待处理'),
+            self::STATUS_PROCESSING => \__('处理中'),
+            self::STATUS_PAID => \__('已支付'),
+            self::STATUS_FULFILLED => \__('已发货'),
+            self::STATUS_COMPLETED => \__('已完成'),
+            self::STATUS_CANCELLED => \__('已取消'),
+            self::STATUS_REFUNDED => \__('已退款'),
             default => $status,
         };
     }
@@ -309,10 +337,10 @@ class Order extends Model
         
         // 回退到硬编码映射
         return match($status) {
-            self::PAYMENT_STATUS_PENDING => __('待支付'),
-            self::PAYMENT_STATUS_PAID => __('已支付'),
-            self::PAYMENT_STATUS_PARTIAL => __('部分支付'),
-            self::PAYMENT_STATUS_REFUNDED => __('已退款'),
+            self::PAYMENT_STATUS_PENDING => \__('待支付'),
+            self::PAYMENT_STATUS_PAID => \__('已支付'),
+            self::PAYMENT_STATUS_PARTIAL => \__('部分支付'),
+            self::PAYMENT_STATUS_REFUNDED => \__('已退款'),
             default => $status,
         };
     }
@@ -354,10 +382,10 @@ class Order extends Model
         
         // 回退到硬编码映射
         return match($status) {
-            self::FULFILLMENT_STATUS_PENDING => __('待发货'),
-            self::FULFILLMENT_STATUS_PARTIAL => __('部分发货'),
-            self::FULFILLMENT_STATUS_SHIPPED => __('已发货'),
-            self::FULFILLMENT_STATUS_DELIVERED => __('已送达'),
+            self::FULFILLMENT_STATUS_PENDING => \__('待发货'),
+            self::FULFILLMENT_STATUS_PARTIAL => \__('部分发货'),
+            self::FULFILLMENT_STATUS_SHIPPED => \__('已发货'),
+            self::FULFILLMENT_STATUS_DELIVERED => \__('已送达'),
             default => $status,
         };
     }

@@ -1,0 +1,140 @@
+﻿"仅允许 POST 请求。","仅允许 POST 请求。"
+操作失败，请稍后重试。参考编号：%{1},操作失败，请稍后重试。参考编号：%{1}
+数据暂时无法加载。参考编号：%{1},数据暂时无法加载。参考编号：%{1}
+状态暂时无法读取。参考编号：%{1},状态暂时无法读取。参考编号：%{1}
+商家管理,商家管理
+商家、授权、商品绑定与结算管理,商家、授权、商品绑定与结算管理
+商家档案,商家档案
+查看商家档案,查看商家档案
+站点授权,站点授权
+查看商家站点授权,查看商家站点授权
+商品绑定,商品绑定
+查看商家商品绑定,查看商家商品绑定
+拆分规则,拆分规则
+查看商家拆分规则,查看商家拆分规则
+结算账本,结算账本
+查看商家结算账本,查看商家结算账本
+退款冲正,退款冲正
+查看商家退款冲正,查看商家退款冲正
+迁移状态,迁移状态
+只读查看商家迁移状态,只读查看商家迁移状态
+创建商家档案,创建商家档案
+授权商家站点,授权商家站点
+授权商家访问站点,授权商家访问站点
+绑定商家商品,绑定商家商品
+绑定商家与商品,绑定商家与商品
+保存拆分规则,保存拆分规则
+保存商家拆分规则,保存商家拆分规则
+调度结算,调度结算
+从不可变快照调度结算,从不可变快照调度结算
+"Vendor reversal 金额或 Store 无效","Vendor reversal 金额或 Store 无效"
+"commission_bps 必须在 0..10000","commission_bps 必须在 0..10000"
+"Store/Product identity 无效","Store/Product identity 无效"
+"Store ID 无效","Store ID 无效"
+"website_id 不能为负数：%{1}","website_id 不能为负数：%{1}"
+"非法 Vendor environment：%{1}","非法 Vendor environment：%{1}"
+"非法 Vendor status：%{1}","非法 Vendor status：%{1}"
+"非法 Vendor code：%{1}","非法 Vendor code：%{1}"
+"Vendor 分账快照不守恒","Vendor 分账快照不守恒"
+"Vendor payout ledger 不守恒","Vendor payout ledger 不守恒"
+是,是
+否,否
+只读诊断,只读诊断
+可管理,可管理
+此页面只显示脱敏业务事实；冲正与生产迁移不在普通后台执行。,此页面只显示脱敏业务事实；冲正与生产迁移不在普通后台执行。
+"写操作复用 Vendor 领域服务与 rollout 门禁；结算只调度内部账本，不调用外部资金接口。","写操作复用 Vendor 领域服务与 rollout 门禁；结算只调度内部账本，不调用外部资金接口。"
+业务操作,业务操作
+商家代码,商家代码
+法定名称,法定名称
+环境,环境
+"商家 ID","商家 ID"
+"网站 ID","网站 ID"
+"店铺 ID","店铺 ID"
+SKU,SKU
+平台佣金（基点）,平台佣金（基点）
+货币,货币
+法定实体,法定实体
+"不可变快照 ID","不可变快照 ID"
+幂等键,幂等键
+保存,保存
+当前没有记录。,当前没有记录。
+"payout idempotency key 过长","payout idempotency key 过长"
+"payout 金额非法","payout 金额非法"
+"payout 不存在：%{1}","payout 不存在：%{1}"
+"reversal 超额或非法：%{1}","reversal 超额或非法：%{1}"
+"payout ledger 并发更新冲突","payout ledger 并发更新冲突"
+"同一 snapshot 的 payout 请求参数冲突","同一 snapshot 的 payout 请求参数冲突"
+"Vendor id 必填","Vendor id 必填"
+"commission_bps 必须在 0..10000：%{1}","commission_bps 必须在 0..10000：%{1}"
+"分账规则 currency 无效：%{1}","分账规则 currency 无效：%{1}"
+"legal_entity 过长","legal_entity 过长"
+分账规则并发更新冲突,分账规则并发更新冲突
+分账规则不存在：%{1}/%{2},分账规则不存在：%{1}/%{2}
+"结算报表 Store mode 无效","结算报表 Store mode 无效"
+"Vendor mode off：禁止新分账规则/快照，既有结算义务仍可继续","Vendor mode off：禁止新分账规则/快照，既有结算义务仍可继续"
+"分账快照必须指定 Store","分账快照必须指定 Store"
+"order_ref 与 payment_ref 必填","order_ref 与 payment_ref 必填"
+"Order/Payment/Checkout group reference 过长","Order/Payment/Checkout group reference 过长"
+"gross_minor 必须为正：%{1}","gross_minor 必须为正：%{1}"
+"快照 currency 必须与分账规则一致","快照 currency 必须与分账规则一致"
+分账金额不守恒,分账金额不守恒
+分账快照不存在：%{1},分账快照不存在：%{1}
+分账快照不可变：%{1},分账快照不可变：%{1}
+分账快照已存在，禁止重算：%{1},分账快照已存在，禁止重算：%{1}
+"Product 绑定必须指定 Store","Product 绑定必须指定 Store"
+"Product SKU 必填","Product SKU 必填"
+"Product identity 不存在：%{1}","Product identity 不存在：%{1}"
+"Product 已绑定 Vendor：%{1}","Product 已绑定 Vendor：%{1}"
+"Product 未绑定 Vendor：%{1}","Product 未绑定 Vendor：%{1}"
+"Vendor Product 绑定写入后无法回读","Vendor Product 绑定写入后无法回读"
+"Vendor capability mode off，禁止写路径","Vendor capability mode off，禁止写路径"
+"Vendor 已授权该站点：%{1}/%{2}","Vendor 已授权该站点：%{1}/%{2}"
+"Vendor 未授权该站点，无法撤权：%{1}/%{2}","Vendor 未授权该站点，无法撤权：%{1}/%{2}"
+"Vendor 未授权站点：%{1}/%{2}","Vendor 未授权站点：%{1}/%{2}"
+"Vendor 站点授权已撤销：%{1}/%{2}","Vendor 站点授权已撤销：%{1}/%{2}"
+"Vendor Website 授权写入后无法回读","Vendor Website 授权写入后无法回读"
+"Vendor 不存在：%{1}","Vendor 不存在：%{1}"
+"Vendor 已存在：%{1}","Vendor 已存在：%{1}"
+"同一 environment 下 Vendor code 已占用：%{1}","同一 environment 下 Vendor code 已占用：%{1}"
+"账户引用必须使用 %{1}: 前缀且不能包含凭证","账户引用必须使用 %{1}: 前缀且不能包含凭证"
+"Vendor 已禁用：%{1}","Vendor 已禁用：%{1}"
+"Vendor 与账户 environment 不匹配","Vendor 与账户 environment 不匹配"
+"dev/test Store 只能绑定 sandbox 账户","dev/test Store 只能绑定 sandbox 账户"
+"Store 已绑定不同的 Vendor 账户","Store 已绑定不同的 Vendor 账户"
+"Vendor 未绑定 Store 账户","Vendor 未绑定 Store 账户"
+"账户 environment 不匹配","账户 environment 不匹配"
+"test Store 的 live 账户绑定无效","test Store 的 live 账户绑定无效"
+"Vendor Store 账户绑定写入后无法回读","Vendor Store 账户绑定写入后无法回读"
+"Store 不存在：%{1}","Store 不存在：%{1}"
+"Store 不属于目标 Website","Store 不属于目标 Website"
+"Store 已停用或不在 active 生命周期","Store 已停用或不在 active 生命周期"
+"Store mode 无效","Store mode 无效"
+"website_code 必填","website_code 必填"
+"未知 ACL 动作：%{1}","未知 ACL 动作：%{1}"
+"角色无权管理 Vendor：role=%{1} website=%{2} action=%{3}","角色无权管理 Vendor：role=%{1} website=%{2} action=%{3}"
+"Vendor environment 不匹配：%{1} 需要 %{2}","Vendor environment 不匹配：%{1} 需要 %{2}"
+"payout_id 与 refund_ref 必填","payout_id 与 refund_ref 必填"
+"refund_ref 过长","refund_ref 过长"
+"reversal reason 无效","reversal reason 无效"
+"reversal environment/Store 不匹配","reversal environment/Store 不匹配"
+"Vendor reversal 写入后无法回读","Vendor reversal 写入后无法回读"
+"同一 refund_ref 的 reversal 请求参数冲突","同一 refund_ref 的 reversal 请求参数冲突"
+"MIG-P4A：Vendor 持久事实 shadow 到精确 Website/Store allowlist（仅登记的 full clone）","MIG-P4A：Vendor 持久事实 shadow 到精确 Website/Store allowlist（仅登记的 full clone）"
+打印帮助,打印帮助
+"在 full clone 只读清点 Vendor binding/snapshot/payout/reversal","在 full clone 只读清点 Vendor binding/snapshot/payout/reversal"
+"冻结 checkpoint 与 shadow 报告；保持 shadow，不写造业务事实","冻结 checkpoint 与 shadow 报告；保持 shadow，不写造业务事实"
+"新进程重载 checkpoint 并重算行 hash、守恒报告与 rollout","新进程重载 checkpoint 并重算行 hash、守恒报告与 rollout"
+"fresh verify 后仅放量目标 dev/test Website/Store","fresh verify 后仅放量目标 dev/test Website/Store"
+"按 checkpoint mode off，保留 binding/snapshot/既有结算义务","按 checkpoint mode off，保留 binding/snapshot/既有结算义务"
+"migration registry 已登记的 full mig_clone_*","migration registry 已登记的 full mig_clone_*"
+"apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）"
+"目标 Website ID；0 是合法系统默认站点","目标 Website ID；0 是合法系统默认站点"
+"目标 dev/test Store ID，必须 >=1","目标 dev/test Store ID，必须 >=1"
+显示本帮助,显示本帮助
+"""仅允许 POST 请求。""","仅允许 POST 请求。"
+"""Vendor reversal 金额或 Store 无效""","Vendor reversal 金额或 Store 无效"
+"MIG-P4A：Vendor shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4A：Vendor shadow 到 allowlist（apply 必须 --database=mig_clone_*）"
+"该快照已有 payout：%{1}","该快照已有 payout：%{1}"
+"refund_ref 必填","refund_ref 必填"
+"退款 reversal 已存在：%{1}","退款 reversal 已存在：%{1}"
+"reversal environment 不匹配","reversal environment 不匹配"

@@ -256,3 +256,4 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 "Invalid demo join condition: %{1}","Invalid demo join condition: %{1}"
 "Frontend demo access is not allowed for model %{1}","Frontend demo access is not allowed for model %{1}"
 %{1}标签必须指定%{2}属性或位于d-table标签内！,"The %{1} tag must specify the %{2} attribute or be located within the d-table tag!"
+"""DataTable Frontend Demo Query""","DataTable Frontend Demo Query"

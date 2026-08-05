@@ -39,11 +39,34 @@ Multipass账户管理,"Multipass account management"
 用户不存在,"User does not exist"
 Token生成成功,"Token generation successful"
 Token生成失败：%{1},"Token generation failed: %{1}"
+"mdi mdi-account-key","mdi mdi-account-key"
+生成和管理Multipass登录令牌,生成和管理Multipass登录令牌
+账户管理首页,账户管理首页
+"mdi mdi-view-dashboard","mdi mdi-view-dashboard"
+查看Multipass账户管理首页,查看Multipass账户管理首页
+前端账户列表,前端账户列表
+"mdi mdi-account","mdi mdi-account"
+查看前端账户列表,查看前端账户列表
+后端账户列表,后端账户列表
+"mdi mdi-account-cog","mdi mdi-account-cog"
+查看后端账户列表,查看后端账户列表
+获取用户列表,获取用户列表
+获取用户列表数据,获取用户列表数据
+生成Token,生成Token
+为用户生成Multipass登录令牌,为用户生成Multipass登录令牌
 官网登录提供方,"Official login provider"
 官网登录提供方已保存,"Official login provider saved"
 保存失败：%{1},"Save failed: %{1}"
 官网登录提供方已删除,"Official login provider deleted"
 官网登录提供方不存在,"Official login provider does not exist"
+"mdi mdi-login-variant","mdi mdi-login-variant"
+配置本站通过官网授权登录,配置本站通过官网授权登录
+保存官网登录提供方,保存官网登录提供方
+"mdi mdi-content-save","mdi mdi-content-save"
+保存本站官网登录提供方配置,保存本站官网登录提供方配置
+删除官网登录提供方,删除官网登录提供方
+"mdi mdi-delete","mdi mdi-delete"
+删除本站官网登录提供方配置,删除本站官网登录提供方配置
 站点管理,"Site Management"
 站点名称不能为空,"Site Name cannot be empty"
 站点URL不能为空,"Site URL cannot be empty"
@@ -56,11 +79,17 @@ Token生成失败：%{1},"Token generation failed: %{1}"
 站点ID不能为空,"Site ID cannot be empty"
 站点删除成功,"Site deleted successfully"
 删除失败:,"Deletion failed:"
+Multipass站点管理,"Multipass site management"
+"mdi mdi-server","mdi mdi-server"
+管理Multipass认证站点配置,管理Multipass认证站点配置
 互通应用,互通应用
 互通应用已保存,互通应用已保存
 "互通应用已创建，请立即保存 client_secret","互通应用已创建，请立即保存 client_secret"
 "应用 ID 不能为空","应用 ID 不能为空"
 "client_secret 已轮换，请立即保存","client_secret 已轮换，请立即保存"
+互通应用管理,互通应用管理
+"mdi mdi-application-cog","mdi mdi-application-cog"
+管理可信互通应用,管理可信互通应用
 缺少密钥,"Missing key"
 用户名或邮箱至少需要提供一个,"Username or email must be provided at least one"
 密钥验证失败,"Secret key verification failed"
@@ -90,12 +119,12 @@ Token验证失败：%{1},"Token verification failed: %{1}"
 启用,启用
 删除态,删除态
 禁用,禁用
-使用官网登录,"Sign in with official account"
 开发者,Developer
 授权应用,"Authorized apps"
 管理通信登录与账号绑定,"Manage communication login and account bindings"
 "Multipass 管理申请","Multipass management application"
 申请接入网站授权登录,"Apply for website authorized login"
+使用官网登录,"Sign in with official account"
 未知应用,未知应用
 "Weline 账号授权","Weline 账号授权"
 "请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。","请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。"
@@ -202,7 +231,6 @@ Multipass管理,Multipass管理
 密钥,Secret
 留空保持不变,"Leave blank to keep unchanged"
 删除,Delete
-Multipass站点管理,"Multipass site management"
 站点列表,"Site List"
 添加站点,"Add Site"
 暂无站点配置，请点击右上角「添加站点」按钮创建,"No site configuration. Please click the ""Add Site"" button in the top right corner to create one."
@@ -286,3 +314,4 @@ Token已复制到剪贴板,"Token has been copied to the clipboard"
 中风险,"Medium risk"
 以下授权范围不可用：%{1},以下授权范围不可用：%{1}
 "该回调地址已经提交过 Multipass 管理申请","A Multipass management application has already been submitted for this callback URL"
+"""Multipass 模块安装完成""","Multipass 模块安装完成"

@@ -4,11 +4,24 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\MessageManager;
 use Weline\MediaManager\Service\AiDrawService;
 
+/**
+ * AI 作图 HTTP 入口；QueryProvider `media_manager.generate/config/save` 的
+ * backend_acl source_id 必须与这里收集进 ACL 表的精确 source 一致，
+ * 否则即使超管（role_id=1）也会因资源不存在而 403。
+ */
+#[Acl(
+    'Weline_MediaManager::query:ai_draw',
+    'AI 作图',
+    'mdi-image-auto-adjust',
+    '媒体管理 AI 作图（文生图/图生图/批量）',
+    'Weline_MediaManager::file_manager'
+)]
 class AiDraw extends BackendController
 {
     public function __construct(
@@ -47,6 +60,13 @@ class AiDraw extends BackendController
     /**
      * 保存：覆盖原图 / 另存为新文件
      */
+    #[Acl(
+        'Weline_MediaManager::query:ai_draw_save',
+        'AI 作图保存',
+        'mdi-content-save',
+        '保存 AI 作图结果到媒体库',
+        'Weline_MediaManager::query:ai_draw'
+    )]
     public function postSave(): string
     {
         try {

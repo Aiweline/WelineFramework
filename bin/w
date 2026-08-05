@@ -20,6 +20,21 @@ try {
     exit(70);
 }
 try {
+    if (!defined('BP')) {
+        define('BP', dirname(__DIR__) . DIRECTORY_SEPARATOR);
+    }
+    require_once BP . 'app/code/Weline/Framework/Setup/Lock/SetupDatabaseAccessLock.php';
+    require_once BP . 'app/code/Weline/Framework/Phrase/DatabaseFreeTranslator.php';
+    require_once BP . 'app/code/Weline/Framework/Console/EarlyDatabaseAccessGate.php';
+    $earlyDatabaseGateExitCode = Weline\Framework\Console\EarlyDatabaseAccessGate::prepare($argv);
+    if ($earlyDatabaseGateExitCode !== null) {
+        exit($earlyDatabaseGateExitCode);
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, '[Weline CLI early database gate failed] ' . $e->getMessage() . PHP_EOL);
+    exit(70);
+}
+try {
     require __DIR__ . '/../app/bootstrap.php';
 } catch (Throwable $e) {
     $chr = chr(27);
@@ -33,8 +48,9 @@ CLI_E;
     exit(1);
 }
 try {
-    $exitCode = (new Weline\Framework\Console\Cli('M?? CLI', $argv))->run();
-    if (PHP_CS && $exitCode === 0) {
+    $cli = new Weline\Framework\Console\Cli('M?? CLI', $argv);
+    $exitCode = $cli->run();
+    if (PHP_CS && $exitCode === 0 && !$cli->shouldSkipFollowUpCommands()) {
         $exitCode = (new Weline\Framework\Console\Cli('M?? CLI', ['bin/m','dev:tool:phpcsfixer','no-show','.']))->run();
     }
     exit($exitCode);

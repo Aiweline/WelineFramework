@@ -69,7 +69,7 @@ class Dashboard extends BackendPageController
             $subject['keyword_count'] = count($keywords);
         }
         
-        $this->assign('title', __('SEO总览'));
+        $this->assign('seo_page_title', __('SEO总览'));
         $this->assign('subjects', $subjects);
         
         return $this->fetch();
@@ -119,7 +119,7 @@ class Dashboard extends BackendPageController
             ->find()
             ->fetch();
         
-        $this->assign('title', __('主体SEO详情'));
+        $this->assign('seo_page_title', __('主体SEO详情'));
         $this->assign('subject', $subjectModel->getData());
         $this->assign('keywords', $keywords);
         $this->assign('suggestion', $suggestion->getId() ? $suggestion->getData() : null);
@@ -168,7 +168,7 @@ class Dashboard extends BackendPageController
             $subject['keyword_count'] = $keywordCount;
         }
         
-        $this->assign('title', __('SEO主体列表'));
+        $this->assign('seo_page_title', __('SEO主体列表'));
         $this->assign('subjects', $subjects);
         $this->assign('search', $search);
         $this->assign('status', $status);

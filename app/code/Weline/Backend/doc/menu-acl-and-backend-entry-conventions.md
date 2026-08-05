@@ -54,9 +54,31 @@
 
 - `Weline.Api.resource()`
 - `Weline.Api.graph()`
-- `Weline.Api.stream()`
+- `Weline.Api.createStream()` / `Weline.Api.stream()`（仅已开放的非后台权威流）
 
 不要因为代码在后台模板里，就写原生 `fetch/ajax`。
+
+后台 Worker operation 必须同时声明身份与资源：
+
+```php
+[
+    'name' => 'saveSomething',
+    'frontend' => true,
+    'auth' => 'backend',
+    'backend_acl' => [
+        'kind' => 'source',
+        'source_id' => 'Vendor_Module::exact_source',
+    ],
+]
+```
+
+- `auth=backend` 是现行契约；`backend=true` 只保留给旧 descriptor 兼容，但同样强制 `backend_acl`。
+- `kind=source` 使用编译期固定的精确 `source_id`；禁止父级、前缀或 route 猜测。
+- 一个 operation 复用多种动作时使用 `kind=param_map`，参数值必须在静态 exact map 中；未知值在 provider 执行前 403。
+- 仅操作当前 binding 用户自身数据、且没有 `user_id/role_id/website_id` 等主体切换参数时，才允许 `kind=self`。
+- 资源必须真实存在、启用、属于后台，并且当前实时角色有精确 `RoleAccess`。即使是超级管理员，拼错或不存在的 source 也拒绝。
+- same-origin 只证明传输来源，不证明后台权限。`resource()` 和 graph 的每个节点都会先恢复页面证明，再做 ACL；graph 任一节点失败时不执行任何节点。
+- `auth=backend` stream 当前 fail-closed 返回 `backend_stream_disabled`。例外：后台页面带着有效 Worker binding 时，可使用 `runtime_task.events`（授权仍走 type 的 `areas + backend_acl` 与 task owner/lease）；不得把任意 `auth=backend` QueryProvider stream 当作已开放。
 
 ## 6. 页面落点
 

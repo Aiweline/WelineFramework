@@ -21,6 +21,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_product_id', columns: ['product_id'])]
 #[Index(name: 'idx_source_module', columns: ['source_module'])]
 #[Index(name: 'idx_business_code', columns: ['business_code'])]
+#[Index(name: 'uk_order_item_uuid', columns: ['item_uuid'], type: 'UNIQUE')]
+#[Index(name: 'idx_order_item_order_uuid', columns: ['order_uuid'])]
 class OrderItem extends Model
 {
     public const schema_table = 'weline_order_item';
@@ -68,6 +70,22 @@ class OrderItem extends Model
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col(type: 'timestamp', nullable: true, comment: '更新时间')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+
+    // P2D-002 additive
+    #[Col(type: 'varchar', length: 36, nullable: true, comment: 'Item UUID')]
+    public const schema_fields_ITEM_UUID = 'item_uuid';
+    #[Col(type: 'varchar', length: 36, nullable: true, comment: 'Order UUID')]
+    public const schema_fields_ORDER_UUID = 'order_uuid';
+    #[Col(type: 'bigint', length: 20, nullable: true, comment: 'Offer ID')]
+    public const schema_fields_OFFER_ID = 'offer_id';
+    #[Col(type: 'bigint', length: 20, nullable: false, default: 0, comment: 'Qty minor')]
+    public const schema_fields_QTY_MINOR = 'qty_minor';
+    #[Col(type: 'bigint', length: 20, nullable: false, default: 0, comment: 'Unit price minor')]
+    public const schema_fields_UNIT_PRICE_MINOR = 'unit_price_minor';
+    #[Col(type: 'text', nullable: true, comment: 'Catalog line snapshot JSON')]
+    public const schema_fields_CATALOG_LINE_SNAPSHOT_JSON = 'catalog_line_snapshot_json';
+    #[Col(type: 'text', nullable: true, comment: 'Frozen line tax snapshot JSON')]
+    public const schema_fields_TAX_SNAPSHOT_JSON = 'tax_snapshot_json';
 
     /**
      * 计算行总计

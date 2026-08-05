@@ -65,28 +65,76 @@
      */
     function getCurrentLang() {
         const cookieLang = readCookieValue('WELINE_USER_LANG');
-        if (cookieLang) {
+        const pathLang = detectPathLanguage();
+        const config = window.__WelineThemeConfig || {};
+        const configLang = config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || '';
+
+        // URL 路径段优先（与服务端 State::getLang 一致）
+        if (pathLang) {
+            return pathLang;
+        }
+
+        // Cookie 仅在属于页面上真实可选语言时生效，避免残留 ar_* 把头部钉死在 AR
+        if (cookieLang && isLanguageOfferedOnPage(cookieLang)) {
             return cookieLang;
         }
 
-        // 从 URL 参数获取
+        if (configLang) {
+            return configLang;
+        }
+
+        const firstOffered = getFirstOfferedLanguage();
+        if (firstOffered) {
+            return firstOffered;
+        }
+
+        // 从 URL 参数获取（兼容旧链接）
         const urlParams = new URLSearchParams(window.location.search);
         const urlLang = urlParams.get('lang');
         if (urlLang) {
             return urlLang;
         }
 
-        // 从 URL 路径获取（如 /zh_Hans_CN/...）
+        return 'zh_Hans_CN';
+    }
+
+    function detectPathLanguage() {
         const pathParts = window.location.pathname.split('/').filter(Boolean);
+        const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
         for (const part of pathParts) {
-            if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
+            if (langPattern.test(part)) {
                 return part;
             }
         }
+        return '';
+    }
 
-        // 从配置获取
-        const config = window.__WelineThemeConfig || {};
-        return config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || 'zh_Hans_CN';
+    function isLanguageOfferedOnPage(langCode) {
+        const needle = String(langCode || '').trim().replace(/-/g, '_').toLowerCase();
+        if (!needle) {
+            return false;
+        }
+        const options = document.querySelectorAll(
+            '[data-i18n-switcher] [data-lang], [data-weline-choice-switcher="language"] [data-lang]'
+        );
+        if (!options.length) {
+            // 切换器尚未渲染时不据此否决 cookie
+            return true;
+        }
+        for (const option of options) {
+            const code = String(option.getAttribute('data-lang') || '').trim().replace(/-/g, '_').toLowerCase();
+            if (code && code === needle) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getFirstOfferedLanguage() {
+        const option = document.querySelector(
+            '[data-i18n-switcher] [data-lang], [data-weline-choice-switcher="language"] [data-lang]'
+        );
+        return option ? String(option.getAttribute('data-lang') || '').trim() : '';
     }
 
     /**
@@ -341,7 +389,16 @@
             currency = normalizeCurrencyCode(fallbackCurrency || config.currentCurrency || 'CNY');
         }
 
-        // 仅保留非货币/语言段，原有大小写保持不变
+        // 仅保留非货币/语言段，原有大小写保持不变。
+        // Internal PageBuilder controller paths are never public routes — treat as home.
+        const isInternalPageBuilderPath = (() => {
+            const joined = pathParts
+                .filter((part) => !langPattern.test(part) && !isSupportedCurrencyCode(part, config))
+                .join('/')
+                .toLowerCase();
+            return joined === 'pagebuilder/frontend/page'
+                || joined.startsWith('pagebuilder/frontend/page/');
+        })();
         const filteredParts = [];
 
         // 前缀优先使用 backend key（即使它不在首段），否则退回首段非货币/语言段
@@ -353,22 +410,24 @@
         }
         const prefixSegment = prefixIndex >= 0 ? pathParts[prefixIndex] : '';
 
-        pathParts.forEach((part, index) => {
-            if (langPattern.test(part) || isSupportedCurrencyCode(part, config)) {
-                return;
-            }
-            if (index === prefixIndex) {
-                return;
-            }
-            filteredParts.push(part);
-        });
+        if (!isInternalPageBuilderPath) {
+            pathParts.forEach((part, index) => {
+                if (langPattern.test(part) || isSupportedCurrencyCode(part, config)) {
+                    return;
+                }
+                if (index === prefixIndex) {
+                    return;
+                }
+                filteredParts.push(part);
+            });
+        }
 
         const outputParts = [];
         if (prefixSegment) {
             outputParts.push(prefixSegment);
         }
 
-        if (isBackendLocalizedPath(pathParts, backendKey) && filteredParts.length > 0) {
+        if (!prefixSegment && isBackendLocalizedPath(pathParts, backendKey) && filteredParts.length > 0) {
             const inferredPrefix = filteredParts.shift();
             outputParts.push(inferredPrefix);
         }
@@ -376,7 +435,15 @@
         if (shouldOutputCurrency(currency, config)) {
             outputParts.push(normalizeCurrencyCode(currency));
         }
-        if (shouldOutputLang(targetLang, config)) {
+        // 后台：路由语言段最高优先，切换时始终写入语言段（含默认语言），
+        // 由 State::getLang 路径解析生效；不再依赖早期 302 剥段写 Cookie。
+        const onBackendPath = prefixSegment !== '';
+        if (onBackendPath) {
+            const backendLang = normalizeLangCode(targetLang);
+            if (backendLang) {
+                outputParts.push(backendLang);
+            }
+        } else if (shouldOutputLang(targetLang, config)) {
             outputParts.push(normalizeLangCode(targetLang));
         }
         if (filteredParts.length > 0) {
@@ -436,6 +503,9 @@
                 if (!langCode) {
                     return;
                 }
+                if (option.getAttribute('data-i18n-authoritative-href') === '1') {
+                    return;
+                }
 
                 const langUrl = buildLanguageUrl(langCode, pathname, search, currentCurrency);
 
@@ -457,15 +527,16 @@
      * @param {string} lang 语言代码
      * @returns {Promise<void>}
      */
-    async function switchLang(lang) {
+    async function switchLang(lang, authoritativeHref = '') {
         if (!lang) {
             console.warn('[WelineI18n] switchLang: 语言代码不能为空');
             return;
         }
 
-        // 统一走 i18n 自身的路径重建，避免多处 URL 语义互相覆盖
+        // 服务端渲染的 href 是权威结果；无 href 的旧编程调用才使用兼容重建。
+        const configuredHref = typeof authoritativeHref === 'string' ? authoritativeHref.trim() : '';
         const config = window.__WelineThemeConfig || {};
-        const langUrl = buildLanguageUrl(
+        const langUrl = configuredHref || buildLanguageUrl(
             lang,
             window.location.pathname || '/',
             window.location.search || '',
@@ -475,7 +546,22 @@
         // 保存语言偏好
         writeLanguagePreference(lang);
 
-        // 立即跳转到新 URL
+        // 前台切到默认语言时 URL 往往不含语言段，与当前 pathname+search 相同；
+        // 仅赋值 location.href 不会触发导航，必须强制 reload。
+        // 后台 buildLanguageUrl 始终带语言段，走下方 href（路由语言段最高优先）。
+        try {
+            const target = new URL(langUrl, window.location.origin);
+            const samePath = target.pathname === (window.location.pathname || '/')
+                && target.search === (window.location.search || '')
+                && target.hash === (window.location.hash || '');
+            if (samePath) {
+                window.location.reload();
+                return;
+            }
+        } catch (e) {
+            // ignore URL parse errors and fall through to href assign
+        }
+
         window.location.href = langUrl;
     }
 
@@ -632,6 +718,7 @@
         updateCurrentLanguageDisplay: updateCurrentLanguageDisplay,
         updateLanguageSwitcherLinks: updateLanguageSwitcherLinks,
         switchLang: switchLang,
+        writeLanguagePreference: writeLanguagePreference,
         buildLanguageUrl: buildLanguageUrl,
         // 翻译相关 API
         currentLang: i18nObj.currentLang,

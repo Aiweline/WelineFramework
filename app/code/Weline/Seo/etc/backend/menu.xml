@@ -12,10 +12,10 @@
           icon="mdi mdi-view-dashboard-outline"
           order="10"/>
 
-    <menu source="Weline_Seo::seo_subject_detail"
-          name="seo_subject_detail"
-          title="主体详情"
-          action="seo/backend/dashboard/subject"
+    <menu source="Weline_Seo::seo_embed"
+          name="seo_subject_management"
+          title="主体管理"
+          action="seo/backend/embed/index"
           parent="Weline_Backend::seo_group"
           icon="mdi mdi-file-chart-outline"
           order="20"/>

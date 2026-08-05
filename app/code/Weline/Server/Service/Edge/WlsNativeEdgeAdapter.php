@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Edge;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\Service\Control\BroadcastControlDispatchService;
-
 /**
  * Pure-PHP WLS edge for TLS 1.3, HTTP/2 and HTTP/1.1 fallback.
  *
@@ -36,9 +33,7 @@ final class WlsNativeEdgeAdapter implements EdgeAdapterInterface
 
     public function onCertificateMaterialUpdated(string $domain, array $paths = []): void
     {
-        $domains = $domain !== '' ? [$domain] : [];
-        ObjectManager::getInstance(BroadcastControlDispatchService::class)
-            ->reloadSslCert($domains);
+        (new CertificateMaterialUpdateCoordinator())->notify($domain, $paths, self::NAME_WLS);
     }
 
     public function doctorSnapshot(): array

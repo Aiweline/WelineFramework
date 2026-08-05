@@ -124,6 +124,9 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
+<script>
+(function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
+</script>
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
@@ -200,7 +203,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         formData.append('palette_name', paletteName);
         
         var opts = { method: 'POST', body: formData };
-        window.Weline.Api.request(saveUrl, opts)
+        WelineThemeBinQuery.request(saveUrl, opts)
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.code === 200) {
@@ -316,14 +319,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         formData.append('palette_name', paletteName);
         
         var getOpts = { method: 'POST', body: formData };
-        window.Weline.Api.request(getUrl, getOpts)
+        WelineThemeBinQuery.request(getUrl, getOpts)
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.code === 200 && data.data && data.data.palette) {
                 // 使用AJAX加载弹窗内容
                 const paletteJson = encodeURIComponent(JSON.stringify(data.data.palette));
                 var modalFetchUrl = modalUrl + '?palette=' + paletteJson + '&palette_name=' + encodeURIComponent(paletteName) + '&area=' + area + '&scope=' + scope + '&theme_id=' + themeId;
-                fetch(modalFetchUrl, { method: 'GET' })
+                WelineThemeBinQuery.request(modalFetchUrl, { method: 'GET' })
                 .then(function(r) { return r.text(); })
                 .then(html => {
                     const modalContent = modal.querySelector('.modal-content');

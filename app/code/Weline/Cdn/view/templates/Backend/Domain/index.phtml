@@ -36,10 +36,10 @@ $escapeAttr = static function (mixed $value): string {
 </div>
 
 <!-- 操作栏 -->
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3" data-testid="cdn-domain-management">
     <div>
-        <a href="<?= $this->getBackendUrl('*/backend/domain/form') ?>" class="btn btn-primary">
-            <i class="mdi mdi-plus"></i> <?= __('添加域名') ?>
+        <a href="<?= $this->getBackendUrl('*/backend/domain/form') ?>" class="btn btn-primary" data-testid="cdn-domain-create">
+            <i class="mdi mdi-plus" aria-hidden="true"></i> <?= __('添加域名') ?>
         </a>
         <w:hook>Weline_Cdn::backend::partials::domain::toolbar-after</w:hook>
     </div>
@@ -137,9 +137,9 @@ $escapeAttr = static function (mixed $value): string {
                                         <button type="button"
                                                 class="btn btn-danger"
                                                 w-delete="true"
-                                                w-url="<?= $this->getBackendUrl('*/backend/domain/postDelete') ?>"
-                                                w-method="POST"
-                                                w-var-id="<?= $domain->getData('domain_id') ?>"
+                                                data-provider="cdn"
+                                                data-operation="deleteDomain"
+                                                w-var-domain_id="<?= $domain->getData('domain_id') ?>"
                                                 w-msg="<?= __('确定要删除域名 "%{1}" 吗？此操作不可恢复！', htmlspecialchars($domain->getData('domain_name'))) ?>">
                                             <i class="mdi mdi-delete"></i> <?= __('删除') ?>
                                         </button>
@@ -231,14 +231,10 @@ $escapeAttr = static function (mixed $value): string {
 
     window.CdnDomainManager = {
         toggleEnable: function(id, enabled) {
-            window.Weline.Api.request(toggleEnableUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ id: id, enabled: enabled }).toString()
-            })
-            .then(function(response) {
-                var data = response.data;
-                if (response.ok && data && data.success) {
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('cdn').toggleDomainEnable({ domain_id: id, enabled: enabled }); })
+            .then(function(data) {
+                if (data && data.success !== false) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
@@ -289,14 +285,10 @@ $escapeAttr = static function (mixed $value): string {
         },
         
         performClearCache: function(id) {
-            window.Weline.Api.request(clearCacheUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ id: id, mode: 'everything' }).toString()
-            })
-            .then(function(response) {
-                var data = response.data;
-                if (response.ok && data && data.success) {
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+            .then(function(api){ return api.resource('cdn').clearDomainCache({ domain_id: id, mode: 'everything' }); })
+            .then(function(data) {
+                if (data && data.success !== false) {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',

@@ -9,6 +9,8 @@ use Weline\Eav\Api\Attribute\AttributeRecord;
 use Weline\Eav\Api\Attribute\AttributeStorageException;
 use Weline\Eav\Api\Attribute\EntityAttributeStoreInterface;
 use Weline\Eav\Api\Entity\EntityDefinitionInterface;
+use Weline\Eav\Api\Scope\EavScopeColumns;
+use Weline\Eav\Api\Scope\EavScopeValue;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Set;
@@ -16,6 +18,7 @@ use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavAttribute\Type\Value;
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface as DdlTableInterface;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Setup\Db\ModelSetup;
 
 final class EntityAttributeStore implements EntityAttributeStoreInterface
@@ -27,6 +30,7 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface
         private readonly Set $setModel,
         private readonly Group $groupModel,
         private readonly EntityAttributeValueTable $valueTableModel,
+        private readonly EavScopeResolver $scopeResolver,
     ) {
     }
 
@@ -84,6 +88,7 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface
                     'not null',
                     '属性值',
                 );
+            $this->appendTypedScopeColumns($table);
 
             if ($type->getIsSwatch()) {
                 $table->addColumn(
@@ -254,22 +259,35 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface
     ): mixed {
         $this->assertAttributeEntity($entity, $attribute);
         $valueModel = $this->valueModel($entity, $attribute);
-        $valueModel
-            ->reset()
-            ->fields(Value::schema_fields_value)
-            ->where(Value::schema_fields_attribute_id, $attribute->id)
-            ->where(Value::schema_fields_entity_id, $ownerId);
+        $hasScopeColumns = $this->valueTableHasScopeColumns($valueModel);
+        $rows = $this->readCompatibilityRows(
+            $valueModel,
+            $ownerId,
+            $attribute,
+            typedGlobal: false,
+            hasScopeColumns: $hasScopeColumns,
+        );
 
-        if ($attribute->multiple) {
-            return array_map(
-                static fn(array $row): mixed => $row[Value::schema_fields_value] ?? null,
-                $valueModel->select()->fetchArray(),
+        // MIG-P1A compatibility：迁移后的 global typed 行仍须被旧 reader 读取。
+        // 旧 API 没有 Scope 参数，因此只允许回退 global，绝不读取 Website/Store/Channel。
+        if ($rows === [] && $hasScopeColumns) {
+            $rows = $this->readCompatibilityRows(
+                $valueModel,
+                $ownerId,
+                $attribute,
+                typedGlobal: true,
+                hasScopeColumns: true,
             );
         }
 
-        $row = $valueModel->find()->fetchArray();
+        if ($attribute->multiple) {
+            return \array_map(
+                static fn(array $row): mixed => $row[Value::schema_fields_value] ?? null,
+                $rows,
+            );
+        }
 
-        return $row[Value::schema_fields_value] ?? '';
+        return $rows[0][Value::schema_fields_value] ?? '';
     }
 
     public function replaceValue(
@@ -285,12 +303,15 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface
         }
 
         $valueModel = $this->valueModel($entity, $attribute);
-        $valueModel
+        $deleter = $valueModel
             ->reset()
             ->where(Value::schema_fields_attribute_id, $attribute->id)
-            ->where(Value::schema_fields_entity_id, $ownerId)
-            ->delete()
-            ->fetch();
+            ->where(Value::schema_fields_entity_id, $ownerId);
+        // legacy 写只触碰遗留行，不破坏 typed 行
+        if ($this->valueTableHasScopeColumns($valueModel)) {
+            $deleter->where(Value::schema_fields_SCOPE_KIND, null);
+        }
+        $deleter->delete()->fetch();
 
         if ($items === []) {
             return;
@@ -315,6 +336,292 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface
                 ],
             )
             ->fetch();
+    }
+
+    public function readScopedValue(
+        EntityDefinitionInterface $entity,
+        int|string $ownerId,
+        AttributeRecord $attribute,
+        ScopeIdentity $scope,
+        string $locale = '',
+    ): EavScopeValue {
+        $this->assertAttributeEntity($entity, $attribute);
+        $valueModel = $this->valueModel($entity, $attribute);
+        if (!$this->valueTableHasScopeColumns($valueModel)) {
+            throw new \LogicException('eav_value_table_missing_scope_columns:' . $valueModel->getTable());
+        }
+
+        $rows = $valueModel
+            ->reset()
+            ->where(Value::schema_fields_attribute_id, $attribute->id)
+            ->where(Value::schema_fields_entity_id, $ownerId)
+            ->where(Value::schema_fields_SCOPE_KIND, null, '!=')
+            ->select()
+            ->fetchArray();
+
+        $records = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $layer = $this->legacyScopeStringFromRow($row);
+            $rowLocale = \trim((string)($row[Value::schema_fields_LOCALE] ?? ''));
+            $key = EavScopeResolver::recordKey($layer, $rowLocale);
+            $cleared = (int)($row[Value::schema_fields_IS_CLEARED] ?? 0) === 1;
+            if ($attribute->multiple && !$cleared) {
+                // 多值：同层同 locale 聚合为 list
+                $existing = $records[$key][EavScopeResolver::KEY_VALUE] ?? [];
+                if (!\is_array($existing)) {
+                    $existing = $existing === null || $existing === '' ? [] : [$existing];
+                }
+                $existing[] = $row[Value::schema_fields_value] ?? null;
+                $records[$key] = [
+                    EavScopeResolver::KEY_VALUE => $existing,
+                    EavScopeResolver::KEY_CLEARED => false,
+                ];
+            } else {
+                $records[$key] = [
+                    EavScopeResolver::KEY_VALUE => $cleared ? null : ($row[Value::schema_fields_value] ?? null),
+                    EavScopeResolver::KEY_CLEARED => $cleared,
+                ];
+            }
+        }
+
+        return $this->scopeResolver->resolveForIdentity($records, $scope, $locale);
+    }
+
+    public function writeScopedValue(
+        EntityDefinitionInterface $entity,
+        int|string $ownerId,
+        AttributeRecord $attribute,
+        ScopeIdentity $scope,
+        string|int|array $value,
+        string $locale = '',
+    ): void {
+        $this->upsertScopedRow($entity, $ownerId, $attribute, $scope, $locale, false, $value);
+    }
+
+    public function clearScopedValue(
+        EntityDefinitionInterface $entity,
+        int|string $ownerId,
+        AttributeRecord $attribute,
+        ScopeIdentity $scope,
+        string $locale = '',
+    ): void {
+        $this->upsertScopedRow($entity, $ownerId, $attribute, $scope, $locale, true, '');
+    }
+
+    /**
+     * @param string|int|list<string|int> $value
+     */
+    private function upsertScopedRow(
+        EntityDefinitionInterface $entity,
+        int|string $ownerId,
+        AttributeRecord $attribute,
+        ScopeIdentity $scope,
+        string $locale,
+        bool $cleared,
+        string|int|array $value,
+    ): void {
+        $this->assertAttributeEntity($entity, $attribute);
+        $items = $cleared ? [''] : (is_array($value) ? array_values($value) : [$value]);
+        if (!$cleared && !$attribute->multiple && count($items) > 1) {
+            throw new \InvalidArgumentException('eav_attribute_single_value_expected:' . $attribute->code);
+        }
+
+        $valueModel = $this->valueModel($entity, $attribute);
+        if (!$this->valueTableHasScopeColumns($valueModel)) {
+            throw new \LogicException('eav_value_table_missing_scope_columns:' . $valueModel->getTable());
+        }
+
+        $locale = \trim($locale);
+        $scopeCols = $this->scopeColumnPayload($scope, $locale);
+
+        $deleter = $valueModel
+            ->reset()
+            ->where(Value::schema_fields_attribute_id, $attribute->id)
+            ->where(Value::schema_fields_entity_id, $ownerId)
+            ->where(Value::schema_fields_SCOPE_KIND, $scopeCols[Value::schema_fields_SCOPE_KIND])
+            ->where(Value::schema_fields_LOCALE, $locale);
+        $this->applyNullableScopeEquals($deleter, $scopeCols);
+        $deleter->delete()->fetch();
+
+        $rows = [];
+        foreach ($items as $item) {
+            $rows[] = \array_merge(
+                [
+                    Value::schema_fields_attribute_id => $attribute->id,
+                    Value::schema_fields_entity_id => $ownerId,
+                    Value::schema_fields_value => $item,
+                    Value::schema_fields_IS_CLEARED => $cleared ? 1 : 0,
+                ],
+                $scopeCols,
+            );
+        }
+        $valueModel->reset()->insert($rows)->fetch();
+    }
+
+    /**
+     * @param array<string, mixed> $scopeCols
+     */
+    private function applyNullableScopeEquals(EntityAttributeValueTable $query, array $scopeCols): void
+    {
+        foreach (
+            [
+                Value::schema_fields_WEBSITE_ID,
+                Value::schema_fields_WEBSITE_CODE,
+                Value::schema_fields_STORE_CODE,
+                Value::schema_fields_CHANNEL_CODE,
+            ] as $col
+        ) {
+            $val = $scopeCols[$col] ?? null;
+            if ($val === null) {
+                $query->where($col, null);
+            } else {
+                $query->where($col, $val);
+            }
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function readCompatibilityRows(
+        EntityAttributeValueTable $valueModel,
+        int|string $ownerId,
+        AttributeRecord $attribute,
+        bool $typedGlobal,
+        bool $hasScopeColumns,
+    ): array {
+        $query = $valueModel
+            ->reset()
+            ->fields(Value::schema_fields_value)
+            ->where(Value::schema_fields_attribute_id, $attribute->id)
+            ->where(Value::schema_fields_entity_id, $ownerId);
+
+        if ($hasScopeColumns) {
+            if ($typedGlobal) {
+                $query
+                    ->where(Value::schema_fields_SCOPE_KIND, ScopeIdentity::KIND_GLOBAL)
+                    ->where(Value::schema_fields_WEBSITE_ID, null)
+                    ->where(Value::schema_fields_WEBSITE_CODE, null)
+                    ->where(Value::schema_fields_STORE_CODE, null)
+                    ->where(Value::schema_fields_CHANNEL_CODE, null)
+                    ->where(Value::schema_fields_LOCALE, '')
+                    ->where(Value::schema_fields_IS_CLEARED, 0);
+            } else {
+                $query->where(Value::schema_fields_SCOPE_KIND, null);
+            }
+        }
+
+        $rows = $query->select()->fetchArray();
+
+        return \array_values(\array_filter($rows, 'is_array'));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function scopeColumnPayload(ScopeIdentity $scope, string $locale): array
+    {
+        return [
+            Value::schema_fields_SCOPE_KIND => $scope->scopeKind,
+            Value::schema_fields_WEBSITE_ID => $scope->websiteId,
+            Value::schema_fields_WEBSITE_CODE => $scope->websiteCode,
+            Value::schema_fields_STORE_CODE => $scope->storeCode,
+            Value::schema_fields_CHANNEL_CODE => $scope->channelCode,
+            Value::schema_fields_LOCALE => $locale,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function legacyScopeStringFromRow(array $row): string
+    {
+        $kind = (string)($row[Value::schema_fields_SCOPE_KIND] ?? '');
+        $website = \trim((string)($row[Value::schema_fields_WEBSITE_CODE] ?? ''));
+        $store = \trim((string)($row[Value::schema_fields_STORE_CODE] ?? ''));
+        $channel = \trim((string)($row[Value::schema_fields_CHANNEL_CODE] ?? ''));
+
+        return match ($kind) {
+            ScopeIdentity::KIND_GLOBAL => '',
+            ScopeIdentity::KIND_WEBSITE => $website,
+            ScopeIdentity::KIND_STORE => $website . '.' . $store,
+            ScopeIdentity::KIND_CHANNEL => $website . '.' . $store . '.' . $channel,
+            default => '',
+        };
+    }
+
+    private function valueTableHasScopeColumns(EntityAttributeValueTable $valueModel): bool
+    {
+        try {
+            $table = $valueModel->getTable();
+            $connector = $valueModel->getConnection()->getConnector();
+            $sql = "SELECT 1 FROM information_schema.columns WHERE table_name = "
+                . $connector->quote(\str_replace('"', '', \preg_replace('/^.*\./', '', $table) ?? $table))
+                . " AND column_name = " . $connector->quote(EavScopeColumns::SCOPE_KIND)
+                . " LIMIT 1";
+            $result = $connector->query($sql)->fetch();
+
+            return !empty($result);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function appendTypedScopeColumns(object $table): void
+    {
+        $table
+            ->addColumn(
+                Value::schema_fields_SCOPE_KIND,
+                DdlTableInterface::column_type_VARCHAR,
+                16,
+                'null',
+                'Scope kind；NULL=遗留行',
+            )
+            ->addColumn(
+                Value::schema_fields_WEBSITE_ID,
+                DdlTableInterface::column_type_INTEGER,
+                11,
+                'null',
+                'Website ID（0 合法）',
+            )
+            ->addColumn(
+                Value::schema_fields_WEBSITE_CODE,
+                DdlTableInterface::column_type_VARCHAR,
+                64,
+                'null',
+                'Website code',
+            )
+            ->addColumn(
+                Value::schema_fields_STORE_CODE,
+                DdlTableInterface::column_type_VARCHAR,
+                64,
+                'null',
+                'Store code',
+            )
+            ->addColumn(
+                Value::schema_fields_CHANNEL_CODE,
+                DdlTableInterface::column_type_VARCHAR,
+                64,
+                'null',
+                'Channel code',
+            )
+            ->addColumn(
+                Value::schema_fields_IS_CLEARED,
+                DdlTableInterface::column_type_SMALLINT,
+                1,
+                'default 0',
+                'cleared 阻断继承',
+            )
+            ->addColumn(
+                Value::schema_fields_LOCALE,
+                DdlTableInterface::column_type_VARCHAR,
+                16,
+                "default ''",
+                'locale；空=默认',
+            );
     }
 
     private function requireEntity(string $entityCode): EavEntity

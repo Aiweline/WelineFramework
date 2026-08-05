@@ -64,6 +64,42 @@ class SlotValidator
         
         // 5. 验证数值属性
         self::validateNumericAttributes($attrs, $file, $line);
+
+        // 6. wrapper=section 时强制 weline-code（事件溯源）
+        self::validateWelineCodeForSectionWrapper($attrs, $file, $line);
+    }
+
+    /**
+     * wrapper=section 时必须配置非空 weline-code（允许 PHP 插值）。
+     *
+     * @throws TemplateException
+     */
+    public static function validateWelineCodeForSectionWrapper(array $attrs, string $file, int $line): void
+    {
+        $wrapper = strtolower(trim((string)($attrs['wrapper'] ?? 'div')));
+        if ($wrapper !== 'section') {
+            return;
+        }
+        if (!array_key_exists('weline-code', $attrs)) {
+            self::throwError(
+                __('w:slot wrapper="section" 必须配置 weline-code 属性（用于事件溯源）'),
+                $file,
+                $line,
+                'weline-code="theme.homepage.hero"'
+            );
+        }
+        $raw = (string)$attrs['weline-code'];
+        if (str_contains($raw, '<?')) {
+            return;
+        }
+        if (trim($raw) === '') {
+            self::throwError(
+                __('w:slot wrapper="section" 的 weline-code 不能为空'),
+                $file,
+                $line,
+                'weline-code="theme.homepage.hero"'
+            );
+        }
     }
     
     /**

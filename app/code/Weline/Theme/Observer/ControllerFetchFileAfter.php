@@ -297,8 +297,7 @@ class ControllerFetchFileAfter implements ObserverInterface
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{$titleEsc}</title>
-{$descriptionHtml}    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235b4cf5'/%3E%3Cpath d='M18 20h28L36 44H22l6-14h8l-2 5h4l5-12H20z' fill='white'/%3E%3C/svg%3E">
-    <style data-auth-theme-vars>
+{$descriptionHtml}    <style data-auth-theme-vars>
         :root {
             --color-primary: #5b4cf5;
             --color-primary-dark: #4436d9;

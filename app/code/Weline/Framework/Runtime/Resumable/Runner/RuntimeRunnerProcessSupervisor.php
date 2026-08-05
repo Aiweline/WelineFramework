@@ -34,10 +34,11 @@ final class RuntimeRunnerProcessSupervisor implements RuntimeRunnerProcessSuperv
             $identity,
             Processer::probeManagedProcessIdentity(
                 $identity->pid,
-                $identity->liveCommand,
+                $identity->processName,
                 $identity->launchId,
                 $identity->managedPname(),
                 true,
+                $this->requiredLiveArguments($identity),
             ),
         );
     }
@@ -52,11 +53,22 @@ final class RuntimeRunnerProcessSupervisor implements RuntimeRunnerProcessSuperv
             $identity,
             Processer::terminateManagedProcessLease(
                 $identity->pid,
-                $identity->liveCommand,
+                $identity->processName,
                 $identity->launchId,
                 $identity->managedPname(),
                 true,
+                $this->requiredLiveArguments($identity),
             ),
         );
+    }
+
+    /** @return array<string,string> */
+    private function requiredLiveArguments(RuntimeProcessIdentity $identity): array
+    {
+        return [
+            'name' => $identity->processName,
+            'launch-id' => $identity->launchId,
+            'epoch' => (string)$identity->generation,
+        ];
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Session\Session;
 use Weline\Theme\Model\WelineTheme;
@@ -15,11 +16,14 @@ use Weline\Theme\Service\PreviewTokenService;
 class PreviewContextServiceTest extends TestCase
 {
     private ?string $originalRequestUri = null;
+    private ?string $originalContextRequestUri = null;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->originalRequestUri = $_SERVER['REQUEST_URI'] ?? null;
+        $contextRequestUri = WelineEnv::server('REQUEST_URI');
+        $this->originalContextRequestUri = is_string($contextRequestUri) ? $contextRequestUri : null;
     }
 
     protected function tearDown(): void
@@ -28,6 +32,11 @@ class PreviewContextServiceTest extends TestCase
             unset($_SERVER['REQUEST_URI']);
         } else {
             $_SERVER['REQUEST_URI'] = $this->originalRequestUri;
+        }
+        if ($this->originalContextRequestUri === null) {
+            WelineEnv::removeServer('REQUEST_URI');
+        } else {
+            WelineEnv::setServer('REQUEST_URI', $this->originalContextRequestUri, 'PreviewContextServiceTest restore');
         }
         parent::tearDown();
     }
@@ -88,7 +97,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testRawQueryFrontendThemeIdOverridesRequestParamBagValue(): void
     {
-        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?frontend_theme_id=6&preview_theme=6&editor_area=frontend';
+        $this->setRequestUri('/theme/frontend/theme-preview/content?frontend_theme_id=6&preview_theme=6&editor_area=frontend');
 
         $service = $this->createService(
             [
@@ -108,7 +117,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testRawQueryPreviewTokenOverridesRequestParamBagToken(): void
     {
-        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?frontend_theme_id=6&weline_preview_token=pv_6_raw_token';
+        $this->setRequestUri('/theme/frontend/theme-preview/content?frontend_theme_id=6&weline_preview_token=pv_6_raw_token');
 
         $service = $this->createService(
             [
@@ -126,7 +135,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testFrontendPreviewShellNormalizesEditorAreaToFrontend(): void
     {
-        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?frontend_theme_id=6&backend_theme_id=9&editor_area=backend&shell=preview';
+        $this->setRequestUri('/theme/frontend/theme-preview/content?frontend_theme_id=6&backend_theme_id=9&editor_area=backend&shell=preview');
 
         $service = $this->createService(
             [
@@ -148,7 +157,7 @@ class PreviewContextServiceTest extends TestCase
 
     public function testDirectPreviewUrlResetsStoredScopeAndTargetContext(): void
     {
-        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?theme_id=1&page_type=category&layout_type=category&layout_option=default&editor_area=frontend&preview_mode=live&status=draft';
+        $this->setRequestUri('/theme/frontend/theme-preview/content?theme_id=1&page_type=category&layout_type=category&layout_option=default&editor_area=frontend&preview_mode=live&status=draft');
 
         $service = $this->createService(
             [
@@ -173,7 +182,8 @@ class PreviewContextServiceTest extends TestCase
         $context = $service->getCurrentContext();
 
         $this->assertSame(1, $context['frontend_theme_id']);
-        $this->assertSame(PreviewContextService::DEFAULT_SCOPE, $context['scope']);
+        $this->assertSame('default.default.default', $context['scope']);
+        $this->assertSame(\Weline\Framework\Runtime\ScopeIdentity::MODE_NORMAL, $context['store_mode']);
         $this->assertSame(PreviewContextService::TARGET_TYPE_LAYOUT, $context['target_type']);
         $this->assertSame('category.default', $context['target_value']);
         $this->assertSame(PreviewContextService::SHELL_PREVIEW, $context['shell']);
@@ -194,6 +204,12 @@ class PreviewContextServiceTest extends TestCase
         $this->assertSame(0, $context['frontend_theme_id']);
         $this->assertSame(0, $context['backend_theme_id']);
         $this->assertSame(PreviewContextService::SHELL_THEME_EDITOR, $context['shell']);
+    }
+
+    private function setRequestUri(string $uri): void
+    {
+        $_SERVER['REQUEST_URI'] = $uri;
+        WelineEnv::setServer('REQUEST_URI', $uri, 'PreviewContextServiceTest fixture');
     }
 
     /**

@@ -64,6 +64,17 @@ Provider 必须实现 `Weline\Payment\Interface\ProviderInterface`。接口函�
 
 Provider 不保存全局配置状态。`Weline_Payment` 会把 SystemConfig effective config 放进请求 DTO 的 `context.runtime_config`，Provider 从 request context 读取即可。
 
+Webhook 的 `verifyCallback()` 和 `parseCallback()` 必须是纯函数边界：
+可以读取传入 DTO，但不能写 Payment/Order/Inventory，不能发送 Queue，
+不能调用远端 API，也不能生成 effect outbox。回调线程会先按 endpoint
+冻结的 `provider_code + method_code` 解析 Provider，再以真实 raw body
+验签，最后把归一化结果写入不可变 Inbox。
+
+`getProviderCode()` 与 `getCode()` 不要求相同。前者表示网关/通道，后者是
+支付方式；注册 webhook endpoint 时必须分别保存，不能拿 provider code
+代替 method code。支付方式被停用或当前配置行被移除后，已登记 endpoint
+仍需在 tombstone 保留期内按冻结绑定处理历史回调。
+
 ## 3. 能力与国际化
 
 `getCapabilities()` 是硬上限，后台配置只能收窄，不能扩大未声明能力。生产级 Provider 至少声明：
@@ -283,8 +294,17 @@ php bin/w http:request /payment/frontend/checkout/fake
 浏览器验收使用独立 WLS 实例，不使用默认 9501：
 
 ```powershell
-php bin/w server:start -p 9506 -n ai-test-payment-fake
-php bin/w server:stop -n ai-test-payment-fake
+php bin/w server:start ai-test-payment-fake -p 9506
+php bin/w server:stop ai-test-payment-fake
 ```
 
 必须在 Browser 中验证：支付方式展示、不可用原因、条款同意、fake 成功、失败、取消、退款。未验证的能力不得在交付说明里写成已通过。
+
+Webhook HTTP 验收还必须覆盖：
+
+- 错签名、过期时间、未知/禁用 endpoint 和 raw tamper 均不入箱；
+- 合法事件返回 200，且只在 Inbox 提交后返回；
+- 同一事件并发重放只产生一条 Inbox；
+- raw body、headers、signature 和命中 secret version 的持久化结果可回读，
+  但日志不泄漏敏感值；
+- WLS 下 4xx/5xx 必须来自框架 Response，而不是仅设置 PHP 原生状态码。

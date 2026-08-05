@@ -3,15 +3,23 @@
 // 
 
 .page-title-box {
-  padding-bottom: $grid-gutter-width;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
 
   .breadcrumb {
     background-color: transparent;
+    margin: 0;
     padding: 0;
+    line-height: 1.35;
   }
 
   h4 {
+    margin: 0;
     font-size: 18px;
     font-weight: 600;
+    line-height: 1.35;
   }
 }

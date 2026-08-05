@@ -5,7 +5,7 @@ namespace Weline\Ai\test;
 
 use Weline\Ai\Model\AiModel;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 /**
  * Backend Model Controller 单元测试

@@ -1,3 +1,15 @@
+
+function csAdmin(url, options){
+  options=options||{};
+  var body=options.body;
+  if(body && typeof FormData!=='undefined' && body instanceof FormData){
+    var p=new URLSearchParams(); body.forEach(function(v,k){p.append(k,String(v));}); body=p.toString();
+  } else if(body && typeof body!=='string'){ try{body=JSON.stringify(body);}catch(e){body='';} }
+  var run=function(api){ return api.resource('customerService').adminRequest({url:url, method:options.method||'GET', headers:options.headers||{}, body:body||''}); };
+  if(window.Weline&&window.Weline.load) return window.Weline.load('api').then(run);
+  return Promise.resolve(run(window.Weline.Api));
+}
+
 /**
  * 客服统计JavaScript
  */
@@ -51,8 +63,7 @@ const CustomerServiceStatistics = (function() {
      */
     async function loadStatistics(period) {
         try {
-            const response = await fetch(config.consoleUrl + '/statistics?period=' + period);
-            const data = await response.json();
+            const data = await csAdmin(config.consoleUrl + '/statistics?period=' + period);
             
             if (data.success) {
                 updateStatisticsDisplay(data.data);
@@ -155,4 +166,3 @@ const CustomerServiceStatistics = (function() {
         loadStatistics
     };
 })();
-

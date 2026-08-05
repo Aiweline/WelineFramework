@@ -48,6 +48,7 @@ final class GatewayPublicRouteProbeTest extends TestCase
             'project_uuid' => '123e4567-e89b-42d3-a456-426614174000',
             'instance_id' => 'gateway-probe-test',
             'routes' => [[
+                'route_id' => \str_repeat('c', 32),
                 'domain' => 'probe.example.test',
                 'backend_identity' => [
                     'generation' => 1,
@@ -56,12 +57,13 @@ final class GatewayPublicRouteProbeTest extends TestCase
                 ],
                 'certificate' => [
                     'cert' => [],
+                    'leaf_fingerprint_sha256' => '',
                 ],
             ]],
         ];
 
         self::assertFalse(
-            (new GatewayPublicRouteProbe($this->builder))->registrationIsHealthy(
+            (new GatewayPublicRouteProbe())->registrationIsHealthy(
                 $registration,
                 21443,
             ),

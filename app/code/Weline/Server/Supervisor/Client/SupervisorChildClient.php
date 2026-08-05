@@ -631,23 +631,10 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
             throw new \RuntimeException('Explicit Supervisor hello authentication is unavailable.');
         }
 
-        $environmentSecret = (string)(\getenv('WLS_MASTER_TOKEN') ?: '');
-        $argv = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
-        if (!\is_array($argv)) {
-            return $environmentSecret;
-        }
-        foreach ($argv as $arg) {
-            $arg = (string)$arg;
-            if (!\str_starts_with($arg, '--master-token=')) {
-                continue;
-            }
-            $secret = (string)\substr($arg, 15);
-            if ($secret !== '') {
-                return $secret;
-            }
-        }
-
-        return $environmentSecret;
+        // WLS 2.0 never accepts a root or child credential from argv/env.
+        // Managed callers must inject the subject credential obtained from
+        // the PID/birth/slot-bound protected ledger.
+        return '';
     }
 
 

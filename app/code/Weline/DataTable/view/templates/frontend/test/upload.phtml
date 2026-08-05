@@ -19,7 +19,7 @@
     <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
     <div class="dt-demo-layout">
-        <section>
+        <section weline-code="datatable.test.upload.section_1">
             <w:d-form id="demo-upload-form"
                       model="Weline\DataTable\Model\TestUser"
                       scope="demo-upload-user"
@@ -30,7 +30,7 @@
                       include_fields="name,email,photo,attachment"
                       show-trigger-button="false"></w:d-form>
         </section>
-        <section>
+        <section weline-code="datatable.test.upload.section_2">
             <w:d-table id="demo-upload-table"
                        model="Weline\DataTable\Model\TestUser"
                        scope="demo-upload-user"

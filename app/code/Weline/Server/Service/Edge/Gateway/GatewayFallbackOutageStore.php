@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Edge\Gateway;
 
 /**
- * Persists the project Agent's current gateway outage across Agent self-heal.
+ * Persists the project Agent's current gateway outage observation.
  *
- * This is project-runtime derived state, not host enrollment state. A different
- * Master identity starts a new outage window.
+ * This is project-runtime derived state, not host enrollment state. Persisted
+ * monotonic time may only be reused by the exact Agent-local outage identity.
+ * Cross-Agent restoration is deliberately fail-closed: the current protocol
+ * has no authenticated data-plane transition identity capable of proving that
+ * the gateway did not recover and fail again while the Agent was absent.
  */
 final class GatewayFallbackOutageStore
 {
@@ -22,51 +25,96 @@ final class GatewayFallbackOutageStore
                 . DIRECTORY_SEPARATOR . 'agent-outages';
     }
 
+    /**
+     * @return array{down_since_monotonic:float,elapsed_seconds:float,restored:bool}
+     */
     public function markDown(
         string $instanceName,
         int $masterPid,
         int $masterEpoch,
-        int $now,
-    ): int {
+        string $launchId,
+        string $outageId,
+        float $monotonicNow,
+    ): array {
+        $this->assertInstanceName($instanceName);
+        $launchId = \strtolower(\trim($launchId));
+        $outageId = \strtolower(\trim($outageId));
+        if ($masterPid < 1
+            || $masterEpoch < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $outageId) !== 1
+            || !\is_finite($monotonicNow)
+            || $monotonicNow < 0.0
+        ) {
+            throw new \InvalidArgumentException('Gateway Agent outage identity or time is invalid.');
+        }
+        $hostBootId = GatewayHostBootIdentity::current();
         return $this->withLock($instanceName, function () use (
             $instanceName,
             $masterPid,
             $masterEpoch,
-            $now,
-        ): int {
+            $launchId,
+            $outageId,
+            $monotonicNow,
+            $hostBootId,
+        ): array {
             $state = $this->read($instanceName);
-            $sameMaster = $state !== null
+            $sameOutage = $state !== null
                 && \hash_equals($instanceName, (string)($state['instance'] ?? ''))
                 && (int)($state['master_pid'] ?? 0) === $masterPid
-                && (int)($state['master_epoch'] ?? 0) === $masterEpoch;
-            $downSince = $sameMaster
-                ? (int)($state['down_since_timestamp'] ?? 0)
-                : 0;
-            if ($downSince > 0 && $downSince <= $now) {
-                return $downSince;
+                && (int)($state['master_epoch'] ?? 0) === $masterEpoch
+                && \hash_equals($launchId, (string)($state['launch_id'] ?? ''))
+                && \hash_equals($outageId, (string)($state['outage_id'] ?? ''))
+                && \hash_equals($hostBootId, (string)($state['host_boot_id'] ?? ''));
+            $rawPersistedMonotonic = $state['down_since_monotonic'] ?? null;
+            if ($sameOutage
+                && (\is_int($rawPersistedMonotonic) || \is_float($rawPersistedMonotonic))
+            ) {
+                $persistedMonotonic = (float)$rawPersistedMonotonic;
+                if (\is_finite($persistedMonotonic)
+                    && $persistedMonotonic >= 0.0
+                    && $persistedMonotonic <= $monotonicNow
+                ) {
+                    return [
+                        'down_since_monotonic' => $persistedMonotonic,
+                        'elapsed_seconds' => $monotonicNow - $persistedMonotonic,
+                        'restored' => true,
+                    ];
+                }
             }
-            $downSince = $now;
+            $wallNow = \time();
             $this->publish($instanceName, [
-                'schema_version' => 1,
+                'schema_version' => 3,
                 'instance' => $instanceName,
                 'master_pid' => $masterPid,
                 'master_epoch' => $masterEpoch,
-                'down_since' => \gmdate(DATE_ATOM, $downSince),
-                'down_since_timestamp' => $downSince,
-                'updated_at' => \gmdate(DATE_ATOM, $now),
-                'updated_timestamp' => $now,
+                'launch_id' => $launchId,
+                'outage_id' => $outageId,
+                'host_boot_id' => $hostBootId,
+                'down_since' => \gmdate(DATE_ATOM, $wallNow),
+                'down_since_timestamp' => $wallNow,
+                'down_since_monotonic' => $monotonicNow,
+                'updated_at' => \gmdate(DATE_ATOM, $wallNow),
+                'updated_timestamp' => $wallNow,
+                'updated_monotonic' => $monotonicNow,
             ]);
-            return $downSince;
+            return [
+                'down_since_monotonic' => $monotonicNow,
+                'elapsed_seconds' => 0.0,
+                'restored' => false,
+            ];
         });
     }
 
     public function clear(string $instanceName): void
     {
+        $this->assertInstanceName($instanceName);
         $this->withLock($instanceName, function () use ($instanceName): void {
             $file = $this->stateFile($instanceName);
-            if (\is_file($file) && !\is_link($file)) {
-                @\unlink($file);
-            }
+            GatewayProjectStateFilesystem::removeRegular(
+                $file,
+                'gateway Agent outage state',
+            );
         });
     }
 
@@ -77,30 +125,24 @@ final class GatewayFallbackOutageStore
      */
     private function withLock(string $instanceName, callable $callback): mixed
     {
-        if (\is_link($this->directory)
-            || (!\is_dir($this->directory)
-                && !@\mkdir($this->directory, 0700, true)
-                && !\is_dir($this->directory))
+        $this->assertInstanceName($instanceName);
+        $this->ensureDirectory($this->directory);
+        $status = @\lstat($this->directory);
+        if (!\is_array($status)
+            || \is_link($this->directory)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
         ) {
-            throw new \RuntimeException('Unable to create gateway Agent outage state directory.');
+            throw new \RuntimeException('Gateway Agent outage state directory is unsafe.');
         }
-        @\chmod($this->directory, 0700);
+        if (\PHP_OS_FAMILY !== 'Windows' && !@\chmod($this->directory, 0700)) {
+            throw new \RuntimeException('Unable to secure gateway Agent outage state directory.');
+        }
         $lockPath = $this->directory . DIRECTORY_SEPARATOR
             . \substr(\hash('sha256', $instanceName), 0, 24) . '.lock';
-        if (\is_link($lockPath)) {
-            throw new \RuntimeException('Gateway Agent outage lock must not be a symbolic link.');
-        }
-        $lock = @\fopen($lockPath, 'c+b');
-        if (!\is_resource($lock) || !@\flock($lock, LOCK_EX)) {
-            throw new \RuntimeException('Unable to lock gateway Agent outage state.');
-        }
-        @\chmod($lockPath, 0600);
-        try {
-            return $callback();
-        } finally {
-            @\flock($lock, LOCK_UN);
-            @\fclose($lock);
-        }
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockPath,
+            \Closure::fromCallable($callback),
+        );
     }
 
     /**
@@ -109,14 +151,47 @@ final class GatewayFallbackOutageStore
     private function read(string $instanceName): ?array
     {
         $file = $this->stateFile($instanceName);
-        if (!\is_file($file) || \is_link($file)) {
+        $encoded = GatewayProjectStateFilesystem::readOptional(
+            $file,
+            16_384,
+            'gateway Agent outage state',
+        );
+        if ($encoded === null) {
             return null;
         }
-        $encoded = @\file_get_contents($file);
-        $state = \is_string($encoded) ? \json_decode($encoded, true) : null;
-        return \is_array($state) && (int)($state['schema_version'] ?? 0) === 1
-            ? $state
-            : null;
+        $state = \json_decode($encoded, true);
+        if (!\is_array($state)) {
+            throw new \RuntimeException('Gateway Agent outage state is malformed.');
+        }
+        // Older schemas had no Agent-local outage identity or exact host boot
+        // fence. They can never shorten the current monotonic window.
+        if ((int)($state['schema_version'] ?? 0) !== 3) {
+            return null;
+        }
+        if (
+            !\hash_equals($instanceName, (string)($state['instance'] ?? ''))
+            || (int)($state['master_pid'] ?? 0) < 1
+            || (int)($state['master_epoch'] ?? 0) < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                $state['launch_id'] ?? ''
+            )) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                $state['outage_id'] ?? ''
+            )) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $state['host_boot_id'] ?? ''
+            )) !== 1
+            || !\is_int($state['down_since_timestamp'] ?? null)
+            || (int)$state['down_since_timestamp'] < 1
+            || !\is_int($state['updated_timestamp'] ?? null)
+            || (int)$state['updated_timestamp'] < (int)$state['down_since_timestamp']
+            || !$this->validPersistedMonotonic($state['down_since_monotonic'] ?? null)
+            || !$this->validPersistedMonotonic($state['updated_monotonic'] ?? null)
+            || (float)$state['updated_monotonic'] < (float)$state['down_since_monotonic']
+        ) {
+            throw new \RuntimeException('Gateway Agent outage state is malformed.');
+        }
+        return $state;
     }
 
     /**
@@ -125,9 +200,6 @@ final class GatewayFallbackOutageStore
     private function publish(string $instanceName, array $state): void
     {
         $file = $this->stateFile($instanceName);
-        if (\is_link($file)) {
-            throw new \RuntimeException('Gateway Agent outage state must not be a symbolic link.');
-        }
         $encoded = \json_encode(
             $state,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
@@ -135,32 +207,64 @@ final class GatewayFallbackOutageStore
         if (!\is_string($encoded)) {
             throw new \RuntimeException('Unable to encode gateway Agent outage state.');
         }
-        $temporary = $file . '.tmp-' . \bin2hex(\random_bytes(8));
-        $stream = @\fopen($temporary, 'x+b');
-        if (!\is_resource($stream)) {
-            throw new \RuntimeException('Unable to stage gateway Agent outage state.');
-        }
-        try {
-            @\chmod($temporary, 0600);
-            if (@\fwrite($stream, $encoded) !== \strlen($encoded)
-                || !@\fflush($stream)
-                || (\function_exists('fsync') && !@\fsync($stream))
-            ) {
-                throw new \RuntimeException('Unable to persist gateway Agent outage state.');
-            }
-        } finally {
-            @\fclose($stream);
-        }
-        if (!@\rename($temporary, $file)) {
-            @\unlink($temporary);
-            throw new \RuntimeException('Unable to publish gateway Agent outage state.');
-        }
-        @\chmod($file, 0600);
+        GatewayProjectStateFilesystem::atomicWrite($file, $encoded, 0600);
     }
 
     private function stateFile(string $instanceName): string
     {
         return $this->directory . DIRECTORY_SEPARATOR
             . \substr(\hash('sha256', $instanceName), 0, 24) . '.json';
+    }
+
+    private function assertInstanceName(string $instanceName): void
+    {
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.:-]{0,511}\z/D', $instanceName) !== 1) {
+            throw new \InvalidArgumentException('Gateway Agent outage instance name is invalid.');
+        }
+    }
+
+    private function validPersistedMonotonic(mixed $value): bool
+    {
+        return (\is_int($value) || \is_float($value))
+                && \is_finite((float)$value)
+                && (float)$value >= 0.0;
+    }
+
+    private function ensureDirectory(string $directory): void
+    {
+        if ($directory === ''
+            || \str_contains($directory, "\0")
+            || (!$this->isAbsolutePath($directory))
+        ) {
+            throw new \RuntimeException('Gateway Agent outage state directory path is invalid.');
+        }
+        $status = @\lstat($directory);
+        if (!\is_array($status)) {
+            if (\file_exists($directory) || \is_link($directory)) {
+                throw new \RuntimeException('Gateway Agent outage state directory is unsafe.');
+            }
+            $parent = \dirname($directory);
+            if ($parent === $directory) {
+                throw new \RuntimeException('Gateway Agent outage state directory has no safe parent.');
+            }
+            $this->ensureDirectory($parent);
+            if (!@\mkdir($directory, 0700)) {
+                throw new \RuntimeException('Unable to create gateway Agent outage state directory.');
+            }
+            $status = @\lstat($directory);
+        }
+        if (!\is_array($status)
+            || \is_link($directory)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException('Gateway Agent outage state directory is unsafe.');
+        }
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return \str_starts_with($path, '/')
+            || \preg_match('/\A[A-Za-z]:[\\\\\/]/D', $path) === 1
+            || \str_starts_with($path, '\\\\');
     }
 }

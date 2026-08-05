@@ -65,17 +65,47 @@ class Account extends Model
     public function getCredentialsArray(): array
     {
         $credentials = $this->getData(self::schema_fields_CREDENTIALS);
-        if (is_string($credentials)) {
-            $decoded = json_decode($credentials, true);
-            return is_array($decoded) ? $decoded : [];
+        if (\is_string($credentials)) {
+            try {
+                if (\Weline\Framework\Http\Security\SecretRefCipher::isRef($credentials)) {
+                    return \Weline\Framework\Http\Security\SecretRefCipher::revealJson($credentials);
+                }
+            } catch (\Throwable) {
+                return [];
+            }
+            $decoded = \json_decode($credentials, true);
+
+            return \is_array($decoded) ? $decoded : [];
         }
-        return is_array($credentials) ? $credentials : [];
+
+        return \is_array($credentials) ? $credentials : [];
     }
 
     public function setCredentialsArray(array $credentials): self
     {
-        $this->setData(self::schema_fields_CREDENTIALS, json_encode($credentials, JSON_UNESCAPED_UNICODE));
+        // TASK-P1D-002：落库密封为 secret_ref，禁止明文 JSON。
+        $this->setData(
+            self::schema_fields_CREDENTIALS,
+            \Weline\Framework\Http\Security\SecretRefCipher::sealJson($credentials)
+        );
+
         return $this;
+    }
+
+    /** API/日志脱敏：永不暴露 secret。 */
+    public function toPublicArray(): array
+    {
+        $creds = $this->getCredentialsArray();
+
+        return [
+            'account_id' => (int)$this->getData(self::schema_fields_ACCOUNT_ID),
+            'adapter' => (string)$this->getData(self::schema_fields_ADAPTER),
+            'name' => (string)$this->getData(self::schema_fields_NAME),
+            'description' => (string)$this->getData(self::schema_fields_DESCRIPTION),
+            'is_default' => (bool)$this->getData(self::schema_fields_IS_DEFAULT),
+            'status' => (string)$this->getData(self::schema_fields_STATUS),
+            'has_credentials' => $creds !== [],
+        ];
     }
 
     public function isDefault(): bool

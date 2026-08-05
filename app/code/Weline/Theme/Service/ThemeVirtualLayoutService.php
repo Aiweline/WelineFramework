@@ -65,6 +65,7 @@ class ThemeVirtualLayoutService
             return ['success' => false, 'status' => 'invalid_identity'];
         }
         $locale = $this->normalizeSelectionLocale($locale);
+        $scope = $this->normalizeScope($scope);
         if (!$this->isSelectableLayoutOption($layoutType, $layoutOption, [
             'area' => self::DEFAULT_AREA,
             'scope' => $scope,
@@ -128,6 +129,7 @@ class ThemeVirtualLayoutService
             return ['success' => false, 'status' => 'invalid_identity'];
         }
         $locale = $this->normalizeSelectionLocale($locale);
+        $scope = $this->normalizeScope($scope);
         $key = $this->selectionKey($targetType, $targetId, $layoutType);
 
         $result = $this->systemConfig->saveScopeConfig(

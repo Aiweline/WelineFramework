@@ -137,6 +137,24 @@ File: Main Js File
         }
     }
 
+    function persistVerticalMenuCollapsedState() {
+        if ($(window).width() < 992) {
+            return;
+        }
+        if (typeof window.setThemeConfig !== 'function') {
+            return;
+        }
+        var collapsed = $('body').hasClass('vertical-collpsed');
+        // Persist into BackendUserConfig via ThemeConfig/Set (no reload).
+        window.setThemeConfig({
+            layouts: {
+                'data-keep-enlarged': collapsed ? 'true' : '',
+                'class': collapsed ? 'vertical-collpsed' : ''
+            },
+            'icon-sidebar': collapsed
+        }, false);
+    }
+
     function initLeftMenuCollapse() {
         $('#vertical-menu-btn').on('click', function (event) {
             event.preventDefault();
@@ -146,6 +164,7 @@ File: Main Js File
                 // 延迟处理，等待类切换完成
                 setTimeout(function () {
                     initMetisMenu(); // 重新初始化MetisMenu
+                    persistVerticalMenuCollapsedState();
                 }, 100);
             } else {
                 $('body').removeClass('vertical-collpsed');

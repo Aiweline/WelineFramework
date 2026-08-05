@@ -24,6 +24,23 @@ class SchedulerSystem
     private static bool $ioWaitEnabled = false;
     /** @var null|callable(string, array): void */
     private static $waitDispatcher = null;
+    /**
+     * Scheduler frames hidden while a nested local Fiber pool is active.
+     *
+     * The top frame is still able to wake the current parent Fiber. This lets a
+     * long-running nested pool periodically return control to the WLS Worker
+     * loop instead of starving Worker IPC/heartbeats while cURL streams.
+     *
+     * @var list<array{
+     *     frame_id: int,
+     *     owner_fiber_id: int,
+     *     scheduler_active: bool,
+     *     io_wait_enabled: bool,
+     *     wait_dispatcher: null|callable(string, array): void
+     * }>
+     */
+    private static array $suppressedSchedulerFrames = [];
+    private static int $nextSuppressedSchedulerFrameId = 0;
 
     /**
      * WLS 全局调度已激活时，暂停其全局标记与 waitDispatcher，便于
@@ -39,15 +56,107 @@ class SchedulerSystem
         /** @var null|callable(string,array):void $savedDispatcher */
         $savedDispatcher = self::$waitDispatcher;
         $savedIoWait = self::$ioWaitEnabled;
+        $currentFiber = \Fiber::getCurrent();
+        $frameId = ++self::$nextSuppressedSchedulerFrameId;
+        self::$suppressedSchedulerFrames[] = [
+            'frame_id' => $frameId,
+            'owner_fiber_id' => $currentFiber instanceof \Fiber ? \spl_object_id($currentFiber) : 0,
+            'scheduler_active' => true,
+            'io_wait_enabled' => $savedIoWait,
+            'wait_dispatcher' => $savedDispatcher,
+        ];
         self::$schedulerActive = false;
         self::$ioWaitEnabled = false;
         self::$waitDispatcher = null;
 
-        return static function () use ($savedDispatcher, $savedIoWait): void {
-            self::$schedulerActive = true;
-            self::$ioWaitEnabled = $savedIoWait;
-            self::$waitDispatcher = $savedDispatcher;
+        $restored = false;
+        return static function () use ($frameId, &$restored): void {
+            if ($restored) {
+                return;
+            }
+            $restored = true;
+
+            $frameIndex = null;
+            foreach (self::$suppressedSchedulerFrames as $index => $candidate) {
+                if (($candidate['frame_id'] ?? 0) === $frameId) {
+                    $frameIndex = $index;
+                    break;
+                }
+            }
+            if ($frameIndex === null) {
+                return;
+            }
+
+            $frame = self::$suppressedSchedulerFrames[$frameIndex];
+            $wasTopFrame = $frameIndex === \array_key_last(self::$suppressedSchedulerFrames);
+            \array_splice(self::$suppressedSchedulerFrames, $frameIndex, 1);
+
+            if (!$wasTopFrame) {
+                // An outer request may be cancelled while a nested Fiber pool is
+                // still suspended. Re-parent that pool to the removed frame's
+                // scheduler so its later cleanup cannot resurrect a dead local
+                // dispatcher.
+                self::$suppressedSchedulerFrames[$frameIndex]['scheduler_active']
+                    = (bool)($frame['scheduler_active'] ?? false);
+                self::$suppressedSchedulerFrames[$frameIndex]['io_wait_enabled']
+                    = (bool)($frame['io_wait_enabled'] ?? false);
+                self::$suppressedSchedulerFrames[$frameIndex]['wait_dispatcher']
+                    = $frame['wait_dispatcher'] ?? null;
+                return;
+            }
+
+            self::$schedulerActive = (bool)($frame['scheduler_active'] ?? false);
+            self::$ioWaitEnabled = (bool)($frame['io_wait_enabled'] ?? false);
+            self::$waitDispatcher = $frame['wait_dispatcher'] ?? null;
         };
+    }
+
+    /**
+     * Yield the current parent Fiber to the scheduler hidden by
+     * suppressGlobalSchedulerMomentarily().
+     *
+     * Nested FiberTaskRunner instances use this checkpoint while their own
+     * scheduler is active. For an HTTP request the hidden dispatcher belongs to
+     * the WLS Worker, so every checkpoint lets the Worker flush SSE output,
+     * service IPC and renew the request Fiber activity timestamp.
+     */
+    public static function yieldToSuppressedScheduler(): bool
+    {
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber || self::$suppressedSchedulerFrames === []) {
+            return false;
+        }
+
+        $fiberId = \spl_object_id($fiber);
+        $frame = null;
+        for ($index = \count(self::$suppressedSchedulerFrames) - 1; $index >= 0; --$index) {
+            $candidate = self::$suppressedSchedulerFrames[$index];
+            if (($candidate['owner_fiber_id'] ?? 0) === $fiberId) {
+                $frame = $candidate;
+                break;
+            }
+        }
+        if ($frame === null && \count(self::$suppressedSchedulerFrames) === 1) {
+            $candidate = self::$suppressedSchedulerFrames[0];
+            if (($candidate['owner_fiber_id'] ?? -1) === 0) {
+                $frame = $candidate;
+            }
+        }
+        if ($frame === null) {
+            return false;
+        }
+        $dispatcher = $frame['wait_dispatcher'] ?? null;
+        if (($frame['scheduler_active'] ?? false) !== true || !\is_callable($dispatcher)) {
+            return false;
+        }
+        if (!self::prepareCurrentFiberForSuspend()) {
+            return false;
+        }
+
+        $dispatcher('yield', ['fiber' => $fiber]);
+        self::suspendCurrentFiber();
+
+        return true;
     }
 
     /**
@@ -269,6 +378,13 @@ class SchedulerSystem
      */
     public static function yield(): void
     {
+        // A generator may temporarily return from a nested local Fiber pool to
+        // its HTTP/SSE caller while that pool's dispatcher is still installed
+        // process-wide. In that window the current request Fiber must yield to
+        // the scheduler frame it owns, not to the nested child's dispatcher.
+        if (self::yieldToSuppressedScheduler()) {
+            return;
+        }
         if (!self::$schedulerActive || !\Fiber::getCurrent()) {
             return;
         }

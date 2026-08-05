@@ -176,6 +176,16 @@ php bin/w <command> --help
 php bin/w command:upgrade
 ```
 
+### 升级系统
+
+```bash
+php bin/w s:up
+```
+
+默认命令会等待 Schema、迁移、类映射和反射编译全部完成后再报告成功。
+只有显式传入 `--background-optimize` 才会把末尾优化放到后台；旧脚本中的
+`--sync` 与 `--skip-background-optimize` 仍兼容，但默认已不需要它们。
+
 ### 启动开发服务器
 
 ```bash
@@ -206,4 +216,3 @@ php bin/w server:start
 **文档版本**：1.0.0  
 **最后更新**：2025-01-08  
 **维护者**：Weline Framework 开发团队
-

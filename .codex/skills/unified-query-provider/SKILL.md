@@ -1,16 +1,8 @@
 ---
 name: unified-query-provider
-description: >-
-
+description: Implement and consume Weline w_query and cross-module QueryProvider contracts, including provider discovery, introspection, and query:help. Use for stable cross-module read APIs; use ordinary module ORM for same-module persistence and weline-api for browser transport.
 ---
 
-# unified-query-provider
+# Canonical adapter
 
-This is a lightweight Codex adapter for the workspace-local WelineFramework skill.
-
-## Required Workflow
-
-1. Read `dev/ai/skills/unified-query-provider/SKILL.md` completely before acting on matching tasks.
-2. If that skill points to required references, read only the relevant referenced files.
-3. Keep `dev/ai/skills` as the single source of truth; do not duplicate detailed rules here.
-4. Also respect `dev/ai/global-constraints.md` for cross-skill hard constraints.
+Read `dev/ai/skills/unified-query-provider/SKILL.md` completely when this skill triggers. Follow `dev/ai/global-constraints.md`; do not duplicate the canonical body here.

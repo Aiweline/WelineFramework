@@ -33,7 +33,7 @@
 - `Observer`：事件观察者。改事件数据前要检查 doc/event 和触发方。 文件数：2
 - `Service`：模块内业务编排层。跨模块读取数据优先发布/使用 w_query。 文件数：1
 - `Setup`：安装/升级装配。不要手改 generated，也不要在 Setup/Upgrade.php 做字段 CRUD。 文件数：1
-- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：3
+- `etc`：模块配置。禁止 routes.xml；路由由控制器和 setup:upgrade --route 生成。 文件数：4
 - `i18n`：国际化资源。用户可见文案使用中文 source/key，en_US/zh_Hans_CN 对齐。 文件数：2
 - `view/templates`：模块模板源文件。可编辑源模板；不要改 view/tpl 编译产物。 文件数：2
 - `view/tpl`：模板编译/生成产物。禁止直接修改。 文件数：0

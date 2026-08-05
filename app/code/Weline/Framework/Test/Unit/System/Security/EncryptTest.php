@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\System\Security;
 
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 class EncryptTest extends TestCore
 {

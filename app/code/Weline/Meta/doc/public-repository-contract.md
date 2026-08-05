@@ -29,6 +29,18 @@ Theme 等消费模块必须在调用前自行解析当前上下文，并将以�
 
 Repository 不反查 `ThemeContextService`、Cookie、Session 或当前请求的 area/scope。这保证 Meta 不反向依赖 Theme，也避免 WLS 长驻 Worker 串请求状态。
 
+## Typed Scope 只读适配（TASK-P1C-005-META）
+
+需要 Channel→Store→Website→Global 回落、来源徽章时，使用 `Weline\Meta\Service\MetaConfigTypedScopeService::resolveTyped()`（返回 `MetaConfigScopeValue` / `MetaConfigScopeSource`）。它在精确 Repository 之上叠加链解析；**不得**把 scope 回落塞进 `MetaConfigRepositoryInterface::resolve()`，以免破坏「Repository 不做 scope 链回退」契约。旧精确 `resolve()`/`upsert()` 保持只读兼容。
+
+前台公开读取使用 QueryProvider 操作
+`meta.resolvePublicCurrentScope(namespace, config_key, locale?)`。它只接受
+`public.*` 命名空间，将 owner 固定为 `"0"`，并且只读取
+`RequestContext::scopeIdentity()` 的可信当前 Scope；浏览器不能传入
+Website/Store/Channel 或枚举实体 owner。缺少可信 Scope 返回
+`meta_request_scope_unavailable`，非公开 namespace 返回
+`meta_public_namespace_required`。
+
 ## 读取语义
 
 ### Metadata
@@ -40,6 +52,7 @@ Repository 不反查 `ThemeContextService`、Cookie、Session 或当前请求的
 ### MetaConfig
 
 - `search()` 必须指定 owner 身份、namespace 和精确 scope。
+- SQL 条件只负责缩小候选集；`search()`、`resolveBatch()` 和 `listScopes()` 都必须在 PHP 中重新以存储字节做大小写敏感的精确比较。MySQL/SQLite 的大小写或重音宽松 collation 可以多返候选，不能扩大最终结果。
 - `allLocales=false` 时 locale 为精确条件；`locale=NULL` 生成 `IS NULL`，不代表“任意语言”。
 - 确实需要查询所有语言时才显式设置 `allLocales=true`，且不能同时提供 locale。
 - `resolve()` 固定按“请求 locale → `zh_Hans_CN` → `NULL`”去重后回退，不改变 scope 和 owner 身份。
@@ -62,12 +75,26 @@ Repository 不反查 `ThemeContextService`、Cookie、Session 或当前请求的
 
 ## 写入与删除
 
-- `upsert()` 只使用 Write DTO 中的精确 identity，不自动推断当前主题、area、scope 或 locale。
+- `upsert()` 只使用 Write DTO 显式给出的 context 与 owner 条件，不自动推断当前主题、area、scope 或 locale。
+- DTO 未提供的可选 owner 字段保持历史兼容语义：查询时只约束已提供的 `identifyId / metaId / metaIdentify`。Repository 按 context、精确 locale 和已提供 owner 查询后，必须再用 PHP 原始字节复核；恰好一个候选时沿用候选的完整 owner，多于一个候选按 `config_id` 报歧义，零候选的新写入才把缺省 owner 保存为 SQL `NULL`。
+- 完整存储身份确定后，`upsert()` 先按七字段 SHA-256 指纹定位，再逐字段按原始字节复核 `namespace + config_key + scope + locale + identify_id + meta_id + meta_identify`；即使出现理论哈希碰撞或并发唯一冲突，也不得更新另一条 identity。
 - Metadata Repository 只负责 Meta 持久化，不隐式写入 I18n 字典；需要翻译收集时由消费方通过已声明的 I18n/Event 契约单独提交。
 - `delete()` 始终精确到 locale；DTO 的 locale 为 `NULL` 时只删除 SQL `NULL` 记录，绝不删除其他语言。
 - 不存在的精确记录返回 `false`，不扩大删除范围。
-- Repository 使用独立 Query 并感知事务所有权：没有外层事务时自行原子提交；已有外层事务时绝不提交或回滚调用方的事务。
+- Repository 通过 `WriteIntentTransactionCoordinatorInterface` 进入写意图事务。没有外层事务时可对已确认的死锁/序列化冲突有界重试；已有外层事务时仍必须进入 coordinator 的嵌套写 scope，成功不提交外层事务，任何内层异常则把外层标记为 rollback-only。调用方捕获异常后也不能把半完成的 upsert 提交。
+- 并发新建使用数据库方言的原子 no-op upsert，再用 locking/current read 回读完整七字段。MySQL 的 `ON DUPLICATE KEY` 对任意 UNIQUE 冲突都可触发，因此冲突分支只能把已存指纹自赋值，不得用输入指纹改写其他行。
+- 兼容 `MetaConfig::setConfig/getConfig/deleteConfig` 不得绕过上述原字节语义。`getConfig()` 按“请求 locale → 调用方给定的 default locale → `NULL`”逐层调用精确 search，同层多候选必须失败；`deleteConfig()` 先用 Repository 找原字节候选，再在该 legacy Model 当前连接的同一写事务内按 `config_id + fingerprint` 删除。每行删除前都要从事务连接回读七字段与指纹；Repository/Model connector 被错配、指纹伪造或中途失败时整批回滚，不得部分删除。
 - 写入成功后会清理 Meta 进程内旧缓存；消费模块仍负责清理自己的 L1/共享缓存与发布相应 epoch。
+
+### `identity_fingerprint` 第一阶段约束
+
+- 指纹由固定顺序的七个身份字段生成，使用带类型和字节长度的无歧义编码后计算 SHA-256，输出固定为 64 位小写十六进制。
+- 生成器本身不 trim、不做 Unicode normalization、不 case-fold；Repository 在调用生成器前继续执行其原有的 namespace/config key/scope/owner trim 语义，locale 保持原值。
+- 模型声明中的 `nullable=true` 仅是 `1.0.1` 旧数据迁移窗口，不是公开写入契约。Repository、兼容 `setConfig()` 和直接 Model `save()` 的应用写入都必须非空。
+- 应用边界在三库之前统一拒绝非 UTF-8 或超长值：namespace/scope 最多 100 字符，config key/value 最多 255，locale 最多 20，字符串 owner 最多 255，`meta_id` 必须为 1..2147483647；三个 owner 不得同时缺失。
+- 直接 Model 只允许两种更新：仅 `config_id + value` 的部分更新，或同时提供全部七个身份字段的完整身份更新。value-only 不得把补读的身份写回 Model，并要求存储指纹已存在且与当前行匹配；不完整身份、单独伪造指纹或无 owner 直接写入必须失败。
+- `Setup/Upgrade.php` 只做数据迁移，不做 DDL：先全表验证已有非空指纹并检测精确重复/理论碰撞，任何问题都在首次写入前按 `config_id` 失败；之后事务化回填 `NULL`，最终断言 `NULL=0` 且无重复。
+- 第二阶段必须在所有环境完成第一阶段验收后另升版本，将字段收紧为 `NOT NULL`；不得把两个阶段合并成一次不可恢复变更。
 
 ## 迁移对照
 

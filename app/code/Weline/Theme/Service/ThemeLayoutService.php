@@ -43,20 +43,16 @@ class ThemeLayoutService
 
     /**
      * @param array<string,mixed> $identity
-     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int,store_mode?:string,storage_scope?:string}
      */
     private function normalizeLayoutIdentity(array $identity = []): array
     {
-        $layoutOption = trim((string)($identity['layout_option'] ?? 'default'));
-        $scope = trim((string)($identity['scope'] ?? 'default'));
-        $targetType = trim((string)($identity['target_type'] ?? 'global'));
+        return $this->getLayoutScopeNormalizer()->normalize($identity);
+    }
 
-        return [
-            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
-            'scope' => $scope !== '' ? $scope : 'default',
-            'target_type' => $targetType !== '' ? $targetType : 'global',
-            'target_id' => max(0, (int)($identity['target_id'] ?? 0)),
-        ];
+    private function getLayoutScopeNormalizer(): ThemeLayoutScopeNormalizer
+    {
+        return new ThemeLayoutScopeNormalizer(new \Weline\SystemConfig\Service\SystemConfigScopeResolver());
     }
 
     private function applyLayoutIdentityFilters(mixed $query, array $identity): mixed

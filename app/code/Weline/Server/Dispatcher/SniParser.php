@@ -61,6 +61,136 @@ class SniParser
      * Peek 数据推荐大小
      */
     public const RECOMMENDED_PEEK_SIZE = 512;
+
+    /** Maximum aggregate first-handshake bytes accepted from a peek flight. */
+    private const MAX_CLIENT_HELLO_BYTES = 65_535;
+
+    /** TLSPlaintext fragment bound for an unencrypted ClientHello flight. */
+    private const MAX_HANDSHAKE_RECORD_BYTES = 16_384;
+
+    /**
+     * Inspect a non-consuming TCP peek and reconstruct the first ClientHello
+     * across consecutive TLS Handshake records.
+     *
+     * @return array{
+     *   status:'incomplete'|'complete'|'invalid',
+     *   client_hello:string,
+     *   consumed:int,
+     *   reason:string
+     * }
+     */
+    public static function inspectClientHelloFlight(string $data): array
+    {
+        $dataLength = \strlen($data);
+        $offset = 0;
+        $handshake = '';
+        $expectedHandshakeBytes = null;
+
+        while (true) {
+            if ($dataLength - $offset < 5) {
+                return self::clientHelloInspection('incomplete', '', 0, 'record_header_incomplete');
+            }
+            if (\ord($data[$offset]) !== self::TLS_CONTENT_TYPE_HANDSHAKE) {
+                return self::clientHelloInspection('invalid', '', 0, 'non_handshake_record');
+            }
+            $versionMajor = \ord($data[$offset + 1]);
+            $versionMinor = \ord($data[$offset + 2]);
+            if ($versionMajor !== 3 || $versionMinor > 4) {
+                return self::clientHelloInspection('invalid', '', 0, 'record_version_invalid');
+            }
+            $recordLength = (\ord($data[$offset + 3]) << 8)
+                | \ord($data[$offset + 4]);
+            if ($recordLength < 1 || $recordLength > self::MAX_HANDSHAKE_RECORD_BYTES) {
+                return self::clientHelloInspection('invalid', '', 0, 'record_length_invalid');
+            }
+            $recordEnd = $offset + 5 + $recordLength;
+            if ($recordEnd > $dataLength) {
+                return self::clientHelloInspection('incomplete', '', 0, 'record_payload_incomplete');
+            }
+            $handshake .= \substr($data, $offset + 5, $recordLength);
+            if (\strlen($handshake) > self::MAX_CLIENT_HELLO_BYTES) {
+                return self::clientHelloInspection('invalid', '', 0, 'client_hello_too_large');
+            }
+            $offset = $recordEnd;
+
+            if ($expectedHandshakeBytes === null && \strlen($handshake) >= 4) {
+                if (\ord($handshake[0]) !== self::TLS_HANDSHAKE_TYPE_CLIENT_HELLO) {
+                    return self::clientHelloInspection(
+                        'invalid',
+                        '',
+                        0,
+                        'first_handshake_is_not_client_hello',
+                    );
+                }
+                $handshakeBodyLength = (\ord($handshake[1]) << 16)
+                    | (\ord($handshake[2]) << 8)
+                    | \ord($handshake[3]);
+                $expectedHandshakeBytes = 4 + $handshakeBodyLength;
+                if ($handshakeBodyLength < 34
+                    || $expectedHandshakeBytes > self::MAX_CLIENT_HELLO_BYTES
+                ) {
+                    return self::clientHelloInspection(
+                        'invalid',
+                        '',
+                        0,
+                        'client_hello_length_invalid',
+                    );
+                }
+            }
+            if ($expectedHandshakeBytes !== null
+                && \strlen($handshake) >= $expectedHandshakeBytes
+            ) {
+                return self::clientHelloInspection(
+                    'complete',
+                    \substr($handshake, 0, $expectedHandshakeBytes),
+                    $offset,
+                    '',
+                );
+            }
+            if ($offset >= $dataLength) {
+                return self::clientHelloInspection(
+                    'incomplete',
+                    '',
+                    0,
+                    'client_hello_fragment_incomplete',
+                );
+            }
+            // A fragmented ClientHello may continue only in another Handshake
+            // record. The next loop validates its type/version/length before
+            // appending any bytes.
+        }
+    }
+
+    /**
+     * @return array{status:string,client_hello:string,consumed:int,reason:string}
+     */
+    private static function clientHelloInspection(
+        string $status,
+        string $clientHello,
+        int $consumed,
+        string $reason,
+    ): array {
+        return [
+            'status' => $status,
+            'client_hello' => $clientHello,
+            'consumed' => $consumed,
+            'reason' => $reason,
+        ];
+    }
+
+    private static function normalizedClientHelloRecord(string $data): ?string
+    {
+        $inspection = self::inspectClientHelloFlight($data);
+        if (($inspection['status'] ?? '') !== 'complete') {
+            return null;
+        }
+        $clientHello = (string)($inspection['client_hello'] ?? '');
+        $length = \strlen($clientHello);
+        if ($length < 4 || $length > self::MAX_CLIENT_HELLO_BYTES) {
+            return null;
+        }
+        return "\x16\x03\x03" . \pack('n', $length) . $clientHello;
+    }
     
     /**
      * 从原始数据中提取 SNI
@@ -70,6 +200,7 @@ class SniParser
      */
     public static function extractSNI(string $data): ?string
     {
+        $data = self::normalizedClientHelloRecord($data) ?? '';
         $length = \strlen($data);
         
         // 最小 ClientHello 长度检查
@@ -151,6 +282,7 @@ class SniParser
      */
     public static function extractAlpnProtocols(string $data): array
     {
+        $data = self::normalizedClientHelloRecord($data) ?? '';
         $length = \strlen($data);
         if ($length < self::MIN_CLIENT_HELLO_LENGTH) {
             return [];

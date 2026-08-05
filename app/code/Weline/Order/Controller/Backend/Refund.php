@@ -2,85 +2,79 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Order\Controller\Backend;
 
+use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Order\Service\RefundService;
+use Weline\Framework\Service\Query\FrontendQueryException;
+use Weline\Order\Service\OrderTradeAdminCommandException;
+use Weline\Order\Service\OrderTradeAdminCommandService;
 
-/**
- * 退款管理控制器
- */
-#[Acl('Weline_Order::refund_manage', '退款管理', 'mdi-cash-refund', '退款管理', 'Weline_Order::order_manage')]
-class Refund extends BackendController
+#[Acl('Weline_Order::refund_controller', '订单退款控制器', 'mdi-cash-refund', '订单并发安全退款管理', 'Weline_Backend::order_group')]
+final class Refund extends BackendController
 {
-    private RefundService $refundService;
-    
+    use OrderObjectAuthorizationTrait;
+
+    private readonly OrderTradeAdminCommandService $commands;
+
     public function __construct(ObjectManager $objectManager)
     {
-        $this->refundService = $objectManager->getInstance(RefundService::class);
+        $this->commands = $objectManager->getInstance(OrderTradeAdminCommandService::class);
     }
-    
-    /**
-     * 创建退款
-     */
-    #[Acl('Weline_Order::refund_create', '创建退款', 'mdi-plus-circle', '创建退款记录')]
-    public function create()
+
+    #[Acl('Weline_Order::refund_manage', '查看订单退款', 'mdi-format-list-bulleted', '查看可退款订单项和退款案例', 'Weline_Backend::order_group')]
+    public function index(): string
     {
-        $orderId = (int)$this->request->getPost('order_id');
-        $refundData = [
-            'amount' => (float)$this->request->getPost('amount'),
-            'reason' => trim((string)$this->request->getPost('reason', '')),
-        ];
-        
-        if (!$orderId || !$refundData['amount']) {
-            $this->getMessageManager()->addError(__('参数错误'));
-            $this->redirect('order/backend/order/view?id=' . $orderId);
-            return;
+        $candidates = [];
+        foreach ($this->commands->refundCandidates() as $row) {
+            $grant = $this->orderActionGrant((int)$row['order_id'], ObjectAction::REFUND);
+            if (!$grant['allowed']) {
+                continue;
+            }
+            $candidates[] = $row + ['expected_grant_version' => $grant['grant_version']];
         }
-        
-        try {
-            $this->refundService->createRefund($orderId, $refundData);
-            $this->getMessageManager()->addSuccess(__('退款申请创建成功'));
-        } catch (\Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
+        $cases = [];
+        foreach ($this->commands->refundCases() as $row) {
+            if ($this->orderActionGrant((int)$row['order_id'], ObjectAction::VIEW)['allowed']) {
+                $cases[] = $row;
+            }
         }
-        
-        // 创建退款申请后返回订单详情
-        $this->redirect('order/backend/order/view?id=' . $orderId);
+        $this->assign('candidates', $candidates);
+        $this->assign('cases', $cases);
+
+        return $this->fetch();
     }
-    
-    /**
-     * 处理退款
-     */
-    #[Acl('Weline_Order::refund_process', '处理退款', 'mdi-check-circle', '处理退款申请')]
-    public function process()
+
+    #[Acl('Weline_Order::refund_execute', '提交退款', 'mdi-cash-refund', '锁内占用可退金额和数量并生成退款 outbox', 'Weline_Order::refund_manage')]
+    public function execute(): mixed
     {
-        $refundId = (int)$this->request->getParam('id');
-        
-        if (!$refundId) {
-            $this->getMessageManager()->addError(__('退款ID不能为空'));
-            $this->redirect('order/backend/order/index');
-            return;
-        }
-        
+        $orderUuid = trim((string)$this->request->getPost('order_uuid', ''));
         try {
-            $refund = $this->refundService->processRefund($refundId);
-            $orderId = (int)$refund->getData(\Weline\Order\Model\OrderRefund::schema_fields_ORDER_ID);
-            $this->getMessageManager()->addSuccess(__('退款处理成功'));
-            $this->redirect('order/backend/order/view?id=' . $orderId);
-        } catch (\Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect('order/backend/order/index');
+            $context = $this->commands->refundContext($orderUuid);
+            $this->requireOrderSubmit((int)$context['order_id'], ObjectAction::REFUND);
+            $result = $this->commands->refund(
+                $orderUuid,
+                (string)$this->request->getPost('item_uuid', ''),
+                (int)$this->request->getPost('qty_minor', 0),
+                (int)$this->request->getPost('shipping_refund_minor', 0),
+                (string)$this->request->getPost('reason', ''),
+                (string)$this->request->getPost('idempotency_key', ''),
+            );
+            $this->getMessageManager()->addSuccess((string)__(
+                !empty($result['replayed']) ? '退款命令已幂等重放' : '退款申请已安全占额并进入处理队列',
+            ));
+        } catch (FrontendQueryException $exception) {
+            $this->request->getResponse()->setCode(403);
+
+            return $exception->getMessage();
+        } catch (OrderTradeAdminCommandException $exception) {
+            $this->getMessageManager()->addError($exception->errorCode());
+        } catch (\Throwable) {
+            $this->getMessageManager()->addError((string)__('退款操作失败，请稍后重试。'));
         }
+
+        return $this->redirect('weline_order/backend/refund/index');
     }
 }
-

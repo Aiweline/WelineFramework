@@ -30,6 +30,11 @@
   - 不需要 hosts
   - Websites 侧会直接跳过 hosts 注入
 
+浏览器侧就绪检查统一由 `websites_ai_site_local_domain_readiness` 提供，三个后台 operation
+（`inspect`、`inspectCandidates`、`prepare`）都必须绑定
+`Weline_Websites::site_builder_agent`。其中只有 `prepare` 可写 hosts，且仍要求显式
+`confirmed=true`；不得把“后台已登录”当成操作授权。
+
 ### 3. 共享本地通配证书
 
 - 托管本地域名共享本地通配证书
@@ -57,6 +62,17 @@
 - 其中 `wildcard_domain` 只会是：
   - `*.weline.test`
   - `*.weline.localhost`
+
+## 工作区操作引导
+
+工作区按“需求与域名 → 页面与主题 → 预览与完成”三步展示当前进度。首屏的“本页只需完成这一件事”卡片是普通用户的主操作入口，会根据会话状态指向当前唯一下一步：
+
+- 域名未完成：启动或重试域名准备。
+- 域名已完成且仍在准备阶段：确认信息并进入页面生成。
+- 页面生成阶段：确认页面方案；主题生成后进入可视化编辑器检查。
+- 完成阶段：优先打开预览验收；预览环境未就绪时查看域名准备状态。
+
+虚拟主题参数、页面布局 JSON、Scope 和事件日志属于进阶信息。未进入页面生成阶段时，虚拟主题区域默认收起，避免与当前主操作竞争注意力。
 
 ## 非目标
 

@@ -8,11 +8,23 @@ use Weline\Framework\App\State;
 use Weline\Framework\Binary\EmergencyPacket;
 use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FrontendWorkerBackendAttestationException;
+use Weline\Framework\Runtime\FrontendWorkerBackendAttestationProviderInterface;
+use Weline\Framework\Runtime\FrontendWorkerScopeException;
+use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
+use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RuntimeProviderResolution;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendQueryGateway;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
+use Weline\Framework\Service\Query\Value\FrontendWorkerBackendBinding;
+use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
+use Weline\Framework\Service\Query\Value\FrontendWorkerScopeBinding;
 
 class QueryBin extends FrontendRestController
 {
@@ -20,11 +32,13 @@ class QueryBin extends FrontendRestController
     private const WORKER_PROTOCOL = 'weline-worker-request-v1';
     private const SIGNED_PATH = '/api/framework/query-bin';
     private const TIMESTAMP_WINDOW = 120;
+    private const RUNTIME_IDENTIFIER_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$/D';
 
     public function __construct(
         private readonly WelineBinaryCodec $codec,
         private readonly FrontendQueryGateway $gateway,
-        private readonly FrontendWorkerSessionService $sessionService
+        private readonly FrontendWorkerSessionService $sessionService,
+        private readonly ?RuntimeProviderResolver $runtimeProviderResolver = null,
     ) {
     }
 
@@ -92,18 +106,28 @@ class QueryBin extends FrontendRestController
             } else {
                 $headers = $this->readSignedHeaders();
                 $markPhase('read_signed_headers');
-                $this->validateSignedRequest($headers, $rawBody);
+                $committedSession = $this->validateSignedRequest($headers, $rawBody);
                 $markPhase('validate_signed_request');
                 $this->applyLocalizationContext($payload);
                 $markPhase('apply_localization_context');
 
-                $result = $this->gateway->execute($payload, $headers['capability']);
+                $executionContext = $this->executionContextFromSession(
+                    $committedSession,
+                    $headers['session'],
+                );
+                $result = $this->gateway->execute(
+                    $payload,
+                    $headers['capability'],
+                    $executionContext->scopeBinding,
+                    $executionContext,
+                );
                 $markPhase('gateway_execute');
                 $payload = [
                     'ok' => true,
                     'data' => $result,
                     'error' => null,
                     'request_id' => $requestId,
+                    'scope_meta' => RequestContext::scopeMetadata(),
                 ];
                 $markPhase('build_success_payload');
                 $statusCode = 200;
@@ -209,15 +233,193 @@ class QueryBin extends FrontendRestController
      */
     private function handleHandshake(array $payload, string $requestId): array
     {
-        $deployVersion = (string)($payload['deploy_version'] ?? 'dev');
-        $workerBuildId = (string)($payload['worker_build_id'] ?? 'dev');
-        if ($deployVersion === '' || $workerBuildId === '') {
+        $deployVersion = $payload['deploy_version'] ?? 'dev';
+        $workerBuildId = $payload['worker_build_id'] ?? 'dev';
+        if (!\is_string($deployVersion)
+            || !\is_string($workerBuildId)
+            || \preg_match(self::RUNTIME_IDENTIFIER_PATTERN, $deployVersion) !== 1
+            || \preg_match(self::RUNTIME_IDENTIFIER_PATTERN, $workerBuildId) !== 1) {
             throw new FrontendQueryException('protocol_error', 'Handshake is missing deploy version or worker build id.', 400);
+        }
+
+        $scopeBootstrapId = $payload['scope_bootstrap_id'] ?? '';
+        if (!\is_string($scopeBootstrapId)) {
+            throw new FrontendQueryException(
+                'scope_bootstrap_invalid',
+                'Worker Scope bootstrap ID must be a string.',
+                400,
+            );
+        }
+        $scopeBootstrapId = \trim($scopeBootstrapId);
+        $backendBootstrapId = $payload['backend_bootstrap_id'] ?? '';
+        if (!\is_string($backendBootstrapId)) {
+            throw new FrontendQueryException(
+                'backend_attestation_invalid',
+                'Worker backend bootstrap ID must be a string.',
+                400,
+            );
+        }
+        $backendBootstrapId = \trim($backendBootstrapId);
+        if ($scopeBootstrapId !== '' && $backendBootstrapId !== '') {
+            throw new FrontendQueryException(
+                'protocol_error',
+                'Worker handshake cannot combine storefront and backend bootstraps.',
+                400,
+            );
+        }
+
+        if ($scopeBootstrapId === '' && $backendBootstrapId === '') {
+            $provider = $this->resolveScopeProvider(false);
+            if ($provider instanceof FrontendWorkerScopeProviderInterface) {
+                try {
+                    $requiresBinding = $provider->requiresBinding($this->requestScheme());
+                } catch (FrontendWorkerScopeException $exception) {
+                    throw $this->scopeFailure($exception);
+                } catch (\Throwable $exception) {
+                    throw new FrontendQueryException(
+                        'scope_service_unavailable',
+                        'Worker Scope binding policy is unavailable.',
+                        503,
+                        $exception,
+                    );
+                }
+                if ($requiresBinding) {
+                    throw new FrontendQueryException(
+                        'scope_binding_required',
+                        'Worker Scope bootstrap is required for this request.',
+                        401,
+                    );
+                }
+            }
+            $session = $this->sessionService->createSession($deployVersion, $workerBuildId);
+        } elseif ($scopeBootstrapId !== '') {
+            $cookieName = FrontendWorkerSessionService::scopeBootstrapCookieName($scopeBootstrapId);
+            $scopeToken = $this->readSingleCookie(
+                $cookieName,
+                'scope_bootstrap_invalid',
+                'Worker Scope bootstrap Cookie',
+            );
+            $provider = $this->resolveScopeProvider(true);
+            if (!$provider instanceof FrontendWorkerScopeProviderInterface) {
+                throw new FrontendQueryException(
+                    'scope_service_unavailable',
+                    'Worker Scope provider is unavailable.',
+                    503,
+                );
+            }
+
+            try {
+                $binding = $provider->verifyToken(
+                    $scopeToken,
+                    $this->requestScheme(),
+                    $this->authorityHost(),
+                );
+            } catch (FrontendWorkerScopeException $exception) {
+                throw $this->scopeFailure($exception);
+            } catch (\Throwable $exception) {
+                throw new FrontendQueryException(
+                    'scope_service_unavailable',
+                    'Worker Scope verification is unavailable.',
+                    503,
+                    $exception,
+                );
+            }
+            if ($binding === null) {
+                throw new FrontendQueryException(
+                    'scope_bootstrap_invalid',
+                    'Worker Scope bootstrap is not active for this request.',
+                    401,
+                );
+            }
+
+            try {
+                $session = $this->sessionService->createSessionFromScopeBootstrap(
+                    $deployVersion,
+                    $workerBuildId,
+                    $scopeBootstrapId,
+                    $binding->tokenFingerprint,
+                    $binding->digest(),
+                );
+            } catch (FrontendQueryException $exception) {
+                if ($exception->getHttpStatus() >= 500) {
+                    throw $exception;
+                }
+                throw new FrontendQueryException(
+                    'scope_bootstrap_invalid',
+                    'Worker Scope bootstrap is invalid, expired, or already consumed.',
+                    401,
+                    $exception,
+                );
+            }
+            RequestContext::set('query_bin.bootstrap_cookie_clear', [
+                'name' => $cookieName,
+                'secure' => true,
+                'same_site' => 'Lax',
+            ]);
+        } else {
+            $secureCookie = $this->requestScheme() === 'https';
+            if (!$secureCookie && !(\defined('DEV') && DEV)) {
+                throw new FrontendQueryException(
+                    'backend_attestation_https_required',
+                    'Backend Worker attestation requires HTTPS.',
+                    503,
+                );
+            }
+            $cookieName = FrontendWorkerSessionService::backendBootstrapCookieName(
+                $backendBootstrapId,
+                $secureCookie,
+            );
+            $cookieProof = $this->readSingleCookie(
+                $cookieName,
+                'backend_attestation_invalid',
+                'Worker backend bootstrap Cookie',
+            );
+            try {
+                $binding = $this->sessionService->peekBackendBootstrap(
+                    $backendBootstrapId,
+                    $cookieProof,
+                    $secureCookie,
+                );
+                $provider = $this->resolveBackendAttestationProvider();
+                $restored = $provider->restoreBinding($binding, $this->authorityHost());
+                $session = $this->sessionService->createSessionFromBackendBootstrap(
+                    $deployVersion,
+                    $workerBuildId,
+                    $backendBootstrapId,
+                    $cookieProof,
+                    $secureCookie,
+                    $restored->digest(),
+                );
+            } catch (FrontendWorkerBackendAttestationException $exception) {
+                throw $this->backendAttestationFailure($exception);
+            } catch (FrontendQueryException $exception) {
+                if ($exception->getHttpStatus() >= 500) {
+                    throw $exception;
+                }
+                throw new FrontendQueryException(
+                    'backend_attestation_invalid',
+                    'Worker backend bootstrap is invalid, expired, or already consumed.',
+                    401,
+                    $exception,
+                );
+            } catch (\Throwable $exception) {
+                throw new FrontendQueryException(
+                    'backend_attestation_unavailable',
+                    'Worker backend attestation is unavailable.',
+                    503,
+                    $exception,
+                );
+            }
+            RequestContext::set('query_bin.bootstrap_cookie_clear', [
+                'name' => $cookieName,
+                'secure' => $secureCookie,
+                'same_site' => 'Strict',
+            ]);
         }
 
         return [
             'ok' => true,
-            'data' => $this->sessionService->createSession($deployVersion, $workerBuildId),
+            'data' => $session,
             'error' => null,
             'request_id' => $requestId,
         ];
@@ -251,13 +453,15 @@ class QueryBin extends FrontendRestController
     /**
      * @param array<string, string> $headers
      */
-    private function validateSignedRequest(array $headers, string $rawBody): void
+    private function validateSignedRequest(array $headers, string $rawBody): array
     {
-        $session = $this->sessionService->validateSessionAndConsumeNonce(
+        // Never consume a nonce before the body and HMAC are authenticated.
+        // Otherwise an attacker can burn a victim's nonce with a forged
+        // signature and turn replay protection into a denial-of-service tool.
+        $session = $this->sessionService->validateSession(
             $headers['session'],
             $headers['deploy_version'],
             $headers['worker_build_id'],
-            $headers['nonce']
         );
 
         $timestamp = (int)$headers['timestamp'];
@@ -284,6 +488,84 @@ class QueryBin extends FrontendRestController
         if (!\hash_equals($expected, $headers['signature'])) {
             throw new FrontendQueryException('auth_error', 'Worker signature mismatch.', 401);
         }
+
+        // Revalidate the session and consume the nonce under one store lock.
+        // Concurrent replays can pass the read-only HMAC phase, but only one
+        // request can commit the nonce.
+        $committedSession = $this->sessionService->validateSessionAndConsumeNonce(
+            $headers['session'],
+            $headers['deploy_version'],
+            $headers['worker_build_id'],
+            $headers['nonce'],
+        );
+        if (!\hash_equals((string)$session['secret'], (string)$committedSession['secret'])) {
+            throw new FrontendQueryException('auth_error', 'Worker session changed during validation.', 401);
+        }
+
+        return $committedSession;
+    }
+
+    /**
+     * Convert committed store data into a strict server-only authority context.
+     * Existing sessions that predate area persistence are deliberately treated
+     * as frontend; they can never be upgraded by request payload fields.
+     *
+     * @param array<string, mixed> $session
+     */
+    private function executionContextFromSession(
+        array $session,
+        ?string $sessionToken = null,
+    ): FrontendWorkerExecutionContext
+    {
+        $area = $session['attested_area'] ?? FrontendWorkerExecutionContext::AREA_FRONTEND;
+        $scopeBinding = $session['scope_binding'] ?? null;
+        if ($scopeBinding !== null && !$scopeBinding instanceof FrontendWorkerScopeBinding) {
+            throw new FrontendQueryException('auth_error', 'Worker session Scope binding is invalid.', 401);
+        }
+        $backendBinding = $session['backend_binding'] ?? null;
+        if ($backendBinding !== null && !$backendBinding instanceof FrontendWorkerBackendBinding) {
+            throw new FrontendQueryException('auth_error', 'Worker session backend binding is invalid.', 401);
+        }
+
+        if ($area === FrontendWorkerExecutionContext::AREA_FRONTEND) {
+            if ($backendBinding !== null) {
+                throw new FrontendQueryException('auth_error', 'Frontend Worker session contains backend authority.', 401);
+            }
+            return FrontendWorkerExecutionContext::frontend($scopeBinding);
+        }
+        if ($area !== FrontendWorkerExecutionContext::AREA_BACKEND
+            || !$backendBinding instanceof FrontendWorkerBackendBinding
+            || $scopeBinding !== null) {
+            throw new FrontendQueryException('auth_error', 'Worker session authority is invalid.', 401);
+        }
+
+        try {
+            $restored = $this->resolveBackendAttestationProvider()->restoreBinding(
+                $backendBinding,
+                $this->authorityHost(),
+            );
+        } catch (FrontendWorkerBackendAttestationException $exception) {
+            throw $this->backendAttestationFailure($exception);
+        } catch (FrontendQueryException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException(
+                'backend_attestation_unavailable',
+                'Worker backend attestation is unavailable.',
+                503,
+                $exception,
+            );
+        }
+
+        if ($sessionToken !== null
+            && $sessionToken !== ''
+            && !\hash_equals($restored->digest(), $backendBinding->digest())) {
+            $this->sessionService->slideBackendSession($sessionToken, $restored);
+        }
+
+        RequestContext::set('frontend_worker.backend_attestation.' . $restored->digest(), true);
+
+        return FrontendWorkerExecutionContext::backend($restored);
     }
 
     /**
@@ -341,26 +623,155 @@ class QueryBin extends FrontendRestController
 
     private function assertSameOrigin(): void
     {
+        $currentOrigin = $this->currentOrigin();
         $origin = (string)$this->request->getServer('HTTP_ORIGIN');
         if ($origin === '') {
             return;
         }
 
-        if (\rtrim($origin, '/') !== $this->currentOrigin()) {
+        if (\rtrim($origin, '/') !== $currentOrigin) {
             throw new FrontendQueryException('auth_error', 'Worker request origin mismatch.', 401);
         }
     }
 
     private function currentOrigin(): string
     {
-        $scheme = (string)$this->request->getServer('REQUEST_SCHEME');
-        if ($scheme === '') {
-            $https = (string)$this->request->getServer('HTTPS');
-            $scheme = ($https !== '' && \strtolower($https) !== 'off') ? 'https' : 'http';
-        }
-        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
+        return $this->requestScheme() . '://' . $this->authorityHost();
+    }
 
-        return $scheme . '://' . $host;
+    private function requestScheme(): string
+    {
+        $scheme = \strtolower(\trim(WelineEnv::getRequestScheme()));
+        if (!\in_array($scheme, ['http', 'https'], true)) {
+            throw new FrontendQueryException('protocol_error', 'Request scheme is invalid.', 400);
+        }
+        return $scheme;
+    }
+
+    private function authorityHost(): string
+    {
+        $host = RequestAuthority::current();
+        if ($host === '') {
+            throw new FrontendQueryException('protocol_error', 'Request authority is invalid.', 400);
+        }
+        return $host;
+    }
+
+    private function readSingleCookie(
+        string $expectedName,
+        string $errorCode,
+        string $label,
+    ): string
+    {
+        $rawHeader = (string)$this->request->getServer('HTTP_COOKIE');
+        if ($rawHeader === '' || \strlen($rawHeader) > 65536) {
+            throw new FrontendQueryException(
+                $errorCode,
+                $label . ' is missing or invalid.',
+                401,
+            );
+        }
+
+        $matches = [];
+        foreach (\explode(';', $rawHeader) as $part) {
+            $pair = \explode('=', \trim($part), 2);
+            if (\count($pair) !== 2 || \urldecode($pair[0]) !== $expectedName) {
+                continue;
+            }
+            $matches[] = \urldecode($pair[1]);
+        }
+        if (\count($matches) !== 1
+            || $matches[0] === ''
+            || \strlen($matches[0]) > 8192
+            || \preg_match('/[\x00-\x1F\x7F]/', $matches[0]) === 1) {
+            throw new FrontendQueryException(
+                $errorCode,
+                $label . ' is missing, duplicated, or invalid.',
+                401,
+            );
+        }
+
+        return $matches[0];
+    }
+
+    private function resolveScopeProvider(bool $required): ?FrontendWorkerScopeProviderInterface
+    {
+        try {
+            $resolver = $this->runtimeProviderResolver
+                ?? ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $resolution = $resolver->resolveDetailed(FrontendWorkerScopeProviderInterface::class);
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException(
+                'scope_service_unavailable',
+                'Worker Scope provider registry is unavailable.',
+                503,
+                $exception,
+            );
+        }
+
+        if ($resolution->isAvailable()
+            && $resolution->provider instanceof FrontendWorkerScopeProviderInterface) {
+            return $resolution->provider;
+        }
+        if ($resolution->status === RuntimeProviderResolution::NOT_CONFIGURED && !$required) {
+            return null;
+        }
+
+        throw new FrontendQueryException(
+            'scope_service_unavailable',
+            'Worker Scope provider is configured but unavailable.',
+            503,
+        );
+    }
+
+    private function resolveBackendAttestationProvider(): FrontendWorkerBackendAttestationProviderInterface
+    {
+        try {
+            $resolver = $this->runtimeProviderResolver
+                ?? ObjectManager::getInstance(RuntimeProviderResolver::class);
+            $resolution = $resolver->resolveDetailed(
+                FrontendWorkerBackendAttestationProviderInterface::class,
+            );
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException(
+                'backend_attestation_unavailable',
+                'Worker backend attestation provider registry is unavailable.',
+                503,
+                $exception,
+            );
+        }
+
+        if ($resolution->isAvailable()
+            && $resolution->provider instanceof FrontendWorkerBackendAttestationProviderInterface) {
+            return $resolution->provider;
+        }
+
+        throw new FrontendQueryException(
+            'backend_attestation_unavailable',
+            'Worker backend attestation provider is unavailable.',
+            503,
+        );
+    }
+
+    private function scopeFailure(FrontendWorkerScopeException $exception): FrontendQueryException
+    {
+        return new FrontendQueryException(
+            $exception->reason,
+            $exception->getMessage(),
+            $exception->httpStatus,
+            $exception,
+        );
+    }
+
+    private function backendAttestationFailure(
+        FrontendWorkerBackendAttestationException $exception,
+    ): FrontendQueryException {
+        return new FrontendQueryException(
+            $exception->reason,
+            $exception->getMessage(),
+            $exception->httpStatus,
+            $exception,
+        );
     }
 
     private function serverHeader(string $name): string
@@ -460,7 +871,7 @@ class QueryBin extends FrontendRestController
         $response->setHeader('X-Content-Type-Options', 'nosniff');
         $response->setHeader('X-Weline-Query-Bin-Time', (string)$elapsedMs);
 
-        return $response;
+        return $this->expireConsumedBootstrapCookie($response);
     }
 
     /**
@@ -497,6 +908,35 @@ class QueryBin extends FrontendRestController
             $response->setHeader('X-Weline-Query-Bin-Operation', $summary['operation']);
         }
 
+        return $this->expireConsumedBootstrapCookie($response);
+    }
+
+    private function expireConsumedBootstrapCookie(Response $response): Response
+    {
+        $cookie = RequestContext::get('query_bin.bootstrap_cookie_clear');
+        if (!\is_array($cookie)
+            || \array_keys($cookie) !== ['name', 'secure', 'same_site']
+            || !\is_string($cookie['name'])
+            || !\is_bool($cookie['secure'])
+            || !\is_string($cookie['same_site'])
+            || !\in_array($cookie['same_site'], ['Lax', 'Strict'], true)
+            || \preg_match(
+                '/^(?:__Host-Weline-Worker-(?:Scope|Backend)-Bootstrap-|Weline-Worker-Backend-Bootstrap-)[A-Za-z0-9_-]{43}$/D',
+                $cookie['name'],
+            ) !== 1) {
+            return $response;
+        }
+
+        $response->setCookie(
+            $cookie['name'],
+            '',
+            \time() - 3600,
+            '/',
+            '',
+            $cookie['secure'],
+            true,
+            $cookie['same_site'],
+        );
         return $response;
     }
 
@@ -514,7 +954,10 @@ class QueryBin extends FrontendRestController
         }
 
         if ($preExisting !== '' && \function_exists('w_log_warning')) {
-            \w_log_warning('[QueryBin] Cleared pre-existing output buffer before binary response: ' . \mb_substr(\trim($preExisting), 0, 500));
+            \w_log_warning('[QueryBin] Cleared pre-existing output buffer before binary response.', [
+                'bytes' => \strlen($preExisting),
+                'sha256' => \hash('sha256', $preExisting),
+            ], 'query_bin');
         }
 
         $guard = [
@@ -550,7 +993,10 @@ class QueryBin extends FrontendRestController
         }
 
         if ($captured !== '' && \function_exists('w_log_warning')) {
-            \w_log_warning('[QueryBin] Suppressed stray output during binary response: ' . \mb_substr(\trim($captured), 0, 500));
+            \w_log_warning('[QueryBin] Suppressed stray output during binary response.', [
+                'bytes' => \strlen($captured),
+                'sha256' => \hash('sha256', $captured),
+            ], 'query_bin');
         }
     }
 }

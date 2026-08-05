@@ -15,10 +15,17 @@ use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Meta\Api\Data\MetaConfigIdentity;
+use Weline\Meta\Api\Data\MetaConfigScopeSearch;
+use Weline\Meta\Api\Data\MetaConfigSearch;
+use Weline\Meta\Api\Data\MetaConfigWrite;
+use Weline\Meta\Api\MetaConfigRepositoryInterface;
+
 /** MetaConfig 模型 - 存储主题配置信息 */
 #[Table(comment: '主题配置表')]
-#[Index(name: 'uk_identify_meta_identify_namespace_key_scope_locale', columns: ['identify_id', 'meta_identify', 'namespace', 'config_key', 'scope', 'locale'], type: 'UNIQUE')]
-#[Index(name: 'uk_meta_namespace_key_scope_locale', columns: ['meta_id', 'namespace', 'config_key', 'scope', 'locale'], type: 'UNIQUE')]
+#[Index(name: 'uk_w_meta_config_identity_fingerprint', columns: ['identity_fingerprint'], type: 'UNIQUE')]
 #[Index(name: 'idx_identify_id', columns: ['identify_id'])]
 #[Index(name: 'idx_meta_id', columns: ['meta_id'])]
 #[Index(name: 'idx_meta_identify', columns: ['meta_identify'])]
@@ -38,6 +45,7 @@ class MetaConfig extends AbstractModel
 
     public const schema_table = 'w_meta_config';
     public const schema_primary_key = 'config_id';
+    public const IDENTITY_FINGERPRINT_UNIQUE_INDEX = 'uk_w_meta_config_identity_fingerprint';
     #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: '配置ID')]
     public const schema_fields_ID = 'config_id';
     #[Col('varchar', 255, comment: '实体标识ID')]
@@ -56,6 +64,8 @@ class MetaConfig extends AbstractModel
     public const schema_fields_SCOPE = 'scope';
     #[Col('varchar', 20, comment: '语言代码')]
     public const schema_fields_LOCALE = 'locale';
+    #[Col('varchar', 64, nullable: true, comment: '七字段身份SHA-256指纹')]
+    public const schema_fields_IDENTITY_FINGERPRINT = 'identity_fingerprint';
 
     /**
      * 主键字段
@@ -65,8 +75,166 @@ class MetaConfig extends AbstractModel
     /**
      * 索引排序键（用于提升查询效率）
      */
-    public array $_index_sort_keys = ['identify_id', 'meta_id', 'meta_identify', 'namespace', 'config_key', 'scope', 'locale'];
-/**
+    public array $_index_sort_keys = [
+        'identify_id',
+        'meta_id',
+        'meta_identify',
+        'namespace',
+        'config_key',
+        'scope',
+        'locale',
+        'identity_fingerprint',
+    ];
+
+    public function save_before(): void
+    {
+        parent::save_before();
+
+        $configId = $this->getData(self::schema_fields_ID);
+        $hasConfigId = $configId !== null && $configId !== '';
+        if ($this->hasData(self::schema_fields_CONFIG_VALUE)) {
+            $value = $this->getData(self::schema_fields_CONFIG_VALUE);
+            if (!is_string($value)) {
+                throw new \InvalidArgumentException('Meta config value must be a string.');
+            }
+            MetaConfigIdentity::assertValue($value);
+        } elseif (!$hasConfigId) {
+            throw new \InvalidArgumentException('Meta config insert requires a value.');
+        }
+
+        $identityFields = self::identityFields();
+        $presentIdentityFields = array_values(array_filter(
+            $identityFields,
+            fn(string $field): bool => $this->hasData($field),
+        ));
+        if ($hasConfigId && $presentIdentityFields === []) {
+            if ($this->hasData(self::schema_fields_IDENTITY_FINGERPRINT)) {
+                throw new \LogicException('MetaConfig partial save cannot set identity_fingerprint without identity fields.');
+            }
+            $row = $this->readStoredRow($configId);
+            $identity = $this->identityFromRow($row);
+            $storedFingerprint = $this->rowValue($row, self::schema_fields_IDENTITY_FINGERPRINT);
+            if (!is_string($storedFingerprint)
+                || strlen($storedFingerprint) !== 64
+                || !hash_equals($identity->fingerprint(), $storedFingerprint)) {
+                throw new \RuntimeException(__('MetaConfig 部分更新要求已完成且有效的身份指纹，config_id=%{1}', [$configId]));
+            }
+            // A value-only update must not copy the identity snapshot back into
+            // model data.  That would overwrite a concurrent identity change.
+            return;
+        }
+        if ($hasConfigId && count($presentIdentityFields) !== count($identityFields)) {
+            throw new \LogicException('MetaConfig identity updates must provide all seven identity fields.');
+        }
+
+        if (!$this->hasData(self::schema_fields_SCOPE)) {
+            $this->setData(self::schema_fields_SCOPE, 'default');
+        }
+        $identity = $this->identityFromCurrentData();
+        $this->setData(
+            self::schema_fields_IDENTITY_FINGERPRINT,
+            $identity->fingerprint(),
+        );
+    }
+
+    /** @return list<string> */
+    private static function identityFields(): array
+    {
+        return [
+            self::schema_fields_NAMESPACE,
+            self::schema_fields_CONFIG_KEY,
+            self::schema_fields_SCOPE,
+            self::schema_fields_LOCALE,
+            self::schema_fields_IDENTIFY_ID,
+            self::schema_fields_META_ID,
+            self::schema_fields_META_IDENTIFY,
+        ];
+    }
+
+    private function readStoredRow(mixed $configId): mixed
+    {
+        $rows = $this->newQuery()
+            ->where(self::schema_fields_ID, $configId)
+            ->select()
+            ->fetchArray();
+        $row = is_array($rows) ? ($rows[0] ?? null) : null;
+        if (!is_array($row) && !(is_object($row) && method_exists($row, 'getData'))) {
+            throw new \RuntimeException(__('MetaConfig 部分更新无法读取原身份，config_id=%{1}', [$configId]));
+        }
+        return $row;
+    }
+
+    private function identityFromCurrentData(): MetaConfigIdentity
+    {
+        return $this->buildIdentity(fn(string $field): mixed => $this->getData($field));
+    }
+
+    private function identityFromRow(mixed $row): MetaConfigIdentity
+    {
+        return $this->buildIdentity(fn(string $field): mixed => $this->rowValue($row, $field));
+    }
+
+    private function buildIdentity(callable $value): MetaConfigIdentity
+    {
+        return new MetaConfigIdentity(
+            namespace: $this->requiredIdentityString($value(self::schema_fields_NAMESPACE), self::schema_fields_NAMESPACE),
+            configKey: $this->requiredIdentityString($value(self::schema_fields_CONFIG_KEY), self::schema_fields_CONFIG_KEY),
+            scope: $this->requiredIdentityString($value(self::schema_fields_SCOPE), self::schema_fields_SCOPE),
+            locale: $this->optionalIdentityString($value(self::schema_fields_LOCALE), self::schema_fields_LOCALE),
+            identifyId: $this->optionalIdentityString($value(self::schema_fields_IDENTIFY_ID), self::schema_fields_IDENTIFY_ID),
+            metaId: $this->identityMetaId($value(self::schema_fields_META_ID)),
+            metaIdentify: $this->optionalIdentityString($value(self::schema_fields_META_IDENTIFY), self::schema_fields_META_IDENTIFY),
+        );
+    }
+
+    private function requiredIdentityString(mixed $value, string $field): string
+    {
+        if (!is_string($value)) {
+            throw new \InvalidArgumentException("MetaConfig {$field} must be a string.");
+        }
+        return $value;
+    }
+
+    private function optionalIdentityString(mixed $value, string $field): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (!is_string($value)) {
+            throw new \InvalidArgumentException("MetaConfig {$field} must be a string or NULL.");
+        }
+        return $value;
+    }
+
+    private function identityMetaId(mixed $value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (is_int($value) && $value > 0 && $value <= MetaConfigIdentity::META_ID_MAX) {
+            return $value;
+        }
+        if (is_string($value)
+            && ctype_digit($value)
+            && (int)$value > 0
+            && (int)$value <= MetaConfigIdentity::META_ID_MAX) {
+            return (int)$value;
+        }
+        throw new \InvalidArgumentException('MetaConfig meta_id must be NULL or fit a positive signed 32-bit integer.');
+    }
+
+    private function rowValue(mixed $row, string $field, mixed $default = null): mixed
+    {
+        if (is_array($row)) {
+            return array_key_exists($field, $row) ? $row[$field] : $default;
+        }
+        if (is_object($row) && method_exists($row, 'getData')) {
+            return $row->getData($field);
+        }
+        return $default;
+    }
+
+    /**
      * 获取配置值（支持语言回退）
      * 
      * @param int|string|null $identifyId 实体ID（主题ID或其他实体ID，可为null）
@@ -90,61 +258,41 @@ class MetaConfig extends AbstractModel
         if ($defaultLocale === null) {
             $defaultLocale = 'zh_Hans_CN';
         }
-        
-        // 构建查询条件
-        $query = $this->reset()
-            ->where(self::schema_fields_NAMESPACE, $namespace)
-            ->where(self::schema_fields_CONFIG_KEY, $configKey)
-            ->where(self::schema_fields_SCOPE, $scope);
-        
-        if (!$this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify)) {
-            // 如果都没有提供，返回 null
+
+        $identifyId = $identifyId === null ? null : (string)$identifyId;
+        if (!$this->hasRequestedOwner($identifyId, $metaId, $metaIdentify)) {
             return null;
         }
-        
-        // 先尝试获取指定语言的配置
-        $query->where(self::schema_fields_LOCALE, $locale)
-            ->find()
-            ->fetch();
-        
-        if ($this->getId()) {
-            return $this->getData(self::schema_fields_CONFIG_VALUE);
-        }
-        
-        // 如果当前语言没有配置，回退到默认语言
-        if ($locale !== $defaultLocale) {
-            $query = $this->reset()
-                ->where(self::schema_fields_NAMESPACE, $namespace)
-                ->where(self::schema_fields_CONFIG_KEY, $configKey)
-                ->where(self::schema_fields_SCOPE, $scope);
-            
-            $this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify);
-            
-            $query->where(self::schema_fields_LOCALE, $defaultLocale)
-                ->find()
-                ->fetch();
-            
-            if ($this->getId()) {
-                return $this->getData(self::schema_fields_CONFIG_VALUE);
+
+        /** @var MetaConfigRepositoryInterface $repository */
+        $repository = ObjectManager::getInstance(MetaConfigRepositoryInterface::class);
+        $locales = [];
+        foreach ([$locale, $defaultLocale, null] as $candidateLocale) {
+            $key = $candidateLocale === null ? 'null' : 'string:' . $candidateLocale;
+            if (!array_key_exists($key, $locales)) {
+                $locales[$key] = $candidateLocale;
             }
         }
-        
-        // 如果默认语言也没有配置，尝试获取 null 语言的配置（通用配置）
-        $query = $this->reset()
-            ->where(self::schema_fields_NAMESPACE, $namespace)
-            ->where(self::schema_fields_CONFIG_KEY, $configKey)
-            ->where(self::schema_fields_SCOPE, $scope);
-        
-        $this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify);
-        
-        $query->where(self::schema_fields_LOCALE, null, 'IS NULL')
-            ->find()
-            ->fetch();
-        
-        if ($this->getId()) {
-            return $this->getData(self::schema_fields_CONFIG_VALUE);
+        foreach ($locales as $candidateLocale) {
+            $records = $repository->search(new MetaConfigSearch(
+                namespace: $namespace,
+                scope: $scope,
+                configKey: $configKey,
+                locale: $candidateLocale,
+                identifyId: $identifyId,
+                metaId: $metaId,
+                metaIdentify: $metaIdentify,
+            ));
+            if (count($records) > 1) {
+                throw new \RuntimeException(__('MetaConfig 可选 owner 身份存在歧义，config_id=%{1}', [
+                    implode(',', array_map(static fn($record): int => $record->id, $records)),
+                ]));
+            }
+            if (isset($records[0])) {
+                return $records[0]->value;
+            }
         }
-        
+
         return null;
     }
 
@@ -233,95 +381,40 @@ class MetaConfig extends AbstractModel
      */
     public function setConfig($identifyId, string $namespace, string $configKey, string $configValue, string $scope = 'default', ?string $locale = null, ?int $metaId = null, ?string $metaIdentify = null): static
     {
-        // 构建查询条件
-        $query = $this->reset()
-            ->where(self::schema_fields_NAMESPACE, $namespace)
-            ->where(self::schema_fields_CONFIG_KEY, $configKey)
-            ->where(self::schema_fields_SCOPE, $scope);
-        
-        // 处理 locale 为 null 的情况（需要使用 IS NULL）
-        if ($locale === null) {
-            $query->where(self::schema_fields_LOCALE, null, 'IS NULL');
-        } else {
-            $query->where(self::schema_fields_LOCALE, $locale);
-        }
-        
-        if (!$this->applyIdentityFilters($query, $identifyId, $metaId, $metaIdentify)) {
-            // 如果都没有提供，无法设置
-            return $this;
-        }
-        
-        // 先查找是否存在
-        /** @var static $existing */
-        $existing = $query->find()->fetch();
-        
-        if ($existing->getId()) {
-            // 更新现有记录
-            $existing->setData(self::schema_fields_CONFIG_VALUE, $configValue);
-            
-            // 如果提供了 meta_id 或 meta_identify，也更新这些字段
-            if ($metaId !== null) {
-                $existing->setData(self::schema_fields_META_ID, $metaId);
-            }
-            if ($metaIdentify !== null) {
-                $existing->setData(self::schema_fields_META_IDENTIFY, $metaIdentify);
-            }
-            
-            $existing->save();
-            // 将更新后的数据同步到当前实例
-            $this->setData($existing->getData());
-        } else {
-            // 插入新记录
-            $this->reset();
-            if ($identifyId !== null) {
-                $this->setData(self::schema_fields_IDENTIFY_ID, (string)$identifyId);
-            }
-            if ($metaId !== null) {
-                $this->setData(self::schema_fields_META_ID, $metaId);
-            }
-            if ($metaIdentify !== null) {
-                $this->setData(self::schema_fields_META_IDENTIFY, $metaIdentify);
-            }
-            $this->setData(self::schema_fields_NAMESPACE, $namespace)
-                 ->setData(self::schema_fields_CONFIG_KEY, $configKey)
-                 ->setData(self::schema_fields_CONFIG_VALUE, $configValue)
-                 ->setData(self::schema_fields_SCOPE, $scope)
-                 ->setData(self::schema_fields_LOCALE, $locale);
-            
-            // 使用 forceCheck 确保唯一索引检查
-            try {
-                $this->forceCheck()->save();
-            } catch (\Throwable $e) {
-                // 如果因为唯一索引冲突而失败，尝试更新现有记录
-                // 重新查询（可能在其他条件匹配的情况下）
-                $retryQuery = $this->reset()
-                    ->where(self::schema_fields_NAMESPACE, $namespace)
-                    ->where(self::schema_fields_CONFIG_KEY, $configKey)
-                    ->where(self::schema_fields_SCOPE, $scope);
-                
-                if ($locale === null) {
-                    $retryQuery->where(self::schema_fields_LOCALE, null, 'IS NULL');
-                } else {
-                    $retryQuery->where(self::schema_fields_LOCALE, $locale);
-                }
-                
-                $this->applyIdentityFilters($retryQuery, $identifyId, $metaId, $metaIdentify);
-                
-                $retryExisting = $retryQuery->find()->fetch();
-                if ($retryExisting->getId()) {
-                    // 找到了现有记录，更新它
-                    $retryExisting->setData(self::schema_fields_CONFIG_VALUE, $configValue)
-                                  ->save();
-                    $this->setData($retryExisting->getData());
-                } else {
-                    // 如果还是找不到，抛出异常
-                    throw new \Exception(__('保存配置失败：无法插入新记录，也无法找到现有记录。错误：%{error}', [
-                        'error' => $e->getMessage()
-                    ]));
-                }
-            }
-        }
-        
+        $identity = new MetaConfigIdentity(
+            namespace: $namespace,
+            configKey: $configKey,
+            scope: $scope,
+            locale: $locale,
+            identifyId: $identifyId === null ? null : (string)$identifyId,
+            metaId: $metaId,
+            metaIdentify: $metaIdentify,
+        );
+        /** @var MetaConfigRepositoryInterface $repository */
+        $repository = ObjectManager::getInstance(MetaConfigRepositoryInterface::class);
+        $record = $repository->upsert(new MetaConfigWrite($identity, $configValue));
+        $storedIdentity = new MetaConfigIdentity(
+            namespace: $record->namespace,
+            configKey: $record->configKey,
+            scope: $record->scope,
+            locale: $record->locale,
+            identifyId: $record->identifyId,
+            metaId: $record->metaId,
+            metaIdentify: $record->metaIdentify,
+        );
+        $this->setData([
+            self::schema_fields_ID => $record->id,
+            self::schema_fields_IDENTIFY_ID => $record->identifyId,
+            self::schema_fields_META_ID => $record->metaId,
+            self::schema_fields_META_IDENTIFY => $record->metaIdentify,
+            self::schema_fields_NAMESPACE => $record->namespace,
+            self::schema_fields_CONFIG_KEY => $record->configKey,
+            self::schema_fields_CONFIG_VALUE => $record->value,
+            self::schema_fields_SCOPE => $record->scope,
+            self::schema_fields_LOCALE => $record->locale,
+            self::schema_fields_IDENTITY_FINGERPRINT => $storedIdentity->fingerprint(),
+        ]);
+
         return $this;
     }
 
@@ -339,23 +432,110 @@ class MetaConfig extends AbstractModel
      */
     public function deleteConfig($identifyId, string $namespace, string $configKey, ?string $scope = null, ?string $locale = null, ?int $metaId = null, ?string $metaIdentify = null): static
     {
-        $this->reset()
-            ->where(self::schema_fields_NAMESPACE, $namespace)
-            ->where(self::schema_fields_CONFIG_KEY, $configKey);
-        
-        $this->applyIdentityFilters($this, $identifyId, $metaId, $metaIdentify);
-        
-        if ($scope !== null) {
-            $this->where(self::schema_fields_SCOPE, $scope);
+        $identifyId = $identifyId === null ? null : (string)$identifyId;
+        if (!$this->hasRequestedOwner($identifyId, $metaId, $metaIdentify)) {
+            return $this;
         }
-        
-        if ($locale !== null) {
-            $this->where(self::schema_fields_LOCALE, $locale);
-        }
-        
-        $this->delete();
-        
+
+        /** @var MetaConfigRepositoryInterface $repository */
+        $repository = ObjectManager::getInstance(MetaConfigRepositoryInterface::class);
+        /** @var WriteIntentTransactionCoordinatorInterface $transactions */
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        $transactions->runWrite($this->getConnection(), function () use (
+            $repository,
+            $identifyId,
+            $namespace,
+            $configKey,
+            $scope,
+            $locale,
+            $metaId,
+            $metaIdentify,
+        ): void {
+            $scopes = $scope === null
+                ? $repository->listScopes(new MetaConfigScopeSearch(
+                    namespace: $namespace,
+                    identifyId: $identifyId,
+                    metaId: $metaId,
+                    metaIdentify: $metaIdentify,
+                ))
+                : [$scope];
+
+            foreach ($scopes as $exactScope) {
+                $records = $repository->search(new MetaConfigSearch(
+                    namespace: $namespace,
+                    scope: $exactScope,
+                    configKey: $configKey,
+                    locale: $locale,
+                    allLocales: $locale === null,
+                    identifyId: $identifyId,
+                    metaId: $metaId,
+                    metaIdentify: $metaIdentify,
+                ));
+                foreach ($records as $record) {
+                    $targetIdentity = new MetaConfigIdentity(
+                        namespace: $record->namespace,
+                        configKey: $record->configKey,
+                        scope: $record->scope,
+                        locale: $record->locale,
+                        identifyId: $record->identifyId,
+                        metaId: $record->metaId,
+                        metaIdentify: $record->metaIdentify,
+                    );
+                    $row = $this->readStoredRow($record->id);
+                    $storedIdentity = $this->identityFromRow($row);
+                    $storedFingerprint = $this->rowValue($row, self::schema_fields_IDENTITY_FINGERPRINT);
+                    if (!$this->identitiesEqual($storedIdentity, $targetIdentity)
+                        || !is_string($storedFingerprint)
+                        || !hash_equals($targetIdentity->fingerprint(), $storedFingerprint)) {
+                        throw new \RuntimeException(__('MetaConfig 兼容删除的事务连接与精确身份不匹配，config_id=%{1}', [
+                            $record->id,
+                        ]));
+                    }
+
+                    // Every mutation stays on this model's transaction
+                    // connection. Repository reads may be wired through an
+                    // equivalent wrapper, but can never independently commit
+                    // one item from this legacy bulk-delete operation.
+                    $this->newQuery()
+                        ->where(self::schema_fields_ID, $record->id)
+                        ->where(self::schema_fields_IDENTITY_FINGERPRINT, $storedFingerprint)
+                        ->delete()
+                        ->fetch();
+                    $remaining = $this->newQuery()
+                        ->where(self::schema_fields_ID, $record->id)
+                        ->select()
+                        ->fetchArray();
+                    if (is_array($remaining) && $remaining === []) {
+                        continue;
+                    }
+                    throw new \RuntimeException(__('MetaConfig 兼容删除未能删除精确记录，config_id=%{1}', [
+                        $record->id,
+                    ]));
+                }
+            }
+        });
+        \Weline\Meta\Helper\MetaData::clearCache();
+        $this->reset();
+
         return $this;
+    }
+
+    private function hasRequestedOwner(?string $identifyId, ?int $metaId, ?string $metaIdentify): bool
+    {
+        return ($identifyId !== null && trim($identifyId) !== '')
+            || $metaId !== null
+            || ($metaIdentify !== null && trim($metaIdentify) !== '');
+    }
+
+    private function identitiesEqual(MetaConfigIdentity $left, MetaConfigIdentity $right): bool
+    {
+        return $left->namespace === $right->namespace
+            && $left->configKey === $right->configKey
+            && $left->scope === $right->scope
+            && $left->locale === $right->locale
+            && $left->identifyId === $right->identifyId
+            && $left->metaId === $right->metaId
+            && $left->metaIdentify === $right->metaIdentify;
     }
 
     private function applyIdentityFilters(mixed $query, mixed $identifyId, ?int $metaId = null, ?string $metaIdentify = null): bool

@@ -7,6 +7,8 @@ on:
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/Test/**/Gateway/**"
+      - "composer.json"
+      - "composer.lock"
       - ".github/workflows/wls-gateway-native.yml"
   pull_request:
     paths:
@@ -14,6 +16,8 @@ on:
       - "app/code/Weline/Server/Service/Edge/Gateway/GatewayPaths.php"
       - "app/code/Weline/Server/bin/wls_gateway_controller.php"
       - "app/code/Weline/Server/Test/**/Gateway/**"
+      - "composer.json"
+      - "composer.lock"
       - ".github/workflows/wls-gateway-native.yml"
   workflow_dispatch:
 
@@ -24,16 +28,20 @@ jobs:
   posix:
     name: ${{ matrix.os }} native build
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
+          extensions: sodium, openssl
           coverage: none
+      - name: Install locked PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
       - name: Install libsodium on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config
@@ -55,19 +63,64 @@ jobs:
         run: ./build/wls-gateway-native/wls-gateway-launcher --self-test
       - name: Controller self-test
         run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test
+      - name: Native Broker lifecycle integration
+        env:
+          WLS_RUN_NATIVE_GATEWAY_INTEGRATION: "1"
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/NativeGatewayBrokerTest.php
+      - name: Signed launcher lifecycle integration
+        env:
+          WLS_RUN_NATIVE_GATEWAY_INTEGRATION: "1"
+          WLS_RUN_NATIVE_GATEWAY_SYSTEMD_INTEGRATION: ${{ runner.os == 'Linux' && '1' || '0' }}
+          WLS_RUN_NATIVE_GATEWAY_LAUNCHD_INTEGRATION: ${{ runner.os == 'macOS' && '1' || '0' }}
+          WLS_RUN_NATIVE_GATEWAY_SYSTEM_LAUNCHD_INTEGRATION: ${{ runner.os == 'macOS' && '1' || '0' }}
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/NativeGatewayLauncherTest.php
 
   windows:
     name: windows native build
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
         with:
           php-version: "8.4"
+          extensions: sodium, openssl
           coverage: none
       - name: Install libsodium
         shell: pwsh
         run: vcpkg install libsodium:x64-windows
+      - name: Generate ephemeral Windows integration key
+        shell: pwsh
+        run: |
+          $keyDir = Join-Path $env:RUNNER_TEMP ("wls-gateway-scm-key-" + [guid]::NewGuid().ToString("N"))
+          New-Item -ItemType Directory -Path $keyDir -ErrorAction Stop | Out-Null
+          $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          & icacls.exe $keyDir /inheritance:r /grant:r `
+            '*S-1-5-18:(OI)(CI)F' `
+            '*S-1-5-32-544:(OI)(CI)F' `
+            "*${currentSid}:(OI)(CI)F" /Q
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to protect the ephemeral key directory."
+          }
+          $keyFile = Join-Path $keyDir "release-key.json"
+          Add-Content -Path $env:GITHUB_ENV -Value "WLS_TEST_KEY_DIR=$keyDir" -Encoding utf8
+          Add-Content -Path $env:GITHUB_ENV -Value "WLS_TEST_KEY_FILE=$keyFile" -Encoding utf8
+          $keyOutput = php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php keygen "--output=$keyFile"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Ephemeral key generation failed with exit code $LASTEXITCODE."
+          }
+          $publicLine = $keyOutput | Where-Object { $_ -like "public_key_hex=*" } | Select-Object -First 1
+          $publicKey = $publicLine -replace '^public_key_hex=', ''
+          if ($publicKey -notmatch '^[0-9a-f]{64}$') {
+            throw "Ephemeral key generator did not return a valid public key."
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "WLS_TEST_PUBLIC_KEY_HEX=$publicKey" -Encoding utf8
       - name: Configure
         shell: pwsh
         run: >
@@ -76,16 +129,63 @@ jobs:
           -B build/wls-gateway-native
           -A x64
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
-          -DWLS_RELEASE_PUBLIC_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000
+          -DWLS_RELEASE_PUBLIC_KEY_HEX="$env:WLS_TEST_PUBLIC_KEY_HEX"
+          -DWLS_BUILD_TEST_HELPERS=ON
       - name: Build
         shell: pwsh
         run: cmake --build build/wls-gateway-native --config Release --parallel
       - name: Native Broker self-test
         shell: pwsh
         run: ./build/wls-gateway-native/Release/wls-gateway-broker.exe --self-test
+      - name: Windows path security integration
+        shell: pwsh
+        env:
+          WLS_RUN_NATIVE_GATEWAY_WINDOWS_PATH_INTEGRATION: "1"
+        run: >-
+          php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php
+          path-security-test
+          "--broker=build/wls-gateway-native/Release/wls-gateway-broker.exe"
       - name: Native launcher self-test
         shell: pwsh
         run: ./build/wls-gateway-native/Release/wls-gateway-launcher.exe --self-test
+      - name: Native bounded-command self-test
+        shell: pwsh
+        run: ./build/wls-gateway-native/Release/wls-bounded-command.exe --self-test
+      - name: Windows bounded-command tree integration
+        shell: pwsh
+        env:
+          WLS_RUN_NATIVE_GATEWAY_WINDOWS_BOUNDED_COMMAND_INTEGRATION: "1"
+        run: >-
+          php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php
+          bounded-command-test
+          "--helper=build/wls-gateway-native/Release/wls-bounded-command.exe"
       - name: Controller self-test
         shell: pwsh
         run: php app/code/Weline/Server/bin/wls_gateway_controller.php --self-test
+      - name: Windows SCM recovery integration
+        shell: pwsh
+        env:
+          WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION: "1"
+        run: >-
+          php app/code/Weline/Server/Test/Integration/Service/Edge/Gateway/windows_service_recovery.php
+          service-test
+          "--key-file=$env:WLS_TEST_KEY_FILE"
+          "--launcher=build/wls-gateway-native/Release/wls-gateway-launcher.exe"
+          "--test-broker=build/wls-gateway-native/Release/wls-gateway-test-broker.exe"
+      - name: Remove ephemeral Windows integration key
+        if: always()
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:RUNNER_TEMP "wls-gateway-scm-key-"
+          if ($env:WLS_TEST_KEY_DIR) {
+            $candidate = [IO.Path]::GetFullPath($env:WLS_TEST_KEY_DIR)
+            if (-not $candidate.StartsWith([IO.Path]::GetFullPath($prefix), [StringComparison]::OrdinalIgnoreCase)) {
+              throw "Refusing to remove an unrecognized ephemeral key directory: $candidate"
+            }
+            if (Test-Path -LiteralPath $candidate) {
+              Remove-Item -LiteralPath $candidate -Recurse -Force -ErrorAction Stop
+            }
+            if (Test-Path -LiteralPath $candidate) {
+              throw "Ephemeral Windows integration key directory was not removed."
+            }
+          }

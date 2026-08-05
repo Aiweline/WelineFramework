@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Test;
 
+use Weline\Framework\Context;
 use Weline\Framework\Http\Url;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Test\TestCore;
 
 /**
  * URL解析域名测试
@@ -17,6 +18,7 @@ class UrlParserDomainTest extends TestCore
      * 保存原始 $_SERVER 状态
      */
     private array $originalServer = [];
+    private ?Context $originalContext = null;
 
     /**
      * 测试前准备
@@ -26,6 +28,7 @@ class UrlParserDomainTest extends TestCore
         parent::setUp();
         // 保存原始 $_SERVER
         $this->originalServer = $_SERVER;
+        $this->originalContext = Context::getCurrent();
         // 清空静态缓存
         Url::$parserSites = [];
         Url::$parserMatchs = [];
@@ -33,6 +36,7 @@ class UrlParserDomainTest extends TestCore
         Url::$parserUrlCache = [];
         Url::$splitUrlCache = [];
         Url::$parserServer = [];
+        Url::resetParserRequestCaches();
     }
 
     /**
@@ -42,6 +46,10 @@ class UrlParserDomainTest extends TestCore
     {
         // 恢复原始 $_SERVER
         $_SERVER = $this->originalServer;
+        Context::leave();
+        if ($this->originalContext !== null) {
+            Context::enter($this->originalContext);
+        }
         // 清空静态缓存
         Url::$parserSites = [];
         Url::$parserMatchs = [];
@@ -49,6 +57,7 @@ class UrlParserDomainTest extends TestCore
         Url::$parserUrlCache = [];
         Url::$splitUrlCache = [];
         Url::$parserServer = [];
+        Url::resetParserRequestCaches();
         parent::tearDown();
     }
 
@@ -67,6 +76,13 @@ class UrlParserDomainTest extends TestCore
         unset($_SERVER['WELINE_WEBSITE_URL']);
         unset($_SERVER['WELINE_WEBSITE_ID']);
         unset($_SERVER['WELINE_WEBSITE_CODE']);
+        $this->enterParserRequestContext();
+    }
+
+    private function enterParserRequestContext(): void
+    {
+        Context::enter(Context::fromGlobals());
+        Url::resetParserRequestCaches();
     }
 
     /**
@@ -206,6 +222,16 @@ class UrlParserDomainTest extends TestCore
         $this->assertEquals('test', $splits[0], '第一个路径段应该是 test');
     }
 
+    public function testWebsiteBaseUrlRequiresACompletePathBoundary(): void
+    {
+        $method = new \ReflectionMethod(Url::class, 'stripAbsoluteUrlBase');
+
+        self::assertNull($method->invoke(null, 'https://example.test/shopper', 'https://example.test/shop'));
+        self::assertSame('/item', $method->invoke(null, 'https://example.test/shop/item', 'https://example.test/shop'));
+        self::assertSame('?q=1', $method->invoke(null, 'https://example.test/shop?q=1', 'https://example.test/shop/'));
+        self::assertSame('/shopper', $method->invoke(null, 'https://example.test/shopper', 'https://example.test/'));
+    }
+
     /**
      * 对比测试：www 和不带 www 的解析结果应该一致（路径部分）
      */
@@ -323,6 +349,7 @@ class UrlParserDomainTest extends TestCore
         Url::$parserUrlCache = [];
         Url::$splitUrlCache = [];
         Url::$parserServer = [];
+        $this->enterParserRequestContext();
         
         $result = Url::parser();
         
@@ -387,6 +414,7 @@ class UrlParserDomainTest extends TestCore
         Url::$parserUrlCache = [];
         Url::$splitUrlCache = [];
         Url::$parserServer = [];
+        $this->enterParserRequestContext();
         
         $result = Url::parser();
         
@@ -403,7 +431,7 @@ class UrlParserDomainTest extends TestCore
      */
     public function testMultiLevelSubdomainWithComplexPath(): void
     {
-        $this->simulateServer('api.dev.streetonthedaily.com', '/api/v1/users/123');
+        $this->simulateServer('api.dev.streetonthedaily.com', '/catalog/v1/users/123');
         
         $result = Url::parser();
         
@@ -411,8 +439,7 @@ class UrlParserDomainTest extends TestCore
         $requestUri = $result['server']['REQUEST_URI'] ?? '';
         $this->assertNotEmpty($requestUri, 'REQUEST_URI 应该不为空');
         $this->assertStringNotContainsString('api.dev.streetonthedaily.com', $requestUri, 'REQUEST_URI 不应该包含域名');
-        $this->assertStringContainsString('api', $requestUri, 'REQUEST_URI 应该包含路径 api');
+        $this->assertStringContainsString('catalog', $requestUri, 'REQUEST_URI 应该包含路径 catalog');
         $this->assertStringContainsString('users', $requestUri, 'REQUEST_URI 应该包含路径 users');
     }
 }
-

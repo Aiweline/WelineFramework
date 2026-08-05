@@ -73,7 +73,7 @@ $meta = $this->getData('meta') ?? [];
                         multiple="false"
                         position="content"
                         wrapper="section"
-                        class="activity-banner">
+                        class="activity-banner" weline-code="theme.activity.activity_hero">
                     {{meta.banner}}
                 </w:slot>
             </if>
@@ -85,7 +85,7 @@ $meta = $this->getData('meta') ?? [];
                         multiple="true"
                         position="content"
                         wrapper="section"
-                        class="activity-section activity-highlight">
+                        class="activity-section activity-highlight" weline-code="theme.activity.activity_highlight">
                     <div class="container">
                         {{meta.highlight}}
                     </div>
@@ -109,7 +109,7 @@ $meta = $this->getData('meta') ?? [];
                         <else/>
                             <div class="activity-default-content">
                                 <div class="container">
-                                    <section class="activity-header">
+                                    <section class="activity-header" weline-code="theme.activity.section_1">
                                         <h1 class="activity-title">
                                             <if condition="meta.title">
                                                 {{meta.title}}
@@ -122,7 +122,7 @@ $meta = $this->getData('meta') ?? [];
                                         </p>
                                     </section>
                                     
-                                    <section class="activity-preview">
+                                    <section class="activity-preview" weline-code="theme.activity.section_2">
                                         <div class="activity-preview-grid">
                                             <div class="activity-preview-card">
                                                 <h2 class="section-title"><lang>活动亮点示例</lang></h2>
@@ -155,7 +155,7 @@ $meta = $this->getData('meta') ?? [];
                         multiple="true"
                         position="content"
                         wrapper="section"
-                        class="activity-section activity-products">
+                        class="activity-section activity-products" weline-code="theme.activity.activity_products">
                     <div class="container">
                         {{meta.products}}
                     </div>

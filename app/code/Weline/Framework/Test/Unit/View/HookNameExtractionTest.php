@@ -12,7 +12,8 @@ declare(strict_types=1);
 namespace Weline\Framework\View\test;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Framework\Hook\HookRenderResult;
+use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
 
@@ -53,6 +54,8 @@ class HookNameExtractionTest extends TestCore
             'Hook 名称不应该包含 HTML 标签');
         $this->assertStringNotContainsString("getHook('header-language-switcher<else", $parsed,
             'Hook 名称不应该包含 else 标签');
+        $this->assertStringContainsString("getHookResult('header-language-switcher', false, true)", $parsed,
+            '显式 else 必须编译为结构化运行时 fallback');
         // 验证 else_content 被正确返回（hook 不存在时）
         $this->assertStringContainsString('Test</button>', $parsed,
             '当 hook 不存在时，应该返回 else_content');
@@ -301,5 +304,50 @@ TPL;
         $this->assertStringContainsString('CNY</span>', $parsed,
             '当 hook 不存在时，应该返回 else_content');
     }
+
+    public function testHookElseRuntimeHonorsFallbackHtmlAndHandledEmpty(): void
+    {
+        $content = '<w:hook>header-language-switcher<else/><button>Fallback</button></w:hook>';
+        $parsed = $this->taglib->tagReplace($this->template, $content);
+
+        $fallback = (new HookRuntimeProbe(
+            new HookRenderResult(html: '', useFallback: true, fileCount: 1),
+        ))->render($parsed);
+        self::assertStringContainsString('<button>Fallback</button>', $fallback);
+
+        $custom = (new HookRuntimeProbe(
+            new HookRenderResult(html: '<span>Custom</span>', fileCount: 1),
+        ))->render($parsed);
+        self::assertStringContainsString('<span>Custom</span>', $custom);
+        self::assertStringNotContainsString('<button>Fallback</button>', $custom);
+
+        $handled = (new HookRuntimeProbe(
+            new HookRenderResult(html: '', handledEmpty: true, useFallback: true, fileCount: 1),
+        ))->render($parsed);
+        self::assertStringNotContainsString('<button>Fallback</button>', $handled);
+    }
 }
 
+final class HookRuntimeProbe
+{
+    public function __construct(
+        private readonly HookRenderResult $result,
+    ) {
+    }
+
+    public function getHookResult(string $name, bool $forceRefresh, bool $preferFallbackOnEmpty): HookRenderResult
+    {
+        return $this->result;
+    }
+
+    public function render(string $compiled): string
+    {
+        ob_start();
+        try {
+            eval('?>' . $compiled);
+            return (string)ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+    }
+}

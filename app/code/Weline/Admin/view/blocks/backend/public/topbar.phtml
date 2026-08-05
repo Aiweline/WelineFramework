@@ -458,11 +458,28 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
         sidebarToggle.dataset.welineSidebarToggleBound = '1';
         sidebarToggle.addEventListener('click', function (event) {
             event.preventDefault();
+            // Capture-phase handler owns the toggle; stop jQuery duplicates from double-flipping.
             event.stopImmediatePropagation();
 
             document.body.classList.toggle('sidebar-enable');
             if (window.innerWidth >= 992) {
                 document.body.classList.toggle('vertical-collpsed');
+                // Persist collapse/expand for the current backend user across refresh.
+                if (typeof window.setThemeConfig === 'function') {
+                    var collapsed = document.body.classList.contains('vertical-collpsed');
+                    if (collapsed) {
+                        document.body.setAttribute('data-keep-enlarged', 'true');
+                    } else {
+                        document.body.removeAttribute('data-keep-enlarged');
+                    }
+                    window.setThemeConfig({
+                        layouts: {
+                            'data-keep-enlarged': collapsed ? 'true' : '',
+                            'class': collapsed ? 'vertical-collpsed' : ''
+                        },
+                        'icon-sidebar': collapsed
+                    }, false);
+                }
             } else {
                 document.body.classList.remove('vertical-collpsed');
             }

@@ -44,6 +44,12 @@ return [
         'doc' => 'checkout/创建订单后.md',
     ],
 
+    'Weline_Checkout::checkout::legacy_writer::assert' => [
+        'name' => __('旧结账订单写入前置门禁'),
+        'description' => __('在旧 Checkout 订单写入路径验证与事务开始前同步触发，允许切换模块拒绝旧 writer。'),
+        'doc' => 'checkout/legacy-writer-assert.md',
+    ],
+
     'Weline_Checkout::checkout::identity::resolve::before' => [
         'name' => __('结账身份解析前'),
         'description' => __('在标准化账户结账/匿名结账选择之前触发，允许模块调整身份上下文。'),
@@ -191,4 +197,3 @@ return [
         'doc' => 'payment/支付失败.md',
     ],
 ];
-

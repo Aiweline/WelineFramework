@@ -219,7 +219,7 @@ form.addEventListener('submit', async function(e) {
     try {
         var saveUrl = '<?= $this->getUrl('storage/backend/config/save') ?>';
         var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
-        var res = await window.Weline.Api.request(saveUrl, saveOpts);
+        var res = await bqAdmin['storage'](saveUrl, saveOpts);
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
@@ -248,7 +248,7 @@ document.getElementById('btn-test').addEventListener('click', async function() {
     try {
         var url = '<?= $this->getUrl('storage/backend/config/test') ?>';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
-        var res = await window.Weline.Api.request(url, opts);
+        var res = await bqAdmin['storage'](url, opts);
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {

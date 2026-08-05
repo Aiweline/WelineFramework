@@ -124,6 +124,31 @@ class AstBuilderTest extends TestCase
         self::assertTrue($hasPlaceholder);
     }
 
+    public function testPlaceholderIdentityDoesNotLeakAcrossTemplates(): void
+    {
+        $firstExtractor = new PhpExtractor();
+        $firstBuilder = new AstBuilder();
+        $firstBuilder->setPhpExtractor($firstExtractor);
+        $firstAst = $firstBuilder->build(
+            $this->tokenizer->tokenize($firstExtractor->extract('<' . '?= $firstValue ?' . '>')),
+            'first-template.phtml'
+        );
+
+        $secondExtractor = new PhpExtractor();
+        $secondBuilder = new AstBuilder();
+        $secondBuilder->setPhpExtractor($secondExtractor);
+        $secondAst = $secondBuilder->build(
+            $this->tokenizer->tokenize($secondExtractor->extract('<' . '?= $secondValue ?' . '>')),
+            'second-template.phtml'
+        );
+
+        self::assertInstanceOf(PhpPlaceholder::class, $firstAst->children[0]);
+        self::assertInstanceOf(PhpPlaceholder::class, $secondAst->children[0]);
+        self::assertNotSame($firstAst->children[0], $secondAst->children[0]);
+        self::assertSame('$firstValue', $firstAst->children[0]->expression);
+        self::assertSame('$secondValue', $secondAst->children[0]->expression);
+    }
+
     public function testBuildWithAttributes(): void
     {
         $content = '<block template="test.phtml" class="container"/>';
