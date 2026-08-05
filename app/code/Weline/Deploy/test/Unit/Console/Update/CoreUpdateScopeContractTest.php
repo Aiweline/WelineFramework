@@ -100,6 +100,43 @@ final class CoreUpdateScopeContractTest extends TestCase
         self::assertFalse($skip->invoke($core, 'app/code/Weline/Deploy/Console/Update/Core.php'));
     }
 
+    public function testIncrementalSyncOnlyFillsMissingFilesAndDoesNotOverwriteDrift(): void
+    {
+        $core = new Core(
+            $this->createMock(\Weline\Framework\Output\Cli\Printing::class),
+            $this->createMock(\Weline\Framework\App\System::class)
+        );
+        $sync = $this->method('syncIncrementalCoreFiles');
+
+        $tmp = sys_get_temp_dir() . '/core-update-incr-' . bin2hex(random_bytes(4));
+        $relExisting = 'app/code/Weline/Deploy/Console/Update/Core.php';
+        $relMissing = 'app/code/Weline/Deploy/Console/Update/__core_update_missing_probe.php';
+        $cacheExisting = $tmp . '/' . $relExisting;
+        $cacheMissing = $tmp . '/' . $relMissing;
+        $localExisting = BP . $relExisting;
+        $localMissing = BP . $relMissing;
+
+        self::assertTrue(is_file($localExisting), 'local Core.php must exist');
+        self::assertFalse(is_file($localMissing), 'probe file must not already exist');
+
+        mkdir(dirname($cacheExisting), 0755, true);
+        file_put_contents($cacheExisting, "<?php\n// cache stale baseline — must NOT overwrite local\n");
+        file_put_contents($cacheMissing, "<?php\n// missing probe\n");
+
+        $before = (string)file_get_contents($localExisting);
+        try {
+            $sync->invoke($core, $tmp);
+            self::assertSame($before, (string)file_get_contents($localExisting), 'existing drifted core must not be overwritten');
+            self::assertTrue(is_file($localMissing), 'missing core file must be filled');
+            self::assertSame("<?php\n// missing probe\n", (string)file_get_contents($localMissing));
+        } finally {
+            if (is_file($localMissing)) {
+                @unlink($localMissing);
+            }
+            $this->removeTree($tmp);
+        }
+    }
+
     /**
      * @return list<string>
      */
