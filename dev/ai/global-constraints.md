@@ -94,6 +94,15 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 - Deployment requires a confirmed repository, target, environment, account/SSH configuration, directory, branch, and target-owned procedure. Do not infer production targets from historical notes.
 - Exact passphrases such as 「分仓」 and 「分项」 trigger only their owning skills. Similar wording does not expand scope.
 
+### Local branch and worktree policy (hard)
+
+- Allowed local branches in this repository: only `dev` and `master`.
+- All code edits, commits, and implementation work happen on `dev` only. Do not modify code while checked out on `master` or any other branch.
+- Do not create, check out, or keep any other local branch (feature, fix, merge, codex/*, agent/*, etc.).
+- Do not create or use `git worktree` (including best-of-n / isolated worktree runners). Work only in the canonical working tree: `/Users/weline/Project/Official/框架`.
+- If a stray branch or worktree exists, remove it before continuing implementation; do not build on top of it.
+- `master` may be read or updated only through an explicitly requested merge/release workflow; it is not a coding branch.
+
 ### Canonical core and site repositories
 
 - This repository is canonical for `app/code/Weline/**`.
