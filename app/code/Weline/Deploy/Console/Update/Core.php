@@ -126,7 +126,7 @@ class Core extends CommandAbstract
                 '-h, --help' => '显示帮助信息',
             ],
             [
-                '双仓库策略' => __('未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像'),
+                '双仓库策略' => __('未指定仓库时：GitHub 可达则对比 GitHub/Gitee 同分支 tip；一致时优先 GitHub，不一致时选用 Gitee 以免拉到落后镜像；GitHub 不可达则用 Gitee。增量更新会把缓存 origin 切到本次选用仓库'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
                 '增量更新' => '默认使用 git fetch 增量拉取；仅 Git 有变更的文件覆盖，另补本地缺失文件；已存在但内容不同的本地核心不因 hash 不一致被回刷',
                 '同步范围' => __('仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内'),
@@ -171,7 +171,7 @@ class Core extends CommandAbstract
         $config = $this->getCoreUpdateConfig();
         $branch = $this->getBranch($args, $config);
         $tag = $args['tag'] ?? $args['t'] ?? null;
-        $this->repoCandidates = $this->resolveRepoCandidates($args, $config);
+        $this->repoCandidates = $this->resolveRepoCandidates($args, $config, $branch);
         $repo = $this->repoCandidates[0];
 
         $this->printer->note(__('仓库：%{1}', [$this->maskRepoUrl($repo)]));
@@ -537,11 +537,11 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 解析仓库候选列表：显式配置时仅用指定仓库；否则 GitHub 优先，Gitee 备用。
+     * 解析仓库候选列表：显式配置时仅用指定仓库；否则 GitHub/Gitee 双源择优。
      *
      * @return string[]
      */
-    private function resolveRepoCandidates(array $args, array $config): array
+    private function resolveRepoCandidates(array $args, array $config, string $branch): array
     {
         $explicitRepo = trim((string)($args['repo'] ?? ''));
         if ($explicitRepo !== '') {
@@ -557,13 +557,108 @@ class Core extends CommandAbstract
         $giteeRepo = $this->buildRepoUrlWithAuth(self::DEFAULT_REPO_GITEE, $config);
 
         $this->printer->note(__('检测 GitHub 连通性（ping github.com）...'));
-        if ($this->isGithubReachable()) {
-            $this->printer->success(__('✓ GitHub 可达，使用 GitHub 仓库'));
+        if (!$this->isGithubReachable()) {
+            $this->printer->warning(__('GitHub 不可达，使用 Gitee 镜像仓库'));
+            return [$giteeRepo];
+        }
+
+        $this->printer->success(__('✓ GitHub 可达'));
+        return $this->orderDualReposByBranchTip($githubRepo, $giteeRepo, $branch);
+    }
+
+    /**
+     * GitHub/Gitee tip 一致时优先 GitHub；不一致时选用 Gitee（本仓库主推源，避免 GitHub 滞后把核心打回旧版）。
+     *
+     * @return string[]
+     */
+    private function orderDualReposByBranchTip(string $githubRepo, string $giteeRepo, string $branch): array
+    {
+        $githubTip = $this->lsRemoteBranchTip($githubRepo, $branch);
+        $giteeTip = $this->lsRemoteBranchTip($giteeRepo, $branch);
+
+        if ($githubTip === '' && $giteeTip === '') {
+            $this->printer->warning(__('未能探测双源 tip，回退优先 GitHub'));
+            return [$githubRepo, $giteeRepo];
+        }
+        if ($githubTip === '') {
+            $this->printer->warning(__('GitHub tip 探测失败，使用 Gitee'));
+            return [$giteeRepo, $githubRepo];
+        }
+        if ($giteeTip === '') {
+            $this->printer->note(__('Gitee tip 探测失败，使用 GitHub'));
+            return [$githubRepo, $giteeRepo];
+        }
+        if (hash_equals($githubTip, $giteeTip)) {
+            $this->printer->success(__(
+                '✓ GitHub/Gitee %{1} tip 一致（%{2}），优先 GitHub',
+                [$branch, substr($githubTip, 0, 8)]
+            ));
             return [$githubRepo, $giteeRepo];
         }
 
-        $this->printer->warning(__('GitHub 不可达，使用 Gitee 镜像仓库'));
-        return [$giteeRepo];
+        $this->printer->warning(__(
+            '⚠ GitHub 与 Gitee 的 %{1} tip 不一致（GitHub=%{2}, Gitee=%{3}），选用 Gitee 以免拉到落后镜像',
+            [$branch, substr($githubTip, 0, 8), substr($giteeTip, 0, 8)]
+        ));
+        return [$giteeRepo, $githubRepo];
+    }
+
+    private function lsRemoteBranchTip(string $repo, string $branch): string
+    {
+        $branch = trim($branch);
+        if ($branch === '') {
+            return '';
+        }
+        $cwd = getcwd() ?: BP;
+        $output = [];
+        $code = $this->runGitCommand($cwd, ['ls-remote', $repo, 'refs/heads/' . $branch], $output);
+        if ($code !== 0 || $output === []) {
+            return '';
+        }
+        foreach ($output as $line) {
+            $line = trim((string)$line);
+            if ($line === '' || str_starts_with($line, 'fatal:') || str_starts_with($line, 'error:')) {
+                continue;
+            }
+            if (preg_match('/^([0-9a-f]{40})\s+refs\/heads\//i', $line, $m) === 1) {
+                return strtolower($m[1]);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 增量缓存仓的 origin 必须指向本次选用仓库，否则会一直 fetch 旧镜像 tip。
+     */
+    private function ensureCacheOriginUsesPreferredRepo(string $tmpDir): void
+    {
+        $preferred = trim((string)($this->repoCandidates[0] ?? ''));
+        if ($preferred === '') {
+            return;
+        }
+
+        $output = [];
+        $code = $this->runGitCommand($tmpDir, ['remote', 'get-url', 'origin'], $output);
+        $current = ($code === 0 && $output !== []) ? trim((string)$output[0]) : '';
+        if ($current === $preferred) {
+            return;
+        }
+
+        if ($current === '') {
+            $this->runGitCommand($tmpDir, ['remote', 'add', 'origin', $preferred], $output);
+            $this->printer->note(__('缓存仓已添加 origin：%{1}', [$this->maskRepoUrl($preferred)]));
+            return;
+        }
+
+        $this->printer->warning(__(
+            '缓存仓 origin 为 %{1}，切换为本次选用仓库 %{2}',
+            [$this->maskRepoUrl($current), $this->maskRepoUrl($preferred)]
+        ));
+        $setCode = $this->runGitCommand($tmpDir, ['remote', 'set-url', 'origin', $preferred], $output);
+        if ($setCode !== 0) {
+            $this->printer->warning(__('切换 origin 失败，继续使用原远程'));
+        }
     }
 
     /**
@@ -670,6 +765,7 @@ class Core extends CommandAbstract
         if ($isExistingRepo && !$this->forceUpdate) {
             // 增量模式：已有仓库，使用 git fetch + diff 获取变化文件
             $this->printer->note(__('增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...'));
+            $this->ensureCacheOriginUsesPreferredRepo($tmpDir);
             
             // 获取当前 HEAD
             $currentHead = '';
@@ -678,8 +774,19 @@ class Core extends CommandAbstract
                 $currentHead = trim($headOutput[0]);
             }
             
-            // 获取远程更新
-            $fetchCode = $this->runGitCommand($tmpDir, ['fetch', 'origin'], $output);
+            // 获取远程更新（失败则按候选列表轮换 origin 再试，仍失败才整仓重克）
+            $fetchCode = 1;
+            $output = [];
+            foreach ($this->repoCandidates as $index => $candidateRepo) {
+                if ($index > 0) {
+                    $this->printer->warning(__('fetch 失败，切换备用仓库：%{1}', [$this->maskRepoUrl($candidateRepo)]));
+                    $this->runGitCommand($tmpDir, ['remote', 'set-url', 'origin', $candidateRepo], $output);
+                }
+                $fetchCode = $this->runGitCommand($tmpDir, ['fetch', 'origin'], $output);
+                if ($fetchCode === 0) {
+                    break;
+                }
+            }
             
             if ($fetchCode !== 0) {
                 $this->printer->warning(__('fetch 失败，尝试切换仓库并重新克隆...'));
