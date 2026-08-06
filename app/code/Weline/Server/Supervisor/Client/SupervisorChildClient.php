@@ -310,6 +310,15 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
                 => DispatcherPolicyControl::readinessSnapshot(),
             default => [],
         };
+        $rawHostLeaseId = $_SERVER['WLS_GATEWAY_HOST_LEASE_ID']
+            ?? $_ENV['WLS_GATEWAY_HOST_LEASE_ID']
+            ?? \getenv('WLS_GATEWAY_HOST_LEASE_ID');
+        $hostLeaseId = \is_string($rawHostLeaseId)
+            ? \strtolower(\trim($rawHostLeaseId))
+            : '';
+        if ($hostLeaseId !== '' && \preg_match('/\A[a-f0-9]{32}\z/D', $hostLeaseId) === 1) {
+            $readiness['host_lease_id'] = $hostLeaseId;
+        }
         $ready = SupervisorMessage::ready(
             slotId: $this->currentSlotId($role, $workerId),
             leaseId: $this->leaseId,

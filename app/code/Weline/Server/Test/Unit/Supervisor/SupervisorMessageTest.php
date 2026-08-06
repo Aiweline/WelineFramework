@@ -58,6 +58,33 @@ final class SupervisorMessageTest extends TestCase
         self::assertSame('lease-1', $ready['lease_id']);
         self::assertSame(18081, $ready['listen']['port']);
 
+        $digest = \str_repeat('ab', 32);
+        $readyWithManifest = SupervisorMessage::decode(SupervisorMessage::ready(
+            slotId: 'worker#1',
+            leaseId: 'lease-1',
+            generation: 3,
+            port: 18081,
+            msgId: 'msg-ready-manifest-1',
+            channel: 'channel-default',
+            readiness: [
+                'warmup_state' => 'hot',
+                'namespace_authority_clock' => 12,
+                'serving_manifest_generation' => 7,
+                'serving_manifest_digest' => $digest,
+                'serving_manifest_route_count' => 3,
+                'host_lease_id' => '0123456789abcdef0123456789abcdef',
+            ],
+        ));
+        self::assertSame(7, $readyWithManifest['serving_manifest_generation']);
+        self::assertSame($digest, $readyWithManifest['serving_manifest_digest']);
+        self::assertSame(3, $readyWithManifest['serving_manifest_route_count']);
+        self::assertSame('hot', $readyWithManifest['warmup_state']);
+        self::assertSame(12, $readyWithManifest['namespace_authority_clock']);
+        self::assertSame(
+            '0123456789abcdef0123456789abcdef',
+            $readyWithManifest['host_lease_id'],
+        );
+
         $readyAck = SupervisorMessage::decode(SupervisorMessage::readyAck(
             $lease->markReady(18081),
             'msg-ready-1',
