@@ -322,16 +322,15 @@
                     return;
                 }
 
-                // 使用 window.urlWithCurrency 生成带货币的 URL（框架推荐的路径格式，会自动保持语言）
+                // urlWithCurrency：只改货币；路径里已有语言则保留，不发明语言。
                 if (typeof window.urlWithCurrency === 'function') {
                     const currencyUrl = window.urlWithCurrency(currentPath, currencyCode);
                     option.setAttribute('href', currencyUrl);
                 } else {
-                    // 降级方案：手动构建路径格式的 URL（需要手动保持语言）
+                    // 降级方案：只改货币段；语言仅保留路径里已有的，不从配置发明语言。
                     const pathOnly = currentPath.split('?')[0];
                     const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
 
-                    // 获取当前语言（从 URL 或配置）
                     let currentLang = '';
                     const pathParts = pathOnly.split('/').filter(Boolean);
                     for (const part of pathParts) {
@@ -340,12 +339,7 @@
                             break;
                         }
                     }
-                    if (!currentLang) {
-                        currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
-                    }
 
-                    // 移除路径中的货币代码和语言代码
-                    // 构建新 URL：/[currency]/[lang]/path（保持语言）
                     const currencyUrl = buildCurrencyUrlFromPath(pathOnly, search ? '?' + search : '', currencyCode, currentLang);
                     option.setAttribute('href', currencyUrl);
                 }
@@ -357,7 +351,7 @@
     }
 
     /**
-     * 切换货币（会自动保持当前语言）
+     * 切换货币（只改货币段；语言仅保留路径里已有的）
      * @param {string} currency 货币代码
      * @returns {Promise<void>}
      */
@@ -402,11 +396,10 @@
             return;
         }
 
-        // 最后的降级方案：手动构建路径格式的 URL（需要手动保持语言）
+        // 最后的降级方案：只改货币段；语言仅保留路径里已有的。
         let currentPath = window.location.pathname;
         const pathParts = currentPath.split('/').filter(Boolean);
 
-        // 获取当前语言（从 URL 或配置）
         let currentLang = '';
         for (const part of pathParts) {
             if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
@@ -414,13 +407,7 @@
                 break;
             }
         }
-        if (!currentLang) {
-            const config = window.__WelineThemeConfig || {};
-            currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
-        }
 
-        // 移除路径中的货币代码和语言代码
-        // 构建新 URL：/[currency]/[lang]/path（保持语言）
         const currencyUrl = buildCurrencyUrlFromPath(currentPath, window.location.search || '', currency, currentLang);
 
         // 保存货币偏好

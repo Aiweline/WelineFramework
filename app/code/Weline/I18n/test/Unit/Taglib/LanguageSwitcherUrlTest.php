@@ -10,19 +10,42 @@ use Weline\I18n\Taglib\LanguageSwitcher;
 
 final class LanguageSwitcherUrlTest extends TestCase
 {
-    public function testBuildLanguageHrefDoesNotTreatFirstRouteSegmentAsPrefix(): void
+    public function testBuildLanguageHrefOmitsDefaultCurrencyOnFrontend(): void
     {
         self::assertSame(
-            '/CNY/en_US/product/view?id=652',
+            '/en_US/product/view?id=652',
             $this->buildLanguageHref('/product/view', '?id=652', 'en_US', 'CNY')
         );
     }
 
-    public function testBuildLanguageHrefMovesExistingLocaleBeforeRouteWithoutPrefixGuessing(): void
+    public function testBuildLanguageHrefStripsDefaultCurrencyFromExistingPath(): void
+    {
+        // default locale (zh_Hans_CN) is also omitted by LocalizedUrlBuilder
+        self::assertSame(
+            '/product/frontend/product/view?id=652',
+            $this->buildLanguageHref('/product/CNY/en_US/frontend/product/view', '?id=652', 'zh_Hans_CN', 'CNY')
+        );
+    }
+
+    public function testBuildLanguageHrefOmitsDefaultCurrencyWhenSwitchingLocale(): void
     {
         self::assertSame(
-            '/CNY/zh_Hans_CN/product/frontend/product/view?id=652',
-            $this->buildLanguageHref('/product/CNY/en_US/frontend/product/view', '?id=652', 'zh_Hans_CN', 'CNY')
+            '/ru_RU/about',
+            $this->buildLanguageHref('/CNY/bn_IN/about', '', 'ru_RU', 'CNY')
+        );
+    }
+
+    public function testBuildLanguageHrefPreservesNonDefaultCurrency(): void
+    {
+        // Default currency is CNY; USD must stay until the currency switcher changes it.
+        // Default locale (zh_Hans_CN) is omitted by LocalizedUrlBuilder.
+        self::assertSame(
+            '/USD/about',
+            $this->buildLanguageHref('/USD/ru_RU/about', '', 'zh_Hans_CN', 'CNY')
+        );
+        self::assertSame(
+            '/USD/en_US/about',
+            $this->buildLanguageHref('/USD/ru_RU/about', '', 'en_US', 'CNY')
         );
     }
 

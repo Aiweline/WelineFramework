@@ -9,6 +9,7 @@ use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\Framework\Taglib\TaglibInterface;
@@ -246,7 +247,7 @@ class LanguageSwitcher implements TaglibInterface
                 \array_keys($welineLanguages)
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
-                . '|markup=v2-closed-boundary-3';
+                . '|markup=v2-lang-default-currency-omit-1';
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
                 return self::$htmlCache[$htmlCacheKey]['html'];
@@ -415,7 +416,8 @@ class LanguageSwitcher implements TaglibInterface
                 $html[] = 'if(requestOpen){requestOpen.addEventListener("click",function(event){event.preventDefault();event.stopPropagation();openRequest();});}';
                 $html[] = 'if(requestModal){requestModal.querySelectorAll("[data-language-request-close]").forEach(function(close){close.addEventListener("click",closeRequest);});requestModal.addEventListener("weline:captcha:refresh-requested",function(event){requestDraft=event&&event.detail?event.detail:null;requestLoaded=false;loadRequestForm();});requestModal.addEventListener("keydown",function(event){if(event.key==="Escape"){event.preventDefault();closeRequest();return;}if(event.key!=="Tab"){return;}var focusable=Array.prototype.slice.call(requestFocusable());if(!focusable.length){event.preventDefault();return;}var first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}});}';
             }
-            $html[] = 'function buildLangHrefFallback(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";var pathParts=String(pathname||"/").split("/").filter(Boolean);var currencyPattern=/^[A-Z]{3}$/;var langPattern=/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;var backendKey=String(' . $backendRouteJson . '||(window.site&&window.site.area)||(window.Weline&&window.Weline.config&&window.Weline.config.url&&window.Weline.config.url.adminArea)||"");var currency="";for(var i=0;i<pathParts.length;i++){if(currencyPattern.test(pathParts[i])){currency=pathParts[i].toUpperCase();break;}}if(!currency){currency=((window.__WelineThemeConfig&&window.__WelineThemeConfig.currentCurrency)||"CNY").toUpperCase();}var prefixIndex=-1;if(backendKey){prefixIndex=pathParts.findIndex(function(part){return !langPattern.test(part)&&!currencyPattern.test(part)&&String(part).toLowerCase()===backendKey.toLowerCase();});}var prefixSegment=prefixIndex>=0?pathParts[prefixIndex]:backendKey;var remain=[];pathParts.forEach(function(part,index){if(langPattern.test(part)||currencyPattern.test(part)){return;}if(index===prefixIndex){return;}remain.push(part);});if(prefixSegment){return "/"+prefixSegment+"/"+currency+"/"+lang+(remain.length?"/"+remain.join("/"):"")+search;}return "/"+currency+"/"+lang+(remain.length?"/"+remain.join("/"):"")+search;}';
+            // Overwritten below by default-aware builder (omits default currency/locale).
+            $html[] = 'function buildLangHrefFallback(lang){return "/"+(String(lang||"").replace(/-/g,"_")||"");}';
             $html[] = $defaultAwareBuildLangHrefFallbackJs;
             $html[] = 'function buildLangHref(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";if(window.WelineI18n&&typeof window.WelineI18n.buildLanguageUrl==="function"){return window.WelineI18n.buildLanguageUrl(lang,pathname,search);}return buildLangHrefFallback(lang);}';
             $html[] = 'var navigation=String(root.getAttribute("data-i18n-navigation")||"path").toLowerCase();';
@@ -446,7 +448,7 @@ class LanguageSwitcher implements TaglibInterface
                 $html[] = 'var p=(window.location.pathname||"").split("/").filter(Boolean);for(var i=0;i<p.length;i++){if(/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(p[i])){return p[i];}}';
                 $html[] = 'return (window.site&&window.site.lang)||"zh_Hans_CN";}';
                 $html[] = 'function toShort(code){if(!code){return"ZH";}var parts=String(code).split("_");if(parts.length>=2){var lang=parts[0].toUpperCase();var region=parts[1].toUpperCase();if(lang==="ZH"){return region==="HANT"?"TW":"ZH";}return lang.substring(0,2);}return String(code).substring(0,2).toUpperCase();}';
-                $html[] = 'function buildLangHrefFallback(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";var pathParts=String(pathname||"/").split("/").filter(Boolean);var currencyPattern=/^[A-Z]{3}$/;var langPattern=/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;var backendKey=String(' . $backendRouteJson . '||(window.site&&window.site.area)||(window.Weline&&window.Weline.config&&window.Weline.config.url&&window.Weline.config.url.adminArea)||"");var currency="";for(var i=0;i<pathParts.length;i++){if(currencyPattern.test(pathParts[i])){currency=pathParts[i].toUpperCase();break;}}if(!currency){currency=((window.__WelineThemeConfig&&window.__WelineThemeConfig.currentCurrency)||"CNY").toUpperCase();}var prefixIndex=-1;if(backendKey){prefixIndex=pathParts.findIndex(function(part){return !langPattern.test(part)&&!currencyPattern.test(part)&&String(part).toLowerCase()===backendKey.toLowerCase();});}var prefixSegment=prefixIndex>=0?pathParts[prefixIndex]:backendKey;var remain=[];pathParts.forEach(function(part,index){if(langPattern.test(part)||currencyPattern.test(part)){return;}if(index===prefixIndex){return;}remain.push(part);});if(prefixSegment){return "/"+prefixSegment+"/"+currency+"/"+lang+(remain.length?"/"+remain.join("/"):"")+search;}return "/"+currency+"/"+lang+(remain.length?"/"+remain.join("/"):"")+search;}';
+                $html[] = 'function buildLangHrefFallback(lang){return "/"+(String(lang||"").replace(/-/g,"_")||"");}';
                 $html[] = $defaultAwareBuildLangHrefFallbackJs;
                 $html[] = 'function buildLangHref(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";if(window.WelineI18n&&typeof window.WelineI18n.buildLanguageUrl==="function"){return window.WelineI18n.buildLanguageUrl(lang,pathname,search);}return buildLangHrefFallback(lang);}';
                 $html[] = 'function hasDiff(lang){var currentEl=root.querySelector(".current-language");var should=toShort(lang);var active=root.querySelector("[data-language-option].active,.language-option.active,a[data-lang].active");var activeLang=active?(active.getAttribute("data-lang")||active.dataset.lang||""):"";if(currentEl&&String(currentEl.textContent||"").trim()!==should){return true;}if(activeLang!==lang){return true;}return false;}';
@@ -1140,6 +1142,13 @@ class LanguageSwitcher implements TaglibInterface
         return $fallback !== '' ? $fallback : '/';
     }
 
+    /**
+     * Visitor-facing language href.
+     *
+     * Frontend: delegates to LocalizedUrlBuilder (default currency/locale omitted).
+     * Backend: always keeps locale segment; still omits default currency.
+     * Non-default currency is preserved until the currency switcher changes it.
+     */
     private static function buildLanguageHref(
         string $path,
         string $search,
@@ -1155,14 +1164,26 @@ class LanguageSwitcher implements TaglibInterface
         $fallbackCurrency = strtoupper(trim($fallbackCurrency ?: 'CNY'));
         $defaultCurrency = self::defaultCurrency();
         $isCurrency = static function (string $part) use ($fallbackCurrency, $defaultCurrency): bool {
-            $code = strtoupper(trim($part));
+            $raw = trim($part);
+            $code = strtoupper($raw);
             if (strlen($code) !== 3 || !ctype_upper($code)) {
                 return false;
             }
 
+            // Currency path segments are uppercase (CNY/USD). Lowercase route
+            // tokens like "cms" must not be treated as currency.
+            if ($raw !== $code
+                && !State::isAllowedCurrencyCode($code)
+                && $code !== $fallbackCurrency
+                && $code !== $defaultCurrency
+            ) {
+                return false;
+            }
+
             return State::isAllowedCurrencyCode($code)
-                || ($fallbackCurrency !== '' && $code === $fallbackCurrency)
-                || ($defaultCurrency !== '' && $code === $defaultCurrency);
+                || $code === $fallbackCurrency
+                || $code === $defaultCurrency
+                || $raw === $code;
         };
 
         if ($preferredPrefix !== '') {
@@ -1200,10 +1221,37 @@ class LanguageSwitcher implements TaglibInterface
         if ($currency !== '' && !$isCurrency($currency)) {
             $currency = '';
         }
-        // 后台始终保留 locale，但默认货币不应污染 canonical 路径。
-        if ($preferredPrefix !== '' && $currency === $defaultCurrency) {
+        // Framework contract: default currency is omitted from language URLs.
+        // Non-default currency stays until the currency switcher changes it.
+        if ($currency === $defaultCurrency) {
             $currency = '';
         }
+
+        $routePath = $remain === [] ? '/' : '/' . implode('/', $remain);
+        $normalizedSearch = self::sanitizeLanguageSearch($search);
+
+        // Frontend: system LocalizedUrlBuilder (omits default currency + default locale).
+        if ($prefix === '') {
+            try {
+                /** @var LocalizedUrlBuilderInterface $builder */
+                $builder = ObjectManager::getInstance(LocalizedUrlBuilderInterface::class);
+                $absolute = $builder->build(
+                    'https://weline.local',
+                    $routePath,
+                    $targetLang,
+                    self::defaultLanguage(),
+                    $currency !== '' ? $currency : null,
+                    $defaultCurrency
+                );
+                $builtPath = parse_url($absolute, PHP_URL_PATH);
+                if (is_string($builtPath) && $builtPath !== '') {
+                    return $builtPath . ($normalizedSearch !== '' ? '?' . $normalizedSearch : '');
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        // Backend (or LocalizedUrlBuilder unavailable): keep locale always; omit default currency.
         $out = [];
         if ($prefix !== '') {
             $out[] = $prefix;
@@ -1218,28 +1266,47 @@ class LanguageSwitcher implements TaglibInterface
             array_push($out, ...$remain);
         }
 
-        $normalizedSearch = self::sanitizeLanguageSearch($search);
         return '/' . implode('/', $out) . ($normalizedSearch !== '' ? '?' . $normalizedSearch : '');
-    }
-
-    private static function defaultCurrency(): string
-    {
-        $currency = strtoupper(trim((string)(
-            w_env('website.currency', '')
-            ?: Env::get('currency', 'CNY')
-            ?: 'CNY'
-        )));
-        return $currency !== '' ? $currency : 'CNY';
     }
 
     private static function defaultLanguage(): string
     {
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $fromWebsite = \trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultLanguage() ?? ''));
+                if ($fromWebsite !== '') {
+                    return \str_replace('-', '_', $fromWebsite);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
         $language = trim((string)(
             w_env('website.language', '')
             ?: Env::get('locale', Env::get('lang', 'zh_Hans_CN'))
             ?: 'zh_Hans_CN'
         ));
         return $language !== '' ? str_replace('-', '_', $language) : 'zh_Hans_CN';
+    }
+
+    private static function defaultCurrency(): string
+    {
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $fromWebsite = \strtoupper(\trim((string)(\Weline\Websites\Data\WebsiteData::getDefaultCurrency() ?? '')));
+                if ($fromWebsite !== '') {
+                    return $fromWebsite;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $currency = strtoupper(trim((string)(
+            w_env('website.currency', '')
+            ?: Env::get('currency', 'CNY')
+            ?: 'CNY'
+        )));
+        return $currency !== '' ? $currency : 'CNY';
     }
 
     private static function sameLanguage(string $left, string $right): bool
