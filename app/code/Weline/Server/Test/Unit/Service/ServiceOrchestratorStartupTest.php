@@ -20,6 +20,7 @@ use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Edge\PureWlsPublicOrigin;
+use Weline\Server\Service\Edge\NativeServingManifestStartupRecovery;
 use Weline\Server\Service\Runtime\HttpProtocolSelection;
 use Weline\Server\Service\Runtime\ProtocolEdgeRuntime;
 use Weline\Server\Service\Runtime\RuntimeSelection;
@@ -5665,6 +5666,157 @@ class ServiceOrchestratorStartupTest extends TestCase
                 \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($evidence),
             ),
         ];
+    }
+
+    public function testAdoptDeferredChildStartupAllowsClearingNativeServingManifestRecovery(): void
+    {
+        $digest = \str_repeat('a', 64);
+        $baseEnv = [
+            'wls' => [
+                'edge' => ['adapter' => 'wls'],
+                'gateway' => [
+                    'instance_generation' => 7,
+                    'mode' => 'wls',
+                    NativeServingManifestStartupRecovery::CONFIG_KEY => [
+                        'schema' => NativeServingManifestStartupRecovery::SCHEMA,
+                        'instance_id' => 'ut-deferred-fence',
+                        'generation' => 3,
+                        'digest' => $digest,
+                    ],
+                ],
+            ],
+        ];
+        $before = new ServiceContext(
+            instanceName: 'ut-deferred-fence',
+            epoch: 1,
+            controlPort: 19991,
+            masterPid: 4242,
+            host: '127.0.0.1',
+            mainPort: 9510,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: false,
+            debug: false,
+            windowMode: false,
+            envConfig: $baseEnv,
+            workerCount: 1,
+            workerBasePort: 9510,
+            workerPort: 9510,
+            controlToken: 'token-before',
+            masterLeaseFile: '/tmp/ut-master.lease',
+            masterToken: 'lease-token',
+        );
+        $afterEnv = $baseEnv;
+        unset($afterEnv['wls']['gateway'][NativeServingManifestStartupRecovery::CONFIG_KEY]);
+        $afterEnv['wls']['serving_manifest_path'] = '/tmp/ut-serving-manifest.json';
+        $afterEnv['wls']['serving_manifest_generation'] = 3;
+        $afterEnv['wls']['serving_manifest_digest'] = $digest;
+        $afterEnv['wls']['serving_instance_generation'] = 7;
+        $after = new ServiceContext(
+            instanceName: 'ut-deferred-fence',
+            epoch: 1,
+            controlPort: 19991,
+            masterPid: 4242,
+            host: '127.0.0.1',
+            mainPort: 9510,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: false,
+            debug: false,
+            windowMode: false,
+            envConfig: $afterEnv,
+            workerCount: 1,
+            workerBasePort: 9510,
+            workerPort: 9510,
+            controlToken: 'token-before',
+            masterLeaseFile: '/tmp/ut-master.lease',
+            masterToken: 'lease-token',
+        );
+
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'context', $before);
+        $this->invokePrivateWithArgs($orchestrator, 'adoptDeferredChildStartupContext', [$after]);
+
+        $adopted = $this->readPrivate($orchestrator, 'context');
+        self::assertInstanceOf(ServiceContext::class, $adopted);
+        self::assertSame(3, (int)$adopted->getConfig('wls.serving_manifest_generation', 0));
+        self::assertArrayNotHasKey(
+            NativeServingManifestStartupRecovery::CONFIG_KEY,
+            \is_array($adopted->envConfig['wls']['gateway'] ?? null)
+                ? $adopted->envConfig['wls']['gateway']
+                : [],
+        );
+    }
+
+    public function testAdoptDeferredChildStartupRejectsNonFenceEnvDrift(): void
+    {
+        $before = new ServiceContext(
+            instanceName: 'ut-deferred-fence-drift',
+            epoch: 1,
+            controlPort: 19992,
+            masterPid: 4243,
+            host: '127.0.0.1',
+            mainPort: 9511,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: false,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'worker_count' => 2,
+                ],
+            ],
+            workerCount: 2,
+            workerBasePort: 9511,
+            workerPort: 9511,
+            controlToken: 'token-drift',
+            masterLeaseFile: '/tmp/ut-master-drift.lease',
+            masterToken: 'lease-token-drift',
+        );
+        $after = new ServiceContext(
+            instanceName: 'ut-deferred-fence-drift',
+            epoch: 1,
+            controlPort: 19992,
+            masterPid: 4243,
+            host: '127.0.0.1',
+            mainPort: 9511,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            runtimeSelection: self::runtimeSelection(),
+            daemon: false,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'edge' => ['adapter' => 'wls'],
+                    'worker_count' => 4,
+                ],
+            ],
+            workerCount: 2,
+            workerBasePort: 9511,
+            workerPort: 9511,
+            controlToken: 'token-drift',
+            masterLeaseFile: '/tmp/ut-master-drift.lease',
+            masterToken: 'lease-token-drift',
+        );
+
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'context', $before);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'Deferred child startup configuration changed outside the serving manifest fence.',
+        );
+        $this->invokePrivateWithArgs($orchestrator, 'adoptDeferredChildStartupContext', [$after]);
     }
 
     private function invokePrivate(object $object, string $method): mixed

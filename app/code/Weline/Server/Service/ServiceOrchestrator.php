@@ -36,6 +36,7 @@ use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 use Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
 use Weline\Server\Service\Edge\EdgeAdapterInterface;
+use Weline\Server\Service\Edge\NativeServingManifestStartupRecovery;
 use Weline\Server\Service\Edge\ServingManifestRuntimeFence;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
@@ -2914,6 +2915,15 @@ class ServiceOrchestrator
             'serving_instance_generation',
         ] as $field) {
             unset($before['wls'][$field], $after['wls'][$field]);
+        }
+        // publishForContext() clears the one-shot cold-start recovery proof from
+        // wls.gateway after the immutable fence is bound. That clearing is part of
+        // the allowed serving-manifest fence transition, not a config drift.
+        if (\is_array($before['wls']['gateway'] ?? null)) {
+            unset($before['wls']['gateway'][NativeServingManifestStartupRecovery::CONFIG_KEY]);
+        }
+        if (\is_array($after['wls']['gateway'] ?? null)) {
+            unset($after['wls']['gateway'][NativeServingManifestStartupRecovery::CONFIG_KEY]);
         }
         if ($before !== $after) {
             throw new \RuntimeException(
@@ -5861,31 +5871,16 @@ class ServiceOrchestrator
         if ($lease === [] || $this->context === null) {
             return;
         }
-        try {
-            (new GatewayPortLeaseAllocator())->confirmTransferred(
-                $this->context->instanceName,
-                $port,
-                $ownerPid,
-                $ownerLaunchId,
-                (string)$lease['lease_id'],
-                (string)$lease['bind_host'],
-                $managedProcessName,
-                (string)$this->context->getConfig('wls.gateway.launch_id', ''),
-            );
-        } catch (\Throwable $throwable) {
-            $probe = Processer::probeManagedProcessIdentity(
-                $ownerPid,
-                $managedProcessName,
-                $ownerLaunchId,
-                '--name=' . $managedProcessName,
-                true,
-            );
-            WlsLogger::error_(
-                '[Orchestrator] public lease confirm probe: '
-                . \json_encode($probe, JSON_UNESCAPED_SLASHES)
-            );
-            throw $throwable;
-        }
+        (new GatewayPortLeaseAllocator())->confirmTransferred(
+            $this->context->instanceName,
+            $port,
+            $ownerPid,
+            $ownerLaunchId,
+            (string)$lease['lease_id'],
+            (string)$lease['bind_host'],
+            $managedProcessName,
+            (string)$this->context->getConfig('wls.gateway.launch_id', ''),
+        );
         $this->publicEdgeLeaseConfirmed = true;
     }
 
