@@ -432,6 +432,9 @@
             outputParts.push(inferredPrefix);
         }
 
+        // Language switching follows LocalizedUrlBuilder: only non-default currency
+        // appears in the path. Default currency is omitted until the currency switcher
+        // explicitly changes it.
         if (shouldOutputCurrency(currency, config)) {
             outputParts.push(normalizeCurrencyCode(currency));
         }
