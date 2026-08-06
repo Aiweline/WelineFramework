@@ -3548,9 +3548,8 @@
             }
 
             const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
-            const config = window.__WelineThemeConfig || {};
 
-            // 获取当前语言（用于保持语言）
+            // 仅保留路径里已有的语言；货币切换不从配置发明语言。
             let currentLang = '';
             const pathParts = currentPath.split('?')[0].split('/').filter(Boolean);
             for (const part of pathParts) {
@@ -3558,9 +3557,6 @@
                     currentLang = part;
                     break;
                 }
-            }
-            if (!currentLang) {
-                currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
             }
 
             currencySwitchers.forEach(currencySwitcher => {
@@ -3629,7 +3625,7 @@
                 return;
             }
 
-            // 最后的降级方案：手动构建 URL
+            // 最后的降级方案：只改货币；语言仅保留路径里已有的。
             let currentPath = window.location.pathname;
             const pathParts = currentPath.split('/').filter(Boolean);
             let currentLang = '';
@@ -3638,10 +3634,6 @@
                     currentLang = part;
                     break;
                 }
-            }
-            if (!currentLang) {
-                const config = window.__WelineThemeConfig || {};
-                currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
             }
 
             const currencyUrl = buildLocalizedFrontendPath(currentPath, currency, currentLang) + sanitizeLanguageSearch(window.location.search || '');

@@ -397,17 +397,28 @@
             }
         }
 
-        const rawTargetCurrency = options.currency || currentCurrency || getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || config.defaultCurrency || 'CNY';
-        const targetCurrency = isSupportedCurrencyCode(rawTargetCurrency, config) ? normalizeCurrencyCode(rawTargetCurrency) : '';
-        const targetLang = options.lang || currentLang || getCookie('WELINE_USER_LANG') || config.currentLang || 'zh_Hans_CN';
+        const rawTargetCurrency = Object.prototype.hasOwnProperty.call(options, 'currency')
+            ? options.currency
+            : currentCurrency;
+        const targetCurrency = isSupportedCurrencyCode(rawTargetCurrency, config)
+            ? normalizeCurrencyCode(rawTargetCurrency)
+            : '';
+        // Currency/language switches are independent: never invent the other axis
+        // from cookie/config. Only keep what is already in the path (or explicitly set).
+        const targetLang = Object.prototype.hasOwnProperty.call(options, 'lang')
+            ? String(options.lang || '')
+            : currentLang;
 
+        const defaultCurrency = normalizeCurrencyCode(config.defaultCurrency || 'CNY');
         const out = [];
         if (prefix) {
             out.push(prefix);
         }
-        if (targetCurrency) {
+        // Default currency omitted; non-default kept / set by currency switcher.
+        if (targetCurrency && targetCurrency !== defaultCurrency) {
             out.push(targetCurrency);
         }
+        // Backend keeps locale when present (including default) for path routing.
         if (targetLang) {
             out.push(targetLang);
         }
