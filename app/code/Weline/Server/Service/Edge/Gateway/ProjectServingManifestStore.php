@@ -321,11 +321,17 @@ final class ProjectServingManifestStore
             }
         }
         // Local loopback fact keys remain valid without a public TLD.
+        // WLS local start commonly uses 127.0.0.1 / ::1 as the serving host.
         if ($body === 'localhost') {
             return $wildcard ? '*.' . $body : $body;
         }
-        if (\filter_var($body, FILTER_VALIDATE_IP) !== false
-            || \strlen($body) > 253
+        if (\filter_var($body, FILTER_VALIDATE_IP) !== false) {
+            if (!$wildcard && self::isLoopbackIpLiteral($body)) {
+                return self::canonicalLoopbackIpLiteral($body);
+            }
+            throw new \InvalidArgumentException('Serving manifest host is invalid: ' . $host);
+        }
+        if (\strlen($body) > 253
             || \preg_match(
                 '/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)'
                     . '(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))+\z/D',
@@ -335,6 +341,32 @@ final class ProjectServingManifestStore
             throw new \InvalidArgumentException('Serving manifest host is invalid: ' . $host);
         }
         return $wildcard ? '*.' . $body : $body;
+    }
+
+    private static function isLoopbackIpLiteral(string $ip): bool
+    {
+        if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+            return \str_starts_with($ip, '127.');
+        }
+        if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+            $packed = @\inet_pton($ip);
+            return \is_string($packed)
+                && \strlen($packed) === 16
+                && $packed === "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\1";
+        }
+
+        return false;
+    }
+
+    private static function canonicalLoopbackIpLiteral(string $ip): string
+    {
+        $packed = @\inet_pton($ip);
+        $canonical = \is_string($packed) ? @\inet_ntop($packed) : false;
+        if (!\is_string($canonical) || $canonical === '') {
+            throw new \InvalidArgumentException('Serving manifest host is invalid: ' . $ip);
+        }
+
+        return \strtolower($canonical);
     }
 
     /** @param array<string,mixed> $registration @return array<string,mixed> */
