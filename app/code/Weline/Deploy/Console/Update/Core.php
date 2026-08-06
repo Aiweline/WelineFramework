@@ -226,6 +226,9 @@ class Core extends CommandAbstract
         $this->printer->note(__('  - 删除文件：%{1} 个', [$this->deletedFiles]));
         $this->printer->note(__('  - 跳过文件：%{1} 个（受保护或排除的文件）', [$this->skippedFiles]));
         $this->printer->note('');
+
+        // 最后打印本次落到的最新 commit 详情，便于确认更新到哪一版
+        $this->printLatestSyncedCommitDetails($tmpDir);
     }
 
     /**
@@ -247,6 +250,104 @@ class Core extends CommandAbstract
             '✓ 下次冲突检测基线已更新为缓存仓 commit %{1}（仅用于判断本地核心是否被私改；下次更新仍会先拉线上最新 tip）',
             [$short]
         ));
+    }
+
+    /**
+     * 在命令最末打印本次同步到的最新 commit 完整信息（hash/作者/时间/标题/正文）。
+     */
+    private function printLatestSyncedCommitDetails(string $tmpDir): void
+    {
+        $gitDir = $tmpDir . DS . '.git';
+        if (!is_dir($gitDir)) {
+            return;
+        }
+
+        $format = implode('%n', [
+            'hash=%H',
+            'short=%h',
+            'author=%an <%ae>',
+            'date=%ci',
+            'subject=%s',
+            'body=%b',
+        ]);
+        $logOutput = [];
+        $logCode = $this->runGitCommand($tmpDir, ['log', '-1', '--format=' . $format], $logOutput);
+        if ($logCode !== 0 || $logOutput === []) {
+            return;
+        }
+
+        $fields = [
+            'hash' => '',
+            'short' => '',
+            'author' => '',
+            'date' => '',
+            'subject' => '',
+        ];
+        $bodyLines = [];
+        $inBody = false;
+        foreach ($logOutput as $line) {
+            $line = (string)$line;
+            if (!$inBody) {
+                if (str_starts_with($line, 'hash=')) {
+                    $fields['hash'] = substr($line, 5);
+                    continue;
+                }
+                if (str_starts_with($line, 'short=')) {
+                    $fields['short'] = substr($line, 6);
+                    continue;
+                }
+                if (str_starts_with($line, 'author=')) {
+                    $fields['author'] = substr($line, 7);
+                    continue;
+                }
+                if (str_starts_with($line, 'date=')) {
+                    $fields['date'] = substr($line, 5);
+                    continue;
+                }
+                if (str_starts_with($line, 'subject=')) {
+                    $fields['subject'] = substr($line, 8);
+                    continue;
+                }
+                if (str_starts_with($line, 'body=')) {
+                    $inBody = true;
+                    $first = substr($line, 5);
+                    if ($first !== '') {
+                        $bodyLines[] = $first;
+                    }
+                    continue;
+                }
+            } else {
+                $bodyLines[] = $line;
+            }
+        }
+
+        while ($bodyLines !== [] && trim((string)end($bodyLines)) === '') {
+            array_pop($bodyLines);
+        }
+
+        $this->printer->setup('───────────────────────────────────────────────────────────────');
+        $this->printer->success(__('本次核心已更新到最新 commit：'));
+        $this->printer->note(__('  commit：%{1}（%{2}）', [
+            $fields['short'] !== '' ? $fields['short'] : '?',
+            $fields['hash'] !== '' ? $fields['hash'] : '?',
+        ]));
+        if ($fields['author'] !== '') {
+            $this->printer->note(__('  作者：%{1}', [$fields['author']]));
+        }
+        if ($fields['date'] !== '') {
+            $this->printer->note(__('  时间：%{1}', [$fields['date']]));
+        }
+        if ($fields['subject'] !== '') {
+            $this->printer->note(__('  标题：%{1}', [$fields['subject']]));
+        }
+        if ($bodyLines !== []) {
+            $this->printer->note(__('  内容：'));
+            foreach ($bodyLines as $bodyLine) {
+                $this->printer->note('    ' . $bodyLine);
+            }
+        }
+        $this->printer->setup('───────────────────────────────────────────────────────────────');
+        $this->printer->note('');
     }
 
     private function checkGit(): void
