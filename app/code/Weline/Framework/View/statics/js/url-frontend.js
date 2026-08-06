@@ -440,9 +440,38 @@
             }
         }
 
+        // Capture locale/currency already present in the path before stripping.
+        const pathSegments = String(path || '/').split('/').filter(Boolean);
+        let pathCurrency = '';
+        let pathLang = '';
+        for (const part of pathSegments) {
+            if (!pathCurrency && isCurrencySegment(part, config)) {
+                pathCurrency = normalizeCurrencyCode(part);
+                continue;
+            }
+            if (!pathLang && isLangSegment(part)) {
+                pathLang = normalizeLangCode(part);
+            }
+        }
+
         path = stripLocaleSegments(path, config);
-        const targetCurrency = normalizeCurrencyCode('currency' === type && code ? code : currentCurrency);
-        const targetLang = normalizeLangCode('lang' === type && code ? code : currentLang);
+
+        // Language and currency switches are independent:
+        // - currency switch only changes currency; keep locale already in the path
+        // - language switch only changes locale; keep currency already in the path
+        // Never invent the other axis from cookie/config (default segments stay omitted).
+        let targetCurrency = '';
+        let targetLang = '';
+        if (type === 'currency') {
+            targetCurrency = normalizeCurrencyCode(code);
+            targetLang = pathLang;
+        } else if (type === 'lang') {
+            targetLang = normalizeLangCode(code);
+            targetCurrency = pathCurrency;
+        } else {
+            targetCurrency = normalizeCurrencyCode(code || pathCurrency || currentCurrency);
+            targetLang = normalizeLangCode(code || pathLang || currentLang);
+        }
 
         if (shouldOutputCurrency(targetCurrency, config)) {
             prePath += '/' + targetCurrency;
