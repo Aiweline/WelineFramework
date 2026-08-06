@@ -5551,6 +5551,19 @@ CNF;
         if ($body === 'localhost') {
             return $wildcard ? '*.' . $body : $body;
         }
+        if (\filter_var($body, FILTER_VALIDATE_IP) !== false) {
+            if (!$wildcard && (
+                \str_starts_with($body, '127.')
+                || $body === '::1'
+            )) {
+                $packed = @\inet_pton($body);
+                $canonical = \is_string($packed) ? @\inet_ntop($packed) : false;
+                if (\is_string($canonical) && $canonical !== '') {
+                    return \strtolower($canonical);
+                }
+            }
+            throw new \RuntimeException('Gateway certificate fact domain is outside protocol bounds.');
+        }
         if (\strlen($body) > 253
             || \preg_match(
                 '/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)'
