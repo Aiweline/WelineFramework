@@ -1401,8 +1401,11 @@ final class GatewayRegistrationBuilder
             }
         }
         // Local loopback fact keys remain valid without a public TLD.
-        if ($body === 'localhost') {
-            return $wildcard ? '*.' . $body : $body;
+        if ($body === 'localhost'
+            || $body === '127.0.0.1'
+            || $body === '::1'
+        ) {
+            return $wildcard && $body === 'localhost' ? '*.' . $body : ($wildcard ? null : $body);
         }
         if (\strlen($body) > 253
             || \preg_match(

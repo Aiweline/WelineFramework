@@ -44,6 +44,17 @@ final class ProjectServingManifestStoreTest extends TestCase
         $this->removeTree($this->root);
     }
 
+    public function testNormalizeHostAllowsLoopbackLiteralsUsedByLocalWls(): void
+    {
+        self::assertSame('localhost', ProjectServingManifestStore::normalizeHost('localhost'));
+        self::assertSame('*.localhost', ProjectServingManifestStore::normalizeHost('*.localhost'));
+        self::assertSame('127.0.0.1', ProjectServingManifestStore::normalizeHost('127.0.0.1'));
+        self::assertSame('::1', ProjectServingManifestStore::normalizeHost('::1'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        ProjectServingManifestStore::normalizeHost('8.8.8.8');
+    }
+
     public function testWholeProjectPublicationIsAtomicIdempotentAndFenceBound(): void
     {
         $registration = $this->registration('primary', [
