@@ -91,6 +91,7 @@ Use the project-intelligence contract supplied by the active runtime. If it is u
 
 - `git commit` requires an explicit commit request. `git push` is a separate external action and requires an explicit push/release request; a commit request alone does not authorize network writes.
 - Stage only task files, review the staged diff, and never include secrets. Do not force-push protected branches without explicit authorization.
+- Do not add `Co-authored-by: Cursor`, `Made-with: Cursor`, or any Cursor/agent attribution trailer to commits or PRs. Commit Author stays the human account only.
 - Deployment requires a confirmed repository, target, environment, account/SSH configuration, directory, branch, and target-owned procedure. Do not infer production targets from historical notes.
 - Exact passphrases such as 「分仓」 and 「分项」 trigger only their owning skills. Similar wording does not expand scope.
 
