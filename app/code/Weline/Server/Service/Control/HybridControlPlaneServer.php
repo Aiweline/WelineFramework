@@ -828,6 +828,10 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             'dynamic_first_render',
             'listen_capabilities',
             'namespace_authority_clock',
+            'serving_manifest_generation',
+            'serving_manifest_digest',
+            'serving_manifest_route_count',
+            'host_lease_id',
         ] as $field) {
             if (\array_key_exists($field, $pending)) {
                 $message[$field] = $pending[$field];

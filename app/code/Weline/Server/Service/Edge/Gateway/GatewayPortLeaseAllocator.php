@@ -1097,18 +1097,50 @@ final class GatewayPortLeaseAllocator
         ) {
             throw new \RuntimeException('WLS port lease managed-process record is unavailable.');
         }
+        if (!$requireLaunchId) {
+            // Master self-check: prove the calling process still owns its managed
+            // lease + birth identity. Do not require cli_set_process_title() to
+            // equal the canonical name; macOS often keeps the full PHP argv.
+            if (!$this->processAlive($pid)) {
+                throw new \RuntimeException('WLS port lease live process identity could not be proven.');
+            }
+            $birth = $this->processBirthIdentity($pid);
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1) {
+                throw new \RuntimeException('WLS port lease process birth identity is unavailable.');
+            }
+            return $birth;
+        }
+        // Prefer immutable argv fences over cli_set_process_title(). On
+        // macOS/Linux the OS cmdline is not always rewritten to the
+        // generation-scoped title, so title equality falsely rejects live
+        // Workers that still carry --name/--launch-id.
         $probe = Processer::probeManagedProcessIdentity(
             $pid,
             $processName,
-            $requireLaunchId ? $launchId : '',
+            $launchId,
             $expectedPname,
             true,
+            [
+                'name' => $processName,
+                'launch-id' => $launchId,
+            ],
         );
         if (!\hash_equals(
             Processer::PROCESS_STATE_RUNNING,
             (string)($probe['state'] ?? ''),
         )) {
-            throw new \RuntimeException('WLS port lease live process identity could not be proven.');
+            // Darwin often exposes neither a rewritten title nor the original
+            // --name/--launch-id argv after Processer adopts the child. The
+            // managed lease record already matched pid+name+launch_id above;
+            // accept with live PID + birth proof instead of failing closed on
+            // an unreliable OS cmdline rendering.
+            if (!$this->processAlive($pid)) {
+                throw new \RuntimeException(
+                    'WLS port lease live process identity could not be proven: '
+                    . (string)($probe['reason'] ?? 'unknown')
+                    . ' state=' . (string)($probe['state'] ?? '')
+                );
+            }
         }
         $birth = $this->processBirthIdentity($pid);
         if (\preg_match('/\A[a-f0-9]{64}\z/D', $birth) !== 1) {
