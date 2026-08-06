@@ -849,6 +849,10 @@ final class SupervisorServer
                 'dynamic_first_render',
                 'listen_capabilities',
                 'namespace_authority_clock',
+                'serving_manifest_generation',
+                'serving_manifest_digest',
+                'serving_manifest_route_count',
+                'host_lease_id',
             ] as $field) {
                 if (\array_key_exists($field, $decoded)) {
                     $readyCapabilities[$field] = $decoded[$field];
