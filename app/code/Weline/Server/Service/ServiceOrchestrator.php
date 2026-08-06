@@ -5861,16 +5861,31 @@ class ServiceOrchestrator
         if ($lease === [] || $this->context === null) {
             return;
         }
-        (new GatewayPortLeaseAllocator())->confirmTransferred(
-            $this->context->instanceName,
-            $port,
-            $ownerPid,
-            $ownerLaunchId,
-            (string)$lease['lease_id'],
-            (string)$lease['bind_host'],
-            $managedProcessName,
-            (string)$this->context->getConfig('wls.gateway.launch_id', ''),
-        );
+        try {
+            (new GatewayPortLeaseAllocator())->confirmTransferred(
+                $this->context->instanceName,
+                $port,
+                $ownerPid,
+                $ownerLaunchId,
+                (string)$lease['lease_id'],
+                (string)$lease['bind_host'],
+                $managedProcessName,
+                (string)$this->context->getConfig('wls.gateway.launch_id', ''),
+            );
+        } catch (\Throwable $throwable) {
+            $probe = Processer::probeManagedProcessIdentity(
+                $ownerPid,
+                $managedProcessName,
+                $ownerLaunchId,
+                '--name=' . $managedProcessName,
+                true,
+            );
+            WlsLogger::error_(
+                '[Orchestrator] public lease confirm probe: '
+                . \json_encode($probe, JSON_UNESCAPED_SLASHES)
+            );
+            throw $throwable;
+        }
         $this->publicEdgeLeaseConfirmed = true;
     }
 
@@ -16273,6 +16288,12 @@ class ServiceOrchestrator
                 ) {
                     $servingManifestReadyRejection =
                         'serving_manifest_ready_proof_invalid';
+                    WlsLogger::error_(
+                        '[Orchestrator] serving_manifest_ready_proof_invalid detail: generation='
+                        . $reportedServingManifestGeneration
+                        . ' digest=' . $reportedServingManifestDigest
+                        . ' route_count=' . $reportedServingManifestRouteCount
+                    );
                 } else {
                     try {
                         $readyManifest = $this->currentSslServingManifestFence();
@@ -16560,7 +16581,7 @@ class ServiceOrchestrator
                     $instance->getTrackingPid(),
                     $reportedPort,
                     $this->getInstanceProcessName($instance),
-                    $instance->launchId,
+                    $this->getInstanceLaunchId($instance),
                 );
                 if ($this->isWindowsRuntime()) {
                     $this->markWindowsListenerAdoptionActive($instance, $publicLease);
@@ -16628,7 +16649,7 @@ class ServiceOrchestrator
                     $instance->getTrackingPid(),
                     $reportedPort,
                     $managedProcessName,
-                    $instance->launchId,
+                    $this->getInstanceLaunchId($instance),
                 );
                 if ($this->isWindowsRuntime()) {
                     $this->markWindowsListenerAdoptionActive($instance, $initialBackendLease);
