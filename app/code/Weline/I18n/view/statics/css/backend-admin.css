@@ -123,6 +123,14 @@ html[data-bs-theme="dark"] .i18n-admin-page {
     line-height: 1.1;
 }
 
+.i18n-admin-stat-tiles .card-body {
+    padding: 1rem 1.05rem;
+}
+
+.i18n-admin-stat-tiles .fs-3 {
+    line-height: 1.15;
+}
+
 .i18n-admin-note {
     display: flex;
     gap: 0.75rem;
@@ -343,5 +351,37 @@ body .weline-language-select-dropdown[id^="dictionary_"] {
     .i18n-admin-actions > form,
     .i18n-admin-actions > a {
         flex: 1 1 auto;
+    }
+
+    .i18n-admin-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.55rem;
+    }
+
+    .i18n-admin-metric {
+        padding: 0.7rem 0.75rem;
+        border-radius: 0.85rem;
+    }
+
+    .i18n-admin-metric-label {
+        font-size: 0.75rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .i18n-admin-metric-value {
+        font-size: 1.25rem;
+    }
+
+    .i18n-admin-stat-tiles .card-body {
+        padding: 0.7rem 0.75rem;
+    }
+
+    .i18n-admin-stat-tiles .text-muted.small {
+        font-size: 0.75rem;
+        line-height: 1.2;
+    }
+
+    .i18n-admin-stat-tiles .fs-3 {
+        font-size: 1.25rem !important;
     }
 }

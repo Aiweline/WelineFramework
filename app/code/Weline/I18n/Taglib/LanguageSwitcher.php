@@ -213,9 +213,19 @@ class LanguageSwitcher implements TaglibInterface
             if (!is_string($backendRouteJson)) {
                 $backendRouteJson = '""';
             }
+            $websiteMount = self::resolveWebsiteMountPath($request instanceof Request ? $request : null);
+            $websiteMountJson = json_encode($websiteMount, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+            if (!is_string($websiteMountJson)) {
+                $websiteMountJson = '""';
+            }
+            // Website mount is a fixed base ([website]/[currency?]/[lang?]/[path]),
+            // never a splittable route segment mixed with locale/page parts.
             $defaultAwareBuildLangHrefFallbackJs =
                 'buildLangHrefFallback=function(lang){'
                 . 'var pathname=window.location.pathname||"/";var search=window.location.search||"";'
+                . 'var mount=String(' . $websiteMountJson . '||"").replace(/^\\/+|\\/+$/g,"");'
+                . 'if(mount){var mountPrefix="/"+mount;var lower=String(pathname).toLowerCase();var mp=mountPrefix.toLowerCase();'
+                . 'if(lower===mp||lower.indexOf(mp+"/")===0){pathname=pathname.slice(mountPrefix.length)||"/";}}'
                 . 'var pathParts=String(pathname||"/").split("/").filter(Boolean);'
                 . 'var currencyPattern=/^[A-Z]{3}$/;var langPattern=/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;'
                 . 'var cfg=window.__WelineThemeConfig||{};'
@@ -231,9 +241,13 @@ class LanguageSwitcher implements TaglibInterface
                 . 'var prefixIndex=-1;if(backendKey){prefixIndex=pathParts.findIndex(function(part){return !langPattern.test(part)&&!isCurrency(part)&&String(part).toLowerCase()===backendKey.toLowerCase();});}'
                 . 'var prefixSegment=prefixIndex>=0?pathParts[prefixIndex]:backendKey;var remain=[];'
                 . 'pathParts.forEach(function(part,index){if(langPattern.test(part)||isCurrency(part)){return;}if(index===prefixIndex){return;}remain.push(part);});'
-                . 'var out=[];if(prefixSegment){out.push(prefixSegment);}if(currency&&currency!==defaultCurrency){out.push(currency);}'
+                . 'var out=[];if(prefixSegment){out.push(prefixSegment);}'
+                . 'if(currency&&currency!==defaultCurrency){out.push(currency);}'
                 . 'var normalizedLang=String(lang||"").replace(/-/g,"_");if(normalizedLang&&normalizedLang.toLowerCase()!==defaultLang){out.push(normalizedLang);}'
-                . 'if(remain.length){out.push.apply(out,remain);}return "/"+out.join("/")+(search||"");'
+                . 'if(remain.length){out.push.apply(out,remain);}'
+                . 'var relativePath=out.length?("/"+out.join("/")):"/";'
+                . 'if(prefixSegment||!mount){return relativePath+(search||"");}'
+                . 'return (relativePath==="/"?("/"+mount+"/"):("/"+mount+relativePath))+(search||"");'
                 . '};';
             $htmlCacheKey = self::buildHtmlCacheKey(
                 $isBackendArea,
@@ -247,7 +261,8 @@ class LanguageSwitcher implements TaglibInterface
                 \array_keys($welineLanguages)
             ) . '|language_request=' . ($showLanguageRequest ? '1' : '0')
                 . '|navigation=' . $navigation
-                . '|markup=v2-lang-native-path-nav-4';
+                . '|markup=v2-lang-native-path-nav-8'
+                . '|mount=' . $websiteMount;
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
                 return self::$htmlCache[$htmlCacheKey]['html'];
@@ -264,6 +279,8 @@ class LanguageSwitcher implements TaglibInterface
                 . $switcherId
                 . '" data-i18n-navigation="'
                 . htmlspecialchars($navigation, ENT_QUOTES, 'UTF-8')
+                . '" data-website-mount="'
+                . htmlspecialchars($websiteMount, ENT_QUOTES, 'UTF-8')
                 . '">';
             $html[] = '    <button type="button" id="' . htmlspecialchars($toggleId, ENT_QUOTES, 'UTF-8') . '" class="btn header-item waves-effect weline-i18n-switcher-toggle position-relative" style="z-index:1056" aria-haspopup="true" aria-expanded="false" aria-controls="' . htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8') . '">';
             if ($renderFor === 'js') {
@@ -350,8 +367,10 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = '</div>';
             $html[] = '<style>';
             // Closed by default even when Bootstrap `.dropdown-menu{display:none}` is absent.
-            $html[] = '.weline-i18n-switcher-panel{display:none;position:absolute;z-index:1200;min-width:min(320px,calc(100vw - 16px));max-width:min(420px,calc(100vw - 16px));max-height:min(70vh,420px);padding:0.5rem;background:var(--backend-color-card-bg,var(--backend-color-bg-primary,#fff));border:1px solid var(--backend-color-card-border,var(--backend-color-border-light,#e9ecef));border-radius:var(--backend-border-radius-xl,1rem);box-shadow:var(--backend-dropdown-shadow,0 10px 30px rgba(0,0,0,.12));overflow:auto;}';
-            $html[] = '.weline-i18n-switcher-panel.show{display:block;position:fixed;top:auto;right:auto;left:auto;bottom:auto;}';
+            // z-index must beat .main-content paint order; panel is portaled to <body> while open
+            // so #page-topbar overflow/backdrop-filter cannot clip or trap it.
+            $html[] = '.weline-i18n-switcher-panel{display:none;position:absolute;z-index:10055;min-width:min(320px,calc(100vw - 16px));max-width:min(420px,calc(100vw - 16px));max-height:min(70vh,420px);padding:0.5rem;background:var(--backend-color-card-bg,var(--backend-color-bg-primary,#fff));border:1px solid var(--backend-color-card-border,var(--backend-color-border-light,#e9ecef));border-radius:var(--backend-border-radius-xl,1rem);box-shadow:var(--backend-dropdown-shadow,0 10px 30px rgba(0,0,0,.12));overflow:auto;}';
+            $html[] = '.weline-i18n-switcher-panel.show,body>.weline-i18n-switcher-panel.show{display:block;position:fixed;top:auto !important;right:auto !important;left:auto !important;bottom:auto !important;z-index:10055;}';
             $html[] = '.weline-i18n-switcher-panel .weline-language-search{min-height:var(--backend-form-control-height,44px);height:var(--backend-form-control-height,44px);padding:0.5rem 0.85rem;line-height:var(--backend-line-height-base,1.5);border:1px solid var(--backend-color-input-border,var(--backend-color-border,#ced4da));border-radius:var(--backend-border-radius-md,0.5rem);background:var(--backend-color-input-bg,var(--backend-color-bg-primary,#fff));color:var(--backend-color-text-primary,#212529);font-size:var(--backend-font-size-base,.875rem);box-shadow:none;transition:border-color .18s ease,box-shadow .18s ease,background-color .18s ease;}';
             $html[] = '.weline-i18n-switcher-panel .weline-language-search::placeholder{color:var(--backend-color-text-placeholder,var(--backend-color-text-tertiary,#adb5bd));opacity:1;}';
             $html[] = '.weline-i18n-switcher-panel .weline-language-search:focus-visible{border-color:var(--backend-color-input-focus-border,var(--backend-color-primary,#556ee6));background:var(--backend-color-bg-primary,#fff);color:var(--backend-color-text-primary,#212529);box-shadow:var(--backend-focus-ring,0 0 0 0.2rem rgba(85,110,230,.25));outline:none;}';
@@ -386,8 +405,11 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = 'var emptyId="weline-language-empty-' . $switcherId . '";';
             $html[] = 'function ensureEmpty(){var empty=root.querySelector("#"+emptyId);if(!empty){empty=document.createElement("div");empty.id=emptyId;empty.className="dropdown-item text-muted small";empty.style.display="none";empty.textContent="' . addslashes(__('无匹配语言')) . '";panel.appendChild(empty);}return empty;}';
             $html[] = 'function filter(){if(!input){return;}var kw=String(input.value||"").trim().toLowerCase();var visible=0;groups().forEach(function(group){var groupVisible=0;group.querySelectorAll(".weline-language-option").forEach(function(opt){var search=(opt.getAttribute("data-search")||"").toLowerCase();var ok=(kw==="")||search.indexOf(kw)!==-1;opt.style.display=ok?"":"none";opt.setAttribute("aria-hidden",ok?"false":"true");if(ok){groupVisible++;}});group.style.display=groupVisible>0?"":"none";visible+=groupVisible;});var empty=ensureEmpty();empty.style.display=visible===0?"":"none";}';
-            $html[] = 'function clearPanelPlacement(){panel.style.position="";panel.style.top="";panel.style.left="";panel.style.right="";panel.style.bottom="";panel.style.maxHeight="";panel.style.width="";panel.style.visibility="";panel.style.setProperty("display","none","important");}';
-            $html[] = 'function placePanelAgainstToggle(){var margin=8,gap=8;var tr=toggle.getBoundingClientRect();panel.style.position="fixed";panel.style.right="auto";panel.style.bottom="auto";panel.style.left="0px";panel.style.top="0px";panel.style.visibility="hidden";panel.style.maxHeight="";panel.style.setProperty("display","block","important");var pw=Math.max(panel.offsetWidth||0,Math.min(320,Math.max(0,(window.innerWidth||0)-16)));var ph=panel.offsetHeight||0;var vw=window.innerWidth||document.documentElement.clientWidth||pw;var vh=window.innerHeight||document.documentElement.clientHeight||ph;if(pw>vw-margin*2){pw=Math.max(160,vw-margin*2);panel.style.width=pw+"px";pw=panel.offsetWidth||pw;ph=panel.offsetHeight||ph;}var left=tr.right-pw;if(left<margin){left=margin;}if(left+pw>vw-margin){left=Math.max(margin,vw-margin-pw);}var top=tr.bottom+gap;if(top+ph>vh-margin){var above=tr.top-gap-ph;if(above>=margin){top=above;}else{top=Math.max(margin,Math.min(top,vh-margin-Math.min(ph,vh-margin*2)));panel.style.maxHeight=Math.max(120,vh-top-margin)+"px";ph=panel.offsetHeight||ph;if(top+ph>vh-margin){top=Math.max(margin,vh-margin-ph);}}}panel.style.left=Math.round(left)+"px";panel.style.top=Math.round(top)+"px";panel.style.visibility="";}';
+            $html[] = 'var panelHome=panel.parentNode;var panelNext=panel.nextSibling;';
+            $html[] = 'function mountPanelToBody(){if(!document.body){return;}if(panel.parentNode!==document.body){document.body.appendChild(panel);}panel.style.zIndex="10055";}';
+            $html[] = 'function restorePanelHome(){if(!panelHome){return;}if(panel.parentNode===panelHome){return;}if(panelNext&&panelNext.parentNode===panelHome){panelHome.insertBefore(panel,panelNext);}else{panelHome.appendChild(panel);}}';
+            $html[] = 'function clearPanelPlacement(){panel.style.position="";panel.style.removeProperty("top");panel.style.removeProperty("left");panel.style.removeProperty("right");panel.style.removeProperty("bottom");panel.style.maxHeight="";panel.style.width="";panel.style.visibility="";panel.style.zIndex="";panel.style.setProperty("display","none","important");restorePanelHome();}';
+            $html[] = 'function placePanelAgainstToggle(){var margin=8,gap=8;var tr=toggle.getBoundingClientRect();mountPanelToBody();panel.style.position="fixed";panel.style.setProperty("right","auto","important");panel.style.setProperty("bottom","auto","important");panel.style.setProperty("left","0px","important");panel.style.setProperty("top","0px","important");panel.style.visibility="hidden";panel.style.maxHeight="";panel.style.setProperty("display","block","important");panel.style.zIndex="10055";var pw=Math.max(panel.offsetWidth||0,Math.min(320,Math.max(0,(window.innerWidth||0)-16)));var ph=panel.offsetHeight||0;var vw=window.innerWidth||document.documentElement.clientWidth||pw;var vh=window.innerHeight||document.documentElement.clientHeight||ph;if(pw>vw-margin*2){pw=Math.max(160,vw-margin*2);panel.style.width=pw+"px";pw=panel.offsetWidth||pw;ph=panel.offsetHeight||ph;}var left=tr.right-pw;if(left<margin){left=margin;}if(left+pw>vw-margin){left=Math.max(margin,vw-margin-pw);}var top=tr.bottom+gap;if(top+ph>vh-margin){var above=tr.top-gap-ph;if(above>=margin){top=above;}else{top=Math.max(margin,Math.min(top,vh-margin-Math.min(ph,vh-margin*2)));panel.style.maxHeight=Math.max(120,vh-top-margin)+"px";ph=panel.offsetHeight||ph;if(top+ph>vh-margin){top=Math.max(margin,vh-margin-ph);}}}panel.style.setProperty("left",Math.round(left)+"px","important");panel.style.setProperty("top",Math.round(top)+"px","important");panel.style.visibility="";}';
             $html[] = 'function openMenu(){panel.hidden=false;panel.classList.add("show");toggle.setAttribute("aria-expanded","true");panel.style.setProperty("display","block","important");placePanelAgainstToggle();if(input){input.value="";filter();setTimeout(function(){try{input.focus();}catch(e){}},0);requestAnimationFrame(function(){placePanelAgainstToggle();});}}';
             $html[] = 'function closeMenu(reason){panel.classList.remove("show");panel.hidden=true;toggle.setAttribute("aria-expanded","false");clearPanelPlacement();if(input){input.value="";filter();}}';
             $html[] = 'function isOpen(){return panel.classList.contains("show");}';
@@ -400,7 +422,7 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = 'panel.addEventListener("mousedown",stopInside);';
             $html[] = 'panel.addEventListener("click",stopInside);';
             $html[] = 'if(input){input.addEventListener("input",function(){filter();});input.addEventListener("pointerdown",stopInside);input.addEventListener("mousedown",stopInside);input.addEventListener("click",stopInside);}';
-            $html[] = 'function isFromRoot(ev){if(!ev){return false;}if(typeof ev.composedPath==="function"){var path=ev.composedPath();return Array.isArray(path)&&path.indexOf(root)!==-1;}return root.contains(ev.target);}';
+            $html[] = 'function isFromRoot(ev){if(!ev){return false;}if(typeof ev.composedPath==="function"){var path=ev.composedPath();return Array.isArray(path)&&(path.indexOf(root)!==-1||path.indexOf(panel)!==-1);}return root.contains(ev.target)||panel.contains(ev.target);}';
             $html[] = 'document.addEventListener("pointerdown",function(ev){if(!isOpen()){return;}if(isFromRoot(ev)){return;}closeMenu("doc-pointerdown-outside");},true);';
             $html[] = 'document.addEventListener("mousedown",function(ev){if(!isOpen()){return;}var fromRoot=isFromRoot(ev);if(fromRoot){return;}closeMenu("doc-mousedown-outside");},true);';
             $html[] = 'document.addEventListener("click",function(ev){if(!isOpen()){return;}var fromRoot=isFromRoot(ev);if(fromRoot){return;}closeMenu("doc-click-outside");},true);';
@@ -1139,7 +1161,9 @@ class LanguageSwitcher implements TaglibInterface
                 return '/';
             }
 
-            return $remaining === [] ? '/' : '/' . $remainingPath;
+            $storefrontPath = $remaining === [] ? '/' : '/' . $remainingPath;
+
+            return self::stripWebsiteMountFromStorefrontPath($storefrontPath, $request);
         }
 
         $fallback = (string)($request->getUrlPath() ?: '/');
@@ -1147,7 +1171,62 @@ class LanguageSwitcher implements TaglibInterface
             return '/';
         }
 
-        return $fallback !== '' ? $fallback : '/';
+        return self::stripWebsiteMountFromStorefrontPath(
+            $fallback !== '' ? $fallback : '/',
+            $request
+        );
+    }
+
+    /**
+     * Website mount sub_path (e.g. aisite_accept_ok) must not appear in the
+     * storefront-relative path used for language hrefs — otherwise locale
+     * builders emit /hi_IN/aisite_accept_ok and mount prefixers double it.
+     */
+    private static function resolveWebsiteMountPath(?Request $request = null): string
+    {
+        $candidates = [
+            $request instanceof Request ? (string)($request->getServer('WELINE_WEBSITE_URL') ?? '') : '',
+            (string)WelineEnv::server('WELINE_WEBSITE_URL', ''),
+            (string)WelineEnv::get('website_url', ''),
+            (string)($_SERVER['WELINE_WEBSITE_URL'] ?? ''),
+        ];
+        foreach ($candidates as $websiteUrl) {
+            $websiteUrl = trim((string)$websiteUrl);
+            if ($websiteUrl === '') {
+                continue;
+            }
+            $path = '';
+            if (str_contains($websiteUrl, '://')) {
+                $parsed = parse_url($websiteUrl, PHP_URL_PATH);
+                $path = is_string($parsed) ? $parsed : '';
+            } elseif (str_starts_with($websiteUrl, '/')) {
+                $path = $websiteUrl;
+            }
+            $mount = trim(str_replace('\\', '/', $path), '/');
+            if ($mount !== '') {
+                return $mount;
+            }
+        }
+
+        return '';
+    }
+
+    private static function stripWebsiteMountFromStorefrontPath(string $path, ?Request $request = null): string
+    {
+        $mount = self::resolveWebsiteMountPath($request);
+        if ($mount === '') {
+            return $path !== '' ? $path : '/';
+        }
+
+        $segments = array_values(array_filter(
+            explode('/', trim(str_replace('\\', '/', $path), '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        while ($segments !== [] && strcasecmp((string)$segments[0], $mount) === 0) {
+            array_shift($segments);
+        }
+
+        return $segments === [] ? '/' : '/' . implode('/', $segments);
     }
 
     /**
@@ -1156,6 +1235,9 @@ class LanguageSwitcher implements TaglibInterface
      * Frontend: delegates to LocalizedUrlBuilder (default currency/locale omitted).
      * Backend: always keeps locale segment; still omits default currency.
      * Non-default currency is preserved until the currency switcher changes it.
+     *
+     * Website mount sub_path is a fixed base ([website]/[currency?]/[lang?]/[path])
+     * and must never be mixed into locale/page segment splitting.
      */
     private static function buildLanguageHref(
         string $path,
@@ -1165,7 +1247,12 @@ class LanguageSwitcher implements TaglibInterface
         string $preferredPrefix = ''
     ): string {
         $preferredPrefix = trim($preferredPrefix, '/');
-        $path = (string)(parse_url($path, PHP_URL_PATH) ?: $path ?: '/');
+        $websiteMount = self::resolveWebsiteMountPath(null);
+        // Peel fixed website base before any locale/currency/page splitting.
+        $path = self::stripWebsiteMountFromStorefrontPath(
+            (string)(parse_url($path, PHP_URL_PATH) ?: $path ?: '/'),
+            null
+        );
         $pathParts = array_values(array_filter(explode('/', $path), static fn($part) => $part !== ''));
         $langPattern = '/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i';
         $prefixIndex = -1;
@@ -1222,6 +1309,10 @@ class LanguageSwitcher implements TaglibInterface
             if ($index === $prefixIndex) {
                 continue;
             }
+            // Mount must never re-enter relative remain after base peel.
+            if ($websiteMount !== '' && strcasecmp((string)$part, $websiteMount) === 0) {
+                continue;
+            }
             $remain[] = $part;
         }
 
@@ -1238,6 +1329,7 @@ class LanguageSwitcher implements TaglibInterface
         $routePath = $remain === [] ? '/' : '/' . implode('/', $remain);
         $normalizedSearch = self::sanitizeLanguageSearch($search);
 
+        $relativeHref = '';
         // Frontend: system LocalizedUrlBuilder (omits default currency + default locale).
         if ($prefix === '') {
             try {
@@ -1253,28 +1345,60 @@ class LanguageSwitcher implements TaglibInterface
                 );
                 $builtPath = parse_url($absolute, PHP_URL_PATH);
                 if (is_string($builtPath) && $builtPath !== '') {
-                    return $builtPath . ($normalizedSearch !== '' ? '?' . $normalizedSearch : '');
+                    $relativeHref = $builtPath;
                 }
             } catch (\Throwable) {
             }
         }
 
-        // Backend (or LocalizedUrlBuilder unavailable): keep locale always; omit default currency.
-        $out = [];
-        if ($prefix !== '') {
-            $out[] = $prefix;
-        }
-        if ($currency !== '') {
-            $out[] = $currency;
-        }
-        if ($targetLang !== '') {
-            $out[] = $targetLang;
-        }
-        if ($remain !== []) {
-            array_push($out, ...$remain);
+        if ($relativeHref === '') {
+            // Backend (or LocalizedUrlBuilder unavailable): keep locale always; omit default currency.
+            $out = [];
+            if ($prefix !== '') {
+                $out[] = $prefix;
+            }
+            if ($currency !== '') {
+                $out[] = $currency;
+            }
+            if ($targetLang !== '') {
+                $out[] = $targetLang;
+            }
+            if ($remain !== []) {
+                array_push($out, ...$remain);
+            }
+            $relativeHref = '/' . implode('/', $out);
         }
 
-        return '/' . implode('/', $out) . ($normalizedSearch !== '' ? '?' . $normalizedSearch : '');
+        // Re-attach fixed website base outside segment splitting.
+        if ($prefix === '' && $websiteMount !== '') {
+            $relativeHref = self::joinWebsiteMountAndRelativePath($websiteMount, $relativeHref);
+        }
+
+        return $relativeHref . ($normalizedSearch !== '' ? '?' . $normalizedSearch : '');
+    }
+
+    private static function joinWebsiteMountAndRelativePath(string $mount, string $relativePath): string
+    {
+        $mount = trim(str_replace('\\', '/', $mount), '/');
+        if ($mount === '') {
+            return $relativePath !== '' ? $relativePath : '/';
+        }
+
+        $relativePath = (string)(parse_url($relativePath, PHP_URL_PATH) ?: $relativePath ?: '/');
+        $segments = array_values(array_filter(
+            explode('/', trim(str_replace('\\', '/', $relativePath), '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        // Fixed base must not appear inside the relative route at any position.
+        $segments = array_values(array_filter(
+            $segments,
+            static fn(string $segment): bool => strcasecmp($segment, $mount) !== 0
+        ));
+        if ($segments === []) {
+            return '/' . $mount . '/';
+        }
+
+        return '/' . $mount . '/' . implode('/', $segments);
     }
 
     private static function defaultLanguage(): string

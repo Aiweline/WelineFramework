@@ -1,6 +1,7 @@
 name: WLS Gateway native runtime
 
 on:
+  workflow_call:
   push:
     paths:
       - "app/code/Weline/Server/Service/Edge/Gateway/Native/**"
@@ -84,6 +85,11 @@ jobs:
           '${{ matrix.arch }}'
       - name: Install locked PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Guard native workflow contracts against self-bypass
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayReleaseWorkflowCoverageTest.php
       - name: Install libsodium on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config
@@ -175,6 +181,12 @@ jobs:
       - name: Install locked PHP dependencies
         shell: pwsh
         run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Guard native workflow contracts against self-bypass
+        shell: pwsh
+        run: >-
+          php vendor/bin/phpunit
+          --bootstrap vendor/autoload.php
+          app/code/Weline/Server/Test/Unit/Service/Edge/Gateway/GatewayReleaseWorkflowCoverageTest.php
       - name: Install libsodium
         shell: pwsh
         run: vcpkg install libsodium:x64-windows

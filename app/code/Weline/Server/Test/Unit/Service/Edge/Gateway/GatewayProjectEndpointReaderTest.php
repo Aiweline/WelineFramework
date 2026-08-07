@@ -6,7 +6,6 @@ namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectEndpointReader;
-use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\ServerInstanceManager;
 
 final class GatewayProjectEndpointReaderTest extends TestCase
@@ -161,11 +160,15 @@ final class GatewayProjectEndpointReaderTest extends TestCase
         $manager->saveInstance($instance, ['port' => 28086]);
         self::assertNotFalse(@\copy($file, $backup));
         @\chmod($backup, 0600);
-        GatewayProjectStateFilesystem::atomicWrite(
+        // Plant a foreign current leaf beside retained recovery evidence.
+        // atomicWrite() refuse-layers over unresolved backups, so this fixture
+        // writes the torn current file directly.
+        self::assertNotFalse(@\file_put_contents(
             $file,
             "{\"name\":\"another-instance\",\"port\":28087}\n",
-            0600,
-        );
+            LOCK_EX,
+        ));
+        @\chmod($file, 0600);
 
         try {
             $manager->saveInstance($instance, ['port' => 28088]);

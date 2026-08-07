@@ -373,4 +373,62 @@ final class SessionServerSharedConsumerConsensusTest extends TestCase
         }
     }
 
+    public function testStartPublishesManagedProcessIdentityIntoSharedRegistry(): void
+    {
+        $role = 'session_server_unit_identity_publish';
+        $tokenFileName = 'session-server-identity-' . \str_replace('.', '-', (string) \microtime(true)) . '.token';
+        $persistPath = \sys_get_temp_dir() . '/wls_session_identity_' . \getmypid() . '/';
+        if (!\is_dir($persistPath)) {
+            @\mkdir($persistPath, 0755, true);
+        }
+
+        $registry = new SharedStateServiceRegistry();
+        $registry->removeRecord($role);
+
+        $processName = 'weline-wls-session-unit-identity';
+        $instanceName = 'shared-session-unit-identity';
+        $server = new SessionServer([
+            'port' => 0,
+            'persist_path' => $persistPath,
+            'token_file_name' => $tokenFileName,
+            'role' => $role,
+            'process_name' => $processName,
+            'instance_name' => $instanceName,
+            'service_instance_name' => $instanceName,
+        ]);
+
+        try {
+            self::assertTrue($server->start('127.0.0.1', 0));
+            $record = $registry->getRecord($role);
+            self::assertSame($processName, $record['process_name'] ?? null);
+            self::assertSame($instanceName, $record['instance_name'] ?? null);
+            self::assertSame($instanceName, $record['service_instance_name'] ?? null);
+            self::assertTrue(SharedStateServiceRegistry::hasExactLifecycleBinding($role, $record));
+            self::assertSame(
+                SharedStateServiceRegistry::lifecycleIdentityDigest($role, [
+                    'role' => $role,
+                    'host' => '127.0.0.1',
+                    'port' => $server->getPort(),
+                    'pid' => \getmypid(),
+                    'token_file_name' => $tokenFileName,
+                    'started_at' => $record['started_at'] ?? null,
+                    'process_name' => $processName,
+                    'instance_name' => $instanceName,
+                    'service_instance_name' => $instanceName,
+                ]),
+                $record['lifecycle_identity_digest'] ?? null,
+            );
+        } finally {
+            $server->stop();
+            $registry->removeRecord($role);
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
+            if (\is_file($tokenPath)) {
+                @\unlink($tokenPath);
+            }
+            if (\is_dir($persistPath)) {
+                @\rmdir($persistPath);
+            }
+        }
+    }
+
 }

@@ -2771,7 +2771,10 @@ final class GatewayPortLeaseAllocator
             throw new \RuntimeException('Active WLS fallback lease has no valid worker identity.');
         }
         if ($schemaVersion === self::SCHEMA_VERSION) {
-            $this->assertListenerTransitionShape($lease);
+            // Observation/read paths must accept acknowledged drain clocks that
+            // cannot be compared on this boot; publication still enforces the
+            // current-boot monotonic fence in assertValidLease().
+            $this->assertListenerTransitionShape($lease, false);
         } elseif ($state === 'DRAINING'
             && (!$this->validTimestamp($lease['draining_timestamp'] ?? null)
                 || ($schemaVersion >= 5
@@ -2796,8 +2799,10 @@ final class GatewayPortLeaseAllocator
     }
 
     /** @param array<string,mixed> $lease */
-    private function assertListenerTransitionShape(array $lease): void
-    {
+    private function assertListenerTransitionShape(
+        array $lease,
+        bool $requireComparableDrainClock = true,
+    ): void {
         $state = (string)($lease['state'] ?? '');
         $phase = (string)($lease['listener_phase'] ?? '');
         $action = $lease['listener_transition_action'] ?? null;
@@ -2863,7 +2868,7 @@ final class GatewayPortLeaseAllocator
                 || $drainDigest !== null
                 || $transitionId !== null
                 || $identity !== null
-                || !$ackClockValid
+                || ($requireComparableDrainClock && !$ackClockValid)
             ) {
                 throw new \RuntimeException(
                     'Terminal WLS fallback drain lacks its exact terminal phase.'
@@ -2903,7 +2908,7 @@ final class GatewayPortLeaseAllocator
         if ($phase === self::LISTENER_PHASE_DRAIN_ACKED) {
             if ($action !== 'DRAIN'
                 || !\hash_equals($drainDigest, $digest)
-                || !$ackClockValid
+                || ($requireComparableDrainClock && !$ackClockValid)
             ) {
                 throw new \RuntimeException(
                     'Acknowledged WLS fallback drain has an invalid phase.'
@@ -2914,7 +2919,7 @@ final class GatewayPortLeaseAllocator
         if ($phase === self::LISTENER_PHASE_UNDRAIN_PREPARED) {
             if ($action !== 'UNDRAIN'
                 || \hash_equals($drainDigest, $digest)
-                || !$ackClockValid
+                || ($requireComparableDrainClock && !$ackClockValid)
             ) {
                 throw new \RuntimeException(
                     'Prepared WLS fallback undrain has an invalid phase.'

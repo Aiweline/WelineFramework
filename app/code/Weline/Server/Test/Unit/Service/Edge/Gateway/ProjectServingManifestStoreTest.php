@@ -56,6 +56,27 @@ final class ProjectServingManifestStoreTest extends TestCase
         ProjectServingManifestStore::normalizeHost('8.8.8.8');
     }
 
+    public function testRouteForHostFallsBackAcrossLoopbackAliases(): void
+    {
+        $localhost = [
+            'route_id' => 'loopback',
+            'domain' => 'localhost',
+        ];
+        $routes = ['localhost' => $localhost];
+
+        self::assertSame($localhost, ProjectServingManifestStore::routeForHost('127.0.0.1', $routes));
+        self::assertSame($localhost, ProjectServingManifestStore::routeForHost('::1', $routes));
+        self::assertSame($localhost, ProjectServingManifestStore::routeForHost('localhost', $routes));
+
+        $ip = [
+            'route_id' => 'ipv4-loopback',
+            'domain' => '127.0.0.1',
+        ];
+        self::assertSame($ip, ProjectServingManifestStore::routeForHost('localhost', [
+            '127.0.0.1' => $ip,
+        ]));
+    }
+
     public function testWholeProjectPublicationIsAtomicIdempotentAndFenceBound(): void
     {
         $registration = $this->registration('primary', [

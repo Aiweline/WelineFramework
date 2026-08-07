@@ -25,6 +25,16 @@ final class InjectCaptchaIntoForm implements ObserverInterface
             return;
         }
 
+        // Async admin forms submit via XHR/bin-query; a visible challenge would only
+        // clutter the UI and cannot participate in that request path.
+        $htmlAttributes = $attributes['html_attributes'] ?? [];
+        if (
+            isset($attributes['data-async-action'])
+            || (\is_array($htmlAttributes) && isset($htmlAttributes['data-async-action']))
+        ) {
+            return;
+        }
+
         $html = $this->captcha->renderChallenge([
             'form_id' => (string)($attributes['id'] ?? ''),
             'intent' => (string)($attributes['intent'] ?? 'generic'),

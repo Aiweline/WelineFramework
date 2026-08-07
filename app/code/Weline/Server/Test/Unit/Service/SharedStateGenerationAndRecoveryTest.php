@@ -1578,6 +1578,99 @@ final class SharedStateGenerationAndRecoveryTest extends TestCase
         ));
     }
 
+    public function testSameGenerationPrefersCompletedManagedIdentityOverIncompletePeer(): void
+    {
+        $role = ControlMessage::ROLE_SESSION_SERVER;
+        $incomplete = SharedStateServiceRegistry::bindLifecycleGeneration($role, [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'pid' => 7407,
+            'token_file_name' => 'session_server.token',
+            'started_at' => '2026-08-07T09:00:00+00:00',
+        ]);
+        $complete = SharedStateServiceRegistry::bindLifecycleGeneration($role, [
+            'role' => $role,
+            'host' => '127.0.0.1',
+            'port' => 19970,
+            'pid' => 7407,
+            'token_file_name' => 'session_server.token',
+            'started_at' => '2026-08-07T09:00:00+00:00',
+            'process_name' => 'weline-wls-session-complete',
+            'instance_name' => 'shared-session-complete',
+            'service_instance_name' => 'shared-session-complete',
+        ]);
+        self::assertSame(
+            1,
+            (int)($incomplete['lifecycle_generation'] ?? 0),
+        );
+        self::assertSame(
+            1,
+            (int)($complete['lifecycle_generation'] ?? 0),
+        );
+        self::assertNotSame(
+            $incomplete['lifecycle_identity_digest'] ?? null,
+            $complete['lifecycle_identity_digest'] ?? null,
+        );
+
+        $manager = new class extends SharedStateServiceManager {
+            /**
+             * @param array<string,mixed> $record
+             * @param array<string,mixed> $runtime
+             * @return array<string,mixed>
+             */
+            public function chooseAuthority(string $role, array $record, array $runtime): array
+            {
+                $method = new \ReflectionMethod(
+                    SharedStateServiceManager::class,
+                    'highestLifecycleAuthority',
+                );
+                $method->setAccessible(true);
+
+                return $method->invoke(null, $role, $record, $runtime);
+            }
+        };
+
+        self::assertSame(
+            $complete['lifecycle_identity_digest'] ?? null,
+            $manager->chooseAuthority($role, $incomplete, $complete)['lifecycle_identity_digest'] ?? null,
+        );
+        self::assertSame(
+            $complete['lifecycle_identity_digest'] ?? null,
+            $manager->chooseAuthority($role, $complete, $incomplete)['lifecycle_identity_digest'] ?? null,
+        );
+
+        $skewedRuntime = $complete;
+        $skewedRuntime['started_at'] = '2026-08-07T09:00:01+00:00';
+        $skewedRuntime = SharedStateServiceRegistry::bindLifecycleGeneration(
+            $role,
+            $skewedRuntime,
+        );
+        $skewedRuntime['lifecycle_generation'] = 1;
+        self::assertNotSame(
+            $complete['lifecycle_identity_digest'] ?? null,
+            $skewedRuntime['lifecycle_identity_digest'] ?? null,
+        );
+        self::assertSame(
+            $complete['lifecycle_identity_digest'] ?? null,
+            $manager->chooseAuthority($role, $complete, $skewedRuntime)['lifecycle_identity_digest'] ?? null,
+        );
+
+        $forked = $complete;
+        $forked['pid'] = 7408;
+        $forked = SharedStateServiceRegistry::bindLifecycleGeneration($role, $forked);
+        $forked['lifecycle_generation'] = 1;
+        try {
+            $manager->chooseAuthority($role, $incomplete, $forked);
+            self::fail('Distinct pid forks at the same generation must remain fail-closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'same generation',
+                \strtolower($exception->getMessage()),
+            );
+        }
+    }
+
     public function testFailedGenerationCasDoesNotRewriteLegacyRegistryBytes(): void
     {
         $directory = $this->temporaryDirectory('registry-cas-noop');

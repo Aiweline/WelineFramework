@@ -20,7 +20,7 @@ use Weline\Websites\Service\AiWorkbench\ProviderRegistry;
 use Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService;
 use Weline\Websites\Service\AiWorkbench\SessionService;
 
-#[Acl('Weline_Websites::site_builder_plan', 'AI Site Plan Flow', 'mdi mdi-sitemap', 'Draft-first AI site planning flow', 'Weline_Websites::site_builder_agent')]
+#[Acl('Weline_Websites::site_builder_plan', 'AI Site Plan Flow', 'mdi mdi-sitemap', 'Draft-first AI site planning flow', 'Weline_Websites::website_service')]
 class SiteBuilderPlan extends BackendController
 {
     public function __construct(

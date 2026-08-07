@@ -6088,12 +6088,16 @@ class Start extends CommandAbstract
                 $needsLocalCert,
                 false,
             );
-            if ($missing === null) {
+            if ($missing !== null) {
+                return $missing;
+            }
+            if (!$needsLocalCert) {
                 throw new \RuntimeException(
                     'WLS 2.0 certificate resolution did not produce an immutable generation.',
                 );
             }
-            return $missing;
+            // Local/development domains keep the existing self-signed cold-start
+            // path below, then activate the resulting PEM under project_ssl.
         }
 
         // Standalone/legacy starts may restore project-owned PEM from PostgreSQL before
@@ -6398,6 +6402,12 @@ class Start extends CommandAbstract
             ];
         }
         if ($mode === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS) {
+            // Local/development domains (*.weline.test, loopback, etc.) still use
+            // the project self-signed cold-start path. Public pure-WLS hosts remain
+            // fail-closed until an enrolled project certificate exists.
+            if ($needsLocalCertificate) {
+                return null;
+            }
             return [
                 'success' => false,
                 'message' => (string)__(

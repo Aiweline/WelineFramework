@@ -58,13 +58,69 @@
 
     /**
      * Cookie 操作函数（如果不存在则定义）
+     * 兼容 website 隔离后的 WELINE_*_w{id} 命名；优先选值里 path 与当前 pathname 最长匹配的挂载站 cookie。
      */
     function getCookie(key) {
-        if (typeof window.getCookie === 'function') {
-            return window.getCookie(key);
+        const exactFromWindow = (typeof window.getCookie === 'function') ? window.getCookie(key) : null;
+        if (exactFromWindow) {
+            return exactFromWindow;
         }
-        const keyValue = document.cookie.match('(^|;) ?' + key + '=([^;]*)(;|$)');
-        return keyValue ? keyValue[2] : null;
+
+        const cookies = String(document.cookie || '');
+        const escaped = String(key || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const exact = cookies.match(new RegExp('(?:^|;\\s*)' + escaped + '=([^;]*)'));
+        if (exact && exact[1]) {
+            try {
+                return decodeURIComponent(exact[1]);
+            } catch (e) {
+                return exact[1];
+            }
+        }
+
+        const scoped = [];
+        const scopedRe = new RegExp('(?:^|;\\s*)' + escaped + '(_w\\d+)=([^;]*)', 'g');
+        let match;
+        while ((match = scopedRe.exec(cookies)) !== null) {
+            let value = match[2] || '';
+            try {
+                value = decodeURIComponent(value);
+            } catch (e) {
+                // keep raw
+            }
+            scoped.push({ suffix: match[1], value: value });
+        }
+        if (!scoped.length) {
+            return null;
+        }
+
+        const pathname = String((window.location && window.location.pathname) || '/').toLowerCase();
+        let best = scoped[0];
+        let bestLen = -1;
+        scoped.forEach((item) => {
+            let mountPath = '';
+            try {
+                if (/^https?:\/\//i.test(item.value)) {
+                    mountPath = new URL(item.value).pathname || '';
+                } else if (String(item.value).charAt(0) === '/') {
+                    mountPath = String(item.value).split('?')[0];
+                }
+            } catch (e) {
+                mountPath = '';
+            }
+            mountPath = '/' + String(mountPath || '').split('/').filter(Boolean).join('/');
+            if (mountPath === '/') {
+                mountPath = '';
+            }
+            const mountLower = mountPath.toLowerCase();
+            const score = mountLower && (pathname === mountLower || pathname.indexOf(mountLower + '/') === 0)
+                ? mountLower.length
+                : 0;
+            if (score > bestLen) {
+                bestLen = score;
+                best = item;
+            }
+        });
+        return best ? best.value : null;
     }
 
     function setCookie(key, value, expiry = 7, options = {}) {
@@ -364,29 +420,88 @@
         return window.site.computePath[originPath];
     }
 
-    function normalizeWebsiteBaseUrl(url, config) {
+    /**
+     * 网站挂载 base：只返回 path 前缀（如 /aisite_accept_ok），不含 origin。
+     * 整域站返回空字符串。API 区域污染的 website_url 视为无挂载。
+     */
+    function normalizeWebsiteMountPath(url, config) {
         const rawUrl = String(url || '').trim();
         if (!rawUrl) {
             return '';
         }
 
         try {
-            const parsed = new URL(rawUrl, window.location.origin);
-            const firstSegment = parsed.pathname.split('/').filter(Boolean)[0] || '';
-            const apiArea = String(config.apiArea || 'api').toLowerCase();
-            if (firstSegment && (firstSegment.toLowerCase() === apiArea || firstSegment.toLowerCase() === 'api')) {
-                return parsed.origin;
+            let pathname = '';
+            if (/^https?:\/\//i.test(rawUrl)) {
+                pathname = new URL(rawUrl).pathname || '';
+            } else if (rawUrl.charAt(0) === '/') {
+                pathname = rawUrl.split('?')[0];
+            } else {
+                pathname = '/' + rawUrl.replace(/^\/+|\/+$/g, '');
             }
-            return parsed.href.replace(/\/$/, '');
+            const segments = String(pathname || '').split('/').filter(Boolean);
+            const firstSegment = segments[0] || '';
+            const apiArea = String((config && config.apiArea) || 'api').toLowerCase();
+            if (firstSegment && (firstSegment.toLowerCase() === apiArea || firstSegment.toLowerCase() === 'api')) {
+                return '';
+            }
+            const mount = '/' + segments.join('/');
+            return mount === '/' ? '' : mount.replace(/\/+$/, '');
         } catch (e) {
-            return rawUrl;
+            if (rawUrl.charAt(0) === '/') {
+                return rawUrl.replace(/\/+$/, '') || '';
+            }
+            return '';
         }
+    }
+
+    /** @deprecated 兼容旧名：现只返回挂载 path，不再返回完整 href */
+    function normalizeWebsiteBaseUrl(url, config) {
+        return normalizeWebsiteMountPath(url, config);
+    }
+
+    function resolveWebsiteMountPath(config) {
+        const fromDom = (function () {
+            const node = document.querySelector('[data-website-mount], [data-i18n-switcher][data-website-mount]');
+            return node ? String(node.getAttribute('data-website-mount') || '').trim() : '';
+        })();
+        const site = window.site || {};
+        const fromSite = site.website_url || site.websiteUrl || site.base_host || '';
+        const raw = String(
+            fromDom
+            || getCookie('WELINE_WEBSITE_URL')
+            || fromSite
+            || ''
+        ).trim();
+        return normalizeWebsiteMountPath(raw, config || getConfig());
+    }
+
+    function peelWebsiteMountPrefix(pathname, mountPath) {
+        let path = String(pathname || '/').split('?')[0] || '/';
+        if (path.charAt(0) !== '/') {
+            path = '/' + path;
+        }
+        const mount = String(mountPath || '').replace(/\/+$/, '');
+        if (!mount || mount === '/') {
+            return path;
+        }
+        const lower = path.toLowerCase();
+        const mountLower = mount.toLowerCase();
+        if (lower === mountLower) {
+            return '/';
+        }
+        if (lower.indexOf(mountLower + '/') === 0) {
+            const peeled = path.slice(mount.length) || '/';
+            return peeled.charAt(0) === '/' ? peeled : ('/' + peeled);
+        }
+        return path;
     }
 
     /**
      * 路径注入：将 website/area/currency/lang 注入到路径中
      * 参考 Frontend 模块的 inject_path 函数
-     * URL 结构：[website_url]/[area]/[currency]/[lang]/[path]
+     * URL 结构：[website_mount]/[area]/[currency]/[lang]/[path]
+     * 网站挂载 path 是固定 base：先剥掉再处理站内段，最后拼回。
      */
     function inject_path(path, code = '', type = '') {
         if (!path) {
@@ -398,16 +513,18 @@
         }
 
         const config = getConfig();
-        let prePath = normalizeWebsiteBaseUrl(getCookie('WELINE_WEBSITE_URL') || '', config);
+        let prePath = resolveWebsiteMountPath(config);
         const currentLang = normalizeLangCode(getCookie('WELINE_USER_LANG') || config.currentLang || '');
         const rawCurrentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
         const currentCurrency = isCurrencySegment(rawCurrentCurrency, config) ? normalizeCurrencyCode(rawCurrentCurrency) : '';
 
-        // 网站
-        if (prePath && WelineString.startsWith(path, prePath)) {
-            path = WelineString.replaceStartsWith(path, prePath, '');
-        } else {
+        // 固定挂载 base：只处理匹配站点后的相对 path
+        path = peelWebsiteMountPrefix(path, prePath);
+        if (!prePath && config.baseRouter) {
             path = WelineString.replaceStartsWith(path, config.baseRouter, '');
+            if (path.charAt(0) !== '/') {
+                path = '/' + path;
+            }
         }
 
         if (WelineString.startsWith(path, '/' + (getCookie('WELINE_WEBSITE_CODE') || ''))) {
@@ -415,10 +532,14 @@
         }
 
         if ('website' === type && code) {
-            prePath = code;
+            prePath = normalizeWebsiteMountPath(code, config) || String(code || '').replace(/\/+$/, '');
         }
 
-        prePath = decodeURIComponent(prePath);
+        try {
+            prePath = decodeURIComponent(prePath);
+        } catch (e) {
+            // keep raw
+        }
         if (prePath.endsWith('/')) {
             prePath = prePath.slice(0, -1);
         }

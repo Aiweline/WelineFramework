@@ -742,13 +742,35 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
     private function logReadyGateWarmupStep(string $step, int $workerId, float $startedAt): void
     {
+        $elapsedMs = \round((\microtime(true) - $startedAt) * 1000, 2);
+        // Always append a durable stage marker for cold-start diagnosis when
+        // workers die during READY gate (process logs may stay empty on SIGSEGV).
+        $traceEnabled = \in_array(
+            \strtolower(\trim((string)(\getenv('WLS_WORKER_STARTUP_TRACE') ?: ''))),
+            ['1', 'true', 'yes', 'on'],
+            true
+        );
+        if ($traceEnabled && \defined('BP')) {
+            $row = [
+                'ts' => \date('c'),
+                'pid' => \getmypid(),
+                'worker_id' => $workerId,
+                'stage' => 'runtime_' . $step,
+                'data' => ['elapsed_ms' => $elapsedMs],
+            ];
+            @\file_put_contents(
+                BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-ready-gate-stage.log',
+                (\json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
+                FILE_APPEND
+            );
+        }
         if (!\function_exists('w_log_info')) {
             return;
         }
 
         \w_log_info('[WlsRuntime] ready-gate ' . $step
             . ' worker=' . $workerId
-            . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+            . ' elapsed_ms=' . $elapsedMs);
     }
 
     public function shouldScheduleHomepageKeepWarm(

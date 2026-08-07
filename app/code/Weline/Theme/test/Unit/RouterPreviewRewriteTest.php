@@ -56,4 +56,17 @@ class RouterPreviewRewriteTest extends TestCore
         $this->assertSame('default', (string)$request->getParam('layout_option', ''));
         $this->assertSame('products', (string)$request->getParam('theme_public_route', ''));
     }
+
+    public function testDefaultThemePublicPageDefersWhenCurrentWebsiteIsPageBuilderOwned(): void
+    {
+        $source = (string)\file_get_contents(BP . '/app/code/Weline/Theme/Controller/Router.php');
+
+        $this->assertStringContainsString('isPageBuilderOwnedCurrentWebsite', $source);
+        $this->assertStringContainsString('pagebuilder_ai_site', $source);
+        $this->assertStringContainsString('page_builder', $source);
+        $this->assertMatchesRegularExpression(
+            '/rewriteDefaultThemePublicPage[\s\S]*isPageBuilderOwnedCurrentWebsite\(\)/',
+            $source
+        );
+    }
 }

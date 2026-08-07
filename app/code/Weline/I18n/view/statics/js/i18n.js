@@ -363,16 +363,66 @@
         return lang !== '' && !sameLang(lang, defaultLang);
     }
 
+    function resolveWebsiteMountPath() {
+        const fromDom = (function () {
+            const node = document.querySelector('[data-i18n-switcher][data-website-mount]');
+            return node ? String(node.getAttribute('data-website-mount') || '').trim() : '';
+        })();
+        const raw = String(fromDom || readCookieValue('WELINE_WEBSITE_URL') || '').trim();
+        if (!raw) {
+            return '';
+        }
+        let path = '';
+        try {
+            if (/^https?:\/\//i.test(raw)) {
+                path = new URL(raw).pathname || '';
+            } else if (raw.charAt(0) === '/') {
+                path = raw.split('?')[0];
+            } else {
+                // bare mount segment from data-website-mount
+                path = '/' + raw.replace(/^\/+|\/+$/g, '');
+            }
+        } catch (error) {
+            path = '';
+        }
+        path = '/' + String(path || '').split('/').filter(Boolean).join('/');
+        return path === '/' ? '' : path.replace(/\/+$/, '');
+    }
+
+    function peelWebsiteMountPrefix(pathname, mountPath) {
+        const path = String(pathname || '/').split('?')[0] || '/';
+        const mount = String(mountPath || '').replace(/\/+$/, '');
+        if (!mount || mount === '/') {
+            return path.charAt(0) === '/' ? path : ('/' + path);
+        }
+        const lower = path.toLowerCase();
+        const mountLower = mount.toLowerCase();
+        if (lower === mountLower) {
+            return '/';
+        }
+        if (lower.indexOf(mountLower + '/') === 0) {
+            const peeled = path.slice(mount.length) || '/';
+            return peeled.charAt(0) === '/' ? peeled : ('/' + peeled);
+        }
+        return path.charAt(0) === '/' ? path : ('/' + path);
+    }
+
     function buildLanguageUrl(targetLang, pathname, search, fallbackCurrency) {
         if (!targetLang) {
             return '';
         }
 
-        const safePathname = (pathname || window.location.pathname || '/').split('?')[0];
+        const mountPath = resolveWebsiteMountPath();
+        const safePathname = peelWebsiteMountPrefix(
+            (pathname || window.location.pathname || '/').split('?')[0],
+            mountPath
+        );
         const safeSearch = sanitizeLanguageSearch(typeof search === 'string' ? search : (window.location.search || ''));
         const pathParts = safePathname.split('/').filter(Boolean);
         const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
         const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+        const mountSegment = mountPath ? mountPath.replace(/^\/+|\/+$/g, '') : '';
+        const mountLower = mountSegment ? mountSegment.toLowerCase() : '';
         const backendKey = String(
             (window.site && window.site.area)
             || (window.Weline && window.Weline.config && window.Weline.config.url && window.Weline.config.url.adminArea)
@@ -389,11 +439,11 @@
             currency = normalizeCurrencyCode(fallbackCurrency || config.currentCurrency || 'CNY');
         }
 
-        // 仅保留非货币/语言段，原有大小写保持不变。
-        // Internal PageBuilder controller paths are never public routes — treat as home.
+        // Relative route only: website mount is already peeled as a fixed base.
         const isInternalPageBuilderPath = (() => {
             const joined = pathParts
-                .filter((part) => !langPattern.test(part) && !isSupportedCurrencyCode(part, config))
+                .filter((part) => !langPattern.test(part) && !isSupportedCurrencyCode(part, config)
+                    && !(mountLower && String(part).toLowerCase() === mountLower))
                 .join('/')
                 .toLowerCase();
             return joined === 'pagebuilder/frontend/page'
@@ -401,7 +451,6 @@
         })();
         const filteredParts = [];
 
-        // 前缀优先使用 backend key（即使它不在首段），否则退回首段非货币/语言段
         let prefixIndex = -1;
         if (backendKey) {
             prefixIndex = pathParts.findIndex(part => !langPattern.test(part)
@@ -418,6 +467,9 @@
                 if (index === prefixIndex) {
                     return;
                 }
+                if (mountLower && String(part).toLowerCase() === mountLower) {
+                    return;
+                }
                 filteredParts.push(part);
             });
         }
@@ -427,19 +479,14 @@
             outputParts.push(prefixSegment);
         }
 
-        if (!prefixSegment && isBackendLocalizedPath(pathParts, backendKey) && filteredParts.length > 0) {
+        if (!prefixSegment && !mountPath && isBackendLocalizedPath(pathParts, backendKey) && filteredParts.length > 0) {
             const inferredPrefix = filteredParts.shift();
             outputParts.push(inferredPrefix);
         }
 
-        // Language switching follows LocalizedUrlBuilder: only non-default currency
-        // appears in the path. Default currency is omitted until the currency switcher
-        // explicitly changes it.
         if (shouldOutputCurrency(currency, config)) {
             outputParts.push(normalizeCurrencyCode(currency));
         }
-        // 后台：路由语言段最高优先，切换时始终写入语言段（含默认语言），
-        // 由 State::getLang 路径解析生效；不再依赖早期 302 剥段写 Cookie。
         const onBackendPath = prefixSegment !== '';
         if (onBackendPath) {
             const backendLang = normalizeLangCode(targetLang);
@@ -453,7 +500,15 @@
             outputParts.push(...filteredParts);
         }
 
-        return '/' + outputParts.join('/') + (safeSearch || '');
+        const relativePath = outputParts.length ? ('/' + outputParts.join('/')) : '/';
+        if (prefixSegment || !mountPath) {
+            return relativePath + (safeSearch || '');
+        }
+        // Re-attach fixed website base outside segment splitting.
+        const withMount = relativePath === '/'
+            ? (mountPath + '/')
+            : (mountPath + relativePath);
+        return withMount + (safeSearch || '');
     }
 
     /**

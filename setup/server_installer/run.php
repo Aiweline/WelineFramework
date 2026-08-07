@@ -113,11 +113,8 @@ $isEnvPhpInstalled = static function (string $path): bool {
 $pgsqlOwnership = new PgsqlProjectOwnership($projectRoot);
 $envPhpHadDbAtStart = $isEnvPhpInstalled($envPhpFile);
 $ensureProjectPgsqlBinary = static function (?string $major = null) use ($projectRoot): bool {
-    $pgsqlBin = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'bin';
-    $pgCtl = (DIRECTORY_SEPARATOR === '\\') ? $pgsqlBin . DIRECTORY_SEPARATOR . 'pg_ctl.exe' : $pgsqlBin . DIRECTORY_SEPARATOR . 'pg_ctl';
-    if (is_file($pgCtl)) {
-        return true;
-    }
+    // Always go through EnsurePgsql validation. A lone pg_ctl (or Debian
+    // /usr/bin wrapper tree) must not short-circuit a broken project bindir.
     $env = (new EnvLoader($projectRoot))->load(true);
     if ($major !== null && $major !== '') {
         $env['INSTALL_PGSQL_VERSION'] = $major;

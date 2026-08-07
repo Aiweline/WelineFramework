@@ -1012,7 +1012,12 @@ final class CertificateMaterialUpdateCoordinator
                     }
                 }
             } catch (\Throwable $throwable) {
-                $failures[] = 'legacy managed Nginx: ' . $throwable->getMessage();
+                // A compatibility probe against a missing or broken managed Nginx
+                // tree must not fail certificate persistence for pure-WLS / first
+                // install. Only a live legacy-managed owner hard-fails here.
+                if ($legacyManaged) {
+                    $failures[] = 'legacy managed Nginx: ' . $throwable->getMessage();
+                }
             }
         }
 
