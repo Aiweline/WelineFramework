@@ -430,6 +430,46 @@ final class ProjectServingManifestStore
         return $wildcard ? '*.' . $body : $body;
     }
 
+    /**
+     * Resolve an exact or wildcard serving route for a Host/SNI authority.
+     *
+     * Local loopback literals (`localhost`, `127.0.0.1`, `::1`) share one
+     * tenant: browsers use IP SNI for https://127.0.0.1 while local start may
+     * only have published the localhost route.
+     *
+     * @param array<string,array<string,mixed>> $routesByDomain
+     * @return array<string,mixed>|null
+     */
+    public static function routeForHost(string $host, array $routesByDomain): ?array
+    {
+        try {
+            $host = self::normalizeHost($host, false);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (\is_array($routesByDomain[$host] ?? null)) {
+            return $routesByDomain[$host];
+        }
+        $loopbackAliases = ['localhost', '127.0.0.1', '::1'];
+        if (\in_array($host, $loopbackAliases, true)) {
+            foreach ($loopbackAliases as $alias) {
+                if ($alias === $host) {
+                    continue;
+                }
+                if (\is_array($routesByDomain[$alias] ?? null)) {
+                    return $routesByDomain[$alias];
+                }
+            }
+        }
+        $dot = \strpos($host, '.');
+        if ($dot === false || $dot < 1) {
+            return null;
+        }
+        $wildcard = '*.' . \substr($host, $dot + 1);
+
+        return \is_array($routesByDomain[$wildcard] ?? null) ? $routesByDomain[$wildcard] : null;
+    }
+
     private static function isLoopbackIpLiteral(string $ip): bool
     {
         if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
