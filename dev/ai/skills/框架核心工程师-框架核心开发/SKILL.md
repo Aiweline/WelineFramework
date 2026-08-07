@@ -23,6 +23,7 @@ description: Implement or review WelineFramework-owned internals, shared abstrac
 
 ## Core-specific guardrails
 
+- **`Framework/` is an abstraction layer**：only platform contracts, runtime, and neutral extension points. Contribute business/site/content policy via **Event / published Interface**; do not embed other modules' domain semantics or names into `Framework/` (see `dev/ai/global-constraints.md` §4).
 - Do not introduce process-global mutable request state.
 - Outside runtime context assembly, use `WelineEnv`, `w_env*`, request objects, or explicit Context instead of `$_SERVER`.
 - A temporary `$_SERVER` bridge is limited to Fiber/WLS request-context assembly and must materialize explicit context objects.

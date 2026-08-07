@@ -20,6 +20,7 @@ Universal AI entry index for WelineFramework development. This file only routes 
 - **Model 字段 → 模块版本**：改 Model Schema 声明（`#[Col]`/`#[Table]`/索引等）必须同步上调该模块 `etc/module.php` 的 `"version"`，再 `setup:upgrade`。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/module-version-on-model-schema.mdc`。
 - **核心框架改动 → 提示合并**：凡改 `app/code/Weline/**`，结案前必须向用户提示跨仓对齐，附决策表（文件→建议码→理由），确认后再合入。权威：`global-constraints.md` §7；Cursor：`.cursor/rules/core-project-sync.mdc`。
 - **跨模块 → Event 解耦**：禁止模块间强制引用对方具体类；通知/副作用用 Event/Observer，读取用 Interface 或 `w_query()`。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/cross-module-event-decoupling.mdc`。
+- **Framework 核心 → 抽象 + 事件**：`app/code/Weline/Framework/**` 只做平台抽象并提供中立事件/契约；禁止非框架业务语义进入核心；模块接入靠 Observer。权威：`global-constraints.md` §4；Cursor：`.cursor/rules/framework-core-abstraction-events.mdc`。
 
 ## Quick Commands
 

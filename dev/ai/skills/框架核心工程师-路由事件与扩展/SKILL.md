@@ -17,7 +17,11 @@ description: >-
 | Notify other owners | Event/Observer |
 | Render/extend a host | Hook or `extends` contract |
 
-**Hard（见 `global-constraints.md` §4）**：模块之间禁止强制相互引用对方具体类；跨模块通知/副作用必须用 Event/Observer 解耦，不得 `use`/注入/`new` 对方 Service/Model 来“直接调用”。
+**Hard（见 `global-constraints.md` §4）**：
+
+- `Framework/` 是抽象层：只提供中立 Event / Interface；禁止把 Website 等业务语义写进核心。
+- 模块之间禁止强制相互引用对方具体类；跨模块通知/副作用必须用 Event/Observer 解耦，不得 `use`/注入/`new` 对方 Service/Model 来“直接调用”。
+
 
 Do not use `routes.xml`, an extra PHP entrypoint, or Nginx routing for a module URL alias.
 
