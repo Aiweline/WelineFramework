@@ -480,17 +480,18 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private function runRequiredHomepageProcessFpcReadyGate(int $workerId, float $startedAt): array
     {
         $this->logReadyGateWarmupStep('homepage_fpc_begin', $workerId, $startedAt);
-        $host = $this->resolveCanonicalHomepageWarmupHost($this->resolveDynamicFirstRenderWarmupHosts());
+        $hosts = $this->resolveHomepageProcessFpcReadyHosts();
         $maxAttempts = (int)Env::get('wls.worker.ready_gate_homepage_attempts', 3);
         $maxAttempts = \max(1, \min(5, $maxAttempts));
         $perAttemptBudgetNs = self::homepageWarmupReadyBudgetMilliseconds() * 1000000;
         $retryDelayBudgetNs = self::HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS
             * \max(0, $maxAttempts - 1)
             * 1000000;
-        // Each transaction owns its independent READY deadline. The outer
-        // deadline therefore covers every configured attempt instead of
-        // expiring as soon as attempt one consumes its platform-specific budget.
-        $deadlineNs = \hrtime(true) + ($perAttemptBudgetNs * $maxAttempts) + $retryDelayBudgetNs;
+        // Host fallbacks share one overall budget so a dead public SNI host
+        // cannot burn the whole gate before registered website URLs are tried.
+        $deadlineNs = \hrtime(true)
+            + ($perAttemptBudgetNs * $maxAttempts * \max(1, \count($hosts)))
+            + ($retryDelayBudgetNs * \max(1, \count($hosts)));
         $proof = [
             'hit' => false,
             'fpc_status' => '',
@@ -499,53 +500,80 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'reason' => 'homepage validation missing',
             'http_status' => 0,
         ];
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-            if ($attempt > 1 && \hrtime(true) >= $deadlineNs) {
-                $reason = (string)($proof['reason'] ?? 'homepage validation missing')
-                    . ':total-ready-budget-exhausted';
-                $proof['reason'] = $reason;
-                break;
-            }
-            $transaction = $this->runHomepageFpcWarmupTransaction($host, $attempt, true);
-            $meta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
-            $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
-            $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
-            $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
-                ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
-            $source = \strtolower(\trim((string)($validation['cache'] ?? '')));
-            $fullUri = \trim((string)($meta['full_uri'] ?? ''));
-            $reason = \trim((string)($validation['reason'] ?? 'homepage validation missing'));
-            $hit = (bool)($validation['ok'] ?? false)
-                && $fpcStatus === 'HIT'
-                && \str_starts_with($source, 'process')
-                && $fullUri !== '';
-            $proof = [
-                'hit' => $hit,
-                'fpc_status' => $fpcStatus,
-                'source' => $source,
-                'full_uri' => $fullUri,
-                'reason' => $reason,
-                'http_status' => (int)($meta['status_code'] ?? 0),
-            ];
-            if ($hit) {
-                break;
-            }
-            if ($attempt >= $maxAttempts) {
-                $reason .= ':attempts-exhausted=' . $maxAttempts;
-                $proof['reason'] = $reason;
-                break;
-            }
+        $hit = false;
+        $fpcStatus = '';
+        $source = '';
+        $fullUri = '';
+        $reason = 'homepage validation missing';
+        foreach ($hosts as $hostIndex => $host) {
             if (\hrtime(true) >= $deadlineNs) {
-                $reason .= ':total-ready-budget-exhausted';
-                $proof['reason'] = $reason;
+                $proof['reason'] = (string)($proof['reason'] ?? 'homepage validation missing')
+                    . ':total-ready-budget-exhausted';
                 break;
             }
-            $this->logReadyGateWarmupStep(
-                'homepage_fpc_retry attempt=' . $attempt . ' status=' . $proof['http_status'] . ' reason=' . $reason,
-                $workerId,
-                $startedAt
-            );
-            SchedulerSystem::yieldDelay(self::HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS);
+            if ($hostIndex > 0) {
+                $this->logReadyGateWarmupStep(
+                    'homepage_fpc_fallback_host=' . $host
+                    . ' previous_status=' . $proof['http_status']
+                    . ' previous_reason=' . $proof['reason'],
+                    $workerId,
+                    $startedAt
+                );
+            }
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                if ($attempt > 1 && \hrtime(true) >= $deadlineNs) {
+                    $reason = (string)($proof['reason'] ?? 'homepage validation missing')
+                        . ':total-ready-budget-exhausted';
+                    $proof['reason'] = $reason;
+                    break;
+                }
+                $transaction = $this->runHomepageFpcWarmupTransaction($host, $attempt, true);
+                $meta = \is_array($transaction['meta'] ?? null) ? $transaction['meta'] : [];
+                $validation = \is_array($transaction['validation'] ?? null) ? $transaction['validation'] : [];
+                $headers = \is_array($meta['headers'] ?? null) ? $meta['headers'] : [];
+                $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
+                    ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
+                $source = \strtolower(\trim((string)($validation['cache'] ?? '')));
+                $fullUri = \trim((string)($meta['full_uri'] ?? ''));
+                $reason = \trim((string)($validation['reason'] ?? 'homepage validation missing'));
+                $hit = (bool)($validation['ok'] ?? false)
+                    && $fpcStatus === 'HIT'
+                    && \str_starts_with($source, 'process')
+                    && $fullUri !== '';
+                $proof = [
+                    'hit' => $hit,
+                    'fpc_status' => $fpcStatus,
+                    'source' => $source,
+                    'full_uri' => $fullUri,
+                    'reason' => $reason,
+                    'http_status' => (int)($meta['status_code'] ?? 0),
+                ];
+                if ($hit) {
+                    break 2;
+                }
+                if ($attempt >= $maxAttempts) {
+                    $reason .= ':attempts-exhausted=' . $maxAttempts;
+                    $proof['reason'] = $reason;
+                    break;
+                }
+                if (\hrtime(true) >= $deadlineNs) {
+                    $reason .= ':total-ready-budget-exhausted';
+                    $proof['reason'] = $reason;
+                    break;
+                }
+                $this->logReadyGateWarmupStep(
+                    'homepage_fpc_retry attempt=' . $attempt . ' host=' . $host
+                    . ' status=' . $proof['http_status'] . ' reason=' . $reason,
+                    $workerId,
+                    $startedAt
+                );
+                SchedulerSystem::yieldDelay(self::HOMEPAGE_WARMUP_RETRY_DELAY_MILLISECONDS);
+            }
+            // Unmatched public SNI / wrong Host → 404: try the next registered
+            // website host instead of fail-fasting the whole Worker.
+            if ((int)$proof['http_status'] === 404) {
+                continue;
+            }
         }
         if (!$hit) {
             $failOpenRaw = \getenv('WLS_WORKER_READY_GATE_HOMEPAGE_FAIL_OPEN');
@@ -585,6 +613,96 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $startedAt
         );
         return $proof;
+    }
+
+    /**
+     * Ordered hosts for the Worker homepage Process-FPC READY gate.
+     *
+     * Pure-WLS public origins (TLS SNI + non-standard port) may not match any
+     * website row. Fall back to hostname-without-port and registered website
+     * URLs so startup does not depend on an unmatched public edge host.
+     *
+     * @return list<string>
+     */
+    private function resolveHomepageProcessFpcReadyHosts(): array
+    {
+        $ordered = [];
+        $add = function (mixed $candidate) use (&$ordered): void {
+            $host = $this->normalizeInternalWarmupHost($candidate);
+            if ($host === null) {
+                return;
+            }
+            $ordered[$host] = $host;
+        };
+
+        $configured = Env::get('wls.worker.homepage_warmup_host', null);
+        if (\is_scalar($configured) && \trim((string)$configured) !== '') {
+            $add((string)$configured);
+        }
+
+        $candidates = $this->resolveDynamicFirstRenderWarmupHosts();
+        $primary = $this->resolveCanonicalHomepageWarmupHost($candidates);
+        $add($primary);
+
+        if (\preg_match('/^(.+):(\d+)$/', $primary, $matches) === 1) {
+            $port = (int)$matches[2];
+            if ($port !== 80 && $port !== 443) {
+                $add($matches[1]);
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $add($candidate);
+        }
+
+        foreach ($this->resolveRegisteredWebsiteWarmupHosts() as $candidate) {
+            $add($candidate);
+        }
+
+        $add('127.0.0.1');
+
+        return \array_values($ordered);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveRegisteredWebsiteWarmupHosts(): array
+    {
+        try {
+            if (!\class_exists(\Weline\Websites\Model\Website::class)) {
+                return [];
+            }
+            /** @var \Weline\Websites\Model\Website $website */
+            $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $rows = $website->clear()->select()->limit(20)->fetch()->getItems();
+            if (!\is_array($rows) || $rows === []) {
+                return [];
+            }
+            $hosts = [];
+            foreach ($rows as $row) {
+                if (!\is_object($row) || !\method_exists($row, 'getUrl')) {
+                    continue;
+                }
+                $url = \trim((string)$row->getUrl());
+                if ($url === '') {
+                    continue;
+                }
+                $parts = $this->parseWarmupUrl($url);
+                $host = \is_array($parts) ? \trim((string)($parts['host'] ?? '')) : '';
+                if ($host === '') {
+                    continue;
+                }
+                $hosts[] = $host;
+                if (\count($hosts) >= 5) {
+                    break;
+                }
+            }
+
+            return $hosts;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function shouldRunReadyGateWorkerBootstrapWarmup(): bool
@@ -5129,7 +5247,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $scheme = ($https !== '' && !\in_array($https, ['off', '0', 'false'], true)) ? 'https' : 'http';
         }
 
-        $uri = (string)(WelineEnv::get('request.uri', $_SERVER['REQUEST_URI'] ?? '/') ?: '/');
+        $uri = (string)(
+            $request->getServer('WELINE_ORIGIN_REQUEST_URI')
+            ?: ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '')
+            ?: ($_SERVER['ORIGIN_REQUEST_URI'] ?? '')
+            ?: WelineEnv::get('origin_request_uri', '')
+            ?: WelineEnv::get('request.uri', $_SERVER['REQUEST_URI'] ?? '/')
+            ?: '/'
+        );
         if ($uri === '') {
             $uri = '/';
         }

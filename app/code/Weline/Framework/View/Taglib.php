@@ -880,6 +880,13 @@ class Taglib
             $prefix .= '(';
             $name = substr($name, 1);
         }
+
+        // Function calls / language helpers must stay bare identifiers.
+        // Otherwise @var(__('停用')) / @var(count($items)) compile to
+        // ($__('停用')) / ($count($items)) and blow up at runtime.
+        if (preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*\s*\(/', $name) === 1) {
+            return $prefix . $name;
+        }
         
         # 有字母的，且不是字符串，不存在特殊字符内的，可以加$
         if (preg_match('/^[a-zA-Z_]/', $name)) {

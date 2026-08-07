@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Session;
 
 use Weline\Framework\Context;
+use Weline\Framework\Http\WebsiteCookieScope;
 
 /**
  * Resolves the framework Session cookie name for the active request.
@@ -12,6 +13,10 @@ use Weline\Framework\Context;
  * Browser cookies are scoped by host and path, not by port. Dedicated WLS
  * instances on the same host therefore need a port-qualified name, while
  * standard HTTP/HTTPS deployments retain the historical name.
+ *
+ * Storefront websites (including path mounts on a shared host) further qualify
+ * the name by website_id so a parent Path=/ cookie cannot be reused by a child
+ * mount. See {@see WebsiteCookieScope}.
  *
  * SameSite follows the same authority: HTTPS non-standard ports use
  * CHIPS (`SameSite=None; Partitioned`) so embedded browsers keep the cookie.
@@ -25,7 +30,7 @@ final class SessionCookieNameResolver
         return self::resolveFor(self::LEGACY_NAME, $host);
     }
 
-    /** Resolve a host cookie name for the active request authority. */
+    /** Resolve a host cookie name for the active request authority + website. */
     public static function resolveFor(string $legacyName, ?string $host = null): string
     {
         $legacyName = trim($legacyName);
@@ -35,11 +40,20 @@ final class SessionCookieNameResolver
 
         $host = $host ?? self::currentHost();
         $port = self::extractPort($host);
-        if ($port === null || $port === 80 || $port === 443) {
-            return $legacyName;
+        $name = $legacyName;
+        if ($port !== null && $port !== 80 && $port !== 443) {
+            $name .= '_' . $port;
         }
 
-        return $legacyName . '_' . $port;
+        return WebsiteCookieScope::qualifyName($name);
+    }
+
+    /**
+     * Cookie Path for the session cookie on the current website.
+     */
+    public static function resolvePath(string $configuredPath = '/'): string
+    {
+        return WebsiteCookieScope::resolvePath($configuredPath);
     }
 
     /**
