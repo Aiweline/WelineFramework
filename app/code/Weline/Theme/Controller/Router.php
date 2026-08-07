@@ -185,6 +185,12 @@ class Router implements RouterInterface
             return;
         }
 
+        // PageBuilder / AI-site storefronts own pretty paths like /about and /contact.
+        // Theme's shell fallback must not steal them into cms_page/contact layouts.
+        if (self::isPageBuilderOwnedCurrentWebsite()) {
+            return;
+        }
+
         $normalizedPath = self::normalizePublicPath($path);
         if ($normalizedPath === ''
             || str_starts_with($normalizedPath, 'theme/frontend/')
@@ -208,6 +214,47 @@ class Router implements RouterInterface
         ]);
 
         $path = 'theme/frontend/policy';
+    }
+
+    /**
+     * Optional Websites module: page_builder / pagebuilder_ai_site scopes are owned by PageBuilder.
+     */
+    private static function isPageBuilderOwnedCurrentWebsite(): bool
+    {
+        if (!\class_exists(\Weline\Websites\Model\Website::class)) {
+            return false;
+        }
+
+        $websiteId = 0;
+        try {
+            $websiteId = (int)(
+                \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', '')
+                ?: \Weline\Framework\Env\WelineEnv::get('website_id', 0)
+            );
+        } catch (\Throwable) {
+            $websiteId = (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+        }
+        if ($websiteId <= 0) {
+            return false;
+        }
+
+        try {
+            /** @var \Weline\Websites\Model\Website $websiteModel */
+            $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website = clone $websiteModel;
+            $website->clearData()->clearQuery()->load($websiteId);
+            if (!$website->getId()) {
+                return false;
+            }
+
+            return \in_array(
+                (string)$website->getData(\Weline\Websites\Model\Website::schema_fields_SCOPE),
+                ['page_builder', 'pagebuilder_ai_site'],
+                true
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private static function applyQueryOverrides(?Request $request, array $queryOverrides): void

@@ -65,6 +65,36 @@ final class LanguageSwitcherUrlTest extends TestCase
         );
     }
 
+    public function testBuildLanguageHrefKeepsWebsiteMountAsFixedBaseOutsideLocaleSplit(): void
+    {
+        $previous = $_SERVER['WELINE_WEBSITE_URL'] ?? null;
+        $_SERVER['WELINE_WEBSITE_URL'] = 'https://pre.example.test/aisite_accept_ok';
+        try {
+            self::assertSame(
+                '/aisite_accept_ok/hi_IN/about',
+                $this->buildLanguageHref('/about', '', 'hi_IN', 'CNY')
+            );
+            self::assertSame(
+                '/aisite_accept_ok/hi_IN/about',
+                $this->buildLanguageHref('/aisite_accept_ok/about', '', 'hi_IN', 'CNY')
+            );
+            self::assertSame(
+                '/aisite_accept_ok/hi_IN/about',
+                $this->buildLanguageHref('/hi_IN/aisite_accept_ok/about', '', 'hi_IN', 'CNY')
+            );
+            self::assertNotSame(
+                '/hi_IN/aisite_accept_ok/about',
+                $this->buildLanguageHref('/about', '', 'hi_IN', 'CNY')
+            );
+        } finally {
+            if ($previous === null) {
+                unset($_SERVER['WELINE_WEBSITE_URL']);
+            } else {
+                $_SERVER['WELINE_WEBSITE_URL'] = $previous;
+            }
+        }
+    }
+
     private function buildLanguageHref(
         string $path,
         string $search,

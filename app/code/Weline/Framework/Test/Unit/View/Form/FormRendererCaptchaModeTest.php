@@ -40,4 +40,17 @@ final class FormRendererCaptchaModeTest extends TestCase
         self::assertSame('required', FormRenderer::current()['captcha'] ?? null);
         self::assertSame('customer.login', FormRenderer::current()['intent'] ?? null);
     }
+
+    public function testAsyncActionForcesCaptchaOffEvenWhenRequested(): void
+    {
+        $html = FormRenderer::open([
+            'id' => 'country-disable-form',
+            'method' => 'post',
+            'captcha' => 'required',
+            'data-async-action' => 'country-disable',
+        ]);
+
+        self::assertStringContainsString('data-weline-form-captcha="off"', $html);
+        self::assertSame('off', FormRenderer::current()['captcha'] ?? null);
+    }
 }

@@ -26,8 +26,8 @@ foreach ($locales as $locale) {
         <?= __('如果目标语言的模块 CSV 或全局语言包中已经存在有效译文，系统会自动跳过，不会再次调用 AI，避免浪费 token。AI 生成的译文会先写入词典并标记为 AI，可再增量导出回模块 CSV。') ?>
     </div>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
+    <div class="row g-2 g-md-3 mb-3 mb-md-4 i18n-admin-stat-tiles">
+        <div class="col-6 col-md-3">
             <div class="card shadow-sm border-0 h-100 i18n-admin-card">
                 <div class="card-body">
                     <div class="text-muted small"><?= __('词条总数') ?></div>
@@ -35,7 +35,7 @@ foreach ($locales as $locale) {
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card shadow-sm border-0 h-100 i18n-admin-card">
                 <div class="card-body">
                     <div class="text-muted small"><?= __('AI 启用语言') ?></div>
@@ -43,7 +43,7 @@ foreach ($locales as $locale) {
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card shadow-sm border-0 h-100 i18n-admin-card">
                 <div class="card-body">
                     <div class="text-muted small"><?= __('AI 已译词') ?></div>
@@ -51,7 +51,7 @@ foreach ($locales as $locale) {
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card shadow-sm border-0 h-100 i18n-admin-card">
                 <div class="card-body">
                     <div class="text-muted small"><?= __('全局状态') ?></div>
