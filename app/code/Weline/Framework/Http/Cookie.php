@@ -24,9 +24,9 @@ class Cookie
      */
     public static function set(string $key, string $value, int $expire = 3600 * 24 * 7, array $options = []): void
     {
-        $qualified = WebsiteCookieScope::qualifyName($key);
+        $qualified = CookieScope::qualifyName($key);
 
-        // 同步到 WelineEnv 以支持 Fiber 隔离（读侧也按网站限定名）
+        // 同步到 WelineEnv 以支持 Fiber 隔离（读侧也按 Cookie 作用域限定名）
         \w_env_set("cookie.{$qualified}", $value);
         
         // 提取选项；Path/Name 的网站隔离由 HeaderCollector 统一处理
@@ -53,7 +53,7 @@ class Cookie
 
     public static function get(string $key, $default = null)
     {
-        $qualified = WebsiteCookieScope::qualifyName($key);
+        $qualified = CookieScope::qualifyName($key);
         $value = \w_env_cookie($qualified, null);
         if ($value !== null && $value !== '') {
             return $value;
