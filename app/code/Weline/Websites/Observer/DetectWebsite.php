@@ -749,6 +749,7 @@ class DetectWebsite implements
             $matchContext['host'],
             (string)$matchContext['port'],
             $cachePath,
+            Url::websiteParserSitesVersion(),
         ]);
         $requestKey = self::REQUEST_CACHE_PREFIX . 'match.' . sha1($cacheIdentity);
         if (RequestContext::has($requestKey)) {
@@ -762,7 +763,9 @@ class DetectWebsite implements
         $processKey = self::CACHE_KEY_MATCHED_SITE_PREFIX . sha1($cacheIdentity);
         $processCached = $this->getProcessValueCache($processKey);
         if ($processCached !== null || $this->hasProcessValueCache($processKey)) {
-            if (\is_array($processCached)) {
+            if (\is_array($processCached)
+                && $this->processCachedMatchStillValid($processCached, $matchContext['path'])
+            ) {
                 RequestContext::set($requestKey, $processCached);
                 return $processCached;
             }
@@ -1240,12 +1243,56 @@ class DetectWebsite implements
     {
         $version = Url::websiteParserSitesVersion();
         if ($version === '') {
+            // Version file temporarily missing must not keep serving stale
+            // domain/path match decisions (path-mounted sites would fall back
+            // to the bare-host website intermittently across workers).
+            if (self::$processCacheVersion !== '') {
+                self::clearProcessCache();
+                self::$processCacheVersion = '';
+            }
             return;
         }
         if (self::$processCacheVersion !== '' && !\hash_equals(self::$processCacheVersion, $version)) {
             self::clearProcessCache();
         }
         self::$processCacheVersion = $version;
+    }
+
+    /**
+     * Reject a process-cached bare-host match when the request path still has a
+     * longer WebsiteDomain mount that should win.
+     *
+     * @param array<string, mixed> $cachedSite
+     */
+    private function processCachedMatchStillValid(array $cachedSite, string $requestPath): bool
+    {
+        $cachedUrl = (string)($cachedSite['url'] ?? '');
+        $cachedPath = (string)(\parse_url($cachedUrl, \PHP_URL_PATH) ?: '/');
+        $cachedPath = $this->canonicalConfiguredPath($cachedPath === '' ? '/' : $cachedPath);
+        $requestPath = $this->canonicalRequestPath($requestPath === '' ? '/' : $requestPath);
+
+        if ($cachedPath !== '/' && CanonicalStorefrontUrl::matchesPathSegmentBoundary($cachedPath, $requestPath)) {
+            return true;
+        }
+
+        foreach ($this->getWebsiteDomainRows() as $domainRow) {
+            $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''));
+            if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
+                $subPath = '/' . $subPath;
+            }
+            $configuredPath = $this->canonicalConfiguredPath($subPath === '' ? '/' : $subPath);
+            if ($configuredPath === '/' || $configuredPath === $cachedPath) {
+                continue;
+            }
+            if (!CanonicalStorefrontUrl::matchesPathSegmentBoundary($configuredPath, $requestPath)) {
+                continue;
+            }
+            if (\strlen($configuredPath) > \strlen($cachedPath)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

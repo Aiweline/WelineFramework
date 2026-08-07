@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Test;
 
+use Weline\Framework\Context;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Test\TestCore;
 
@@ -96,6 +97,18 @@ class WwwDomainTest extends TestCore
     private function setupWebsiteConfigs(array $sites): void
     {
         Url::$parserSites = $sites;
+    }
+
+    private function enterParserRequestContext(): void
+    {
+        Context::enter(Context::fromGlobals());
+        Url::resetParserRequestCaches();
+    }
+
+    private function leaveParserRequestContext(): void
+    {
+        Context::leave();
+        Url::resetParserRequestCaches();
     }
 
     /**
@@ -601,6 +614,137 @@ class WwwDomainTest extends TestCore
                 $result['uri'] ?? '',
                 sprintf('域名 %s 的 URI 应该是去掉查询串后的纯路由', $case['host'])
             );
+        }
+    }
+
+    /**
+     * 同 host 下 path 挂载站优先于整域站：先剥挂载路径，再走站内路由。
+     */
+    public function testPathMountedSiteWinsOverBareHostAndStripsMountPath(): void
+    {
+        Url::resetWebsiteParserSites();
+        $this->setupWebsiteConfigs([
+            'http://example.com' => [
+                'website_id' => 10,
+                'name' => '整域站',
+                'code' => 'root_site',
+                'url' => 'http://example.com',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+            'http://example.com/aisite_accept_ok' => [
+                'website_id' => 20,
+                'name' => '挂载站',
+                'code' => 'mount_site',
+                'url' => 'http://example.com/aisite_accept_ok',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+        ]);
+
+        $this->simulateServer('example.com', '/aisite_accept_ok/about');
+        $this->enterParserRequestContext();
+        try {
+            $result = Url::parser();
+
+            $this->assertIsArray($result);
+            $this->assertEquals(20, (int)($result['server']['WELINE_WEBSITE_ID'] ?? 0));
+            $this->assertEquals('mount_site', $result['server']['WELINE_WEBSITE_CODE'] ?? '');
+            $this->assertEquals('http://example.com/aisite_accept_ok', $result['website_url'] ?? '');
+            $this->assertStringContainsString('about', (string)($result['server']['REQUEST_URI'] ?? ''));
+            $this->assertStringNotContainsString('aisite_accept_ok', (string)($result['server']['REQUEST_URI'] ?? ''));
+        } finally {
+            $this->leaveParserRequestContext();
+        }
+    }
+
+    /**
+     * 即使 parserSites 以短 URL（整域）先插入，深层挂载路径也必须选最长 mount。
+     * 覆盖 WLS Fiber 并发下“增量表只含整域站”时的错误首个命中。
+     */
+    public function testLongestMountWinsEvenWhenRootSiteInsertedFirst(): void
+    {
+        Url::resetWebsiteParserSites();
+        // Intentionally publish root before mount (insertion order ≠ path length).
+        Url::resetWebsiteParserSites();
+        $ref = new \ReflectionProperty(Url::class, 'parserSites');
+        $ref->setAccessible(true);
+        $ref->setValue(null, [
+            'http://example.com' => [
+                'website_id' => 10,
+                'name' => '整域站',
+                'code' => 'root_site',
+                'url' => 'http://example.com',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+            'http://example.com/aisite_accept_ok' => [
+                'website_id' => 20,
+                'name' => '挂载站',
+                'code' => 'mount_site',
+                'url' => 'http://example.com/aisite_accept_ok',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+        ]);
+
+        foreach (['/aisite_accept_ok/about', '/aisite_accept_ok/contact', '/aisite_accept_ok/'] as $path) {
+            $this->simulateServer('example.com', $path);
+            $this->enterParserRequestContext();
+            try {
+                $result = Url::parser();
+                $this->assertIsArray($result, $path);
+                $this->assertEquals(20, (int)($result['server']['WELINE_WEBSITE_ID'] ?? 0), $path);
+                $this->assertEquals('mount_site', $result['server']['WELINE_WEBSITE_CODE'] ?? '', $path);
+                $this->assertEquals('http://example.com/aisite_accept_ok', $result['website_url'] ?? '', $path);
+            } finally {
+                $this->leaveParserRequestContext();
+            }
+        }
+    }
+
+    /**
+     * /shop 不匹配 /shopper（路径段边界）。
+     */
+    public function testWebsiteBaseUrlRequiresPathSegmentBoundary(): void
+    {
+        Url::resetWebsiteParserSites();
+        $this->setupWebsiteConfigs([
+            'http://example.com/shop' => [
+                'website_id' => 30,
+                'name' => 'Shop',
+                'code' => 'shop',
+                'url' => 'http://example.com/shop',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+            'http://example.com' => [
+                'website_id' => 31,
+                'name' => 'Root',
+                'code' => 'root',
+                'url' => 'http://example.com',
+                'default_currency' => 'CNY',
+                'default_language' => 'zh_Hans_CN',
+                'default_timezone' => 'Asia/Shanghai',
+            ],
+        ]);
+
+        $this->simulateServer('example.com', '/shopper');
+        $this->enterParserRequestContext();
+        try {
+            $result = Url::parser();
+
+            $this->assertIsArray($result);
+            $this->assertEquals(31, (int)($result['server']['WELINE_WEBSITE_ID'] ?? 0));
+            $this->assertEquals('root', $result['server']['WELINE_WEBSITE_CODE'] ?? '');
+            $this->assertStringContainsString('shopper', (string)($result['server']['REQUEST_URI'] ?? ''));
+        } finally {
+            $this->leaveParserRequestContext();
         }
     }
 }

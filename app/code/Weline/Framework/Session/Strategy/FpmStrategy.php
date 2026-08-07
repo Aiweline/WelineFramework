@@ -68,6 +68,11 @@ final class FpmStrategy implements SessionStrategyInterface
         $this->cookieSameSite = $this->configuredCookieSameSite !== '' ? $this->configuredCookieSameSite : 'Lax';
     }
 
+    private function resolveCookiePath(): string
+    {
+        return \Weline\Framework\Session\SessionCookieNameResolver::resolvePath($this->cookiePath);
+    }
+
     /**
      * @inheritDoc
      */
@@ -244,8 +249,8 @@ final class FpmStrategy implements SessionStrategyInterface
             if ($expires > 0) {
                 $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $expires);
             }
-            if ($this->cookiePath !== '') {
-                $parts[] = 'Path=' . $this->cookiePath;
+            if ($this->resolveCookiePath() !== '') {
+                $parts[] = 'Path=' . $this->resolveCookiePath();
             }
             if ($this->cookieDomain !== '') {
                 $parts[] = 'Domain=' . $this->cookieDomain;
@@ -267,7 +272,7 @@ final class FpmStrategy implements SessionStrategyInterface
             $sessionId,
             [
                 'expires' => $expires,
-                'path' => $this->cookiePath,
+                'path' => $this->resolveCookiePath(),
                 'domain' => $this->cookieDomain,
                 'secure' => $secure,
                 'httponly' => $this->cookieHttpOnly,

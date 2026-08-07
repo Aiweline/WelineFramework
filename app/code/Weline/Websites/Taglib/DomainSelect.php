@@ -75,6 +75,10 @@ class DomainSelect implements TaglibInterface
             'value-type' => false,         // v1.6.0: 值类型 "domain"（默认）或 "pool_id"
             'website-id' => false,        // 编辑站点时传入当前 website_id，列表中包含本站已绑定域名便于取消绑定
             'bind-root-www' => false,     // 多选时：点选 apex 与 www.{apex} 其一则自动勾选另一（列表中存在时）；移除标签时成对移除
+            'with-sub-path' => false,     // 标签内可选子路径 + 挂载契约输出
+            'allow-bound' => false,       // 列表包含已被占用的就绪域名（供填 path 共用）
+            'sub-path-name' => false,     // 子路径 hidden/input name，默认 sub_path
+            'mount-url-name' => false,    // mount_url 字段名
         ];
     }
 
@@ -121,6 +125,26 @@ class DomainSelect implements TaglibInterface
             $epPath = $url->getBackendUrlPath($urlPath);
             $manualCreatePath = $url->getBackendUrlPath('websites/admin/domain/create-manual-domain');
             $dnsAccountsPath = $url->getBackendUrlPath('websites/admin/domain/get-dns-accounts');
+            $conflictCheckPath = $url->getBackendUrlPath('websites/backend/api/domain-pool/check-conflict');
+            // Prefer module view/statics path (served as /Weline/Websites/view/statics/...).
+            // getThemeUrl(.../statics/backend/...) currently 404s under pure WLS static mapping.
+            $purchaseDialogJs = '/Weline/Websites/view/statics/backend/domain-purchase-dialog.js';
+            $mountJs = '/Weline/Websites/view/statics/backend/domain-select-mount.js';
+            $purchaseApiPath = $url->getBackendUrlPath('websites/admin/domain/purchase');
+            $purchaseAccountsPath = $url->getBackendUrlPath('websites/admin/domain/get-registrar-accounts');
+
+            $withSubPathRaw = $attributes['with-sub-path'] ?? 'false';
+            $withSubPath = \in_array(\strtolower(\trim((string)$withSubPathRaw)), ['true', '1', 'yes'], true);
+            $allowBoundRaw = $attributes['allow-bound'] ?? ($withSubPath ? 'true' : 'false');
+            $allowBound = \in_array(\strtolower(\trim((string)$allowBoundRaw)), ['true', '1', 'yes'], true);
+            $subPathName = \trim((string)($attributes['sub-path-name'] ?? 'sub_path'));
+            $mountUrlName = \trim((string)($attributes['mount-url-name'] ?? 'mount_url'));
+            if ($subPathName === '') {
+                $subPathName = 'sub_path';
+            }
+            if ($mountUrlName === '') {
+                $mountUrlName = 'mount_url';
+            }
 
             $attributes['url'] = $epPath;
             $attributes['limit'] = $limit;
@@ -312,7 +336,23 @@ class DomainSelect implements TaglibInterface
             $dataWebsiteId = ($websiteIdAttr !== '' && !str_contains($websiteIdAttr, '<?='))
                 ? ' data-website-id="' . (int) $websiteIdAttr . '"'
                 : ' data-website-id="' . $websiteIdAttr . '"';
-            $html[] = '<div class="weline-domain-select ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '" id="<?= htmlspecialchars($Taglib__id) ?>_wrapper" data-multiple="' . $multipleAttr . '"' . $dataWebsiteId . '>';
+            $withSubPathAttr = $withSubPath ? 'true' : 'false';
+            $allowBoundAttr = $allowBound ? 'true' : 'false';
+            $html[] = '<div class="weline-domain-select ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '" id="<?= htmlspecialchars($Taglib__id) ?>_wrapper" data-multiple="' . $multipleAttr . '"' . $dataWebsiteId
+                . ' data-with-sub-path="' . $withSubPathAttr . '"'
+                . ' data-allow-bound="' . $allowBoundAttr . '"'
+                . ' data-value-type="' . htmlspecialchars($valueType, ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-conflict-url="' . htmlspecialchars($conflictCheckPath, ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-sub-path-name="' . htmlspecialchars($subPathName, ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-mount-url-name="' . htmlspecialchars($mountUrlName, ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-text-local="' . htmlspecialchars((string)__('本地域名'), ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-text-bound="' . htmlspecialchars((string)__('已占用'), ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-text-suggest-path="' . htmlspecialchars((string)__('该域名已被站点「%{name}」使用，请填写子路径以共用此域名。'), ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-text-path-conflict="' . htmlspecialchars((string)__('该地址已被站点「%{name}」使用。'), ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-text-sub-path-label="' . htmlspecialchars((string)__('网站子路径（可选）'), ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-text-sub-path-placeholder="' . htmlspecialchars((string)__('留空使用整域，例如 shop'), ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-text-mount-preview="' . htmlspecialchars((string)__('站点地址：%{url}'), ENT_QUOTES, 'UTF-8') . '"'
+                . '>';
             $html[] = '  <button type="button" class="weline-domain-select-trigger" id="<?= htmlspecialchars($Taglib__id) ?>_trigger">';
             if ($isMultiple) {
                 $html[] = '    <div class="weline-domain-select-tags" id="<?= htmlspecialchars($Taglib__id) ?>_tags">';
@@ -343,7 +383,8 @@ class DomainSelect implements TaglibInterface
                 $html[] = '    </div>';
             }
             $html[] = '    <div class="weline-domain-select-actions">';
-            $html[] = '      <button type="button" class="weline-domain-select-btn weline-domain-select-btn-secondary" id="<?= htmlspecialchars($Taglib__id) ?>_manual_create_btn"><i class="mdi mdi-plus-circle-outline me-1"></i>' . __('新建域名') . '</button>';
+            $html[] = '      <button type="button" class="weline-domain-select-btn weline-domain-select-btn-secondary" id="<?= htmlspecialchars($Taglib__id) ?>_manual_create_btn"><i class="mdi mdi-plus-circle-outline me-1"></i>' . __('添加本地域名') . '</button>';
+            $html[] = '      <button type="button" class="weline-domain-select-btn weline-domain-select-btn-primary" id="<?= htmlspecialchars($Taglib__id) ?>_purchase_create_btn"><i class="mdi mdi-cart-outline me-1"></i>' . __('购买正式域名') . '</button>';
             $html[] = '    </div>';
             $html[] = '  </div>';
             if ($isMultiple) {
@@ -351,9 +392,11 @@ class DomainSelect implements TaglibInterface
                 $hintShort = \htmlspecialchars(__('点击选择多个域名，选中后点击确定'), ENT_QUOTES, 'UTF-8');
                 $html[] = '  <small class="weline-domain-select-hint"><?php if ($__wds_brw_' . $brwSuffix . '): ?>' . $hintLong . '<?php else: ?>' . $hintShort . '<?php endif; ?></small>';
             } else {
-                $html[] = '  <small class="weline-domain-select-hint">' . __('点击选择域名，选择后将自动填充相关字段') . '</small>';
+                $html[] = '  <small class="weline-domain-select-hint">' . __('点击选择域名；可选子路径时由下方字段组装挂载地址') . '</small>';
             }
             $html[] = '</div>';
+            $html[] = '<script src="' . htmlspecialchars($mountJs, ENT_QUOTES, 'UTF-8') . '"></script>';
+            $html[] = '<script src="' . htmlspecialchars($purchaseDialogJs, ENT_QUOTES, 'UTF-8') . '"></script>';
             $html[] = '<div class="offcanvas offcanvas-end" tabindex="-1" id="<?= htmlspecialchars($Taglib__id) ?>_manual_create_offcanvas">';
             $html[] = '  <div class="offcanvas-header">';
             $html[] = '    <h5 class="offcanvas-title"><lang>新建域名</lang></h5>';
@@ -450,7 +493,19 @@ class DomainSelect implements TaglibInterface
             $html[] = 'var confirmBtn = isMultiple ? document.getElementById(id + "_confirm") : null;';
             $html[] = 'var clearBtn = isMultiple ? document.getElementById(id + "_clear") : null;';
             $html[] = 'var manualCreateBtn = document.getElementById(id + "_manual_create_btn");';
+            $html[] = 'var purchaseCreateBtn = document.getElementById(id + "_purchase_create_btn");';
             $html[] = 'var manualOffcanvasEl = document.getElementById(id + "_manual_create_offcanvas");';
+            $html[] = 'var allowBound = ' . ($allowBound ? 'true' : 'false') . ';';
+            $html[] = 'var withSubPath = ' . ($withSubPath ? 'true' : 'false') . ';';
+            $html[] = 'if (withSubPath && window.WelineDomainSelectMount) {';
+            $html[] = '  window.WelineDomainSelectMount.register(id, {';
+            $html[] = '    onChange: function(contract) {';
+            $html[] = '      if (onSelectFn && typeof window[onSelectFn] === "function") {';
+            $html[] = '        window[onSelectFn](contract.domain || "", { multiple: isMultiple, mount: contract });';
+            $html[] = '      }';
+            $html[] = '    }';
+            $html[] = '  });';
+            $html[] = '}';
             $html[] = 'var manualDomainInput = document.getElementById(id + "_manual_domain");';
             $html[] = 'var manualDescInput = document.getElementById(id + "_manual_description");';
             $html[] = 'var manualDnsSelect = document.getElementById(id + "_manual_dns_account");';
@@ -735,9 +790,12 @@ class DomainSelect implements TaglibInterface
             $html[] = '      addrEl.value = addressList.join("\\n");';
             $html[] = '    }';
             $html[] = '  }';
+            $html[] = '  var mountApi = (window.WelineDomainSelectMount && window.WelineDomainSelectMount.get(id)) || null;';
+            $html[] = '  var mountValue = mountApi && mountApi.getValue ? mountApi.getValue() : null;';
             $html[] = '  if (onSelectFn && typeof window[onSelectFn] === "function") {';
-            $html[] = '    window[onSelectFn](isMultiple ? domains : firstDomain, { multiple: isMultiple });';
+            $html[] = '    window[onSelectFn](isMultiple ? domains : firstDomain, { multiple: isMultiple, mount: mountValue });';
             $html[] = '  }';
+            $html[] = '  if (mountApi && mountApi.refresh) { mountApi.refresh(); }';
             $html[] = '}';
             $html[] = '';
             
@@ -750,11 +808,16 @@ class DomainSelect implements TaglibInterface
             $html[] = '    return;';
             $html[] = '  }';
             $html[] = '  var html = "";';
+            $html[] = '  var mountApi = (window.WelineDomainSelectMount && window.WelineDomainSelectMount.get(id)) || null;';
             $html[] = '  groups.forEach(function(group) {';
             $html[] = '    html += \'<div class="weline-domain-select-group-label">\' + (group.label || "") + \'</div>\';';
             $html[] = '    if (group.options && group.options.length) {';
             $html[] = '      group.options.forEach(function(opt) {';
             $html[] = '        var descParts = [];';
+            $html[] = '        var isLocal = !!(opt.is_local || opt.is_local_server || /\\.weline\\.test$/i.test(String(opt.domain || "")));';
+            $html[] = '        var siteCreated = parseInt(opt.site_created || 0, 10) === 1;';
+            $html[] = '        if (isLocal) { descParts.push(\'<span style="color:var(--backend-color-info,#0d6efd)">' . addslashes(__('本地域名')) . '</span>\'); }';
+            $html[] = '        if (siteCreated) { descParts.push(\'<span style="color:var(--backend-color-danger,#dc3545)">' . addslashes(__('已占用')) . '</span>\'); }';
             $html[] = '        if (opt.https_status === "valid") { descParts.push(\'<span style="color:var(--backend-color-success)">HTTPS</span>\'); }';
             $html[] = '        if (opt.site_ready) { descParts.push(\'<span style="color:var(--backend-color-success)">' . addslashes(__('可建站')) . '</span>\'); }';
             $html[] = '        if (opt.https_expires_at) { descParts.push(\'' . addslashes(__('证书到期')) . ': \' + opt.https_expires_at); }';
@@ -762,7 +825,8 @@ class DomainSelect implements TaglibInterface
             $html[] = '        var isSelected = isDomainInSelection(opt.domain);';
             $html[] = '        var selectedClass = isSelected ? " selected" : "";';
             $html[] = '        var poolId = opt.pool_id || "";';
-            $html[] = '        html += \'<div class="weline-domain-select-item\' + selectedClass + \'" data-domain="\' + opt.domain + \'" data-poolid="\' + poolId + \'">\';';
+            $html[] = '        if (mountApi && mountApi.setDomainMeta) { mountApi.setDomainMeta(opt.domain, { is_local: isLocal, site_created: siteCreated, pool_id: poolId }); }';
+            $html[] = '        html += \'<div class="weline-domain-select-item\' + selectedClass + \'" data-domain="\' + opt.domain + \'" data-poolid="\' + poolId + \'" data-is-local="\' + (isLocal ? "1" : "0") + \'" data-site-created="\' + (siteCreated ? "1" : "0") + \'">\';';
             $html[] = '        if (isMultiple) {';
             $html[] = '          html += \'<input type="checkbox" class="weline-domain-select-checkbox"\' + (isSelected ? " checked" : "") + \'>\';';
             $html[] = '        }';
@@ -773,6 +837,7 @@ class DomainSelect implements TaglibInterface
             $html[] = '  });';
             $html[] = '  list.innerHTML = html;';
             $html[] = '  bindItems();';
+            $html[] = '  if (mountApi && mountApi.enhanceList) { mountApi.enhanceList(list); }';
             $html[] = '}';
             $html[] = '';
             
@@ -803,6 +868,11 @@ class DomainSelect implements TaglibInterface
             $html[] = '          li.classList.remove("active");';
             $html[] = '        });';
             $html[] = '        this.classList.add("active");';
+            $html[] = '        var mountApiPick = window.WelineDomainSelectMount && window.WelineDomainSelectMount.get(id);';
+            $html[] = '        if (mountApiPick) {';
+            $html[] = '          mountApiPick.setDomainMeta(domain, { is_local: this.getAttribute("data-is-local") === "1", site_created: this.getAttribute("data-site-created") === "1", pool_id: poolId });';
+            $html[] = '          mountApiPick.setDomainSource("pool");';
+            $html[] = '        }';
             $html[] = '        doAutoFill();';
             $html[] = '        try { hidden.dispatchEvent(new Event("change")); } catch(e) {}';
             $html[] = '      }';
@@ -844,7 +914,7 @@ class DomainSelect implements TaglibInterface
             $html[] = '  var curPoolIds = (hidden.value || "").trim().split(",").map(function(v){ return v.trim(); }).filter(function(v){ return v !== ""; });';
             $html[] = '  var poolIdsParam = curPoolIds.length ? "&pool_ids=" + encodeURIComponent(curPoolIds.join(",")) : "";';
             $html[] = '  var searchParam = query ? "&search=" + encodeURIComponent(query) : "";';
-            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false") + (wid > 0 ? "&website_id=" + wid : "") + poolIdsParam + searchParam;';
+            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false") + "&allow_bound=" + (allowBound ? "true" : "false") + (wid > 0 ? "&website_id=" + wid : "") + poolIdsParam + searchParam;';
             $html[] = '  fetch(apiUrl)';
             $html[] = '    .then(function(r) { return r.json(); })';
             $html[] = '    .then(function(res) {';
@@ -1007,11 +1077,90 @@ class DomainSelect implements TaglibInterface
             $html[] = '          updateDisplay();';
             $html[] = '          doAutoFill();';
             $html[] = '        }';
+            $html[] = '        if (!isMultiple && newDomain) {';
+            $html[] = '          hidden.value = (valueType === "pool_id" && newPoolId) ? newPoolId : newDomain;';
+            $html[] = '          hidden.dataset.domain = newDomain;';
+            $html[] = '          hidden.dataset.poolid = newPoolId || "";';
+            $html[] = '          if (display) display.textContent = newDomain;';
+            $html[] = '        }';
+            $html[] = '        var mountApiLocal = window.WelineDomainSelectMount && window.WelineDomainSelectMount.get(id);';
+            $html[] = '        if (mountApiLocal) {';
+            $html[] = '          mountApiLocal.setDomainMeta(newDomain, { is_local: true, site_created: 0, pool_id: newPoolId });';
+            $html[] = '          mountApiLocal.setDomainSource("manual_local");';
+            $html[] = '          mountApiLocal.refresh();';
+            $html[] = '        }';
             $html[] = '        notify((res.msg || "' . addslashes(__('域名已添加并已选')) . '") + " ' . addslashes(__('系统将自动完成解析与证书，可建站后网站即可访问。')) . '", "success");';
             $html[] = '        hideManualOffcanvas();';
             $html[] = '      }).catch(function(){ manualSubmitBtn.disabled = false; notify("' . addslashes(__('请求失败')) . '", "error"); });';
             $html[] = '    });';
             $html[] = '  }';
+            $html[] = '}';
+            $html[] = 'var purchaseApi = ' . \json_encode($purchaseApiPath) . ';';
+            $html[] = 'var purchaseAccountsApi = ' . \json_encode($purchaseAccountsPath) . ';';
+            $html[] = 'if (purchaseCreateBtn) {';
+            $html[] = '  purchaseCreateBtn.addEventListener("click", function(e) {';
+            $html[] = '    e.stopPropagation();';
+            $html[] = '    e.preventDefault();';
+            $html[] = '    closeDropdownPanel();';
+            $html[] = '    var boughtDomain = window.prompt("' . addslashes(__('请输入要购买的正式域名（如 example.com）')) . '", "");';
+            $html[] = '    boughtDomain = String(boughtDomain || "").trim().toLowerCase();';
+            $html[] = '    if (!boughtDomain) { return; }';
+            $html[] = '    if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(boughtDomain)) {';
+            $html[] = '      notify("' . addslashes(__('域名格式无效')) . '", "warning");';
+            $html[] = '      return;';
+            $html[] = '    }';
+            $html[] = '    fetch(purchaseAccountsApi).then(function(r){ return r.json(); }).then(function(accRes) {';
+            $html[] = '      var accounts = (accRes && (accRes.data || accRes.accounts || accRes.items)) || [];';
+            $html[] = '      if (!Array.isArray(accounts) || !accounts.length) {';
+            $html[] = '        notify("' . addslashes(__('暂无可用域名购买账户，请先在域名管理中配置。')) . '", "warning");';
+            $html[] = '        return null;';
+            $html[] = '      }';
+            $html[] = '      var accountId = parseInt((accounts[0].account_id || accounts[0].id || 0), 10) || 0;';
+            $html[] = '      var openDialog = window.WelineDomainPurchaseDialog && window.WelineDomainPurchaseDialog.open';
+            $html[] = '        ? window.WelineDomainPurchaseDialog.open({ accounts: accounts })';
+            $html[] = '        : Promise.resolve({ resolve_to_local: "yes", subdomains: "@,www", start_lifecycle: "1", dns_choice: "follow_registrar", cdn_choice: "follow_registrar" });';
+            $html[] = '      return openDialog.then(function(cfg) {';
+            $html[] = '        if (!cfg) { return; }';
+            $html[] = '        if (!accountId) { notify("' . addslashes(__('请选择域名购买账户')) . '", "warning"); return; }';
+            $html[] = '        var fd = new FormData();';
+            $html[] = '        fd.append("account_id", String(accountId));';
+            $html[] = '        fd.append("auto_resolve", "1");';
+            $html[] = '        fd.append("resolve_to_local", cfg.resolve_to_local || "yes");';
+            $html[] = '        fd.append("subdomains", cfg.subdomains || "@,www");';
+            $html[] = '        fd.append("dns_choice", cfg.dns_choice || "follow_registrar");';
+            $html[] = '        fd.append("dns_provider", cfg.dns_provider || "");';
+            $html[] = '        fd.append("dns_account_id", cfg.dns_account_id || "0");';
+            $html[] = '        fd.append("dns_nameservers", cfg.dns_nameservers || "");';
+            $html[] = '        fd.append("cdn_choice", cfg.cdn_choice || "follow_registrar");';
+            $html[] = '        fd.append("cdn_provider", cfg.cdn_provider || "");';
+            $html[] = '        fd.append("cdn_account_id", cfg.cdn_account_id || "0");';
+            $html[] = '        fd.append("start_lifecycle", cfg.start_lifecycle || "1");';
+            $html[] = '        fd.append("items", JSON.stringify([{ domain: boughtDomain, years: 1 }]));';
+            $html[] = '        return fetch(purchaseApi, { method: "POST", body: fd }).then(function(r){ return r.json(); }).then(function(res) {';
+            $html[] = '          if (!res || res.code !== 200) {';
+            $html[] = '            var msg = (window.WelineDomainPurchaseDialog && window.WelineDomainPurchaseDialog.buildErrorMessage)';
+            $html[] = '              ? window.WelineDomainPurchaseDialog.buildErrorMessage(res && res.data ? res.data : res, "' . addslashes(__('购买失败')) . '")';
+            $html[] = '              : ((res && res.msg) || "' . addslashes(__('购买失败')) . '");';
+            $html[] = '            notify(msg, "error");';
+            $html[] = '            return;';
+            $html[] = '          }';
+            $html[] = '          hidden.value = boughtDomain;';
+            $html[] = '          hidden.dataset.domain = boughtDomain;';
+            $html[] = '          if (display) display.textContent = boughtDomain;';
+            $html[] = '          var mountApiBuy = window.WelineDomainSelectMount && window.WelineDomainSelectMount.get(id);';
+            $html[] = '          if (mountApiBuy) {';
+            $html[] = '            mountApiBuy.setDomainMeta(boughtDomain, { is_local: false, site_created: 0 });';
+            $html[] = '            mountApiBuy.setDomainSource("purchase");';
+            $html[] = '            mountApiBuy.refresh();';
+            $html[] = '          }';
+            $html[] = '          try { hidden.dispatchEvent(new Event("change")); } catch (_e) {}';
+            $html[] = '          doAutoFill();';
+            $html[] = '          loadData();';
+            $html[] = '          notify("' . addslashes(__('域名购买已提交，并已选中该域名。')) . '", "success");';
+            $html[] = '        });';
+            $html[] = '      });';
+            $html[] = '    }).catch(function(){ notify("' . addslashes(__('请求失败')) . '", "error"); });';
+            $html[] = '  });';
             $html[] = '}';
             $html[] = 'trigger.addEventListener("click", function() {';
             $html[] = '  setTimeout(function() {';
