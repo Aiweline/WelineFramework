@@ -42,7 +42,7 @@ final class PassthroughCoreFirstByteTimeoutTest extends TestCase
             $this->invokePrivateMethod(
                 $core,
                 'shouldTreatSilentWorkerAsFailure',
-                ['request_sent_at' => \microtime(true) - 1.0],
+                ['request_sent_at' => (\hrtime(true) / 1_000_000_000) - 1.0],
                 0
             )
         );
@@ -56,7 +56,7 @@ final class PassthroughCoreFirstByteTimeoutTest extends TestCase
             $this->invokePrivateMethod(
                 $core,
                 'shouldTreatSilentWorkerAsFailure',
-                ['request_sent_at' => \microtime(true) - 3.0],
+                ['request_sent_at' => (\hrtime(true) / 1_000_000_000) - 3.0],
                 0
             )
         );
@@ -65,7 +65,7 @@ final class PassthroughCoreFirstByteTimeoutTest extends TestCase
             $this->invokePrivateMethod(
                 $core,
                 'shouldTreatSilentWorkerAsFailure',
-                ['request_sent_at' => \microtime(true) - 6.0],
+                ['request_sent_at' => (\hrtime(true) / 1_000_000_000) - 6.0],
                 0
             )
         );
@@ -80,7 +80,7 @@ final class PassthroughCoreFirstByteTimeoutTest extends TestCase
             $this->invokePrivateMethod(
                 $core,
                 'shouldTreatSilentWorkerAsFailure',
-                ['request_sent_at' => \microtime(true) - 1.0],
+                ['request_sent_at' => (\hrtime(true) / 1_000_000_000) - 1.0],
                 1
             )
         );

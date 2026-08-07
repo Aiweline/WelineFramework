@@ -29,6 +29,11 @@ require_once \dirname(__DIR__) . '/bin/worker_http_message.php';
  */
 final class WorkerPolicyKernel
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private const EDGE_AUTH_HEADER = 'x-wls-edge-token';
 
     private const EDGE_CLIENT_PROTOCOL_HEADER = 'x-wls-client-protocol';
@@ -1456,7 +1461,7 @@ final class WorkerPolicyKernel
         if (!$this->rateLimiter->shouldReconnectSharedState()) {
             return;
         }
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($now - $this->lastStateReconnectAttempt < 1.0) {
             return;
         }

@@ -27,6 +27,8 @@ class AiSiteProvisioningRequest extends Model
 
     public const DOMAIN_MODE_TEST = 'test';
     public const DOMAIN_MODE_PURCHASE = 'purchase';
+    /** Pool-existing domain: bind WebsiteDomain only, no purchase / no *.weline.test force. */
+    public const DOMAIN_MODE_BIND = 'bind';
 
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '请求主键')]
     public const schema_fields_ID = 'ai_site_provisioning_request_id';
@@ -51,6 +53,9 @@ class AiSiteProvisioningRequest extends Model
 
     #[Col(type: 'varchar', length: 253, nullable: false, default: '', comment: '规范化目标域名')]
     public const schema_fields_TARGET_DOMAIN = 'target_domain';
+
+    #[Col(type: 'varchar', length: 128, nullable: false, default: '', comment: '站点挂载子路径；空表示整域，如 /shop')]
+    public const schema_fields_SUB_PATH = 'sub_path';
 
     #[Col(type: 'int', nullable: true, comment: '正式购买使用的注册商账号ID')]
     public const schema_fields_REGISTRAR_ACCOUNT_ID = 'registrar_account_id';

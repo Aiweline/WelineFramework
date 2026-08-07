@@ -33,6 +33,11 @@ use Weline\Server\Event\EventInterface;
  */
 class Timer
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 定时器 ID 计数器
      */
@@ -103,7 +108,7 @@ class Timer
             'callback' => $callback,
             'args' => $args,
             'persistent' => $persistent,
-            'next_run' => microtime(true) + $interval,
+            'next_run' => self::monotonicSeconds() + $interval,
         ];
         
         return $timerId;

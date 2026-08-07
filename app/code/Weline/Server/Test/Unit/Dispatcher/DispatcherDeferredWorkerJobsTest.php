@@ -527,12 +527,37 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertFalse((bool) $this->getProperty($dispatcher, 'maintenanceFallbackActive'));
     }
 
-    public function testPoolSnapshotQueuesVersionedBusinessSetPoolAndAcknowledges(): void
+    public function testPoolSnapshotTrustsMasterReadyBusinessPoolAndAcknowledges(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
             ->disableOriginalConstructor()
+            ->onlyMethods([
+                'setMaintenanceRoutingActive',
+                'setWorkerPortsFromMasterReady',
+                'getWorkerCount',
+                'getWorkerPorts',
+                'getMaintenanceWorkerPorts',
+                'getWorkerHealthSummary',
+            ])
             ->getMock();
+        $core->expects(self::once())
+            ->method('setMaintenanceRoutingActive')
+            ->with(false);
+        $core->expects(self::once())
+            ->method('setWorkerPortsFromMasterReady')
+            ->with([18082, 18081])
+            ->willReturn([
+                'accepted' => [18082, 18081],
+                'rejected' => [],
+            ]);
+        $core->method('getWorkerCount')->willReturn(2);
+        $core->method('getWorkerPorts')->willReturn([18082, 18081]);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
+        $core->method('getWorkerHealthSummary')->willReturn([
+            'healthy' => 2,
+            'total' => 2,
+        ]);
 
         $client = new class implements ChildControlClientInterface {
             public array $sent = [];
@@ -568,6 +593,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $this->setProperty($dispatcher, 'ipcClient', $client);
         $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
         $this->setProperty($dispatcher, 'lastAppliedWorkerPoolSnapshotVersion', 0);
+        $this->setProperty($dispatcher, 'port', 9981);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
         $method->setAccessible(true);
@@ -583,37 +609,20 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
             ],
         ]);
 
-        self::assertSame([
-            [
-                'type' => 'set_pool',
-                'ports' => [18082, 18081],
-                'workers' => [
-                    [
-                        'role' => ControlMessage::ROLE_WORKER,
-                        'slot_id' => 'worker#2',
-                        'lease_id' => 'lease-2',
-                        'generation' => 4,
-                        'port' => 18082,
-                        'state' => 'ready',
-                    ],
-                    [
-                        'role' => ControlMessage::ROLE_WORKER,
-                        'slot_id' => 'worker#1',
-                        'lease_id' => 'lease-1',
-                        'generation' => 7,
-                        'port' => 18081,
-                        'state' => 'ready',
-                    ],
-                ],
-                'role' => ControlMessage::ROLE_WORKER,
-                'pool_snapshot_version' => 9,
-                'pool_snapshot_scope' => 'business',
-            ],
-        ], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
         self::assertSame(9, $this->getProperty($dispatcher, 'lastAppliedWorkerPoolSnapshotVersion'));
-        self::assertCount(1, $client->sent);
-        $ack = \json_decode(\trim($client->sent[0]), true);
-        self::assertSame(ControlMessage::TYPE_POOL_SNAPSHOT_ACK, $ack['type'] ?? null);
+        self::assertGreaterThanOrEqual(1, \count($client->sent));
+        $ack = null;
+        foreach ($client->sent as $raw) {
+            $decoded = \json_decode(\trim((string)$raw), true);
+            if (\is_array($decoded)
+                && ($decoded['type'] ?? null) === ControlMessage::TYPE_POOL_SNAPSHOT_ACK
+            ) {
+                $ack = $decoded;
+                break;
+            }
+        }
+        self::assertIsArray($ack);
         self::assertSame(9, $ack['version'] ?? null);
         self::assertSame('business', $ack['scope'] ?? null);
         self::assertTrue($ack['accepted'] ?? false);

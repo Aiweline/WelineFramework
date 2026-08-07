@@ -56,7 +56,7 @@ final class SessionServerShutdownCommandTest extends TestCase
             self::assertFalse($server->isRunning());
         } finally {
             $server->stop();
-            $tokenPath = BP . 'var/session/' . $tokenFileName;
+            $tokenPath = \Weline\Server\Service\SharedStateRuntimeScope::tokenFilePath($tokenFileName);
             if (\is_file($tokenPath)) {
                 @\unlink($tokenPath);
             }

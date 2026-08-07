@@ -45,7 +45,7 @@ final class GatewayStopRegistrationPolicyTest extends TestCase
     {
         $decision = GatewayStopRegistrationPolicy::decide(
             $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERED, 2),
-            $this->status([]),
+            $this->ownStatus([]),
             \str_repeat('f', 64),
         );
 
@@ -57,7 +57,7 @@ final class GatewayStopRegistrationPolicyTest extends TestCase
     {
         $decision = GatewayStopRegistrationPolicy::decide(
             $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERING, 1),
-            $this->status([]),
+            $this->ownStatus([]),
             \str_repeat('f', 64),
         );
 
@@ -68,7 +68,7 @@ final class GatewayStopRegistrationPolicyTest extends TestCase
     {
         $decision = GatewayStopRegistrationPolicy::decide(
             $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERED, 2),
-            $this->status([[
+            $this->ownStatus([[
                 'instance_id' => 'shop',
                 'status' => 'ACTIVE',
                 'generation' => 7,
@@ -81,11 +81,50 @@ final class GatewayStopRegistrationPolicyTest extends TestCase
         self::assertSame(GatewayStopRegistrationPolicy::ACTION_DRAIN, $decision['action']);
     }
 
+    public function testExactAuthenticatedStaleLaunchStillRequiresHostRetirement(): void
+    {
+        $decision = GatewayStopRegistrationPolicy::decide(
+            $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERED, 2),
+            $this->ownStatus([[
+                'instance_id' => 'shop',
+                'status' => 'STALE',
+                'generation' => 7,
+                'master_epoch' => 11,
+                'launch_id' => \str_repeat('b', 32),
+            ]]),
+            \str_repeat('f', 64),
+        );
+
+        self::assertSame(GatewayStopRegistrationPolicy::ACTION_DRAIN, $decision['action']);
+        self::assertSame('STALE', $decision['host_instance_status'] ?? null);
+    }
+
+    public function testExactAuthenticatedRemovedLaunchCannotBeReactivatedByStop(): void
+    {
+        $decision = GatewayStopRegistrationPolicy::decide(
+            $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERED, 2),
+            $this->ownStatus([[
+                'instance_id' => 'shop',
+                'status' => 'REMOVED',
+                'generation' => 7,
+                'master_epoch' => 11,
+                'launch_id' => \str_repeat('b', 32),
+            ]]),
+            \str_repeat('f', 64),
+        );
+
+        self::assertSame(
+            GatewayStopRegistrationPolicy::ACTION_LOCAL_ONLY,
+            $decision['action'],
+        );
+        self::assertSame('REMOVED', $decision['host_instance_status'] ?? null);
+    }
+
     public function testSameInstanceIdFromAnotherLaunchBlocksDestructiveDrain(): void
     {
         $decision = GatewayStopRegistrationPolicy::decide(
             $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERED, 2),
-            $this->status([[
+            $this->ownStatus([[
                 'instance_id' => 'shop',
                 'status' => 'ACTIVE',
                 'generation' => 7,
@@ -102,7 +141,7 @@ final class GatewayStopRegistrationPolicyTest extends TestCase
     {
         $decision = GatewayStopRegistrationPolicy::decide(
             $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERING, 1),
-            $this->status([[
+            $this->ownStatus([[
                 'instance_id' => 'shop',
                 'status' => 'ACTIVE',
                 'generation' => 7,
@@ -119,7 +158,7 @@ final class GatewayStopRegistrationPolicyTest extends TestCase
     {
         $decision = GatewayStopRegistrationPolicy::decide(
             $this->retiringEndpoint(GatewayRegistrationLifecycle::STATE_REGISTERED, 2),
-            $this->status([]),
+            $this->ownStatus([]),
             \str_repeat('a', 64),
         );
 
@@ -172,7 +211,7 @@ final class GatewayStopRegistrationPolicyTest extends TestCase
     }
 
     /** @param list<array<string,mixed>> $instances @return array<string,mixed> */
-    private function status(array $instances): array
+    private function ownStatus(array $instances): array
     {
         return [
             'ok' => true,

@@ -46,6 +46,26 @@ final class EdgeRuntimeDecision
         ) {
             throw new \InvalidArgumentException('WLS edge decision contains an invalid mode.');
         }
+        $allowedResolvedModes = match ($requestedMode) {
+            GatewayStartupDecision::MODE_AUTO => [
+                GatewayStartupDecision::MODE_GATEWAY,
+                GatewayStartupDecision::MODE_WLS,
+            ],
+            GatewayStartupDecision::MODE_GATEWAY => [
+                GatewayStartupDecision::MODE_GATEWAY,
+            ],
+            GatewayStartupDecision::MODE_WLS => [
+                GatewayStartupDecision::MODE_WLS,
+            ],
+            GatewayStartupDecision::MODE_LEGACY => [
+                GatewayStartupDecision::MODE_LEGACY,
+            ],
+        };
+        if (!\in_array($mode, $allowedResolvedModes, true)) {
+            throw new \InvalidArgumentException(
+                'WLS edge decision contains an invalid requested/resolved mode transition.'
+            );
+        }
         if ($source !== \trim($source)
             || $reason !== \trim($reason)
             || $fallbackReason !== \trim($fallbackReason)
@@ -95,8 +115,25 @@ final class EdgeRuntimeDecision
         ) {
             throw new \InvalidArgumentException('Pure WLS mode requires the project WLS scope.');
         }
+        if ($mode === GatewayStartupDecision::MODE_LEGACY
+            && ($adapter !== EdgeAdapterInterface::NAME_NGINX || $scope !== self::SCOPE_LEGACY)
+        ) {
+            throw new \InvalidArgumentException('Legacy mode requires the legacy Nginx scope.');
+        }
         if ($fallbackPort !== 0 && ($fallbackPort < 20000 || $fallbackPort > 29999)) {
             throw new \InvalidArgumentException('WLS fallback port must be zero or in 20000..29999.');
+        }
+        if ($mode !== GatewayStartupDecision::MODE_WLS
+            && ($fallbackPort !== 0 || $portLease !== [])
+        ) {
+            throw new \InvalidArgumentException(
+                'Only pure WLS mode may carry a public port lease or fallback port.'
+            );
+        }
+        if ($fallbackPort !== 0 && $portLease === []) {
+            throw new \InvalidArgumentException(
+                'An advertised WLS fallback port requires a retained public port lease.'
+            );
         }
         if ($requestedMode === GatewayStartupDecision::MODE_AUTO
             && $mode === GatewayStartupDecision::MODE_WLS
@@ -105,8 +142,12 @@ final class EdgeRuntimeDecision
             throw new \InvalidArgumentException('Automatic pure-WLS fallback requires a reason.');
         }
         if ($portLease !== []) {
-            $leasePort = (int)($portLease['port'] ?? 0);
-            $allocationScope = (string)($portLease['allocation_scope'] ?? '');
+            $leasePort = \is_int($portLease['port'] ?? null)
+                ? $portLease['port']
+                : 0;
+            $allocationScope = \is_string($portLease['allocation_scope'] ?? null)
+                ? $portLease['allocation_scope']
+                : '';
             $scopeIsValid = ($allocationScope === 'stable_range'
                     && $leasePort >= 20000
                     && $leasePort <= 29999
@@ -116,16 +157,27 @@ final class EdgeRuntimeDecision
                     && $leasePort <= 65535
                     && $fallbackPort === 0);
             if (!$scopeIsValid
-                || (int)($portLease['schema_version'] ?? 0) !== 5
+                || !\is_int($portLease['schema_version'] ?? null)
+                || $portLease['schema_version']
+                    !== GatewayPortLeaseAllocator::SCHEMA_VERSION
+                || !\is_string($portLease['state'] ?? null)
                 || !\hash_equals('RESERVED', (string)($portLease['state'] ?? ''))
+                || !\is_string($portLease['lease_id'] ?? null)
                 || \preg_match(
                     '/\A[a-f0-9]{32}\z/D',
                     (string)($portLease['lease_id'] ?? ''),
                 ) !== 1
+                || !\is_string($portLease['instance'] ?? null)
                 || \preg_match(
                     '/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D',
                     (string)($portLease['instance'] ?? ''),
                 ) !== 1
+                || !\is_string($portLease['project_uuid'] ?? null)
+                || \preg_match(
+                    '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                    (string)($portLease['project_uuid'] ?? ''),
+                ) !== 1
+                || !\is_string($portLease['bind_host'] ?? null)
                 || \filter_var(
                     (string)($portLease['bind_host'] ?? ''),
                     FILTER_VALIDATE_IP,

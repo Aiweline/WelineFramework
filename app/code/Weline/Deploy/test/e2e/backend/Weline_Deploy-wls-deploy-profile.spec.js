@@ -79,7 +79,7 @@ moduleDescribe(test, MODULE, 'WLS Deploy profile panel', () => {
       await page.locator('#wdep-profile-webhook-secret').fill('e2e-project-secret');
       await page.locator('#wdep-profile-git-mode').selectOption('pull_ff_only');
       await page.locator('#wdep-profile-composer').fill('composer install --no-dev --prefer-dist');
-      await page.locator('#wdep-profile-post-command').fill('php bin/w setup:upgrade --route');
+      await page.locator('#wdep-profile-post-command').fill('php bin/w setup:upgrade');
       await page.locator('#wdep-profile-rollback').fill('last-stable');
       await page.locator('#wdep-profile-description').fill('E2E project deploy profile');
 

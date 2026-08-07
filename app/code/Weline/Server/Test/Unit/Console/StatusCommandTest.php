@@ -477,6 +477,103 @@ final class StatusCommandTest extends TestCase
         ]));
     }
 
+    public function testFallbackPresentationConsumesProjectedHttpOrigin(): void
+    {
+        $raw = [
+            'edge_adapter' => 'wls',
+            'gateway' => [
+                'requested_mode' => 'auto',
+                'serving_mode' => 'fallback_wls',
+            ],
+        ];
+        $manager = new class($raw) extends \Weline\Server\Service\ServerInstanceManager {
+            /** @param array<string,mixed> $raw */
+            public function __construct(private readonly array $raw)
+            {
+            }
+
+            public function getRawInstanceData(string $name): ?array
+            {
+                return $this->raw;
+            }
+        };
+        $status = new class($manager) extends Status {
+            public function __construct(
+                private readonly \Weline\Server\Service\ServerInstanceManager $manager,
+            ) {
+            }
+
+            /** @return array<string,mixed> */
+            public function presentation(ServerInstanceInfo $info): array
+            {
+                return $this->resolveServingPresentation($info->name, $info);
+            }
+
+            protected function getInstanceManager(): \Weline\Server\Service\ServerInstanceManager
+            {
+                return $this->manager;
+            }
+
+            protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
+            {
+                return [
+                    'origin' => 'http://shop.example.test:27675',
+                    'bind_host' => '127.0.0.1',
+                    'connect_host' => '127.0.0.1',
+                    'authority_host' => 'shop.example.test',
+                    'port' => 27675,
+                    'https' => false,
+                ];
+            }
+        };
+
+        $presentation = $status->presentation(
+            $this->createInstanceInfo('auto-http-fallback', []),
+        );
+
+        self::assertSame('http://shop.example.test:27675', $presentation['endpoint']);
+        self::assertTrue($presentation['public']);
+        self::assertSame('fallback_wls', $presentation['source']);
+    }
+
+    public function testFallbackStatusConsumesOnlyProjectedHttpOrigin(): void
+    {
+        $status = new class extends Status {
+            /** @return array<string,mixed>|null */
+            public function fallback(array $gatewayRuntime, array $endpoint): ?array
+            {
+                return $this->resolveGatewayFallbackStatus(
+                    null,
+                    $gatewayRuntime,
+                    $endpoint,
+                );
+            }
+
+            protected function runtimeFallbackServingEndpoint(array $endpoint): ?array
+            {
+                return [
+                    'origin' => 'http://shop.example.test:27676',
+                    'bind_host' => '127.0.0.1',
+                    'connect_host' => '127.0.0.1',
+                    'authority_host' => 'shop.example.test',
+                    'port' => 27676,
+                    'https' => false,
+                ];
+            }
+        };
+
+        $fallback = $status->fallback(
+            [
+                'fallback_state' => 'DEGRADED_WLS',
+                'fallback_urls' => ['https://forged.example.test:27676'],
+            ],
+            ['gateway' => ['requested_mode' => 'auto']],
+        );
+
+        self::assertIsArray($fallback);
+        self::assertSame(['http://shop.example.test:27676'], $fallback['urls']);
+    }
+
     public function testPureWlsHttpDiagnosticAuthorityAcceptsCanonicalLoopbackHosts(): void
     {
         $method = new \ReflectionMethod(

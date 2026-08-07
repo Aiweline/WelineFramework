@@ -8,7 +8,8 @@ namespace Weline\Server\Service;
  * Isolates localhost sidecars when the project tree is shared across runtime
  * environments (for example, Parallels UNC or a Colima bind mount).
  *
- * macOS keeps the historical names. Windows combines the project and local
+ * Unix keeps the historical token names but stores them below a dedicated
+ * low-cardinality state directory. Windows combines the project and local
  * user profile identities, while Linux adds a network-namespace identity.
  * Explicit file names remain authoritative and are not passed through this
  * helper.
@@ -18,9 +19,19 @@ final class SharedStateRuntimeScope
     public static function tokenDirectory(): string
     {
         if (\PHP_OS_FAMILY !== 'Windows') {
-            return \defined('BP')
-                ? BP . 'var' . \DIRECTORY_SEPARATOR . 'session' . \DIRECTORY_SEPARATOR
-                : \rtrim(\sys_get_temp_dir(), '\\/') . \DIRECTORY_SEPARATOR . 'wls_session' . \DIRECTORY_SEPARATOR;
+            $basePath = \defined('BP')
+                ? BP . 'var' . \DIRECTORY_SEPARATOR . 'session'
+                : \rtrim(\sys_get_temp_dir(), '\\/') . \DIRECTORY_SEPARATOR . 'wls_session';
+
+            // PHP's native Session directory can contain hundreds of
+            // thousands of files. Token publication must enumerate its
+            // recovery directory to reject aliases and malformed atomic
+            // artifacts, so keep the security boundary in a dedicated,
+            // low-cardinality directory instead of weakening that scan.
+            return \rtrim($basePath, '\\/')
+                . \DIRECTORY_SEPARATOR . '.wls-state'
+                . \DIRECTORY_SEPARATOR . 'tokens'
+                . \DIRECTORY_SEPARATOR;
         }
 
         // A Parallels/shared-folder BP is an UNC path. Authentication token

@@ -29,6 +29,7 @@ use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\MasterChildCredentialStore;
 use Weline\Server\Service\MasterLeaseManager;
 use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -47,6 +48,7 @@ use Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectEndpointReader;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Runtime\PhpRuntimeSafetyProfile;
 use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
 use Weline\Server\Service\Runtime\RuntimeDependencyBootstrapper;
@@ -197,6 +199,14 @@ class Start extends CommandAbstract
      * 已执行 startMasterInBackground / runMasterProcess 尝试拉起子进程；fatal 退出时需清理残留
      */
     private bool $wlsChildProcessesMayExist = false;
+
+    /**
+     * Exact process-birth authority for the detached Master created by this
+     * launcher. It is never reconstructed from a port or name-prefix scan.
+     *
+     * @var array{pid:int,process_birth:string,pid_namespace_id:string,process_name:string,launch_id:string,pname:string}|null
+     */
+    private ?array $spawnedMasterTerminationLease = null;
 
     /** @var array<string,mixed>|null pre-start public listener lease */
     private ?array $startupPublicEdgeLease = null;
@@ -458,8 +468,20 @@ class Start extends CommandAbstract
                     $ownerBirth,
                     $ownerPidNamespace,
                 )) {
-                    Processer::killProcessTreeByPid($ownerPid, true)
-                        || Processer::killByPid($ownerPid, true);
+                    $takeover = $ownerRuntimeIdentity->terminateExactProcessIdentity(
+                        $ownerPid,
+                        $ownerBirth,
+                        $ownerPidNamespace,
+                        0.5,
+                    );
+                    if (!(bool)($takeover['released'] ?? false)) {
+                        $this->printer->error(__(
+                            '启动锁持有者无法通过稳定进程句柄安全终止；'
+                            . '已拒绝使用裸 PID 强制接管。reason=%{1}',
+                            [(string)($takeover['reason'] ?? 'stable termination unavailable')],
+                        ));
+                        return 1;
+                    }
                 }
             }
             if ($this->acquireStartLock($instanceName, 2)) {
@@ -926,7 +948,8 @@ class Start extends CommandAbstract
                 $leaseBindHost = \strtolower(\trim((string)(
                     $publicLease['bind_host'] ?? ''
                 ), " \t\n\r\0\x0B[]"));
-                if ((int)($publicLease['schema_version'] ?? 0) === 5
+                if ((int)($publicLease['schema_version'] ?? 0)
+                        === GatewayPortLeaseAllocator::SCHEMA_VERSION
                     && \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
                         $publicLease['lease_id'] ?? ''
                     )) === 1
@@ -980,6 +1003,10 @@ class Start extends CommandAbstract
                 $sslKey = Processer::resolveWindowsPersistentPath((string)$sslKey);
             }
             $sslEnabled = (bool) ($sslResult['ssl_enabled'] ?? true);
+            $retiredHttpOnly = \hash_equals(
+                'TLS_CERTIFICATE_RETIRED_HTTP_ONLY',
+                (string)($sslResult['code'] ?? ''),
+            );
             $certificatePending = $gatewayMode
                 && (($sslResult['pending_certificate'] ?? false) === true);
             $activeCertificate = null;
@@ -1041,6 +1068,7 @@ class Start extends CommandAbstract
                 ? (string)($sslResult['domain'] ?? '')
                 : $this->resolveCertificateHost($config, (string)$host);
             if (!$servingManifestRecovery
+                && ($sslEnabled || $certificatePending)
                 && ($gatewayMode
                     || $edgeDecision->requestedMode
                         === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO)
@@ -1157,6 +1185,7 @@ class Start extends CommandAbstract
         if (!$pureWls
             && !$sslEnabled
             && !($gatewayMode && $certificatePending)
+            && !($gatewayMode && $retiredHttpOnly)
         ) {
             $this->printer->error(__('Nginx-only 公网端点要求 TLS 1.3；已拒绝 --no-ssl。'));
             return 1;
@@ -2057,39 +2086,16 @@ class Start extends CommandAbstract
                     goto wls_http_redirect_conflict_done;
                 }
 
-                // 深橙色警告提示
-                $this->printer->warning(__('HTTP Redirect 端口 %{1} 被占用: %{2}', [$httpRedirectPort, $processName]));
-                $this->printer->note(__('是否强制停用该进程以释放端口？[y/N]: ', []));
-                echo '  > ';
-                $input = \trim((string)@\fgets(STDIN));
-                if (!\in_array(\strtolower($input), ['y', 'yes', '是'], true)) {
-                    $this->printer->note(__('已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。', [$httpRedirectPort]));
-                    $this->printer->note(__('提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
-                    // 禁用 HTTP Redirect
-                    $httpRedirectPort = 0;
-                } else {
-                    // 用户确认，尝试强制释放
-                    $this->printer->note(__('正在强制停用占用端口 %{1} 的进程...', [$httpRedirectPort]));
-                    $released = Processer::killProcessByPort($httpRedirectPort);
-                    if (!$released) {
-                        $released = Processer::forceReleasePort($httpRedirectPort);
-                    }
-                    if (IS_WIN && !$released) {
-                        $waited = 0;
-                        while ($waited < 3000 && Processer::isPortInUse($httpRedirectPort)) {
-                            SchedulerSystem::usleep(300000);
-                            $waited += 300;
-                        }
-                        $released = !Processer::isPortInUse($httpRedirectPort);
-                    }
-                    if (!Processer::isPortInUse($httpRedirectPort)) {
-                        $this->printer->success(__('端口 %{1} 已释放，HTTP Redirect 将正常启动', [$httpRedirectPort]));
-                    } else {
-                        $this->printer->error(__('无法释放端口 %{1}，HTTP Redirect 将不启用', [$httpRedirectPort]));
-                        $this->printer->note(__('提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
-                        $httpRedirectPort = 0;
-                    }
-                }
+                // WLS 2.0 never turns a port observation into permission to
+                // kill an unknown process, even after an interactive prompt.
+                $this->printer->warning(__('HTTP Redirect 端口 %{1} 被未知进程占用: %{2}', [
+                    $httpRedirectPort,
+                    $processName,
+                ]));
+                $this->printer->note(__(
+                    '已保留该进程；HTTP→HTTPS 重定向将不启用。请手动处理 owner 或改用非 443 主端口。'
+                ));
+                $httpRedirectPort = 0;
             }
         }
         
@@ -2208,6 +2214,7 @@ class Start extends CommandAbstract
                 $backendSslEnabled,
                 $listenHost,
                 $port,
+                $launchId,
                 $foregroundMode,
                 $windowMode,
                 $args,
@@ -3064,6 +3071,7 @@ class Start extends CommandAbstract
         bool $sslEnabled = false,
         string $host = '127.0.0.1',
         int $port = 443,
+        string $launchId = '',
         bool $foregroundMode = false,
         bool $windowMode = false,
         array $args = [],
@@ -3073,15 +3081,19 @@ class Start extends CommandAbstract
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
         $masterName = MasterProcess::getMasterProcessName($instanceName);
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1) {
+            throw new \RuntimeException('Detached Master launch identity is invalid.');
+        }
         $argv = $this->buildMasterBackgroundArgv(
             $phpBinary,
             $script,
             $instanceName,
             $masterName,
+            $launchId,
             $foregroundMode,
             $windowMode
         );
-        $processIdentity = '--name=' . $masterName;
+        $processIdentity = '--name=' . $masterName . ' --launch-id=' . $launchId;
         $inheritedDescriptors = $this->startupMasterInheritedDescriptors();
         $spawnTransport = IS_WIN
             ? 'windows_wmi_isolated_argv'
@@ -3097,20 +3109,14 @@ class Start extends CommandAbstract
         ]);
 
         $spawnedMasterPid = 0;
+        $this->spawnedMasterTerminationLease = null;
         try {
             if (IS_WIN) {
-                $spawnedMasterPid = Processer::createWindowsIsolatedArgv($argv, BP, $masterName);
-                if (\is_array($this->startupWindowsListenerHandoffIntent)) {
-                    $intent = $this->startupWindowsListenerHandoffIntent;
-                    $listener = $this->startupListenerForLeaseId(
-                        (string)($intent['lease_id'] ?? ''),
-                    );
-                    WindowsListenerHandoff::publishStreamToMaster(
-                        $listener,
-                        $intent,
-                        $spawnedMasterPid,
-                    );
-                }
+                $spawnedMasterPid = Processer::createWindowsIsolatedArgv(
+                    $argv,
+                    BP,
+                    $processIdentity,
+                );
             } elseif ($inheritedDescriptors !== []) {
                 $command = \implode(' ', \array_map('escapeshellarg', $argv));
                 $spawnResults = Processer::batchCreate([
@@ -3132,7 +3138,6 @@ class Start extends CommandAbstract
                         'POSIX Master inherited-listener launcher did not return a child PID.'
                     );
                 }
-                Processer::setPid($processIdentity, $spawnedMasterPid);
             } else {
                 $spawnedMasterPid = Processer::createDetachedPhpArgv(
                     $argv,
@@ -3141,12 +3146,48 @@ class Start extends CommandAbstract
                     null
                 );
             }
-        } catch (\Throwable $exception) {
-            if ($spawnedMasterPid > 0 && Processer::isRunningByPid($spawnedMasterPid)) {
-                Processer::killProcessTreeByPid($spawnedMasterPid, true);
+            if ($spawnedMasterPid <= 0) {
+                throw new \RuntimeException(
+                    'Detached Master launcher did not return an authoritative child PID.'
+                );
             }
+            // Publish the generation-aware Processer lease on every transport,
+            // then freeze the boot-stable PID birth before any socket handoff.
+            Processer::setPid($processIdentity, $spawnedMasterPid, false);
+            $spawnedIdentity = $this->getMasterLeaseRuntimeIdentity()
+                ->captureProcessIdentity($spawnedMasterPid);
+            $this->spawnedMasterTerminationLease = [
+                'pid' => $spawnedMasterPid,
+                'process_birth' => (string)$spawnedIdentity['birth'],
+                'pid_namespace_id' => (string)$spawnedIdentity['pid_namespace_id'],
+                'process_name' => $masterName,
+                'launch_id' => $launchId,
+                'pname' => $processIdentity,
+            ];
+            if (IS_WIN && \is_array($this->startupWindowsListenerHandoffIntent)) {
+                $intent = $this->startupWindowsListenerHandoffIntent;
+                $listener = $this->startupListenerForLeaseId(
+                    (string)($intent['lease_id'] ?? ''),
+                );
+                WindowsListenerHandoff::publishStreamToMaster(
+                    $listener,
+                    $intent,
+                    $spawnedMasterPid,
+                );
+            }
+        } catch (\Throwable $exception) {
+            $retired = $spawnedMasterPid <= 0
+                || $this->terminateSpawnedMasterProcess($instanceName, $spawnedMasterPid);
             $this->closeStartupListenerCopies();
-            $this->recordMasterOnlyStartupFailure($instanceName, $exception);
+            $failure = $retired
+                ? $exception
+                : new \RuntimeException(
+                    $exception->getMessage()
+                    . ' The spawned Master could not be retired through an exact stable process handle.',
+                    0,
+                    $exception,
+                );
+            $this->recordMasterOnlyStartupFailure($instanceName, $failure);
             $this->traceStartupPhase($instanceName, 'master-spawn:failed', [
                 'failure_class' => \get_class($exception),
             ]);
@@ -3436,13 +3477,17 @@ class Start extends CommandAbstract
                 ? $lastData
                 : $this->readBackgroundStartupData($instanceFile);
             if (!$this->isBackgroundStartupTerminalFailure($lastData)) {
-                Processer::killProcessTreeByPid($spawnedMasterPid, true);
+                $retired = $this->terminateSpawnedMasterProcess(
+                    $instanceName,
+                    $spawnedMasterPid,
+                );
                 $this->recordMasterOnlyStartupFailure(
                     $instanceName,
                     new \RuntimeException(
                         'Master did not publish its control endpoint within '
                         . \number_format($hardWaitMs / 1000, 2)
-                        . ' seconds; the spawned process was terminated.'
+                        . ' seconds; exact retirement '
+                        . ($retired ? 'was verified.' : 'could not be verified.')
                     )
                 );
                 $lastData = $this->readBackgroundStartupData($instanceFile);
@@ -3470,6 +3515,73 @@ class Start extends CommandAbstract
         // numeric-port race during diagnostics and rollback.
         $this->closeStartupListenerCopies();
         return $startupCompleted;
+    }
+
+    /**
+     * Retire only the detached Master generation created by this launcher.
+     * The stable PID birth is captured before handoff; a protected Master lease
+     * may recover the same tuple after publication. No name/port fallback may
+     * authorize a signal.
+     */
+    protected function terminateSpawnedMasterProcess(
+        string $instanceName,
+        int $spawnedMasterPid,
+    ): bool {
+        if ($spawnedMasterPid <= 0) {
+            return true;
+        }
+        $candidate = $this->spawnedMasterTerminationLease;
+        if (!\is_array($candidate)
+            || (int)($candidate['pid'] ?? 0) !== $spawnedMasterPid
+        ) {
+            $candidate = null;
+            $lease = $this->getMasterLeaseManager()->read(
+                $this->getMasterLeasePathForInstance($instanceName),
+            );
+            if (\is_array($lease)
+                && \hash_equals($instanceName, (string)($lease['instance'] ?? ''))
+                && (int)($lease['master_pid'] ?? 0) === $spawnedMasterPid
+            ) {
+                $candidate = [
+                    'pid' => $spawnedMasterPid,
+                    'process_birth' => (string)($lease['master_process_birth'] ?? ''),
+                    'pid_namespace_id' => (string)($lease['pid_namespace_id'] ?? ''),
+                    'process_name' => MasterProcess::getMasterProcessName($instanceName),
+                    'launch_id' => '',
+                    'pname' => '--name=' . MasterProcess::getMasterProcessName($instanceName),
+                ];
+            }
+        }
+        if (!\is_array($candidate)) {
+            return false;
+        }
+
+        $result = $this->getMasterLeaseRuntimeIdentity()->terminateExactProcessIdentity(
+            $spawnedMasterPid,
+            (string)($candidate['process_birth'] ?? ''),
+            (string)($candidate['pid_namespace_id'] ?? ''),
+            0.5,
+        );
+        if (!(bool)($result['released'] ?? false)) {
+            $this->printer->warning(__(
+                '已拒绝使用裸 PID 终止 Master %{1}：reason=%{2}',
+                [
+                    $spawnedMasterPid,
+                    (string)($result['reason'] ?? 'stable termination result missing'),
+                ],
+            ));
+
+            return false;
+        }
+
+        Processer::removePidFile((string)($candidate['pname'] ?? ''));
+        if (\is_array($this->spawnedMasterTerminationLease)
+            && (int)($this->spawnedMasterTerminationLease['pid'] ?? 0) === $spawnedMasterPid
+        ) {
+            $this->spawnedMasterTerminationLease = null;
+        }
+
+        return true;
     }
 
     /** @param array<string,mixed> $endpoint */
@@ -3515,9 +3627,13 @@ class Start extends CommandAbstract
         string $script,
         string $instanceName,
         string $masterName,
+        string $launchId,
         bool $foregroundMode = false,
         bool $windowMode = false
     ): array {
+        if (\preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1) {
+            throw new \InvalidArgumentException('Master launch ID must be 32 lowercase hex characters.');
+        }
         $argv = [
             $phpBinary,
             ...\Weline\Server\Service\LongRunningPhpRuntime::startupCliArguments(),
@@ -3536,6 +3652,7 @@ class Start extends CommandAbstract
         }
 
         $argv[] = '--name=' . $masterName;
+        $argv[] = '--launch-id=' . $launchId;
 
         if ($windowMode) {
             $argv[] = '--window-title=' . MasterProcess::getMasterProcessDisplayName($instanceName, true);
@@ -4284,6 +4401,17 @@ class Start extends CommandAbstract
         int $workerCount = 0,
     ): bool
     {
+        $masterLease = $this->getMasterLeaseManager()->read(
+            $this->getMasterLeasePathForInstance($instanceName),
+        );
+        $masterPid = \is_array($masterLease)
+            ? (int)($masterLease['master_pid'] ?? 0)
+            : 0;
+        if ($masterPid > 0 && $masterPid !== (int)\getmypid()) {
+            // Authenticated control stop is the preferred cross-platform path;
+            // the stable-handle retirement below is only its bounded fallback.
+            MasterProcess::sendStopCommand($instanceName, false);
+        }
         $workerCount = $workerCount > 0 ? $workerCount : 16;
         $scopedWorkerPrefix = MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName) . '-';
         $scopedMaintenancePrefix = MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-';
@@ -4330,14 +4458,14 @@ class Start extends CommandAbstract
         try {
             foreach ($processNames as $processName) {
                 foreach (Processer::getProcessIdsByName($processName) as $pid) {
-                    if ((int)$pid > 0) {
+                    if ((int)$pid > 0 && (int)$pid !== (int)\getmypid()) {
                         $knownPids[(int)$pid] = true;
                     }
                 }
             }
             foreach ($prefixes as $prefix) {
                 foreach (Processer::getProcessIdsByPrefix($prefix) as $pid) {
-                    if ((int)$pid > 0) {
+                    if ((int)$pid > 0 && (int)$pid !== (int)\getmypid()) {
                         $knownPids[(int)$pid] = true;
                     }
                 }
@@ -4346,7 +4474,28 @@ class Start extends CommandAbstract
             $enumerationComplete = false;
         }
 
-        Processer::killByProcessNamePrefixes($prefixes);
+        $retirementComplete = true;
+        if ($masterPid > 0 && $masterPid !== (int)\getmypid()) {
+            $retirementComplete = $this->terminateSpawnedMasterProcess(
+                $instanceName,
+                $masterPid,
+            );
+        }
+        try {
+            $childOutcomes = (new MasterChildCredentialStore())
+                ->retireGenerationProcesses($instanceName);
+            foreach ($childOutcomes as $outcome) {
+                if (!(bool)($outcome['released'] ?? false)) {
+                    $retirementComplete = false;
+                }
+            }
+        } catch (\Throwable $throwable) {
+            $retirementComplete = false;
+            $this->printer->warning(__(
+                '子进程凭据退役失败：%{1}',
+                [\substr($throwable->getMessage(), 0, 512)],
+            ));
+        }
         $remaining = [];
         if ($knownPids !== []) {
             $exit = Processer::waitForExit(\array_keys($knownPids), 2.0);
@@ -4357,14 +4506,14 @@ class Start extends CommandAbstract
         try {
             foreach ($processNames as $processName) {
                 foreach (Processer::getProcessIdsByName($processName) as $pid) {
-                    if ((int)$pid > 0) {
+                    if ((int)$pid > 0 && (int)$pid !== (int)\getmypid()) {
                         $remaining[(int)$pid] = (int)$pid;
                     }
                 }
             }
             foreach ($prefixes as $prefix) {
                 foreach (Processer::getProcessIdsByPrefix($prefix) as $pid) {
-                    if ((int)$pid > 0) {
+                    if ((int)$pid > 0 && (int)$pid !== (int)\getmypid()) {
                         $remaining[(int)$pid] = (int)$pid;
                     }
                 }
@@ -4372,7 +4521,7 @@ class Start extends CommandAbstract
         } catch (\Throwable) {
             $enumerationComplete = false;
         }
-        if (!$enumerationComplete || $remaining !== []) {
+        if (!$retirementComplete || !$enumerationComplete || $remaining !== []) {
             // Do not release shared-state ownership, erase identity indexes, or
             // release a listener lease while a startup child may still execute.
             return false;
@@ -4628,12 +4777,17 @@ class Start extends CommandAbstract
             return;
         }
         
-        ServerInstanceManager::updateJsonFileAtomically($instanceFile, function (array $data) use ($masterPid, $enabled): array {
+        $published = ServerInstanceManager::updateJsonFileAtomically($instanceFile, function (array $data) use ($masterPid, $enabled): array {
             $data['master_enabled'] = $enabled;
             $data['master_pid'] = $masterPid;
             $data['master_started_at'] = \date('Y-m-d H:i:s');
             return $data;
         });
+        if (!$published) {
+            throw new \RuntimeException(
+                'Failed to atomically publish WLS launcher Master state.'
+            );
+        }
     }
 
     /**
@@ -5689,10 +5843,59 @@ class Start extends CommandAbstract
         $host = $config['host'] ?? '127.0.0.1';
         $certificateHost = $this->resolveCertificateHost($config, (string)$host);
         $legacyCertificateRuntime = $this->isLegacyEdgeRuntimeConfig($config);
+        $retirementRecoveryError = '';
+        try {
+            $sslService->replayPendingCertificateRetirements(5.0, 2);
+        } catch (\Throwable $throwable) {
+            // Pending state remains durable and the Gateway Agent retries it
+            // from a bounded child. This startup must still reject any PEM
+            // fenced by the domain's tombstone below.
+            $retirementRecoveryError = $throwable->getMessage();
+            w_log_error(
+                '[WLS startup] pending certificate retirement replay failed: '
+                    . $retirementRecoveryError,
+            );
+        }
         if (!empty($config['no_ssl'])) {
             return [
                 'success' => true,
                 'message' => 'TLS is disabled by explicit startup intent.',
+                'cert_path' => '',
+                'key_path' => '',
+                'domain' => $certificateHost,
+                'ssl_enabled' => false,
+                'pending_certificate' => false,
+                'is_new' => false,
+            ];
+        }
+        try {
+            $generationStore = new \Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore();
+            $disabledGeneration = $generationStore->disabled($certificateHost);
+            $activeGeneration = $generationStore->active($certificateHost);
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => 'TLS_CERTIFICATE_RETIREMENT_STATE_INVALID: '
+                    . $throwable->getMessage(),
+                'code' => 'TLS_CERTIFICATE_RETIREMENT_STATE_INVALID',
+                'cert_path' => '',
+                'key_path' => '',
+                'domain' => $certificateHost,
+                'ssl_enabled' => false,
+                'pending_certificate' => false,
+                'is_new' => false,
+            ];
+        }
+        if (\is_array($disabledGeneration) && !\is_array($activeGeneration)) {
+            return [
+                'success' => true,
+                'message' => 'TLS_CERTIFICATE_RETIRED_HTTP_ONLY: the project tombstone forbids serving '
+                    . $certificateHost
+                    . ($retirementRecoveryError === ''
+                        ? '; starting an HTTP-only runtime without PEM material.'
+                        : '; retirement recovery remains pending: '
+                            . $retirementRecoveryError),
+                'code' => 'TLS_CERTIFICATE_RETIRED_HTTP_ONLY',
                 'cert_path' => '',
                 'key_path' => '',
                 'domain' => $certificateHost,
@@ -6312,7 +6515,7 @@ class Start extends CommandAbstract
             : $this->startupGatewayBackendListener;
         if (!\is_resource($listener)) {
             throw new \RuntimeException(
-                'A schema-5 startup lease has no retained listener.',
+                'A schema-6 startup lease has no retained listener.',
             );
         }
         if (\PHP_OS_FAMILY === 'Windows') {
@@ -6540,7 +6743,7 @@ class Start extends CommandAbstract
     }
 
     /**
-     * Adopt FD 3 only after the immutable endpoint copy and the schema-5 lease
+     * Adopt FD 3 only after the immutable endpoint copy and the schema-6 lease
      * envelope agree. Merely having an open descriptor never authorizes it.
      *
      * @param array<string,mixed> $endpoint
@@ -6620,7 +6823,8 @@ class Start extends CommandAbstract
             if (!\is_array($lease) || $lease === []) {
                 continue;
             }
-            if ((int)($lease['schema_version'] ?? 0) !== 5
+            if ((int)($lease['schema_version'] ?? 0)
+                    !== GatewayPortLeaseAllocator::SCHEMA_VERSION
                 || !\hash_equals('RESERVED', (string)($lease['state'] ?? ''))
                 || (int)($lease['port'] ?? 0) !== $port
                 || !\hash_equals(
@@ -6642,7 +6846,7 @@ class Start extends CommandAbstract
         }
         if (\count($matchingLeases) !== 1) {
             throw new \RuntimeException(
-                'POSIX startup listener handoff does not match exactly one schema-5 lease.'
+                'POSIX startup listener handoff does not match exactly one schema-6 lease.'
             );
         }
         $leaseInstance = (string)($matchingLeases[0]['instance'] ?? '');
@@ -7439,17 +7643,15 @@ class Start extends CommandAbstract
             }
         } elseif ($result['needs_admin'] ?? false) {
             $this->printer->warning(__('无法自动配置 hosts 文件（需要管理员权限）'));
+            if (!empty($result['message'])) {
+                $this->printer->note((string)$result['message']);
+            }
             $this->printer->note(__('请手动添加以下内容到 hosts 文件：'));
             $this->printer->note("  127.0.0.1 {$host}");
 
             if (PHP_OS_FAMILY === 'Windows') {
                 $this->printer->note(__('Windows hosts 文件位置：'));
                 $this->printer->note('  C:\\Windows\\System32\\drivers\\etc\\hosts');
-                $this->printer->note(__('或以管理员身份运行 PowerShell 执行：'));
-                $this->printer->note('  ' . ($result['command'] ?? ''));
-            } else {
-                $this->printer->note(__('Linux/Mac 执行：'));
-                $this->printer->note('  ' . ($result['command'] ?? ''));
             }
         } else {
             $this->printer->warning(__('配置 hosts 文件失败: %{1}', [$result['message'] ?? '未知错误']));
@@ -7824,7 +8026,7 @@ class Start extends CommandAbstract
                 if (\is_array($fallbackEndpoint)) {
                     $port = (int)$fallbackEndpoint['port'];
                     $host = (string)$fallbackEndpoint['authority_host'];
-                    $sslEnabled = true;
+                    $sslEnabled = (bool)$fallbackEndpoint['https'];
                 }
             }
             $displayHost = $this->isUsablePublicHost($host) ? $host : '127.0.0.1';
@@ -8576,7 +8778,7 @@ class Start extends CommandAbstract
     /**
      * Authenticate the unique listener retained by this exact Start process.
      *
-     * Metadata cannot exempt a port on its own: the durable schema-5 lease,
+     * Metadata cannot exempt a port on its own: the durable schema-6 lease,
      * current process birth, retained stream endpoint and kernel listener
      * state must all agree. Any partial/ambiguous claim fails closed before a
      * generic port-release path can kill the startup process itself.
@@ -8644,7 +8846,8 @@ class Start extends CommandAbstract
         if (!\is_array($lease)
             || !\is_resource($listener)
             || !\is_array($streamEndpoint)
-            || (int)($lease['schema_version'] ?? 0) !== 5
+            || (int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals('RESERVED', (string)($lease['state'] ?? ''))
             || !\hash_equals($expectedInstance, (string)($lease['instance'] ?? ''))
             || (int)($lease['master_pid'] ?? 0) !== \getmypid()
@@ -8655,7 +8858,7 @@ class Start extends CommandAbstract
             || (int)($lease['port'] ?? 0) !== $port
         ) {
             throw new \RuntimeException(
-                'Startup listener claim is missing its exact schema-5 reservation evidence.',
+                'Startup listener claim is missing its exact schema-6 reservation evidence.',
             );
         }
         $leaseHost = $this->normalizeStartupListenerHost((string)(
@@ -9321,73 +9524,33 @@ class Start extends CommandAbstract
             return false;
         }
         if (!$isWelineProcess) {
-            if (($portInspect['state'] ?? '') === 'orphan') {
-                $this->printer->warning(__('%{1} 端口 %{2} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...', [$label, $port]));
-                Processer::forceReleasePort($port);
-                if (!Processer::isPortInUse($port)) {
-                    $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
-                    return true;
-                }
-                if ($this->releaseRuntimeRecordedOrphanPorts($instanceName, [$port], $label)) {
-                    $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
-                    return true;
-                }
-                $this->printer->error(__('端口 %{1} 异常占用兜底清壳后仍未释放', [$port]));
-            } else {
-                $this->printer->error(__('%{1} 端口 %{2} 被非框架进程占用，不予杀死', [$label, $port]));
-            }
+            $this->printer->error(__('%{1} 端口 %{2} 的 owner 无法由凭据出生身份证明，不予终止', [
+                $label,
+                $port,
+            ]));
             $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
-            $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
             return false;
         }
 
-        $this->printer->warning(__('%{1} 端口 %{2} 已被框架进程占用，强制释放...', [$label, $port]));
-        $maxAttempts = 3;
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-            $released = Processer::killProcessByPort($port);
-            if (!$released) {
-                $released = Processer::forceReleasePort($port);
-            }
-            if (IS_WIN && !$released) {
-                $waited = 0;
-                while ($waited < 3000 && Processer::isPortInUse($port)) {
-                    SchedulerSystem::usleep(300000);
-                    $waited += 300;
-                }
-                $released = !Processer::isPortInUse($port);
-            }
-            if (!Processer::isPortInUse($port)) {
-                $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
-                return true;
-            }
-            if ($attempt < $maxAttempts) {
-                SchedulerSystem::usleep(500000);
-            }
+        $this->printer->warning(__('%{1} 端口 %{2} 由 WLS 记录占用；正在通过实例 IPC 与凭据出生身份退役。', [
+            $label,
+            $port,
+        ]));
+        if (!$this->cleanupFailedStartupProcesses($instanceName, 16)) {
+            $this->printer->error(__(
+                '实例 [%{1}] 无法证明旧代进程全部退出；已拒绝按端口或前缀强杀。',
+                [$instanceName],
+            ));
+            return false;
         }
-
-        // 三次仍杀不死：存在逃逸 Master 在不断拉起子进程，从 var/process 按 Master 前缀找并杀
-        $this->printer->warning(__('端口 %{1} 经 %{2} 次仍占用，按 Master 前缀清理逃逸进程...', [$port, $maxAttempts]));
-        $masterPrefix = MasterProcess::buildScopedProcessName(MasterProcess::MASTER_PROCESS_NAME_PREFIX, $instanceName);
-        $pnamesInProcessDir = Processer::getProcessNamesByPrefix($masterPrefix);
-        if (\count($pnamesInProcessDir) > 0) {
-            $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
-        }
-        $killed = Processer::killByProcessNamePrefixes([
-            $masterPrefix,
-            MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName,
-        ]);
-        if ($killed > 0) {
-            $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
-        }
-        SchedulerSystem::sleep(1);
-        $released = Processer::killProcessByPort($port) || Processer::forceReleasePort($port);
+        Processer::clearPortCache();
         if (!Processer::isPortInUse($port)) {
             $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
             return true;
         }
 
         $this->printer->error(__('无法释放 %{1} 端口 %{2}', [$label, $port]));
-        $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$port]));
+        $this->printer->note(__('请检查当前 owner 并手动处理；WLS 2.0 不会从端口反推终止权限。'));
         return false;
     }
 
@@ -9425,19 +9588,7 @@ class Start extends CommandAbstract
         foreach ($portsInUse as $p) {
             $portInspect = Processer::inspectPortOccupantWithHistory($p);
             if (!($portInspect['is_weline'] ?? false)) {
-                if (($portInspect['state'] ?? '') === 'orphan') {
-                    $this->printer->warning(__('端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...', [$p]));
-                    Processer::forceReleasePort($p);
-                    if (!Processer::isPortInUse($p)) {
-                        continue;
-                    }
-                    if ($this->releaseRuntimeRecordedOrphanPorts($instanceName, [$p], 'Worker')) {
-                        continue;
-                    }
-                    $this->printer->error(__('端口 %{1} 异常占用兜底清壳后仍未释放', [$p]));
-                } else {
-                    $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$p]));
-                }
+                $this->printer->error(__('端口 %{1} 的 owner 无法由凭据出生身份证明，不予终止', [$p]));
                 $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
                 return false;
             }
@@ -9453,51 +9604,17 @@ class Start extends CommandAbstract
             return true;
         }
 
-        $maxAttempts = 3;
-        for ($round = 1; $round <= $maxAttempts; $round++) {
-            foreach ($portsInUse as $p) {
-                Processer::killProcessByPort($p);
-                Processer::forceReleasePort($p);
-            }
-            if (IS_WIN) {
-                SchedulerSystem::usleep(500000);
-            }
-            $stillInUse = [];
-            foreach ($portsInUse as $p) {
-                if (Processer::isPortInUse($p)) {
-                    $stillInUse[] = $p;
-                }
-            }
-            $portsInUse = $stillInUse;
-            if (empty($portsInUse)) {
-                $this->printer->success(__('端口检查通过'));
-                echo "\n";
-                return true;
-            }
-            if ($round < $maxAttempts) {
-                SchedulerSystem::usleep(500000);
-            }
+        $this->printer->warning(__(
+            '当前 Worker 端口由 WLS 记录占用；正在通过实例 IPC 与凭据出生身份退役。'
+        ));
+        if (!$this->cleanupFailedStartupProcesses($instanceName, $count)) {
+            $this->printer->error(__(
+                '实例 [%{1}] 无法证明旧代进程全部退出；已拒绝按端口或前缀强杀。',
+                [$instanceName],
+            ));
+            return false;
         }
-
-        // 三轮仍杀不死：从 var/process 按 Master 前缀找并杀逃逸 Master 后再试
-        $this->printer->warning(__('端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程...', [$maxAttempts]));
-        $masterPrefix = MasterProcess::buildScopedProcessName(MasterProcess::MASTER_PROCESS_NAME_PREFIX, $instanceName);
-        $pnamesInProcessDir = Processer::getProcessNamesByPrefix($masterPrefix);
-        if (\count($pnamesInProcessDir) > 0) {
-            $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
-        }
-        $killed = Processer::killByProcessNamePrefixes([
-            $masterPrefix,
-            MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName,
-        ]);
-        if ($killed > 0) {
-            $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
-        }
-        SchedulerSystem::sleep(1);
-        foreach ($portsInUse as $p) {
-            Processer::killProcessByPort($p);
-            Processer::forceReleasePort($p);
-        }
+        Processer::clearPortCache();
         $stillInUse = [];
         foreach ($portsInUse as $p) {
             if (Processer::isPortInUse($p)) {
@@ -11450,7 +11567,7 @@ PHP;
                 : $port;
             if (\is_array($fallbackEndpoint)) {
                 $host = (string)$fallbackEndpoint['authority_host'];
-                $sslEnabled = true;
+                $sslEnabled = (bool)$fallbackEndpoint['https'];
             }
             $backendPorts = [$port];
         } elseif ($gatewayMode) {
@@ -11769,59 +11886,104 @@ PHP;
         echo "\n";
         
         // 启动文件监控（变更时通知所有 WLS Worker 重载，与 CLI 命令重载机制一致）
-        $this->runFileWatcher($absoluteDirs, $watchInterval);
+        $this->runFileWatcher($absoluteDirs, $watchInterval, $instanceName);
     }
     
     /**
-     * 文件监控进程名（符合 Processer 规范：--name 标识）
+     * 文件监控进程名前缀（真实名称按项目实例隔离）
      */
     protected const FILE_WATCHER_PROCESS_NAME = 'weline-wls-watcher';
 
     /**
      * 运行文件监控器（子进程模式）
      *
-     * 遵循 Processer 进程管理规范：注册、检测、终止均通过 Processer
-     * 文件监控在独立子进程中运行，主进程负责信号处理
+     * 子进程通过受保护配置文件和父进程出生身份自行退出；
+     * 只在协作退出超时时使用稳定内核句柄精确终止。
      */
-    protected function runFileWatcher(array $watchDirs, float $interval): void
+    protected function runFileWatcher(array $watchDirs, float $interval, string $instanceName): void
     {
         $configDir = Env::VAR_DIR . 'tmp' . DS;
-        if (!\is_dir($configDir)) {
-            @\mkdir($configDir, 0755, true);
+        $watchDirs = \array_values(\array_filter(
+            \array_map(static fn(mixed $path): string => \trim((string)$path), $watchDirs),
+            static fn(string $path): bool => $path !== '' && \strlen($path) <= 4096,
+        ));
+        if ($watchDirs === [] || \count($watchDirs) > 64) {
+            $this->printer->error(__('文件监控目录配置无效'));
+            return;
         }
-        $configFile = $configDir . 'file_watcher_' . \getmypid() . '_' . \time() . '.json';
-        \file_put_contents($configFile, \json_encode([
+        $interval = \max(0.1, \min(60.0, $interval));
+
+        try {
+            $parentPid = (int)\getmypid();
+            $parentRuntimeIdentity = $this->getMasterLeaseRuntimeIdentity();
+            $parentIdentity = $parentRuntimeIdentity->captureProcessIdentity($parentPid);
+            $parentHostBootId = $parentRuntimeIdentity->hostBootId();
+            $watcherLaunchId = \bin2hex(\random_bytes(16));
+            $watcherTaskName = MasterProcess::buildScopedProcessName(
+                self::FILE_WATCHER_PROCESS_NAME,
+                $instanceName,
+            );
+        } catch (\Throwable $throwable) {
+            $this->printer->error(__('无法建立文件监控父进程身份：%{1}', [$throwable->getMessage()]));
+            return;
+        }
+
+        $configFile = $this->createFileWatcherConfig($configDir, [
             'watch_dirs' => $watchDirs,
             'check_interval' => $interval,
-        ]));
+            'parent_pid' => $parentPid,
+            'parent_process_birth' => (string)$parentIdentity['birth'],
+            'parent_pid_namespace_id' => (string)$parentIdentity['pid_namespace_id'],
+            'parent_host_boot_id' => $parentHostBootId,
+        ]);
+        if ($configFile === null) {
+            $this->printer->error(__('无法安全创建文件监控配置'));
+            return;
+        }
 
         $watcherScript = \dirname(__DIR__, 2) . DS . 'bin' . DS . 'file_watcher.php';
         $phpBinary = \defined('PHP_BINARY') && \PHP_BINARY ? \PHP_BINARY : 'php';
-        $processName = "\"{$phpBinary}\" \"{$watcherScript}\" \"{$configFile}\" --name=" . self::FILE_WATCHER_PROCESS_NAME;
-
-        // 若已存在同进程，先销毁
-        if (Processer::running($processName)) {
-            Processer::destroy($processName);
-        }
+        $processName = '--name=' . $watcherTaskName
+            . ' --launch-id=' . \rawurlencode($watcherLaunchId);
 
         $this->printer->note(__('按 Ctrl+C 停止监控...'));
         echo "\n";
 
         // 方案1：pcntl_fork（Linux/Mac），主进程可正确处理信号
         if (!IS_WIN && $this->availableFunctions['pcntl_fork']) {
-            $this->runFileWatcherWithFork($phpBinary, $watcherScript, $configFile, $processName);
+            $this->runFileWatcherWithFork(
+                $phpBinary,
+                $watcherScript,
+                $configFile,
+                $processName,
+                $watcherTaskName,
+                $watcherLaunchId,
+            );
             return;
         }
 
         // 方案2：proc_open（Windows 或 pcntl 不可用）
-        $this->runFileWatcherWithProcOpen($phpBinary, $watcherScript, $configFile, $processName);
+        $this->runFileWatcherWithProcOpen(
+            $phpBinary,
+            $watcherScript,
+            $configFile,
+            $processName,
+            $watcherTaskName,
+            $watcherLaunchId,
+        );
     }
 
     /**
      * 使用 pcntl_fork 运行文件监控子进程
      */
-    protected function runFileWatcherWithFork(string $phpBinary, string $watcherScript, string $configFile, string $processName): void
-    {
+    protected function runFileWatcherWithFork(
+        string $phpBinary,
+        string $watcherScript,
+        string $configFile,
+        string $processName,
+        string $watcherTaskName,
+        string $watcherLaunchId,
+    ): void {
         $pid = \pcntl_fork();
         if ($pid === -1) {
             $this->printer->error(__('创建文件监控子进程失败'));
@@ -11832,11 +11994,24 @@ PHP;
             if (\function_exists('posix_setsid')) {
                 \posix_setsid();
             }
-            \pcntl_exec($phpBinary, [$watcherScript, $configFile, '--name=' . self::FILE_WATCHER_PROCESS_NAME]);
+            \pcntl_exec($phpBinary, [
+                $watcherScript,
+                $configFile,
+                '--name=' . $watcherTaskName,
+                '--launch-id=' . $watcherLaunchId,
+            ]);
             exit(1);
         }
 
-        Processer::setPid($processName, $pid);
+        try {
+            $childIdentity = $this->getMasterLeaseRuntimeIdentity()->captureProcessIdentity($pid);
+        } catch (\Throwable $throwable) {
+            @\unlink($configFile);
+            $this->waitForForkedFileWatcherExit($pid, 2.0);
+            $this->printer->error(__('无法冻结文件监控子进程身份：%{1}', [$throwable->getMessage()]));
+            return;
+        }
+        Processer::setPid($processName, $pid, false);
 
         $shutdown = false;
         \pcntl_async_signals(true);
@@ -11847,35 +12022,61 @@ PHP;
             $shutdown = true;
         });
 
+        $released = false;
         while (!$shutdown) {
             $result = \pcntl_waitpid($pid, $status, \WNOHANG);
-            if ($result === $pid) {
-                break;
-            }
-            if ($result === -1) {
+            if ($result === $pid || $result === -1) {
+                $released = true;
                 break;
             }
             \pcntl_signal_dispatch();
             SchedulerSystem::usleep(200000);
         }
 
-        if ($shutdown && Processer::isRunningByPid($pid)) {
-            Processer::killByPid($pid);
-            \pcntl_waitpid($pid, $status);
-        }
-        Processer::destroy($processName);
         @\unlink($configFile);
+        if (!$released) {
+            $released = $this->waitForForkedFileWatcherExit($pid, 2.0);
+        }
+        if (!$released) {
+            $result = $this->getMasterLeaseRuntimeIdentity()->terminateExactProcessIdentity(
+                $pid,
+                (string)$childIdentity['birth'],
+                (string)$childIdentity['pid_namespace_id'],
+                0.5,
+            );
+            $released = (bool)($result['released'] ?? false);
+            if ($released) {
+                @\pcntl_waitpid($pid, $status, \WNOHANG);
+            } else {
+                $this->printer->warning(__('文件监控进程未确认退出；已保留精确出生 lease，且未向裸 PID 发送信号。'));
+            }
+        }
+        if ($released) {
+            Processer::removeManagedProcessLeaseRecord($pid, $watcherTaskName, $watcherLaunchId);
+        }
     }
 
     /**
      * 使用 proc_open 运行文件监控子进程
      */
-    protected function runFileWatcherWithProcOpen(string $phpBinary, string $watcherScript, string $configFile, string $processName): void
-    {
+    protected function runFileWatcherWithProcOpen(
+        string $phpBinary,
+        string $watcherScript,
+        string $configFile,
+        string $processName,
+        string $watcherTaskName,
+        string $watcherLaunchId,
+    ): void {
         $descriptorspec = [
             0 => ['pipe', 'r'],
         ];
-        $command = [$phpBinary, $watcherScript, $configFile, '--name=' . self::FILE_WATCHER_PROCESS_NAME];
+        $command = [
+            $phpBinary,
+            $watcherScript,
+            $configFile,
+            '--name=' . $watcherTaskName,
+            '--launch-id=' . $watcherLaunchId,
+        ];
         $proc = @\proc_open($command, $descriptorspec, $pipes, null, null, ['bypass_shell' => true]);
         if (!\is_resource($proc)) {
             $this->printer->error(__('创建文件监控子进程失败'));
@@ -11887,10 +12088,16 @@ PHP;
         }
 
         $status = \proc_get_status($proc);
-        $pid = $status['pid'] ?? 0;
-        if ($pid > 0) {
-            Processer::setPid($processName, $pid);
+        $pid = (int)($status['pid'] ?? 0);
+        try {
+            $childIdentity = $this->getMasterLeaseRuntimeIdentity()->captureProcessIdentity($pid);
+        } catch (\Throwable $throwable) {
+            @\unlink($configFile);
+            $this->waitForProcFileWatcherExit($proc, 2.0);
+            $this->printer->error(__('无法冻结文件监控子进程身份：%{1}', [$throwable->getMessage()]));
+            return;
         }
+        Processer::setPid($processName, $pid, false);
 
         $shutdown = false;
         if (!IS_WIN && \function_exists('pcntl_async_signals')) {
@@ -11909,7 +12116,6 @@ PHP;
                 break;
             }
             if ($shutdown) {
-                Processer::killByPid($pid);
                 break;
             }
             if (!IS_WIN) {
@@ -11917,9 +12123,115 @@ PHP;
             }
             SchedulerSystem::usleep(200000);
         }
-        \proc_close($proc);
-        Processer::destroy($processName);
         @\unlink($configFile);
+        $released = !\is_array($status) || !($status['running'] ?? false);
+        if (!$released) {
+            $released = $this->waitForProcFileWatcherExit($proc, 2.0);
+        }
+        if (!$released) {
+            $result = $this->getMasterLeaseRuntimeIdentity()->terminateExactProcessIdentity(
+                $pid,
+                (string)$childIdentity['birth'],
+                (string)$childIdentity['pid_namespace_id'],
+                0.5,
+            );
+            $released = (bool)($result['released'] ?? false);
+        }
+        if ($released) {
+            @\proc_close($proc);
+            Processer::removeManagedProcessLeaseRecord($pid, $watcherTaskName, $watcherLaunchId);
+        } else {
+            $this->printer->warning(__('文件监控进程未确认退出；已保留精确出生 lease，且未向裸 PID 发送信号。'));
+        }
+    }
+
+    /** @param array<string,mixed> $payload */
+    protected function createFileWatcherConfig(string $configDir, array $payload): ?string
+    {
+        if (\is_link($configDir)
+            || (!\is_dir($configDir) && !@\mkdir($configDir, 0700, true))
+            || !\is_dir($configDir)
+        ) {
+            return null;
+        }
+        @\chmod($configDir, 0700);
+        try {
+            $json = \json_encode($payload, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!\is_string($json) || $json === '' || \strlen($json) > 262144) {
+            return null;
+        }
+
+        for ($attempt = 0; $attempt < 8; ++$attempt) {
+            try {
+                $path = $configDir . 'file_watcher_' . \bin2hex(\random_bytes(16)) . '.json';
+            } catch (\Throwable) {
+                return null;
+            }
+            $handle = @\fopen($path, 'xb');
+            if (!\is_resource($handle)) {
+                continue;
+            }
+            $written = 0;
+            try {
+                @\chmod($path, 0600);
+                $length = \strlen($json);
+                while ($written < $length) {
+                    $result = @\fwrite($handle, \substr($json, $written));
+                    if (!\is_int($result) || $result <= 0) {
+                        throw new \RuntimeException('file watcher config write failed');
+                    }
+                    $written += $result;
+                }
+                if (!@\fflush($handle)
+                    || (\function_exists('fsync') && !@\fsync($handle))
+                ) {
+                    throw new \RuntimeException('file watcher config flush failed');
+                }
+                @\fclose($handle);
+                return $path;
+            } catch (\Throwable) {
+                @\fclose($handle);
+                @\unlink($path);
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    protected function waitForForkedFileWatcherExit(int $pid, float $timeoutSeconds): bool
+    {
+        $deadline = \hrtime(true) + (int)(\max(0.01, $timeoutSeconds) * 1_000_000_000);
+        do {
+            $result = @\pcntl_waitpid($pid, $status, \WNOHANG);
+            if ($result === $pid || $result === -1) {
+                return true;
+            }
+            SchedulerSystem::usleep(20_000);
+        } while (\hrtime(true) < $deadline);
+
+        return false;
+    }
+
+    /** @param resource $process */
+    protected function waitForProcFileWatcherExit($process, float $timeoutSeconds): bool
+    {
+        if (!\is_resource($process)) {
+            return true;
+        }
+        $deadline = \hrtime(true) + (int)(\max(0.01, $timeoutSeconds) * 1_000_000_000);
+        do {
+            $status = @\proc_get_status($process);
+            if (!\is_array($status) || !($status['running'] ?? false)) {
+                return true;
+            }
+            SchedulerSystem::usleep(20_000);
+        } while (\hrtime(true) < $deadline);
+
+        return false;
     }
     /**
      * 获取启动锁，防止并发启动同一实例
@@ -11941,8 +12253,6 @@ PHP;
         static $traceStartNs = null;
         static $tracePreviousNs = null;
         static $traceSequence = 0;
-        static $traceHandle = null;
-        static $tracePath = '';
 
         $nowNs = \hrtime(true);
         $traceStartNs ??= $nowNs;
@@ -11951,7 +12261,9 @@ PHP;
         $context['mono_ns'] = $nowNs;
         $context['total_ms'] = \round(($nowNs - $traceStartNs) / 1_000_000, 3);
         $context['delta_ms'] = \round(($nowNs - $tracePreviousNs) / 1_000_000, 3);
-        $context['process_elapsed_ms'] = \round((\microtime(true) - (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? \microtime(true))) * 1000, 3);
+        $wallNow = self::diagnosticWallSeconds();
+        $requestStartedAt = (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? $wallNow);
+        $context['process_elapsed_ms'] = \round(\max(0.0, $wallNow - $requestStartedAt) * 1000, 3);
         $context['memory_mb'] = \round(\memory_get_usage(true) / 1048576, 2);
         $tracePreviousNs = $nowNs;
 
@@ -11960,20 +12272,128 @@ PHP;
             @\mkdir($dir, 0755, true);
         }
         $path = $dir . 'wls-startup-trace.log';
-        if (!\is_resource($traceHandle) || $tracePath !== $path) {
-            $traceHandle = @\fopen($path, 'ab');
-            $tracePath = $path;
-        }
         $contextJson = \json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
         $line = \sprintf("[%s] pid=%d instance=%s phase=%s context=%s%s", \date('Y-m-d H:i:s'), \getmypid(), $instanceName, $phase, $contextJson, PHP_EOL);
-        if (\is_resource($traceHandle)) {
-            @\flock($traceHandle, LOCK_EX);
-            @\fwrite($traceHandle, $line);
-            @\fflush($traceHandle);
-            @\flock($traceHandle, LOCK_UN);
+        self::appendStartupTraceLine($path, $line);
+    }
+
+    /**
+     * Diagnostic tracing must never become a startup mutex. Open only a
+     * single-link regular inode, verify the path/handle identity before and
+     * after the non-blocking lock, and drop the line on any contention/race.
+     */
+    private static function appendStartupTraceLine(string $path, string $line): void
+    {
+        if ($path === '' || \str_contains($path, "\0") || $line === '') {
             return;
         }
-        @\file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
+        $directory = \dirname($path);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)($directoryBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            return;
+        }
+        $safeFile = static fn (array $status): bool =>
+            ((((int)($status['mode'] ?? 0)) & 0170000) === 0100000)
+            && (int)($status['nlink'] ?? 0) === 1;
+        $sameIdentity = static function (array $before, array $after): bool {
+            foreach (['dev', 'ino', 'mode', 'nlink'] as $field) {
+                if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $sameDirectoryIdentity = static function (array $before, array $after): bool {
+            foreach (['dev', 'ino', 'mode'] as $field) {
+                if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        $handle = false;
+        $before = false;
+        $created = false;
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            \clearstatcache(true, $path);
+            $before = @\lstat($path);
+            $created = false;
+            if (\is_array($before)) {
+                if (!$safeFile($before) || \is_link($path)) {
+                    return;
+                }
+                $handle = @\fopen($path, 'r+b');
+            } else {
+                if (\file_exists($path) || \is_link($path)) {
+                    return;
+                }
+                $handle = @\fopen($path, 'x+b');
+                $created = \is_resource($handle);
+            }
+            if (\is_resource($handle)) {
+                break;
+            }
+        }
+        if (!\is_resource($handle)) {
+            return;
+        }
+
+        $locked = false;
+        try {
+            \clearstatcache(true, $path);
+            $opened = @\fstat($handle);
+            $pathAfterOpen = @\lstat($path);
+            $directoryAfterOpen = @\lstat($directory);
+            if (!\is_array($opened)
+                || !\is_array($pathAfterOpen)
+                || !\is_array($directoryAfterOpen)
+                || !$safeFile($opened)
+                || !$safeFile($pathAfterOpen)
+                || (!$created && (!\is_array($before) || !$sameIdentity($before, $opened)))
+                || !$sameIdentity($opened, $pathAfterOpen)
+                || !$sameDirectoryIdentity($directoryBefore, $directoryAfterOpen)
+                || \is_link($path)
+            ) {
+                return;
+            }
+            $locked = @\flock($handle, LOCK_EX | LOCK_NB);
+            if (!$locked) {
+                return;
+            }
+            $lockedStatus = @\fstat($handle);
+            $lockedPathStatus = @\lstat($path);
+            $lockedDirectoryStatus = @\lstat($directory);
+            if (!\is_array($lockedStatus)
+                || !\is_array($lockedPathStatus)
+                || !\is_array($lockedDirectoryStatus)
+                || !$safeFile($lockedStatus)
+                || !$sameIdentity($opened, $lockedStatus)
+                || !$sameIdentity($lockedStatus, $lockedPathStatus)
+                || !$sameDirectoryIdentity($directoryBefore, $lockedDirectoryStatus)
+                || @\fseek($handle, 0, SEEK_END) !== 0
+            ) {
+                return;
+            }
+            $offset = 0;
+            $length = \strlen($line);
+            while ($offset < $length) {
+                $written = @\fwrite($handle, \substr($line, $offset));
+                if (!\is_int($written) || $written < 1) {
+                    return;
+                }
+                $offset += $written;
+            }
+            @\fflush($handle);
+        } finally {
+            if ($locked) {
+                @\flock($handle, LOCK_UN);
+            }
+            @\fclose($handle);
+        }
     }
 
     protected function acquireStartLock(string $instanceName, int $timeout = 3): bool
@@ -12680,5 +13100,10 @@ PHP;
 
         $code = $colors[$color] ?? '34';
         return "\033[{$code}m{$text}\033[0m";
+    }
+
+    private static function diagnosticWallSeconds(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
     }
 }

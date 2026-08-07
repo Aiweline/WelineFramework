@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Dispatcher;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\Dispatcher;
+use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\SslCertificateService;
 
 final class DispatcherAcmeHttp01ChallengeTest extends TestCase
@@ -41,7 +42,7 @@ final class DispatcherAcmeHttp01ChallengeTest extends TestCase
     public function testResolveChallengeByHostAndToken(): void
     {
         $token = 'Gy7HnlSGiN_Dchg8qWH9woawHDoRrwISnua6u8Lr_68';
-        $keyAuth = $token . '.thumbprint';
+        $keyAuth = $token . '.' . \str_repeat('A', 43);
         $this->writeAcmeChallenge('test.aiweline.com', $token, $keyAuth);
 
         $dispatcher = $this->newDispatcherWithoutConstructor();
@@ -55,7 +56,7 @@ final class DispatcherAcmeHttp01ChallengeTest extends TestCase
     public function testExpiredChallengeIsRejected(): void
     {
         $token = 'expired_token';
-        $keyAuth = $token . '.thumbprint';
+        $keyAuth = $token . '.' . \str_repeat('B', 43);
         $this->writeAcmeChallenge('expired.aiweline.com', $token, $keyAuth, \time() - 1);
 
         $dispatcher = $this->newDispatcherWithoutConstructor();
@@ -65,17 +66,17 @@ final class DispatcherAcmeHttp01ChallengeTest extends TestCase
         self::assertNull($method->invoke($dispatcher, 'expired.aiweline.com', $token));
     }
 
-    public function testResolveChallengeFallsBackToTokenScanWhenHostIsMissing(): void
+    public function testResolveChallengeRejectsMissingHostInsteadOfScanningByToken(): void
     {
         $token = 'fallback_token';
-        $keyAuth = $token . '.thumbprint';
+        $keyAuth = $token . '.' . \str_repeat('C', 43);
         $this->writeAcmeChallenge('fallback.aiweline.com', $token, $keyAuth);
 
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $method = new \ReflectionMethod(Dispatcher::class, 'resolveAcmeHttp01ChallengeBody');
         $method->setAccessible(true);
 
-        self::assertSame($keyAuth, $method->invoke($dispatcher, '', $token));
+        self::assertNull($method->invoke($dispatcher, '', $token));
     }
 
     private function writeAcmeChallenge(
@@ -93,13 +94,24 @@ final class DispatcherAcmeHttp01ChallengeTest extends TestCase
             @\mkdir($dir, 0755, true);
         }
 
-        $file = $dir . SslCertificateService::domainToAcmeChallengeFilename($domain) . '.json';
-        \file_put_contents($file, (string)\json_encode([
-            'token' => $token,
-            'keyAuth' => $keyAuth,
-            'expires_at' => $expiresAt ?? (\time() + 900),
-        ]));
-        $this->cleanupFiles[] = $file;
+        $wallNow = $expiresAt === null
+            ? \time()
+            : \max(1, $expiresAt - 900);
+        $monotonicNow = \hrtime(true) / 1_000_000_000;
+        if ($expiresAt !== null && $expiresAt <= \time()) {
+            $monotonicNow = \max(0.001, $monotonicNow - 901.0);
+        }
+        $store = new ProjectAcmeHttp01ChallengeStore(
+            $dir,
+            static fn (): int => $wallNow,
+            static fn (): float => $monotonicNow,
+        );
+        $store->register($domain, $token, $keyAuth);
+        $this->cleanupFiles[] = $dir
+            . SslCertificateService::domainToAcmeChallengeFilename($domain)
+            . '.json';
+        $this->cleanupFiles[] = $dir . '.desired.json';
+        $this->cleanupFiles[] = $dir . '.desired.lock';
     }
 
     private function newDispatcherWithoutConstructor(): Dispatcher

@@ -1,5 +1,24 @@
 # Cursor entry for WelineFramework
 
-Read `AI-ENTRY.md`, then `dev/ai/global-constraints.md`. Select task-specific skills through `dev/ai/skills/_index.md`.
+Read `AI-ENTRY.md`, then follow `dev/ai/global-constraints.md` as the single source of repository-wide AI rules.
 
-Cursor-specific `.cursor/rules/*.mdc` files are conditional adapters only; they must point to canonical rules or skills and must not mirror long rule bodies.
+Cursor-specific `.cursor/rules/*.mdc` files are adapters that must point to canonical rules; if they conflict, `dev/ai/global-constraints.md` wins.
+
+## Always-on: WebUI / 内置 Browser 验收（强制）
+
+**禁止未测报完成。** 每次修改都要测：局部功能函数可用单测；整体/产品功能必须用 Cursor 本地内置 Browser 走 WebUI，不得仅用单测、CLI、`curl`、DB、日志或 diff 结案。
+
+- **真机 + WebUI 闭环**：`.cursor/rules/real-device-acceptance.mdc`（权威：`global-constraints.md` §5 No untested “done” / WebUI acceptance / Feature closed-loop、§10、§10.1）
+- **验收 URL 交付**：`.cursor/rules/local-browser-urls.mdc`（权威：`global-constraints.md` §11）
+
+闭环：**做一个功能 → 立刻测（局部单测 / 整体 WebUI）→ 不通记下并修通 → 再回主流程**；闭环后建议用户做 E2E 固化。
+
+## Other always-on / conditional adapters
+
+- Local Git policy: `.cursor/rules/dev-only-branch.mdc`（`global-constraints.md` §7）
+- **核心框架改动必须提示合并**：`.cursor/rules/core-project-sync.mdc`（权威：`global-constraints.md` §7；决策表含建议理由，确认后再合入）
+- Planning lifecycle: `.cursor/rules/planning-lifecycle.mdc`
+- **Model 字段变更必须升模块版本**：`.cursor/rules/module-version-on-model-schema.mdc`（权威：`global-constraints.md` §4）
+- **跨模块禁止硬类引用**：`.cursor/rules/cross-module-event-decoupling.mdc`（权威：`global-constraints.md` §4；优先 Event 解耦）
+
+Select task-specific skills through `dev/ai/skills/_index.md`。

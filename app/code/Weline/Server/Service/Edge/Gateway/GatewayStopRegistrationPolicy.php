@@ -17,7 +17,7 @@ final class GatewayStopRegistrationPolicy
     /**
      * @param array<string,mixed> $endpoint retirement-fenced endpoint
      * @param array<string,mixed> $status authenticated project own-status, or failure
-     * @return array{action:string,reason:string,status_authenticated:bool}
+     * @return array{action:string,reason:string,status_authenticated:bool,host_instance_status?:string}
      */
     public static function decide(
         array $endpoint,
@@ -136,12 +136,14 @@ final class GatewayStopRegistrationPolicy
                 'action' => self::ACTION_LOCAL_ONLY,
                 'reason' => 'Authenticated own-status proves the exact instance is removed.',
                 'status_authenticated' => true,
+                'host_instance_status' => $statusName,
             ];
         }
         return [
             'action' => self::ACTION_DRAIN,
             'reason' => 'Authenticated own-status proves the exact launch owns gateway state.',
             'status_authenticated' => true,
+            'host_instance_status' => $statusName,
         ];
     }
 

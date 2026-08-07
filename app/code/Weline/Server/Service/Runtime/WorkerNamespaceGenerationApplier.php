@@ -95,7 +95,7 @@ final class WorkerNamespaceGenerationApplier
             $this->history[$operationId] = [
                 'payload_hash' => $payloadHash,
                 'result' => $result,
-                'finished_at' => \microtime(true),
+                'finished_at' => self::monotonicSeconds(),
             ];
             $this->pruneHistory();
 
@@ -128,7 +128,7 @@ final class WorkerNamespaceGenerationApplier
 
     private function pruneHistory(): void
     {
-        $cutoff = \microtime(true) - self::HISTORY_TTL_SEC;
+        $cutoff = self::monotonicSeconds() - self::HISTORY_TTL_SEC;
         foreach ($this->history as $operationId => $entry) {
             if ($entry['finished_at'] < $cutoff) {
                 unset($this->history[$operationId]);
@@ -141,5 +141,10 @@ final class WorkerNamespaceGenerationApplier
             }
             unset($this->history[$operationId]);
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

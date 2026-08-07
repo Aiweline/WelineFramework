@@ -563,7 +563,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
             19982 => [
                 'failures' => 0,
                 'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true) - 30.0,
+                'last_success' => (\hrtime(true) / 1_000_000_000) - 30.0,
                 'total_failures' => 0,
             ],
         ]);

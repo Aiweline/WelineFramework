@@ -35,6 +35,11 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     /** @var array<int, true> */
     private array $notifiedSupervisorDisconnects = [];
 
+    /**
+     * @var array<string,array{ping_monotonic:float,pong_monotonic:float,received_monotonic:float,rtt_seconds:float,host_boot_id:string}>
+     */
+    private array $supervisorPongObservations = [];
+
     public function __construct(
         private readonly MasterControlServer $controlServer,
         private readonly ControlEndpointResolver $endpointResolver,
@@ -193,6 +198,37 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         return $this->controlServer->sendTo($clientId, $message);
     }
 
+    public function sendToInstance(string $launchId, string $message): bool
+    {
+        if ($this->controlServer->sendToInstance($launchId, $message)) {
+            return true;
+        }
+        if ($this->supervisorServer === null) {
+            return false;
+        }
+        foreach ($this->supervisorServer->sessions() as $session) {
+            if (!$session->masterAccepted
+                || $session->launchNonce === ''
+                || !\hash_equals($launchId, $session->launchNonce)
+            ) {
+                continue;
+            }
+
+            return $this->sendToSupervisor($this->toSupervisorClientId($session->id), $message);
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{ping_monotonic:float,pong_monotonic:float,received_monotonic:float,rtt_seconds:float,host_boot_id:string}|null
+     */
+    public function getLastPongObservation(string $launchId): ?array
+    {
+        return $this->controlServer->getLastPongObservation($launchId)
+            ?? ($this->supervisorPongObservations[$launchId] ?? null);
+    }
+
     public function sendToRole(string $role, string $message): void
     {
         $this->controlServer->sendToRole($role, $message);
@@ -277,15 +313,15 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
 
     public function flushPendingWrites(float $maxSeconds = 2.0): void
     {
+        $deadline = ControlMessage::monotonicSeconds() + \max(0.0, $maxSeconds);
         $this->controlServer->flushPendingWrites($maxSeconds);
         if ($this->supervisorServer !== null) {
-            $deadline = \microtime(true) + \max(0.0, $maxSeconds);
-            do {
+            while (ControlMessage::monotonicSeconds() < $deadline) {
                 $changed = $this->pollSupervisor(0, 0);
                 if ($changed <= 0) {
                     break;
                 }
-            } while (\microtime(true) < $deadline);
+            }
         }
     }
 
@@ -296,6 +332,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         $this->pendingSupervisorPassthrough = [];
         $this->pendingSupervisorPassthroughBytes = 0;
         $this->notifiedSupervisorDisconnects = [];
+        $this->supervisorPongObservations = [];
         $this->started = false;
     }
 
@@ -415,7 +452,19 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
                 $this->disconnectSupervisorSession($sessionId, 'client_exited');
                 continue;
             }
-            if ($type === SupervisorMessage::TYPE_POOL_SNAPSHOT_ACK || $type === ControlMessage::TYPE_PONG) {
+            if ($type === ControlMessage::TYPE_PONG) {
+                $observation = ControlMessage::monotonicPongObservation($entry['message']);
+                if ($observation !== null && $session->launchNonce !== '') {
+                    $previous = $this->supervisorPongObservations[$session->launchNonce] ?? null;
+                    if (!\is_array($previous)
+                        || $observation['ping_monotonic'] >= $previous['ping_monotonic']
+                    ) {
+                        $this->supervisorPongObservations[$session->launchNonce] = $observation;
+                    }
+                }
+                continue;
+            }
+            if ($type === SupervisorMessage::TYPE_POOL_SNAPSHOT_ACK) {
                 continue;
             }
 
@@ -756,6 +805,10 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
             $disconnectInfo = \is_array($closed[$sessionId] ?? null)
                 ? $closed[$sessionId]
                 : $sessionInfo;
+            $closedLaunchId = (string)($disconnectInfo['launch_nonce'] ?? '');
+            if ($closedLaunchId !== '') {
+                unset($this->supervisorPongObservations[$closedLaunchId]);
+            }
             if (($disconnectInfo['role'] ?? '') === '' || $this->disconnectHandler === null) {
                 continue;
             }

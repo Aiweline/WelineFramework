@@ -79,6 +79,60 @@ final class MasterControlServerCommandClientTest extends TestCase
         self::assertFalse($method->invoke($server, 101, 'write_connection_closed'));
         self::assertTrue($method->invoke($server, 102, 'write_connection_closed'));
         self::assertFalse($method->invoke($server, 201, 'write_connection_closed'));
+
+        $this->writePrivate($server, 'transientClientLifecycleLoggedAt', [
+            'control:write_connection_closed:127.0.0.1' => \time() + 3600.0,
+        ]);
+        self::assertFalse(
+            $method->invoke($server, 101, 'write_connection_closed'),
+            'legacy/future wall values must not suppress monotonic lifecycle logging forever',
+        );
+    }
+
+    public function testOnlyComparableMonotonicPongRefreshesHealthObservation(): void
+    {
+        $server = new MasterControlServer();
+        $this->writePrivate($server, 'clients', [
+            101 => [
+                'role' => ControlMessage::ROLE_WORKER,
+                'pid' => 12001,
+                'worker_id' => 1,
+                'peer_name' => '127.0.0.1:50001',
+                'launch_id' => 'launch-monotonic-pong',
+                'message_count' => 0,
+                'last_message_type' => '',
+            ],
+        ]);
+        $dispatch = new \ReflectionMethod(MasterControlServer::class, 'dispatchDecodedControlMessage');
+        $dispatch->setAccessible(true);
+
+        $ping = ControlMessage::decode(ControlMessage::ping());
+        self::assertIsArray($ping);
+        $validPong = ControlMessage::decode(ControlMessage::pongForPing($ping));
+        self::assertIsArray($validPong);
+        $dispatch->invoke($server, 101, $validPong);
+
+        $accepted = $server->getLastPongObservation('launch-monotonic-pong');
+        self::assertIsArray($accepted);
+        self::assertSame(
+            (float)($ping['monotonic_timestamp'] ?? 0.0),
+            $accepted['ping_monotonic'],
+        );
+
+        $future = $validPong;
+        $future['ping_monotonic'] = ControlMessage::monotonicSeconds() + 60.0;
+        $future['pong_monotonic'] = $future['ping_monotonic'];
+        $dispatch->invoke($server, 101, $future);
+        self::assertSame($accepted, $server->getLastPongObservation('launch-monotonic-pong'));
+
+        $legacy = ControlMessage::decode(ControlMessage::pong((float)($ping['timestamp'] ?? 1.0)));
+        self::assertIsArray($legacy);
+        $dispatch->invoke($server, 101, $legacy);
+        self::assertSame(
+            $accepted,
+            $server->getLastPongObservation('launch-monotonic-pong'),
+            'legacy wall-clock pong must not refresh health evidence',
+        );
     }
 
     /**

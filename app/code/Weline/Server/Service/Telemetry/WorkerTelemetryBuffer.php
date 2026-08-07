@@ -67,7 +67,7 @@ final class WorkerTelemetryBuffer
             ];
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($this->pendingRequests === 0) {
             $this->lastFlushAt = $now;
         }
@@ -106,7 +106,7 @@ final class WorkerTelemetryBuffer
         if ($this->pendingRequests === 0) {
             return [];
         }
-        $now ??= \microtime(true);
+        $now ??= self::monotonicSeconds();
         if (($now - $this->lastFlushAt) < $this->flushIntervalSeconds) {
             return [];
         }
@@ -123,7 +123,7 @@ final class WorkerTelemetryBuffer
         $batch = \array_values($this->buckets);
         $this->buckets = [];
         $this->pendingRequests = 0;
-        $this->lastFlushAt = $now ?? \microtime(true);
+        $this->lastFlushAt = $now ?? self::monotonicSeconds();
 
         return $batch;
     }
@@ -153,5 +153,10 @@ final class WorkerTelemetryBuffer
         }
 
         return \substr($host !== '' ? $host : 'unknown', 0, 255);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

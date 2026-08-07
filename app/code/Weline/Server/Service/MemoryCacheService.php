@@ -29,12 +29,17 @@ use Weline\Framework\App\Env;
  */
 class MemoryCacheService
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 缓存存储
      *
      * PHP 8.4 优化：强类型注解帮助 JIT 优化大型数组操作
      *
-     * @var array<string, array{response: string, headers: array, created_at: int, ttl: int, last_access: int}>
+     * @var array<string, array{response: string, headers: array, created_at: int, created_monotonic?: float, ttl: int, last_access: int, last_access_monotonic?: float}>
      */
     private static array $cache = [];
 
@@ -118,9 +123,9 @@ class MemoryCacheService
     /**
      * 上次内存检查时间
      * 
-     * @var int
+     * @var float
      */
-    private static int $lastMemoryCheck = 0;
+    private static float $lastMemoryCheck = 0.0;
 
     /**
      * 内存检查间隔（秒）
@@ -191,7 +196,7 @@ class MemoryCacheService
      */
     private static function checkMemoryPressure(): void
     {
-        $now = \time();
+        $now = self::monotonicSeconds();
         if ($now - self::$lastMemoryCheck < self::$memoryCheckInterval) {
             return;
         }
@@ -238,7 +243,10 @@ class MemoryCacheService
         $entry = self::$cache[$key];
         
         // 检查是否过期
-        if ($entry['ttl'] > 0 && (\time() - $entry['created_at']) > $entry['ttl']) {
+        $nowMonotonic = self::monotonicSeconds();
+        $createdMonotonic = (float)($entry['created_monotonic'] ?? 0.0);
+        if ($entry['ttl'] > 0
+            && ($createdMonotonic <= 0.0 || ($nowMonotonic - $createdMonotonic) > $entry['ttl'])) {
             self::delete($key);
             self::$stats['misses']++;
             return null;
@@ -247,12 +255,13 @@ class MemoryCacheService
         self::$stats['hits']++;
 
         self::$cache[$key]['last_access'] = \time();
+        self::$cache[$key]['last_access_monotonic'] = $nowMonotonic;
         
         return [
             'response' => $entry['response'],
             'headers' => $entry['headers'],
             'created_at' => $entry['created_at'],
-            'age' => \time() - $entry['created_at'],
+            'age' => \max(0.0, $nowMonotonic - $createdMonotonic),
         ];
     }
 
@@ -307,11 +316,14 @@ class MemoryCacheService
         }
 
         $now = \time();
+        $nowMonotonic = self::monotonicSeconds();
         self::$cache[$key] = [
             'response' => $response,
             'headers' => $headers,
             'created_at' => $now,
+            'created_monotonic' => $nowMonotonic,
             'last_access' => $now,
+            'last_access_monotonic' => $nowMonotonic,
             'ttl' => $ttl,
         ];
 
@@ -512,14 +524,16 @@ class MemoryCacheService
      */
     public static function cleanExpired(): int
     {
-        $now = \time();
+        $now = self::monotonicSeconds();
 
         // PHP 8.4 优化：先收集过期键，再批量删除（避免迭代中修改数组）
         /** @var string[] */
         $expiredKeys = [];
 
         foreach (self::$cache as $key => $entry) {
-            if ($entry['ttl'] > 0 && ($now - $entry['created_at']) > $entry['ttl']) {
+            $createdMonotonic = (float)($entry['created_monotonic'] ?? 0.0);
+            if ($entry['ttl'] > 0
+                && ($createdMonotonic <= 0.0 || ($now - $createdMonotonic) > $entry['ttl'])) {
                 $expiredKeys[] = $key;
             }
         }
@@ -546,10 +560,12 @@ class MemoryCacheService
     private static function evictOldest(int $targetFreeBytes): int
     {
         // PHP 8.4 优化：构建访问时间数组而不是复制整个缓存
-        /** @var array<string, int> */
+        /** @var array<string, float> */
         $accessTimes = [];
         foreach (self::$cache as $key => $entry) {
-            $accessTimes[$key] = $entry['last_access'] ?? $entry['created_at'];
+            $accessTimes[$key] = (float)($entry['last_access_monotonic']
+                ?? $entry['created_monotonic']
+                ?? 0.0);
         }
 
         // PHP 8.4 优化：asort 比 uasort 快约 20%（数值排序）
@@ -676,7 +692,10 @@ class MemoryCacheService
         $entry = self::$cache[$key];
         
         // 检查是否过期
-        if ($entry['ttl'] > 0 && (time() - $entry['created_at']) > $entry['ttl']) {
+        $createdMonotonic = (float)($entry['created_monotonic'] ?? 0.0);
+        if ($entry['ttl'] > 0
+            && ($createdMonotonic <= 0.0
+                || (self::monotonicSeconds() - $createdMonotonic) > $entry['ttl'])) {
             self::delete($key);
             return false;
         }
@@ -697,6 +716,8 @@ class MemoryCacheService
             'sets' => 0,
             'purges' => 0,
             'size' => self::$stats['size'], // 保留当前大小
+            'evictions' => 0,
+            'emergency_cleanups' => 0,
         ];
     }
 }

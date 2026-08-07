@@ -35,6 +35,13 @@ interface ControlPlaneServerInterface
 
     public function sendTo(int $clientId, string $message): bool;
 
+    public function sendToInstance(string $launchId, string $message): bool;
+
+    /**
+     * @return array{ping_monotonic:float,pong_monotonic:float,received_monotonic:float,rtt_seconds:float,host_boot_id:string}|null
+     */
+    public function getLastPongObservation(string $launchId): ?array;
+
     public function sendToRole(string $role, string $message): void;
 
     /**

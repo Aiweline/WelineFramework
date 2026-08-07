@@ -14,6 +14,11 @@ namespace Weline\Server\Service\Edge\Gateway;
 final class GatewayCredentialStore
 {
     private const MAX_CREDENTIAL_FILES = 64;
+    private const MAX_RECOVERY_ARTIFACTS = 256;
+    // One explicitly recoverable semantic overflow, every bounded recovery
+    // artifact, plus '.', '..' and the credential lock itself.
+    private const MAX_RAW_DIRECTORY_ENTRIES = self::MAX_CREDENTIAL_FILES + 1
+        + self::MAX_RECOVERY_ARTIFACTS + 3;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -139,18 +144,43 @@ final class GatewayCredentialStore
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
             function () use ($directory, $file, $encoded, $projectOwner, $seal): string {
                 $credentials = $this->credentialFiles($directory);
+                $overflowAfterImage = $this->assertRecoverableOverflowAfterImage(
+                    $credentials,
+                    $file,
+                    $encoded,
+                    'active credential install',
+                );
+                if ($overflowAfterImage) {
+                    $this->assertProjectOwnedRegularFile(
+                        $file,
+                        $projectOwner,
+                        \strlen($encoded),
+                    );
+                    $this->cleanupPublishedCredentialFiles($credentials, $file);
+                    return $file;
+                }
+                $credentials = $this->makeRoomForActivePath(
+                    $directory,
+                    $credentials,
+                    $file,
+                    'active credential install',
+                );
+                if ($this->credentialFileMatches($file, $encoded)) {
+                    $this->assertProjectOwnedRegularFile(
+                        $file,
+                        $projectOwner,
+                        \strlen($encoded),
+                    );
+                    $this->cleanupPublishedCredentialFiles($credentials, $file);
+                    return $file;
+                }
                 GatewayProjectStateFilesystem::atomicWrite($file, $encoded, 0600, $seal);
                 $this->assertProjectOwnedRegularFile($file, $projectOwner, \strlen($encoded));
-                foreach ($credentials as $candidate) {
-                    if (\str_ends_with($candidate, '.cred')
-                        && !\hash_equals($file, $candidate)
-                    ) {
-                        GatewayProjectStateFilesystem::removeRegular(
-                            $candidate,
-                            'stale host-bound gateway credential',
-                        );
-                    }
-                }
+                // The active payload is now durable. Cleanup is maintenance,
+                // not part of the commit acknowledgement: a race or platform
+                // unlink failure must not report this exact credential as
+                // uncommitted to the caller.
+                $this->cleanupPublishedCredentialFiles($credentials, $file);
                 return $file;
             },
             $seal,
@@ -184,7 +214,26 @@ final class GatewayCredentialStore
         return GatewayProjectStateFilesystem::withExclusiveLock(
             $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
             function () use ($directory, $file, $encoded, $owner, $seal): string {
-                $this->credentialFiles($directory);
+                $credentials = $this->credentialFiles($directory);
+                $overflowAfterImage = $this->assertRecoverableOverflowAfterImage(
+                    $credentials,
+                    $file,
+                    $encoded,
+                    'pending credential install',
+                );
+                if ($overflowAfterImage || $this->credentialFileMatches($file, $encoded)) {
+                    $this->assertProjectOwnedRegularFile(
+                        $file,
+                        $owner,
+                        \strlen($encoded),
+                    );
+                    return $file;
+                }
+                $this->assertCapacityForNewPath(
+                    $credentials,
+                    $file,
+                    'pending credential install',
+                );
                 GatewayProjectStateFilesystem::atomicWrite($file, $encoded, 0600, $seal);
                 $this->assertProjectOwnedRegularFile($file, $owner, \strlen($encoded));
                 return $file;
@@ -250,22 +299,36 @@ final class GatewayCredentialStore
                     $payload,
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
                 ) . PHP_EOL;
-                GatewayProjectStateFilesystem::atomicWrite($active, $encoded, 0600, $seal);
-                $this->assertProjectOwnedRegularFile($active, $owner, \strlen($encoded));
-                GatewayProjectStateFilesystem::removeRegular(
+                $this->assertProjectOwnedRegularFile(
                     $pending,
-                    'committed pending gateway credential',
+                    $owner,
+                    \strlen($encoded),
                 );
-                foreach ($files as $candidate) {
-                    if (\str_ends_with($candidate, '.cred')
-                        && !\hash_equals($active, $candidate)
-                    ) {
-                        GatewayProjectStateFilesystem::removeRegular(
-                            $candidate,
-                            'stale host-bound gateway credential',
-                        );
-                    }
+                $overflowAfterImage = $this->assertRecoverableOverflowAfterImage(
+                    $files,
+                    $pending,
+                    $encoded,
+                    'pending credential commit',
+                    $active,
+                );
+                if (!$overflowAfterImage) {
+                    $files = $this->makeRoomForActivePath(
+                        $directory,
+                        $files,
+                        $active,
+                        'pending credential commit',
+                    );
                 }
+                if (!$this->credentialFileMatches($active, $encoded)) {
+                    GatewayProjectStateFilesystem::atomicWrite(
+                        $active,
+                        $encoded,
+                        0600,
+                        $seal,
+                    );
+                }
+                $this->assertProjectOwnedRegularFile($active, $owner, \strlen($encoded));
+                $this->cleanupPublishedCredentialFiles($files, $active, $pending);
                 return $payload;
             },
             $seal,
@@ -326,6 +389,116 @@ final class GatewayCredentialStore
                 $file,
                 'host-bound gateway credential',
             ),
+            $seal,
+        );
+    }
+
+    /**
+     * Remove every host-bound capability copied into this project directory
+     * before assigning a live same-host clone its fresh UUID. This is broader
+     * than remove(): pending rotations and credentials from another host are
+     * equally foreign capabilities, but the operation is still strictly
+     * confined to the current project's validated var/wls/gateway directory.
+     */
+    public function purgeForFreshCloneIdentity(
+        ?string $preserveProjectUuid = null,
+    ): int
+    {
+        if ($preserveProjectUuid !== null) {
+            $preserveProjectUuid = \strtolower(\trim($preserveProjectUuid));
+            if (!$this->isUuidV4($preserveProjectUuid)) {
+                throw new \InvalidArgumentException(
+                    'Fresh-clone credential preservation identity is invalid.',
+                );
+            }
+        }
+        $directory = $this->credentialDirectory();
+        $status = @\lstat($directory);
+        if (!\is_array($status)) {
+            if (\file_exists($directory) || \is_link($directory)) {
+                throw new \RuntimeException(
+                    'Project gateway credential directory is unsafe.',
+                );
+            }
+            return 0;
+        }
+        $projectRoot = $this->root();
+        $owner = @\lstat($projectRoot);
+        if (!\is_array($owner)) {
+            throw new \RuntimeException(
+                'Unable to inspect the project credential owner.',
+            );
+        }
+        $this->assertCredentialDirectory($directory, $projectRoot, $owner, true);
+        $this->assertProjectDirectoryChain($directory, $projectRoot);
+        $seal = fn ($handle, string $path): mixed => $this->preserveProjectOwner(
+            $handle,
+            $path,
+            $owner,
+        );
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $directory . DIRECTORY_SEPARATOR . '.credentials.lock',
+            function () use ($directory, $preserveProjectUuid): int {
+                $files = $this->credentialFiles($directory);
+                $preserved = $preserveProjectUuid === null
+                    ? ''
+                    : $directory . DIRECTORY_SEPARATOR . $this->hostId() . '.cred';
+                $removed = 0;
+                foreach ($files as $file) {
+                    if ($preserved !== '' && \hash_equals($preserved, $file)) {
+                        $raw = GatewayProjectStateFilesystem::read(
+                            $file,
+                            16_384,
+                            'Fresh-enrollment host-bound WLS Gateway credential',
+                        );
+                        $decoded = \json_decode($raw, true);
+                        $storedProjectUuid = \is_array($decoded)
+                            ? (string)($decoded['project_uuid'] ?? '')
+                            : '';
+                        if (\hash_equals($preserveProjectUuid, $storedProjectUuid)) {
+                            // A crash may occur after the fresh host credential
+                            // is durable but before the identity marker is
+                            // finalized. Preserve only that exact, fully valid
+                            // current-host after-image; every copied old or
+                            // pending capability is still retired below.
+                            $this->credentialPayload($decoded, $preserveProjectUuid);
+                            continue;
+                        }
+                    }
+                    $selectedIdentity = @\lstat($file);
+                    if (!\is_array($selectedIdentity)) {
+                        throw new \RuntimeException(
+                            'Unable to fence a copied fresh-clone gateway credential.',
+                        );
+                    }
+                    if (!GatewayProjectStateFilesystem::removeRegular(
+                        $file,
+                        'copied fresh-clone gateway credential',
+                        $selectedIdentity,
+                    )) {
+                        throw new \RuntimeException(
+                            'Unable to retire a copied fresh-clone gateway credential.',
+                        );
+                    }
+                    $removed++;
+                }
+                $remaining = $this->credentialFiles($directory);
+                if (($preserved === '' && $remaining !== [])
+                    || ($preserved !== ''
+                        && ($remaining !== [] && $remaining !== [$preserved]))
+                ) {
+                    throw new \RuntimeException(
+                        'Copied fresh-clone gateway credentials remain after retirement.',
+                    );
+                }
+                if ($remaining === [$preserved]) {
+                    $this->readCredentialPayload(
+                        $preserved,
+                        (string)$preserveProjectUuid,
+                    );
+                }
+                return $removed;
+            },
             $seal,
         );
     }
@@ -464,6 +637,8 @@ final class GatewayCredentialStore
     private function credentialFiles(string $directory): array
     {
         $files = [];
+        $staging = [];
+        $backups = [];
         $handle = @\opendir($directory);
         if (!\is_resource($handle)) {
             throw new \RuntimeException(
@@ -473,7 +648,10 @@ final class GatewayCredentialStore
         $rawEntries = 0;
         try {
             while (($leaf = @\readdir($handle)) !== false) {
-                if (++$rawEntries > self::MAX_CREDENTIAL_FILES + 3) {
+                // Count every raw leaf, including dot/lock/recovery entries,
+                // before interpreting it. Recovery must remain bounded even
+                // when an attacker fills the project-owned directory.
+                if (++$rawEntries > self::MAX_RAW_DIRECTORY_ENTRIES) {
                     throw new \RuntimeException(
                         'Project gateway credential directory exceeds its fixed raw entry limit.'
                     );
@@ -481,12 +659,25 @@ final class GatewayCredentialStore
                 if ($leaf === '.' || $leaf === '..' || $leaf === '.credentials.lock') {
                     continue;
                 }
-                if (\preg_match('/\A[a-f0-9]{32}\.cred\z/D', $leaf) !== 1
-                    && \preg_match(
-                        '/\A[a-f0-9]{32}\.rotate-[a-f0-9]{32}\.pending\z/D',
-                        $leaf,
-                    ) !== 1
-                ) {
+                $activePattern = '[a-f0-9]{32}\.cred';
+                $pendingPattern = '[a-f0-9]{32}\.rotate-[a-f0-9]{32}\.pending';
+                $semantic = \preg_match('/\A(?:' . $activePattern . '|'
+                    . $pendingPattern . ')\z/D', $leaf) === 1;
+                $stagingMatch = [];
+                $backupMatch = [];
+                $isStaging = \preg_match(
+                    '/\A(' . $activePattern . '|' . $pendingPattern
+                        . ')\.tmp-[a-f0-9]{24}\z/D',
+                    $leaf,
+                    $stagingMatch,
+                ) === 1;
+                $isBackup = \preg_match(
+                    '/\A(' . $activePattern . '|' . $pendingPattern
+                        . ')\.wls-backup-[a-f0-9]{16}\z/D',
+                    $leaf,
+                    $backupMatch,
+                ) === 1;
+                if (!$semantic && !$isStaging && !$isBackup) {
                     throw new \RuntimeException(
                         'Project gateway credential directory contains an unsafe entry.'
                     );
@@ -497,17 +688,369 @@ final class GatewayCredentialStore
                     16_384,
                     'host-bound gateway credential',
                 );
+                if ($isStaging || $isBackup) {
+                    $identity = @\lstat($candidate);
+                    if (!\is_array($identity)) {
+                        throw new \RuntimeException(
+                            'Project gateway credential recovery artifact is indeterminate.',
+                        );
+                    }
+                    $entry = [
+                        'path' => $candidate,
+                        'identity' => $identity,
+                        'target_leaf' => (string)(
+                            $isStaging ? $stagingMatch[1] : $backupMatch[1]
+                        ),
+                    ];
+                    if ($isStaging) {
+                        $staging[] = $entry;
+                    } else {
+                        $backups[] = $entry;
+                    }
+                    if (\count($staging) + \count($backups)
+                        > self::MAX_RECOVERY_ARTIFACTS
+                    ) {
+                        throw new \RuntimeException(
+                            'Project gateway credential recovery artifact quota is exhausted.',
+                        );
+                    }
+                    continue;
+                }
                 $files[] = $candidate;
-                if (\count($files) > self::MAX_CREDENTIAL_FILES) {
+                if (\count($files) > self::MAX_CREDENTIAL_FILES + 1) {
                     throw new \RuntimeException(
-                        'Project gateway credential directory exceeds its fixed entry limit.'
+                        'Project gateway credential directory exceeds its bounded recovery entry limit.'
                     );
                 }
             }
         } finally {
             @\closedir($handle);
         }
+
+        // A Windows backup is the prior committed target. Delete it only when
+        // the paired target still exists, parses as an exact credential, and
+        // is authorized by durable project identity/rotation facts. Validate
+        // every backup first so a damaged target retains all recovery evidence.
+        foreach ($backups as $index => $backup) {
+            $target = $directory . DIRECTORY_SEPARATOR . $backup['target_leaf'];
+            if (!\in_array($target, $files, true)) {
+                throw new \RuntimeException(
+                    'Credential recovery backup paired credential target is missing.',
+                );
+            }
+            try {
+                $backups[$index]['target_identity']
+                    = $this->validateCredentialRecoveryTarget(
+                    $target,
+                    (string)$backup['target_leaf'],
+                );
+            } catch (\Throwable $throwable) {
+                throw new \RuntimeException(
+                    'Credential recovery backup paired credential target is invalid.',
+                    0,
+                    $throwable,
+                );
+            }
+        }
+        foreach ([...$staging, ...$backups] as $artifact) {
+            if (\is_array($artifact['target_identity'] ?? null)) {
+                $target = $directory . DIRECTORY_SEPARATOR
+                    . (string)$artifact['target_leaf'];
+                $currentTargetIdentity = @\lstat($target);
+                if (!\is_array($currentTargetIdentity)
+                    || !$this->sameRecoveryFileState(
+                        $artifact['target_identity'],
+                        $currentTargetIdentity,
+                    )
+                ) {
+                    throw new \RuntimeException(
+                        'Credential recovery backup paired target changed before cleanup.',
+                    );
+                }
+            }
+            if (!GatewayProjectStateFilesystem::removeRegular(
+                (string)$artifact['path'],
+                'orphan WLS Gateway credential recovery artifact',
+                \is_array($artifact['identity'] ?? null)
+                    ? $artifact['identity']
+                    : null,
+            )) {
+                throw new \RuntimeException(
+                    'Unable to collect an orphan WLS Gateway credential recovery artifact.',
+                );
+            }
+        }
         return $files;
+    }
+
+    /** @return array<string|int,mixed> */
+    private function validateCredentialRecoveryTarget(
+        string $target,
+        string $targetLeaf,
+    ): array {
+        $active = [];
+        $pending = [];
+        $isActive = \preg_match(
+            '/\A([a-f0-9]{32})\.cred\z/D',
+            $targetLeaf,
+            $active,
+        ) === 1;
+        $isPending = \preg_match(
+            '/\A([a-f0-9]{32})\.rotate-([a-f0-9]{32})\.pending\z/D',
+            $targetLeaf,
+            $pending,
+        ) === 1;
+        if (!$isActive && !$isPending) {
+            throw new \RuntimeException(
+                'Credential recovery target leaf is not semantic.',
+            );
+        }
+        $identityBeforeRead = @\lstat($target);
+        if (!\is_array($identityBeforeRead)) {
+            throw new \RuntimeException(
+                'Credential recovery paired target identity is unavailable.',
+            );
+        }
+        $raw = GatewayProjectStateFilesystem::read(
+            $target,
+            16_384,
+            'Credential recovery paired target',
+        );
+        $projectOwner = @\lstat($this->root());
+        if (!\is_array($projectOwner)) {
+            throw new \RuntimeException(
+                'Credential recovery project owner is unavailable.',
+            );
+        }
+        $this->assertProjectOwnedRegularFile(
+            $target,
+            $projectOwner,
+            \strlen($raw),
+        );
+        $decoded = \json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
+        $expectedFields = [
+            'schema_version',
+            'protocol',
+            'host_id',
+            'project_uuid',
+            'credential_id',
+            'credential_generation',
+            'secret',
+            'issued_at',
+        ];
+        $actualFields = \is_array($decoded) ? \array_keys($decoded) : [];
+        \sort($expectedFields, SORT_STRING);
+        \sort($actualFields, SORT_STRING);
+        $hostId = (string)($isActive ? $active[1] : $pending[1]);
+        $projectUuid = \is_array($decoded)
+            ? (string)($decoded['project_uuid'] ?? '')
+            : '';
+        if (!\is_array($decoded)
+            || $actualFields !== $expectedFields
+            || ($decoded['schema_version'] ?? null) !== 1
+            || !\hash_equals(
+                GatewayPaths::PROTOCOL,
+                (string)($decoded['protocol'] ?? ''),
+            )
+            || !\hash_equals($hostId, (string)($decoded['host_id'] ?? ''))
+            || !$this->isUuidV4($projectUuid)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)(
+                $decoded['credential_id'] ?? ''
+            )) !== 1
+            || !\is_int($decoded['credential_generation'] ?? null)
+            || (int)$decoded['credential_generation'] < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                $decoded['secret'] ?? ''
+            )) !== 1
+            || !\is_string($decoded['issued_at'] ?? null)
+            || \strlen((string)$decoded['issued_at']) > 128
+            || \strtotime((string)$decoded['issued_at']) === false
+        ) {
+            throw new \RuntimeException(
+                'Credential recovery paired target payload is malformed.',
+            );
+        }
+        $rotationId = $isPending ? (string)$pending[2] : null;
+        if (!(new ProjectIdentityStore($this->root()))->authorizesCredentialRecovery(
+            $projectUuid,
+            $rotationId,
+        )) {
+            throw new \RuntimeException(
+                'Credential recovery paired target is not authorized by project facts.',
+            );
+        }
+        $identityAfterRead = @\lstat($target);
+        if (!\is_array($identityAfterRead)
+            || !$this->sameRecoveryFileState(
+                $identityBeforeRead,
+                $identityAfterRead,
+            )
+        ) {
+            throw new \RuntimeException(
+                'Credential recovery paired target changed during validation.',
+            );
+        }
+        return $identityAfterRead;
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private function sameRecoveryFileState(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function credentialFileMatches(string $file, string $encoded): bool
+    {
+        $current = GatewayProjectStateFilesystem::readOptional(
+            $file,
+            16_384,
+            'Host-bound WLS Gateway credential after-image',
+        );
+        return \is_string($current) && \hash_equals($encoded, $current);
+    }
+
+    /**
+     * Exactly one overflow file is recoverable only when the operation's
+     * target already contains the byte-exact payload that this caller is
+     * authorized to persist. Commit recovery additionally requires an active
+     * path that can be replaced without allocating another semantic entry.
+     *
+     * @param list<string> $files
+     */
+    private function assertRecoverableOverflowAfterImage(
+        array $files,
+        string $target,
+        string $encoded,
+        string $operation,
+        ?string $requiredCompanion = null,
+    ): bool {
+        $count = \count($files);
+        if ($count <= self::MAX_CREDENTIAL_FILES) {
+            return false;
+        }
+        $targetPresent = \in_array($target, $files, true);
+        $companionPresent = $requiredCompanion === null
+            || \in_array($requiredCompanion, $files, true);
+        if ($count !== self::MAX_CREDENTIAL_FILES + 1
+            || !$targetPresent
+            || !$companionPresent
+            || !$this->credentialFileMatches($target, $encoded)
+        ) {
+            throw new \RuntimeException(
+                'Project gateway credential capacity overflow does not match the '
+                    . 'exact recoverable after-image for ' . $operation . '.'
+            );
+        }
+        return true;
+    }
+
+    /** @param list<string> $files */
+    private function assertCapacityForNewPath(
+        array $files,
+        string $target,
+        string $operation,
+    ): void {
+        if (!\in_array($target, $files, true)
+            && \count($files) >= self::MAX_CREDENTIAL_FILES
+        ) {
+            throw new \RuntimeException(
+                'Project gateway credential capacity is exhausted before '
+                    . $operation . '; no new credential file was published.'
+            );
+        }
+    }
+
+    /**
+     * A stale active file is host-inapplicable and is already part of the
+     * install/commit cleanup contract. It may be retired before publication
+     * to reserve a slot while the pending credential remains durable. Pending
+     * rotations are never selected as capacity victims.
+     *
+     * @param list<string> $files
+     * @return list<string>
+     */
+    private function makeRoomForActivePath(
+        string $directory,
+        array $files,
+        string $active,
+        string $operation,
+    ): array {
+        if (\in_array($active, $files, true)
+            || \count($files) < self::MAX_CREDENTIAL_FILES
+        ) {
+            return $files;
+        }
+        foreach ($files as $candidate) {
+            if (!\str_ends_with($candidate, '.cred')
+                || \hash_equals($active, $candidate)
+            ) {
+                continue;
+            }
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $candidate,
+                    'stale host-bound gateway credential capacity reservation',
+                );
+            } catch (\Throwable $throwable) {
+                throw new \RuntimeException(
+                    'Project gateway credential capacity could not retire a stale '
+                        . 'active path before ' . $operation . '.',
+                    0,
+                    $throwable,
+                );
+            }
+            $files = $this->credentialFiles($directory);
+            break;
+        }
+        $this->assertCapacityForNewPath($files, $active, $operation);
+        return $files;
+    }
+
+    /**
+     * Once the active file has passed its identity/owner/size verification,
+     * stale-file removal is best-effort. Throwing here would tell the caller
+     * to retry an operation whose secret is already authoritative on disk.
+     * A retry safely re-enters the exact after-image path and attempts cleanup
+     * again.
+     *
+     * @param list<string> $files
+     */
+    private function cleanupPublishedCredentialFiles(
+        array $files,
+        string $active,
+        ?string $committedPending = null,
+    ): void {
+        $cleanup = [];
+        if ($committedPending !== null && !\hash_equals($active, $committedPending)) {
+            $cleanup[$committedPending] = 'committed pending gateway credential';
+        }
+        foreach ($files as $candidate) {
+            if (\str_ends_with($candidate, '.cred')
+                && !\hash_equals($active, $candidate)
+            ) {
+                $cleanup[$candidate] = 'stale host-bound gateway credential';
+            }
+        }
+        foreach ($cleanup as $candidate => $label) {
+            try {
+                GatewayProjectStateFilesystem::removeRegular($candidate, $label);
+            } catch (\Throwable) {
+                // The verified active credential is already committed. Leave
+                // the exact stale path for a bounded retry instead of emitting
+                // a false pre-commit failure (and never include its contents).
+            }
+        }
     }
 
     /** @param array<string|int,mixed>|null $owner */

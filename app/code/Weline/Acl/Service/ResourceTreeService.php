@@ -7,7 +7,10 @@ use Weline\Acl\Api\RoleIdentityInterface;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\AclNode;
 use Weline\Acl\Model\RoleAccess;
+use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * ACL 资源树服务
@@ -50,7 +53,13 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             return [];
         }
 
-        $cacheKey = 'role:' . $roleId;
+        $websiteId = 0;
+        try {
+            $websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+        } catch (\Throwable) {
+            $websiteId = 0;
+        }
+        $cacheKey = 'role:' . $roleId . ':w:' . $websiteId;
         $now = microtime(true);
         if (isset(self::$backendMenuTreeCache[$cacheKey]) && self::$backendMenuTreeCache[$cacheKey]['expires'] >= $now) {
             return self::$backendMenuTreeCache[$cacheKey]['data'];
@@ -73,23 +82,49 @@ class ResourceTreeService implements ResourceTreeServiceInterface
         
         $menuSourceIds = array_column($menuSources, Acl::schema_fields_SOURCE_ID);
         
-        // 非超管需要检查权限
-        if ($roleId !== 1) {
-            $allowedSources = $this->getAllowedMenuSources($role, $menuSourceIds);
+        if ($roleId === 1 && $this->isSuperAdminMenuBypassAllowed()) {
+            $allowedSources = $menuSourceIds;
+        } else {
+            /** @var AclServiceInterface $aclService */
+            $aclService = ObjectManager::getInstance(AclServiceInterface::class);
+            $allowedSources = [];
+            foreach ($aclService->getRoleAclEntries($roleId) as $row) {
+                $type = (string)($row[Acl::schema_fields_TYPE] ?? '');
+                if ($type !== Acl::type_MENUS && $type !== 'menus') {
+                    continue;
+                }
+                $sid = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+                if ($sid !== '') {
+                    $allowedSources[] = $sid;
+                }
+            }
+            $allowedSources = array_values(array_intersect($menuSourceIds, $allowedSources));
             if (empty($allowedSources)) {
                 self::$backendMenuTreeCache[$cacheKey] = ['expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL, 'data' => []];
                 return [];
             }
-            // 展开祖先以确保树结构完整
             $allowedSources = $this->expandWithAncestors($menuSources, $allowedSources);
-        } else {
-            $allowedSources = $menuSourceIds;
         }
         
         // 构建树
         $tree = $this->buildTree($menuSources, $allowedSources, '', true);
         self::$backendMenuTreeCache[$cacheKey] = ['expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL, 'data' => $tree];
         return $tree;
+    }
+
+    private function isSuperAdminMenuBypassAllowed(): bool
+    {
+        $eventData = new DataObject([
+            'role_id' => 1,
+            'allow_bypass' => true,
+        ]);
+        try {
+            ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Acl::super_admin_bypass_check', $eventData);
+        } catch (\Throwable) {
+            return true;
+        }
+
+        return (bool)$eventData->getData('allow_bypass');
     }
     
     /**
@@ -111,6 +146,27 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             ->order(Acl::schema_fields_ORDER, 'ASC')
             ->select()
             ->fetchArray();
+
+        $websiteId = 0;
+        if (\method_exists($role, 'getWebsiteId')) {
+            $websiteId = (int)$role->getWebsiteId();
+        } elseif (\method_exists($role, 'getData')) {
+            $websiteId = (int)$role->getData('website_id');
+        }
+        $rowsEvent = new DataObject([
+            'role_id' => $roleId,
+            'website_id' => $websiteId,
+            'rows' => $allRows,
+        ]);
+        try {
+            ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Acl::acl_assignment_rows_after', $rowsEvent);
+        } catch (\Throwable) {
+            // keep unfiltered rows
+        }
+        $filteredRows = $rowsEvent->getData('rows');
+        if (\is_array($filteredRows)) {
+            $allRows = $filteredRows;
+        }
         
         $roleSelectedSources = $this->getRoleSelectedSources($roleId);
         $knownIds = [];

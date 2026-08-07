@@ -11,6 +11,11 @@ use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
 class SharedStateClient
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private ConnectionPoolInterface $pool;
     private float $acquireTimeout;
     private bool $released = false;
@@ -47,9 +52,9 @@ class SharedStateClient
 
     public function request(string $cmd, array $params = []): ?array
     {
-        $requestStart = \microtime(true);
+        $requestStart = self::monotonicSeconds();
         return $this->withConnection(function (PooledConnectionInterface $connection) use ($cmd, $params, $requestStart): ?array {
-            $encodeStart = \microtime(true);
+            $encodeStart = self::monotonicSeconds();
             $payload = SessionProtocol::encodeRequest($cmd, $params);
             $this->recordClientPhase('protocol_encode', $encodeStart, 'success');
 
@@ -137,7 +142,7 @@ class SharedStateClient
 
     private function recordClientPhase(string $phase, float $startTime, string $result): void
     {
-        $durationMs = (\microtime(true) - $startTime) * 1000;
+        $durationMs = (self::monotonicSeconds() - $startTime) * 1000;
         \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
             'wls_shared_client_phase_duration_ms',
             $durationMs,

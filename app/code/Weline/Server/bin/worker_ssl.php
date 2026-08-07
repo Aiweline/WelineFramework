@@ -142,6 +142,7 @@ $publicOrigin = '';
 $isMaintenanceWorker = false;
 $isGatewayFallbackWorker = false;
 $gatewayHostLeaseId = '';
+$gatewayMasterLaunchId = '';
 $wlsHttpPolicyEncoded = '';
 $wlsHttpPolicySha256 = '';
 $windowsListenerHandoffPath = '';
@@ -199,6 +200,11 @@ foreach ($argv as $arg) {
         $gatewayHostLeaseId = \strtolower(\trim((string)\substr(
             $arg,
             \strlen('--gateway-host-lease-id='),
+        )));
+    } elseif (\str_starts_with($arg, '--gateway-master-launch-id=')) {
+        $gatewayMasterLaunchId = \strtolower(\trim((string)\substr(
+            $arg,
+            \strlen('--gateway-master-launch-id='),
         )));
     } elseif (\str_starts_with($arg, '--master-pid=')) {
         $masterPid = (int)\substr($arg, 13);
@@ -365,6 +371,16 @@ if ($isGatewayFallbackWorker
     \fwrite(\STDERR, "Gateway fallback host lease identity is required.\n");
     exit(1);
 }
+if ($isGatewayFallbackWorker
+    && \preg_match('/^[a-f0-9]{32}$/D', $gatewayMasterLaunchId) !== 1
+) {
+    \fwrite(\STDERR, "Gateway fallback Master launch identity is required.\n");
+    exit(1);
+}
+if (!$isGatewayFallbackWorker && $gatewayMasterLaunchId !== '') {
+    \fwrite(\STDERR, "Gateway Master launch identity is fallback-only.\n");
+    exit(1);
+}
 if ($gatewayHostLeaseId !== '') {
     $_SERVER['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
     $_ENV['WLS_GATEWAY_HOST_LEASE_ID'] = $gatewayHostLeaseId;
@@ -393,6 +409,7 @@ if ($windowsListenerHandoffPresent
         || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerHandoffId) !== 1
         || \preg_match('/\A[a-f0-9]{64}\z/D', $windowsListenerIntentDigest) !== 1
         || \preg_match('/\A[a-f0-9]{32}\z/D', $windowsListenerMasterLaunchId) !== 1
+        || !\hash_equals($gatewayMasterLaunchId, $windowsListenerMasterLaunchId)
         || \preg_match('/\A[a-f0-9]{32}\z/D', $orchestratorLaunchId) !== 1
         || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerLeaseInstance) !== 1
         || \preg_match('/\A[A-Za-z0-9_.-]{1,128}\z/D', $windowsListenerWlsInstance) !== 1
@@ -469,6 +486,13 @@ if ($wlsListenerMode === 'shared_fd') {
     }
 } elseif ($listenFd !== 0) {
     \fwrite(\STDERR, "--listen-fd is only valid with --wls-listener-mode=shared_fd.\n");
+    exit(1);
+}
+if ($isGatewayFallbackWorker
+    && \PHP_OS_FAMILY !== 'Windows'
+    && ($wlsListenerMode !== 'shared_fd' || $listenFd !== 3)
+) {
+    \fwrite(\STDERR, "POSIX gateway fallback requires the Master-owned listener on FD 3.\n");
     exit(1);
 }
 
@@ -796,10 +820,10 @@ $workerStartupTraceFileEnabled = (bool)($wlsEnv['debug']['worker_startup_trace']
 $ipcClient = $ipcClient ?? null;
 $wlsStartupTraceLastStage = 'logger_bootstrap';
 $wlsWorkerGracefulExitReason = '';
-$wlsStartupTraceStartedAt = \microtime(true);
+$wlsStartupTraceStartedAt = wlsWorkerMonotonicNow();
 $wlsStartupTraceLastAt = $wlsStartupTraceStartedAt;
 $wlsStartupTrace = static function (string $stage, array $context = []) use (&$wlsStartupTraceLastAt, &$wlsStartupTraceLastStage, $wlsStartupTraceStartedAt, $workerId, $port, $instanceName, $isMaintenanceWorker, $isGatewayFallbackWorker, $workerStartupTraceFileEnabled): void {
-    $now = \microtime(true);
+    $now = wlsWorkerMonotonicNow();
     $wlsStartupTraceLastStage = $stage;
     $context['delta_ms'] = (int)\round(($now - $wlsStartupTraceLastAt) * 1000);
     $context['total_ms'] = (int)\round(($now - $wlsStartupTraceStartedAt) * 1000);
@@ -850,7 +874,7 @@ $ipcClient = $ipcClient ?? null;
 $ipcSelfTag = $ipcSelfTag ?? null;
 $ipcDraining = $ipcDraining ?? false;
 $ipcReceivedShutdown = $ipcReceivedShutdown ?? false;
-$drainStartTime = $drainStartTime ?? 0;
+$drainStartTime = $drainStartTime ?? 0.0;
 $shouldExit = $shouldExit ?? false;
 $maxDrainTime = 10;
 $maintenanceDrainState = new \Weline\Server\Service\Runtime\WorkerMaintenanceDrainState($isMaintenanceWorker);
@@ -866,7 +890,7 @@ if ($maxMemoryBytes <= 0) {
     $maxMemoryBytes = 256 * 1024 * 1024;
 }
 $memoryCheckInterval = $memoryCheckInterval ?? 5;
-$lastMemoryCheck = $lastMemoryCheck ?? \time();
+$lastMemoryCheck = $lastMemoryCheck ?? wlsWorkerMonotonicNow();
 $memoryWarningThreshold = $memoryWarningThreshold ?? 0.80;
 $memoryDrainThreshold = $memoryDrainThreshold ?? 0.88;
 $maxRequestHeaderBytes = $maxRequestHeaderBytes ?? 65536;
@@ -931,6 +955,9 @@ $mainLoopUnblockedLogIntervalSec = \Weline\Server\Service\MainLoopUnblockedLogCo
 $lastMainLoopUnblockedLogAt = 0.0;
 $hotPathLogsEnabled = (bool)($wlsEnv['debug']['hot_path_logs'] ?? false)
     || \Weline\Server\Log\LogConfig::isVerboseWlsLog();
+if (!\defined('WLS_WORKER_HOT_PATH_LOGS_ENABLED')) {
+    \define('WLS_WORKER_HOT_PATH_LOGS_ENABLED', $hotPathLogsEnabled);
+}
 
 /**
  * Load one exact immutable generation supplied by the launcher.
@@ -1035,6 +1062,462 @@ function wlsLoadServingManifestSnapshot(
 }
 
 /**
+ * Reconstruct the listener/process tuple independently inside the fallback
+ * Worker. The Master sends the same tuple, but its copy is not authority for
+ * facts this process can observe itself.
+ *
+ * @param array<string,mixed> $servingSnapshot
+ * @param array<string,mixed> $windowsListenerProof
+ * @return array<string,mixed>
+ */
+function wlsBuildGatewayFallbackTransitionIdentity(
+    array $servingSnapshot,
+    string $instanceName,
+    string $slotId,
+    string $serviceLeaseId,
+    int $serviceGeneration,
+    string $workerLaunchId,
+    int $masterPid,
+    int $masterEpoch,
+    string $masterLaunchId,
+    string $hostLeaseId,
+    string $bindHost,
+    int $port,
+    int $listenFd,
+    bool $windowsListenerAdopted,
+    array $windowsListenerProof,
+): array {
+    $runtimeIdentity = new \Weline\Server\Service\MasterLeaseRuntimeIdentity();
+    $workerIdentity = $runtimeIdentity->captureProcessIdentity((int)\getmypid());
+    $masterIdentity = $runtimeIdentity->captureOwner($masterPid);
+    $manifestPayload = \is_array($servingSnapshot['manifest']['payload'] ?? null)
+        ? $servingSnapshot['manifest']['payload']
+        : [];
+    $projectUuid = (string)($manifestPayload['project_uuid'] ?? '');
+    $normalisedBindHost = \strtolower(\trim($bindHost, " \t\n\r\0\x0B[]"));
+    $packedBindHost = @\inet_pton($normalisedBindHost);
+    $normalisedBindHost = \is_string($packedBindHost)
+        ? (string)@\inet_ntop($packedBindHost)
+        : '';
+    if ($projectUuid === ''
+        || $normalisedBindHost === ''
+        || $masterPid <= 0
+        || $masterEpoch <= 0
+    ) {
+        throw new \RuntimeException(
+            'Gateway fallback transition identity lacks immutable startup facts.',
+        );
+    }
+
+    $listenerTransport = 'posix_inherited_fd';
+    $listenerReceiptDigest = '';
+    if ($windowsListenerAdopted) {
+        $listenerTransport = \Weline\Server\Service\Runtime\WindowsListenerHandoff::TRANSPORT;
+        $listenerReceiptDigest = (string)($windowsListenerProof['envelope_digest'] ?? '');
+        if (!\hash_equals($hostLeaseId, (string)($windowsListenerProof['host_lease_id'] ?? ''))
+            || !\hash_equals($masterLaunchId, (string)($windowsListenerProof['master_launch_id'] ?? ''))
+            || !\hash_equals($workerLaunchId, (string)($windowsListenerProof['launch_id'] ?? ''))
+            || !\hash_equals($slotId, (string)($windowsListenerProof['slot_id'] ?? ''))
+            || $serviceGeneration !== (int)($windowsListenerProof['generation'] ?? 0)
+            || (int)\getmypid() !== (int)($windowsListenerProof['target_pid'] ?? 0)
+            || !\hash_equals(
+                (string)$workerIdentity['birth'],
+                (string)($windowsListenerProof['target_process_birth'] ?? ''),
+            )
+            || !\hash_equals(
+                (string)$masterIdentity['birth'],
+                (string)($windowsListenerProof['source_process_birth'] ?? ''),
+            )
+            || !\hash_equals(
+                $normalisedBindHost,
+                \strtolower((string)($windowsListenerProof['host'] ?? '')),
+            )
+            || $port !== (int)($windowsListenerProof['port'] ?? 0)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $listenerReceiptDigest) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Windows fallback transition identity diverges from its adopted socket proof.',
+            );
+        }
+    } else {
+        if (\PHP_OS_FAMILY === 'Windows' || $listenFd !== 3) {
+            throw new \RuntimeException(
+                'POSIX fallback transition identity requires inherited listener FD 3.',
+            );
+        }
+        $listenerReceiptDigest = \hash('sha256', \implode("\0", [
+            $hostLeaseId,
+            (string)\getmypid(),
+            (string)$workerIdentity['birth'],
+            (string)$workerIdentity['pid_namespace_id'],
+            $workerLaunchId,
+            (string)$serviceGeneration,
+            (string)$listenFd,
+        ]));
+    }
+
+    $adoption = [
+        'schema' => 'wls-listener-adoption/2',
+        'lease_id' => $hostLeaseId,
+        'lease_state' => 'ACTIVE',
+        'owner_pid' => (int)\getmypid(),
+        'owner_process_birth' => (string)$workerIdentity['birth'],
+        'owner_pid_namespace_id' => (string)$workerIdentity['pid_namespace_id'],
+        'owner_launch_id' => $workerLaunchId,
+        'slot_id' => $slotId,
+        'generation' => $serviceGeneration,
+        'host' => $normalisedBindHost,
+        'port' => $port,
+        'transport' => $listenerTransport,
+        'receipt_digest' => $listenerReceiptDigest,
+    ];
+    $listenerProofDigest = \hash('sha256', \json_encode(
+        $adoption,
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+    ));
+
+    return [
+        'schema' => \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+        'project_uuid' => $projectUuid,
+        'wls_instance' => $instanceName,
+        'role' => \Weline\Server\IPC\ControlMessage::ROLE_GATEWAY_FALLBACK,
+        'slot_id' => $slotId,
+        'service_generation' => $serviceGeneration,
+        'service_lease_id' => $serviceLeaseId,
+        'worker_pid' => (int)\getmypid(),
+        'worker_process_birth' => (string)$workerIdentity['birth'],
+        'worker_pid_namespace_id' => (string)$workerIdentity['pid_namespace_id'],
+        'worker_launch_id' => $workerLaunchId,
+        'master_pid' => $masterPid,
+        'master_epoch' => $masterEpoch,
+        'master_launch_id' => $masterLaunchId,
+        'master_process_birth' => (string)$masterIdentity['birth'],
+        'master_pid_namespace_id' => (string)$masterIdentity['pid_namespace_id'],
+        'port' => $port,
+        'host_lease_instance' => \Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity::forRole(
+            $instanceName,
+            \Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity::ROLE_FALLBACK,
+        ),
+        'host_lease_id' => $hostLeaseId,
+        'host_boot_id' => $runtimeIdentity->hostBootId(),
+        'bind_host' => $normalisedBindHost,
+        'listener_proof_digest' => $listenerProofDigest,
+        'listener_transport' => $listenerTransport,
+        'listener_receipt_digest' => $listenerReceiptDigest,
+    ];
+}
+
+/** @param array<string,mixed> $received @param array<string,mixed> $expected */
+function wlsGatewayFallbackTransitionIdentityMatches(array $received, array $expected): bool
+{
+    return \hash_equals(
+        \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($expected),
+        \Weline\Server\Service\Edge\Gateway\GatewayClient::canonicalJson($received),
+    );
+}
+
+/** @param array<string,mixed> $left @param array<string,mixed> $right */
+function wlsGatewayFallbackTransitionMatches(array $left, array $right): bool
+{
+    foreach ([
+        'action',
+        'target_listener_state',
+        'transition_id',
+        'action_digest',
+        'predecessor_action_digest',
+    ] as $field) {
+        if (!\is_string($left[$field] ?? null)
+            || !\is_string($right[$field] ?? null)
+            || !\hash_equals((string)$left[$field], (string)$right[$field])
+        ) {
+            return false;
+        }
+    }
+
+    return \is_array($left['identity'] ?? null)
+        && \is_array($right['identity'] ?? null)
+        && wlsGatewayFallbackTransitionIdentityMatches(
+            $left['identity'],
+            $right['identity'],
+        );
+}
+
+/**
+ * Re-prove the exact project-owned certificate generation before reopening
+ * listener admission. The Master performs the same proof, but the Worker must
+ * not turn an expired, revoked, replaced, or partially reloaded TLS context
+ * back into an accepting endpoint merely because an old UNDRAIN was replayed.
+ *
+ * @param array<string,array<string,mixed>> $routes
+ * @param array<string,array{local_cert:string,local_pk:string}> $sniServerCerts
+ */
+function wlsGatewayFallbackTlsContextIsUsable(
+    array $routes,
+    array $sniServerCerts,
+    string $sslCert,
+    string $sslKey,
+): bool {
+    if ($routes === [] || $sniServerCerts === [] || $sslCert === '' || $sslKey === '') {
+        return false;
+    }
+
+    try {
+        $firstPair = \reset($sniServerCerts);
+        if (!\is_array($firstPair)
+            || !\hash_equals($sslCert, (string)($firstPair['local_cert'] ?? ''))
+            || !\hash_equals($sslKey, (string)($firstPair['local_pk'] ?? ''))
+        ) {
+            return false;
+        }
+        $deadline = \Weline\Server\IPC\ControlMessage::monotonicSeconds() + 0.5;
+        $generations = new \Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore(
+            (string)BP,
+        );
+        foreach ($routes as $route) {
+            if (!\is_array($route)) {
+                return false;
+            }
+            $domain = (string)($route['domain'] ?? '');
+            $generation = (int)($route['certificate_generation'] ?? 0);
+            $sourceDigest = (string)($route['certificate_source_digest'] ?? '');
+            $certificate = \is_array($route['certificate'] ?? null)
+                ? $route['certificate']
+                : [];
+            $privateKey = \is_array($route['private_key'] ?? null)
+                ? $route['private_key']
+                : [];
+            $snapshot = \is_array($route['certificate_snapshot'] ?? null)
+                ? $route['certificate_snapshot']
+                : [];
+            $pair = $sniServerCerts[$domain] ?? null;
+            $active = $generations->active($domain, $deadline);
+            if (!\is_array($pair)
+                || !\is_array($active)
+                || $generation < 1
+                || (int)($active['generation'] ?? 0) !== $generation
+                || !\hash_equals(
+                    $sourceDigest,
+                    (string)($active['source_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($certificate['path'] ?? ''),
+                    (string)($pair['local_cert'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($privateKey['path'] ?? ''),
+                    (string)($pair['local_pk'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($certificate['path'] ?? ''),
+                    (string)($active['cert_path'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($privateKey['path'] ?? ''),
+                    (string)($active['key_path'] ?? ''),
+                )
+                || !\hash_equals(
+                    (string)($snapshot['leaf_fingerprint_sha256'] ?? ''),
+                    (string)($active['leaf_fingerprint_sha256'] ?? ''),
+                )
+            ) {
+                return false;
+            }
+        }
+    } catch (\Throwable) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Apply only the in-process admission state. The caller owns ACK delivery and
+ * restores its snapshot only if an UNDRAIN ACK cannot enter the write queue.
+ *
+ * @param array<string,mixed> $transition
+ * @param array<string,mixed> $expectedIdentity
+ * @param array<string,mixed>|null $drainTransition
+ * @param array<string,mixed>|null $undrainTransition
+ * @param array<string,array{drain:string,undrain:string}> $retiredTransitions
+ * @return array{success:bool,reason:string,listener_state:string,idempotent:bool,action_applied:bool}
+ */
+function wlsApplyGatewayFallbackListenerTransition(
+    array $transition,
+    array $expectedIdentity,
+    string &$listenerState,
+    bool &$listenerDraining,
+    bool $terminal,
+    bool $undrainAllowed,
+    bool &$drainAcknowledged,
+    ?array &$drainTransition,
+    ?array &$undrainTransition,
+    array &$retiredTransitions,
+): array {
+    $actualState = $terminal
+        ? \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_TERMINAL
+        : $listenerState;
+    if (!\is_array($transition['identity'] ?? null)
+        || !wlsGatewayFallbackTransitionIdentityMatches(
+            $transition['identity'],
+            $expectedIdentity,
+        )
+    ) {
+        return [
+            'success' => false,
+            'reason' => 'transition_identity_mismatch',
+            'listener_state' => $actualState,
+            'idempotent' => false,
+            'action_applied' => false,
+        ];
+    }
+    if ($terminal) {
+        return [
+            'success' => false,
+            'reason' => 'listener_terminal',
+            'listener_state' => $actualState,
+            'idempotent' => false,
+            'action_applied' => false,
+        ];
+    }
+
+    $action = (string)$transition['action'];
+    $transitionId = (string)$transition['transition_id'];
+    if ($action === \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN) {
+        if ($listenerState === \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING) {
+            $same = \is_array($drainTransition)
+                && wlsGatewayFallbackTransitionMatches($transition, $drainTransition);
+            return [
+                'success' => $same,
+                'reason' => $same ? '' : 'drain_transition_conflict',
+                'listener_state' => $listenerState,
+                'idempotent' => $same,
+                'action_applied' => false,
+            ];
+        }
+        $transitionHistoryExhausted = \count($retiredTransitions) >= 32;
+        if ($listenerState !== \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE
+            || isset($retiredTransitions[$transitionId])
+            || $transitionHistoryExhausted
+        ) {
+            return [
+                'success' => false,
+                'reason' => isset($retiredTransitions[$transitionId])
+                    ? 'drain_transition_replay'
+                    : ($transitionHistoryExhausted
+                        ? 'transition_history_exhausted'
+                        : 'listener_not_active'),
+                'listener_state' => $listenerState,
+                'idempotent' => false,
+                'action_applied' => false,
+            ];
+        }
+        $listenerState = \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING;
+        $listenerDraining = true;
+        $drainAcknowledged = false;
+        $drainTransition = $transition;
+        $undrainTransition = null;
+        return [
+            'success' => true,
+            'reason' => '',
+            'listener_state' => $listenerState,
+            'idempotent' => false,
+            'action_applied' => true,
+        ];
+    }
+
+    if (!$undrainAllowed) {
+        return [
+            'success' => false,
+            'reason' => 'undrain_tls_context_unavailable',
+            'listener_state' => $listenerState,
+            'idempotent' => false,
+            'action_applied' => false,
+        ];
+    }
+
+    if ($listenerState === \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE) {
+        $same = \is_array($undrainTransition)
+            && wlsGatewayFallbackTransitionMatches($transition, $undrainTransition);
+        return [
+            'success' => $same,
+            'reason' => $same ? '' : 'undrain_transition_replay',
+            'listener_state' => $listenerState,
+            'idempotent' => $same,
+            'action_applied' => false,
+        ];
+    }
+    if ($listenerState !== \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING
+        || !$drainAcknowledged
+        || !\is_array($drainTransition)
+        || !\hash_equals($transitionId, (string)($drainTransition['transition_id'] ?? ''))
+        || !\hash_equals(
+            (string)($transition['predecessor_action_digest'] ?? ''),
+            (string)($drainTransition['action_digest'] ?? ''),
+        )
+        || !wlsGatewayFallbackTransitionIdentityMatches(
+            (array)$transition['identity'],
+            (array)($drainTransition['identity'] ?? []),
+        )
+    ) {
+        return [
+            'success' => false,
+            'reason' => 'undrain_predecessor_not_acknowledged',
+            'listener_state' => $listenerState,
+            'idempotent' => false,
+            'action_applied' => false,
+        ];
+    }
+
+    $listenerState = \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE;
+    $listenerDraining = false;
+    $undrainTransition = $transition;
+    $retiredTransitions[$transitionId] = [
+        'drain' => (string)$drainTransition['action_digest'],
+        'undrain' => (string)$transition['action_digest'],
+    ];
+    return [
+        'success' => true,
+        'reason' => '',
+        'listener_state' => $listenerState,
+        'idempotent' => false,
+        'action_applied' => true,
+    ];
+}
+
+/**
+ * @param array<string,mixed> $transition
+ * @return array{enqueued:bool,flushed:bool}
+ */
+function wlsSendGatewayFallbackListenerAck(
+    mixed $ipcClient,
+    array $transition,
+    string $actualState,
+    bool $success,
+    string $reason = '',
+): array {
+    if ($ipcClient === null || !$ipcClient->isConnected()) {
+        return ['enqueued' => false, 'flushed' => false];
+    }
+    $ack = \Weline\Server\IPC\ControlMessage::gatewayFallbackListenerAck(
+        (string)$transition['action'],
+        (string)$transition['target_listener_state'],
+        $actualState,
+        (string)$transition['transition_id'],
+        (string)$transition['action_digest'],
+        (string)$transition['predecessor_action_digest'],
+        (array)$transition['identity'],
+        $success,
+        $reason,
+    );
+
+    $enqueued = $ipcClient->send($ack);
+    return [
+        'enqueued' => $enqueued,
+        'flushed' => $enqueued && $ipcClient->flushPendingWrites(0.2),
+    ];
+}
+
+/**
  * Build the immutable TLS-context identity set used by the unload barrier.
  * A same-domain certificate rotation is a retirement too: an established
  * connection may still own the old SSL_CTX even though the route key remains.
@@ -1135,6 +1618,56 @@ function _getDomainPolicy(string $domain, array $servingRoutes): array
     ];
 }
 
+/** Return the token only for the one exact HTTP-01 transport request shape. */
+function wlsAcmeHttp01RequestToken(string $method, string $target): ?string
+{
+    if ($method !== 'GET'
+        || \preg_match(
+            '#\A/\.well-known/acme-challenge/([A-Za-z0-9_-]{1,256})\z#D',
+            $target,
+            $matches,
+        ) !== 1
+    ) {
+        return null;
+    }
+
+    return (string)$matches[1];
+}
+
+function wlsAcmeHttp01ChallengeResponse(
+    \Weline\Server\Security\WorkerPolicyDecision $decision,
+): ?string {
+    $token = wlsAcmeHttp01RequestToken($decision->method, $decision->target);
+    if ($token === null) {
+        return null;
+    }
+
+    $host = wlsServingManifestNormalizeAuthority(
+        (string)($decision->headers['host'] ?? ''),
+    );
+    $body = null;
+    if ($host !== null && \defined('BP')) {
+        $acmeDirectory = \rtrim(BP, \DIRECTORY_SEPARATOR)
+            . \DIRECTORY_SEPARATOR . 'generated'
+            . \DIRECTORY_SEPARATOR . 'acme-http01';
+        $body = \Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore::resolvePublishedChallenge(
+            $acmeDirectory,
+            $host,
+            $token,
+        );
+    }
+    if ($body === null) {
+        $notFoundBody = 'ACME challenge not found';
+        return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: "
+            . \strlen($notFoundBody) . "\r\nConnection: close\r\n\r\n{$notFoundBody}";
+    }
+
+    $len = \strlen($body);
+    return $decision->keepAlive()
+        ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
+        : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
+}
+
 /**
  * Re-authorize a cleartext keep-alive request against the current complete
  * desired-route set. The Host observed during the initial non-consuming peek
@@ -1142,7 +1675,7 @@ function _getDomainPolicy(string $domain, array $servingRoutes): array
  * every parsed request must repeat that exact authority and resolve to the
  * same digest-bound route identity.
  *
- * @return 'allow'|'redirect_https'|'not_found'|'misdirected'
+ * @return 'allow'|'acme_http01'|'redirect_https'|'not_found'|'misdirected'
  */
 function wlsServingManifestPlaintextRequestAction(
     array $frame,
@@ -1171,18 +1704,26 @@ function wlsServingManifestPlaintextRequestAction(
         return 'misdirected';
     }
 
-    return match ((string)($route['certificate_state'] ?? '')) {
+    $certificateState = (string)($route['certificate_state'] ?? '');
+    $isExactHttp01Challenge = wlsAcmeHttp01RequestToken(
+        (string)($frame['method'] ?? ''),
+        (string)($frame['target'] ?? ''),
+    ) !== null;
+    if ($isExactHttp01Challenge
+        && \in_array($certificateState, ['active', 'pending'], true)
+    ) {
+        // Renewal challenges for an active force-HTTPS route must reach the
+        // project-owned authoritative challenge store before any redirect or
+        // application dispatch. A store miss is answered with 404 there.
+        return 'acme_http01';
+    }
+
+    return match ($certificateState) {
         'active' => ($route['force_https'] ?? true) === true
             ? 'redirect_https'
             : 'allow',
         'disabled' => 'allow',
-        'pending' => (string)($frame['method'] ?? '') === 'GET'
-            && \preg_match(
-                '#\A/\.well-known/acme-challenge/[A-Za-z0-9_-]+\z#D',
-                (string)($frame['target'] ?? ''),
-            ) === 1
-                ? 'allow'
-                : 'not_found',
+        'pending' => 'not_found',
         default => 'misdirected',
     };
 }
@@ -1624,12 +2165,12 @@ $fiberTickBudgetMs = (float)(\Weline\Framework\App\Env::get('wls.worker.fiber_ti
 $fiberIdleTtlSec = 0;
 $fiberMaxActive = 0;
 $fiberReleaseIdleRequested = false;
-$lastFiberIdleCheck = \time();
+$lastFiberIdleCheck = \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
 $longLivedConnections = [];
 $longLivedMaxActive = 0;
 $longLivedSaturationReported = false;
 $longLivedSaturationCleared = false;
-$lastLongLivedSaturationReport = 0;
+$lastLongLivedSaturationReport = 0.0; // monotonic 秒
 $longLivedSaturationInterval = 10;
 WlsLogger::info_("Fiber 调度器已初始化");
 WlsLogger::info_(
@@ -1683,7 +2224,7 @@ function calculateCacheSize(string|int $configValue, int $defaultPercent, int $d
     if (\is_int($configValue)) {
         return $configValue;
     }
-    
+
     $configValue = \strtolower(\trim($configValue));
     
     // 'auto' 或空：智能计算
@@ -2443,8 +2984,50 @@ $ipcClient = null;
 $ipcSelfTag = null;
 $ipcDraining = false;
 $ipcReceivedShutdown = false;
-$drainStartTime = 0;
+$drainStartTime = 0.0;
 $shouldExit = false;
+$gatewayFallbackListenerState = $isGatewayFallbackWorker
+    ? \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE
+    : '';
+$gatewayFallbackListenerDraining = false;
+$gatewayFallbackDrainAcknowledged = false;
+$gatewayFallbackDrainTransition = null;
+$gatewayFallbackUndrainTransition = null;
+$gatewayFallbackRetiredTransitions = [];
+$gatewayFallbackExpectedTransitionIdentity = [];
+if ($isGatewayFallbackWorker) {
+    try {
+        $gatewayFallbackExpectedTransitionIdentity =
+            wlsBuildGatewayFallbackTransitionIdentity(
+                $servingSnapshot,
+                $instanceName,
+                $orchestratorSlotId,
+                $orchestratorLeaseId,
+                $orchestratorGeneration,
+                $orchestratorLaunchId,
+                $masterPid,
+                $orchestratorEpoch,
+                $gatewayMasterLaunchId,
+                $gatewayHostLeaseId,
+                $privateListenerHost,
+                $port,
+                $listenFd,
+                $windowsListenerAdopted,
+                $windowsListenerProof,
+            );
+    } catch (\Throwable $throwable) {
+        WlsLogger::error_(
+            'Gateway fallback exact listener identity could not be reconstructed: '
+            . $throwable->getMessage(),
+        );
+        if ($socket && \is_resource($socket)) {
+            @\fclose($socket);
+            $socket = null;
+        }
+        \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+        exit(1);
+    }
+}
 $cacheClearEpoch = 0;
 $maxDrainTime = 10;     // 由 Master drain/reload 消息或默认覆盖
 $waitingForAck = false;
@@ -2556,7 +3139,7 @@ if ($maxMemoryBytes <= 0) {
     $maxMemoryBytes = 256 * 1024 * 1024;
 }
 $memoryCheckInterval = 5;
-$lastMemoryCheck = \time();
+$lastMemoryCheck = wlsWorkerMonotonicNow();
 $normalizeMemoryThreshold = static function (mixed $value, float $default): float {
     if (!\is_numeric($value)) {
         return $default;
@@ -2685,7 +3268,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, $isGatewayFallbackWorker, &$gatewayFallbackListenerState, &$gatewayFallbackListenerDraining, &$gatewayFallbackDrainAcknowledged, &$gatewayFallbackDrainTransition, &$gatewayFallbackUndrainTransition, &$gatewayFallbackRetiredTransitions, $gatewayFallbackExpectedTransitionIdentity, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -2693,7 +3276,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
             }
             switch ($type) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_PING:
-                    $pingTimestamp = (float) ($msg['timestamp'] ?? 0.0);
                     $stats = [
                         'active_fibers' => \count($activeFibers),
                         'memory_usage' => \memory_get_usage(true),
@@ -2706,7 +3288,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         'serving_manifest_reload_error' => $servingManifestReloadError,
                     ];
                     if ($ipcClient !== null && $ipcClient->isConnected()) {
-                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::pong($pingTimestamp, $stats));
+                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::pongForPing($msg, $stats));
                     }
                     break;
 
@@ -2727,7 +3309,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         $shouldExit = true;
                         $ipcDraining = true;
                         $maxDrainTime = 1;
-                        $drainStartTime = \time() - $maxDrainTime;
+                        $drainStartTime = (\hrtime(true) / 1_000_000_000) - $maxDrainTime;
                         if ($socket && \is_resource($socket)) {
                             @\fclose($socket);
                             $socket = null;
@@ -2927,7 +3509,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         $shouldExit = true;
                         $ipcDraining = true;
                         $maxDrainTime = \min($maxDrainTime, 3);
-                        $drainStartTime = \time();
+                        $drainStartTime = \hrtime(true) / 1_000_000_000;
                         if ($socket && \is_resource($socket)) {
                             @\fclose($socket);
                             $socket = null;
@@ -2944,7 +3526,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     ) {
                         $shouldExit = true;
                         $ipcDraining = true;
-                        $drainStartTime = \time();
+                        $drainStartTime = \hrtime(true) / 1_000_000_000;
                         WlsLogger::error_('[HTTP3] availability enabled without a live native runtime');
                         break;
                     }
@@ -2991,7 +3573,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     \clearstatcache(true);
                     $shouldExit = true;
                     $ipcDraining = true;
-                    $drainStartTime = \time();
+                    $drainStartTime = \hrtime(true) / 1_000_000_000;
                     $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
                     $maxDrainTime = $dt > 0 ? \max(1, \min(7200, $dt)) : 120;
                     if ($http3Runtime instanceof \Weline\Server\Protocol\Http3\WorkerQuicRuntime) {
@@ -3275,7 +3857,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                                 }
                                 $shouldExit = true;
                                 $ipcDraining = true;
-                                $drainStartTime = \time();
+                                $drainStartTime = \hrtime(true) / 1_000_000_000;
                             }
                             throw new \RuntimeException(
                                 $contextRollbackSucceeded
@@ -3443,7 +4025,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                             \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                             $shouldExit = true;
                             $ipcDraining = true;
-                            $drainStartTime = \time();
+                            $drainStartTime = \hrtime(true) / 1_000_000_000;
                         }
                         // Invalid new facts never replace the live in-memory LKG.
                         $servingManifestReloadError = \substr(
@@ -3536,10 +4118,66 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_DRAIN:
+                    if ($isGatewayFallbackWorker
+                        && \hash_equals(
+                            \Weline\Server\IPC\ControlMessage::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+                            (string)($msg['protocol'] ?? ''),
+                        )
+                    ) {
+                        try {
+                            $transition = \Weline\Server\IPC\ControlMessage::
+                                validateGatewayFallbackListenerTransition($msg);
+                            $result = wlsApplyGatewayFallbackListenerTransition(
+                                $transition,
+                                $gatewayFallbackExpectedTransitionIdentity,
+                                $gatewayFallbackListenerState,
+                                $gatewayFallbackListenerDraining,
+                                $shouldExit
+                                    || $ipcReceivedShutdown
+                                    || !$socket
+                                    || !\is_resource($socket),
+                                true,
+                                $gatewayFallbackDrainAcknowledged,
+                                $gatewayFallbackDrainTransition,
+                                $gatewayFallbackUndrainTransition,
+                                $gatewayFallbackRetiredTransitions,
+                            );
+                            $ackDelivery = wlsSendGatewayFallbackListenerAck(
+                                $ipcClient,
+                                $transition,
+                                $result['listener_state'],
+                                $result['success'],
+                                $result['reason'],
+                            );
+                            if ($result['success'] && $ackDelivery['enqueued']) {
+                                $gatewayFallbackDrainAcknowledged = true;
+                                WlsLogger::info_(
+                                    'Gateway fallback listener entered reversible DRAINING '
+                                    . 'transition=' . $transition['transition_id']
+                                    . ($ackDelivery['flushed'] ? '' : ' ack=pending'),
+                                );
+                            } elseif ($result['success']) {
+                                WlsLogger::warning_(
+                                    'Gateway fallback DRAIN applied fail-closed but exact ACK '
+                                    . 'could not be enqueued; awaiting idempotent retry.',
+                                );
+                            } else {
+                                WlsLogger::warning_(
+                                    'Gateway fallback DRAIN rejected: ' . $result['reason'],
+                                );
+                            }
+                        } catch (\Throwable $throwable) {
+                            WlsLogger::warning_(
+                                'Gateway fallback DRAIN envelope rejected: '
+                                . $throwable->getMessage(),
+                            );
+                        }
+                        break;
+                    }
                     // 排水模式：停止接受新连接，完成现有请求后退出
                     $shouldExit = true;
                     $ipcDraining = true;
-                    $drainStartTime = \time();
+                    $drainStartTime = \hrtime(true) / 1_000_000_000;
                     $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
                     if ($dt > 0) {
                         $maxDrainTime = \max(1, \min(7200, $dt));
@@ -3559,6 +4197,89 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                     }
                     WlsLogger::info_("收到 drain 命令，已关闭监听 socket，开始排水（最多 {$maxDrainTime}s）...");
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_UNDRAIN:
+                    if (!$isGatewayFallbackWorker) {
+                        break;
+                    }
+                    try {
+                        $transition = \Weline\Server\IPC\ControlMessage::
+                            validateGatewayFallbackListenerTransition($msg);
+                        $beforeUndrain = [
+                            'listener_state' => $gatewayFallbackListenerState,
+                            'listener_draining' => $gatewayFallbackListenerDraining,
+                            'drain_acknowledged' => $gatewayFallbackDrainAcknowledged,
+                            'drain_transition' => $gatewayFallbackDrainTransition,
+                            'undrain_transition' => $gatewayFallbackUndrainTransition,
+                            'retired_transitions' => $gatewayFallbackRetiredTransitions,
+                        ];
+                        $result = wlsApplyGatewayFallbackListenerTransition(
+                            $transition,
+                            $gatewayFallbackExpectedTransitionIdentity,
+                            $gatewayFallbackListenerState,
+                            $gatewayFallbackListenerDraining,
+                            $shouldExit
+                                || $ipcReceivedShutdown
+                                || !$socket
+                                || !\is_resource($socket),
+                            wlsGatewayFallbackTlsContextIsUsable(
+                                $servingManifestRoutes,
+                                $sniServerCerts,
+                                $sslCert,
+                                $sslKey,
+                            ),
+                            $gatewayFallbackDrainAcknowledged,
+                            $gatewayFallbackDrainTransition,
+                            $gatewayFallbackUndrainTransition,
+                            $gatewayFallbackRetiredTransitions,
+                        );
+                        $ackDelivery = wlsSendGatewayFallbackListenerAck(
+                            $ipcClient,
+                            $transition,
+                            $result['listener_state'],
+                            $result['success'],
+                            $result['reason'],
+                        );
+                        if ($result['success']
+                            && !$ackDelivery['enqueued']
+                            && $result['action_applied']
+                        ) {
+                            // The Master may only reactivate credential/lease
+                            // state after receiving the exact ACK. Restore only
+                            // when the ACK could not enter the write queue. A
+                            // queued partial write must retain ACTIVE because it
+                            // may complete later; rolling back would split the
+                            // delayed success ACK from the local listener state.
+                            $gatewayFallbackListenerState = $beforeUndrain['listener_state'];
+                            $gatewayFallbackListenerDraining = $beforeUndrain['listener_draining'];
+                            $gatewayFallbackDrainAcknowledged = $beforeUndrain['drain_acknowledged'];
+                            $gatewayFallbackDrainTransition = $beforeUndrain['drain_transition'];
+                            $gatewayFallbackUndrainTransition = $beforeUndrain['undrain_transition'];
+                            $gatewayFallbackRetiredTransitions = $beforeUndrain['retired_transitions'];
+                            WlsLogger::warning_(
+                                'Gateway fallback UNDRAIN ACK was not enqueued; listener remains DRAINING.',
+                            );
+                            break;
+                        }
+                        if ($result['success'] && $ackDelivery['enqueued']) {
+                            $gatewayFallbackListenerDraining = false;
+                            WlsLogger::info_(
+                                'Gateway fallback listener resumed admission for exact transition='
+                                . $transition['transition_id']
+                                . ($ackDelivery['flushed'] ? '' : ' ack=pending'),
+                            );
+                        } elseif (!$result['success']) {
+                            WlsLogger::warning_(
+                                'Gateway fallback UNDRAIN rejected: ' . $result['reason'],
+                            );
+                        }
+                    } catch (\Throwable $throwable) {
+                        WlsLogger::warning_(
+                            'Gateway fallback UNDRAIN envelope rejected: '
+                            . $throwable->getMessage(),
+                        );
+                    }
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_SET_MAINTENANCE_MODE:
@@ -3593,7 +4314,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $maxDrainTime = 1;
-                    $drainStartTime = \time() - $maxDrainTime;
+                    $drainStartTime = \hrtime(true) / 1_000_000_000;
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
                         $socket = null;
@@ -3802,7 +4523,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                 ? "已上报就绪状态，等待 Master+Dispatcher 入池闭环 ACK（当前：等待中）"
                 : "已上报就绪状态，Master ACK 确认结果：成功（控制面已同步确认 READY）"
         );
-        $readySentTime = \microtime(true);
+        $readySentTime = wlsWorkerMonotonicNow();
         if ((\Weline\Server\Log\LogConfig::isDevMode() || $isFrontend) && $ipcClient !== null) {
             WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($ipcClient): void {
                 if ($ipcClient->isConnected()) {
@@ -3823,7 +4544,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $ipcClient = $kernel->getClient();
         $ipcReconnectAttempts = 0;
         $ipcReconnectMaxAttempts = 30;  // 最多重连30次（每次5秒业务循环 = 150秒）
-        $ipcReconnectDueTime = \microtime(true) + 5.0;  // 5秒后第一次重连
+        $ipcReconnectDueTime = wlsWorkerMonotonicNow() + 5.0;  // 5秒后第一次重连
         if ($masterPid > 0 && !\Weline\Framework\System\Process\Processer::isRunningByPid($masterPid)) {
             WlsLogger::error_("[IPC] Master PID {$masterPid} 已不存在，Worker 将在启动期孤儿保护中退出");
             $exitBecauseMasterMissingAtStartup = true;
@@ -3861,12 +4582,12 @@ $pendingHandshakes = [];
 $postHandshakeReadPending = [];
 $pendingClose = [];
 $handshakeStartTimes = [];
-$startTime = \time(); // 记录启动时间
+$startTime = wlsWorkerMonotonicNow(); // 进程内 uptime 的 monotonic 起点
 
 // Keep-Alive 连接超时配置（秒）
 $keepAliveTimeout = 60; // 默认 60 秒空闲超时
 $connectionTimeoutCheckInterval = 5; // 每 5 秒检查一次超时连接
-$lastTimeoutCheck = \time();
+$lastTimeoutCheck = wlsWorkerMonotonicNow();
 if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
     $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
     $env = \is_array($env) ? $env : [];
@@ -3901,7 +4622,20 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
 // 是否需要优雅退出（重载时设置为 true）
 
 // Worker 优雅退出函数
-$gracefulExit = function (string $reason = '') use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, $processName, &$ipcClient, $workerId, $port, $isMaintenanceWorker, &$wlsWorkerGracefulExitReason, $wlsTlsSessionCacheRuntime) {
+$gracefulExit = function (string $reason = '') use (
+    $socket,
+    &$connections,
+    &$requestBuffers,
+    &$connectionLastActivity,
+    $processName,
+    &$ipcClient,
+    $workerId,
+    $port,
+    $isMaintenanceWorker,
+    $isGatewayFallbackWorker,
+    &$wlsWorkerGracefulExitReason,
+    $wlsTlsSessionCacheRuntime,
+) {
     $wlsWorkerGracefulExitReason = $reason !== '' ? $reason : 'graceful';
     // 刷新日志缓冲区
     WlsLogger::flush_(true);
@@ -3922,13 +4656,13 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
         }
     }
     if ($wlsTlsSessionCacheRuntime !== null) {
-        $tlsSessionDrainDeadline = \microtime(true) + 0.02;
+        $tlsSessionDrainDeadline = wlsWorkerMonotonicNow() + 0.02;
         while ($wlsTlsSessionCacheRuntime->hasPendingWrites()
-            && \microtime(true) < $tlsSessionDrainDeadline
+            && wlsWorkerMonotonicNow() < $tlsSessionDrainDeadline
         ) {
             $wlsTlsSessionCacheRuntime->maintain(\max(
                 0.0001,
-                $tlsSessionDrainDeadline - \microtime(true),
+                $tlsSessionDrainDeadline - wlsWorkerMonotonicNow(),
             ));
         }
         $wlsTlsSessionCacheRuntime->disconnect();
@@ -3978,7 +4712,7 @@ if (\function_exists('pcntl_signal')) {
         // 收到重载信号，标记优雅退出（Master 会重新启动新进程加载新代码）
         $shouldExit = true;
         $ipcDraining = true;
-        $drainStartTime = \time();
+        $drainStartTime = \hrtime(true) / 1_000_000_000;
         if ($http3Runtime instanceof \Weline\Server\Protocol\Http3\WorkerQuicRuntime) {
             try {
                 $http3Runtime->beginDrain();
@@ -4012,11 +4746,11 @@ $workerLoopStartedSent = false;
 $workerLoopNotifyNotBefore = 0.0;
 $eventLoopWaitTimeouts = 0;
 $eventLoopLagWarnings = 0;
-$eventLoopLastMetricsLogAt = \time();
+$eventLoopLastMetricsLogAt = wlsWorkerMonotonicNow();
 $deferredWorkerBootstrapWarmupStarted = false;
-$deferredWorkerBootstrapWarmupNotBefore = \microtime(true);
+$deferredWorkerBootstrapWarmupNotBefore = wlsWorkerMonotonicNow();
 $sharedRuntimeConnectionWarmupStarted = false;
-$sharedRuntimeConnectionWarmupNotBefore = \microtime(true)
+$sharedRuntimeConnectionWarmupNotBefore = wlsWorkerMonotonicNow()
     + 0.10
     + ((($workerId * 53) % 700) / 1000);
 $homepageKeepWarmFiber = null;
@@ -4084,10 +4818,10 @@ function wlsCancelActiveFibersForConnection(
 }
 
 /**
- * Exact TLS tombstones retire every suspended request before the old
- * certificate context is released. HTTP/3 Fiber keys intentionally do not
- * share the TCP connection-id namespace, so a connection-only sweep is not a
- * complete revocation barrier.
+ * Exact TLS tombstones and a Worker hard-drain deadline retire every suspended
+ * request before the owning transport disappears. HTTP/3 Fiber keys
+ * intentionally do not share the TCP connection-id namespace, so a
+ * connection-only sweep is not a complete retirement barrier.
  *
  * @param array<int|string,array<string,mixed>> $activeFibers
  */
@@ -4096,6 +4830,7 @@ function wlsCancelAllActiveFibersForTlsRetirement(
     array &$activeFibers,
     \Weline\Server\Scheduler\FiberScheduler $fiberScheduler,
     int &$activeRequests,
+    string $cancellationReason = 'tls_manifest_retired',
 ): int {
     $cancelled = 0;
     foreach (\array_keys($activeFibers) as $fiberKey) {
@@ -4110,7 +4845,7 @@ function wlsCancelAllActiveFibersForTlsRetirement(
             wlsUnwindRequestFiberForCancellation(
                 $fiber,
                 \is_array($state) ? ($state['context'] ?? null) : null,
-                'tls_manifest_retired',
+                $cancellationReason,
             );
             \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
             $fiberScheduler->unregisterFiber();
@@ -4136,7 +4871,7 @@ while (true) {
         $workerLoopCount = 0;
     }
     $workerLoopCount++;
-    $workerLoopHeartbeatNow = \microtime(true);
+    $workerLoopHeartbeatNow = wlsWorkerMonotonicNow();
     if (
         \Weline\Server\Service\MainLoopUnblockedLogConfig::shouldEmit($workerLoopCount, $mainLoopUnblockedLogEvery)
         || \Weline\Server\Service\MainLoopUnblockedLogConfig::shouldEmitByInterval(
@@ -4207,7 +4942,7 @@ while (true) {
         );
     }
 
-    $now = \time();
+    $now = $workerLoopHeartbeatNow;
 
     // 注意：Worker 的主循环不进行连接池预热
     // 连接池将在首次需要时由请求 Fiber 按需初始化
@@ -4243,7 +4978,7 @@ while (true) {
     
     // ========== IPC 控制通道处理 ==========
     // 如果初始连接失败，定期尝试与 Master 重新连接（自愈机制）
-    if (isset($ipcReconnectDueTime) && \microtime(true) >= $ipcReconnectDueTime && $ipcReconnectAttempts < $ipcReconnectMaxAttempts) {
+    if (isset($ipcReconnectDueTime) && wlsWorkerMonotonicNow() >= $ipcReconnectDueTime && $ipcReconnectAttempts < $ipcReconnectMaxAttempts) {
         $ipcReconnectAttempts++;
         
         WlsLogger::warning_("[IPC] 第 {$ipcReconnectAttempts}/{$ipcReconnectMaxAttempts} 次尝试与 Master 重新连接 (端口: {$controlPort})");
@@ -4257,11 +4992,11 @@ while (true) {
                     ? "[IPC] 成功重新连接到 Master，已重新上报就绪状态，Master ACK 确认结果：等待中"
                     : "[IPC] 成功重新连接到 Master，已重新上报就绪状态，Master ACK 确认结果：成功"
             );
-            $readySentTime = \microtime(true);
+            $readySentTime = wlsWorkerMonotonicNow();
         } else {
             // 重连失败，设置下一次重连时间（指数退避：5秒 + attempt*1秒）
             $nextRetryDelay = 5 + \min($ipcReconnectAttempts, 10);  // 最多加10秒，即15秒
-            $ipcReconnectDueTime = \microtime(true) + $nextRetryDelay;
+            $ipcReconnectDueTime = wlsWorkerMonotonicNow() + $nextRetryDelay;
         }
     }
     
@@ -4274,19 +5009,19 @@ while (true) {
         $workerLoopNotifyNotBefore = 0.0;
     }
     if ($waitingForAck && $ipcClient && $ipcClient->isConnected()) {
-        $ackElapsed = \microtime(true) - $readySentTime;
+        $ackElapsed = wlsWorkerMonotonicNow() - $readySentTime;
         if ($ackElapsed >= $ackTimeout) {
             $ackRetryCount++;
             WlsLogger::warning_("Master ACK 确认结果：超时未确认（{$ackElapsed}s），第 {$ackRetryCount} 次重新发送 ready...");
             $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
-            $readySentTime = \microtime(true);
+            $readySentTime = wlsWorkerMonotonicNow();
         }
     }
     if ($ipcClient && $ipcClient->isConnected() && !$waitingForAck && !$workerLoopStartedSent && !$ipcReceivedShutdown) {
         if ($workerLoopNotifyNotBefore <= 0.0) {
-            $workerLoopNotifyNotBefore = \microtime(true) + 0.25;
+            $workerLoopNotifyNotBefore = wlsWorkerMonotonicNow() + 0.25;
         }
-        if (\microtime(true) >= $workerLoopNotifyNotBefore) {
+        if (wlsWorkerMonotonicNow() >= $workerLoopNotifyNotBefore) {
             $ipcClient->sendWorkerLoopStarted($workerId, $port, (int) \getmypid());
             $workerLoopStartedSent = true;
         }
@@ -4296,7 +5031,7 @@ while (true) {
         && isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)
         && $workerLoopStartedSent
         && !$ipcReceivedShutdown
-        && \microtime(true) >= $sharedRuntimeConnectionWarmupNotBefore
+        && wlsWorkerMonotonicNow() >= $sharedRuntimeConnectionWarmupNotBefore
     ) {
         $sharedRuntimeConnectionWarmupStarted = true;
         $fiberScheduler->registerFiber();
@@ -4343,7 +5078,7 @@ while (true) {
         && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
         && $workerLoopStartedSent
         && !$ipcReceivedShutdown
-        && \microtime(true) >= $deferredWorkerBootstrapWarmupNotBefore
+        && wlsWorkerMonotonicNow() >= $deferredWorkerBootstrapWarmupNotBefore
     ) {
         $deferredWorkerBootstrapWarmupStarted = true;
         $warmupIpcClient = $ipcClient;
@@ -4482,37 +5217,62 @@ while (true) {
     // 检查是否需要优雅退出（排水模式）
     if ($shouldExit) {
         if ($ipcDraining) {
-            if (!empty($longLivedConnections)) {
-                foreach (\array_keys($longLivedConnections) as $cid) {
-                    if (isset($connections[$cid]) && \is_resource($connections[$cid])) {
-                        safeCloseStream($connections[$cid]);
-                    }
-                    wlsCancelActiveFibersForConnection(
-                        $activeFibers,
-                        $cid,
-                        $fiberScheduler,
-                        $activeRequests
-                    );
-                    unset(
-                        $connections[$cid],
-                        $requestBuffers[$cid],
-                        $connectionLastActivity[$cid],
-                        $requestLogged[$cid],
-                        $writeBuffers[$cid],
-                        $writableConnections[$cid],
-                        $pendingClose[$cid],
-                        $longLivedConnections[$cid],
-                        $activeFibers[$cid]
-                    );
-                }
-            }
             // 已 accept/已握手但 HTTP 首字节尚未到达的 fresh TLS 连接，
             // 与空闲 Keep-Alive 在缓冲层看起来相同。排水时不能立即
             // close 这些连接，否则客户端会在 reload 窗口收到 RST。
             // 完成响应的连接会因 ipcDraining 自动关闭，其余交给
-            // 下方的总 drain deadline。
+            // 下方的 soft/hard drain deadline。SSE/WebSocket/H2 在 hard
+            // deadline 前仍由事件循环推进，不在进入 DRAIN 时截断。
 
-            $drainElapsed = $drainStartTime > 0 ? (\time() - $drainStartTime) : 0;
+            $drainDeadlines = \Weline\Server\IPC\ControlMessage::drainDeadlines((float)$maxDrainTime);
+            $drainNow = \hrtime(true) / 1_000_000_000;
+            $drainElapsed = $drainStartTime > 0.0 ? \max(0.0, $drainNow - $drainStartTime) : 0.0;
+            // 先发 GOAWAY，再做 deadline 判定。这样即使首次 drain tick
+            // 已到 hard deadline，H2 也会先被明确通知后再强制收敛。
+            foreach ($http2ConnectionAdapters as $http2DrainConnectionId => $http2DrainAdapter) {
+                if (!$http2DrainAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter) {
+                    continue;
+                }
+                $http2DrainConnectionId = (int)$http2DrainConnectionId;
+                $http2DrainConnection = $connections[$http2DrainConnectionId] ?? null;
+                if (!\is_resource($http2DrainConnection)) {
+                    unset(
+                        $http2ConnectionAdapters[$http2DrainConnectionId],
+                        $http2PendingRequests[$http2DrainConnectionId],
+                    );
+                    continue;
+                }
+                $http2GoawayFrame = $http2DrainAdapter->initiateGoaway();
+                if ($http2GoawayFrame !== '') {
+                    $writeBuffers[$http2DrainConnectionId] =
+                        ($writeBuffers[$http2DrainConnectionId] ?? '') . $http2GoawayFrame;
+                    $writableConnections[$http2DrainConnectionId] = $http2DrainConnection;
+                }
+            }
+            if ($drainElapsed >= $drainDeadlines['soft']) {
+                foreach ($longLivedConnections as $drainConnectionId => &$drainConnectionState) {
+                    if (!wlsSslIsActiveWebSocketConnection($drainConnectionState)
+                        || !isset($connections[$drainConnectionId])
+                        || !\is_resource($connections[$drainConnectionId])
+                    ) {
+                        continue;
+                    }
+                    $closeResult = \Weline\Server\IPC\ControlMessage::webSocketInitiateServerClose(
+                        (array)($drainConnectionState['websocket_state'] ?? []),
+                        1001,
+                    );
+                    $drainConnectionState['websocket_state'] = $closeResult['state'];
+                    if ($closeResult['outbound'] !== []) {
+                        $writeBuffers[$drainConnectionId] = ($writeBuffers[$drainConnectionId] ?? '')
+                            . \implode('', $closeResult['outbound']);
+                        $writableConnections[$drainConnectionId] = $connections[$drainConnectionId];
+                    }
+                    if (($closeResult['close_transport'] ?? false) === true) {
+                        $pendingClose[$drainConnectionId] = true;
+                    }
+                }
+                unset($drainConnectionState);
+            }
             $http3ActiveConnections = 0;
             $http3ActiveStreams = 0;
             $http3QueuedRequests = 0;
@@ -4549,110 +5309,215 @@ while (true) {
                     $http2PendingResponseConnections++;
                 }
             }
-            
-            // 1. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
-            if (empty($connections)
-                && empty($pendingPeek)
-                && empty($pendingHandshakes)
-                && empty($postHandshakeReadPending)
-                && empty($activeFibers)
-                && empty($writeBuffers)
-                && $http2PendingRequestCount === 0
-                && $http2PendingResponseConnections === 0
-                && $http3ActiveConnections === 0
-                && $http3ActiveStreams === 0
-                && $http3QueuedRequests === 0
-                && ($wlsTlsSessionCacheRuntime === null || !$wlsTlsSessionCacheRuntime->hasPendingWrites())
-                && $http3RetryGraceElapsed) {
+
+            $transportConnectionIds = [];
+            foreach ([
+                \array_keys($connections),
+                \array_keys($pendingPeek),
+                \array_keys($pendingHandshakes),
+                \array_keys($postHandshakeReadPending),
+            ] as $transportIds) {
+                foreach ($transportIds as $transportId) {
+                    $transportConnectionIds[(int)$transportId] = true;
+                }
+            }
+            $tcpConnectionCount = \count($transportConnectionIds);
+            $drainConnectionCount = $tcpConnectionCount + $http3ActiveConnections;
+            $drainCounters = wlsDrainConnectionCounters($longLivedConnections);
+            $pendingApplicationWork = \count($activeFibers)
+                + $http2PendingRequestCount
+                + $http2PendingResponseConnections
+                + $http3ActiveStreams
+                + $http3QueuedRequests;
+            foreach ($writeBuffers as $drainWriteBuffer) {
+                if (\is_string($drainWriteBuffer) && $drainWriteBuffer !== '') {
+                    ++$pendingApplicationWork;
+                }
+            }
+            if ($wlsTlsSessionCacheRuntime !== null && $wlsTlsSessionCacheRuntime->hasPendingWrites()) {
+                ++$pendingApplicationWork;
+            }
+            if (!$http3RetryGraceElapsed) {
+                ++$pendingApplicationWork;
+            }
+            $drainObserved = [
+                'connections' => $drainConnectionCount,
+                'active_requests' => $activeRequests,
+                'long_lived_connections' => $drainCounters['long_lived_connections'],
+                'sse_connections' => $drainCounters['sse_connections'],
+                'websocket_connections' => $drainCounters['websocket_connections'],
+                'http2_connections' => $http2DrainingConnectionCount,
+            ];
+            $drainAction = \Weline\Server\IPC\ControlMessage::drainLifecycleDecision(
+                elapsedSeconds: $drainElapsed,
+                softDeadlineSeconds: $drainDeadlines['soft'],
+                hardDeadlineSeconds: $drainDeadlines['hard'],
+                connectionCount: $drainConnectionCount,
+                activeRequests: $activeRequests,
+                pendingApplicationWork: $pendingApplicationWork,
+                longLivedConnections: $drainCounters['long_lived_connections'],
+                http2Connections: $http2DrainingConnectionCount,
+            );
+
+            if ($drainAction === \Weline\Server\IPC\ControlMessage::DRAIN_ACTION_COMPLETE) {
+                $sslDrainReason = $ipcReceivedShutdown
+                    ? "shutdown_command:worker={$workerId}"
+                    : "drain_or_reload:worker={$workerId}";
                 if ($ipcClient && $ipcClient->isConnected()) {
-                    $sslDrainReason = $ipcReceivedShutdown
-                        ? "shutdown_command:worker={$workerId}"
-                        : "drain_or_reload:worker={$workerId}";
-                    $ipcClient->sendDrainingComplete($workerId, $port, '', $sslDrainReason);
+                    $ipcClient->send(\Weline\Server\IPC\ControlMessage::drainingComplete(
+                        workerId: $workerId,
+                        port: $port,
+                        reason: $sslDrainReason,
+                        drainReport: \Weline\Server\IPC\ControlMessage::drainCompletionReport(
+                            outcome: \Weline\Server\IPC\ControlMessage::DRAIN_OUTCOME_NATURAL,
+                            elapsedSeconds: $drainElapsed,
+                            softDeadlineSeconds: $drainDeadlines['soft'],
+                            hardDeadlineSeconds: $drainDeadlines['hard'],
+                            observed: $drainObserved,
+                        ),
+                    ));
                     $ipcClient->flushPendingWrites(0.2);
                 }
                 WlsLogger::info_("排水完成（{$drainElapsed}秒），Worker 退出");
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
             }
-            
-            // 2. 软排水期限：只清理空闲/未完成握手连接。响应 Fiber、HTTP/3
-            // 请求或 TLS 写缓冲仍在推进时继续事件循环，绝不丢弃响应后伪报完成。
-            if ($drainElapsed >= $maxDrainTime) {
-                $hasPendingApplicationWork = $activeRequests > 0
-                    || $activeFibers !== []
-                    || $http2PendingRequestCount > 0
-                    || $http2PendingResponseConnections > 0
-                    || $http2DrainingConnectionCount > 0
-                    || $http3ActiveStreams > 0
-                    || $http3QueuedRequests > 0;
-                if (!$hasPendingApplicationWork) {
-                    foreach ($writeBuffers as $drainWriteBuffer) {
-                        if (\is_string($drainWriteBuffer) && $drainWriteBuffer !== '') {
-                            $hasPendingApplicationWork = true;
-                            break;
-                        }
-                    }
-                }
-                if ($hasPendingApplicationWork) {
-                    static $lastSslDrainExtensionLogAt = 0.0;
-                    $drainNow = \microtime(true);
-                    if (($drainNow - $lastSslDrainExtensionLogAt) >= 1.0) {
-                        WlsLogger::warning_(
-                            "排水软期限已到，等待活跃响应安全写完（active={$activeRequests}, fibers="
-                            . \count($activeFibers) . ', write_buffers=' . \count($writeBuffers)
-                            . ", h2_queued={$http2PendingRequestCount}, h2_pending_write={$http2PendingResponseConnections}"
-                            . ", h3_streams={$http3ActiveStreams}, h3_queued={$http3QueuedRequests})"
-                        );
-                        $lastSslDrainExtensionLogAt = $drainNow;
-                    }
-                } else {
-                    $remaining = \count($connections)
-                        + \count($pendingPeek)
-                        + \count($pendingHandshakes)
-                        + \count($postHandshakeReadPending)
-                        + $http2PendingRequestCount
-                        + $http2PendingResponseConnections
-                        + $http3ActiveConnections
-                        + $http3ActiveStreams
-                        + $http3QueuedRequests;
-                    WlsLogger::info_("排水软期限已到，关闭剩余 {$remaining} 个空闲/握手连接");
-                    foreach ($connections as $cid => $cconn) {
-                        @\fclose($cconn);
-                    }
-                    foreach ($pendingHandshakes as $cid => $hsInfo) {
-                        if (\is_resource($hsInfo['conn'])) {
-                            @\fclose($hsInfo['conn']);
-                        }
-                    }
-                    foreach ($pendingPeek as $cid => $peekInfo) {
-                        if (\is_resource($peekInfo['conn'] ?? null)) {
-                            @\fclose($peekInfo['conn']);
-                        }
-                    }
-                    $connections = [];
-                    $pendingPeek = [];
-                    $pendingPeekStartTimes = [];
-                    $pendingHandshakes = [];
-                    $requestBuffers = [];
-                    $connectionLastActivity = [];
-                    $requestLogged = [];
-                    $writeBuffers = [];
-                    $writableConnections = [];
-                    $writeZeroProgress = [];
-                    $pendingClose = [];
-                    $handshakeStartTimes = [];
-                    $postHandshakeReadPending = [];
-                    $connectionPeerIps = [];
 
-                    if ($ipcClient && $ipcClient->isConnected()) {
-                        $sslDrainTimeoutReason = $ipcReceivedShutdown
-                            ? "shutdown_command_idle_cleanup:worker={$workerId},remaining={$remaining}"
-                            : "drain_or_reload_idle_cleanup:worker={$workerId},remaining={$remaining}";
-                        $ipcClient->sendDrainingComplete($workerId, $port, '', $sslDrainTimeoutReason);
-                        $ipcClient->flushPendingWrites(0.2);
+            if (\in_array($drainAction, [
+                \Weline\Server\IPC\ControlMessage::DRAIN_ACTION_CLOSE_IDLE,
+                \Weline\Server\IPC\ControlMessage::DRAIN_ACTION_FORCE,
+            ], true)) {
+                $forcedDrain = $drainAction === \Weline\Server\IPC\ControlMessage::DRAIN_ACTION_FORCE;
+                $terminatedLongLived = [];
+                if ($forcedDrain) {
+                    foreach ($longLivedConnections as $longLivedConnectionId => $longLivedState) {
+                        if (isset($connections[$longLivedConnectionId])
+                            && \is_resource($connections[$longLivedConnectionId])
+                        ) {
+                            $terminatedLongLived[$longLivedConnectionId] = $longLivedState;
+                        }
                     }
-                    $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（空闲连接清理）');
                 }
+                $terminatedDrainCounters = wlsDrainConnectionCounters($terminatedLongLived);
+                $closedResourceIds = [];
+                $closeDrainResource = static function (mixed $drainConnection) use (&$closedResourceIds): void {
+                    if (!\is_resource($drainConnection)) {
+                        return;
+                    }
+                    $resourceId = \get_resource_id($drainConnection);
+                    if (isset($closedResourceIds[$resourceId])) {
+                        return;
+                    }
+                    $closedResourceIds[$resourceId] = true;
+                    safeCloseStream($drainConnection);
+                };
+                foreach ($connections as $drainConnection) {
+                    $closeDrainResource($drainConnection);
+                }
+                foreach ($pendingHandshakes as $handshakeInfo) {
+                    $closeDrainResource($handshakeInfo['conn'] ?? null);
+                }
+                foreach ($pendingPeek as $peekInfo) {
+                    $closeDrainResource($peekInfo['conn'] ?? null);
+                }
+                $terminatedRequests = $forcedDrain
+                    ? wlsCancelAllActiveFibersForTlsRetirement(
+                        $activeFibers,
+                        $fiberScheduler,
+                        $activeRequests,
+                        'drain_hard_deadline',
+                    )
+                    : 0;
+                \Weline\Server\Protocol\Http3\WorkerQuicRuntime::shutdownActive();
+                $terminatedConnections = \count($closedResourceIds) + $http3ActiveConnections;
+
+                $connections = [];
+                $pendingPeek = [];
+                $pendingPeekStartTimes = [];
+                $pendingHandshakes = [];
+                $requestBuffers = [];
+                $connectionLastActivity = [];
+                $requestLogged = [];
+                $writeBuffers = [];
+                $writableConnections = [];
+                $writeZeroProgress = [];
+                $pendingClose = [];
+                $handshakeStartTimes = [];
+                $postHandshakeReadPending = [];
+                $connectionPeerIps = [];
+                $connectionProtocols = [];
+                $connectionSniHosts = [];
+                $connectionPlaintextHosts = [];
+                $http2ConnectionAdapters = [];
+                $http2PendingRequests = [];
+                $longLivedConnections = [];
+                $activeFibers = [];
+
+                $sslDrainReason = $forcedDrain
+                    ? ($ipcReceivedShutdown
+                        ? "shutdown_command_hard_deadline:worker={$workerId},remaining={$terminatedConnections}"
+                        : "drain_or_reload_hard_deadline:worker={$workerId},remaining={$terminatedConnections}")
+                    : ($ipcReceivedShutdown
+                        ? "shutdown_command_idle_cleanup:worker={$workerId},remaining={$terminatedConnections}"
+                        : "drain_or_reload_idle_cleanup:worker={$workerId},remaining={$terminatedConnections}");
+                if ($ipcClient && $ipcClient->isConnected()) {
+                    $ipcClient->send(\Weline\Server\IPC\ControlMessage::drainingComplete(
+                        workerId: $workerId,
+                        port: $port,
+                        reason: $sslDrainReason,
+                        drainReport: \Weline\Server\IPC\ControlMessage::drainCompletionReport(
+                            outcome: $forcedDrain
+                                ? \Weline\Server\IPC\ControlMessage::DRAIN_OUTCOME_FORCED
+                                : \Weline\Server\IPC\ControlMessage::DRAIN_OUTCOME_IDLE_CLEANUP,
+                            elapsedSeconds: $drainElapsed,
+                            softDeadlineSeconds: $drainDeadlines['soft'],
+                            hardDeadlineSeconds: $drainDeadlines['hard'],
+                            observed: $drainObserved,
+                            terminated: [
+                                'connections' => $terminatedConnections,
+                                'active_requests' => $terminatedRequests,
+                                'long_lived_connections' => $terminatedDrainCounters['long_lived_connections'],
+                                'sse_connections' => $terminatedDrainCounters['sse_connections'],
+                                'websocket_connections' => $terminatedDrainCounters['websocket_connections'],
+                                'http2_connections' => $forcedDrain ? $http2DrainingConnectionCount : 0,
+                            ],
+                        ),
+                    ));
+                    $ipcClient->flushPendingWrites(0.2);
+                }
+                $sslDrainLogMessage =
+                    '[WorkerSslDrain] phase=' . ($forcedDrain ? 'hard_deadline_force_close' : 'idle_cleanup')
+                    . ', elapsed_sec=' . $drainElapsed
+                    . ', connections=' . $terminatedConnections
+                    . ', active_requests=' . $terminatedRequests
+                    . ', h2=' . $http2DrainingConnectionCount
+                    . ', long_lived=' . $terminatedDrainCounters['long_lived_connections'];
+                if ($forcedDrain) {
+                    WlsLogger::warning_($sslDrainLogMessage);
+                } else {
+                    WlsLogger::info_($sslDrainLogMessage);
+                }
+                $gracefulExit($ipcReceivedShutdown
+                    ? ($forcedDrain ? 'shutdown命令（硬期限）' : 'shutdown命令')
+                    : ($forcedDrain ? '热重载（硬期限）' : '热重载（空闲连接清理）'));
+            }
+
+            static $lastSslDrainWaitLogAt = 0.0;
+            if ($drainElapsed >= $drainDeadlines['soft']
+                && ($drainNow - $lastSslDrainWaitLogAt) >= 1.0
+            ) {
+                WlsLogger::warning_(
+                    '[WorkerSslDrain] phase=application_wait'
+                    . ', elapsed_sec=' . $drainElapsed
+                    . ', hard_deadline_sec=' . $drainDeadlines['hard']
+                    . ', active=' . $activeRequests
+                    . ', fibers=' . \count($activeFibers)
+                    . ', h2=' . $http2DrainingConnectionCount
+                    . ', h2_queued=' . $http2PendingRequestCount
+                    . ', h2_pending_write=' . $http2PendingResponseConnections
+                    . ', h3_streams=' . $http3ActiveStreams
+                    . ', long_lived=' . $drainCounters['long_lived_connections']
+                );
+                $lastSslDrainWaitLogAt = $drainNow;
             }
         } elseif (empty($connections)
             && empty($pendingPeek)
@@ -4747,11 +5612,16 @@ while (true) {
                 ? $http3Runtime->stats()
                 : [];
             $drainCounters = wlsDrainConnectionCounters($longLivedConnections);
+            $http2StatusConnectionCount = wlsHttp2LiveConnectionCount(
+                $http2ConnectionAdapters,
+                $connections,
+            );
             $statusContext = [
                 'active_requests' => $activeRequests,
                 'long_lived_connections' => $drainCounters['long_lived_connections'],
                 'sse_connections' => $drainCounters['sse_connections'],
                 'websocket_connections' => $drainCounters['websocket_connections'],
+                'http2_connections' => $http2StatusConnectionCount,
                 'drain_counters_version' => 1,
             ];
             foreach ($http3Status as $http3Metric => $http3Value) {
@@ -4778,7 +5648,7 @@ while (true) {
                 'total_requests' => $requestCount,
                 'memory_usage' => \memory_get_usage(true),
                 'memory_peak' => \memory_get_peak_usage(true),
-                'uptime' => $now - $startTime,
+                'uptime' => \max(0, (int)\floor($now - $startTime)),
                 'ssl' => true,
             ]);
         } catch (\Throwable $e) {
@@ -4822,7 +5692,7 @@ while (true) {
                 }
                 $shouldExit = true;
                 $ipcDraining = true;
-                $drainStartTime = \time();
+                $drainStartTime = \hrtime(true) / 1_000_000_000;
                 $maxDrainTime = \min($maxDrainTime, 10);
                 if ($socket && \is_resource($socket)) {
                     @\fclose($socket);
@@ -4853,7 +5723,7 @@ while (true) {
         }
         $shouldExit = true;
         $ipcDraining = true;
-        $drainStartTime = \time();
+        $drainStartTime = \hrtime(true) / 1_000_000_000;
         if ($socket && \is_resource($socket)) {
             @\fclose($socket);
             $socket = null;
@@ -4917,7 +5787,7 @@ while (true) {
         }
     }
     $validWritableConnections = [];
-    $queuedWriteNow = \microtime(true);
+    $queuedWriteNow = wlsWorkerMonotonicNow();
     $queuedWriteRetryUsec = null;
     foreach ($writableConnections as $connId => $conn) {
         if (\is_resource($conn) && \get_resource_type($conn) === 'stream') {
@@ -4968,8 +5838,10 @@ while (true) {
     foreach ($validConnections as $connIdReadable => $connReadable) {
         $isDrainingHttp2ControlConnection = $ipcDraining
             && ($connectionProtocols[$connIdReadable] ?? '') === 'h2';
-        if (($applicationAdmissionOpen || $isDrainingHttp2ControlConnection)
-            && !isset($longLivedConnections[$connIdReadable])
+        $longLivedState = $longLivedConnections[$connIdReadable] ?? null;
+        if ((($applicationAdmissionOpen || $isDrainingHttp2ControlConnection)
+                && $longLivedState === null)
+            || wlsSslIsActiveWebSocketConnection($longLivedState)
         ) {
             // GOAWAY already rejects new streams. The read side must remain live
             // for WINDOW_UPDATE/RST/PING so admitted streams can finish safely.
@@ -4980,14 +5852,15 @@ while (true) {
     foreach ($http2PendingRequests as $http2ReadyConnId => $queuedHttp2Requests) {
         $http2QueuedWriteBytes = \strlen((string)($writeBuffers[$http2ReadyConnId] ?? ''));
         $http2ReadyAdapter = $http2ConnectionAdapters[$http2ReadyConnId] ?? null;
-        $http2AdapterHasPendingResponse = $http2ReadyAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
-            && $http2ReadyAdapter->hasPendingResponseData();
+        $http2QueuedResponseBytes = $http2QueuedWriteBytes
+            + ($http2ReadyAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                ? $http2ReadyAdapter->pendingResponseBytes()
+                : 0);
         if ($queuedHttp2Requests !== []
             && isset($validConnections[$http2ReadyConnId])
             && \is_resource($validConnections[$http2ReadyConnId])
             && $applicationAdmissionOpen
-            && $http2QueuedWriteBytes < $http2AdmissionWriteHighWatermark
-            && !$http2AdapterHasPendingResponse
+            && $http2QueuedResponseBytes < $http2AdmissionWriteHighWatermark
             && \Weline\Server\Protocol\Http2\MultiplexScheduler::activeStreamCount(
                 $activeFibers,
                 (int)$http2ReadyConnId
@@ -5032,9 +5905,9 @@ while (true) {
         $loopWaitUsec = \min($loopWaitUsec, \max(1000, $queuedWriteRetryUsec));
     }
 
-    $waitStartedAt = \microtime(true);
+    $waitStartedAt = wlsWorkerMonotonicNow();
     $changed = $coroutineRuntime->wait($read, $write, $except, $loopWaitUsec);
-    $waitElapsedMs = (\microtime(true) - $waitStartedAt) * 1000;
+    $waitElapsedMs = (wlsWorkerMonotonicNow() - $waitStartedAt) * 1000;
     if ($waitElapsedMs >= 500) {
         $eventLoopLagWarnings++;
         WlsLogger::warning_(
@@ -5056,7 +5929,7 @@ while (true) {
                     $transportPeer = (string)($http3Request['peer'] ?? '');
                     $http3ConnectionId = (int)($http3Request['connection_id'] ?? 0);
                     $http3StreamId = (int)($http3Request['stream_id'] ?? -1);
-                    $policyStartedAt = \microtime(true);
+                    $policyStartedAt = wlsWorkerMonotonicNow();
                     $activeRequests++;
                     $requestCount++;
 
@@ -5195,7 +6068,7 @@ while (true) {
                             $fastPathResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(
                                 (string)$fpcHit['response'],
                                 $rawRequest,
-                                (float)\round((\microtime(true) - $policyStartedAt) * 1000, 2),
+                                (float)\round((wlsWorkerMonotonicNow() - $policyStartedAt) * 1000, 2),
                                 $workerId,
                                 $port,
                                 (string)$fpcHit['source'],
@@ -5266,6 +6139,8 @@ while (true) {
                         $WLS_UOPZ_EXIT_GUARD,
                         $http3FiberKey,
                         &$longLivedConnections,
+                        &$http2ConnectionAdapters,
+                        &$connections,
                     ): string {
                         wlsFiberRequestContextEnter(null, $http3FiberKey);
                         try {
@@ -5287,7 +6162,9 @@ while (true) {
                                 $originTokenAllowLocal,
                                 $transportPeer,
                                 $policyDecision,
-                                wlsDrainConnectionCounters($longLivedConnections),
+                                $longLivedConnections,
+                                $http2ConnectionAdapters,
+                                $connections,
                             );
                         } catch (\Weline\Framework\Runtime\RequestExitException $exception) {
                             throw $exception;
@@ -5330,6 +6207,9 @@ while (true) {
                             $activeRequests,
                         );
                     } elseif ($requestFiber->isSuspended()) {
+                        $fiberActivityWall = \time();
+                        $fiberActivityMonotonicNs =
+                            \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
                         $activeFibers[$http3FiberKey] = [
                             'fiber' => $requestFiber,
                             'transport' => 'http3',
@@ -5339,8 +6219,10 @@ while (true) {
                             'rawRequest' => $rawRequest,
                             'handleStartTime' => $policyStartedAt,
                             'context' => wlsCaptureSuspendedRequestFiberOrQuarantine($requestFiber),
-                            'suspended_at' => \time(),
-                            'last_activity' => \time(),
+                            'suspended_at' => $fiberActivityWall,
+                            'last_activity' => $fiberActivityWall,
+                            'suspended_at_monotonic_ns' => $fiberActivityMonotonicNs,
+                            'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
                             'is_long_lived' => false,
                             'is_sse_protocol' => false,
                         ];
@@ -5365,7 +6247,7 @@ while (true) {
             $http3Runtime = null;
             $shouldExit = true;
             $ipcDraining = true;
-            $drainStartTime = \time();
+            $drainStartTime = \hrtime(true) / 1_000_000_000;
             $maxDrainTime = \min($maxDrainTime, 3);
             if ($socket && \is_resource($socket)) {
                 @\fclose($socket);
@@ -5432,6 +6314,11 @@ while (true) {
         $afConnId = \Weline\Server\Protocol\Http2\MultiplexScheduler::connectionId($afKey, $afData);
         $afStreamId = \Weline\Server\Protocol\Http2\MultiplexScheduler::streamId($afKey, $afData);
         if ($af->isTerminated()) {
+            $afFinishedAt = wlsWorkerMonotonicNow();
+            $afStartedAt = \Weline\Server\Runtime\WorkerFiberContextTracker::normalizeMonotonicStartSeconds(
+                $afData['handleStartTime'] ?? null,
+                $afFinishedAt,
+            );
             $afResponse = '';
             try {
                 $afResponse = (string)($af->getReturn() ?? '');
@@ -5446,13 +6333,13 @@ while (true) {
                     (int)($afData['http3_token'] ?? 0),
                     (string)($afData['rawRequest'] ?? ''),
                     $afResponse,
-                    (float)($afData['handleStartTime'] ?? \microtime(true)),
+                    $afStartedAt,
                     $activeRequests,
                 );
                 unset($activeFibers[$afKey]);
                 continue;
             }
-            $afDurationMs = (\microtime(true) - (float)($afData['handleStartTime'] ?? \microtime(true))) * 1000;
+            $afDurationMs = \max(0.0, $afFinishedAt - $afStartedAt) * 1000;
             $afResponse = injectWlsProcessTimeHeader($afResponse, $afDurationMs);
             if ($afConnId > 0 && isset($connections[$afConnId]) && \is_resource($afData['conn'] ?? null)) {
                 $afHttp2Adapter = $afData['http2_adapter'] ?? null;
@@ -5461,7 +6348,7 @@ while (true) {
                     $afConnId,
                     (string)($afData['rawRequest'] ?? ''),
                     $afResponse,
-                    (float)($afData['handleStartTime'] ?? \microtime(true)),
+                    $afStartedAt,
                     (bool)($afData['is_sse_protocol'] ?? false),
                     $ipcDraining,
                     $connections,
@@ -5497,12 +6384,14 @@ while (true) {
 
     \Weline\Server\Runtime\WorkerFiberSnapshot::setSnapshot(\Weline\Server\Runtime\WorkerFiberHealthSnapshot::build($activeFibers));
 
-    $nowFiberCheck = \time();
+    $nowFiberCheckMonotonicNs = \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
     $idleCheckIntervalSsl = 5;
     $doReleaseIdleSsl = $fiberReleaseIdleRequested
-        || ($fiberIdleTtlSec > 0 && $nowFiberCheck - $lastFiberIdleCheck >= $idleCheckIntervalSsl);
+        || ($fiberIdleTtlSec > 0
+            && ($nowFiberCheckMonotonicNs - $lastFiberIdleCheck)
+                >= ($idleCheckIntervalSsl * 1_000_000_000));
     if ($doReleaseIdleSsl && $activeFibers !== []) {
-        $lastFiberIdleCheck = $nowFiberCheck;
+        $lastFiberIdleCheck = $nowFiberCheckMonotonicNs;
         $fiberReleaseIdleRequested = false;
         $releaseThresholdSsl = $fiberIdleTtlSec > 0 ? $fiberIdleTtlSec : 0;
         $toReleaseSsl = [];
@@ -5512,20 +6401,22 @@ while (true) {
         }
         foreach ($activeFibers as $afKeySsl => $afDataSsl) {
             $afConnIdSsl = \Weline\Server\Protocol\Http2\MultiplexScheduler::connectionId($afKeySsl, $afDataSsl);
-            $suspendedAtSsl = $afDataSsl['suspended_at'] ?? $nowFiberCheck;
-            $lastActivitySsl = $afDataSsl['last_activity'] ?? $afDataSsl['handleStartTime'] ?? $nowFiberCheck;
-            $inactiveTimeSsl = $nowFiberCheck - $lastActivitySsl;
-            $isLongLivedAfSsl = $afDataSsl['is_long_lived'] ?? false;
-            if (!$isLongLivedAfSsl && $fiberHeartbeatTimeoutSsl > 0 && $inactiveTimeSsl >= $fiberHeartbeatTimeoutSsl) {
+            $idleDecisionSsl = \Weline\Server\Runtime\WorkerFiberContextTracker::idleReleaseDecision(
+                $afDataSsl,
+                $nowFiberCheckMonotonicNs,
+                $fiberHeartbeatTimeoutSsl,
+                $releaseThresholdSsl,
+            );
+            if (($idleDecisionSsl['release'] ?? false) !== true) {
+                continue;
+            }
+            if (($idleDecisionSsl['reason'] ?? '') === 'heartbeat_timeout') {
+                $inactiveTimeSsl = (int)\floor((float)($idleDecisionSsl['inactive_seconds'] ?? 0.0));
                 WlsLogger::warning_(
                     "Fiber 心跳超时: connId={$afConnIdSsl} inactive_time={$inactiveTimeSsl}s (超过 {$fiberHeartbeatTimeoutSsl}s 未续约)"
                 );
-                $toReleaseSsl[$afKeySsl] = $afDataSsl;
-                continue;
             }
-            if (!$isLongLivedAfSsl && $releaseThresholdSsl > 0 && ($nowFiberCheck - $suspendedAtSsl) >= $releaseThresholdSsl) {
-                $toReleaseSsl[$afKeySsl] = $afDataSsl;
-            }
+            $toReleaseSsl[$afKeySsl] = $afDataSsl;
         }
         $releasedHttp3Fibers = 0;
         foreach ($toReleaseSsl as $releaseFiberKeySsl => $releaseStateSsl) {
@@ -5792,8 +6683,9 @@ while (true) {
             \PHP_OS_FAMILY,
             (string)($eventLoopMeta['resolved'] ?? $wlsLoopDriver),
         ),
-        $applicationAdmissionOpen,
+        $applicationAdmissionOpen && !$gatewayFallbackListenerDraining,
         $sharedListenerSocket,
+        rejectWithoutAdmission: $gatewayFallbackListenerDraining,
     );
     if ($darwinSharedAcceptCooldownEnabled && $admittedConnections > 0) {
         $acceptNowNs = \hrtime(true);
@@ -5878,7 +6770,7 @@ while (true) {
     // first HTTP bytes in its user-space buffer after TLS completes, so newly
     // handshaken streams get a short bounded first-read pump. Ordinary
     // keep-alive connections never enter this map and pay no scan cost.
-    $postHandshakeReadNow = \microtime(true);
+    $postHandshakeReadNow = wlsWorkerMonotonicNow();
     foreach ($postHandshakeReadPending as $postHandshakeConnId => $postHandshakeState) {
         $postHandshakeConn = $postHandshakeState['conn'] ?? null;
         if (($postHandshakeState['deadline'] ?? 0.0) < $postHandshakeReadNow
@@ -5908,6 +6800,12 @@ while (true) {
         ) {
             continue;
         }
+        if (wlsSslIsActiveWebSocketConnection($longLivedConnections[$bufferedConnId] ?? null)) {
+            if (!\in_array($connections[$bufferedConnId], $read, true)) {
+                $read[] = $connections[$bufferedConnId];
+            }
+            continue;
+        }
         $bufferedFrame = wlsParseHttpRequestFrame(
             $bufferedRequest,
             $maxRequestHeaderBytes,
@@ -5918,6 +6816,20 @@ while (true) {
         ) {
             $read[] = $connections[$bufferedConnId];
         }
+    }
+    foreach ($longLivedConnections as $webSocketConnId => $webSocketState) {
+        if (!wlsSslIsActiveWebSocketConnection($webSocketState)
+            || (($webSocketState['resume_pending'] ?? false) !== true
+                && ($webSocketState['read_pump_pending'] ?? false) !== true)
+            || !isset($connections[$webSocketConnId])
+            || isset($activeFibers[$webSocketConnId])
+            || ($writeBuffers[$webSocketConnId] ?? '') !== ''
+            || isset($pendingClose[$webSocketConnId])
+            || \in_array($connections[$webSocketConnId], $read, true)
+        ) {
+            continue;
+        }
+        $read[] = $connections[$webSocketConnId];
     }
 
     // `$read` 同时作为本轮公平工作队列：每个 H2 连接处理一个 parsed stream 后
@@ -5931,11 +6843,12 @@ while (true) {
             continue;
         }
         $connId = \get_resource_id($conn);
+        $activeWebSocket = wlsSslIsActiveWebSocketConnection($longLivedConnections[$connId] ?? null);
 
         if (isset($pendingPeek[$connId])) {
             continue;
         }
-        if (!$applicationAdmissionOpen && isset($connections[$connId])) {
+        if (!$applicationAdmissionOpen && isset($connections[$connId]) && !$activeWebSocket) {
             continue;
         }
         $isHttp2Read = ($connectionProtocols[$connId] ?? 'http/1.1') === 'h2';
@@ -5961,6 +6874,30 @@ while (true) {
         */
 
         if (!isset($connections[$connId])) {
+            continue;
+        }
+
+        if ($activeWebSocket) {
+            wlsSslWebSocketReadStep(
+                $conn,
+                $connId,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $writeZeroProgress,
+                $postHandshakeReadPending,
+                $connectionPeerIps,
+                $connectionProtocols,
+                $connectionSniHosts,
+                $connectionPlaintextHosts,
+                $http2ConnectionAdapters,
+                $http2PendingRequests,
+            );
             continue;
         }
         
@@ -6079,9 +7016,15 @@ while (true) {
         }
         
         if ($isHttp2Connection) {
-            if ($data === '' && empty($http2PendingRequests[$connId])) {
+            if ($data === '') {
                 if (@\feof($conn)) {
                     safeCloseStream($conn);
+                    wlsCancelActiveFibersForConnection(
+                        $activeFibers,
+                        $connId,
+                        $fiberScheduler,
+                        $activeRequests,
+                    );
                     unset(
                         $postHandshakeReadPending[$connId],
                         $connections[$connId],
@@ -6091,16 +7034,19 @@ while (true) {
                         $writeBuffers[$connId],
                         $writableConnections[$connId],
                         $pendingClose[$connId],
+                        $longLivedConnections[$connId],
                         $connectionProtocols[$connId],
                         $http2ConnectionAdapters[$connId],
                         $http2PendingRequests[$connId]
                     );
                     continue;
                 }
-                continue;
+                if (empty($http2PendingRequests[$connId])) {
+                    continue;
+                }
             }
 
-            $connectionLastActivity[$connId] = \time();
+            $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             // L4 slowloris accounting covers accept through the first complete H2
             // request. Subsequent DATA/WINDOW_UPDATE/PING frames are connection
             // control traffic, not new requests; per-stream framing limits belong
@@ -6244,9 +7190,10 @@ while (true) {
             if (empty($http2PendingRequests[$connId])) {
                 continue;
             }
+            $http2QueuedResponseBytes = \strlen((string)($writeBuffers[$connId] ?? ''))
+                + $http2Adapter->pendingResponseBytes();
             if ($http2ParsedAdmissionsThisLoop >= $http2ParsedAdmissionBudget
-                || \strlen((string)($writeBuffers[$connId] ?? '')) >= $http2AdmissionWriteHighWatermark
-                || $http2Adapter->hasPendingResponseData()
+                || $http2QueuedResponseBytes >= $http2AdmissionWriteHighWatermark
             ) {
                 continue;
             }
@@ -6294,7 +7241,7 @@ while (true) {
                     $connId,
                     $rawRequest,
                     wlsServingManifestFramingErrorResponse($frame),
-                    \microtime(true),
+                    wlsWorkerMonotonicNow(),
                     false,
                     $ipcDraining,
                     $connections,
@@ -6331,7 +7278,7 @@ while (true) {
 
         if ($data !== '') {
             // 更新连接最后活动时间
-            $connectionLastActivity[$connId] = \time();
+            $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             \Weline\Server\Security\ConnectionAcceptGatePool::instanceOrNull()?->beginRequest((string)$connId);
             $requestBuffers[$connId] = ($requestBuffers[$connId] ?? '') . $data;
         } else {
@@ -6439,7 +7386,7 @@ while (true) {
         $transportPeerRaw = @\stream_socket_get_name($conn, true);
         $transportPeer = $connectionPeerIps[$connId]
             ?? (\is_string($transportPeerRaw) ? $transportPeerRaw : '');
-        $policyStartedAt = \microtime(true);
+        $policyStartedAt = wlsWorkerMonotonicNow();
         $frameHasHeaders = \is_array($frame['headers'] ?? null);
         $frameHeaders = $frameHasHeaders
             ? $frame['headers']
@@ -6588,6 +7535,43 @@ while (true) {
             );
             continue;
         }
+
+        // ACME HTTP-01 is a transport-owned response. Resolve it after the
+        // mandatory request policy and exact cleartext Host/route fence,
+        // but before canonical redirects, Static/FPC or Framework dispatch.
+        $acmeHttp01Response = $plaintextAction === 'acme_http01'
+            ? wlsAcmeHttp01ChallengeResponse($policyDecision)
+            : null;
+        if ($acmeHttp01Response !== null) {
+            sslFinalizeHttpResponseAfterHandle(
+                $conn,
+                $connId,
+                $rawRequest,
+                $acmeHttp01Response,
+                $policyStartedAt,
+                false,
+                $ipcDraining,
+                $connections,
+                $requestBuffers,
+                $connectionLastActivity,
+                $requestLogged,
+                $writeBuffers,
+                $writableConnections,
+                $pendingClose,
+                $longLivedConnections,
+                $ipcClient,
+                $instanceName,
+                $activeRequests,
+                false,
+                (string)($policyDecision->headers['host'] ?? ''),
+                $policyDecision->keepAlive(),
+                false,
+                $http2ResponseAdapter,
+                $http2ResponseStreamId,
+            );
+            continue;
+        }
+
         $uri = $policyDecision->path;
         $method = $policyDecision->method;
 
@@ -6760,7 +7744,7 @@ while (true) {
                     $writeBuffers[$connId] = \substr($h2Response, \max(0, (int)$written));
                     $writableConnections[$connId] = $conn;
                 }
-                $connectionLastActivity[$connId] = \time();
+                $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
                 continue;
             }
         }
@@ -6774,7 +7758,7 @@ while (true) {
         if ($staticFastResponse !== null) {
             $staticFastResponse = injectWlsProcessTimeHeader(
                 $staticFastResponse,
-                (\microtime(true) - $policyStartedAt) * 1000
+                (wlsWorkerMonotonicNow() - $policyStartedAt) * 1000
             );
             sslFinalizeHttpResponseAfterHandle(
                 $conn,
@@ -6813,7 +7797,7 @@ while (true) {
         ) {
             $fpcHit = $fpcFastPath->lookup($policyDecision, 'https');
             if ($fpcHit !== null) {
-                $fastPathElapsedMs = (float)\round((\microtime(true) - $policyStartedAt) * 1000, 2);
+                $fastPathElapsedMs = (float)\round((wlsWorkerMonotonicNow() - $policyStartedAt) * 1000, 2);
                 $fastPathResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(
                     (string)$fpcHit['response'],
                     $rawRequest,
@@ -6897,12 +7881,13 @@ while (true) {
         $isLongLived = ($longLivedDetection['is_long_lived'] ?? false) === true;
         $requestProtocol = (string) ($longLivedDetection['protocol'] ?? 'http');
         $isSseProtocolRequest = ($requestProtocol === 'sse');
+        $isWebSocketProtocolRequest = \in_array(\strtolower($requestProtocol), ['websocket', 'ws'], true);
         $applyLongLivedLimit = !$isSseProtocolRequest;
 
-        // 当前 SSE Writer 生成 HTTP/1.1 流式字节；在专用 HTTP/2 DATA writer 接入前必须明确拒绝，
-        // 不能把文本响应直接写进 h2 TLS 连接并污染其它并发 stream。
-        if ($http2ResponseStreamId > 0 && $isSseProtocolRequest) {
-            $body = 'HTTP/2 SSE streaming is not available';
+        // RFC 8441 WebSocket-over-H2 尚未实现，必须保持显式失败；SSE 则由
+        // ConnectionAdapter 转换为原生 HEADERS + 增量 DATA，不走 H1 字节流。
+        if ($http2ResponseStreamId > 0 && $isWebSocketProtocolRequest) {
+            $body = 'HTTP/2 WebSocket upgrade is not available';
             $response = "HTTP/1.1 501 Not Implemented\r\n"
                 . "Content-Type: text/plain; charset=utf-8\r\n"
                 . 'Content-Length: ' . \strlen($body) . "\r\n\r\n"
@@ -6950,9 +7935,12 @@ while (true) {
                 . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog)
             );
         }
-        $handleStartTime = \microtime(true);
+        $handleStartTime = wlsWorkerMonotonicNow();
 
-        if ($isLongLived) {
+        // H1 长连接以 TCP 连接为生命周期单位；H2 SSE 以 stream 为单位，
+        // 不能写入 longLivedConnections，否则该 TLS 连接会停止读取
+        // WINDOW_UPDATE/RST_STREAM，也会阻断同连接其它普通 H2 stream。
+        if ($isLongLived && $http2ResponseStreamId <= 0) {
             $layer = (string) ($longLivedDetection['layer'] ?? 'unknown');
             $protocol = (string) ($longLivedDetection['protocol'] ?? 'long-lived');
             WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
@@ -6965,8 +7953,8 @@ while (true) {
             ) {
                 $isWorkspaceStreamSse = $isSseProtocolRequest && \str_contains($rawRequest, '/stream-sse');
                 if ($isWorkspaceStreamSse) {
-                    $waitDeadline = \microtime(true) + 1.2;
-                    while (\microtime(true) < $waitDeadline
+                    $waitDeadline = wlsWorkerMonotonicNow() + 1.2;
+                    while (wlsWorkerMonotonicNow() < $waitDeadline
                         && $quotaLongLivedCount >= $longLivedMaxActive
                     ) {
                         foreach (\array_keys($longLivedConnections) as $llConnId) {
@@ -7010,6 +7998,13 @@ while (true) {
                 'start' => \time(),
                 'quota_exempt' => !$applyLongLivedLimit,
             ];
+            if (\in_array(\strtolower($protocol), ['websocket', 'ws'], true)) {
+                $longLivedConnections[$connId]['upgraded'] = false;
+                $longLivedConnections[$connId]['websocket_state'] =
+                    \Weline\Server\IPC\ControlMessage::webSocketInitialState();
+                $longLivedConnections[$connId]['resume_pending'] = false;
+                $longLivedConnections[$connId]['read_pump_pending'] = false;
+            }
             if ($applyLongLivedLimit) {
                 WlsLogger::info_(
                     '长连接槽位已分配 (connId: ' . $connId . ', protocol: ' . $protocol
@@ -7112,59 +8107,125 @@ while (true) {
             $WLS_UOPZ_EXIT_GUARD,
             $fiberConn,
             $fiberConnId,
+            $fiberHttp2StreamId,
+            $fiberHttp2Adapter,
             $isSseProtocolRequest,
+            &$ipcDraining,
+            &$drainStartTime,
+            &$maxDrainTime,
             &$requestBuffers,
             &$connectionLastActivity,
             &$requestLogged,
             &$writeBuffers,
             &$writableConnections,
             &$pendingClose,
-            &$longLivedConnections
+            &$longLivedConnections,
+            &$http2ConnectionAdapters,
         ) {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
             try {
                 if ($isSseProtocolRequest) {
-                    \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
-                        static function (string $data) use (
-                            $fiberConnId,
-                            $fiberConn,
-                            &$connections,
-                            &$requestBuffers,
-                            &$connectionLastActivity,
-                            &$requestLogged,
-                            &$writeBuffers,
-                            &$writableConnections,
-                            &$pendingClose
-                        ): bool {
-                            return enqueueSseWriteAndAwaitDrain(
+                    if ($fiberHttp2StreamId > 0
+                        && $fiberHttp2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+                    ) {
+                        \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
+                            static function (string $data) use (
                                 $fiberConnId,
                                 $fiberConn,
-                                $data,
-                                $connections,
-                                $requestBuffers,
-                                $connectionLastActivity,
-                                $requestLogged,
-                                $writeBuffers,
-                                $writableConnections,
-                                $pendingClose
-                            );
-                        }
-                    );
-                    \Weline\Framework\Http\Sse\SseContext::setAliveCallback(
-                        static function () use (
-                            $fiberConnId,
-                            $fiberConn,
-                            &$connections,
-                            &$pendingClose
-                        ): bool {
-                            return wlsSslIsSseClientConnected(
+                                $fiberHttp2StreamId,
+                                $fiberHttp2Adapter,
+                                &$connections,
+                                &$http2ConnectionAdapters,
+                                &$connectionLastActivity,
+                                &$writeBuffers,
+                                &$writableConnections,
+                                &$pendingClose,
+                            ): bool {
+                                return enqueueHttp2SseWrite(
+                                    $fiberConnId,
+                                    $fiberConn,
+                                    $fiberHttp2StreamId,
+                                    $fiberHttp2Adapter,
+                                    $data,
+                                    $connections,
+                                    $http2ConnectionAdapters,
+                                    $connectionLastActivity,
+                                    $writeBuffers,
+                                    $writableConnections,
+                                    $pendingClose,
+                                );
+                            },
+                        );
+                        \Weline\Framework\Http\Sse\SseContext::setAliveCallback(
+                            static function () use (
                                 $fiberConnId,
                                 $fiberConn,
-                                $connections,
-                                $pendingClose
-                            );
-                        }
-                    );
+                                $fiberHttp2StreamId,
+                                $fiberHttp2Adapter,
+                                &$connections,
+                                &$http2ConnectionAdapters,
+                                &$pendingClose,
+                                &$ipcDraining,
+                                &$drainStartTime,
+                                &$maxDrainTime,
+                            ): bool {
+                                return wlsSslIsHttp2SseStreamAlive(
+                                    $fiberConnId,
+                                    $fiberConn,
+                                    $fiberHttp2StreamId,
+                                    $fiberHttp2Adapter,
+                                    $connections,
+                                    $http2ConnectionAdapters,
+                                    $pendingClose,
+                                    $ipcDraining,
+                                    $drainStartTime,
+                                    $maxDrainTime,
+                                );
+                            },
+                        );
+                    } else {
+                        \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
+                            static function (string $data) use (
+                                $fiberConnId,
+                                $fiberConn,
+                                &$connections,
+                                &$requestBuffers,
+                                &$connectionLastActivity,
+                                &$requestLogged,
+                                &$writeBuffers,
+                                &$writableConnections,
+                                &$pendingClose
+                            ): bool {
+                                return enqueueSseWriteAndAwaitDrain(
+                                    $fiberConnId,
+                                    $fiberConn,
+                                    $data,
+                                    $connections,
+                                    $requestBuffers,
+                                    $connectionLastActivity,
+                                    $requestLogged,
+                                    $writeBuffers,
+                                    $writableConnections,
+                                    $pendingClose
+                                );
+                            }
+                        );
+                        \Weline\Framework\Http\Sse\SseContext::setAliveCallback(
+                            static function () use (
+                                $fiberConnId,
+                                $fiberConn,
+                                &$connections,
+                                &$pendingClose
+                            ): bool {
+                                return wlsSslIsSseClientConnected(
+                                    $fiberConnId,
+                                    $fiberConn,
+                                    $connections,
+                                    $pendingClose
+                                );
+                            }
+                        );
+                    }
                 }
                 return handleRequest(
                     $fiberRawRequest,
@@ -7184,7 +8245,9 @@ while (true) {
                     $originTokenAllowLocal,
                     $transportPeer,
                     $policyDecision,
-                    wlsDrainConnectionCounters($longLivedConnections),
+                    $longLivedConnections,
+                    $http2ConnectionAdapters,
+                    $connections,
                 );
             } catch (\Weline\Framework\Runtime\RequestExitException $e) {
                 throw $e;
@@ -7220,7 +8283,7 @@ while (true) {
             } finally {
                 \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($requestFiber);
             }
-            $handleDurationMs = (\microtime(true) - $handleStartTime) * 1000;
+            $handleDurationMs = (wlsWorkerMonotonicNow() - $handleStartTime) * 1000;
             $fiberResponse = injectWlsProcessTimeHeader($fiberResponse, $handleDurationMs);
             sslFinalizeHttpResponseAfterHandle(
                 $conn,
@@ -7250,6 +8313,9 @@ while (true) {
             );
             wlsDrainAfterResponseIfRequested($socket, $shouldExit, $ipcDraining, $drainStartTime, $maxDrainTime);
         } elseif ($requestFiber->isSuspended()) {
+            $fiberActivityWall = \time();
+            $fiberActivityMonotonicNs =
+                \Weline\Server\Runtime\WorkerFiberContextTracker::monotonicNowNs();
             $activeFibers[$fiberKey] = [
                 'fiber' => $requestFiber,
                 'conn' => $fiberConn,
@@ -7259,14 +8325,23 @@ while (true) {
                 'rawRequest' => $rawRequest,
                 'handleStartTime' => $handleStartTime,
                 'context' => wlsCaptureSuspendedRequestFiberOrQuarantine($requestFiber),
-                'suspended_at' => \time(),
-                'last_activity' => \time(),
+                'suspended_at' => $fiberActivityWall,
+                'last_activity' => $fiberActivityWall,
+                'suspended_at_monotonic_ns' => $fiberActivityMonotonicNs,
+                'last_activity_monotonic_ns' => $fiberActivityMonotonicNs,
                 'is_long_lived' => $isLongLived,
                 'is_sse_protocol' => $isSseProtocolRequest,
             ];
-            WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
-            $nowSat = \time();
-            if ($longLivedMaxActive > 0) {
+            if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
+                WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
+            }
+            // A normal suspended request did not mutate the long-lived
+            // registry. Sample only for a long-lived request or while a
+            // previously reported saturation still needs its cleared event.
+            $shouldSampleLongLivedSaturation = $isLongLived
+                || ($longLivedSaturationReported && !$longLivedSaturationCleared);
+            if ($shouldSampleLongLivedSaturation && $longLivedMaxActive > 0) {
+                $nowSat = wlsWorkerMonotonicNow();
                 $quotaLongLivedCount = wlsDrainConnectionCounters(
                     $longLivedConnections,
                 )['quota_connections'];
@@ -7367,7 +8442,7 @@ while (true) {
  * @param array<int, resource> $read
  * @param array<int, resource> $connections
  * @param array<int, string> $requestBuffers
- * @param array<int, int> $connectionLastActivity
+ * @param array<int, float> $connectionLastActivity
  * @param array<int, array{conn: resource, peerName: string, buffer: string}> $pendingPeek
  * @param array<int, float> $pendingPeekStartTimes
  */
@@ -7407,12 +8482,13 @@ function wlsSslAcceptNewConnections(
     int $maxAcceptPerLoop = 64,
     bool $applicationAdmissionOpen = true,
     mixed $nativeListenerSocket = null,
+    bool $rejectWithoutAdmission = false,
 ): int {
     if (!$socket || !\is_resource($socket) || !\in_array($socket, $read, true)) {
         return 0;
     }
 
-    if (!$applicationAdmissionOpen) {
+    if (!$applicationAdmissionOpen && !$rejectWithoutAdmission) {
         $key = \array_search($socket, $read, true);
         if ($key !== false) {
             unset($read[$key]);
@@ -7432,6 +8508,10 @@ function wlsSslAcceptNewConnections(
             // Raw accept already consumed kernel work. Count it before export so
             // repeated export failures cannot bypass the per-loop CPU budget.
             $accepted++;
+            if ($rejectWithoutAdmission) {
+                @\socket_close($acceptedSocket);
+                continue;
+            }
             $conn = @\socket_export_stream($acceptedSocket);
             if (!\is_resource($conn)) {
                 @\socket_close($acceptedSocket);
@@ -7443,6 +8523,10 @@ function wlsSslAcceptNewConnections(
                 break;
             }
             $accepted++;
+            if ($rejectWithoutAdmission) {
+                safeCloseStream($conn);
+                continue;
+            }
         }
         $connId = \get_resource_id($conn);
         // PHP may reuse a closed stream resource id before the next event-loop
@@ -7483,11 +8567,11 @@ function wlsSslAcceptNewConnections(
                 'peerName' => $peerName,
                 'buffer' => '',
             ];
-            $pendingPeekStartTimes[$connId] = \microtime(true);
+            $pendingPeekStartTimes[$connId] = wlsWorkerMonotonicNow();
         } else {
             $connections[$connId] = $conn;
             $requestBuffers[$connId] = '';
-            $connectionLastActivity[$connId] = \time();
+            $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
         }
         $admitted++;
     }
@@ -7628,7 +8712,7 @@ function wlsSslApplyPerConnectionSslForDeferHandshake(
  * @param array<int, float> $handshakeStartTimes
  * @param array<int, resource> $connections
  * @param array<int, string> $requestBuffers
- * @param array<int, int> $connectionLastActivity
+ * @param array<int, float> $connectionLastActivity
  * @param array<string, array{local_cert: string, local_pk: string}> $sniServerCerts
  */
 function wlsSslAdvancePeekState(
@@ -7687,8 +8771,8 @@ function wlsSslAdvancePeekState(
         }
         $conn = $peekInfo['conn'];
         $peerName = $peekInfo['peerName'];
-        $startTime = $pendingPeekStartTimes[$connId] ?? \microtime(true);
-        $elapsed = \microtime(true) - $startTime;
+        $startTime = $pendingPeekStartTimes[$connId] ?? wlsWorkerMonotonicNow();
+        $elapsed = wlsWorkerMonotonicNow() - $startTime;
         if ($elapsed > $peekTimeout) {
             $failedPeeks[] = $connId;
             WlsLogger::warning_("Peek 超时: {$peerName} (connId: {$connId})");
@@ -7776,10 +8860,14 @@ function wlsSslAdvancePeekState(
                     $_host,
                     $servingHttpRoutes,
                 );
-                if ($_plaintextAction === 'allow') {
+                if (\in_array(
+                    $_plaintextAction,
+                    ['allow', 'acme_http01'],
+                    true,
+                )) {
                     $connections[$connId] = $conn;
                     $requestBuffers[$connId] = '';
-                    $connectionLastActivity[$connId] = \time();
+                    $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
                     $connectionProtocols[$connId] = 'http/1.1';
                     $connectionPlaintextHosts[$connId] = (string)$_host;
                     unset($connectionSniHosts[$connId]);
@@ -7871,10 +8959,10 @@ function wlsSslAdvancePeekState(
             }
             $connections[$connId] = $conn;
             $requestBuffers[$connId] = '';
-            $connectionLastActivity[$connId] = \time();
+            $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             $postHandshakeReadPending[$connId] = [
                 'conn' => $conn,
-                'deadline' => \microtime(true) + 0.20,
+                'deadline' => wlsWorkerMonotonicNow() + 0.20,
             ];
             $completedPeeks[] = $connId;
             continue;
@@ -7885,7 +8973,7 @@ function wlsSslAdvancePeekState(
             'peerName' => $peerName,
             'phase' => 'pending',
         ];
-        $handshakeStartTimes[$connId] = \microtime(true);
+        $handshakeStartTimes[$connId] = wlsWorkerMonotonicNow();
         $completedPeeks[] = $connId;
 
         if ($isDev && $cryptoResult === false) {
@@ -7914,7 +9002,7 @@ function wlsSslAdvancePeekState(
  * @param array<int, float> $handshakeStartTimes
  * @param array<int, resource> $connections
  * @param array<int, string> $requestBuffers
- * @param array<int, int> $connectionLastActivity
+ * @param array<int, float> $connectionLastActivity
  * @param array<int, bool> $requestLogged
  * @param array<int, resource> $read
  * @param array<int, resource> $write
@@ -7948,7 +9036,7 @@ function wlsSslAdvanceHandshakeState(
         static $lastPendingHandshakeLogAt = 0.0;
         static $lastPendingHandshakeCount = -1;
         $pendingCount = \count($pendingHandshakes);
-        $now = \microtime(true);
+        $now = wlsWorkerMonotonicNow();
         // 节流：数量变化立即记录；数量不变时最多每秒记录一次，避免日志风暴淹没关键事件。
         if ($pendingCount !== $lastPendingHandshakeCount || ($now - $lastPendingHandshakeLogAt) >= 1.0) {
             WlsLogger::info_('握手循环待处理连接数: ' . $pendingCount);
@@ -7963,8 +9051,8 @@ function wlsSslAdvanceHandshakeState(
         }
         $conn = $handshakeInfo['conn'];
         $peerName = $handshakeInfo['peerName'];
-        $startTime = $handshakeStartTimes[$connId] ?? \microtime(true);
-        $elapsed = \microtime(true) - $startTime;
+        $startTime = $handshakeStartTimes[$connId] ?? wlsWorkerMonotonicNow();
+        $elapsed = wlsWorkerMonotonicNow() - $startTime;
         if ($elapsed > $handshakeTimeout) {
             $failedHandshakes[] = $connId;
             WlsLogger::warning_("SSL 握手超时: {$peerName} (connId: {$connId})");
@@ -8023,10 +9111,10 @@ function wlsSslAdvanceHandshakeState(
         $conn = $pendingHandshakes[$connId]['conn'];
         $connections[$connId] = $conn;
         $requestBuffers[$connId] = '';
-        $connectionLastActivity[$connId] = \time();
+        $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
         $postHandshakeReadPending[$connId] = [
             'conn' => $conn,
-            'deadline' => \microtime(true) + 0.20,
+            'deadline' => wlsWorkerMonotonicNow() + 0.20,
         ];
         // OpenSSL may consume the first HTTP bytes into its user-space buffer
         // while finishing a handshake on WRITE readiness. libevent then sees
@@ -8051,6 +9139,145 @@ function wlsSslAdvanceHandshakeState(
             $requestLogged[$connId]
         );
     }
+}
+
+function wlsSslIsActiveWebSocketConnection(mixed $state): bool
+{
+    return \is_array($state)
+        && ($state['upgraded'] ?? false) === true
+        && \in_array(\strtolower((string)($state['type'] ?? '')), ['websocket', 'ws'], true);
+}
+
+/**
+ * Advance one non-blocking WebSocket read turn on the production TLS worker.
+ * WebSocket remains an HTTP/1.1 upgrade; ALPN-selected HTTP/2 never enters here.
+ */
+function wlsSslWebSocketReadStep(
+    mixed $conn,
+    int $connId,
+    array &$connections,
+    array &$requestBuffers,
+    array &$connectionLastActivity,
+    array &$requestLogged,
+    array &$writeBuffers,
+    array &$writableConnections,
+    array &$pendingClose,
+    array &$longLivedConnections,
+    array &$writeZeroProgress,
+    array &$postHandshakeReadPending,
+    array &$connectionPeerIps,
+    array &$connectionProtocols,
+    array &$connectionSniHosts,
+    array &$connectionPlaintextHosts,
+    array &$http2ConnectionAdapters,
+    array &$http2PendingRequests,
+): void {
+    $closeConnection = static function () use (
+        $conn,
+        $connId,
+        &$connections,
+        &$requestBuffers,
+        &$connectionLastActivity,
+        &$requestLogged,
+        &$writeBuffers,
+        &$writableConnections,
+        &$pendingClose,
+        &$longLivedConnections,
+        &$writeZeroProgress,
+        &$postHandshakeReadPending,
+        &$connectionPeerIps,
+        &$connectionProtocols,
+        &$connectionSniHosts,
+        &$connectionPlaintextHosts,
+        &$http2ConnectionAdapters,
+        &$http2PendingRequests,
+    ): void {
+        safeCloseStream($conn);
+        unset(
+            $connections[$connId],
+            $requestBuffers[$connId],
+            $connectionLastActivity[$connId],
+            $requestLogged[$connId],
+            $writeBuffers[$connId],
+            $writableConnections[$connId],
+            $pendingClose[$connId],
+            $longLivedConnections[$connId],
+            $writeZeroProgress[$connId],
+            $postHandshakeReadPending[$connId],
+            $connectionPeerIps[$connId],
+            $connectionProtocols[$connId],
+            $connectionSniHosts[$connId],
+            $connectionPlaintextHosts[$connId],
+            $http2ConnectionAdapters[$connId],
+            $http2PendingRequests[$connId],
+        );
+    };
+
+    if (!\is_resource($conn)
+        || !isset($connections[$connId])
+        || $connections[$connId] !== $conn
+        || ($connectionProtocols[$connId] ?? '') !== 'http/1.1'
+        || !wlsSslIsActiveWebSocketConnection($longLivedConnections[$connId] ?? null)
+    ) {
+        $closeConnection();
+        return;
+    }
+
+    $registration = $longLivedConnections[$connId];
+    $bytes = (string)($requestBuffers[$connId] ?? '');
+    $requestBuffers[$connId] = '';
+    $frameResumePending = ($registration['resume_pending'] ?? false) === true;
+    $readPumpPending = ($registration['read_pump_pending'] ?? false) === true
+        || $frameResumePending
+        || $bytes !== '';
+    $readFromStream = false;
+    if ($bytes === '' && !$frameResumePending) {
+        $bytes = @\fread($conn, 65535);
+        $readFromStream = true;
+        if ($bytes === false || ($bytes === '' && @\feof($conn))) {
+            $closeConnection();
+            return;
+        }
+        if ($bytes === '') {
+            $longLivedConnections[$connId]['read_pump_pending'] = false;
+            return;
+        }
+    }
+
+    $result = \Weline\Server\IPC\ControlMessage::webSocketConsumeClientBytes(
+        (array)($registration['websocket_state'] ?? []),
+        $bytes,
+    );
+    $longLivedConnections[$connId]['websocket_state'] = $result['state'];
+    $longLivedConnections[$connId]['resume_pending'] =
+        ($result['frame_budget_exhausted'] ?? false) === true;
+    $longLivedConnections[$connId]['read_pump_pending'] = $readFromStream
+        ? \strlen($bytes) === 65535
+        : $readPumpPending;
+    if ($bytes !== '') {
+        $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+    }
+
+    if ($result['outbound'] !== []) {
+        $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . \implode('', $result['outbound']);
+        $writableConnections[$connId] = $conn;
+    }
+    if (($result['error_code'] ?? null) !== null) {
+        WlsLogger::warning_(
+            'TLS WebSocket 协议错误，关闭连接 (connId: ' . $connId
+            . ', close_code: ' . (int)$result['error_code'] . ')'
+        );
+    }
+    if (($result['close_transport'] ?? false) !== true) {
+        return;
+    }
+
+    if (($writeBuffers[$connId] ?? '') !== '') {
+        $pendingClose[$connId] = true;
+        return;
+    }
+
+    $closeConnection();
 }
 
 /**
@@ -8113,7 +9340,7 @@ function wlsSslFlushQueuedWrites(
             unset($writeZeroProgress[$connId]);
             $retryState = null;
         }
-        if ((float) ($retryState['retry_at'] ?? 0.0) > \microtime(true)) {
+        if ((float) ($retryState['retry_at'] ?? 0.0) > wlsWorkerMonotonicNow()) {
             continue;
         }
 
@@ -8151,7 +9378,7 @@ function wlsSslFlushQueuedWrites(
                 // Keep-Alive is an inactivity budget, not an absolute response deadline.
                 // Slow HTTP/2 clients can keep TLS/TCP back-pressured for longer than
                 // the nominal idle timeout while bytes are still making progress.
-                $connectionLastActivity[$connId] = \time();
+                $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             }
 
             if ($written === false) {
@@ -8166,7 +9393,7 @@ function wlsSslFlushQueuedWrites(
             }
 
             if ($written === 0) {
-                $zeroNow = \microtime(true);
+                $zeroNow = wlsWorkerMonotonicNow();
                 $zeroState = $writeZeroProgress[$connId] ?? null;
                 if (!\is_array($zeroState) || ($zeroState['connection'] ?? null) !== $conn) {
                     $zeroState = [
@@ -8227,7 +9454,7 @@ function wlsSslFlushQueuedWrites(
             }
 
             unset($writeZeroProgress[$connId]);
-            $connectionLastActivity[$connId] = \time();
+            $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             $totalWrittenThisLoop += $written;
             $writeBuffers[$connId] = \substr($buffer, $written);
 
@@ -8370,6 +9597,122 @@ function wlsSslIsSseClientConnected(
     return !@\feof($conn);
 }
 
+/**
+ * H2 SSE stays alive only while the exact TLS connection, adapter and stream
+ * identity are current. During Worker drain it receives the soft-deadline
+ * budget to finish cooperatively; the existing hard deadline remains the
+ * fail-safe that cancels a stubborn Fiber and retires the transport.
+ *
+ * @param array<int,resource> $connections
+ * @param array<int,\Weline\Server\Protocol\Http2\ConnectionAdapter> $http2ConnectionAdapters
+ */
+function wlsSslIsHttp2SseStreamAlive(
+    int $connId,
+    mixed $conn,
+    int $streamId,
+    \Weline\Server\Protocol\Http2\ConnectionAdapter $adapter,
+    array &$connections,
+    array &$http2ConnectionAdapters,
+    array &$pendingClose,
+    bool $ipcDraining,
+    float $drainStartTime,
+    int $maxDrainTime,
+): bool {
+    if (($http2ConnectionAdapters[$connId] ?? null) !== $adapter
+        || !$adapter->isStreamActive($streamId)
+        || !wlsSslIsSseClientConnected($connId, $conn, $connections, $pendingClose)
+    ) {
+        return false;
+    }
+
+    if (!$ipcDraining) {
+        return true;
+    }
+
+    $deadlines = \Weline\Server\IPC\ControlMessage::drainDeadlines((float)$maxDrainTime);
+    $elapsed = $drainStartTime > 0.0
+        ? \max(0.0, (\hrtime(true) / 1_000_000_000) - $drainStartTime)
+        : 0.0;
+
+    return $elapsed < $deadlines['soft'];
+}
+
+/**
+ * Convert the existing SseWriter output into native per-stream H2 frames.
+ * The first callback carries the HTTP response head; later callbacks become
+ * incremental DATA. Flow-controlled bytes remain in ConnectionAdapter rather
+ * than being misreported as a failed application write.
+ *
+ * @param array<int,resource> $connections
+ * @param array<int,\Weline\Server\Protocol\Http2\ConnectionAdapter> $http2ConnectionAdapters
+ * @param array<int,string> $writeBuffers
+ * @param array<int,resource> $writableConnections
+ */
+function enqueueHttp2SseWrite(
+    int $connId,
+    mixed $conn,
+    int $streamId,
+    \Weline\Server\Protocol\Http2\ConnectionAdapter $adapter,
+    string $data,
+    array &$connections,
+    array &$http2ConnectionAdapters,
+    array &$connectionLastActivity,
+    array &$writeBuffers,
+    array &$writableConnections,
+    array &$pendingClose,
+): bool {
+    if ($data === '') {
+        return true;
+    }
+    if (isset($pendingClose[$connId])
+        || !isset($connections[$connId])
+        || $connections[$connId] !== $conn
+        || ($http2ConnectionAdapters[$connId] ?? null) !== $adapter
+        || !\is_resource($conn)
+        || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)
+        || !$adapter->isStreamActive($streamId)
+    ) {
+        return false;
+    }
+
+    $bufferedBytes = \strlen((string)($writeBuffers[$connId] ?? ''))
+        + $adapter->pendingResponseBytes();
+    $appendBytes = \strlen($data) + 64;
+    if (\Weline\Server\Service\WorkerResponseMemoryGuard::sseWriteBufferWouldExceed(
+        $bufferedBytes,
+        $appendBytes,
+    )) {
+        WlsLogger::warning_(
+            'HTTP/2 SSE 写缓冲超限，取消 stream (connId: ' . $connId
+            . ', streamId=' . $streamId . ', buffered=' . $bufferedBytes
+            . ', append=' . \strlen($data) . ')'
+        );
+        $reset = $adapter->abortStream($streamId, \Weline\Server\Protocol\Http2\FrameCodec::ERROR_CANCEL);
+        if ($reset !== '') {
+            $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $reset;
+            $writableConnections[$connId] = $conn;
+        }
+        return false;
+    }
+
+    if (!$adapter->isStreamingResponse($streamId)) {
+        $frames = $adapter->beginStreamingResponse($streamId, $data);
+        if (!$adapter->isStreamingResponse($streamId)) {
+            return false;
+        }
+    } else {
+        $frames = $adapter->appendStreamingData($streamId, $data);
+    }
+
+    if ($frames !== '') {
+        $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $frames;
+        $writableConnections[$connId] = $conn;
+    }
+    $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+
+    return $adapter->isStreamActive($streamId);
+}
+
 function enqueueSseWriteAndAwaitDrain(
     int $connId,
     mixed $conn,
@@ -8436,7 +9779,7 @@ function enqueueSseWriteAndAwaitDrain(
 
     $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $data;
     $writableConnections[$connId] = $conn;
-    $connectionLastActivity[$connId] = \time();
+    $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
     return true;
 }
 
@@ -8450,7 +9793,7 @@ function wlsDrainAfterResponseIfRequested(
     mixed &$socket,
     bool &$shouldExit,
     bool &$ipcDraining,
-    int &$drainStartTime,
+    float &$drainStartTime,
     int &$maxDrainTime
 ): void {
     $reason = \Weline\Server\Service\WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
@@ -8461,7 +9804,7 @@ function wlsDrainAfterResponseIfRequested(
     WlsLogger::warning_("Worker requested drain after response: {$reason}");
     $shouldExit = true;
     $ipcDraining = true;
-    $drainStartTime = \time();
+    $drainStartTime = \hrtime(true) / 1_000_000_000;
     $maxDrainTime = \min($maxDrainTime, 10);
     if ($socket && \is_resource($socket)) {
         @\fclose($socket);
@@ -8554,7 +9897,7 @@ function wlsHttp3SubmitResponse(
         $response = wlsDecorateFormattedBenchmarkWorkerIdentity($response, $rawRequest);
         $response = injectWlsProcessTimeHeader(
             $response,
-            (\microtime(true) - $startedAt) * 1000,
+            (wlsWorkerMonotonicNow() - $startedAt) * 1000,
         );
         $requestHost = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
         if ($requestHost !== '') {
@@ -8610,6 +9953,37 @@ function sslFinalizeHttpResponseAfterHandle(
         $responseStatus = (int) $statusMatches[1];
     }
 
+    $webSocketRegistration = $longLivedConnections[$connId] ?? null;
+    $isWebSocketRequest = \is_array($webSocketRegistration)
+        && \in_array(\strtolower((string)($webSocketRegistration['type'] ?? '')), ['websocket', 'ws'], true);
+    $isWebSocketMode = false;
+    if ($responseStatus === 101) {
+        if ($http2Adapter === null
+            && $http2StreamId === 0
+            && $isWebSocketRequest
+            && \Weline\Server\IPC\ControlMessage::webSocketUpgradeAccepted($rawRequest, $response)
+        ) {
+            $longLivedConnections[$connId]['upgraded'] = true;
+            $longLivedConnections[$connId]['websocket_state'] =
+                \Weline\Server\IPC\ControlMessage::webSocketInitialState();
+            $longLivedConnections[$connId]['resume_pending'] = false;
+            $longLivedConnections[$connId]['read_pump_pending'] = false;
+            $isWebSocketMode = true;
+        } else {
+            $body = 'Invalid WebSocket Upgrade';
+            $response = "HTTP/1.1 502 Bad Gateway\r\n"
+                . "Content-Type: text/plain; charset=utf-8\r\n"
+                . 'Content-Length: ' . \strlen($body) . "\r\n"
+                . "Connection: close\r\n\r\n"
+                . $body;
+            $responseStatus = 502;
+            unset($longLivedConnections[$connId]);
+            WlsLogger::warning_("WebSocket 101 握手校验失败，已拒绝升级 (connId: {$connId})");
+        }
+    } elseif ($isWebSocketRequest) {
+        unset($longLivedConnections[$connId]);
+    }
+
     if ($responseStatus === 400) {
         $requestLine = '';
         if (\preg_match('/^([^\r\n]+)/', $rawRequest, $lineMatches)) {
@@ -8637,12 +10011,18 @@ function sslFinalizeHttpResponseAfterHandle(
         WlsLogger::debug_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
     }
 
-    $hasQueuedSsePayload = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
+    $isHttp2Stream = $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+        && $http2StreamId > 0;
+    $http2StreamingStarted = $isHttp2Stream
+        && $http2Adapter->isStreamingResponse($http2StreamId);
+    $hasQueuedSsePayload = !$isHttp2Stream
+        && isset($writeBuffers[$connId])
+        && $writeBuffers[$connId] !== '';
     $actualSseStarted = $isSseProtocolRequest
-        && (
-            \Weline\Framework\Http\Sse\SseContext::isSseEnabled()
-            || \Weline\Framework\Http\Sse\SseContext::isHeadersSent()
-        );
+        && ($isHttp2Stream
+            ? $http2StreamingStarted
+            : (\Weline\Framework\Http\Sse\SseContext::isSseEnabled()
+                || \Weline\Framework\Http\Sse\SseContext::isHeadersSent()));
     if ($isSseProtocolRequest && !$actualSseStarted && $response !== '') {
         $statusLine = \trim((string) (\strtok($response, "\r\n") ?: ''));
         WlsLogger::warning_(
@@ -8652,14 +10032,25 @@ function sslFinalizeHttpResponseAfterHandle(
     }
     // SSE 收尾兜底：上下文标记可能先于写队列排空被重置，此时仍必须按 SSE 分支处理。
     $isSseMode = $actualSseStarted || ($isSseProtocolRequest && $hasQueuedSsePayload);
+    $isHttp2SseMode = $isSseMode && $http2StreamingStarted;
+    $isHttp1SseMode = $isSseMode && !$isHttp2SseMode;
     $runtimeDrainPending = \Weline\Server\Service\WorkerResponseMemoryGuard::hasDrainAfterResponseRequest();
     $drainRequestedBeforeResponse = $ipcDraining || $runtimeDrainPending;
     $isHttp2Response = false;
-    if (!$isSseMode && $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter && $http2StreamId > 0) {
+    if ($isHttp2SseMode && $http2Adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter) {
+        $response = $http2Adapter->endStreamingResponse($http2StreamId);
+        if ($drainRequestedBeforeResponse) {
+            $response .= $http2Adapter->initiateGoaway();
+        }
+        $responseLenPre = \strlen($response);
+        $trustedCacheHit = true;
+        $precomputedKeepAlive = true;
+        $isHttp2Response = true;
+    } elseif (!$isSseMode && $isHttp2Stream) {
         $response = $http2Adapter->encodeResponse($http2StreamId, $response);
         if ($response === '') {
             \Weline\Framework\Http\Sse\SseContext::reset();
-            $connectionLastActivity[$connId] = \time();
+            $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
             return;
         }
         if ($drainRequestedBeforeResponse) {
@@ -8670,8 +10061,8 @@ function sslFinalizeHttpResponseAfterHandle(
         $precomputedKeepAlive = true;
         $isHttp2Response = true;
     }
-    $keepAlive = $precomputedKeepAlive ?? isKeepAlive($rawRequest);
-    if ($drainRequestedBeforeResponse && !$isSseMode && !$isHttp2Response) {
+    $keepAlive = $isWebSocketMode ? true : ($precomputedKeepAlive ?? isKeepAlive($rawRequest));
+    if ($drainRequestedBeforeResponse && !$isSseMode && !$isHttp2Response && !$isWebSocketMode) {
         // H1 advertises retirement before any immediate or queued write. Keep
         // the transport readable until the client acknowledges with FIN.
         $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
@@ -8682,16 +10073,16 @@ function sslFinalizeHttpResponseAfterHandle(
     $forceCloseAfterResponse = !$isHttp2Response
         && \Weline\Server\Service\WorkerResponseMemoryGuard::shouldForceConnectionClose(
             $keepAlive,
-            $isSseMode,
+            $isSseMode || $isWebSocketMode,
             $responseLenPre,
             $bufferedBytesBeforeWrite
         );
-    if ($forceCloseAfterResponse && !$isSseMode) {
+    if ($forceCloseAfterResponse && !$isSseMode && !$isWebSocketMode) {
         $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
     }
 
     $responseFullyWritten = false;
-    if (!$isSseMode) {
+    if (!$isHttp1SseMode) {
         $responseLen = \strlen($response);
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
 
@@ -8790,8 +10181,8 @@ function sslFinalizeHttpResponseAfterHandle(
     }
 
     \Weline\Framework\Http\Sse\SseContext::reset();
-    $connectionLastActivity[$connId] = \time();
-    $handleDurationMs = (float) \round((\microtime(true) - $handleStartTime) * 1000, 2);
+    $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+    $handleDurationMs = (float) \round((wlsWorkerMonotonicNow() - $handleStartTime) * 1000, 2);
 
     if ($recordObservability) {
         // 浏览器文档请求慢时输出明确慢日志（method/uri/status/耗时），便于直接对照 DevTools waterfall。
@@ -8818,7 +10209,7 @@ function sslFinalizeHttpResponseAfterHandle(
         WlsLogger::tick_();
     }
 
-    if ($recordObservability && !$isSseMode && $responseFullyWritten) {
+    if ($recordObservability && !$isSseMode && !$isWebSocketMode && $responseFullyWritten) {
         wlsDrainPostResponseTasks($activeRequests, $requestBuffers, $writeBuffers, $connId);
     }
 
@@ -8832,9 +10223,10 @@ function sslFinalizeHttpResponseAfterHandle(
         $isSseMode,
         $isHttp2Response,
     );
-    $shouldClose = !$awaitPeerCloseAfterDrain
+    $shouldClose = !$isWebSocketMode
+        && !$awaitPeerCloseAfterDrain
         && (
-            $isSseMode
+            ($isSseMode && !$isHttp2Response)
             || !$keepAlive
             || (!$isHttp2Response && $drainRequestedBeforeResponse)
             || $forceCloseAfterResponse
@@ -8900,6 +10292,24 @@ function wlsDrainConnectionCounters(array $connections): array
     return $counters;
 }
 
+/**
+ * @param array<int|string,mixed> $adapters
+ * @param array<int|string,mixed> $connections
+ */
+function wlsHttp2LiveConnectionCount(array $adapters, array $connections): int
+{
+    $count = 0;
+    foreach ($adapters as $connectionId => $adapter) {
+        $connection = $connections[(int)$connectionId] ?? null;
+        if ($adapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
+            && \is_resource($connection)
+        ) {
+            ++$count;
+        }
+    }
+    return $count;
+}
+
 function handleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
@@ -8911,14 +10321,16 @@ function handleRequest(
     int $requestCount,
     int $activeRequests,
     int $connectionCount,
-    int $startTime,
+    float $startTime,
     string $originToken,
     bool $originTokenValidationEnabled,
     string $originTokenHeader,
     bool $originTokenAllowLocal,
     string $transportPeer = '',
     ?\Weline\Server\Security\WorkerPolicyDecision $precomputedPolicyDecision = null,
-    array $drainCounters = [],
+    array $longLivedConnections = [],
+    array $http2ConnectionAdapters = [],
+    array $liveConnections = [],
 ): string {
     $policyDecision = $precomputedPolicyDecision
         ?? \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate($rawRequest, $transportPeer);
@@ -8964,6 +10376,11 @@ function handleRequest(
         
         if ($wantsDetail) {
             // 详细模式：返回完整信息
+            $drainCounters = wlsDrainConnectionCounters($longLivedConnections);
+            $http2ConnectionCount = wlsHttp2LiveConnectionCount(
+                $http2ConnectionAdapters,
+                $liveConnections,
+            );
             $fiberSnapshot = \Weline\Server\Runtime\WorkerFiberSnapshot::getSnapshot();
             $health = [
                 'status' => 'healthy',
@@ -8986,13 +10403,14 @@ function handleRequest(
                     0,
                     (int)($drainCounters['websocket_connections'] ?? 0),
                 ),
+                'http2_connections' => \max(0, $http2ConnectionCount),
                 'drain_counters_version' => 1,
                 'total_requests' => $requestCount,
                 'memory_usage' => \memory_get_usage(true),
                 'memory_usage_used' => \memory_get_usage(false),
                 'memory_peak' => \memory_get_peak_usage(true),
                 'memory_peak_used' => \memory_get_peak_usage(false),
-                'uptime' => \time() - $startTime,
+                'uptime' => \max(0, (int)\floor(wlsWorkerMonotonicNow() - $startTime)),
                 'php_version' => PHP_VERSION,
                 'ssl' => true,
                 'tls_session_reuse' => \Weline\Server\Service\WlsWorkerGlobals::getTlsSessionReuse(),
@@ -9020,40 +10438,8 @@ function handleRequest(
     }
     // ========== 健康检查接口结束 ==========
 
-    // ========== ACME HTTP-01 校验（仅读取项目权威事实包） ==========
-    if ($method === 'GET' && \preg_match('#^/\.well-known/acme-challenge/([^/]+)/?$#', $uri, $acmeMatches)) {
-        $requestToken = $acmeMatches[1];
-        $hostAuthority = \trim((string)($policyDecision->headers['host'] ?? ''));
-        try {
-            $parsedHost = \parse_url('https://' . $hostAuthority, PHP_URL_HOST);
-        } catch (\ValueError) {
-            $parsedHost = false;
-        }
-        $hostHeader = \is_string($parsedHost) ? $parsedHost : '';
-        if (\defined('BP')) {
-            $acmeDirectory = \rtrim(BP, \DIRECTORY_SEPARATOR)
-                . \DIRECTORY_SEPARATOR . 'generated'
-                . \DIRECTORY_SEPARATOR . 'acme-http01';
-            $body = \Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore::resolvePublishedChallenge(
-                $acmeDirectory,
-                $hostHeader,
-                (string)$requestToken,
-            );
-            if ($body !== null) {
-                $len = \strlen($body);
-                $keepAlive = $policyDecision->keepAlive();
-                return $keepAlive
-                    ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
-                    : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
-            }
-        }
-        $notFoundBody = 'ACME challenge not found';
-        return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: " . \strlen($notFoundBody) . "\r\nConnection: close\r\n\r\n{$notFoundBody}";
-    }
-    // ========== ACME HTTP-01 校验结束 ==========
-
     // ========== 静态文件处理（WLS 模式特有） ==========
-    $staticFileStart = \microtime(true);
+    $staticFileStart = wlsWorkerMonotonicNow();
     $staticResponse = $policyDecision->staticProcessCacheEnabled()
         ? handleStaticFile($uri, $rawRequest)
         : null;
@@ -9061,12 +10447,14 @@ function handleRequest(
         $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache();
         $cacheStatus = $cacheInfo['status'] ?? 'miss';
         $cacheUri = $cacheInfo['uri'] ?? $uri;
-        WlsLogger::info_(__('静态文件缓存: %{1} %{2}', [\strtoupper($cacheStatus), $cacheUri]));
+        if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
+            WlsLogger::info_(__('静态文件缓存: %{1} %{2}', [\strtoupper($cacheStatus), $cacheUri]));
+        }
         if (\function_exists('wlsDecorateFormattedStaticResponseForPerformancePanel')) {
             $staticResponse = wlsDecorateFormattedStaticResponseForPerformancePanel(
                 $staticResponse,
                 $rawRequest,
-                (\microtime(true) - $staticFileStart) * 1000,
+                (wlsWorkerMonotonicNow() - $staticFileStart) * 1000,
                 $workerId,
                 $port,
                 \is_array($cacheInfo) ? $cacheInfo : []
@@ -9086,7 +10474,9 @@ function handleRequest(
         ]);
     }
     
-    WlsLogger::info_("准备进入框架处理: {$method} {$uri}");
+    if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
+        WlsLogger::info_("准备进入框架处理: {$method} {$uri}");
+    }
     try {
         // 创建 WLS 请求对象（框架会自动处理维护模式）
         $request = \Weline\Framework\Http\WlsRequest::fromEnvelope($policyDecision->requestEnvelope(), $policyServerInfo + [
@@ -9654,7 +11044,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $connectionHeader = $keepAlive ? 'keep-alive' : 'close';
 
     // ========== 静态文件内存缓存（冷热淘汰策略） ==========
-    // 缓存格式：[filepath => ['content' => string, 'mtime' => int, 'size' => int, 'cached_at' => int, 'hits' => int, 'last_access' => int]]
+    // 缓存格式：[filepath => ['content' => string, 'mtime' => int, 'size' => int, 'cached_at' => float, 'hits' => int, 'last_access' => float]]
     static $staticFileCache = [];
     static $staticFileCacheTotalSize = 0;
     static $staticFileCacheMaxAge = 86400 * 7;  // 缓存有效期：7 天
@@ -9698,7 +11088,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
             return; // 空间足够，无需淘汰
         }
         
-        $now = \time();
+        $now = wlsWorkerMonotonicNow();
         $candidates = [];
         
         // 计算每个缓存项的冷热分数
@@ -9904,7 +11294,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
 
     $validatedCached = null;
     $cacheHeaderStatus = 'MISS';
-    $now = \time();
+    $now = wlsWorkerMonotonicNow();
     if (isset($staticFileCache[$filename])) {
         $cached = $staticFileCache[$filename];
         if (($cached['mtime'] ?? null) === \filemtime($filename)
@@ -9981,7 +11371,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // ========== 内存缓存策略（冷热淘汰） ==========
     $content = $validatedCached['content'] ?? null;
     $fromCache = $validatedCached !== null;
-    $now = $now ?? \time();
+    $now = $now ?? wlsWorkerMonotonicNow();
     
     // 只有小于配置阈值的文件才缓存到内存
     if ($fileSize <= $maxSize) {
@@ -10091,7 +11481,6 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
             $filename,
             $etag,
             $lastModified,
-            $now,
             $staticFileCacheMaxAge,
         );
     }

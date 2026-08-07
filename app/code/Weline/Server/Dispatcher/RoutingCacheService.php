@@ -22,6 +22,11 @@ namespace Weline\Server\Dispatcher;
 
 class RoutingCacheService
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 单例实例
      */
@@ -29,22 +34,22 @@ class RoutingCacheService
     
     /**
      * SNI -> Worker 端口映射
-     * 格式: [sni => ['port' => int, 'expires' => int]]
-     * @var array<string, array{port: int, expires: int}>
+     * 格式: [sni => ['port' => int, 'expires' => float]]
+     * @var array<string, array{port: int, expires: float}>
      */
     private array $sniCache = [];
     
     /**
      * 客户端 IP -> 路由信息
-     * 格式: [ip => ['port' => int, 'sni' => string, 'expires' => int, 'hits' => int]]
-     * @var array<string, array{port: int, sni: string, expires: int, hits: int}>
+     * 格式: [ip => ['port' => int, 'sni' => string, 'expires' => float, 'hits' => int]]
+     * @var array<string, array{port: int, sni: string, expires: float, hits: int}>
      */
     private array $ipCache = [];
     
     /**
      * 连接 ID -> 路由信息（Keep-Alive 场景）
-     * 格式: [connId => ['port' => int, 'sni' => string, 'expires' => int]]
-     * @var array<int, array{port: int, sni: string, expires: int}>
+     * 格式: [connId => ['port' => int, 'sni' => string, 'expires' => float]]
+     * @var array<int, array{port: int, sni: string, expires: float}>
      */
     private array $connectionCache = [];
     
@@ -82,7 +87,7 @@ class RoutingCacheService
     /**
      * 上次清理时间
      */
-    private int $lastCleanup = 0;
+    private float $lastCleanup = 0.0;
     
     /**
      * 清理间隔（秒）
@@ -157,7 +162,7 @@ class RoutingCacheService
     public function getRouteBySni(string $sni): ?int
     {
         $sni = \strtolower($sni);
-        $now = \time();
+        $now = self::monotonicSeconds();
         
         // 检查缓存
         if (isset($this->sniCache[$sni])) {
@@ -187,7 +192,7 @@ class RoutingCacheService
             return null;
         }
 
-        $now = \time();
+        $now = self::monotonicSeconds();
         
         if (isset($this->ipCache[$ip])) {
             $entry = $this->ipCache[$ip];
@@ -212,7 +217,7 @@ class RoutingCacheService
      */
     public function getRouteByConnection(int $connId): ?array
     {
-        $now = \time();
+        $now = self::monotonicSeconds();
         
         if (isset($this->connectionCache[$connId])) {
             $entry = $this->connectionCache[$connId];
@@ -246,7 +251,7 @@ class RoutingCacheService
         
         $this->sniCache[$sni] = [
             'port' => $workerPort,
-            'expires' => \time() + $ttl,
+            'expires' => self::monotonicSeconds() + $ttl,
         ];
         
         $this->stats['total_routes']++;
@@ -277,7 +282,7 @@ class RoutingCacheService
         $this->ipCache[$ip] = [
             'port' => $workerPort,
             'sni' => $sni,
-            'expires' => \time() + $ttl,
+            'expires' => self::monotonicSeconds() + $ttl,
             'hits' => 0,
         ];
         
@@ -301,7 +306,7 @@ class RoutingCacheService
         $this->connectionCache[$connId] = [
             'port' => $workerPort,
             'sni' => $sni,
-            'expires' => \time() + $this->connectionTtl,
+            'expires' => self::monotonicSeconds() + $this->connectionTtl,
         ];
     }
     
@@ -437,7 +442,7 @@ class RoutingCacheService
     public function refreshConnection(int $connId): void
     {
         if (isset($this->connectionCache[$connId])) {
-            $this->connectionCache[$connId]['expires'] = \time() + $this->connectionTtl;
+            $this->connectionCache[$connId]['expires'] = self::monotonicSeconds() + $this->connectionTtl;
         }
     }
     
@@ -509,7 +514,7 @@ class RoutingCacheService
      */
     private function maybeCleanup(): void
     {
-        $now = \time();
+        $now = self::monotonicSeconds();
         if ($now - $this->lastCleanup < $this->cleanupInterval) {
             return;
         }
@@ -525,7 +530,7 @@ class RoutingCacheService
      */
     private function evictSniCache(): void
     {
-        /** @var array<string, int> $expiresAt */
+        /** @var array<string, float> $expiresAt */
         $expiresAt = [];
         foreach ($this->sniCache as $sni => $entry) {
             $expiresAt[$sni] = $entry['expires'];
@@ -542,7 +547,7 @@ class RoutingCacheService
         /** @var array<string, string> $priorities */
         $priorities = [];
         foreach ($this->ipCache as $ip => $entry) {
-            $priorities[$ip] = \sprintf('%020d:%020d', $entry['hits'], $entry['expires']);
+            $priorities[$ip] = \sprintf('%020d:%024.6f', $entry['hits'], $entry['expires']);
         }
 
         $this->evictByPriority($this->ipCache, $priorities, \SORT_STRING);
@@ -553,7 +558,7 @@ class RoutingCacheService
      */
     private function evictConnectionCache(): void
     {
-        /** @var array<int, int> $expiresAt */
+        /** @var array<int, float> $expiresAt */
         $expiresAt = [];
         foreach ($this->connectionCache as $connId => $entry) {
             $expiresAt[$connId] = $entry['expires'];
@@ -562,14 +567,14 @@ class RoutingCacheService
         $this->evictByPriority($this->connectionCache, $expiresAt, \SORT_NUMERIC);
     }
 
-    /**
-     * @param array<array-key, array{expires: int}> $cache
-     */
-    private function removeExpiredEntries(array &$cache, int $now): void
+    /** @param array<array-key, mixed> $cache */
+    private function removeExpiredEntries(array &$cache, float $now): void
     {
         $expiredKeys = [];
         foreach ($cache as $key => $entry) {
-            if ($entry['expires'] <= $now) {
+            if (\is_array($entry)
+                && isset($entry['expires'])
+                && (float)$entry['expires'] <= $now) {
                 $expiredKeys[] = $key;
             }
         }
@@ -581,7 +586,7 @@ class RoutingCacheService
 
     /**
      * @param array<array-key, mixed> $cache
-     * @param array<array-key, int|string> $priorities
+     * @param array<array-key, float|int|string> $priorities
      */
     private function evictByPriority(array &$cache, array $priorities, int $sortFlag): void
     {

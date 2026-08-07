@@ -11,6 +11,7 @@ use Weline\Framework\Runtime\Policy\RuntimePolicyDescriptor;
 use Weline\Framework\Runtime\Policy\RuntimePolicyProviderCompiler;
 use Weline\Server\Security\AttackDetector;
 use Weline\Server\Service\LocalDomainPolicy;
+use Weline\Server\Service\Security\SecurityPolicyStateStore;
 
 final class RuntimePolicyCompiler
 {
@@ -27,6 +28,7 @@ final class RuntimePolicyCompiler
     public function __construct(
         private readonly ?string $registryFile = null,
         private readonly RuntimePolicyValidator $validator = new RuntimePolicyValidator(),
+        private readonly SecurityPolicyStateStore $securityPolicyStateStore = new SecurityPolicyStateStore(),
     ) {
     }
 
@@ -352,28 +354,8 @@ final class RuntimePolicyCompiler
      */
     private function loadAttackRules(): array
     {
-        $rulesFile = AttackDetector::getRulesFilePath();
-        if (\is_file($rulesFile)) {
-            $raw = @\file_get_contents($rulesFile);
-            if (!\is_string($raw) || \trim($raw) === '') {
-                throw new \RuntimeException('Runtime attack rules file is unreadable or empty: ' . $rulesFile);
-            }
-            try {
-                $persisted = \json_decode($raw, false, 512, \JSON_THROW_ON_ERROR);
-            } catch (\JsonException $exception) {
-                throw new \RuntimeException(
-                    'Runtime attack rules file contains invalid JSON: ' . $rulesFile,
-                    0,
-                    $exception,
-                );
-            }
-            if (!$persisted instanceof \stdClass) {
-                throw new \RuntimeException('Runtime attack rules file must contain a JSON object: ' . $rulesFile);
-            }
-        }
-
         try {
-            $rules = AttackDetector::getInstance()->getRules();
+            $rules = (new AttackDetector($this->securityPolicyStateStore))->getRules();
         } catch (\Throwable $throwable) {
             throw new \RuntimeException('Unable to load runtime attack rules.', 0, $throwable);
         }

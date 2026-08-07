@@ -1359,7 +1359,7 @@ final class TlsSessionResumptionLiveVerifier
         ) {
             throw new \RuntimeException('TLS reload_wait command was not explicitly accepted.');
         }
-        $deadline = \microtime(true) + self::RELOAD_TIMEOUT_SECONDS;
+        $deadline = self::monotonicSeconds() + self::RELOAD_TIMEOUT_SECONDS;
         $sawGenerationChange = false;
         $sawOwnedOperation = false;
         do {
@@ -1459,7 +1459,7 @@ final class TlsSessionResumptionLiveVerifier
                     'TLS reload_wait lacked a matching successful terminal outcome: ' . $terminalState
                 );
             }
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         throw new \RuntimeException($sawGenerationChange
             ? 'TLS reload gate timed out before all Worker slots completed.'
@@ -1804,7 +1804,7 @@ final class TlsSessionResumptionLiveVerifier
         ) {
             throw new \RuntimeException('Previous Memory sidecar exit identity is incomplete.');
         }
-        $deadline = \microtime(true) + 5.0;
+        $deadline = self::monotonicSeconds() + 5.0;
         do {
             $probe = Processer::probeManagedProcessIdentity(
                 $pid,
@@ -1821,7 +1821,7 @@ final class TlsSessionResumptionLiveVerifier
                 return;
             }
             SchedulerSystem::usleep(50_000);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         throw new \RuntimeException(
             'Previous Memory sidecar launch generation remained active before fault traffic began.'
@@ -1879,7 +1879,7 @@ final class TlsSessionResumptionLiveVerifier
         if (!\preg_match('/\Asidecar-[a-f0-9]{32}\z/D', $previousLaunchId)) {
             throw new \RuntimeException('Previous Memory sidecar generation identity is invalid.');
         }
-        $deadline = \microtime(true) + self::SIDECAR_RECOVERY_TIMEOUT_SECONDS;
+        $deadline = self::monotonicSeconds() + self::SIDECAR_RECOVERY_TIMEOUT_SECONDS;
         $lastFailure = 'no recovered sidecar candidate was observed';
         do {
             SchedulerSystem::usleep(100_000);
@@ -1907,7 +1907,7 @@ final class TlsSessionResumptionLiveVerifier
                     240,
                 );
             }
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         throw new \RuntimeException(
             'Memory sidecar did not recover with a new authenticated generation: ' . $lastFailure
@@ -1929,7 +1929,7 @@ final class TlsSessionResumptionLiveVerifier
         int $originPort,
         float $connectTimeoutSeconds,
     ): array {
-        $deadline = \microtime(true) + self::SIDECAR_RECOVERY_TIMEOUT_SECONDS;
+        $deadline = self::monotonicSeconds() + self::SIDECAR_RECOVERY_TIMEOUT_SECONDS;
         do {
             $snapshot = $this->snapshotWorkers(
                 $instanceName,
@@ -1946,7 +1946,7 @@ final class TlsSessionResumptionLiveVerifier
                 return $snapshot;
             }
             SchedulerSystem::usleep(100_000);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         throw new \RuntimeException('TLS Session cache did not drain after sidecar recovery.');
     }
@@ -2316,5 +2316,10 @@ final class TlsSessionResumptionLiveVerifier
         unset($item);
 
         return $value;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

@@ -14,6 +14,9 @@ final class MasterLeaseManagerTest extends TestCase
     /** @var list<string> */
     private array $instances = [];
 
+    /** @var list<string> */
+    private array $recoveryBackups = [];
+
     protected function tearDown(): void
     {
         foreach ($this->instances as $instance) {
@@ -23,6 +26,10 @@ final class MasterLeaseManagerTest extends TestCase
             @\rmdir(\dirname($path));
         }
         $this->instances = [];
+        foreach ($this->recoveryBackups as $backup) {
+            @\unlink($backup);
+        }
+        $this->recoveryBackups = [];
     }
 
     public function testFreshForeignGenerationVetoesThenStaleLeaseIsTakenByCas(): void
@@ -77,6 +84,49 @@ final class MasterLeaseManagerTest extends TestCase
         self::assertSame(MasterLeaseManager::STATE_STOPPING, $lease['state']);
         self::assertSame(19101, $lease['control_port']);
         self::assertSame($token, $lease['master_token']);
+    }
+
+    public function testMutationCollectsOnlyBackupPairedWithValidLeaseUnderLeaseLock(): void
+    {
+        $now = 2_500.0;
+        $manager = $this->manager($now);
+        $instance = $this->instance('lease-recovery-backup');
+        $pid = (int)\getmypid();
+        $token = \str_repeat('d', 64);
+        $path = $manager->writeRunning($instance, $pid, 19105, 1, $token);
+        $backup = $path . '.wls-backup-' . \str_repeat('a', 16);
+        self::assertNotFalse(@\copy($path, $backup));
+        @\chmod($backup, 0600);
+        $this->recoveryBackups[] = $backup;
+
+        $now += 1.0;
+        $manager->touchRunning($instance, $pid, 19105, 1, $token);
+
+        self::assertFileDoesNotExist($backup);
+        self::assertSame(2, $manager->readProtected($path)['lease_sequence'] ?? null);
+    }
+
+    public function testMutationPreservesBackupWhenPairedLeaseIsMalformed(): void
+    {
+        $now = 2_600.0;
+        $manager = $this->manager($now);
+        $instance = $this->instance('lease-recovery-malformed');
+        $pid = (int)\getmypid();
+        $token = \str_repeat('e', 64);
+        $path = $manager->writeRunning($instance, $pid, 19106, 1, $token);
+        $backup = $path . '.wls-backup-' . \str_repeat('b', 16);
+        self::assertNotFalse(@\copy($path, $backup));
+        @\chmod($backup, 0600);
+        $this->recoveryBackups[] = $backup;
+        GatewayProjectStateFilesystem::atomicWrite($path, "{}\n", 0600);
+
+        try {
+            $manager->touchRunning($instance, $pid, 19106, 1, $token);
+            self::fail('Malformed paired state must veto retained-backup cleanup.');
+        } catch (\RuntimeException) {
+            self::assertFileExists($backup);
+            self::assertSame("{}\n", (string)\file_get_contents($path));
+        }
     }
 
     public function testCrossBootAndLegacyPayloadNeverAuthorizeAndAreReplacedUnderLock(): void
@@ -142,6 +192,9 @@ final class MasterLeaseManagerTest extends TestCase
 
     public function testForeignPidNamespaceVetoIsFreshnessBoundAndIgnoresWallClock(): void
     {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            self::markTestSkipped('Foreign PID namespace veto is a Linux kernel contract.');
+        }
         $now = 5_000.0;
         $boot = \str_repeat('7', 64);
         $namespace = 'pid:[4026531999]';
@@ -190,6 +243,7 @@ final class MasterLeaseManagerTest extends TestCase
     public function testInjectedMissingProcessEvidenceDoesNotFallThroughToHostPidTable(): void
     {
         $pid = (int)\getmypid();
+        $namespace = PHP_OS_FAMILY === 'Linux' ? 'pid:[4026531999]' : '';
         $runtime = new MasterLeaseRuntimeIdentity(
             bootIdentityResolver: static fn (): string => \str_repeat('a', 64),
             monotonicClock: static fn (): float => 6_000.0,
@@ -200,12 +254,12 @@ final class MasterLeaseManagerTest extends TestCase
                 'start_time' => '',
             ],
             managedProcessVerifier: static fn (int $candidate, string $instance): bool => false,
-            pidNamespaceResolver: static fn (int $candidate): ?string => 'pid:[4026531999]',
+            pidNamespaceResolver: static fn (int $candidate): ?string => $namespace,
         );
 
         self::assertSame(
             MasterLeaseRuntimeIdentity::OWNER_MISSING,
-            $runtime->observeProcessIdentity($pid, \str_repeat('b', 64), 'pid:[4026531999]'),
+            $runtime->observeProcessIdentity($pid, \str_repeat('b', 64), $namespace),
         );
     }
 
@@ -269,7 +323,7 @@ final class MasterLeaseManagerTest extends TestCase
     {
         $boot ??= \str_repeat('9', 64);
         $pid = (int)\getmypid();
-        $namespace ??= 'pid:[4026531999]';
+        $namespace ??= PHP_OS_FAMILY === 'Linux' ? 'pid:[4026531999]' : '';
         $runtime = new MasterLeaseRuntimeIdentity(
             bootIdentityResolver: static function () use (&$boot): string {
                 return $boot;

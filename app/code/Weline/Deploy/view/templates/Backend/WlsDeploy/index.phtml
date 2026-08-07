@@ -1232,7 +1232,7 @@ $releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (st
                             </div>
                             <div class="wdep-field is-wide">
                                 <label for="wdep-profile-post-command"><?= $escapeHtml(__('部署后命令')) ?></label>
-                                <input id="wdep-profile-post-command" type="text" name="post_deploy_command" value="<?= $profileValue('post_deploy_command') ?>" placeholder="php bin/w setup:upgrade --route && php bin/w server:reload -r">
+                                <input id="wdep-profile-post-command" type="text" name="post_deploy_command" value="<?= $profileValue('post_deploy_command') ?>" placeholder="php bin/w setup:upgrade && php bin/w server:reload -r">
                             </div>
                             <div class="wdep-command-policy" aria-label="<?= $escapeHtml(__('命令白名单')) ?>">
                                 <p><strong><?= $escapeHtml(__('命令白名单')) ?></strong></p>

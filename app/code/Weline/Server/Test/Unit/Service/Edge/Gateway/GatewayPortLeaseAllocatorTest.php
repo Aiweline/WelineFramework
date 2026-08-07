@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Edge\Gateway\ProjectIdentityStore;
 use Weline\Server\Service\Runtime\DirectSharedListener;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 use Weline\Framework\System\Process\Processer;
 
 final class GatewayPortLeaseAllocatorTest extends TestCase
@@ -86,6 +88,7 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
 
         $launchId = \str_repeat('a', 32);
         $masterLaunchId = \str_repeat('c', 32);
+        $identity = $this->processIdentity();
         $first->prepareTransfer(
             'site-gateway-fallback',
             (string)$firstLease['lease_id'],
@@ -102,11 +105,13 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             '127.0.0.1',
             $this->masterProcessName,
             $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
         );
         self::assertSame('ACTIVE', $confirmed['state']);
         self::assertSame(\getmypid(), $confirmed['worker_pid']);
         self::assertSame($launchId, $confirmed['launch_id']);
-        self::assertSame(5, $confirmed['schema_version']);
+        self::assertSame(GatewayPortLeaseAllocator::SCHEMA_VERSION, $confirmed['schema_version']);
 
         $draining = $first->markDraining(
             'site-gateway-fallback',
@@ -166,6 +171,7 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             },
         );
         $masterLaunchId = \str_repeat('c', 32);
+        $identity = $this->processIdentity();
         $allocator->prepareTransfer(
             'site-gateway-fallback',
             (string)$lease['lease_id'],
@@ -182,11 +188,431 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             '127.0.0.1',
             $this->masterProcessName,
             $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
         );
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already owns a live port lease');
         $allocator->reserveBound('site-gateway-fallback', static fn (int $port): bool => true);
+    }
+
+    public function testFailedDrainCanCasTheExactLiveLeaseBackToActive(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Master-owned inherited listener test is POSIX-only.');
+        }
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $allocator = $this->allocator(
+            'drain-rollback',
+            $hostState,
+            $hostState . DIRECTORY_SEPARATOR . 'fallback-leases',
+        );
+        $listener = $this->listener();
+        $lease = $allocator->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($listener): bool {
+                $listener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        $masterLaunchId = \str_repeat('c', 32);
+        $workerLaunchId = \str_repeat('d', 32);
+        $identity = $this->processIdentity();
+        $allocator->prepareTransfer(
+            'site-gateway-fallback',
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            (int)$lease['port'],
+            $masterLaunchId,
+        );
+        $allocator->confirmTransferred(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            \getmypid(),
+            $workerLaunchId,
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            $this->masterProcessName,
+            $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
+        );
+        $activeLease = $allocator->status('site-gateway-fallback');
+        self::assertIsArray($activeLease);
+        $transitionIdentity = $this->transitionIdentity(
+            $activeLease,
+            $workerLaunchId,
+            $masterLaunchId,
+            $identity,
+        );
+        $transitionId = \str_repeat('e', 32);
+        $actionDigest = ControlMessage::gatewayFallbackListenerActionDigest(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            $transitionId,
+            '',
+            $transitionIdentity,
+        );
+        $pending = $allocator->beginDrain(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $actionDigest,
+            $transitionIdentity,
+        );
+        self::assertSame('DRAINING', $pending['state']);
+        self::assertFalse($pending['drain_acknowledged']);
+        self::assertSame($transitionId, $pending['drain_transition_id']);
+        self::assertSame(
+            GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_PREPARED,
+            $pending['listener_phase'],
+        );
+        self::assertNull($pending['draining_monotonic']);
+
+        $active = $allocator->restoreActiveAfterFailedDrain(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $actionDigest,
+            $transitionIdentity,
+        );
+
+        self::assertSame('ACTIVE', $active['state']);
+        self::assertNull($active['draining_at']);
+        self::assertNull($active['draining_timestamp']);
+        self::assertNull($active['draining_host_boot_id']);
+        self::assertNull($active['draining_monotonic']);
+        self::assertTrue($listener->matches('127.0.0.1', (int)$lease['port']));
+        self::assertSame('ACTIVE', $allocator->status('site-gateway-fallback')['state'] ?? null);
+    }
+
+    public function testDrainClockStartsOnlyAfterExactChildAcknowledgement(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Master-owned inherited listener test is POSIX-only.');
+        }
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $clock = 100.0;
+        $allocator = $this->allocator(
+            'drain-ack',
+            $hostState,
+            $hostState . DIRECTORY_SEPARATOR . 'fallback-leases',
+            null,
+            static function () use (&$clock): float {
+                return $clock;
+            },
+        );
+        $listener = $this->listener();
+        $lease = $allocator->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($listener): bool {
+                $listener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        $masterLaunchId = \str_repeat('a', 32);
+        $workerLaunchId = \str_repeat('b', 32);
+        $transitionId = \str_repeat('c', 32);
+        $identity = $this->processIdentity();
+        $allocator->prepareTransfer(
+            'site-gateway-fallback',
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            (int)$lease['port'],
+            $masterLaunchId,
+        );
+        $allocator->confirmTransferred(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            \getmypid(),
+            $workerLaunchId,
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            $this->masterProcessName,
+            $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
+        );
+
+        $activeLease = $allocator->status('site-gateway-fallback');
+        self::assertIsArray($activeLease);
+        $transitionIdentity = $this->transitionIdentity(
+            $activeLease,
+            $workerLaunchId,
+            $masterLaunchId,
+            $identity,
+        );
+        $drainDigest = ControlMessage::gatewayFallbackListenerActionDigest(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            $transitionId,
+            '',
+            $transitionIdentity,
+        );
+
+        $pending = $allocator->beginDrain(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $drainDigest,
+            $transitionIdentity,
+        );
+        self::assertFalse($pending['drain_acknowledged']);
+        self::assertNull($pending['draining_monotonic']);
+
+        $clock = 130.0;
+        $acknowledged = $allocator->acknowledgeDrain(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $drainDigest,
+            $transitionIdentity,
+        );
+        self::assertTrue($acknowledged['drain_acknowledged']);
+        self::assertSame(130.0, $acknowledged['draining_monotonic']);
+
+        $clock = 140.0;
+        $undrainDigest = ControlMessage::gatewayFallbackListenerActionDigest(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE,
+            $transitionId,
+            $drainDigest,
+            $transitionIdentity,
+        );
+        $allocator->prepareUndrain(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $drainDigest,
+            $undrainDigest,
+            $transitionIdentity,
+        );
+        $active = $allocator->restoreActiveAfterUndrainAck(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $undrainDigest,
+            $transitionIdentity,
+        );
+        self::assertSame('ACTIVE', $active['state']);
+        self::assertFalse($active['drain_acknowledged']);
+        self::assertNull($active['drain_transition_id']);
+    }
+
+    public function testTransitionCallerCanReconcileCommittedAfterImageAfterPublicationThrows(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Master-owned inherited listener test is POSIX-only.');
+        }
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $injectPhase = '';
+        $allocator = $this->allocator(
+            'after-image-transition',
+            $hostState,
+            $hostState . DIRECTORY_SEPARATOR . 'fallback-leases',
+            null,
+            null,
+            static function (string $_file, array $afterImage) use (&$injectPhase): void {
+                if ($injectPhase !== ''
+                    && \hash_equals(
+                        $injectPhase,
+                        (string)($afterImage['listener_phase'] ?? ''),
+                    )
+                ) {
+                    $injectPhase = '';
+                    throw new \RuntimeException('injected after-image publication failure');
+                }
+            },
+        );
+        $listener = $this->listener();
+        $lease = $allocator->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($listener): bool {
+                $listener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        $masterLaunchId = \str_repeat('4', 32);
+        $workerLaunchId = \str_repeat('5', 32);
+        $processIdentity = $this->processIdentity();
+        $allocator->prepareTransfer(
+            'site-gateway-fallback',
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            (int)$lease['port'],
+            $masterLaunchId,
+        );
+        $allocator->confirmTransferred(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            \getmypid(),
+            $workerLaunchId,
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            $this->masterProcessName,
+            $masterLaunchId,
+            $processIdentity['birth'],
+            $processIdentity['pid_namespace_id'],
+        );
+        $active = $allocator->status('site-gateway-fallback');
+        self::assertIsArray($active);
+        $identity = $this->transitionIdentity(
+            $active,
+            $workerLaunchId,
+            $masterLaunchId,
+            $processIdentity,
+        );
+        $transitionId = \str_repeat('6', 32);
+        $drainDigest = ControlMessage::gatewayFallbackListenerActionDigest(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+            $transitionId,
+            '',
+            $identity,
+        );
+        $allocator->beginDrain(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $drainDigest,
+            $identity,
+        );
+
+        $injectPhase = GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED;
+        try {
+            $allocator->acknowledgeDrain(
+                'site-gateway-fallback',
+                (int)$lease['port'],
+                (string)$lease['lease_id'],
+                $workerLaunchId,
+                $transitionId,
+                $drainDigest,
+                $identity,
+            );
+            self::fail('The committed-after-image fault was not injected.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('after-image', $exception->getMessage());
+        }
+        $drainAfterImage = $allocator->status('site-gateway-fallback');
+        self::assertIsArray($drainAfterImage);
+        self::assertSame(
+            GatewayPortLeaseAllocator::LISTENER_PHASE_DRAIN_ACKED,
+            $drainAfterImage['listener_phase'],
+        );
+
+        $undrainDigest = ControlMessage::gatewayFallbackListenerActionDigest(
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN,
+            ControlMessage::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE,
+            $transitionId,
+            $drainDigest,
+            $identity,
+        );
+        $allocator->prepareUndrain(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $workerLaunchId,
+            $transitionId,
+            $drainDigest,
+            $undrainDigest,
+            $identity,
+        );
+        $injectPhase = GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE;
+        try {
+            $allocator->restoreActiveAfterUndrainAck(
+                'site-gateway-fallback',
+                (int)$lease['port'],
+                (string)$lease['lease_id'],
+                $workerLaunchId,
+                $transitionId,
+                $undrainDigest,
+                $identity,
+            );
+            self::fail('The ACTIVE committed-after-image fault was not injected.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('after-image', $exception->getMessage());
+        }
+        $activeAfterImage = $allocator->status('site-gateway-fallback');
+        self::assertIsArray($activeAfterImage);
+        self::assertSame('ACTIVE', $activeAfterImage['state']);
+        self::assertSame(
+            GatewayPortLeaseAllocator::LISTENER_PHASE_ACTIVE,
+            $activeAfterImage['listener_phase'],
+        );
+    }
+
+    public function testConfirmTransferredSucceedsAfterPreparerProcessExits(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Master-owned inherited listener test is POSIX-only.');
+        }
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $allocator = $this->allocator('handoff-after-cli', $hostState, $leaseDirectory);
+        $listener = $this->listener();
+        $lease = $allocator->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($listener): bool {
+                $listener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        $masterLaunchId = \str_repeat('a', 32);
+        $identity = $this->processIdentity();
+        $allocator->prepareTransfer(
+            'site-gateway-fallback',
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            (int)$lease['port'],
+            $masterLaunchId,
+        );
+
+        $leaseFile = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \substr(\hash(
+                'sha256',
+                (string)$lease['project_uuid'] . ':site-gateway-fallback',
+            ), 0, 24) . '.json';
+        $encoded = \file_get_contents($leaseFile);
+        self::assertIsString($encoded);
+        $durable = \json_decode($encoded, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($durable);
+        // Simulate Start CLI exiting after spawning Master: preparer PID is gone.
+        $deadPid = 2147483000;
+        $durable['master_pid'] = $deadPid;
+        $durable['transfer_intent']['prepared_pid'] = $deadPid;
+        $this->writeLeaseFixture($leaseFile, $durable);
+
+        $confirmed = $allocator->confirmTransferred(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            \getmypid(),
+            \str_repeat('b', 32),
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            $this->masterProcessName,
+            $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
+        );
+        self::assertSame('ACTIVE', $confirmed['state']);
+        self::assertSame(\getmypid(), $confirmed['master_pid']);
+        self::assertArrayNotHasKey('transfer_intent', $confirmed);
+        self::assertSame(\str_repeat('b', 32), $confirmed['launch_id']);
     }
 
     public function testDrainingObservationQuarantinesUncomparableMonotonicEvidence(): void
@@ -214,6 +640,7 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         );
         $masterLaunchId = \str_repeat('e', 32);
         $workerLaunchId = \str_repeat('f', 32);
+        $identity = $this->processIdentity();
         $allocator->prepareTransfer(
             'site-gateway-fallback',
             (string)$lease['lease_id'],
@@ -230,6 +657,8 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             '127.0.0.1',
             $this->masterProcessName,
             $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
         );
         $allocator->markDraining(
             'site-gateway-fallback',
@@ -311,12 +740,103 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         self::assertFalse($observed['draining_time_trusted'] ?? true);
         self::assertNull($observed['draining_monotonic'] ?? null);
         self::assertSame($lease['port'], $observed['port'] ?? null);
-        self::assertIsArray($allocator->liveServingLease(
+        self::assertNull($allocator->liveServingLease(
             'site-gateway-fallback',
             '127.0.0.1',
             (int)$lease['port'],
             (string)$lease['lease_id'],
             $workerLaunchId,
+            \getmypid(),
+        ));
+    }
+
+    public function testAnyOwnerObservationFallsBackFromDeadLatestOwner(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Master-owned inherited listener test is POSIX-only.');
+        }
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $allocator = $this->allocator(
+            'multi-owner-observation',
+            $hostState,
+            $leaseDirectory,
+        );
+        $listener = $this->listener();
+        $lease = $allocator->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($listener): bool {
+                $listener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        $masterLaunchId = \str_repeat('8', 32);
+        $liveLaunchId = \str_repeat('9', 32);
+        $deadLaunchId = \str_repeat('a', 32);
+        $identity = $this->processIdentity();
+        $allocator->prepareTransfer(
+            'site-gateway-fallback',
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            (int)$lease['port'],
+            $masterLaunchId,
+        );
+        $confirmed = $allocator->confirmTransferred(
+            'site-gateway-fallback',
+            (int)$lease['port'],
+            \getmypid(),
+            $liveLaunchId,
+            (string)$lease['lease_id'],
+            '127.0.0.1',
+            $this->masterProcessName,
+            $masterLaunchId,
+            $identity['birth'],
+            $identity['pid_namespace_id'],
+        );
+        $liveConfirmedTimestamp = (int)$confirmed['confirmed_timestamp'];
+        $deadPid = 2_147_483_647;
+        $deadConfirmedTimestamp = $liveConfirmedTimestamp + 1;
+        $confirmed['worker_pid'] = $deadPid;
+        $confirmed['launch_id'] = $deadLaunchId;
+        $confirmed['confirmed_at'] = \gmdate(DATE_ATOM, $deadConfirmedTimestamp);
+        $confirmed['confirmed_timestamp'] = $deadConfirmedTimestamp;
+        $confirmed['workers'][] = [
+            'pid' => $deadPid,
+            'launch_id' => $deadLaunchId,
+            'process_name' => $this->masterProcessName,
+            'process_birth' => \str_repeat('b', 64),
+            'pid_namespace_id' => $identity['pid_namespace_id'],
+            'confirmed_at' => \gmdate(DATE_ATOM, $deadConfirmedTimestamp),
+            'confirmed_timestamp' => $deadConfirmedTimestamp,
+        ];
+        $leaseFile = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \substr(\hash(
+                'sha256',
+                (string)$lease['project_uuid'] . ':site-gateway-fallback',
+            ), 0, 24) . '.json';
+        $this->writeLeaseFixture($leaseFile, $confirmed);
+
+        $observed = $allocator->liveServingLeaseForAnyOwner(
+            'site-gateway-fallback',
+            '127.0.0.1',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            \getmypid(),
+        );
+
+        self::assertIsArray($observed);
+        self::assertSame(\getmypid(), $observed['worker_pid'] ?? null);
+        self::assertSame($liveLaunchId, $observed['launch_id'] ?? null);
+        self::assertSame(
+            $liveConfirmedTimestamp,
+            $observed['confirmed_timestamp'] ?? null,
+        );
+        self::assertNull($allocator->liveServingLease(
+            'site-gateway-fallback',
+            '127.0.0.1',
+            (int)$lease['port'],
+            (string)$lease['lease_id'],
+            $deadLaunchId,
             \getmypid(),
         ));
     }
@@ -330,10 +850,12 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             $hostState . DIRECTORY_SEPARATOR . 'fallback-leases',
         );
         $method = new \ReflectionMethod($allocator, 'processMatchesBirth');
+        $identity = $this->processIdentity();
         self::assertFalse($method->invoke(
             $allocator,
             \getmypid(),
             \str_repeat('0', 64),
+            $identity['pid_namespace_id'],
         ));
     }
 
@@ -443,6 +965,44 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         @\fclose($socket);
     }
 
+    public function testResourceBinderMustOwnTheExactDeclaredEndpoint(): void
+    {
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $allocator = $this->allocator(
+            'resource-endpoint-proof',
+            $hostState,
+            $hostState . DIRECTORY_SEPARATOR . 'fallback-leases',
+        );
+        $bindability = new \ReflectionMethod($allocator, 'numericPortIsBindable');
+        $exactPort = 0;
+        for ($candidate = 20000; $candidate <= 29999; ++$candidate) {
+            if ($bindability->invoke($allocator, $candidate) === true) {
+                $exactPort = $candidate;
+                break;
+            }
+        }
+        self::assertGreaterThanOrEqual(20000, $exactPort);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'The explicitly requested WLS port could not be reserved.',
+        );
+        $allocator->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port): mixed {
+                return @\stream_socket_server(
+                    'tcp://127.0.0.1:0',
+                    $errno,
+                    $error,
+                    \STREAM_SERVER_BIND | \STREAM_SERVER_LISTEN,
+                );
+            },
+            '127.0.0.1',
+            true,
+            $exactPort,
+        );
+    }
+
     public function testExternalReservationReentryUsesBinderOwnershipProof(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
@@ -470,12 +1030,348 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         self::assertTrue($listener->matches('127.0.0.1', (int)$lease['port']));
     }
 
+    public function testCrashOrphanedAtomicLeaseCandidateIsRecoveredUnderAllocationLock(): void
+    {
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $allocator = $this->allocator(
+            'atomic-orphan-recovery',
+            $hostState,
+            $leaseDirectory,
+        );
+        self::assertTrue(@\mkdir($leaseDirectory, 0700, true));
+        $orphan = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \str_repeat('a', 24) . '.json.tmp-' . \str_repeat('b', 24);
+        self::assertNotFalse(\file_put_contents($orphan, '{"partial":true}'));
+        @\chmod($orphan, 0600);
+
+        $lease = $allocator->reserveBound(
+            'site-gateway-fallback',
+            static fn (int $port): bool => $port >= 20000,
+        );
+
+        self::assertSame('RESERVED', $lease['state']);
+        self::assertFileDoesNotExist($orphan);
+    }
+
+    public function testRetainedWindowsRecoveryBackupIsCollectedAfterTargetValidation(): void
+    {
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $owner = $this->allocator('backup-owner', $hostState, $leaseDirectory);
+        $ownerLease = $owner->reserveBound(
+            'site-gateway-fallback',
+            static fn (int $port): bool => $port >= 20000,
+        );
+        $ownerFile = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \substr(\hash(
+                'sha256',
+                (string)$ownerLease['project_uuid'] . ':site-gateway-fallback',
+            ), 0, 24) . '.json';
+        $backup = $ownerFile . '.wls-backup-' . \str_repeat('b', 16);
+        self::assertTrue(\copy($ownerFile, $backup));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($backup, 0600));
+        }
+
+        $newcomer = $this->allocator('backup-newcomer', $hostState, $leaseDirectory);
+        $newcomerLease = $newcomer->reserveBound(
+            'site-gateway-fallback',
+            static fn (int $port): bool => $port >= 20000,
+        );
+
+        self::assertSame('RESERVED', $newcomerLease['state']);
+        self::assertNotSame($ownerLease['port'], $newcomerLease['port']);
+        self::assertFileDoesNotExist($backup);
+    }
+
+    public function testWindowsRecoveryBackupIsPreservedWhenTargetIsCorrupt(): void
+    {
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $allocator = $this->allocator('backup-corrupt', $hostState, $leaseDirectory);
+        self::assertTrue(@\mkdir($leaseDirectory, 0700, true));
+        $target = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \str_repeat('c', 24) . '.json';
+        $backup = $target . '.wls-backup-' . \str_repeat('d', 16);
+        self::assertNotFalse(\file_put_contents($target, '{"partial":true}'));
+        self::assertNotFalse(\file_put_contents($backup, '{"previous":true}'));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($target, 0600));
+            self::assertTrue(\chmod($backup, 0600));
+        }
+
+        try {
+            $allocator->reserveBound(
+                'site-gateway-fallback',
+                static fn (int $port): bool => $port >= 20000,
+            );
+            self::fail('A recovery backup with a corrupt target was accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'WLS fallback port lease',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($backup);
+    }
+
+    public function testRecoveryBackupBatchRejectsLegacyTargetBeforeDeletingAnyEvidence(): void
+    {
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $first = $this->allocator('backup-batch-first', $hostState, $leaseDirectory);
+        $second = $this->allocator('backup-batch-second', $hostState, $leaseDirectory);
+        $leases = [
+            $first->reserveBound(
+                'site-gateway-fallback',
+                static fn (int $port): bool => $port >= 20000,
+            ),
+            $second->reserveBound(
+                'site-gateway-fallback',
+                static fn (int $port): bool => $port >= 20000,
+            ),
+        ];
+        $backups = [];
+        foreach ($leases as $index => $lease) {
+            $target = $leaseDirectory . DIRECTORY_SEPARATOR
+                . \substr(\hash(
+                    'sha256',
+                    (string)$lease['project_uuid'] . ':site-gateway-fallback',
+                ), 0, 24) . '.json';
+            $backup = $target . '.wls-backup-'
+                . \str_repeat($index === 0 ? 'a' : 'b', 16);
+            self::assertTrue(\copy($target, $backup));
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(\chmod($backup, 0600));
+            }
+            $backups[$backup] = $target;
+        }
+
+        $orderedBackups = $this->recoveryBackupTraversalOrder($leaseDirectory);
+        self::assertCount(2, $orderedBackups);
+        $legacyTarget = $backups[$orderedBackups[1]] ?? null;
+        self::assertIsString($legacyTarget);
+        $encoded = @\file_get_contents($legacyTarget);
+        self::assertIsString($encoded);
+        $legacy = \json_decode($encoded, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($legacy);
+        $legacy['schema_version'] = 5;
+        $this->writeLeaseFixture($legacyTarget, $legacy);
+
+        $newcomer = $this->allocator('backup-batch-newcomer', $hostState, $leaseDirectory);
+        try {
+            $newcomer->reserveBound(
+                'site-gateway-fallback',
+                static fn (int $port): bool => $port >= 20000,
+            );
+            self::fail('A retained recovery backup paired with a legacy lease was accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('schema-6', $exception->getMessage());
+        }
+
+        foreach (\array_keys($backups) as $backup) {
+            self::assertFileExists(
+                $backup,
+                'No recovery evidence may be deleted before every paired target is accepted.',
+            );
+        }
+    }
+
+    public function testRecoveryBackupBatchIsFullyBoundedBeforeDeletingAnyEvidence(): void
+    {
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $first = $this->allocator('backup-size-first', $hostState, $leaseDirectory);
+        $second = $this->allocator('backup-size-second', $hostState, $leaseDirectory);
+        $leases = [
+            $first->reserveBound(
+                'site-gateway-fallback',
+                static fn (int $port): bool => $port >= 20000,
+            ),
+            $second->reserveBound(
+                'site-gateway-fallback',
+                static fn (int $port): bool => $port >= 20000,
+            ),
+        ];
+        $backups = [];
+        foreach ($leases as $index => $lease) {
+            $target = $leaseDirectory . DIRECTORY_SEPARATOR
+                . \substr(\hash(
+                    'sha256',
+                    (string)$lease['project_uuid'] . ':site-gateway-fallback',
+                ), 0, 24) . '.json';
+            $backup = $target . '.wls-backup-'
+                . \str_repeat($index === 0 ? 'c' : 'd', 16);
+            self::assertTrue(\copy($target, $backup));
+            if (\PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(\chmod($backup, 0600));
+            }
+            $backups[] = $backup;
+        }
+
+        $orderedBackups = $this->recoveryBackupTraversalOrder($leaseDirectory);
+        self::assertCount(2, $orderedBackups);
+        self::assertIsInt(\file_put_contents($orderedBackups[1], \str_repeat('x', 65_537)));
+        if (\PHP_OS_FAMILY !== 'Windows') {
+            self::assertTrue(\chmod($orderedBackups[1], 0600));
+        }
+
+        $newcomer = $this->allocator('backup-size-newcomer', $hostState, $leaseDirectory);
+        try {
+            $newcomer->reserveBound(
+                'site-gateway-fallback',
+                static fn (int $port): bool => $port >= 20000,
+            );
+            self::fail('An oversized retained recovery backup was accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('size limit', $exception->getMessage());
+        }
+
+        foreach ($backups as $backup) {
+            self::assertFileExists(
+                $backup,
+                'Backup collection must not begin until every backup passes its fixed bounds.',
+            );
+        }
+    }
+
+    public function testCapacityIsReservedBeforeBindingAndAllowsOnlyAnOwnReplacement(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The retained occupied-port capacity fixture is POSIX-only.');
+        }
+        $hostState = $this->root . DIRECTORY_SEPARATOR . 'host';
+        $leaseDirectory = $hostState . DIRECTORY_SEPARATOR . 'fallback-leases';
+        $owner = $this->allocator('capacity-owner', $hostState, $leaseDirectory);
+        $occupiedListener = $this->listener();
+        $seed = $owner->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($occupiedListener): bool {
+                $occupiedListener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        $ownerFile = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \substr(\hash(
+                'sha256',
+                (string)$seed['project_uuid'] . ':site-gateway-fallback',
+            ), 0, 24) . '.json';
+        $encoded = @\file_get_contents($ownerFile);
+        self::assertIsString($encoded);
+        $legacyRetained = \json_decode($encoded, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($legacyRetained);
+        $legacyRetained['schema_version'] = 5;
+        $this->writeLeaseFixture($ownerFile, $legacyRetained);
+        $encoded = \json_encode(
+            $legacyRetained,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+        );
+
+        $leaseFiles = 1;
+        for ($index = 0; $leaseFiles < 10000; ++$index) {
+            $file = $leaseDirectory . DIRECTORY_SEPARATOR
+                . \substr(\hash('sha256', 'capacity-fixture-' . $index), 0, 24)
+                . '.json';
+            if (\hash_equals($ownerFile, $file) || \is_file($file)) {
+                continue;
+            }
+            if (@\file_put_contents($file, $encoded, LOCK_EX) === false) {
+                self::fail('Unable to create the fixed-capacity lease fixture.');
+            }
+            ++$leaseFiles;
+        }
+        self::assertSame(10000, $this->leaseFileCount($leaseDirectory));
+
+        $newcomer = $this->allocator('capacity-newcomer', $hostState, $leaseDirectory);
+        $newcomerBinds = 0;
+        $capacityException = null;
+        $unexpectedLease = null;
+        try {
+            $unexpectedLease = $newcomer->reserveBound(
+                'site-gateway-fallback',
+                static function (int $port) use (&$newcomerBinds): bool {
+                    unset($port);
+                    ++$newcomerBinds;
+                    return true;
+                },
+            );
+        } catch (\RuntimeException $exception) {
+            $capacityException = $exception;
+        }
+        self::assertNull($unexpectedLease, 'A new lease must not publish the 10001st retained entry.');
+        self::assertInstanceOf(\RuntimeException::class, $capacityException);
+        self::assertStringContainsString(
+            'has no capacity for another retained lease',
+            $capacityException->getMessage(),
+        );
+        self::assertSame(0, $newcomerBinds);
+        self::assertSame(10000, $this->leaseFileCount($leaseDirectory));
+
+        $replacementListener = $this->listener();
+        $replacementBinds = 0;
+        $replacement = $owner->reserveBound(
+            'site-gateway-fallback',
+            static function (int $port) use ($replacementListener, &$replacementBinds): bool {
+                ++$replacementBinds;
+                $replacementListener->acquire('127.0.0.1', $port);
+                return true;
+            },
+        );
+        self::assertSame(1, $replacementBinds);
+        self::assertNotSame($seed['lease_id'], $replacement['lease_id']);
+        self::assertNotSame($seed['port'], $replacement['port']);
+        self::assertSame(10000, $this->leaseFileCount($leaseDirectory));
+
+        $recoverableFile = $leaseDirectory . DIRECTORY_SEPARATOR
+            . \substr(\hash('sha256', 'legacy-overflow-recoverable'), 0, 24)
+            . '.json';
+        self::assertFileDoesNotExist($recoverableFile);
+        $recoverable = $replacement;
+        $recoverable['state'] = 'RELEASED';
+        $recoverable['worker_pid'] = 0;
+        $recoverable['launch_id'] = '';
+        $recoverable['workers'] = [];
+        $recoverable['released_at'] = \gmdate(DATE_ATOM);
+        $recoverable['released_timestamp'] = \time();
+        $this->writeLeaseFixture($recoverableFile, $recoverable);
+        self::assertSame(10001, $this->leaseFileCount($leaseDirectory));
+
+        $capacityException = null;
+        $unexpectedLease = null;
+        try {
+            $unexpectedLease = $newcomer->reserveBound(
+                'site-gateway-fallback',
+                static function (int $port) use (&$newcomerBinds): bool {
+                    unset($port);
+                    ++$newcomerBinds;
+                    return true;
+                },
+            );
+        } catch (\RuntimeException $exception) {
+            $capacityException = $exception;
+        }
+        self::assertNull(
+            $unexpectedLease,
+            'GC must not turn one recovered overflow slot into a new overflow.',
+        );
+        self::assertInstanceOf(\RuntimeException::class, $capacityException);
+        self::assertStringContainsString(
+            'has no capacity for another retained lease',
+            $capacityException->getMessage(),
+        );
+        self::assertSame(0, $newcomerBinds);
+        self::assertFileDoesNotExist($recoverableFile);
+        self::assertSame(10000, $this->leaseFileCount($leaseDirectory));
+    }
+
     private function allocator(
         string $name,
         string $hostState,
         string $leaseDirectory,
         ?string $hostBootId = null,
         ?\Closure $monotonicClock = null,
+        ?\Closure $afterAtomicPublication = null,
     ): GatewayPortLeaseAllocator {
         $project = $this->root . DIRECTORY_SEPARATOR . $name;
         self::assertTrue(\mkdir(
@@ -493,7 +1389,48 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
             $leaseDirectory,
             $hostBootId,
             $monotonicClock,
+            null,
+            $afterAtomicPublication,
         );
+    }
+
+    /**
+     * @param array<string,mixed> $lease
+     * @param array{birth:string,pid_namespace_id:string} $processIdentity
+     * @return array<string,mixed>
+     */
+    private function transitionIdentity(
+        array $lease,
+        string $workerLaunchId,
+        string $masterLaunchId,
+        array $processIdentity,
+    ): array {
+        return [
+            'schema' => 'wls-gateway-fallback-listener/1',
+            'project_uuid' => (string)$lease['project_uuid'],
+            'wls_instance' => 'site',
+            'role' => 'gateway_fallback',
+            'slot_id' => 'gateway_fallback#1',
+            'service_generation' => 1,
+            'service_lease_id' => \str_repeat('1', 32),
+            'worker_pid' => (int)$lease['worker_pid'],
+            'worker_process_birth' => $processIdentity['birth'],
+            'worker_pid_namespace_id' => $processIdentity['pid_namespace_id'],
+            'worker_launch_id' => $workerLaunchId,
+            'master_pid' => (int)$lease['master_pid'],
+            'master_epoch' => 1,
+            'master_launch_id' => $masterLaunchId,
+            'master_process_birth' => (string)$lease['master_process_birth'],
+            'master_pid_namespace_id' => (string)$lease['master_pid_namespace_id'],
+            'port' => (int)$lease['port'],
+            'host_lease_instance' => (string)$lease['instance'],
+            'host_lease_id' => (string)$lease['lease_id'],
+            'host_boot_id' => (string)$lease['host_boot_id'],
+            'bind_host' => (string)$lease['bind_host'],
+            'listener_proof_digest' => \str_repeat('2', 64),
+            'listener_transport' => 'posix_inherited_fd',
+            'listener_receipt_digest' => \str_repeat('3', 64),
+        ];
     }
 
     /** @param array<string,mixed> $lease */
@@ -514,6 +1451,40 @@ final class GatewayPortLeaseAllocatorTest extends TestCase
         $listener = new DirectSharedListener();
         $this->listeners[] = $listener;
         return $listener;
+    }
+
+    private function leaseFileCount(string $leaseDirectory): int
+    {
+        $files = @\glob($leaseDirectory . DIRECTORY_SEPARATOR . '*.json');
+        self::assertIsArray($files);
+        return \count($files);
+    }
+
+    /** @return list<string> */
+    private function recoveryBackupTraversalOrder(string $leaseDirectory): array
+    {
+        $directory = @\opendir($leaseDirectory);
+        self::assertIsResource($directory);
+        $backups = [];
+        try {
+            while (($leaf = @\readdir($directory)) !== false) {
+                if (\preg_match(
+                    '/\A[a-f0-9]{24}\.json\.wls-backup-[a-f0-9]{16}\z/D',
+                    $leaf,
+                ) === 1) {
+                    $backups[] = $leaseDirectory . DIRECTORY_SEPARATOR . $leaf;
+                }
+            }
+        } finally {
+            @\closedir($directory);
+        }
+        return $backups;
+    }
+
+    /** @return array{birth:string,pid_namespace_id:string} */
+    private function processIdentity(): array
+    {
+        return (new MasterLeaseRuntimeIdentity())->captureProcessIdentity(\getmypid());
     }
 
     private function removeTree(string $root): void

@@ -101,7 +101,7 @@ class ServiceInstance
         if ($this->startedAt <= 0.0) {
             return 0;
         }
-        return \max(0.0, \microtime(true) - $this->startedAt);
+        return \max(0.0, self::wallClockSeconds() - $this->startedAt);
     }
 
     public function getStartedMonotonic(): float
@@ -236,5 +236,10 @@ class ServiceInstance
             $arr['module_code'] = $this->moduleCode;
         }
         return $arr;
+    }
+
+    private static function wallClockSeconds(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
     }
 }

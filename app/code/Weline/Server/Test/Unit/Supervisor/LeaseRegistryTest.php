@@ -37,14 +37,14 @@ final class LeaseRegistryTest extends TestCase
 
         self::assertInstanceOf(SlotLease::class, $ready);
         self::assertSame(SlotLease::STATE_READY, $ready->state);
-        self::assertSame(220.0, $ready->updatedAt);
+        self::assertSame(220.0, $ready->updatedMonotonic);
 
         self::assertNull($registry->heartbeat('dispatcher#1', $old->leaseId, $old->generation, 1, 230.0));
         $heartbeat = $registry->heartbeat('dispatcher#1', $current->leaseId, $current->generation, 7, 240.0);
 
         self::assertInstanceOf(SlotLease::class, $heartbeat);
         self::assertSame(7, $heartbeat->heartbeatSeq);
-        self::assertSame(240.0, $heartbeat->updatedAt);
+        self::assertSame(240.0, $heartbeat->updatedMonotonic);
     }
 
     public function testReleaseOnlyAcceptsCurrentLease(): void
@@ -58,5 +58,22 @@ final class LeaseRegistryTest extends TestCase
         self::assertNotNull($registry->get('worker#2'));
         self::assertTrue($registry->release('worker#2', $current->leaseId, $current->generation));
         self::assertNull($registry->get('worker#2'));
+    }
+
+    public function testSerializedLeaseStatusDoesNotExposeMonotonicSecondsAsWallTimestamps(): void
+    {
+        $registry = new LeaseRegistry();
+        $wallBefore = \time();
+
+        $lease = $registry->assign('worker#3', 'worker', now: 123.5);
+        $status = $lease->toArray();
+
+        self::assertSame(123.5, $lease->createdMonotonic);
+        self::assertSame(123.5, $lease->updatedMonotonic);
+        self::assertGreaterThanOrEqual($wallBefore, $status['created_at']);
+        self::assertLessThanOrEqual(\time() + 1, $status['created_at']);
+        self::assertSame($status['created_at'], $status['updated_at']);
+        self::assertArrayNotHasKey('created_monotonic', $status);
+        self::assertArrayNotHasKey('updated_monotonic', $status);
     }
 }

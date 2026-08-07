@@ -41,7 +41,9 @@ final class GatewayStartupDecision
         $requested = \strtolower(\trim($requested));
         $source = self::boundedDecisionText($source, 128, 'runtime');
         if (!\in_array($requested, self::MODES, true)) {
-            throw new \InvalidArgumentException('WLS edge mode must be auto, gateway or wls.');
+            throw new \InvalidArgumentException(
+                'WLS edge mode must be auto, gateway, wls or legacy.'
+            );
         }
         if ($portExplicit && ($exactPort === null || $exactPort < 1 || $exactPort > 65535)) {
             throw new \InvalidArgumentException(

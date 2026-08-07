@@ -11,6 +11,143 @@ use Weline\Server\Service\Edge\Gateway\ProjectCertificateRenewalIntentStore;
 
 final class ProjectCertificateRenewalIntentStoreTest extends TestCase
 {
+    public function testPendingReplayCollectsOnlyAValidatedPairedStateBackup(): void
+    {
+        $root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-renewal-recovery-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(@\mkdir(
+            $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl',
+            0700,
+            true,
+        ));
+        try {
+            $store = new ProjectCertificateRenewalIntentStore($root);
+            $store->enqueueFromRegistration($this->registration(1, 'a'));
+            $state = $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR
+                . '.wls-renewal-intents' . DIRECTORY_SEPARATOR . 'state.json';
+            $backup = $state . '.wls-backup-' . \str_repeat('a', 16);
+            self::assertTrue(\copy($state, $backup));
+
+            self::assertIsArray($store->pendingReplay());
+            self::assertFileDoesNotExist($backup);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testPendingReplayFailsClosedWhenOnlyRecoveryEvidenceRemains(): void
+    {
+        $root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-renewal-recovery-missing-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(@\mkdir(
+            $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl',
+            0700,
+            true,
+        ));
+        try {
+            $store = new ProjectCertificateRenewalIntentStore($root);
+            $store->enqueueFromRegistration($this->registration(1, 'b'));
+            $state = $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR
+                . '.wls-renewal-intents' . DIRECTORY_SEPARATOR . 'state.json';
+            $backup = $state . '.wls-backup-' . \str_repeat('b', 16);
+            self::assertTrue(\rename($state, $backup));
+
+            try {
+                $store->pendingReplay();
+                self::fail('A missing paired renewal state must fail closed.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    'paired target',
+                    \strtolower($exception->getMessage()),
+                );
+            }
+            self::assertFileExists($backup);
+            self::assertFileDoesNotExist($state);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testRecoveryRejectsAnUnrecognizedRenewalEnvelope(): void
+    {
+        $root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-renewal-recovery-envelope-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(@\mkdir(
+            $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl',
+            0700,
+            true,
+        ));
+        try {
+            $store = new ProjectCertificateRenewalIntentStore($root);
+            $store->enqueueFromRegistration($this->registration(1, 'c'));
+            $state = $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR
+                . '.wls-renewal-intents' . DIRECTORY_SEPARATOR . 'state.json';
+            $backup = $state . '.wls-backup-' . \str_repeat('c', 16);
+            self::assertTrue(\copy($state, $backup));
+            $envelope = \json_decode(
+                (string)\file_get_contents($state),
+                true,
+                64,
+                JSON_THROW_ON_ERROR,
+            );
+            $envelope['unsupported'] = true;
+            self::assertNotFalse(\file_put_contents(
+                $state,
+                \json_encode($envelope, JSON_THROW_ON_ERROR),
+            ));
+
+            try {
+                $store->pendingReplay();
+                self::fail('An unsupported renewal envelope must fail closed.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString(
+                    'integrity check failed',
+                    \strtolower($exception->getMessage()),
+                );
+            }
+            self::assertFileExists($backup);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testDurableStateCommitIsNotReportedAsTimeoutWhenDeadlineCrossesDuringWrite(): void
+    {
+        $root = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-renewal-commit-boundary-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(@\mkdir(
+            $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc'
+                . DIRECTORY_SEPARATOR . 'ssl',
+            0700,
+            true,
+        ));
+        $monotonicReads = [100.0, 100.0, 101.0];
+        try {
+            $store = new ProjectCertificateRenewalIntentStore(
+                $root,
+                monotonicClock: static function () use (&$monotonicReads): float {
+                    return \array_shift($monotonicReads) ?? 101.0;
+                },
+            );
+
+            $state = $store->enqueueFromRegistration(
+                $this->registration(1, 'd'),
+                deadlineMonotonic: 100.5,
+            );
+
+            self::assertSame(1, $state['sequence'] ?? null);
+            self::assertSame(1, $store->pendingReplay()['intent']['project_generation'] ?? null);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
     public function testStoreRejectsFilesystemProjectRoot(): void
     {
         $root = \realpath(\sys_get_temp_dir());
@@ -118,8 +255,10 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
             'routes' => [[
                 'route_id' => $routeId,
                 'domain' => 'example.test',
+                'state' => 'active',
                 'certificate_generation' => 3,
                 'source_digest' => $sourceDigest,
+                'pending' => false,
             ]],
         ];
         $receipt = $this->leaseReceipt(
@@ -143,8 +282,10 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
                 'status' => 'ACTIVE',
                 'route_generation' => 7,
                 'certificate' => [
+                    'state' => 'active',
                     'generation' => 3,
                     'source_digest' => $sourceDigest,
+                    'pending' => false,
                 ],
             ]],
         ];
@@ -190,7 +331,10 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
         $method = new \ReflectionMethod($store, 'assertStatusMatchesFacts');
         $projectUuid = '123e4567-e89b-42d3-a456-426614174092';
         $routeId = \str_repeat('7', 32);
-        $pendingDigest = \str_repeat('8', 64);
+        $pendingDigest = \hash(
+            'sha256',
+            "wls-pending-certificate\0pending.example.test",
+        );
         $activeDigest = \str_repeat('9', 64);
         $facts = [
             'project_uuid' => $projectUuid,
@@ -200,6 +344,7 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
             'routes' => [[
                 'route_id' => $routeId,
                 'domain' => 'pending.example.test',
+                'state' => 'pending',
                 'certificate_generation' => 0,
                 'source_digest' => $pendingDigest,
                 'pending' => true,
@@ -226,8 +371,10 @@ final class ProjectCertificateRenewalIntentStoreTest extends TestCase
                 'status' => 'PENDING_CERTIFICATE',
                 'route_generation' => 2,
                 'certificate' => [
+                    'state' => 'pending',
                     'generation' => 0,
                     'source_digest' => $pendingDigest,
+                    'pending' => true,
                 ],
             ]],
         ];

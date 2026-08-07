@@ -63,7 +63,7 @@ final class SessionServer
     private int $gcInterval = 300;
 
     /** 上次 GC 时间 */
-    private int $lastGcTime = 0;
+    private float $lastGcTime = 0.0;
 
     /** 上次连接泄漏检测时间 */
     private float $lastLeakCheckTime = 0.0;
@@ -128,7 +128,7 @@ final class SessionServer
                 (float)($config['memory_low_watermark_ratio'] ?? 0.60),
             );
         }
-        $this->lastGcTime = \time();
+        $this->lastGcTime = $this->monotonicNow();
 
         $authEnabled = (bool)($config['auth_enabled'] ?? true);
         if ($authEnabled) {
@@ -146,11 +146,13 @@ final class SessionServer
     private function initAuthToken(): void
     {
         $this->authToken = \bin2hex(\random_bytes(32));
-        $this->authTokenVersion = \time(); // 使用时间戳作为版本号
+        // The stable capability store assigns the durable generation while
+        // holding its publication lock. Wall time must never be a fence.
+        $this->authTokenVersion = 0;
 
         $basePath = \Weline\Server\Service\SharedStateRuntimeScope::tokenDirectory();
         if (!\is_dir($basePath)) {
-            @\mkdir($basePath, 0755, true);
+            @\mkdir($basePath, 0700, true);
         }
 
         $defaultTokenFileName = \Weline\Server\Service\SharedStateRuntimeScope::defaultTokenFileNameForRole(
@@ -255,7 +257,7 @@ final class SessionServer
 
         $this->store->loadFromFile();
         $startupShutdownDueAt = $this->monotonicNow() + $this->startupConsumerGraceSec;
-        $startupShutdownWallDueAt = (int)\ceil(\microtime(true) + $this->startupConsumerGraceSec);
+        $startupShutdownWallDueAt = (int)\ceil($this->wallClockNow() + $this->startupConsumerGraceSec);
         $serviceRecord = [
             'role' => $this->serviceRole,
             'host' => $this->host,
@@ -419,7 +421,7 @@ final class SessionServer
         }
 
         $processed = 0;
-        $tickStartedAt = \microtime(true);
+        $tickStartedAt = $this->monotonicNow();
 
         if (\in_array($this->serverSocket, $read, true)) {
             $accepts = 0;
@@ -436,7 +438,7 @@ final class SessionServer
         }
 
         foreach ($read as $socket) {
-            if (((\microtime(true) - $tickStartedAt) * 1000.0) >= self::MAX_CLIENT_HANDLE_MS_PER_TICK) {
+            if ((($this->monotonicNow() - $tickStartedAt) * 1000.0) >= self::MAX_CLIENT_HANDLE_MS_PER_TICK) {
                 break;
             }
             $clientId = $this->getClientId($socket);
@@ -522,7 +524,7 @@ final class SessionServer
         }
 
         if ($recovered === 0) {
-            $now = \microtime(true);
+            $now = $this->monotonicNow();
             if (($now - $this->lastSelectFailureLogAt) >= 30.0) {
                 $this->lastSelectFailureLogAt = $now;
                 $this->log(
@@ -583,7 +585,7 @@ final class SessionServer
             'owner_type' => 'instance',
             'hello_completed' => false,
             'shutdown_requested' => false,
-            'last_lease_refresh_at' => 0,
+            'last_lease_refresh_monotonic' => 0.0,
         ];
 
         $this->logDebug("Client connected: {$peerName} (id={$clientId})");
@@ -1042,7 +1044,7 @@ final class SessionServer
         $this->store->relieveMemoryPressure();
         $this->store->checkPersist();
 
-        $now = \time();
+        $now = $this->monotonicNow();
         if ($now - $this->lastGcTime >= $this->gcInterval) {
             $this->store->gc();
             // Memory role is RAM-only; do not scan Session mirror files on the hot GC path.
@@ -1053,7 +1055,7 @@ final class SessionServer
         }
 
         // 连接泄漏检测（每 30 秒）
-        $nowFloat = \microtime(true);
+        $nowFloat = $this->monotonicNow();
         if ($nowFloat - $this->lastLeakCheckTime >= 30.0) {
             $this->detectConnectionLeaks();
             $this->lastLeakCheckTime = $nowFloat;
@@ -1069,7 +1071,7 @@ final class SessionServer
             return;
         }
 
-        $nowFloat = \microtime(true);
+        $nowFloat = $this->monotonicNow();
         if (($nowFloat - $this->lastEmptyTokenCheckAt) < $this->emptyTokenCheckIntervalSec) {
             return;
         }
@@ -1134,7 +1136,7 @@ final class SessionServer
         $this->clients[$clientId]['owner_type'] = $ownerType !== '' ? $ownerType : 'instance';
         $this->clients[$clientId]['hello_completed'] = true;
         $this->clients[$clientId]['shutdown_requested'] = false;
-        $this->clients[$clientId]['last_lease_refresh_at'] = \time();
+        $this->clients[$clientId]['last_lease_refresh_monotonic'] = $this->monotonicNow();
 
         $this->upsertConsumerLease($consumerCode, $instanceName, $ownerType, $leaseTtl);
         $this->idleShutdownDueAt = null;
@@ -1194,13 +1196,13 @@ final class SessionServer
             return;
         }
 
-        $now = \time();
-        $lastRefreshAt = (int) ($this->clients[$clientId]['last_lease_refresh_at'] ?? 0);
+        $now = $this->monotonicNow();
+        $lastRefreshAt = (float)($this->clients[$clientId]['last_lease_refresh_monotonic'] ?? 0.0);
         if (($now - $lastRefreshAt) < 30) {
             return;
         }
 
-        $this->clients[$clientId]['last_lease_refresh_at'] = $now;
+        $this->clients[$clientId]['last_lease_refresh_monotonic'] = $now;
         $this->upsertConsumerLease(
             $consumerCode,
             (string) ($this->clients[$clientId]['instance_name'] ?? $consumerCode),
@@ -1228,11 +1230,12 @@ final class SessionServer
 
     private function upsertConsumerLease(string $consumerCode, string $instanceName, string $ownerType, int $leaseTtl): void
     {
-        $leaseExpiresAt = \date('c', \time() + \max(1, $leaseTtl));
+        $wallNow = (int)\floor($this->wallClockNow());
+        $leaseExpiresAt = \date('c', $wallNow + \max(1, $leaseTtl));
         $this->sharedRegistry->upsertConsumer($this->serviceRole, $consumerCode, [
             'instance_name' => $instanceName,
             'owner_type' => $ownerType !== '' ? $ownerType : 'instance',
-            'last_seen_at' => \date('c'),
+            'last_seen_at' => \date('c', $wallNow),
             'lease_expires_at' => $leaseExpiresAt,
         ]);
     }
@@ -1293,7 +1296,7 @@ final class SessionServer
         if ($explicitConsumerShutdown) {
             $this->idleShutdownDueAt = $this->monotonicNow() + $this->emptyTokenExitGraceSec;
             $this->idleShutdownWallDueAt = (int)\ceil(
-                \microtime(true) + $this->emptyTokenExitGraceSec,
+                $this->wallClockNow() + $this->emptyTokenExitGraceSec,
             );
             $this->sharedRegistry->setShutdownDueAt(
                 $this->serviceRole,
@@ -1305,7 +1308,7 @@ final class SessionServer
         if ($this->idleShutdownDueAt === null) {
             $record = $this->sharedRegistry->getRecord($this->serviceRole);
             $shutdownDueAt = \strtotime((string) ($record['shutdown_due_at'] ?? ''));
-            $wallNow = \microtime(true);
+            $wallNow = $this->wallClockNow();
             $this->idleShutdownWallDueAt = $shutdownDueAt !== false && $shutdownDueAt > 0
                 ? $shutdownDueAt
                 : (int)\ceil($wallNow + $this->emptyTokenExitGraceSec);
@@ -1343,6 +1346,15 @@ final class SessionServer
     private function monotonicNow(): float
     {
         return \hrtime(true) / 1_000_000_000.0;
+    }
+
+    /**
+     * Wall time is restricted to registry/audit projections that survive this
+     * process; it must never drive an in-process duration decision.
+     */
+    private function wallClockNow(): float
+    {
+        return (float)(new \DateTimeImmutable('now'))->format('U.u');
     }
 
     /**
@@ -1607,17 +1619,23 @@ final class SessionServer
         if (!$ownsListenPort) {
             return;
         }
-        if ($this->tokenFilePath && \is_file($this->tokenFilePath)) {
-            $currentToken = @\file_get_contents($this->tokenFilePath);
-            $currentToken = \is_string($currentToken) ? $this->normalizeAuthToken($currentToken) : '';
-            $ownToken = \is_string($this->authToken) ? \trim($this->authToken) : '';
-
-            // 避免并发重启时旧进程把新进程刚写入的 token 文件误删。
-            if ($ownToken !== '' && $currentToken !== '' && !\hash_equals($ownToken, $currentToken)) {
-                return;
-            }
-
-            @\unlink($this->tokenFilePath);
+        $ownToken = \is_string($this->authToken) ? \trim($this->authToken) : '';
+        if ($this->tokenFilePath === '' || $ownToken === '') {
+            return;
+        }
+        try {
+            (new SharedStateTokenStore(
+                $this->tokenFilePath,
+                0.25,
+                $this->tokenAuthority(),
+            ))->removeIfMatches(
+                $ownToken,
+                $this->authTokenVersion,
+            );
+        } catch (\Throwable $throwable) {
+            // Token cleanup is best effort after the listener is already
+            // closed. Never delete an unverified generation on failure.
+            $this->log('Auth token cleanup failed safely: ' . $throwable->getMessage());
         }
     }
 
@@ -1631,31 +1649,30 @@ final class SessionServer
         }
 
         // 限制检查频率：每 5 秒最多检查一次，避免频繁文件 I/O
-        $now = \microtime(true);
+        $now = $this->monotonicNow();
         if ($now - $this->lastTokenFileCheck < 5.0) {
             return;
         }
         $this->lastTokenFileCheck = $now;
 
-        if (\is_file($this->tokenFilePath)) {
-            $currentContent = @\file_get_contents($this->tokenFilePath);
-            $currentContent = \is_string($currentContent) ? \trim($currentContent) : '';
-
-            if ($currentContent !== '') {
-                // 解析 token:version 格式
-                $parts = \explode(':', $currentContent, 2);
-                $currentToken = $parts[0] ?? '';
-                $currentVersion = isset($parts[1]) ? (int)$parts[1] : 0;
-
-                // 如果文件中的 token 和内存中的一致，无需操作
-                if (\hash_equals($this->authToken, $currentToken) && $currentVersion === $this->authTokenVersion) {
-                    return;
-                }
-
-                // Token 或版本号不一致，说明有其他进程修改了文件或服务器重启了
-                // 强制恢复为内存中的 token（内存中的是启动时生成的权威 token）
-                $this->log("Auth token mismatch detected (file_ver={$currentVersion}, mem_ver={$this->authTokenVersion}), restoring server token to file");
+        $tokenStore = new SharedStateTokenStore(
+            $this->tokenFilePath,
+            0.25,
+            $this->tokenAuthority(),
+        );
+        try {
+            $current = $tokenStore->read();
+            if ($current !== null
+                && \hash_equals($this->authToken, $current['secret'])
+                && $current['version'] === $this->authTokenVersion
+            ) {
+                return;
             }
+            $currentVersion = $current['version'] ?? 0;
+            $this->log("Auth token mismatch detected (file_ver={$currentVersion}, mem_ver={$this->authTokenVersion}), restoring server token to file");
+        } catch (\Throwable $throwable) {
+            $this->log('Auth token validation failed, attempting owner recovery: '
+                . $throwable->getMessage());
         }
 
         if (!$this->prepareAuthTokenFileForWrite()) {
@@ -1663,15 +1680,13 @@ final class SessionServer
             return;
         }
 
-        $content = $this->authToken . ':' . $this->authTokenVersion;
-        $written = @\file_put_contents($this->tokenFilePath, $content, \LOCK_EX);
-        if ($written === false) {
-            $this->log("Auth token file restore failed: {$this->tokenFilePath}");
-            return;
+        try {
+            $tokenStore->publish($this->authToken, $this->authTokenVersion);
+            $this->log("Auth token file restored: {$this->tokenFilePath}");
+        } catch (\Throwable $throwable) {
+            $this->log("Auth token file restore failed: {$this->tokenFilePath} ("
+                . $throwable->getMessage() . ')');
         }
-
-        @\chmod($this->tokenFilePath, 0600);
-        $this->log("Auth token file restored: {$this->tokenFilePath}");
     }
 
     private function publishAuthTokenFile(): void
@@ -1688,16 +1703,12 @@ final class SessionServer
         }
 
         $dir = \dirname($this->tokenFilePath);
-        if (!\is_dir($dir) && !@\mkdir($dir, 0755, true) && !\is_dir($dir)) {
+        if (!\is_dir($dir) && !@\mkdir($dir, 0700, true) && !\is_dir($dir)) {
             $this->lastBindError = "auth token directory create failed: {$dir}";
             $this->log($this->lastBindError);
             $this->authToken = null;
             $this->tokenFilePath = '';
             return;
-        }
-        if (!\is_writable($dir)) {
-            $this->repairRuntimePathOwnershipWithSudo($dir, true);
-            \clearstatcache(true, $dir);
         }
         if (!\is_writable($dir)) {
             $this->lastBindError = "auth token directory not writable: {$dir}";
@@ -1707,7 +1718,7 @@ final class SessionServer
             return;
         }
 
-        // Token 文件格式：token:version（用冒号分隔）
+        // WLS 2 capability envelope publication is the generation commit point.
         if (!$this->prepareAuthTokenFileForWrite()) {
             $this->lastBindError = 'auth token file not writable: ' . $this->tokenFilePath;
             $this->log($this->lastBindError);
@@ -1716,20 +1727,46 @@ final class SessionServer
             return;
         }
 
-        $content = $this->authToken . ':' . $this->authTokenVersion;
-        $written = @\file_put_contents($this->tokenFilePath, $content, \LOCK_EX);
-        if ($written === false) {
-            $error = \error_get_last();
-            $detail = \is_array($error) ? (string)($error['message'] ?? '') : '';
+        try {
+            $published = (new SharedStateTokenStore(
+                $this->tokenFilePath,
+                0.25,
+                $this->tokenAuthority(),
+            ))->publishNext(
+                $this->authToken,
+            );
+            $this->authTokenVersion = $published['version'];
+        } catch (\Throwable $throwable) {
             $this->lastBindError = 'auth token file write failed: ' . $this->tokenFilePath
-                . ($detail !== '' ? " ({$detail})" : '');
+                . ' (' . $throwable->getMessage() . ')';
             $this->log($this->lastBindError);
             $this->authToken = null;
             $this->tokenFilePath = '';
             return;
         }
+    }
 
-        @\chmod($this->tokenFilePath, 0600);
+    /** @return array{role:string,host:string,port:int,instance:string} */
+    private function tokenAuthority(): array
+    {
+        $instance = \trim((string)(
+            $this->config['token_authority_instance']
+            ?? ''
+        ));
+        if ($instance === '') {
+            $instance = SharedStateTokenStore::defaultInstance(
+                $this->serviceRole,
+                $this->host,
+                $this->port,
+            );
+        }
+
+        return [
+            'role' => $this->serviceRole,
+            'host' => $this->host,
+            'port' => $this->port,
+            'instance' => $instance,
+        ];
     }
 
     private function prepareAuthTokenFileForWrite(): bool
@@ -1740,17 +1777,13 @@ final class SessionServer
 
         $dir = \dirname($this->tokenFilePath);
         if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
+            @\mkdir($dir, 0700, true);
         }
         if (!\is_dir($dir)) {
             return false;
         }
 
         if (!\is_writable($dir)) {
-            $this->repairRuntimePathOwnershipWithSudo($dir, true);
-            \clearstatcache(true, $dir);
-        }
-        if (!\is_writable($dir)) {
             return false;
         }
 
@@ -1759,83 +1792,20 @@ final class SessionServer
             return true;
         }
 
-        if (\is_file($this->tokenFilePath) && \is_writable($this->tokenFilePath)) {
-            return true;
+        $status = @\lstat($this->tokenFilePath);
+        if (!\is_array($status)) {
+            return !\file_exists($this->tokenFilePath) && !\is_link($this->tokenFilePath);
+        }
+        if (\is_link($this->tokenFilePath)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($status['nlink'] ?? 0) !== 1
+        ) {
+            return false;
         }
 
-        @\chmod($this->tokenFilePath, 0600);
-        \clearstatcache(true, $this->tokenFilePath);
-        if (\is_file($this->tokenFilePath) && \is_writable($this->tokenFilePath)) {
-            return true;
-        }
-
-        // var/session is normally owned by the runtime user; remove stale
-        // root-owned token files from earlier privileged WLS launches.
-        @\unlink($this->tokenFilePath);
-        \clearstatcache(true, $this->tokenFilePath);
-        if (!\file_exists($this->tokenFilePath)) {
-            return true;
-        }
-
-        $this->repairRuntimePathOwnershipWithSudo($this->tokenFilePath, false);
-        \clearstatcache(true, $this->tokenFilePath);
-
-        return \is_file($this->tokenFilePath) && \is_writable($this->tokenFilePath);
-    }
-
-    private function repairRuntimePathOwnershipWithSudo(string $path, bool $directory): void
-    {
-        if (DIRECTORY_SEPARATOR === '\\') {
-            return;
-        }
-
-        $user = self::getEffectiveUserName();
-        if ($user === '') {
-            return;
-        }
-
-        $group = self::getEffectiveGroupName();
-        $owner = $group !== '' ? $user . ':' . $group : $user;
-        $script = $directory
-            ? 'mkdir -p "$1" && chown -- "$2" "$1" && chmod u+rwx,g+rwx "$1"'
-            : 'touch "$1" && chown -- "$2" "$1" && chmod u+rw "$1"';
-        $command = 'sudo -n sh -c ' . \escapeshellarg($script)
-            . ' sh ' . \escapeshellarg($path)
-            . ' ' . \escapeshellarg($owner)
-            . ' 2>/dev/null';
-
-        @\exec($command);
-    }
-
-    private static function getEffectiveUserName(): string
-    {
-        if (\function_exists('posix_geteuid') && \function_exists('posix_getpwuid')) {
-            $info = @\posix_getpwuid((int) \posix_geteuid());
-            if (\is_array($info) && !empty($info['name'])) {
-                return (string) $info['name'];
-            }
-        }
-
-        foreach (['USER', 'LOGNAME', 'USERNAME'] as $name) {
-            $value = \getenv($name);
-            if (\is_string($value) && $value !== '') {
-                return $value;
-            }
-        }
-
-        return '';
-    }
-
-    private static function getEffectiveGroupName(): string
-    {
-        if (\function_exists('posix_getegid') && \function_exists('posix_getgrgid')) {
-            $info = @\posix_getgrgid((int) \posix_getegid());
-            if (\is_array($info) && !empty($info['name'])) {
-                return (string) $info['name'];
-            }
-        }
-
-        return '';
+        // Atomic replacement is authorized by the parent directory, not by
+        // truncating the old target. Keep the old inode intact until commit.
+        return \is_writable($dir);
     }
 
     private function normalizeAuthToken(string $token): string
@@ -1855,7 +1825,7 @@ final class SessionServer
             return true;
         }
 
-        $now = \microtime(true);
+        $now = $this->monotonicNow();
         if (($now - $this->lastListenOwnerCheckAt) < 2.0) {
             return true;
         }

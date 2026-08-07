@@ -208,6 +208,42 @@ final class WlsGatewayPackageBuilderTest extends TestCase
             );
         }
         self::assertNotFalse(\file_put_contents($auditReceipt, $receiptBytes));
+        $manifestFile = $output . DIRECTORY_SEPARATOR . 'manifest.json';
+        $unsignedManifestBytes = (string)\file_get_contents($manifestFile);
+        $modeTamperedManifest = $this->json($manifestFile);
+        $phpComponent = \PHP_OS_FAMILY === 'Windows' ? 'bin/php.exe' : 'bin/php';
+        self::assertSame(0755, $modeTamperedManifest['components'][$phpComponent]['mode']);
+        $originalDigest = $modeTamperedManifest['components'][$phpComponent]['sha256'];
+        $modeTamperedManifest['components'][$phpComponent]['mode'] = 0400;
+        self::assertSame(
+            $originalDigest,
+            $modeTamperedManifest['components'][$phpComponent]['sha256'],
+            'The tampered candidate preserves the component bytes and hash.',
+        );
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode(
+                $modeTamperedManifest,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL,
+        ));
+        try {
+            $signer->sign([
+                'package' => $output,
+                'audit-receipt' => $auditReceipt,
+                'expected-audit-environment-sha256' => $auditEnvironment,
+                'signing-key-id' => 'fixture-release-key',
+                'signing-key-file' => $secretFile,
+                'trusted-keys' => $trustedKeys,
+            ]);
+            self::fail('A non-executable declared bin component must not be signed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'locked release mode',
+                $exception->getMessage(),
+            );
+        }
+        self::assertNotFalse(\file_put_contents($manifestFile, $unsignedManifestBytes));
         $signed = $signer->sign([
             'package' => $output,
             'audit-receipt' => $auditReceipt,
@@ -238,6 +274,30 @@ final class WlsGatewayPackageBuilderTest extends TestCase
         ))->verifyPackage($output, 'default');
         self::assertSame('production', $verified['manifest']['package_profile']);
         self::assertTrue($verified['manifest']['release_ready']);
+
+        $modeTamperedManifest = $this->json($manifestFile);
+        self::assertSame(0755, $modeTamperedManifest['components'][$phpComponent]['mode']);
+        $modeTamperedManifest['components'][$phpComponent]['mode'] = 0400;
+        $modeTamperedBytes = \json_encode(
+            $modeTamperedManifest,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ) . PHP_EOL;
+        self::assertNotFalse(\file_put_contents($manifestFile, $modeTamperedBytes));
+        self::assertNotFalse(\file_put_contents(
+            $output . DIRECTORY_SEPARATOR . 'manifest.sig',
+            \base64_encode(\sodium_crypto_sign_detached($modeTamperedBytes, $secret)) . PHP_EOL,
+        ));
+        try {
+            (new HostGatewayPackageManager(
+                trustedKeysFile: $trustedKeys,
+            ))->verifyPackage($output, 'default');
+            self::fail('A validly signed package with a non-executable declared bin component must be rejected.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'component verification failed',
+                $exception->getMessage(),
+            );
+        }
 
         $sbomMismatchOutput = $this->root . DIRECTORY_SEPARATOR . 'sbom-mismatch';
         (new \WlsGatewayPackageBuilder())->build(
@@ -339,6 +399,419 @@ final class WlsGatewayPackageBuilderTest extends TestCase
             $openssl,
             'Linux',
         );
+    }
+
+    public function testSignerReconcilesCrashPointsAndRecognizesCompletedTransaction(): void
+    {
+        $fixture = $this->productionSigningFixture('transaction-crash-points');
+        $signer = $fixture['signer'];
+        $options = $fixture['sign_options'];
+        $package = $fixture['package'];
+        $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $signatureFile = $package . DIRECTORY_SEPARATOR . 'manifest.sig';
+        $active = $package . '.signing-transaction';
+        $complete = $package . '.signing-complete';
+
+        $signer->sign($options);
+        $completedManifest = (string)\file_get_contents($manifestFile);
+        $completedSignature = (string)\file_get_contents($signatureFile);
+        self::assertDirectoryExists($complete);
+        $recognized = $signer->sign($options);
+        self::assertTrue($recognized['release_ready']);
+        self::assertSame($completedManifest, (string)\file_get_contents($manifestFile));
+        self::assertSame($completedSignature, (string)\file_get_contents($signatureFile));
+
+        self::assertTrue(\rename($complete, $active));
+        $this->tamperAuditReceipt($fixture['audit_receipt']);
+        try {
+            $signer->sign($options);
+            self::fail('A crash after manifest publication must roll back before revalidation.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('receipt does not match', $exception->getMessage());
+        }
+        self::assertSame($fixture['unsigned_manifest'], (string)\file_get_contents($manifestFile));
+        self::assertFileDoesNotExist($signatureFile);
+        self::assertDirectoryDoesNotExist($active);
+        self::assertDirectoryDoesNotExist($complete);
+
+        self::assertNotFalse(\file_put_contents(
+            $fixture['audit_receipt'],
+            $fixture['audit_receipt_bytes'],
+        ));
+        $signer->sign($options);
+        self::assertTrue(\rename($complete, $active));
+        self::assertTrue(\rename(
+            $manifestFile,
+            $active . DIRECTORY_SEPARATOR . 'signed-manifest.json',
+        ));
+        self::assertTrue(\rename(
+            $active . DIRECTORY_SEPARATOR . 'quarantine'
+                . DIRECTORY_SEPARATOR . 'original-unsigned-manifest.json',
+            $manifestFile,
+        ));
+        $this->tamperAuditReceipt($fixture['audit_receipt']);
+        try {
+            $signer->sign($options);
+            self::fail('A crash after signature publication must roll back before revalidation.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('receipt does not match', $exception->getMessage());
+        }
+        self::assertSame($fixture['unsigned_manifest'], (string)\file_get_contents($manifestFile));
+        self::assertFileDoesNotExist($signatureFile);
+        self::assertDirectoryDoesNotExist($active);
+    }
+
+    public function testSignerFailsClosedForUnprovedReservedTransactionState(): void
+    {
+        $fixture = $this->productionSigningFixture('reserved-transaction-state');
+        $reserved = $fixture['package'] . '.signing-transaction';
+        self::assertTrue(\mkdir($reserved, 0700));
+        self::assertNotFalse(\file_put_contents(
+            $reserved . DIRECTORY_SEPARATOR . 'signed-manifest.json',
+            "unproved\n",
+        ));
+
+        try {
+            $fixture['signer']->sign($fixture['sign_options']);
+            self::fail('Reserved signing state without a valid transaction proof must fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('transaction proof', $exception->getMessage());
+        }
+        self::assertSame(
+            $fixture['unsigned_manifest'],
+            (string)\file_get_contents(
+                $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.json',
+            ),
+        );
+        self::assertFileExists($reserved . DIRECTORY_SEPARATOR . 'signed-manifest.json');
+    }
+
+    public function testWindowsBootstrapRollbackRequiresExactTransactionOwnershipProof(): void
+    {
+        $remove = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'removeWindowsBootstrapBundle',
+        );
+        $expected = [
+            'wls-bounded-command.exe' => ['bytes' => "helper\n", 'mode' => 0755],
+            'wls-bounded-command.manifest.json' => ['bytes' => "manifest\n", 'mode' => 0644],
+            'wls-bounded-command.manifest.sig' => ['bytes' => "signature\n", 'mode' => 0644],
+        ];
+        $signer = new \WlsGatewayPackageSigner();
+        $owned = $this->windowsBootstrapFixture(
+            '.owned-bootstrap.signing-quarantine-' . \str_repeat('a', 32),
+            $expected,
+        );
+        $ownedIdentities = $this->windowsBootstrapIdentities($signer, $owned);
+        $remove->invoke($signer, $owned, $expected, $ownedIdentities);
+        self::assertDirectoryDoesNotExist($owned);
+
+        $unowned = $this->windowsBootstrapFixture(
+            '.unowned-bootstrap.signing-quarantine-' . \str_repeat('b', 32),
+            $expected,
+        );
+        $unownedIdentities = $this->windowsBootstrapIdentities($signer, $unowned);
+        self::assertTrue(\unlink(
+            $unowned . DIRECTORY_SEPARATOR . 'wls-bounded-command.exe',
+        ));
+        self::assertNotFalse(\file_put_contents(
+            $unowned . DIRECTORY_SEPARATOR . 'wls-bounded-command.exe',
+            "arbitrary-pre-existing-output\n",
+        ));
+        self::assertTrue(\chmod(
+            $unowned . DIRECTORY_SEPARATOR . 'wls-bounded-command.exe',
+            0755,
+        ));
+        try {
+            $remove->invoke($signer, $unowned, $expected, $unownedIdentities);
+            self::fail('Rollback must not delete a bootstrap directory without exact ownership proof.');
+        } catch (\RuntimeException $exception) {
+            self::assertTrue(
+                \str_contains($exception->getMessage(), 'identity changed')
+                    || \str_contains($exception->getMessage(), 'ownership proof'),
+            );
+        }
+        self::assertDirectoryExists($unowned);
+        self::assertFileExists(
+            $unowned . DIRECTORY_SEPARATOR . 'wls-bounded-command.exe',
+        );
+    }
+
+    public function testSignerLockRejectsConcurrentInterleavingForSamePackage(): void
+    {
+        $fixture = $this->productionSigningFixture('exclusive-signing-lock');
+        $acquire = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'acquireSigningLock',
+        );
+        $release = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'releaseSigningLock',
+        );
+        $first = $acquire->invoke($fixture['signer'], $fixture['package']);
+        try {
+            $acquire->invoke($fixture['signer'], $fixture['package']);
+            self::fail('A second signer must not interleave while the package lock is held.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('already locked', $exception->getMessage());
+        } finally {
+            $release->invoke($fixture['signer'], $first);
+        }
+    }
+
+    public function testSignerLockRootIsPrivateAndOutsideCandidateWritableNamespace(): void
+    {
+        $fixture = $this->productionSigningFixture('protected-signing-lock-root');
+        $legacySiblingLock = $fixture['package'] . '.signing.lock';
+        self::assertNotFalse(\file_put_contents($legacySiblingLock, "candidate-owned\n"));
+        self::assertTrue(\chmod($this->root, 0777));
+        $acquire = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'acquireSigningLock',
+        );
+        $release = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'releaseSigningLock',
+        );
+
+        try {
+            $lock = $acquire->invoke($fixture['signer'], $fixture['package']);
+            try {
+                $lockPath = (string)$lock['path'];
+                $lockRoot = \dirname($lockPath);
+                self::assertNotSame($legacySiblingLock, $lockPath);
+                self::assertFalse(\str_starts_with(
+                    \str_replace('\\', '/', $lockRoot) . '/',
+                    \str_replace('\\', '/', $this->root) . '/',
+                ));
+                $rootStatus = \lstat($lockRoot);
+                self::assertIsArray($rootStatus);
+                self::assertSame(0700, ((int)$rootStatus['mode']) & 0777);
+                if (\function_exists('posix_geteuid')) {
+                    self::assertSame((int)\posix_geteuid(), (int)$rootStatus['uid']);
+                }
+                self::assertSame(
+                    "candidate-owned\n",
+                    (string)\file_get_contents($legacySiblingLock),
+                );
+            } finally {
+                $release->invoke($fixture['signer'], $lock);
+            }
+        } finally {
+            self::assertTrue(\chmod($this->root, 0700));
+        }
+    }
+
+    public function testSignerRejectsGroupReadableSecretKeyFile(): void
+    {
+        $fixture = $this->productionSigningFixture('private-signing-key-policy');
+        $secret = $fixture['sign_options']['signing-key-file'];
+        self::assertTrue(\chmod($secret, 0640));
+
+        try {
+            $fixture['signer']->sign($fixture['sign_options']);
+            self::fail('A group-readable release signing key must be rejected.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('signing key permissions', $exception->getMessage());
+        }
+        self::assertFileDoesNotExist(
+            $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.sig',
+        );
+    }
+
+    public function testSignerRejectsActualComponentModeThatContradictsManifest(): void
+    {
+        $fixture = $this->productionSigningFixture('actual-component-mode-policy');
+        $php = $fixture['package'] . DIRECTORY_SEPARATOR . 'bin'
+            . DIRECTORY_SEPARATOR . 'php';
+        self::assertTrue(\chmod($php, 0777));
+
+        try {
+            $fixture['signer']->sign($fixture['sign_options']);
+            self::fail('A writable executable must not be signed under a declared 0755 mode.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('component mode or owner', $exception->getMessage());
+        }
+        self::assertFileDoesNotExist(
+            $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.sig',
+        );
+    }
+
+    public function testEarliestCrashLeavesOnlyRandomPrivateStagingAndDoesNotReserveActiveState(): void
+    {
+        $fixture = $this->productionSigningFixture('earliest-staging-crash');
+        $orphan = $fixture['package'] . '.signing-stage-' . \bin2hex(\random_bytes(16));
+        self::assertTrue(\mkdir($orphan, 0700));
+        self::assertNotFalse(\file_put_contents(
+            $orphan . DIRECTORY_SEPARATOR . 'partial-record.json',
+            "partial\n",
+        ));
+
+        $signed = $fixture['signer']->sign($fixture['sign_options']);
+        self::assertTrue($signed['release_ready']);
+        self::assertDirectoryExists($orphan);
+        self::assertDirectoryDoesNotExist($fixture['package'] . '.signing-transaction');
+        self::assertDirectoryExists($fixture['package'] . '.signing-complete');
+    }
+
+    public function testSignerRecoversProofBoundAbandonedStageBeforeNewSigning(): void
+    {
+        $fixture = $this->productionSigningFixture('proof-bound-abandoned-stage');
+        $fixture['signer']->sign($fixture['sign_options']);
+        $package = $fixture['package'];
+        $complete = $package . '.signing-complete';
+        $record = $this->json($complete . DIRECTORY_SEPARATOR . 'record.json');
+        $stage = $package . '.signing-stage-' . (string)$record['transaction_id'];
+        $manifest = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $signature = $package . DIRECTORY_SEPARATOR . 'manifest.sig';
+        self::assertTrue(\rename(
+            $manifest,
+            $complete . DIRECTORY_SEPARATOR . 'signed-manifest.json',
+        ));
+        self::assertTrue(\rename(
+            $signature,
+            $complete . DIRECTORY_SEPARATOR . 'manifest.sig',
+        ));
+        self::assertTrue(\rename(
+            $complete . DIRECTORY_SEPARATOR . 'quarantine'
+                . DIRECTORY_SEPARATOR . 'original-unsigned-manifest.json',
+            $manifest,
+        ));
+        self::assertTrue(\rename($complete, $stage));
+
+        $signed = $fixture['signer']->sign($fixture['sign_options']);
+
+        self::assertTrue($signed['release_ready']);
+        self::assertDirectoryDoesNotExist($stage);
+        self::assertDirectoryExists($package . '.signing-complete');
+    }
+
+    public function testUnprovedAbandonedStagesAreRetainedButBounded(): void
+    {
+        $fixture = $this->productionSigningFixture('bounded-unproved-staging');
+        $stages = [];
+        for ($index = 0; $index < 9; $index++) {
+            $stage = $fixture['package'] . '.signing-stage-'
+                . \str_pad(\dechex($index + 1), 32, '0', STR_PAD_LEFT);
+            self::assertTrue(\mkdir($stage, 0700));
+            self::assertNotFalse(\file_put_contents(
+                $stage . DIRECTORY_SEPARATOR . 'unproved',
+                "unproved\n",
+            ));
+            $stages[] = $stage;
+        }
+
+        try {
+            $fixture['signer']->sign($fixture['sign_options']);
+            self::fail('Unbounded unproved signing staging must stop new release publication.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('abandoned signing-stage bound', $exception->getMessage());
+        }
+        foreach ($stages as $stage) {
+            self::assertDirectoryExists($stage);
+            self::assertFileExists($stage . DIRECTORY_SEPARATOR . 'unproved');
+        }
+        self::assertFileDoesNotExist(
+            $fixture['package'] . DIRECTORY_SEPARATOR . 'manifest.sig',
+        );
+    }
+
+    public function testActiveArtifactMismatchIsQuarantinedWithoutDeletion(): void
+    {
+        $fixture = $this->productionSigningFixture('active-proof-mismatch');
+        $fixture['signer']->sign($fixture['sign_options']);
+        $active = $fixture['package'] . '.signing-transaction';
+        $complete = $fixture['package'] . '.signing-complete';
+        $quarantine = $fixture['package'] . '.signing-quarantine';
+        self::assertTrue(\rename($complete, $active));
+        $rollback = $active . DIRECTORY_SEPARATOR . 'unsigned-manifest.json';
+        self::assertNotFalse(\file_put_contents($rollback, "replacement\n"));
+
+        try {
+            $fixture['signer']->sign($fixture['sign_options']);
+            self::fail('An active artifact replacement must be isolated and reported.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('quarantined', $exception->getMessage());
+        }
+        self::assertDirectoryDoesNotExist($active);
+        self::assertDirectoryExists($quarantine);
+        self::assertSame(
+            "replacement\n",
+            (string)\file_get_contents(
+                $quarantine . DIRECTORY_SEPARATOR . 'unsigned-manifest.json',
+            ),
+        );
+    }
+
+    public function testQuarantineDetectsReplacementBetweenIdentityCheckAndRename(): void
+    {
+        $signer = new \WlsGatewayPackageSigner();
+        $identityMethod = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'securePathIdentity',
+        );
+        $quarantineMethod = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'quarantineExactFile',
+        );
+        $source = $this->root . DIRECTORY_SEPARATOR . 'toctou-source';
+        $quarantineDirectory = $this->root . DIRECTORY_SEPARATOR . 'toctou-quarantine';
+        self::assertNotFalse(\file_put_contents($source, "owned\n"));
+        self::assertTrue(\chmod($source, 0600));
+        self::assertTrue(\mkdir($quarantineDirectory, 0700));
+        $sourceIdentity = $identityMethod->invoke($signer, $source, false, 0600);
+        $quarantineIdentity = $identityMethod->invoke(
+            $signer,
+            $quarantineDirectory,
+            true,
+            0700,
+        );
+        self::assertTrue(\unlink($source));
+        self::assertNotFalse(\file_put_contents($source, "replacement\n"));
+        self::assertTrue(\chmod($source, 0600));
+
+        try {
+            $quarantineMethod->invoke(
+                $signer,
+                $source,
+                $quarantineDirectory . DIRECTORY_SEPARATOR . 'owned',
+                "owned\n",
+                $sourceIdentity,
+                $quarantineIdentity,
+                0600,
+                'TOCTOU fixture',
+            );
+            self::fail('A replacement must be detected before it can be moved or deleted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('identity changed', $exception->getMessage());
+        }
+        self::assertSame("replacement\n", (string)\file_get_contents($source));
+        self::assertFileDoesNotExist(
+            $quarantineDirectory . DIRECTORY_SEPARATOR . 'owned',
+        );
+    }
+
+    public function testWindowsBootstrapStagingAndQuarantineStayInTargetVolumeParent(): void
+    {
+        $signer = new \WlsGatewayPackageSigner();
+        $bootstrapPaths = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'bootstrapTransactionPaths',
+        );
+        $packageParent = $this->root . DIRECTORY_SEPARATOR . 'package-volume';
+        $outputParent = $this->root . DIRECTORY_SEPARATOR . 'bootstrap-volume';
+        self::assertTrue(\mkdir($packageParent, 0700));
+        self::assertTrue(\mkdir($outputParent, 0700));
+        $package = $packageParent . DIRECTORY_SEPARATOR . 'package';
+        $output = $outputParent . DIRECTORY_SEPARATOR . 'bootstrap';
+        $transactionId = \str_repeat('a', 32);
+        $paths = $bootstrapPaths->invoke($signer, $output, $transactionId);
+
+        self::assertSame($outputParent, \dirname($paths['stage']));
+        self::assertSame($outputParent, \dirname($paths['quarantine']));
+        self::assertNotSame(\dirname($package), \dirname($paths['stage']));
+        self::assertStringContainsString($transactionId, \basename($paths['stage']));
+        self::assertStringContainsString($transactionId, \basename($paths['quarantine']));
     }
 
     public function testDarwinDependencyAuditSupportsLlvmCrossFormatFallback(): void
@@ -497,6 +970,165 @@ C,
         self::assertSame(0, \proc_close($process), $output);
         self::assertTrue(\is_executable($path));
         return $path;
+    }
+
+    /**
+     * @return array{
+     *   signer:\WlsGatewayPackageSigner,
+     *   sign_options:array<string,string>,
+     *   package:string,
+     *   unsigned_manifest:string,
+     *   audit_receipt:string,
+     *   audit_receipt_bytes:string
+     * }
+     */
+    private function productionSigningFixture(string $name): array
+    {
+        $keyPair = \sodium_crypto_sign_keypair();
+        $secret = \sodium_crypto_sign_secretkey($keyPair);
+        $public = \sodium_crypto_sign_publickey($keyPair);
+        $secretFile = $this->root . DIRECTORY_SEPARATOR . $name . '.secret';
+        self::assertNotFalse(\file_put_contents(
+            $secretFile,
+            \base64_encode($secret) . PHP_EOL,
+        ));
+        self::assertTrue(\chmod($secretFile, 0600));
+        $trustedKeys = $this->root . DIRECTORY_SEPARATOR . $name . '.trusted.json';
+        self::assertNotFalse(\file_put_contents(
+            $trustedKeys,
+            \json_encode([
+                'schema_version' => 1,
+                'keys' => [[
+                    'id' => 'fixture-release-key',
+                    'algorithm' => 'ed25519',
+                    'enabled' => true,
+                    'public_key_base64' => \base64_encode($public),
+                ]],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        ));
+        $definitions = [];
+        foreach ([
+            'controller',
+            'php',
+            'nginx',
+            'wls-gateway-broker',
+            'wls-gateway-launcher',
+        ] as $component) {
+            $path = $this->inputs[$component];
+            $definitions[$component] = [
+                'version' => 'fixture-1',
+                'source_url' => 'https://example.invalid/' . $component,
+                'source_sha256' => \hash_file('sha256', $path),
+                'binary_sha256' => \hash_file('sha256', $path),
+                'license' => 'test-only',
+                'self_contained' => $component !== 'controller',
+            ];
+        }
+        $provenance = $this->root . DIRECTORY_SEPARATOR . $name . '.provenance.json';
+        self::assertNotFalse(\file_put_contents(
+            $provenance,
+            \json_encode([
+                'schema_version' => 1,
+                'target' => [
+                    'platform' => \PHP_OS_FAMILY,
+                    'arch' => $this->normalizedArch(),
+                ],
+                'components' => $definitions,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+        ));
+        $package = $this->root . DIRECTORY_SEPARATOR . $name;
+        (new \WlsGatewayPackageBuilder())->build(
+            $this->options($package, 'production') + ['provenance' => $provenance],
+        );
+        $manifestFile = $package . DIRECTORY_SEPARATOR . 'manifest.json';
+        $unsignedManifest = (string)\file_get_contents($manifestFile);
+        $auditReceipt = $this->root . DIRECTORY_SEPARATOR . $name . '.audit.json';
+        $signer = new \WlsGatewayPackageSigner();
+        $audit = $signer->audit([
+            'package' => $package,
+            'receipt-output' => $auditReceipt,
+        ]);
+        $signOptions = [
+            'package' => $package,
+            'audit-receipt' => $auditReceipt,
+            'expected-audit-environment-sha256' => (string)$audit['audit_environment_sha256'],
+            'signing-key-id' => 'fixture-release-key',
+            'signing-key-file' => $secretFile,
+            'trusted-keys' => $trustedKeys,
+        ];
+        \sodium_memzero($secret);
+
+        return [
+            'signer' => $signer,
+            'sign_options' => $signOptions,
+            'package' => $package,
+            'unsigned_manifest' => $unsignedManifest,
+            'audit_receipt' => $auditReceipt,
+            'audit_receipt_bytes' => (string)\file_get_contents($auditReceipt),
+        ];
+    }
+
+    private function tamperAuditReceipt(string $file): void
+    {
+        $receipt = $this->json($file);
+        $receipt['manifest_sha256'] = \str_repeat('0', 64);
+        self::assertNotFalse(\file_put_contents(
+            $file,
+            \json_encode(
+                $receipt,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ) . PHP_EOL,
+        ));
+    }
+
+    /** @param array<string,array{bytes:string,mode:int}> $files */
+    private function windowsBootstrapFixture(string $name, array $files): string
+    {
+        $directory = $this->root . DIRECTORY_SEPARATOR . $name;
+        self::assertTrue(\mkdir($directory, 0700));
+        foreach ($files as $leaf => $definition) {
+            $file = $directory . DIRECTORY_SEPARATOR . $leaf;
+            self::assertNotFalse(\file_put_contents($file, $definition['bytes']));
+            self::assertTrue(\chmod($file, $definition['mode']));
+        }
+        return $directory;
+    }
+
+    /** @return array<string,array<string,int|string>> */
+    private function windowsBootstrapIdentities(
+        \WlsGatewayPackageSigner $signer,
+        string $directory,
+    ): array {
+        $identity = new \ReflectionMethod(
+            \WlsGatewayPackageSigner::class,
+            'securePathIdentity',
+        );
+        return [
+            'bootstrap_parent' => $identity->invoke(
+                $signer,
+                \dirname($directory),
+                true,
+            ),
+            'bootstrap_stage' => $identity->invoke($signer, $directory, true, 0700),
+            'bootstrap_helper' => $identity->invoke(
+                $signer,
+                $directory . DIRECTORY_SEPARATOR . 'wls-bounded-command.exe',
+                false,
+                0755,
+            ),
+            'bootstrap_manifest' => $identity->invoke(
+                $signer,
+                $directory . DIRECTORY_SEPARATOR . 'wls-bounded-command.manifest.json',
+                false,
+                0644,
+            ),
+            'bootstrap_signature' => $identity->invoke(
+                $signer,
+                $directory . DIRECTORY_SEPARATOR . 'wls-bounded-command.manifest.sig',
+                false,
+                0644,
+            ),
+        ];
     }
 
     /** @return array<string,mixed> */

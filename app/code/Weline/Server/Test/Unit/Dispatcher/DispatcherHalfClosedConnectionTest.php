@@ -24,8 +24,8 @@ class DispatcherHalfClosedConnectionTest extends TestCase
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'clientConnections', [$connId => $socket]);
-        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => \microtime(true) - 1.0]);
-        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => \microtime(true) - 1.0]);
+        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => (\hrtime(true) / 1_000_000_000) - 1.0]);
+        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => (\hrtime(true) / 1_000_000_000) - 1.0]);
         $this->setProperty($dispatcher, 'connectionBytes', [$connId => ['in' => 0, 'out' => 0]]);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'handleClientData');
@@ -52,8 +52,8 @@ class DispatcherHalfClosedConnectionTest extends TestCase
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'clientConnections', [$connId => $socket]);
-        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => \microtime(true) - 1.0]);
-        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => \microtime(true) - 1.0]);
+        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => (\hrtime(true) / 1_000_000_000) - 1.0]);
+        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => (\hrtime(true) / 1_000_000_000) - 1.0]);
         $this->setProperty($dispatcher, 'connectionBytes', [$connId => ['in' => 128, 'out' => 0]]);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'handleClientData');
@@ -81,8 +81,8 @@ class DispatcherHalfClosedConnectionTest extends TestCase
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'clientConnections', [$connId => $socket]);
-        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => \microtime(true) - 31.0]);
-        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => \microtime(true) - 31.0]);
+        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => (\hrtime(true) / 1_000_000_000) - 31.0]);
+        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => (\hrtime(true) / 1_000_000_000) - 31.0]);
         $this->setProperty($dispatcher, 'connectionBytes', [$connId => ['in' => 128, 'out' => 0]]);
         $this->setProperty($dispatcher, 'lastConnectionCleanup', 0);
         $this->setProperty($dispatcher, 'connectionCleanupInterval', 0);
@@ -118,8 +118,8 @@ class DispatcherHalfClosedConnectionTest extends TestCase
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'clientConnections', [$connId => $socket]);
-        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => \microtime(true)]);
-        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => \microtime(true)]);
+        $this->setProperty($dispatcher, 'connectionLastActivity', [$connId => \hrtime(true) / 1_000_000_000]);
+        $this->setProperty($dispatcher, 'connectionAcceptTime', [$connId => \hrtime(true) / 1_000_000_000]);
         $this->setProperty($dispatcher, 'connectionBytes', [$connId => ['in' => 128, 'out' => 256]]);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'handleClientData');

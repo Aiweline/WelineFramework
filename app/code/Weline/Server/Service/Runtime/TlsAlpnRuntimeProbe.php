@@ -143,7 +143,7 @@ OPENSSL_CONFIG;
 
             $serverCryptoMethod = (int)\constant('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER');
             $clientCryptoMethod = (int)\constant('STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT');
-            $probeDeadline = \microtime(true) + ($deadlineBudgetMs / 1000);
+            $probeDeadline = self::monotonicSeconds() + ($deadlineBudgetMs / 1000);
             $connectionSpecs = [
                 'preferred' => [
                     'client_protocols' => self::SERVER_PROTOCOLS,
@@ -162,7 +162,7 @@ OPENSSL_CONFIG;
             $pairs = [];
 
             try {
-                if (\microtime(true) >= $probeDeadline) {
+                if (self::monotonicSeconds() >= $probeDeadline) {
                     throw new \RuntimeException('tls_probe_total_deadline');
                 }
                 $serverContext = \stream_context_create(['ssl' => [
@@ -190,7 +190,7 @@ OPENSSL_CONFIG;
                 }
 
                 foreach ($connectionSpecs as $name => $spec) {
-                    $remaining = $probeDeadline - \microtime(true);
+                    $remaining = $probeDeadline - self::monotonicSeconds();
                     if ($remaining <= 0.0) {
                         $results[$name]['reason'] = 'tls_probe_total_deadline';
                         continue;
@@ -211,7 +211,7 @@ OPENSSL_CONFIG;
                         STREAM_CLIENT_CONNECT,
                         $clientContext
                     );
-                    $remaining = $probeDeadline - \microtime(true);
+                    $remaining = $probeDeadline - self::monotonicSeconds();
                     $serverConnection = $remaining > 0.0
                         ? @\stream_socket_accept($listener, \min(0.1, $remaining))
                         : false;
@@ -240,7 +240,7 @@ OPENSSL_CONFIG;
                     $results[$name]['reason'] = 'tls_handshake_deadline';
                 }
 
-                while (\microtime(true) < $probeDeadline) {
+                while (self::monotonicSeconds() < $probeDeadline) {
                     $read = [];
                     $unfinished = 0;
                     foreach ($pairs as $name => &$pair) {
@@ -301,7 +301,7 @@ OPENSSL_CONFIG;
                     }
                     $remainingMicros = (int)\max(
                         0,
-                        \min(20000, ($probeDeadline - \microtime(true)) * 1000000)
+                        \min(20000, ($probeDeadline - self::monotonicSeconds()) * 1000000)
                     );
                     if ($remainingMicros <= 0 || $read === []) {
                         break;
@@ -380,5 +380,10 @@ OPENSSL_CONFIG;
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

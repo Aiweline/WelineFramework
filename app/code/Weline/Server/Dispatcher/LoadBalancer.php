@@ -389,7 +389,7 @@ class LoadBalancer
             
             // 检查连接是否仍然有效
             if (\is_resource($conn) && !\feof($conn)) {
-                $this->connectionLastActivity[$connId] = \time();
+                $this->connectionLastActivity[$connId] = self::monotonicSeconds();
                 return $conn;
             }
             
@@ -410,7 +410,7 @@ class LoadBalancer
         if ($conn) {
             \stream_set_blocking($conn, true);
             $connId = (int) $conn;
-            $this->connectionLastActivity[$connId] = \time();
+            $this->connectionLastActivity[$connId] = self::monotonicSeconds();
         }
         
         return $conn ?: null;
@@ -442,7 +442,7 @@ class LoadBalancer
         }
         
         // 归还到连接池
-        $this->connectionLastActivity[$connId] = \time();
+        $this->connectionLastActivity[$connId] = self::monotonicSeconds();
         $this->connectionPool[$port][] = $conn;
     }
     
@@ -455,7 +455,7 @@ class LoadBalancer
             return;
         }
         
-        $now = \time();
+        $now = self::monotonicSeconds();
         $activeConnections = [];
         
         foreach ($this->connectionPool[$port] as $conn) {
@@ -503,13 +503,13 @@ class LoadBalancer
         // 发送请求（带超时保护的分块写入）
         $requestLen = \strlen($request);
         $totalWritten = 0;
-        $writeStartTime = \microtime(true);
+        $writeStartTime = self::monotonicSeconds();
         $remaining = $request;
         $zeroWriteCount = 0;
         
         while ($totalWritten < $requestLen) {
             // 检查写入是否超时
-            $elapsed = \microtime(true) - $writeStartTime;
+            $elapsed = self::monotonicSeconds() - $writeStartTime;
             if ($elapsed > $this->writeTimeout) {
                 $this->log("写入 Worker 超时: tcp://{$host}:{$port}，已写入 {$totalWritten}/{$requestLen} 字节", 'WARN');
                 @\fclose($workerConn);
@@ -545,7 +545,6 @@ class LoadBalancer
         // 读取响应
         $response = '';
         \stream_set_timeout($workerConn, $this->readTimeout);
-        $readStartTime = \microtime(true);
         $connectionBroken = false;
 
         while (!\feof($workerConn)) {
@@ -627,5 +626,10 @@ class LoadBalancer
     public function reset(): void
     {
         $this->currentIndex = 0;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

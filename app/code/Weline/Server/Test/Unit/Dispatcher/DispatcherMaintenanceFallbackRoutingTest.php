@@ -363,7 +363,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $this->setProperty($dispatcher, 'startupProtectionEnabled', true);
         $this->setProperty($dispatcher, 'startupProtectionWindowSec', 45.0);
         // 濠碘槅鍨崜婵堚偓?uptime = 300s闂佹寧绋戦惌浣烘崲濞嗘垶鎯ラ柛娑卞枟閿涘鐥褍澧伴柣娑栧劦瀹?
-        $this->setProperty($dispatcher, 'startTime', \time() - 300);
+        $this->setProperty($dispatcher, 'startMonotonic', (\hrtime(true) / 1_000_000_000) - 300.0);
         $this->setProperty($dispatcher, 'hasEverObservedHealthyWorker', false);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'shouldApplyStartupProtection');
@@ -415,7 +415,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $this->setProperty($dispatcher, 'startupProtectionEnabled', false);
         $this->setProperty($dispatcher, 'healthyZeroMaintenanceThresholdSec', 2.0);
         // 濠碘槅鍨崜婵堚偓?2.5 缂備礁顦扮敮鎺撴櫠閻樿櫕浜ゆ繛鎴灻?healthy==0 闂佺粯顭堥崺鏍焵椤戣法绛忕紒杈ㄧ箓椤斿繘鎳犻崜浣囥垽寮堕埡浣瑰枠婵℃彃娲畷?
-        $this->setProperty($dispatcher, 'healthyZeroSince', \microtime(true) - 2.5);
+        $this->setProperty($dispatcher, 'healthyZeroSince', (\hrtime(true) / 1_000_000_000) - 2.5);
         $this->setProperty($dispatcher, 'hasEverObservedHealthyWorker', true);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'shouldServeMaintenanceFallback');
@@ -659,7 +659,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $this->setProperty($dispatcher, 'pendingMaintenancePageQueueMax', 1);
         // 闂佺绻愰悧鍡涖€侀敐鍡欌枖闁逞屽墯缁嬪顢旈崟顐ょ崶婵炶揪绲界粙鍕濡炬cket 闁诲孩绋掗〃鍡涱敊瀹€鍕挄闊洦鏌ㄦ竟鍫ユ煥濞戞鐒稿ù灏栨櫊瀹曟顓奸崶銊ョ劯闁?I/O闂?
         $this->setProperty($dispatcher, 'pendingMaintenancePageQueue', [
-            99 => ['socket' => null, 'clientIp' => '1.2.3.4', 'acceptedAt' => \microtime(true), 'allWorkersUnavailable' => false],
+            99 => ['socket' => null, 'clientIp' => '1.2.3.4', 'acceptedAt' => \hrtime(true) / 1_000_000_000, 'allWorkersUnavailable' => false],
         ]);
 
         [$server, $client] = $this->createLocalSocketPair();

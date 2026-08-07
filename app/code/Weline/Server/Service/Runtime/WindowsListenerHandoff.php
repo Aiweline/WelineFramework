@@ -4,9 +4,10 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Runtime;
 
 use Weline\Framework\Runtime\SchedulerSystem;
-use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\Edge\Gateway\GatewayLeaseIdentity;
+use Weline\Server\Service\Edge\Gateway\GatewayPortLeaseAllocator;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
+use Weline\Server\Service\MasterLeaseRuntimeIdentity;
 
 /**
  * Lossless Windows listener transfer using the ext-sockets WSAPROTOCOL API.
@@ -26,10 +27,23 @@ final class WindowsListenerHandoff
     private const HANDOFF_TIMEOUT_SECONDS = 20.0;
     private const ENVELOPE_LIFETIME_SECONDS = 60;
     private const POLL_INTERVAL_MICROSECONDS = 10_000;
+    private const PENDING_REGISTRY_SCHEMA_VERSION = 2;
+    private const MAX_PENDING_EXPORTS = 256;
+    private const MAX_PENDING_REGISTRY_BYTES = 4_194_304;
+    private const PENDING_REGISTRY_FILE = '.wls-listener-handoff-pending.json';
+    private const PENDING_REGISTRY_LOCK = '.wls-listener-handoff-pending.lock';
+    private const EXPORT_MUTEX_WAIT_MILLISECONDS = 20_000;
 
     /** @var array<string,array{socket:\Socket,stream:mixed,intent:array<string,mixed>}> */
     private static array $masterSources = [];
     private static string $primaryIntentDigest = '';
+    private static ?WindowsListenerHandoffMutexGuard $exportMutexGuard = null;
+    /** @var array<string,true> */
+    private static array $ownedExportProtocols = [];
+    private static int $exportMutexSourcePid = 0;
+    private static string $exportMutexSourceBirth = '';
+    private static string $exportMutexSourcePidNamespaceId = '';
+    private static string $exportMutexRecoveryState = 'NONE';
 
     /**
      * @param array<string,mixed> $lease
@@ -51,11 +65,12 @@ final class WindowsListenerHandoff
         $leaseInstance = self::boundedInstance((string)($lease['instance'] ?? ''));
         $host = self::normalizeHost((string)($lease['bind_host'] ?? ''));
         $port = self::port($lease['port'] ?? 0);
-        if ((int)($lease['schema_version'] ?? 0) !== 5
+        if ((int)($lease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals('RESERVED', (string)($lease['state'] ?? ''))
         ) {
             throw new \RuntimeException(
-                'Windows startup listener requires one RESERVED schema-5 lease.'
+                'Windows startup listener requires one RESERVED schema-6 lease.'
             );
         }
 
@@ -80,7 +95,7 @@ final class WindowsListenerHandoff
 
     /**
      * Validate the endpoint copy and require an exact match with one and only
-     * one schema-5 startup lease.
+     * one schema-6 startup lease.
      *
      * @param array<string,mixed> $gateway
      * @return array<string,mixed>|null
@@ -116,7 +131,8 @@ final class WindowsListenerHandoff
             if (!\is_array($lease) || $lease === []) {
                 continue;
             }
-            if ((int)($lease['schema_version'] ?? 0) === 5
+            if ((int)($lease['schema_version'] ?? 0)
+                    === GatewayPortLeaseAllocator::SCHEMA_VERSION
                 && \hash_equals('RESERVED', (string)($lease['state'] ?? ''))
                 && \hash_equals($intent['lease_id'], (string)($lease['lease_id'] ?? ''))
                 && \hash_equals($intent['instance'], (string)($lease['instance'] ?? ''))
@@ -220,6 +236,7 @@ final class WindowsListenerHandoff
 
     public static function hasMasterSocket(?string $intentDigest = null): bool
     {
+        self::sweepPendingExportsBestEffort();
         $intentDigest = $intentDigest !== null
             ? \strtolower(\trim($intentDigest))
             : self::$primaryIntentDigest;
@@ -230,6 +247,7 @@ final class WindowsListenerHandoff
     /** @return array<string,mixed> */
     public static function masterIntent(?string $intentDigest = null): array
     {
+        self::sweepPendingExportsBestEffort();
         $intentDigest = $intentDigest !== null
             ? \strtolower(\trim($intentDigest))
             : self::$primaryIntentDigest;
@@ -384,6 +402,7 @@ final class WindowsListenerHandoff
 
     public static function closeMasterSocket(): void
     {
+        self::sweepPendingExportsBestEffort();
         foreach (\array_keys(self::$masterSources) as $intentDigest) {
             self::releaseMasterSource($intentDigest);
         }
@@ -420,7 +439,15 @@ final class WindowsListenerHandoff
         string $launchId,
         string $slotId,
         int $generation,
+        ?WindowsListenerHandoffRuntime $runtime = null,
     ): array {
+        $runtime ??= new WindowsListenerHandoffRuntime();
+        if ($targetPid !== $runtime->currentPid()) {
+            throw new \RuntimeException(
+                'Windows listener handoff target PID is not the importing process.'
+            );
+        }
+        self::sweepPendingExportsBestEffort(\dirname($path), $runtime);
         $deadline = (\hrtime(true) / 1_000_000_000) + self::HANDOFF_TIMEOUT_SECONDS;
         $encoded = null;
         while ((\hrtime(true) / 1_000_000_000) < $deadline) {
@@ -442,8 +469,18 @@ final class WindowsListenerHandoff
 
         $socket = false;
         $protocolId = null;
+        $protocolOwnershipTransferred = false;
+        $targetIdentity = null;
         try {
             $envelope = self::decodeEnvelope($encoded);
+            $protocolId = \base64_decode(
+                (string)($envelope['protocol_info_b64'] ?? ''),
+                true,
+            );
+            if (!\is_string($protocolId) || $protocolId === '') {
+                throw new \RuntimeException('Windows WSAPROTOCOL identifier is invalid.');
+            }
+            $targetIdentity = $runtime->captureProcessIdentity($targetPid);
             self::assertEnvelope(
                 $envelope,
                 $intent,
@@ -452,29 +489,42 @@ final class WindowsListenerHandoff
                 $launchId,
                 $slotId,
                 $generation,
+                $runtime,
             );
-            $protocolId = \base64_decode(
-                (string)$envelope['protocol_info_b64'],
-                true,
-            );
-            if (!\is_string($protocolId) || $protocolId === '') {
-                throw new \RuntimeException('Windows WSAPROTOCOL identifier is invalid.');
-            }
-            $socket = @\socket_wsaprotocol_info_import($protocolId);
-            $released = @\socket_wsaprotocol_info_release($protocolId);
+            $ownedProtocolId = $protocolId;
             $protocolId = null;
-            if (!$socket instanceof \Socket || $released !== true) {
-                if ($socket instanceof \Socket) {
-                    @\socket_close($socket);
-                }
-                throw new \RuntimeException(
-                    'Windows target process could not consume and release its WSAPROTOCOL handoff.'
-                );
-            }
-            self::assertListeningSocket($socket, $intent['bind_host'], $intent['port']);
+            $protocolOwnershipTransferred = true;
+            $socket = self::consumePendingExport(
+                $ownedProtocolId,
+                $path,
+                $intent['bind_host'],
+                $intent['port'],
+                $targetPid,
+                $targetIdentity,
+                $generation,
+                $runtime,
+            );
         } finally {
-            if (\is_string($protocolId) && $protocolId !== '') {
-                @\socket_wsaprotocol_info_release($protocolId);
+            if (!$protocolOwnershipTransferred) {
+                try {
+                    $targetIdentity ??= $runtime->captureProcessIdentity($targetPid);
+                    self::requestPendingExportReleaseForConsumer(
+                        $path,
+                        \is_string($protocolId) && $protocolId !== ''
+                            ? $protocolId
+                            : null,
+                        $targetPid,
+                        $targetIdentity,
+                        $generation,
+                        'REJECTED',
+                        $runtime,
+                    );
+                } catch (\Throwable) {
+                    // The token is owned by the exporter process. If the
+                    // protected release request cannot be recorded, its exact
+                    // source/target birth and monotonic deadline remain in the
+                    // existing registry for a later source-process sweep.
+                }
             }
             GatewayProjectStateFilesystem::removeRegular(
                 $path,
@@ -495,42 +545,73 @@ final class WindowsListenerHandoff
         string $launchId,
         string $slotId,
         int $generation,
+        ?WindowsListenerHandoffRuntime $runtime = null,
     ): array {
         if (!$socket instanceof \Socket || $targetPid <= 0) {
             throw new \RuntimeException('Windows listener export target is invalid.');
         }
-        $protocolId = @\socket_wsaprotocol_info_export($socket, $targetPid);
-        if (!\is_string($protocolId) || $protocolId === '') {
-            throw new \RuntimeException(
-                'Winsock refused to export the listener for the requested target PID.'
-            );
-        }
-        $targetProcessBirth = self::processBirthIdentity($targetPid);
-        $sourceProcessBirth = self::processBirthIdentity((int)\getmypid());
-        $envelope = [
-            'schema_version' => self::SCHEMA_VERSION,
-            'transport' => self::TRANSPORT,
-            'stage' => $stage,
-            'handoff_id' => $intent['handoff_id'],
-            'intent_digest' => $intent['intent_digest'],
-            'instance' => $intent['instance'],
-            'wls_instance' => $intent['wls_instance'],
-            'lease_id' => $intent['lease_id'],
-            'bind_host' => $intent['bind_host'],
-            'port' => $intent['port'],
-            'source_pid' => (int)\getmypid(),
-            'source_process_birth' => $sourceProcessBirth,
-            'target_pid' => $targetPid,
-            'target_process_birth' => $targetProcessBirth,
-            'adoption_nonce' => \bin2hex(\random_bytes(16)),
-            'launch_id' => $launchId,
-            'slot_id' => $slotId,
-            'generation' => $generation,
-            'expires_at' => \time() + self::ENVELOPE_LIFETIME_SECONDS,
-            'protocol_info_b64' => \base64_encode($protocolId),
-        ];
-        $envelope['payload_digest'] = self::digest($envelope);
+        $runtime ??= new WindowsListenerHandoffRuntime();
+        self::sweepPendingExportsBestEffort(\dirname($path), $runtime);
+        $targetIdentity = $runtime->captureProcessIdentity($targetPid);
+        $sourcePid = $runtime->currentPid();
+        $sourceIdentity = $runtime->captureProcessIdentity($sourcePid);
+        $protocolId = null;
+        $registered = false;
+        $mutexReady = false;
         try {
+            $mutexRecoveryState = self::ensureExportMutex(
+                $sourcePid,
+                $sourceIdentity,
+                $runtime,
+            );
+            $mutexReady = true;
+            if ($mutexRecoveryState === 'ABANDONED') {
+                self::recoverAbandonedPendingExports(\dirname($path), $runtime);
+            }
+            $exported = $runtime->export($socket, $targetPid);
+            if (!\is_string($exported) || $exported === '') {
+                throw new \RuntimeException(
+                    'Winsock refused to export the listener for the requested target PID.'
+                );
+            }
+            $protocolId = $exported;
+            self::trackOwnedExportProtocol($protocolId);
+            $publishedAt = $runtime->wallNow();
+            self::registerPendingExport(
+                $protocolId,
+                $path,
+                $sourcePid,
+                $sourceIdentity,
+                $targetPid,
+                $targetIdentity,
+                $generation,
+                $mutexRecoveryState,
+                $runtime,
+            );
+            $registered = true;
+            $envelope = [
+                'schema_version' => self::SCHEMA_VERSION,
+                'transport' => self::TRANSPORT,
+                'stage' => $stage,
+                'handoff_id' => $intent['handoff_id'],
+                'intent_digest' => $intent['intent_digest'],
+                'instance' => $intent['instance'],
+                'wls_instance' => $intent['wls_instance'],
+                'lease_id' => $intent['lease_id'],
+                'bind_host' => $intent['bind_host'],
+                'port' => $intent['port'],
+                'source_pid' => $sourcePid,
+                'source_process_birth' => $sourceIdentity['birth'],
+                'target_pid' => $targetPid,
+                'target_process_birth' => $targetIdentity['birth'],
+                'adoption_nonce' => \bin2hex(\random_bytes(16)),
+                'launch_id' => $launchId,
+                'slot_id' => $slotId,
+                'generation' => $generation,
+                'expires_at' => $publishedAt + self::ENVELOPE_LIFETIME_SECONDS,
+                'protocol_info_b64' => \base64_encode($protocolId),
+            ];
+            $envelope['payload_digest'] = self::digest($envelope);
             $encoded = \json_encode(
                 $envelope,
                 JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
@@ -539,8 +620,51 @@ final class WindowsListenerHandoff
                 throw new \RuntimeException('Windows listener handoff envelope is too large.');
             }
             GatewayProjectStateFilesystem::atomicWrite($path, $encoded, 0600);
+            if (!$runtime->publisherReleaseWaitIsExternallyDriven($path)) {
+                self::awaitSourceExportRelease(
+                    $protocolId,
+                    $path,
+                    $targetPid,
+                    $targetIdentity,
+                    $generation,
+                    $runtime,
+                );
+            }
         } catch (\Throwable $throwable) {
-            @\socket_wsaprotocol_info_release($protocolId);
+            if (\is_string($protocolId) && $protocolId !== '') {
+                try {
+                    if ($registered) {
+                        $releasedByRegistry = self::requestPendingExportReleaseForConsumer(
+                            $path,
+                            $protocolId,
+                            $targetPid,
+                            $targetIdentity,
+                            $generation,
+                            'CANCELLED',
+                            $runtime,
+                        );
+                        if (!$releasedByRegistry) {
+                            $runtime->release($protocolId);
+                            self::releaseOwnedExportProtocol($protocolId);
+                        }
+                    } else {
+                        $runtime->release($protocolId);
+                        self::releaseOwnedExportProtocol($protocolId);
+                    }
+                } catch (\Throwable) {
+                    $runtime->release($protocolId);
+                    self::releaseOwnedExportProtocol($protocolId);
+                }
+            } elseif ($mutexReady) {
+                self::releaseExportMutexIfIdle();
+            }
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $path,
+                    'failed Windows listener handoff envelope',
+                );
+            } catch (\Throwable) {
+            }
             throw $throwable;
         }
         return [
@@ -549,10 +673,10 @@ final class WindowsListenerHandoff
             'lease_id' => $intent['lease_id'],
             'bind_host' => $intent['bind_host'],
             'port' => $intent['port'],
-            'source_pid' => (int)\getmypid(),
-            'source_process_birth' => $sourceProcessBirth,
+            'source_pid' => $sourcePid,
+            'source_process_birth' => $sourceIdentity['birth'],
             'target_pid' => $targetPid,
-            'target_process_birth' => $targetProcessBirth,
+            'target_process_birth' => $targetIdentity['birth'],
             'adoption_nonce' => $envelope['adoption_nonce'],
             'envelope_digest' => $envelope['payload_digest'],
             'master_launch_id' => $intent['launch_id'],
@@ -560,6 +684,830 @@ final class WindowsListenerHandoff
             'slot_id' => $slotId,
             'generation' => $generation,
         ];
+    }
+
+    /** @param array{birth:string,pid_namespace_id:string} $targetIdentity */
+    private static function awaitSourceExportRelease(
+        string $protocolId,
+        string $path,
+        int $targetPid,
+        array $targetIdentity,
+        int $generation,
+        WindowsListenerHandoffRuntime $runtime,
+    ): void {
+        $protocolDigest = \hash('sha256', $protocolId);
+        $deadline = $runtime->monotonicNow() + self::ENVELOPE_LIFETIME_SECONDS;
+        do {
+            self::sweepPendingExports(\dirname($path), $runtime);
+            if (!isset(self::$ownedExportProtocols[$protocolDigest])) {
+                return;
+            }
+            SchedulerSystem::usleep(self::POLL_INTERVAL_MICROSECONDS);
+        } while ($runtime->monotonicNow() < $deadline);
+
+        try {
+            self::requestPendingExportReleaseForConsumer(
+                $path,
+                $protocolId,
+                $targetPid,
+                $targetIdentity,
+                $generation,
+                'CANCELLED',
+                $runtime,
+            );
+        } catch (\Throwable) {
+            // The exact exporter still owns the process-local php-src mapping.
+            // Registry failure cannot authorize leaving the session mutex held.
+        }
+        if (isset(self::$ownedExportProtocols[$protocolDigest])) {
+            $runtime->release($protocolId);
+            self::releaseOwnedExportProtocol($protocolId);
+        }
+        throw new \RuntimeException(
+            'Timed out waiting for the target to consume the Windows listener export.'
+        );
+    }
+
+    /**
+     * @param array{birth:string,pid_namespace_id:string} $sourceIdentity
+     * @param array{birth:string,pid_namespace_id:string} $targetIdentity
+     */
+    private static function registerPendingExport(
+        string $protocolId,
+        string $path,
+        int $sourcePid,
+        array $sourceIdentity,
+        int $targetPid,
+        array $targetIdentity,
+        int $generation,
+        string $mutexRecoveryState,
+        WindowsListenerHandoffRuntime $runtime,
+    ): void {
+        if ($sourcePid < 1
+            || $targetPid < 1
+            || $generation < 0
+            || !\in_array($mutexRecoveryState, ['NORMAL', 'ABANDONED'], true)
+        ) {
+            throw new \RuntimeException(
+                'Windows listener handoff pending export identity is invalid.'
+            );
+        }
+        $protocolDigest = \hash('sha256', $protocolId);
+        $pathDigest = self::pendingPathDigest($path);
+        $createdMonotonic = $runtime->monotonicNow();
+        $createdTimestamp = $runtime->wallNow();
+        $record = [
+            'protocol_digest' => $protocolDigest,
+            'protocol_info_b64' => \base64_encode($protocolId),
+            'envelope_leaf' => \basename($path),
+            'path_digest' => $pathDigest,
+            'source_pid' => $sourcePid,
+            'source_process_birth' => (string)$sourceIdentity['birth'],
+            'source_pid_namespace_id' => (string)$sourceIdentity['pid_namespace_id'],
+            'target_pid' => $targetPid,
+            'target_process_birth' => (string)$targetIdentity['birth'],
+            'target_pid_namespace_id' => (string)$targetIdentity['pid_namespace_id'],
+            'socket_generation' => $generation,
+            'mutex_recovery_state' => $mutexRecoveryState,
+            'host_boot_id' => $runtime->hostBootId(),
+            'created_monotonic' => $createdMonotonic,
+            'expires_monotonic' => $createdMonotonic + self::ENVELOPE_LIFETIME_SECONDS,
+            'created_timestamp' => $createdTimestamp,
+            'expires_timestamp' => $createdTimestamp + self::ENVELOPE_LIFETIME_SECONDS,
+            'release_requested' => false,
+            'consumer_state' => 'PENDING',
+        ];
+        self::withPendingRegistry(
+            \dirname($path),
+            static function (array &$records) use (
+                $protocolDigest,
+                $pathDigest,
+                $record,
+            ): void {
+                foreach ($records as $pending) {
+                    if (\hash_equals(
+                        $pathDigest,
+                        (string)($pending['path_digest'] ?? ''),
+                    )) {
+                        throw new \RuntimeException(
+                            'Windows listener handoff path already owns a pending export.'
+                        );
+                    }
+                }
+                if (isset($records[$protocolDigest])
+                    || \count($records) >= self::MAX_PENDING_EXPORTS
+                ) {
+                    throw new \RuntimeException(
+                        'Windows listener handoff pending export registry is full or duplicated.'
+                    );
+                }
+                $records[$protocolDigest] = $record;
+            },
+        );
+    }
+
+    /**
+     * @param array{birth:string,pid_namespace_id:string} $sourceIdentity
+     */
+    private static function ensureExportMutex(
+        int $sourcePid,
+        array $sourceIdentity,
+        WindowsListenerHandoffRuntime $runtime,
+    ): string {
+        if (self::$exportMutexGuard instanceof WindowsListenerHandoffMutexGuard) {
+            if ($sourcePid !== self::$exportMutexSourcePid
+                || !\hash_equals(
+                    self::$exportMutexSourceBirth,
+                    (string)$sourceIdentity['birth'],
+                )
+                || !\hash_equals(
+                    self::$exportMutexSourcePidNamespaceId,
+                    (string)$sourceIdentity['pid_namespace_id'],
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Windows listener export mutex is owned by another source birth.'
+                );
+            }
+            return self::$exportMutexRecoveryState;
+        }
+
+        $guard = $runtime->acquireExportMutex(self::EXPORT_MUTEX_WAIT_MILLISECONDS);
+        self::$exportMutexSourcePid = $sourcePid;
+        self::$exportMutexSourceBirth = (string)$sourceIdentity['birth'];
+        self::$exportMutexSourcePidNamespaceId = (string)$sourceIdentity['pid_namespace_id'];
+        self::$exportMutexRecoveryState = $guard->wasAbandoned()
+            ? 'ABANDONED'
+            : 'NORMAL';
+        self::$exportMutexGuard = $guard;
+        return self::$exportMutexRecoveryState;
+    }
+
+    private static function trackOwnedExportProtocol(string $protocolId): void
+    {
+        $digest = \hash('sha256', $protocolId);
+        if (isset(self::$ownedExportProtocols[$digest])) {
+            throw new \RuntimeException(
+                'Windows listener exporter reused a live WSAPROTOCOL mapping identifier.'
+            );
+        }
+        self::$ownedExportProtocols[$digest] = true;
+    }
+
+    private static function recoverAbandonedPendingExports(
+        string $directory,
+        WindowsListenerHandoffRuntime $runtime,
+    ): void {
+        $removedPaths = [];
+        self::withPendingRegistry(
+            $directory,
+            static function (array &$records) use (
+                $directory,
+                $runtime,
+                &$removedPaths,
+            ): void {
+                $hostBootId = $runtime->hostBootId();
+                foreach ($records as $digest => $record) {
+                    $crossBoot = !\hash_equals(
+                        $hostBootId,
+                        (string)$record['host_boot_id'],
+                    );
+                    $sourceState = $crossBoot
+                        ? MasterLeaseRuntimeIdentity::OWNER_MISSING
+                        : $runtime->observeProcessIdentity(
+                            (int)$record['source_pid'],
+                            (string)$record['source_process_birth'],
+                            (string)$record['source_pid_namespace_id'],
+                        );
+                    if (!$crossBoot && !\in_array($sourceState, [
+                        MasterLeaseRuntimeIdentity::OWNER_MISSING,
+                        MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+                    ], true)) {
+                        throw new \RuntimeException(
+                            'Abandoned Windows export mutex has an unretired source birth.'
+                        );
+                    }
+                    $removedPaths[] = $directory . DIRECTORY_SEPARATOR
+                        . (string)$record['envelope_leaf'];
+                    unset($records[$digest]);
+                }
+            },
+        );
+        foreach ($removedPaths as $path) {
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $path,
+                    'abandoned Windows listener handoff envelope',
+                );
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    private static function releaseOwnedExportProtocol(string $protocolId): void
+    {
+        unset(self::$ownedExportProtocols[\hash('sha256', $protocolId)]);
+        self::releaseExportMutexIfIdle();
+    }
+
+    private static function releaseExportMutexIfIdle(): void
+    {
+        if (self::$ownedExportProtocols !== []) {
+            return;
+        }
+        if (self::$exportMutexGuard instanceof WindowsListenerHandoffMutexGuard) {
+            self::$exportMutexGuard->release();
+        }
+        self::$exportMutexGuard = null;
+        self::$exportMutexSourcePid = 0;
+        self::$exportMutexSourceBirth = '';
+        self::$exportMutexSourcePidNamespaceId = '';
+        self::$exportMutexRecoveryState = 'NONE';
+    }
+
+    /**
+     * @param array{birth:string,pid_namespace_id:string} $targetIdentity
+     */
+    private static function requestPendingExportReleaseForConsumer(
+        string $path,
+        ?string $protocolId,
+        int $targetPid,
+        array $targetIdentity,
+        int $generation,
+        string $consumerState,
+        WindowsListenerHandoffRuntime $runtime,
+    ): bool {
+        if (!\in_array($consumerState, ['CONSUMED', 'REJECTED', 'CANCELLED'], true)) {
+            throw new \RuntimeException(
+                'Windows listener handoff consumer state is invalid.'
+            );
+        }
+        $pathDigest = self::pendingPathDigest($path);
+        $released = false;
+        self::withPendingRegistry(
+            \dirname($path),
+            static function (array &$records) use (
+                $pathDigest,
+                $protocolId,
+                $targetPid,
+                $targetIdentity,
+                $generation,
+                $consumerState,
+                $runtime,
+                &$released,
+            ): void {
+                foreach ($records as $digest => $record) {
+                    if (!\hash_equals(
+                        $pathDigest,
+                        (string)($record['path_digest'] ?? ''),
+                    )) {
+                        continue;
+                    }
+                    $recordedProtocol = \base64_decode(
+                        (string)($record['protocol_info_b64'] ?? ''),
+                        true,
+                    );
+                    if ((int)($record['target_pid'] ?? 0) !== $targetPid
+                        || !\hash_equals(
+                            (string)$targetIdentity['birth'],
+                            (string)($record['target_process_birth'] ?? ''),
+                        )
+                        || !\hash_equals(
+                            (string)$targetIdentity['pid_namespace_id'],
+                            (string)($record['target_pid_namespace_id'] ?? ''),
+                        )
+                        || (int)($record['socket_generation'] ?? -1) !== $generation
+                        || !\is_string($recordedProtocol)
+                        || $recordedProtocol === ''
+                        || ($protocolId !== null
+                            && !\hash_equals($protocolId, $recordedProtocol))
+                    ) {
+                        throw new \RuntimeException(
+                            'Windows listener handoff pending export does not match its target birth identity.'
+                        );
+                    }
+                    $records[$digest]['release_requested'] = true;
+                    $records[$digest]['consumer_state'] = $consumerState;
+                    $released = self::releasePendingRecordIfOwned(
+                        $records,
+                        (string)$digest,
+                        $runtime,
+                    );
+                    return;
+                }
+            },
+        );
+        // A registry-less token belongs to a legacy exporter process. PHP keeps
+        // exported mapping handles in that process's SOCKETS_G(wsa_info), so a
+        // different target process must never pretend it can release them.
+        return $released;
+    }
+
+    /** @param array<string,array<string,mixed>> $records */
+    private static function releasePendingRecordIfOwned(
+        array &$records,
+        string $digest,
+        WindowsListenerHandoffRuntime $runtime,
+    ): bool {
+        $record = $records[$digest] ?? null;
+        if (!\is_array($record) || !self::currentProcessOwnsPendingRecord($record, $runtime)) {
+            return false;
+        }
+        $protocolId = \base64_decode(
+            (string)($record['protocol_info_b64'] ?? ''),
+            true,
+        );
+        if (!\is_string($protocolId) || $protocolId === '') {
+            throw new \RuntimeException(
+                'Windows listener handoff owned pending token is invalid.'
+            );
+        }
+        // php-src implements release as zend_hash_del() against the exporting
+        // process's SOCKETS_G(wsa_info). For the exact source process, either
+        // return value leaves no matching local mapping handle: true deleted it;
+        // false proves it was already absent.
+        $runtime->release($protocolId);
+        unset($records[$digest]);
+        self::releaseOwnedExportProtocol($protocolId);
+        return true;
+    }
+
+    /** @param array<string,mixed> $record */
+    private static function currentProcessOwnsPendingRecord(
+        array $record,
+        WindowsListenerHandoffRuntime $runtime,
+    ): bool {
+        if (!\hash_equals(
+            (string)($record['host_boot_id'] ?? ''),
+            $runtime->hostBootId(),
+        )) {
+            return false;
+        }
+        $currentPid = $runtime->currentPid();
+        if ($currentPid !== (int)($record['source_pid'] ?? 0)) {
+            return false;
+        }
+        try {
+            $currentIdentity = $runtime->captureProcessIdentity($currentPid);
+        } catch (\Throwable) {
+            return false;
+        }
+        return \hash_equals(
+            (string)($record['source_process_birth'] ?? ''),
+            (string)$currentIdentity['birth'],
+        ) && \hash_equals(
+            (string)($record['source_pid_namespace_id'] ?? ''),
+            (string)$currentIdentity['pid_namespace_id'],
+        );
+    }
+
+    /**
+     * @param array{birth:string,pid_namespace_id:string} $targetIdentity
+     */
+    private static function consumePendingExport(
+        string $protocolId,
+        string $path,
+        string $expectedHost,
+        int $expectedPort,
+        int $targetPid,
+        array $targetIdentity,
+        int $generation,
+        WindowsListenerHandoffRuntime $runtime,
+    ): \Socket {
+        $pathDigest = self::pendingPathDigest($path);
+        $socket = null;
+        $completed = false;
+        try {
+            self::withPendingRegistry(
+                \dirname($path),
+                static function (array &$records) use (
+                    $pathDigest,
+                    $protocolId,
+                    $expectedHost,
+                    $expectedPort,
+                    $targetPid,
+                    $targetIdentity,
+                    $generation,
+                    $runtime,
+                    &$socket,
+                ): void {
+                    $recordKey = null;
+                    foreach ($records as $digest => $record) {
+                        if (!\hash_equals(
+                            $pathDigest,
+                            (string)($record['path_digest'] ?? ''),
+                        )) {
+                            continue;
+                        }
+                        $recordedProtocol = \base64_decode(
+                            (string)($record['protocol_info_b64'] ?? ''),
+                            true,
+                        );
+                        if (!\is_string($recordedProtocol)
+                            || !\hash_equals($protocolId, $recordedProtocol)
+                            || (int)($record['target_pid'] ?? 0) !== $targetPid
+                            || !\hash_equals(
+                                (string)$targetIdentity['birth'],
+                                (string)($record['target_process_birth'] ?? ''),
+                            )
+                            || !\hash_equals(
+                                (string)$targetIdentity['pid_namespace_id'],
+                                (string)($record['target_pid_namespace_id'] ?? ''),
+                            )
+                            || (int)($record['socket_generation'] ?? -1) !== $generation
+                        ) {
+                            throw new \RuntimeException(
+                                'Windows listener handoff pending export identity changed before import.'
+                            );
+                        }
+                        $recordKey = $digest;
+                        $expired = !\hash_equals(
+                            $runtime->hostBootId(),
+                            (string)($record['host_boot_id'] ?? ''),
+                        ) || $runtime->monotonicNow()
+                            >= (float)($record['expires_monotonic'] ?? 0.0);
+                        if ($expired) {
+                            $records[$digest]['release_requested'] = true;
+                            $records[$digest]['consumer_state'] = 'REJECTED';
+                            self::releasePendingRecordIfOwned(
+                                $records,
+                                (string)$digest,
+                                $runtime,
+                            );
+                            throw new \RuntimeException(
+                                'Windows listener handoff pending export expired before import.'
+                            );
+                        }
+                        break;
+                    }
+
+                    if ($recordKey === null) {
+                        throw new \RuntimeException(
+                            'Windows listener handoff has no protected pending export record.'
+                        );
+                    }
+
+                    $consumerState = 'REJECTED';
+                    try {
+                        $imported = $runtime->import($protocolId);
+                        if (!$imported instanceof \Socket) {
+                            throw new \RuntimeException(
+                                'Windows target process could not import its WSAPROTOCOL handoff.'
+                            );
+                        }
+                        $socket = $imported;
+                        self::assertListeningSocket($socket, $expectedHost, $expectedPort);
+                        $consumerState = 'CONSUMED';
+                    } finally {
+                        if ($recordKey !== null && isset($records[$recordKey])) {
+                            $records[$recordKey]['release_requested'] = true;
+                            $records[$recordKey]['consumer_state'] = $consumerState;
+                            self::releasePendingRecordIfOwned(
+                                $records,
+                                (string)$recordKey,
+                                $runtime,
+                            );
+                        }
+                    }
+                },
+            );
+            if (!$socket instanceof \Socket) {
+                throw new \RuntimeException(
+                    'Windows target process did not receive a listener socket.'
+                );
+            }
+            $completed = true;
+            return $socket;
+        } finally {
+            if (!$completed && $socket instanceof \Socket) {
+                $runtime->close($socket);
+            }
+        }
+    }
+
+    private static function sweepPendingExports(
+        string $directory,
+        WindowsListenerHandoffRuntime $runtime,
+    ): int {
+        $removedPaths = [];
+        $reclaimed = 0;
+        self::withPendingRegistry(
+            $directory,
+            static function (array &$records) use (
+                $directory,
+                $runtime,
+                &$removedPaths,
+                &$reclaimed,
+            ): void {
+                $now = $runtime->monotonicNow();
+                $hostBootId = $runtime->hostBootId();
+                foreach ($records as $digest => $record) {
+                    $targetState = $runtime->observeProcessIdentity(
+                        (int)$record['target_pid'],
+                        (string)$record['target_process_birth'],
+                        (string)$record['target_pid_namespace_id'],
+                    );
+                    $crossBoot = !\hash_equals(
+                        $hostBootId,
+                        (string)$record['host_boot_id'],
+                    );
+                    $expired = $crossBoot
+                        || $now >= (float)$record['expires_monotonic'];
+                    $targetExited = \in_array($targetState, [
+                        MasterLeaseRuntimeIdentity::OWNER_MISSING,
+                        MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+                    ], true);
+                    $releaseRequested = ($record['release_requested'] ?? false) === true;
+                    $reclaimedHere = false;
+                    $currentSourceOwns = self::currentProcessOwnsPendingRecord(
+                        $record,
+                        $runtime,
+                    );
+                    if ($crossBoot) {
+                        // The kernel mapping handle cannot survive a host boot.
+                        unset($records[$digest]);
+                        $reclaimedHere = true;
+                    } elseif (!$currentSourceOwns) {
+                        $sourceState = $runtime->observeProcessIdentity(
+                            (int)$record['source_pid'],
+                            (string)$record['source_process_birth'],
+                            (string)$record['source_pid_namespace_id'],
+                        );
+                        if (\in_array($sourceState, [
+                            MasterLeaseRuntimeIdentity::OWNER_MISSING,
+                            MasterLeaseRuntimeIdentity::OWNER_MISMATCH,
+                        ], true)) {
+                            // The exact exporter birth has departed, so Windows
+                            // has closed its process-local mapping and mutex
+                            // handles even if the target still exists.
+                            unset($records[$digest]);
+                            $reclaimedHere = true;
+                        }
+                    }
+                    if (!$reclaimedHere
+                        && !$releaseRequested
+                        && !$expired
+                        && !$targetExited
+                    ) {
+                        continue;
+                    }
+                    if (!$reclaimedHere
+                        && $currentSourceOwns
+                        && self::releasePendingRecordIfOwned(
+                        $records,
+                        (string)$digest,
+                        $runtime,
+                    )) {
+                        $reclaimedHere = true;
+                    }
+                    if (!$reclaimedHere) {
+                        // Another live exporter owns the only valid release
+                        // context. UNKNOWN evidence is never deletion authority.
+                        continue;
+                    }
+                    $removedPaths[] = $directory . DIRECTORY_SEPARATOR
+                        . (string)$record['envelope_leaf'];
+                    $reclaimed++;
+                }
+            },
+        );
+        foreach ($removedPaths as $path) {
+            try {
+                GatewayProjectStateFilesystem::removeRegular(
+                    $path,
+                    'expired Windows listener handoff envelope',
+                );
+            } catch (\Throwable) {
+            }
+        }
+        self::releaseExportMutexIfIdle();
+        return $reclaimed;
+    }
+
+    private static function sweepPendingExportsBestEffort(
+        ?string $directory = null,
+        ?WindowsListenerHandoffRuntime $runtime = null,
+    ): void {
+        if ($runtime === null && PHP_OS_FAMILY !== 'Windows') {
+            return;
+        }
+        try {
+            $directory ??= self::handoffDirectory();
+            $registryPath = $directory . DIRECTORY_SEPARATOR
+                . self::PENDING_REGISTRY_FILE;
+            $status = @\lstat($registryPath);
+            if (!\is_array($status)
+                && !\file_exists($registryPath)
+                && !\is_link($registryPath)
+            ) {
+                return;
+            }
+            self::sweepPendingExports(
+                $directory,
+                $runtime ?? new WindowsListenerHandoffRuntime(),
+            );
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * @template TResult
+     * @param \Closure(array<string,array<string,mixed>>&):TResult $callback
+     * @return TResult
+     */
+    private static function withPendingRegistry(
+        string $directory,
+        \Closure $callback,
+    ): mixed {
+        $canonical = \realpath($directory);
+        if (!\is_string($canonical)
+            || $canonical === ''
+            || \is_link($directory)
+            || !\is_dir($canonical)
+        ) {
+            throw new \RuntimeException(
+                'Windows listener handoff pending export directory is unsafe.'
+            );
+        }
+        $registryPath = $canonical . DIRECTORY_SEPARATOR . self::PENDING_REGISTRY_FILE;
+        $lockPath = $canonical . DIRECTORY_SEPARATOR . self::PENDING_REGISTRY_LOCK;
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $lockPath,
+            static function () use ($canonical, $registryPath, $callback): mixed {
+                GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                    $registryPath,
+                    self::MAX_PENDING_REGISTRY_BYTES,
+                    'Windows listener pending export registry',
+                    static function (string $contents) use ($canonical, $registryPath): void {
+                        unset($contents);
+                        self::readPendingRegistry($canonical, $registryPath);
+                    },
+                );
+                $records = self::readPendingRegistry($canonical, $registryPath);
+                $originalRecords = $records;
+                $result = null;
+                $failure = null;
+                try {
+                    $result = $callback($records);
+                } catch (\Throwable $throwable) {
+                    $failure = $throwable;
+                }
+                if ($records !== $originalRecords) {
+                    self::writePendingRegistry($registryPath, $records);
+                }
+                if ($failure instanceof \Throwable) {
+                    throw $failure;
+                }
+                return $result;
+            },
+        );
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    private static function readPendingRegistry(string $directory, string $path): array
+    {
+        $encoded = GatewayProjectStateFilesystem::readOptional(
+            $path,
+            self::MAX_PENDING_REGISTRY_BYTES,
+            'Windows listener pending export registry',
+        );
+        if ($encoded === null) {
+            return [];
+        }
+        try {
+            $decoded = \json_decode($encoded, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new \RuntimeException(
+                'Windows listener pending export registry is not valid JSON.',
+                0,
+                $exception,
+            );
+        }
+        $records = \is_array($decoded) ? ($decoded['records'] ?? null) : null;
+        if (!\is_array($decoded)
+            || (int)($decoded['schema_version'] ?? 0)
+                !== self::PENDING_REGISTRY_SCHEMA_VERSION
+            || !\is_array($records)
+            || (\array_is_list($records) && $records !== [])
+            || \count($records) > self::MAX_PENDING_EXPORTS
+        ) {
+            throw new \RuntimeException(
+                'Windows listener pending export registry is malformed.'
+            );
+        }
+        foreach ($records as $digest => $record) {
+            $protocolId = \is_array($record)
+                ? \base64_decode((string)($record['protocol_info_b64'] ?? ''), true)
+                : false;
+            $leaf = \is_array($record) ? (string)($record['envelope_leaf'] ?? '') : '';
+            $createdMonotonic = \is_array($record)
+                ? (float)($record['created_monotonic'] ?? 0.0)
+                : 0.0;
+            $expiresMonotonic = \is_array($record)
+                ? (float)($record['expires_monotonic'] ?? 0.0)
+                : 0.0;
+            if (!\is_string($digest)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+                || !\is_array($record)
+                || !\is_string($protocolId)
+                || $protocolId === ''
+                || \strlen($protocolId) > 16_384
+                || !\hash_equals($digest, \hash('sha256', $protocolId))
+                || !\hash_equals($digest, (string)($record['protocol_digest'] ?? ''))
+                || \preg_match('/\A[A-Za-z0-9._-]{1,191}\z/D', $leaf) !== 1
+                || !\hash_equals(
+                    self::pendingPathDigest($directory . DIRECTORY_SEPARATOR . $leaf),
+                    (string)($record['path_digest'] ?? ''),
+                )
+                || !\is_int($record['source_pid'] ?? null)
+                || (int)$record['source_pid'] < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                    $record['source_process_birth'] ?? ''
+                )) !== 1
+                || !\is_string($record['source_pid_namespace_id'] ?? null)
+                || \strlen((string)$record['source_pid_namespace_id']) > 128
+                || !\is_int($record['target_pid'] ?? null)
+                || (int)$record['target_pid'] < 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                    $record['target_process_birth'] ?? ''
+                )) !== 1
+                || !\is_string($record['target_pid_namespace_id'] ?? null)
+                || \strlen((string)$record['target_pid_namespace_id']) > 128
+                || !\is_int($record['socket_generation'] ?? null)
+                || (int)$record['socket_generation'] < 0
+                || !\in_array((string)($record['mutex_recovery_state'] ?? ''), [
+                    'NORMAL',
+                    'ABANDONED',
+                ], true)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', (string)(
+                    $record['host_boot_id'] ?? ''
+                )) !== 1
+                || !\is_finite($createdMonotonic)
+                || $createdMonotonic <= 0.0
+                || !\is_finite($expiresMonotonic)
+                || $expiresMonotonic <= $createdMonotonic
+                || $expiresMonotonic - $createdMonotonic
+                    > self::ENVELOPE_LIFETIME_SECONDS + 0.001
+                || !\is_int($record['created_timestamp'] ?? null)
+                || (int)$record['created_timestamp'] < 1
+                || !\is_int($record['expires_timestamp'] ?? null)
+                || (int)$record['expires_timestamp']
+                    <= (int)$record['created_timestamp']
+                || (int)$record['expires_timestamp']
+                    - (int)$record['created_timestamp']
+                    > self::ENVELOPE_LIFETIME_SECONDS
+                || !\is_bool($record['release_requested'] ?? null)
+                || !\in_array((string)($record['consumer_state'] ?? ''), [
+                    'PENDING',
+                    'CONSUMED',
+                    'REJECTED',
+                    'CANCELLED',
+                ], true)
+                || (bool)$record['release_requested']
+                    !== ((string)$record['consumer_state'] !== 'PENDING')
+            ) {
+                throw new \RuntimeException(
+                    'Windows listener pending export registry record is malformed.'
+                );
+            }
+        }
+        return $records;
+    }
+
+    /** @param array<string,array<string,mixed>> $records */
+    private static function writePendingRegistry(string $path, array $records): void
+    {
+        \ksort($records, SORT_STRING);
+        $encoded = \json_encode([
+            'schema_version' => self::PENDING_REGISTRY_SCHEMA_VERSION,
+            'records' => $records,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if (\strlen($encoded) > self::MAX_PENDING_REGISTRY_BYTES) {
+            throw new \RuntimeException(
+                'Windows listener pending export registry exceeds its fixed size limit.'
+            );
+        }
+        GatewayProjectStateFilesystem::atomicWrite($path, $encoded, 0600);
+    }
+
+    private static function pendingPathDigest(string $path): string
+    {
+        $directory = \realpath(\dirname($path));
+        $leaf = \basename($path);
+        if (!\is_string($directory)
+            || $directory === ''
+            || \preg_match('/\A[A-Za-z0-9._-]{1,191}\z/D', $leaf) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Windows listener handoff pending export path is unsafe.'
+            );
+        }
+        $canonical = \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $directory)
+            . DIRECTORY_SEPARATOR . $leaf;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $canonical = \strtolower($canonical);
+        }
+        return \hash('sha256', $canonical);
     }
 
     /** @return array<string,mixed> */
@@ -600,7 +1548,11 @@ final class WindowsListenerHandoff
         string $launchId,
         string $slotId,
         int $generation,
+        WindowsListenerHandoffRuntime $runtime,
     ): void {
+        $sourcePid = (int)($envelope['source_pid'] ?? 0);
+        $sourceBirth = (string)($envelope['source_process_birth'] ?? '');
+        $targetBirth = (string)($envelope['target_process_birth'] ?? '');
         if ((int)($envelope['schema_version'] ?? 0) !== self::SCHEMA_VERSION
             || !\hash_equals(self::TRANSPORT, (string)($envelope['transport'] ?? ''))
             || !\hash_equals($stage, (string)($envelope['stage'] ?? ''))
@@ -615,20 +1567,14 @@ final class WindowsListenerHandoff
             || !\hash_equals($launchId, (string)($envelope['launch_id'] ?? ''))
             || !\hash_equals($slotId, (string)($envelope['slot_id'] ?? ''))
             || $generation !== (int)($envelope['generation'] ?? -1)
-            || (int)($envelope['source_pid'] ?? 0) <= 0
-            || !\hash_equals(
-                self::processBirthIdentity((int)($envelope['source_pid'] ?? 0)),
-                (string)($envelope['source_process_birth'] ?? ''),
-            )
-            || !\hash_equals(
-                self::processBirthIdentity($targetPid),
-                (string)($envelope['target_process_birth'] ?? ''),
-            )
+            || $sourcePid <= 0
+            || !$runtime->processBirthMatches($sourcePid, $sourceBirth)
+            || !$runtime->processBirthMatches($targetPid, $targetBirth)
             || \preg_match(
                 '/\A[a-f0-9]{32}\z/D',
                 (string)($envelope['adoption_nonce'] ?? ''),
             ) !== 1
-            || (int)($envelope['expires_at'] ?? 0) < \time()
+            || (int)($envelope['expires_at'] ?? 0) < $runtime->wallNow()
             || !\is_string($envelope['protocol_info_b64'] ?? null)
             || \strlen((string)$envelope['protocol_info_b64']) > 16_384
         ) {
@@ -761,7 +1707,7 @@ final class WindowsListenerHandoff
     }
 
     /**
-     * Reproduce the schema-5 lease birth fence from immutable OS process
+     * Reproduce the schema-6 lease birth fence from immutable OS process
      * facts. No random fallback is accepted for a cross-process handoff.
      */
     public static function processBirthIdentity(int $pid): string
@@ -769,19 +1715,8 @@ final class WindowsListenerHandoff
         if ($pid < 1) {
             throw new \RuntimeException('Windows handoff process PID is invalid.');
         }
-        $info = Processer::getProcessInfo($pid);
-        $startedAt = \trim((string)($info['start_time'] ?? ''));
-        $name = \trim((string)($info['name'] ?? ''));
-        if (($info['exists'] ?? false) !== true || $startedAt === '') {
-            throw new \RuntimeException(
-                'Windows handoff process birth identity is unavailable.'
-            );
-        }
-        return \hash(
-            'sha256',
-            $pid . "\0" . $startedAt . "\0" . $name . "\0"
-                . \hash('sha256', (string)($info['command'] ?? '')),
-        );
+        $identity = (new MasterLeaseRuntimeIdentity())->captureProcessIdentity($pid);
+        return $identity['birth'];
     }
 
     private static function masterPath(string $handoffId): string

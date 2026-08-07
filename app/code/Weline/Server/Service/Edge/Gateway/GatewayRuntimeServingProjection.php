@@ -75,31 +75,51 @@ final class GatewayRuntimeServingProjection
      * been revalidated against the current host lease and process identities.
      *
      * @param array<string,mixed> $endpoint
-     * @return array{bind_host:string,connect_host:string,authority_host:string,port:int}|null
+     * @return array{origin:string,bind_host:string,connect_host:string,authority_host:string,port:int,https:bool}|null
      */
     public static function fallbackServingEndpoint(array $endpoint): ?array
     {
-        if (!self::fallbackWlsIsServing($endpoint)) {
-            return null;
+        if (self::fallbackWlsIsServing($endpoint)) {
+            $gateway = self::gateway($endpoint);
+            $proof = (array)$gateway['fallback_lease_proof'];
+            $bindHost = (string)$proof['bind_host'];
+            $authorityHost = (string)$proof['authority_host'];
+            $port = (int)$proof['port'];
+            try {
+                $origin = \Weline\Server\Service\Edge\PureWlsPublicOrigin::fromHostAndPort(
+                    $authorityHost,
+                    $port,
+                    true,
+                );
+            } catch (\Throwable) {
+                return null;
+            }
+            return [
+                'origin' => $origin,
+                'bind_host' => $bindHost,
+                'connect_host' => match ($bindHost) {
+                    '0.0.0.0' => '127.0.0.1',
+                    '::' => '::1',
+                    default => $bindHost,
+                },
+                'authority_host' => $authorityHost,
+                'port' => $port,
+                'https' => true,
+            ];
         }
         $gateway = self::gateway($endpoint);
-        $proof = (array)$gateway['fallback_lease_proof'];
-        $bindHost = (string)$proof['bind_host'];
-        return [
-            'bind_host' => $bindHost,
-            'connect_host' => match ($bindHost) {
-                '0.0.0.0' => '127.0.0.1',
-                '::' => '::1',
-                default => $bindHost,
-            },
-            'authority_host' => (string)$proof['authority_host'],
-            'port' => (int)$proof['port'],
-        ];
+        if (!self::initialAutoFallbackUsesPrimaryLease($endpoint, $gateway)) {
+            return null;
+        }
+        return self::projectOwnedWlsServingEndpoint(
+            $endpoint,
+            GatewayStartupDecision::MODE_AUTO,
+        );
     }
 
     /**
      * Resolve an explicitly requested project-owned WLS listener only while
-     * its schema-5 host lease still belongs to the exact live process
+     * its schema-6 host lease still belongs to the exact live process
      * generation. HTTPS additionally requires the current immutable serving
      * manifest to cover the persisted browser authority. A configured origin
      * by itself is never evidence that a public listener still exists.
@@ -109,6 +129,21 @@ final class GatewayRuntimeServingProjection
      */
     public static function explicitPureWlsServingEndpoint(array $endpoint): ?array
     {
+        return self::projectOwnedWlsServingEndpoint(
+            $endpoint,
+            GatewayStartupDecision::MODE_WLS,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $endpoint
+     * @return array{origin:string,bind_host:string,connect_host:string,authority_host:string,port:int,https:bool}|null
+     */
+    private static function projectOwnedWlsServingEndpoint(
+        array $endpoint,
+        string $requestedMode,
+    ): ?array
+    {
         if (!\hash_equals(
             'wls',
             \strtolower(\trim((string)($endpoint['edge_adapter'] ?? ''))),
@@ -117,7 +152,7 @@ final class GatewayRuntimeServingProjection
         }
         $gateway = self::gateway($endpoint);
         if (!\hash_equals(
-            GatewayStartupDecision::MODE_WLS,
+            $requestedMode,
             \strtolower(\trim((string)(
                 $gateway['requested_mode'] ?? $gateway['mode'] ?? ''
             ))),
@@ -138,7 +173,8 @@ final class GatewayRuntimeServingProjection
         $port = (int)($leaseIntent['port'] ?? 0);
         $allocationScope = (string)($leaseIntent['allocation_scope'] ?? '');
         if ($fence === null
-            || (int)($leaseIntent['schema_version'] ?? 0) !== 5
+            || (int)($leaseIntent['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
             || !\hash_equals($projectUuid, (string)($leaseIntent['project_uuid'] ?? ''))
             || !\hash_equals($instanceId, (string)($leaseIntent['instance'] ?? ''))
             || \preg_match('/\A[a-f0-9]{32}\z/D', $leaseId) !== 1
@@ -183,51 +219,37 @@ final class GatewayRuntimeServingProjection
 
         try {
             $leases = new GatewayPortLeaseAllocator();
-            $observedLease = $leases->status($instanceId);
-        } catch (\Throwable) {
-            return null;
-        }
-        if (!\is_array($observedLease)) {
-            return null;
-        }
-        $workerLaunchId = \strtolower(\trim((string)(
-            $observedLease['launch_id'] ?? ''
-        )));
-        $confirmedTimestamp = (int)($observedLease['confirmed_timestamp'] ?? 0);
-        if ((int)($observedLease['schema_version'] ?? 0) !== 5
-            || !\in_array((string)($observedLease['state'] ?? ''), ['ACTIVE', 'DRAINING'], true)
-            || !\hash_equals($projectUuid, (string)($observedLease['project_uuid'] ?? ''))
-            || !\hash_equals($instanceId, (string)($observedLease['instance'] ?? ''))
-            || !\hash_equals($leaseId, (string)($observedLease['lease_id'] ?? ''))
-            || !\hash_equals($bindHost, (string)($observedLease['bind_host'] ?? ''))
-            || !\hash_equals($allocationScope, (string)(
-                $observedLease['allocation_scope'] ?? ''
-            ))
-            || (int)($observedLease['port'] ?? 0) !== $port
-            || (int)($observedLease['master_pid'] ?? 0) !== $fence['master_pid']
-            || \preg_match('/\A[a-f0-9]{32}\z/D', $workerLaunchId) !== 1
-            || $confirmedTimestamp < 1
-        ) {
-            return null;
-        }
-        try {
-            $liveLease = $leases->liveServingLease(
+            $liveLease = $leases->liveServingLeaseForAnyOwner(
                 $instanceId,
                 $bindHost,
                 $port,
                 $leaseId,
-                $workerLaunchId,
                 $fence['master_pid'],
             );
         } catch (\Throwable) {
             return null;
         }
-        if (!\is_array($liveLease)
-            || !\hash_equals(
-                (string)$observedLease['state'],
-                (string)($liveLease['state'] ?? ''),
-            )
-            || (int)($liveLease['confirmed_timestamp'] ?? 0) !== $confirmedTimestamp
+        if (!\is_array($liveLease)) {
+            return null;
+        }
+        $workerLaunchId = \strtolower(\trim((string)(
+            $liveLease['launch_id'] ?? ''
+        )));
+        $confirmedTimestamp = (int)($liveLease['confirmed_timestamp'] ?? 0);
+        if ((int)($liveLease['schema_version'] ?? 0)
+                !== GatewayPortLeaseAllocator::SCHEMA_VERSION
+            || !\in_array((string)($liveLease['state'] ?? ''), ['ACTIVE', 'DRAINING'], true)
+            || !\hash_equals($projectUuid, (string)($liveLease['project_uuid'] ?? ''))
+            || !\hash_equals($instanceId, (string)($liveLease['instance'] ?? ''))
+            || !\hash_equals($leaseId, (string)($liveLease['lease_id'] ?? ''))
+            || !\hash_equals($bindHost, (string)($liveLease['bind_host'] ?? ''))
+            || !\hash_equals($allocationScope, (string)(
+                $liveLease['allocation_scope'] ?? ''
+            ))
+            || (int)($liveLease['port'] ?? 0) !== $port
+            || (int)($liveLease['master_pid'] ?? 0) !== $fence['master_pid']
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $workerLaunchId) !== 1
+            || $confirmedTimestamp < 1
         ) {
             return null;
         }
@@ -265,6 +287,60 @@ final class GatewayRuntimeServingProjection
             'port' => $port,
             'https' => $https,
         ];
+    }
+
+    /**
+     * Initial auto fallback is the project Master listener itself and owns the
+     * plain instance lease. Runtime outage fallback is a separate service with
+     * a ROLE_FALLBACK lease and proof. Never let one identity substitute for
+     * the other after the supplemental lifecycle has started.
+     *
+     * @param array<string,mixed> $endpoint
+     * @param array<string,mixed> $gateway
+     */
+    private static function initialAutoFallbackUsesPrimaryLease(
+        array $endpoint,
+        array $gateway,
+    ): bool {
+        $lease = \is_array($gateway['public_lease'] ?? null)
+            ? $gateway['public_lease']
+            : [];
+        return \hash_equals(
+                'wls',
+                \strtolower(\trim((string)($endpoint['edge_adapter'] ?? ''))),
+            )
+            && \hash_equals(
+                GatewayStartupDecision::MODE_AUTO,
+                \strtolower(\trim((string)(
+                    $gateway['requested_mode'] ?? ''
+                ))),
+            )
+            && \hash_equals(
+                GatewayStartupDecision::MODE_WLS,
+                \strtolower(\trim((string)($gateway['mode'] ?? ''))),
+            )
+            && \hash_equals(
+                self::SERVING_FALLBACK_WLS,
+                \strtolower(\trim((string)($gateway['serving_mode'] ?? ''))),
+            )
+            && \hash_equals(
+                GatewayPaths::PROTOCOL,
+                (string)($gateway['protocol'] ?? ''),
+            )
+            && \hash_equals(
+                'DEGRADED_WLS',
+                \strtoupper(\trim((string)($gateway['fallback_state'] ?? ''))),
+            )
+            && \trim((string)($gateway['degraded_reason'] ?? '')) !== ''
+            && (int)($gateway['public_http'] ?? 0) === 0
+            && (int)($gateway['public_https'] ?? 0) === 0
+            && !\array_key_exists('fallback_lease_proof', $gateway)
+            && \hash_equals(
+                'stable_range',
+                (string)($lease['allocation_scope'] ?? ''),
+            )
+            && (int)($lease['port'] ?? 0) >= 20000
+            && (int)($lease['port'] ?? 0) <= 29999;
     }
 
     /**
@@ -573,7 +649,7 @@ final class GatewayRuntimeServingProjection
             || !\hash_equals($authorityHost, (string)($proof['authority_host'] ?? ''))
             || (int)($proof['port'] ?? 0) !== $port
             || (int)($proof['master_pid'] ?? 0) !== $masterPid
-            || !\in_array((string)($proof['state'] ?? ''), ['ACTIVE', 'DRAINING'], true)
+            || !\hash_equals('ACTIVE', (string)($proof['state'] ?? ''))
             || (int)($proof['confirmed_timestamp'] ?? 0) < 1
             || (int)($proof['serving_manifest_generation'] ?? 0) < 1
             || (int)($gateway['serving_manifest_generation'] ?? 0)

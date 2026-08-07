@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Service\Edge\Gateway;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Gateway\GatewayPaths;
 use Weline\Server\Service\Edge\Gateway\GatewayRegistrationBuilder;
@@ -58,7 +59,7 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
             lifecycle: $this->lifecycle,
             statusResolver: function () use (&$calls): array {
                 $calls[] = 'status';
-                return $this->status([$this->instance('ACTIVE')]);
+                return $this->ownStatus([$this->instance('ACTIVE')]);
             },
             receiptValidator: static function (string $instance) use (&$calls): void {
                 $calls[] = 'receipt:' . $instance;
@@ -91,7 +92,7 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
     {
         $coordinator = new GatewayRegistrationRetirementCoordinator(
             lifecycle: $this->lifecycle,
-            statusResolver: fn (): array => $this->status([$this->instance('ACTIVE')]),
+            statusResolver: fn (): array => $this->ownStatus([$this->instance('ACTIVE')]),
             receiptValidator: static function (string $instance): void {
                 unset($instance);
             },
@@ -122,7 +123,7 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
     {
         $coordinator = new GatewayRegistrationRetirementCoordinator(
             lifecycle: $this->lifecycle,
-            statusResolver: fn (): array => $this->status([$this->instance('ACTIVE')]),
+            statusResolver: fn (): array => $this->ownStatus([$this->instance('ACTIVE')]),
             receiptValidator: static function (string $instance): void {
                 unset($instance);
             },
@@ -153,8 +154,8 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
     public function testAlreadyRemovedRequiresFreshAuthenticatedAbsence(): void
     {
         $statuses = [
-            $this->status([$this->instance('ACTIVE')]),
-            $this->status([]),
+            $this->ownStatus([$this->instance('ACTIVE')]),
+            $this->ownStatus([]),
         ];
         $coordinator = new GatewayRegistrationRetirementCoordinator(
             lifecycle: $this->lifecycle,
@@ -185,6 +186,121 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
         );
     }
 
+    #[DataProvider('statusFencedDrainStates')]
+    public function testStaleOrDrainingRetirementUsesStatusFenceWithoutFreshLeaseReceipt(
+        string $hostStatus,
+    ): void
+    {
+        $calls = [];
+        $coordinator = new GatewayRegistrationRetirementCoordinator(
+            lifecycle: $this->lifecycle,
+            statusResolver: function () use (&$calls, $hostStatus): array {
+                $calls[] = 'status';
+                return $this->ownStatus([$this->instance($hostStatus)]);
+            },
+            receiptValidator: static function (string $instance) use (&$calls): void {
+                $calls[] = 'receipt:' . $instance;
+                throw new \RuntimeException('A STALE launch has no fresh lease receipt.');
+            },
+            drainResolver: static function (
+                string $instance,
+                int $seconds,
+                bool $wait,
+            ) use (&$calls): array {
+                $calls[] = 'lease-drain:' . $instance . ':' . $seconds . ':' . (int)$wait;
+                throw new \RuntimeException('STALE must not use the fresh-lease drain path.');
+            },
+            staleDrainResolver: static function (
+                string $instance,
+                int $seconds,
+                bool $wait,
+            ) use (&$calls): array {
+                $calls[] = 'stale-drain:' . $instance . ':' . $seconds . ':' . (int)$wait;
+                return [
+                    'stale_drain_committed' => true,
+                    'irreversible' => true,
+                    'unregistered' => true,
+                    'retirement_authority' => 'authenticated_own_status',
+                ];
+            },
+            currentHostBootId: self::HOST_BOOT_ID,
+        );
+
+        $result = $coordinator->retire('shop', 1, true, false);
+
+        self::assertSame(GatewayStopRegistrationPolicy::ACTION_DRAIN, $result['action']);
+        self::assertSame(['status', 'stale-drain:shop:1:1'], $calls);
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_RETIRED,
+            $this->fact()['state'],
+        );
+    }
+
+    public function testWaitingStaleDrainCannotRetireLocallyBeforeCommittedUnregister(): void
+    {
+        $coordinator = new GatewayRegistrationRetirementCoordinator(
+            lifecycle: $this->lifecycle,
+            statusResolver: fn (): array => $this->ownStatus([
+                $this->instance('STALE'),
+            ]),
+            receiptValidator: static function (string $instance): void {
+                throw new \RuntimeException(
+                    'A STALE launch must not require a current lease receipt: ' . $instance,
+                );
+            },
+            drainResolver: static function (
+                string $instance,
+                int $seconds,
+                bool $wait,
+            ): array {
+                throw new \RuntimeException(
+                    'A STALE launch must not use the fresh lease path: '
+                        . $instance . ':' . $seconds . ':' . (int)$wait,
+                );
+            },
+            staleDrainResolver: static function (
+                string $instance,
+                int $seconds,
+                bool $wait,
+            ): array {
+                unset($instance, $seconds, $wait);
+                return [
+                    'stale_drain_committed' => true,
+                    'irreversible' => true,
+                    // The controller accepted DRAINING, but the requested wait
+                    // has not yet reached exact connection-zero + unregister.
+                    'unregistered' => false,
+                    'retirement_authority' => 'authenticated_own_status',
+                ];
+            },
+            currentHostBootId: self::HOST_BOOT_ID,
+        );
+
+        try {
+            $coordinator->retire('shop', 300, true, true);
+            self::fail('Waiting retirement must require committed unregister.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'irreversible authenticated stale drain',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertSame(
+            GatewayRegistrationLifecycle::STATE_REGISTERED,
+            $this->fact()['state'],
+        );
+    }
+
+    /** @return array<string,array{string}> */
+    public static function statusFencedDrainStates(): array
+    {
+        return [
+            'stale' => ['STALE'],
+            'draining retry' => ['DRAINING'],
+        ];
+    }
+
     /** @return array<string,mixed> */
     private function endpoint(): array
     {
@@ -212,7 +328,7 @@ final class GatewayRegistrationRetirementCoordinatorTest extends TestCase
     }
 
     /** @param list<array<string,mixed>> $instances */
-    private function status(array $instances): array
+    private function ownStatus(array $instances): array
     {
         return [
             'ok' => true,

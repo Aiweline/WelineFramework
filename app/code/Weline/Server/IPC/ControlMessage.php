@@ -14,6 +14,8 @@ namespace Weline\Server\IPC;
 
 use Weline\Framework\System\IPC\NdjsonProtocol;
 use Weline\Framework\System\IPC\ProcessKind;
+use Weline\Server\Service\Edge\Gateway\GatewayClient;
+use Weline\Server\Service\Edge\Gateway\GatewayHostBootIdentity;
 use Weline\Server\Service\Policy\DispatcherPolicyControl;
 
 class ControlMessage
@@ -23,6 +25,37 @@ class ControlMessage
 
     /** 总预算内的幂等 READY/activate 重试间隔。 */
     public const READY_RETRY_INTERVAL_SEC = 0.5;
+
+    /** Drain 仍在等待应用或传输层自然收敛。 */
+    public const DRAIN_ACTION_WAIT = 'wait';
+
+    /** Drain 已自然清空。 */
+    public const DRAIN_ACTION_COMPLETE = 'complete';
+
+    /** 软截止点仅剩空闲 transport，可安全关闭。 */
+    public const DRAIN_ACTION_CLOSE_IDLE = 'close_idle';
+
+    /** 硬截止点已到，必须强制收敛。 */
+    public const DRAIN_ACTION_FORCE = 'force';
+
+    public const DRAIN_OUTCOME_NATURAL = 'natural';
+    public const DRAIN_OUTCOME_IDLE_CLEANUP = 'idle_cleanup';
+    public const DRAIN_OUTCOME_FORCED = 'forced';
+
+    /** RFC 6455 message budget shared by the production HTTP and TLS workers. */
+    public const WEBSOCKET_DEFAULT_MAX_MESSAGE_BYTES = 1_048_576;
+
+    /** Bound one event-loop turn so a single WebSocket cannot monopolize a worker. */
+    public const WEBSOCKET_MAX_FRAMES_PER_TICK = 64;
+
+    private const DRAIN_REPORT_COUNT_KEYS = [
+        'connections',
+        'active_requests',
+        'long_lived_connections',
+        'sse_connections',
+        'websocket_connections',
+        'http2_connections',
+    ];
 
     // ========== 消息类型常量 ==========
 
@@ -91,6 +124,16 @@ class ControlMessage
 
     /** Master → Dispatcher：将指定端口从黑名单移除 */
     public const TYPE_UNDRAIN = 'undrain';
+
+    /** Gateway fallback Worker → Master：精确 listener 转换回执。 */
+    public const TYPE_GATEWAY_FALLBACK_LISTENER_ACK = 'gateway_fallback_listener_ack';
+
+    public const GATEWAY_FALLBACK_LISTENER_PROTOCOL = 'wls-gateway-fallback-listener/1';
+    public const GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN = 'DRAIN';
+    public const GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN = 'UNDRAIN';
+    public const GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE = 'ACTIVE';
+    public const GATEWAY_FALLBACK_LISTENER_STATE_DRAINING = 'DRAINING';
+    public const GATEWAY_FALLBACK_LISTENER_STATE_TERMINAL = 'TERMINAL';
 
     /** Master → Dispatcher：设置 HTTP 重定向端口（用于明文 HTTP 请求转发） */
     public const TYPE_SET_REDIRECT_PORT = 'set_redirect_port';
@@ -990,6 +1033,652 @@ class ControlMessage
     }
 
     /**
+     * 从 Worker 的总排水预算派生 soft/hard 截止点。
+     *
+     * soft 最多比 hard 早 1 秒：它只允许关闭无应用工作的空闲
+     * transport；hard 是 SSE/WebSocket/H2 等所有未收敛连接的最终上限。
+     *
+     * @return array{soft:float,hard:float}
+     */
+    public static function drainDeadlines(float $hardDeadlineSeconds): array
+    {
+        $hard = \max(1.0, \min(7200.0, $hardDeadlineSeconds));
+        $soft = $hard > 1.0 ? \max(1.0, $hard - 1.0) : $hard;
+
+        return ['soft' => $soft, 'hard' => $hard];
+    }
+
+    /**
+     * 统一 HTTP/1.1、SSE、WebSocket 和 HTTP/2 的排水判定。
+     */
+    public static function drainLifecycleDecision(
+        float $elapsedSeconds,
+        float $softDeadlineSeconds,
+        float $hardDeadlineSeconds,
+        int $connectionCount,
+        int $activeRequests,
+        int $pendingApplicationWork,
+        int $longLivedConnections,
+        int $http2Connections,
+    ): string {
+        $connectionCount = \max(0, $connectionCount);
+        $hasPendingWork = \max(0, $activeRequests) > 0
+            || \max(0, $pendingApplicationWork) > 0
+            || \max(0, $longLivedConnections) > 0
+            || \max(0, $http2Connections) > 0;
+
+        if ($connectionCount === 0 && !$hasPendingWork) {
+            return self::DRAIN_ACTION_COMPLETE;
+        }
+
+        $hardDeadlineSeconds = \max(0.0, $hardDeadlineSeconds);
+        if (\max(0.0, $elapsedSeconds) >= $hardDeadlineSeconds) {
+            return self::DRAIN_ACTION_FORCE;
+        }
+
+        $softDeadlineSeconds = \max(0.0, \min($softDeadlineSeconds, $hardDeadlineSeconds));
+        if (!$hasPendingWork && \max(0.0, $elapsedSeconds) >= $softDeadlineSeconds) {
+            return self::DRAIN_ACTION_CLOSE_IDLE;
+        }
+
+        return self::DRAIN_ACTION_WAIT;
+    }
+
+    /**
+     * 生成可版本化的 drain 完成报告，明确区分观测值和实际终止数。
+     *
+     * @param array<string,int> $observed
+     * @param array<string,int> $terminated
+     * @return array{
+     *     schema:string,
+     *     outcome:string,
+     *     forced:bool,
+     *     elapsed_ms:int,
+     *     soft_deadline_ms:int,
+     *     hard_deadline_ms:int,
+     *     observed:array<string,int>,
+     *     terminated:array<string,int>
+     * }
+     */
+    public static function drainCompletionReport(
+        string $outcome,
+        float $elapsedSeconds,
+        float $softDeadlineSeconds,
+        float $hardDeadlineSeconds,
+        array $observed = [],
+        array $terminated = [],
+    ): array {
+        if (!\in_array($outcome, [
+            self::DRAIN_OUTCOME_NATURAL,
+            self::DRAIN_OUTCOME_IDLE_CLEANUP,
+            self::DRAIN_OUTCOME_FORCED,
+        ], true)) {
+            throw new \InvalidArgumentException('Unsupported drain completion outcome: ' . $outcome);
+        }
+
+        $normalizeCounts = static function (array $counts): array {
+            $normalized = [];
+            foreach (self::DRAIN_REPORT_COUNT_KEYS as $key) {
+                $normalized[$key] = \max(0, (int)($counts[$key] ?? 0));
+            }
+
+            return $normalized;
+        };
+
+        return [
+            'schema' => 'wls-drain-report/1',
+            'outcome' => $outcome,
+            'forced' => $outcome === self::DRAIN_OUTCOME_FORCED,
+            'elapsed_ms' => (int)\round(\max(0.0, $elapsedSeconds) * 1000),
+            'soft_deadline_ms' => (int)\round(\max(0.0, $softDeadlineSeconds) * 1000),
+            'hard_deadline_ms' => (int)\round(\max(0.0, $hardDeadlineSeconds) * 1000),
+            'observed' => $normalizeCounts($observed),
+            'terminated' => $normalizeCounts($terminated),
+        ];
+    }
+
+    /**
+     * Build the per-connection RFC 6455 state used by both production workers.
+     *
+     * @return array{
+     *     buffer:string,
+     *     fragment_opcode:?int,
+     *     fragment_payload:string,
+     *     close_sent:bool,
+     *     close_received:bool
+     * }
+     */
+    public static function webSocketInitialState(): array
+    {
+        return [
+            'buffer' => '',
+            'fragment_opcode' => null,
+            'fragment_payload' => '',
+            'close_sent' => false,
+            'close_received' => false,
+        ];
+    }
+
+    /**
+     * Only an application-authorized and cryptographically coherent HTTP/1.1
+     * upgrade may switch the worker from HTTP parsing to the frame data plane.
+     */
+    public static function webSocketUpgradeAccepted(string $request, string $response): bool
+    {
+        $requestHead = self::webSocketParseHttpHead($request);
+        $responseHead = self::webSocketParseHttpHead($response);
+        if ($requestHead === null || $responseHead === null) {
+            return false;
+        }
+        if (!\preg_match('/^GET\s+\S+\s+HTTP\/1\.1$/i', $requestHead['start_line'])) {
+            return false;
+        }
+        if (!\preg_match('/^HTTP\/1\.1\s+101(?:\s|$)/i', $responseHead['start_line'])) {
+            return false;
+        }
+
+        $requestHeaders = $requestHead['headers'];
+        $responseHeaders = $responseHead['headers'];
+        if (!self::webSocketHeaderHasToken($requestHeaders, 'upgrade', 'websocket')
+            || !self::webSocketHeaderHasToken($requestHeaders, 'connection', 'upgrade')
+            || !self::webSocketHeaderHasToken($responseHeaders, 'upgrade', 'websocket')
+            || !self::webSocketHeaderHasToken($responseHeaders, 'connection', 'upgrade')
+        ) {
+            return false;
+        }
+
+        $versions = $requestHeaders['sec-websocket-version'] ?? [];
+        $keys = $requestHeaders['sec-websocket-key'] ?? [];
+        $accepts = $responseHeaders['sec-websocket-accept'] ?? [];
+        if (\count($versions) !== 1
+            || \trim((string)$versions[0]) !== '13'
+            || \count($keys) !== 1
+            || \count($accepts) !== 1
+        ) {
+            return false;
+        }
+
+        // This bounded runtime does not implement extension RSV semantics. An
+        // application must not negotiate compression (or another extension)
+        // that the production frame parser cannot honor.
+        if (isset($responseHeaders['sec-websocket-extensions'])) {
+            return false;
+        }
+
+        $selectedProtocols = $responseHeaders['sec-websocket-protocol'] ?? [];
+        if (\count($selectedProtocols) > 1) {
+            return false;
+        }
+        if ($selectedProtocols !== []) {
+            $selectedProtocol = \trim((string)$selectedProtocols[0]);
+            if ($selectedProtocol === ''
+                || \str_contains($selectedProtocol, ',')
+                || \preg_match('/^[!#$%&\'*+.^_`|~0-9a-z-]+$/i', $selectedProtocol) !== 1
+            ) {
+                return false;
+            }
+            $offeredProtocols = [];
+            foreach ($requestHeaders['sec-websocket-protocol'] ?? [] as $offeredHeader) {
+                foreach (\explode(',', $offeredHeader) as $offeredProtocol) {
+                    $offeredProtocol = \trim($offeredProtocol);
+                    if ($offeredProtocol !== '') {
+                        $offeredProtocols[] = $offeredProtocol;
+                    }
+                }
+            }
+            if (!\in_array($selectedProtocol, $offeredProtocols, true)) {
+                return false;
+            }
+        }
+
+        $key = \trim((string)$keys[0]);
+        $decodedKey = \base64_decode($key, true);
+        if (!\is_string($decodedKey) || \strlen($decodedKey) !== 16) {
+            return false;
+        }
+
+        $expectedAccept = \base64_encode(\sha1(
+            $key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11',
+            true,
+        ));
+
+        return \hash_equals($expectedAccept, \trim((string)$accepts[0]));
+    }
+
+    /**
+     * Incrementally consume masked client frames and produce unmasked server
+     * frames. Complete text/binary messages are echoed because the existing WLS
+     * upgrade contract has no separate per-frame application callback.
+     *
+     * @param array<string,mixed> $state
+     * @return array{
+     *     state:array<string,mixed>,
+     *     outbound:list<string>,
+     *     events:list<array<string,mixed>>,
+     *     close_transport:bool,
+     *     error_code:?int
+     * }
+     */
+    public static function webSocketConsumeClientBytes(
+        array $state,
+        string $bytes,
+        int $maxMessageBytes = self::WEBSOCKET_DEFAULT_MAX_MESSAGE_BYTES,
+    ): array {
+        $state = self::webSocketNormalizeState($state);
+        $maxMessageBytes = \max(1, $maxMessageBytes);
+        if ($bytes !== '') {
+            $state['buffer'] .= $bytes;
+        }
+
+        $events = [];
+        $outbound = [];
+        if ($state['close_received']) {
+            $state['buffer'] = '';
+
+            return self::webSocketResult($state, $outbound, $events, true, null);
+        }
+
+        $processedFrames = 0;
+        while ($processedFrames < self::WEBSOCKET_MAX_FRAMES_PER_TICK) {
+            $bufferLength = \strlen($state['buffer']);
+            if ($bufferLength < 2) {
+                break;
+            }
+
+            $firstByte = \ord($state['buffer'][0]);
+            $secondByte = \ord($state['buffer'][1]);
+            $fin = ($firstByte & 0x80) !== 0;
+            $rsv = $firstByte & 0x70;
+            $opcode = $firstByte & 0x0f;
+            $masked = ($secondByte & 0x80) !== 0;
+            $lengthMarker = $secondByte & 0x7f;
+
+            if ($rsv !== 0
+                || !\in_array($opcode, [0x0, 0x1, 0x2, 0x8, 0x9, 0xa], true)
+                || !$masked
+            ) {
+                return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+            }
+
+            $isControl = $opcode >= 0x8;
+            if ($isControl && (!$fin || $lengthMarker > 125)) {
+                return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+            }
+
+            $headerLength = 2;
+            $payloadLength = $lengthMarker;
+            if ($lengthMarker === 126) {
+                if ($bufferLength < 4) {
+                    break;
+                }
+                $unpacked = \unpack('nlength', \substr($state['buffer'], 2, 2));
+                $payloadLength = (int)($unpacked['length'] ?? 0);
+                $headerLength = 4;
+                if ($payloadLength < 126) {
+                    return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+                }
+            } elseif ($lengthMarker === 127) {
+                if ($bufferLength < 10) {
+                    break;
+                }
+                $unpacked = \unpack('Nhigh/Nlow', \substr($state['buffer'], 2, 8));
+                $high = (int)($unpacked['high'] ?? 0);
+                $low = (int)($unpacked['low'] ?? 0);
+                if (($high & 0x80000000) !== 0) {
+                    return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+                }
+                if ($high !== 0) {
+                    return self::webSocketProtocolFailure($state, $outbound, $events, 1009);
+                }
+                $payloadLength = $low;
+                $headerLength = 10;
+                if ($payloadLength <= 65535) {
+                    return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+                }
+            }
+
+            $fragmentLength = $opcode === 0x0 ? \strlen($state['fragment_payload']) : 0;
+            if (!$isControl
+                && ($payloadLength > $maxMessageBytes || $fragmentLength > ($maxMessageBytes - $payloadLength))
+            ) {
+                return self::webSocketProtocolFailure($state, $outbound, $events, 1009);
+            }
+
+            $frameLength = $headerLength + 4 + $payloadLength;
+            if ($bufferLength < $frameLength) {
+                break;
+            }
+
+            $mask = \substr($state['buffer'], $headerLength, 4);
+            $maskedPayload = \substr($state['buffer'], $headerLength + 4, $payloadLength);
+            $state['buffer'] = (string)\substr($state['buffer'], $frameLength);
+            $payload = '';
+            for ($index = 0; $index < $payloadLength; ++$index) {
+                $payload .= $maskedPayload[$index] ^ $mask[$index % 4];
+            }
+            ++$processedFrames;
+
+            if ($opcode === 0x8) {
+                if ($payloadLength === 1) {
+                    return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+                }
+                $closeCode = null;
+                $closeReason = '';
+                if ($payloadLength >= 2) {
+                    $unpacked = \unpack('ncode', \substr($payload, 0, 2));
+                    $closeCode = (int)($unpacked['code'] ?? 0);
+                    $closeReason = (string)\substr($payload, 2);
+                    if (!self::webSocketValidCloseCode($closeCode)) {
+                        return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+                    }
+                    if (!self::webSocketValidUtf8($closeReason)) {
+                        return self::webSocketProtocolFailure($state, $outbound, $events, 1007);
+                    }
+                }
+
+                $events[] = ['type' => 'close', 'code' => $closeCode, 'reason' => $closeReason];
+                $state['close_received'] = true;
+                if (!$state['close_sent']) {
+                    $outbound[] = self::webSocketServerFrame(0x8, $payload);
+                    $state['close_sent'] = true;
+                }
+                $state['buffer'] = '';
+
+                return self::webSocketResult($state, $outbound, $events, true, null);
+            }
+
+            if ($state['close_sent']) {
+                return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+            }
+
+            if ($opcode === 0x9) {
+                $events[] = ['type' => 'ping', 'data' => $payload];
+                $outbound[] = self::webSocketServerFrame(0xa, $payload);
+                continue;
+            }
+            if ($opcode === 0xa) {
+                $events[] = ['type' => 'pong', 'data' => $payload];
+                continue;
+            }
+
+            if ($opcode === 0x0) {
+                if ($state['fragment_opcode'] === null) {
+                    return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+                }
+                $state['fragment_payload'] .= $payload;
+                if (!$fin) {
+                    continue;
+                }
+                $messageOpcode = (int)$state['fragment_opcode'];
+                $messagePayload = $state['fragment_payload'];
+                $state['fragment_opcode'] = null;
+                $state['fragment_payload'] = '';
+                $completed = self::webSocketCompleteMessage(
+                    $state,
+                    $outbound,
+                    $events,
+                    $messageOpcode,
+                    $messagePayload,
+                );
+                if ($completed !== null) {
+                    return $completed;
+                }
+                continue;
+            }
+
+            if ($state['fragment_opcode'] !== null) {
+                return self::webSocketProtocolFailure($state, $outbound, $events, 1002);
+            }
+            if (!$fin) {
+                $state['fragment_opcode'] = $opcode;
+                $state['fragment_payload'] = $payload;
+                continue;
+            }
+
+            $completed = self::webSocketCompleteMessage(
+                $state,
+                $outbound,
+                $events,
+                $opcode,
+                $payload,
+            );
+            if ($completed !== null) {
+                return $completed;
+            }
+        }
+
+        return self::webSocketResult(
+            $state,
+            $outbound,
+            $events,
+            false,
+            null,
+            $processedFrames >= self::WEBSOCKET_MAX_FRAMES_PER_TICK && $state['buffer'] !== '',
+        );
+    }
+
+    /**
+     * Send one RFC 6455 close frame and keep reading until the peer answers or
+     * the worker's existing hard drain deadline forces the transport closed.
+     *
+     * @param array<string,mixed> $state
+     * @return array{
+     *     state:array<string,mixed>,outbound:list<string>,events:list<array<string,mixed>>,
+     *     close_transport:bool,error_code:?int
+     * }
+     */
+    public static function webSocketInitiateServerClose(
+        array $state,
+        int $code = 1001,
+        string $reason = '',
+    ): array {
+        $state = self::webSocketNormalizeState($state);
+        if (!self::webSocketValidCloseCode($code)) {
+            throw new \InvalidArgumentException('Unsupported WebSocket close code: ' . $code);
+        }
+        if (!self::webSocketValidUtf8($reason)) {
+            throw new \InvalidArgumentException('WebSocket close reason must be valid UTF-8.');
+        }
+        while (\strlen($reason) > 123) {
+            $reason = (string)\substr($reason, 0, -1);
+            while ($reason !== '' && !self::webSocketValidUtf8($reason)) {
+                $reason = (string)\substr($reason, 0, -1);
+            }
+        }
+
+        $outbound = [];
+        if (!$state['close_sent']) {
+            $outbound[] = self::webSocketServerFrame(0x8, \pack('n', $code) . $reason);
+            $state['close_sent'] = true;
+        }
+
+        return self::webSocketResult(
+            $state,
+            $outbound,
+            [],
+            $state['close_received'],
+            null,
+        );
+    }
+
+    public static function webSocketServerFrame(int $opcode, string $payload = '', bool $fin = true): string
+    {
+        if (!\in_array($opcode, [0x0, 0x1, 0x2, 0x8, 0x9, 0xa], true)) {
+            throw new \InvalidArgumentException('Unsupported WebSocket opcode: ' . $opcode);
+        }
+        $payloadLength = \strlen($payload);
+        if ($opcode >= 0x8 && (!$fin || $payloadLength > 125)) {
+            throw new \InvalidArgumentException('WebSocket control frames must be final and at most 125 bytes.');
+        }
+
+        $frame = \chr(($fin ? 0x80 : 0x00) | $opcode);
+        if ($payloadLength < 126) {
+            return $frame . \chr($payloadLength) . $payload;
+        }
+        if ($payloadLength <= 65535) {
+            return $frame . \chr(126) . \pack('n', $payloadLength) . $payload;
+        }
+
+        return $frame . \chr(127) . \pack('NN', 0, $payloadLength) . $payload;
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @param list<string> $outbound
+     * @param list<array<string,mixed>> $events
+     * @return null|array<string,mixed>
+     */
+    private static function webSocketCompleteMessage(
+        array &$state,
+        array &$outbound,
+        array &$events,
+        int $opcode,
+        string $payload,
+    ): ?array {
+        if ($opcode === 0x1 && !self::webSocketValidUtf8($payload)) {
+            return self::webSocketProtocolFailure($state, $outbound, $events, 1007);
+        }
+
+        $events[] = [
+            'type' => $opcode === 0x1 ? 'text' : 'binary',
+            'data' => $payload,
+        ];
+        $outbound[] = self::webSocketServerFrame($opcode, $payload);
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @return array<string,mixed>
+     */
+    private static function webSocketNormalizeState(array $state): array
+    {
+        $fragmentOpcode = $state['fragment_opcode'] ?? null;
+        if (!\in_array($fragmentOpcode, [0x1, 0x2], true)) {
+            $fragmentOpcode = null;
+        }
+
+        return [
+            'buffer' => \is_string($state['buffer'] ?? null) ? $state['buffer'] : '',
+            'fragment_opcode' => $fragmentOpcode,
+            'fragment_payload' => \is_string($state['fragment_payload'] ?? null)
+                ? $state['fragment_payload']
+                : '',
+            'close_sent' => ($state['close_sent'] ?? false) === true,
+            'close_received' => ($state['close_received'] ?? false) === true,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @param list<string> $outbound
+     * @param list<array<string,mixed>> $events
+     * @return array<string,mixed>
+     */
+    private static function webSocketProtocolFailure(
+        array $state,
+        array $outbound,
+        array $events,
+        int $code,
+    ): array {
+        $state = self::webSocketNormalizeState($state);
+        $state['buffer'] = '';
+        $state['fragment_opcode'] = null;
+        $state['fragment_payload'] = '';
+        if (!$state['close_sent']) {
+            $outbound[] = self::webSocketServerFrame(0x8, \pack('n', $code));
+            $state['close_sent'] = true;
+        }
+
+        return self::webSocketResult($state, $outbound, $events, true, $code);
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @param list<string> $outbound
+     * @param list<array<string,mixed>> $events
+     * @return array<string,mixed>
+     */
+    private static function webSocketResult(
+        array $state,
+        array $outbound,
+        array $events,
+        bool $closeTransport,
+        ?int $errorCode,
+        bool $frameBudgetExhausted = false,
+    ): array {
+        return [
+            'state' => $state,
+            'outbound' => $outbound,
+            'events' => $events,
+            'close_transport' => $closeTransport,
+            'error_code' => $errorCode,
+            'frame_budget_exhausted' => $frameBudgetExhausted,
+        ];
+    }
+
+    private static function webSocketValidUtf8(string $value): bool
+    {
+        return $value === '' || \preg_match('//u', $value) === 1;
+    }
+
+    private static function webSocketValidCloseCode(int $code): bool
+    {
+        return \in_array($code, [
+            1000, 1001, 1002, 1003, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014,
+        ], true) || ($code >= 3000 && $code <= 4999);
+    }
+
+    /**
+     * @return null|array{start_line:string,headers:array<string,list<string>>}
+     */
+    private static function webSocketParseHttpHead(string $message): ?array
+    {
+        $headEnd = \strpos($message, "\r\n\r\n");
+        $head = $headEnd === false ? $message : \substr($message, 0, $headEnd);
+        $lines = \explode("\r\n", $head);
+        $startLine = \trim((string)\array_shift($lines));
+        if ($startLine === '') {
+            return null;
+        }
+
+        $headers = [];
+        foreach ($lines as $line) {
+            if ($line === '' || \str_starts_with($line, ' ') || \str_starts_with($line, "\t")) {
+                return null;
+            }
+            $separator = \strpos($line, ':');
+            if ($separator === false) {
+                return null;
+            }
+            $name = \strtolower(\trim(\substr($line, 0, $separator)));
+            if ($name === '' || \preg_match('/^[!#$%&\'*+.^_`|~0-9a-z-]+$/', $name) !== 1) {
+                return null;
+            }
+            $headers[$name][] = \trim(\substr($line, $separator + 1));
+        }
+
+        return ['start_line' => $startLine, 'headers' => $headers];
+    }
+
+    /**
+     * @param array<string,list<string>> $headers
+     */
+    private static function webSocketHeaderHasToken(array $headers, string $name, string $token): bool
+    {
+        foreach ($headers[$name] ?? [] as $value) {
+            foreach (\explode(',', $value) as $candidate) {
+                if (\strcasecmp(\trim($candidate), $token) === 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * 构建 drain 消息
      */
     public static function drain(array $ports, int $drainTimeoutSec = 0): string
@@ -1017,6 +1706,466 @@ class ControlMessage
     }
 
     /**
+     * Canonical digest for one action inside a reversible fallback-listener
+     * transaction. DRAIN and UNDRAIN deliberately share transition_id; the
+     * UNDRAIN digest is chained to the acknowledged DRAIN digest.
+     *
+     * @param array<string,mixed> $identity
+     */
+    public static function gatewayFallbackListenerActionDigest(
+        string $action,
+        string $targetListenerState,
+        string $transitionId,
+        string $predecessorActionDigest,
+        array $identity,
+    ): string {
+        $identity = self::normaliseGatewayFallbackListenerIdentity($identity);
+        self::assertGatewayFallbackListenerAction(
+            $action,
+            $targetListenerState,
+            $transitionId,
+            $predecessorActionDigest,
+        );
+
+        return \hash('sha256', GatewayClient::canonicalJson([
+            'protocol' => self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+            'action' => $action,
+            'target_listener_state' => $targetListenerState,
+            'transition_id' => $transitionId,
+            'predecessor_action_digest' => $predecessorActionDigest,
+            'identity' => $identity,
+        ]));
+    }
+
+    /**
+     * Build a generation-fenced reversible transition for the one fallback
+     * listener. Generic worker/dispatcher drain messages deliberately do not
+     * carry this contract.
+     *
+     * @param array<string,mixed> $identity
+     */
+    public static function gatewayFallbackListenerTransition(
+        string $action,
+        string $targetListenerState,
+        string $transitionId,
+        string $actionDigest,
+        string $predecessorActionDigest,
+        array $identity,
+        int $drainTimeoutSec = 0,
+    ): string {
+        $identity = self::normaliseGatewayFallbackListenerIdentity($identity);
+        $expectedDigest = self::gatewayFallbackListenerActionDigest(
+            $action,
+            $targetListenerState,
+            $transitionId,
+            $predecessorActionDigest,
+            $identity,
+        );
+        if (!\hash_equals($expectedDigest, $actionDigest)
+            || $drainTimeoutSec < 0
+            || $drainTimeoutSec > 3600
+            || ($action === self::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN
+                && $drainTimeoutSec !== 0)
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway fallback listener transition action or timeout is invalid.'
+            );
+        }
+        $payload = [
+            'type' => $action === self::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN
+                ? self::TYPE_DRAIN
+                : self::TYPE_UNDRAIN,
+            'protocol' => self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+            'action' => $action,
+            'target_listener_state' => $targetListenerState,
+            'transition_id' => $transitionId,
+            'action_digest' => $actionDigest,
+            'predecessor_action_digest' => $predecessorActionDigest,
+            'identity' => $identity,
+        ];
+        if ($action === self::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN
+            && $drainTimeoutSec > 0
+        ) {
+            $payload['drain_timeout_sec'] = $drainTimeoutSec;
+        }
+
+        return self::encode(self::validateGatewayFallbackListenerTransition($payload));
+    }
+
+    /**
+     * @param array<string,mixed> $message
+     * @return array<string,mixed>
+     */
+    public static function validateGatewayFallbackListenerTransition(array $message): array
+    {
+        $action = self::requiredGatewayFallbackListenerString($message, 'action');
+        $targetListenerState = self::requiredGatewayFallbackListenerString(
+            $message,
+            'target_listener_state',
+        );
+        $transitionId = self::requiredGatewayFallbackListenerString(
+            $message,
+            'transition_id',
+        );
+        $actionDigest = self::requiredGatewayFallbackListenerString(
+            $message,
+            'action_digest',
+        );
+        $predecessorActionDigest = self::requiredGatewayFallbackListenerString(
+            $message,
+            'predecessor_action_digest',
+            true,
+        );
+        $identity = self::normaliseGatewayFallbackListenerIdentity(
+            \is_array($message['identity'] ?? null) ? $message['identity'] : [],
+        );
+        $expectedType = $action === self::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN
+            ? self::TYPE_DRAIN
+            : self::TYPE_UNDRAIN;
+        $drainTimeoutSec = $message['drain_timeout_sec'] ?? 0;
+        $allowedKeys = [
+            'type',
+            'protocol',
+            'action',
+            'target_listener_state',
+            'transition_id',
+            'action_digest',
+            'predecessor_action_digest',
+            'identity',
+        ];
+        if (\array_key_exists('drain_timeout_sec', $message)) {
+            $allowedKeys[] = 'drain_timeout_sec';
+        }
+        if (!self::sameGatewayFallbackListenerKeys($message, $allowedKeys)
+            || !\hash_equals(
+                self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+                (string)($message['protocol'] ?? ''),
+            )
+            || !\hash_equals($expectedType, (string)($message['type'] ?? ''))
+            || !\is_int($drainTimeoutSec)
+            || $drainTimeoutSec < 0
+            || $drainTimeoutSec > 3600
+            || ($action === self::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN
+                && ($drainTimeoutSec !== 0
+                    || \array_key_exists('drain_timeout_sec', $message)))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $actionDigest) !== 1
+            || !\hash_equals(
+                self::gatewayFallbackListenerActionDigest(
+                    $action,
+                    $targetListenerState,
+                    $transitionId,
+                    $predecessorActionDigest,
+                    $identity,
+                ),
+                $actionDigest,
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway fallback listener transition envelope is invalid.'
+            );
+        }
+
+        $validated = [
+            'type' => $expectedType,
+            'protocol' => self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+            'action' => $action,
+            'target_listener_state' => $targetListenerState,
+            'transition_id' => $transitionId,
+            'action_digest' => $actionDigest,
+            'predecessor_action_digest' => $predecessorActionDigest,
+            'identity' => $identity,
+        ];
+        if ($drainTimeoutSec > 0) {
+            $validated['drain_timeout_sec'] = $drainTimeoutSec;
+        }
+
+        return $validated;
+    }
+
+    /** @param array<string,mixed> $identity */
+    public static function gatewayFallbackListenerAck(
+        string $action,
+        string $targetListenerState,
+        string $listenerState,
+        string $transitionId,
+        string $actionDigest,
+        string $predecessorActionDigest,
+        array $identity,
+        bool $success,
+        string $reason = '',
+    ): string {
+        $payload = [
+            'type' => self::TYPE_GATEWAY_FALLBACK_LISTENER_ACK,
+            'protocol' => self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+            'action' => $action,
+            'target_listener_state' => $targetListenerState,
+            'listener_state' => $listenerState,
+            'transition_id' => $transitionId,
+            'action_digest' => $actionDigest,
+            'predecessor_action_digest' => $predecessorActionDigest,
+            'identity' => self::normaliseGatewayFallbackListenerIdentity($identity),
+            'success' => $success,
+        ];
+        if ($reason !== '') {
+            $payload['reason'] = $reason;
+        }
+
+        return self::encode(self::validateGatewayFallbackListenerAck($payload));
+    }
+
+    /**
+     * @param array<string,mixed> $message
+     * @return array<string,mixed>
+     */
+    public static function validateGatewayFallbackListenerAck(array $message): array
+    {
+        $action = self::requiredGatewayFallbackListenerString($message, 'action');
+        $targetState = self::requiredGatewayFallbackListenerString(
+            $message,
+            'target_listener_state',
+        );
+        $actualState = self::requiredGatewayFallbackListenerString(
+            $message,
+            'listener_state',
+        );
+        $transitionId = self::requiredGatewayFallbackListenerString(
+            $message,
+            'transition_id',
+        );
+        $actionDigest = self::requiredGatewayFallbackListenerString(
+            $message,
+            'action_digest',
+        );
+        $predecessorActionDigest = self::requiredGatewayFallbackListenerString(
+            $message,
+            'predecessor_action_digest',
+            true,
+        );
+        $identity = self::normaliseGatewayFallbackListenerIdentity(
+            \is_array($message['identity'] ?? null) ? $message['identity'] : [],
+        );
+        $reason = self::requiredGatewayFallbackListenerString(
+            $message,
+            'reason',
+            true,
+        );
+        $allowedKeys = [
+            'type',
+            'protocol',
+            'action',
+            'target_listener_state',
+            'listener_state',
+            'transition_id',
+            'action_digest',
+            'predecessor_action_digest',
+            'identity',
+            'success',
+        ];
+        if (\array_key_exists('reason', $message)) {
+            $allowedKeys[] = 'reason';
+        }
+        $success = $message['success'] ?? null;
+        if (!self::sameGatewayFallbackListenerKeys($message, $allowedKeys)
+            || !\hash_equals(
+                self::TYPE_GATEWAY_FALLBACK_LISTENER_ACK,
+                (string)($message['type'] ?? ''),
+            )
+            || !\hash_equals(
+                self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+                (string)($message['protocol'] ?? ''),
+            )
+            || !\in_array($actualState, [
+                self::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE,
+                self::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING,
+                self::GATEWAY_FALLBACK_LISTENER_STATE_TERMINAL,
+            ], true)
+            || !\is_bool($success)
+            || (!$success && $reason === '')
+            || \strlen($reason) > 256
+            || ($success
+                && !\hash_equals($targetState, $actualState))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $actionDigest) !== 1
+            || !\hash_equals(
+                self::gatewayFallbackListenerActionDigest(
+                    $action,
+                    $targetState,
+                    $transitionId,
+                    $predecessorActionDigest,
+                    $identity,
+                ),
+                $actionDigest,
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway fallback listener acknowledgement is invalid.'
+            );
+        }
+
+        $validated = [
+            'type' => self::TYPE_GATEWAY_FALLBACK_LISTENER_ACK,
+            'protocol' => self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+            'action' => $action,
+            'target_listener_state' => $targetState,
+            'listener_state' => $actualState,
+            'transition_id' => $transitionId,
+            'action_digest' => $actionDigest,
+            'predecessor_action_digest' => $predecessorActionDigest,
+            'identity' => $identity,
+            'success' => $success,
+        ];
+        if ($reason !== '') {
+            $validated['reason'] = $reason;
+        }
+
+        return $validated;
+    }
+
+    private static function assertGatewayFallbackListenerAction(
+        string $action,
+        string $listenerState,
+        string $transitionId,
+        string $predecessorActionDigest,
+    ): void {
+        $drain = $action === self::GATEWAY_FALLBACK_LISTENER_ACTION_DRAIN
+            && $listenerState === self::GATEWAY_FALLBACK_LISTENER_STATE_DRAINING
+            && $predecessorActionDigest === '';
+        $undrain = $action === self::GATEWAY_FALLBACK_LISTENER_ACTION_UNDRAIN
+            && $listenerState === self::GATEWAY_FALLBACK_LISTENER_STATE_ACTIVE
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $predecessorActionDigest) === 1;
+        if ((!$drain && !$undrain)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $transitionId) !== 1
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway fallback listener action fence is invalid.'
+            );
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     * @return array<string,mixed>
+     */
+    private static function normaliseGatewayFallbackListenerIdentity(array $identity): array
+    {
+        $canonical = [
+            'schema' => (string)($identity['schema'] ?? ''),
+            'project_uuid' => (string)($identity['project_uuid'] ?? ''),
+            'wls_instance' => (string)($identity['wls_instance'] ?? ''),
+            'role' => (string)($identity['role'] ?? ''),
+            'slot_id' => (string)($identity['slot_id'] ?? ''),
+            'service_generation' => $identity['service_generation'] ?? null,
+            'service_lease_id' => (string)($identity['service_lease_id'] ?? ''),
+            'worker_pid' => $identity['worker_pid'] ?? null,
+            'worker_process_birth' => (string)($identity['worker_process_birth'] ?? ''),
+            'worker_pid_namespace_id' => (string)($identity['worker_pid_namespace_id'] ?? ''),
+            'worker_launch_id' => (string)($identity['worker_launch_id'] ?? ''),
+            'master_pid' => $identity['master_pid'] ?? null,
+            'master_epoch' => $identity['master_epoch'] ?? null,
+            'master_launch_id' => (string)($identity['master_launch_id'] ?? ''),
+            'master_process_birth' => (string)($identity['master_process_birth'] ?? ''),
+            'master_pid_namespace_id' => (string)($identity['master_pid_namespace_id'] ?? ''),
+            'port' => $identity['port'] ?? null,
+            'host_lease_instance' => (string)($identity['host_lease_instance'] ?? ''),
+            'host_lease_id' => (string)($identity['host_lease_id'] ?? ''),
+            'host_boot_id' => (string)($identity['host_boot_id'] ?? ''),
+            'bind_host' => (string)($identity['bind_host'] ?? ''),
+            'listener_proof_digest' => (string)($identity['listener_proof_digest'] ?? ''),
+            'listener_transport' => (string)($identity['listener_transport'] ?? ''),
+            'listener_receipt_digest' => (string)($identity['listener_receipt_digest'] ?? ''),
+        ];
+        $received = $identity;
+        \ksort($received, SORT_STRING);
+        $expected = $canonical;
+        \ksort($expected, SORT_STRING);
+        $workerNamespace = (string)$canonical['worker_pid_namespace_id'];
+        $masterNamespace = (string)$canonical['master_pid_namespace_id'];
+        $namespacesValid = PHP_OS_FAMILY === 'Linux'
+            ? (\preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $workerNamespace) === 1
+                && \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $masterNamespace) === 1)
+            : ($workerNamespace === '' && $masterNamespace === '');
+        $bindHost = (string)$canonical['bind_host'];
+        $packedBindHost = @\inet_pton($bindHost);
+        $normalisedBindHost = \is_string($packedBindHost)
+            ? @\inet_ntop($packedBindHost)
+            : false;
+        if ($received !== $expected
+            || !\hash_equals(
+                self::GATEWAY_FALLBACK_LISTENER_PROTOCOL,
+                (string)$canonical['schema'],
+            )
+            || \preg_match(
+                '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                (string)$canonical['project_uuid'],
+            ) !== 1
+            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', (string)$canonical['wls_instance']) !== 1
+            || !\hash_equals(self::ROLE_GATEWAY_FALLBACK, (string)$canonical['role'])
+            || \preg_match('/\Agateway_fallback#[1-9][0-9]*\z/D', (string)$canonical['slot_id']) !== 1
+            || !\is_int($canonical['service_generation'])
+            || (int)$canonical['service_generation'] < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$canonical['service_lease_id']) !== 1
+            || !\is_int($canonical['worker_pid'])
+            || (int)$canonical['worker_pid'] < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['worker_process_birth']) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$canonical['worker_launch_id']) !== 1
+            || !\is_int($canonical['master_pid'])
+            || (int)$canonical['master_pid'] < 1
+            || !\is_int($canonical['master_epoch'])
+            || (int)$canonical['master_epoch'] < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$canonical['master_launch_id']) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['master_process_birth']) !== 1
+            || !\is_int($canonical['port'])
+            || (int)$canonical['port'] < 1
+            || (int)$canonical['port'] > 65535
+            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', (string)$canonical['host_lease_instance']) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', (string)$canonical['host_lease_id']) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['host_boot_id']) !== 1
+            || !\is_string($normalisedBindHost)
+            || !\hash_equals(\strtolower($bindHost), \strtolower($normalisedBindHost))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['listener_proof_digest']) !== 1
+            || !\in_array((string)$canonical['listener_transport'], [
+                'posix_inherited_fd',
+                'windows_wsaprotocol_info',
+            ], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$canonical['listener_receipt_digest']) !== 1
+            || !$namespacesValid
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway fallback listener transition identity is invalid.'
+            );
+        }
+
+        return $canonical;
+    }
+
+    /** @param array<string,mixed> $message */
+    private static function requiredGatewayFallbackListenerString(
+        array $message,
+        string $field,
+        bool $emptyAllowed = false,
+    ): string {
+        $value = $message[$field] ?? ($emptyAllowed ? '' : null);
+        if (!\is_string($value)
+            || \strlen($value) > 512
+            || (!$emptyAllowed && $value === '')
+        ) {
+            throw new \InvalidArgumentException(
+                'Gateway fallback listener field is invalid: ' . $field,
+            );
+        }
+
+        return $value;
+    }
+
+    /** @param array<string,mixed> $message @param list<string> $keys */
+    private static function sameGatewayFallbackListenerKeys(array $message, array $keys): bool
+    {
+        $actual = \array_keys($message);
+        \sort($actual, SORT_STRING);
+        \sort($keys, SORT_STRING);
+        return $actual === $keys;
+    }
+
+    /**
      * 构建 set_redirect_port 消息（设置 HTTP 重定向端口）
      */
     public static function setRedirectPort(int $port): string
@@ -1030,8 +2179,13 @@ class ControlMessage
     /**
      * 构建 draining_complete 消息
      */
-    public static function drainingComplete(int $workerId, int $port, string $msgId = '', string $reason = ''): string
-    {
+    public static function drainingComplete(
+        int $workerId,
+        int $port,
+        string $msgId = '',
+        string $reason = '',
+        array $drainReport = [],
+    ): string {
         $data = [
             'type'      => self::TYPE_DRAINING_COMPLETE,
             'worker_id' => $workerId,
@@ -1042,6 +2196,9 @@ class ControlMessage
         }
         if ($reason !== '') {
             $data['reason'] = $reason;
+        }
+        if ($drainReport !== []) {
+            $data['drain'] = $drainReport;
         }
         return self::encode($data);
     }
@@ -1251,20 +2408,47 @@ class ControlMessage
         return self::encode($data);
     }
 
-    /**
-     * 构建 ping 消息（Master → Worker/Dispatcher）
-     *
-     * @param float $timestamp 发送时间戳（用于计算 RTT）
-     */
-    public static function ping(float $timestamp = 0.0): string
+    public static function monotonicSeconds(): float
     {
-        if ($timestamp === 0.0) {
+        $now = \hrtime(true) / 1_000_000_000;
+        if (!\is_finite($now) || $now <= 0.0) {
+            throw new \RuntimeException('WLS monotonic clock is unavailable.');
+        }
+
+        return $now;
+    }
+
+    /**
+     * 构建 ping 消息（Master → Worker/Dispatcher）。
+     *
+     * `timestamp` / `wall_timestamp` 仅作日志兼容与审计；健康判定只使用
+     * 同一 host boot 下的 `monotonic_timestamp`。可选参数仅供可重现单测使用。
+     */
+    public static function ping(
+        float $timestamp = 0.0,
+        ?float $monotonicTimestamp = null,
+        string $hostBootId = '',
+    ): string {
+        if (!\is_finite($timestamp) || $timestamp <= 0.0) {
             $timestamp = \microtime(true);
         }
-        return self::encode([
+        $monotonicTimestamp = self::normalizePositiveFiniteFloat(
+            $monotonicTimestamp ?? self::monotonicSeconds(),
+        );
+        $hostBootId = self::normalizeHostBootId(
+            $hostBootId !== '' ? $hostBootId : self::currentHostBootId(),
+        ) ?? '';
+        $data = [
             'type' => self::TYPE_PING,
             'timestamp' => $timestamp,
-        ]);
+            'wall_timestamp' => $timestamp,
+        ];
+        if ($monotonicTimestamp !== null && $hostBootId !== '') {
+            $data['monotonic_timestamp'] = $monotonicTimestamp;
+            $data['host_boot_id'] = $hostBootId;
+        }
+
+        return self::encode($data);
     }
 
     /**
@@ -1284,6 +2468,134 @@ class ControlMessage
             $data['stats'] = $stats;
         }
         return self::encode($data);
+    }
+
+    /**
+     * 从完整 ping 信封构建可跨进程比较的 pong。
+     *
+     * 旧 ping 或不可比的字段仍会得到可解码的 legacy pong，但不会携带
+     * monotonic 证据，Master 必须将其视为健康判定失败。
+     *
+     * @param array<string,mixed> $ping
+     * @param array<string,mixed> $stats
+     */
+    public static function pongForPing(
+        array $ping,
+        array $stats = [],
+        ?float $pongMonotonicTimestamp = null,
+        string $pongHostBootId = '',
+        ?float $pongWallTimestamp = null,
+    ): string {
+        $pingWallTimestamp = self::normalizePositiveFiniteFloat($ping['timestamp'] ?? null) ?? 0.0;
+        $pongWallTimestamp = self::normalizePositiveFiniteFloat(
+            $pongWallTimestamp ?? \microtime(true),
+        ) ?? 0.0;
+        $data = [
+            'type' => self::TYPE_PONG,
+            'ping_timestamp' => $pingWallTimestamp,
+            'pong_timestamp' => $pongWallTimestamp,
+        ];
+
+        $pingMonotonic = self::normalizePositiveFiniteFloat($ping['monotonic_timestamp'] ?? null);
+        $pingHostBootId = self::normalizeHostBootId($ping['host_boot_id'] ?? null);
+        $pongMonotonic = self::normalizePositiveFiniteFloat(
+            $pongMonotonicTimestamp ?? self::monotonicSeconds(),
+        );
+        $pongHostBootId = self::normalizeHostBootId(
+            $pongHostBootId !== '' ? $pongHostBootId : self::currentHostBootId(),
+        );
+        if ($pingMonotonic !== null
+            && $pingHostBootId !== null
+            && $pongMonotonic !== null
+            && $pongHostBootId !== null
+        ) {
+            $data['ping_monotonic'] = $pingMonotonic;
+            $data['pong_monotonic'] = $pongMonotonic;
+            $data['ping_host_boot_id'] = $pingHostBootId;
+            $data['pong_host_boot_id'] = $pongHostBootId;
+        }
+        if ($stats !== []) {
+            $data['stats'] = $stats;
+        }
+
+        return self::encode($data);
+    }
+
+    /**
+     * @param array<string,mixed> $pong
+     * @return array{ping_monotonic:float,pong_monotonic:float,received_monotonic:float,rtt_seconds:float,host_boot_id:string}|null
+     */
+    public static function monotonicPongObservation(
+        array $pong,
+        ?float $receivedMonotonic = null,
+        string $currentHostBootId = '',
+    ): ?array {
+        if (($pong['type'] ?? null) !== self::TYPE_PONG) {
+            return null;
+        }
+        $receivedMonotonic = self::normalizePositiveFiniteFloat(
+            $receivedMonotonic ?? self::monotonicSeconds(),
+        );
+        $currentHostBootId = self::normalizeHostBootId(
+            $currentHostBootId !== '' ? $currentHostBootId : self::currentHostBootId(),
+        ) ?? '';
+        $pingMonotonic = self::normalizePositiveFiniteFloat($pong['ping_monotonic'] ?? null);
+        $pongMonotonic = self::normalizePositiveFiniteFloat($pong['pong_monotonic'] ?? null);
+        $pingHostBootId = self::normalizeHostBootId($pong['ping_host_boot_id'] ?? null);
+        $pongHostBootId = self::normalizeHostBootId($pong['pong_host_boot_id'] ?? null);
+        if ($receivedMonotonic === null
+            || $currentHostBootId === ''
+            || $pingMonotonic === null
+            || $pongMonotonic === null
+            || $pingHostBootId === null
+            || $pongHostBootId === null
+            || !\hash_equals($currentHostBootId, $pingHostBootId)
+            || !\hash_equals($currentHostBootId, $pongHostBootId)
+            || $pongMonotonic < $pingMonotonic
+            || $pingMonotonic > $receivedMonotonic
+            || $pongMonotonic > $receivedMonotonic
+        ) {
+            return null;
+        }
+
+        return [
+            'ping_monotonic' => $pingMonotonic,
+            'pong_monotonic' => $pongMonotonic,
+            'received_monotonic' => $receivedMonotonic,
+            'rtt_seconds' => $pongMonotonic - $pingMonotonic,
+            'host_boot_id' => $currentHostBootId,
+        ];
+    }
+
+    private static function normalizePositiveFiniteFloat(mixed $value): ?float
+    {
+        if (!\is_int($value) && !\is_float($value)) {
+            return null;
+        }
+        $value = (float)$value;
+
+        return \is_finite($value) && $value > 0.0 ? $value : null;
+    }
+
+    private static function normalizeHostBootId(mixed $value): ?string
+    {
+        if (!\is_string($value)) {
+            return null;
+        }
+        try {
+            return GatewayHostBootIdentity::validate($value);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private static function currentHostBootId(): string
+    {
+        try {
+            return GatewayHostBootIdentity::current();
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

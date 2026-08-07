@@ -812,7 +812,7 @@ class WlsPerformanceTraceStore
     private function memory(): ?MemoryStateFacade
     {
         if ($this->memoryResolved) {
-            if ($this->memory === null && \microtime(true) >= $this->memoryRetryAt) {
+            if ($this->memory === null && self::monotonicSeconds() >= $this->memoryRetryAt) {
                 $this->memoryResolved = false;
             } else {
                 return $this->memory;
@@ -853,7 +853,7 @@ class WlsPerformanceTraceStore
         }
         $this->memory = null;
         $this->memoryResolved = true;
-        $this->memoryRetryAt = \microtime(true) + 1.0;
+        $this->memoryRetryAt = self::monotonicSeconds() + 1.0;
     }
 
     private function writePayloadFile(string $key, mixed $value, int $ttl): bool
@@ -1038,5 +1038,10 @@ class WlsPerformanceTraceStore
         }
 
         return \w_env($key, $default);
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

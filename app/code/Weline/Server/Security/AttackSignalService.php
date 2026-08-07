@@ -20,6 +20,11 @@ namespace Weline\Server\Security;
 
 class AttackSignalService
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * 攻击信号头名称
      */
@@ -50,6 +55,9 @@ class AttackSignalService
      * 攻击模式激活时间
      */
     private static int $attackModeActivatedAt = 0;
+
+    /** 攻击模式激活的进程内单调时间。 */
+    private static float $attackModeActivatedMonotonic = 0.0;
     
     /**
      * 攻击模式持续时间（秒）
@@ -75,7 +83,7 @@ class AttackSignalService
     /**
      * 上次 CDN 通知时间
      */
-    private static int $lastCdnNotification = 0;
+    private static float $lastCdnNotificationMonotonic = 0.0;
     
     /**
      * CDN 通知冷却时间（秒）
@@ -142,12 +150,13 @@ class AttackSignalService
     public static function recordSignal(array $signal): void
     {
         $signal['recorded_at'] = \time();
+        $signal['_recorded_monotonic'] = self::monotonicSeconds();
         self::$recentSignals[] = $signal;
         
         // 清理过期信号
-        $cutoff = \time() - self::$signalWindow;
+        $cutoff = self::monotonicSeconds() - self::$signalWindow;
         self::$recentSignals = \array_filter(self::$recentSignals, function ($s) use ($cutoff) {
-            return $s['recorded_at'] >= $cutoff;
+            return (float)($s['_recorded_monotonic'] ?? 0.0) >= $cutoff;
         });
         
         // 重新索引
@@ -162,7 +171,8 @@ class AttackSignalService
     public static function shouldNotifyCdn(): bool
     {
         // 检查冷却时间
-        if (\time() - self::$lastCdnNotification < self::$cdnNotificationCooldown) {
+        if (self::monotonicSeconds() - self::$lastCdnNotificationMonotonic
+            < self::$cdnNotificationCooldown) {
             return false;
         }
         
@@ -177,7 +187,7 @@ class AttackSignalService
      */
     public static function markCdnNotified(): void
     {
-        self::$lastCdnNotification = \time();
+        self::$lastCdnNotificationMonotonic = self::monotonicSeconds();
     }
     
     /**
@@ -226,6 +236,7 @@ class AttackSignalService
     {
         self::$underAttackMode = true;
         self::$attackModeActivatedAt = \time();
+        self::$attackModeActivatedMonotonic = self::monotonicSeconds();
         self::$attackModeDuration = $duration;
     }
     
@@ -236,6 +247,7 @@ class AttackSignalService
     {
         self::$underAttackMode = false;
         self::$attackModeActivatedAt = 0;
+        self::$attackModeActivatedMonotonic = 0.0;
     }
     
     /**
@@ -250,7 +262,10 @@ class AttackSignalService
         }
         
         // 检查是否过期
-        if (\time() - self::$attackModeActivatedAt > self::$attackModeDuration) {
+        $elapsed = self::monotonicSeconds() - self::$attackModeActivatedMonotonic;
+        if (self::$attackModeActivatedMonotonic <= 0.0
+            || $elapsed < 0.0
+            || $elapsed > self::$attackModeDuration) {
             self::$underAttackMode = false;
             return false;
         }
@@ -266,13 +281,16 @@ class AttackSignalService
     public static function getAttackModeInfo(): array
     {
         $isActive = self::isUnderAttackMode();
+        $elapsed = $isActive
+            ? \max(0.0, self::monotonicSeconds() - self::$attackModeActivatedMonotonic)
+            : 0.0;
         
         return [
             'active' => $isActive,
             'activated_at' => self::$attackModeActivatedAt,
             'duration' => self::$attackModeDuration,
-            'remaining_seconds' => $isActive 
-                ? \max(0, self::$attackModeDuration - (\time() - self::$attackModeActivatedAt))
+            'remaining_seconds' => $isActive
+                ? \max(0, (int)\ceil(self::$attackModeDuration - $elapsed))
                 : 0,
         ];
     }
@@ -317,7 +335,13 @@ class AttackSignalService
      */
     public static function getRecentSignals(int $limit = 100): array
     {
-        return \array_slice(self::$recentSignals, -$limit);
+        $signals = \array_slice(self::$recentSignals, -$limit);
+        foreach ($signals as &$signal) {
+            unset($signal['_recorded_monotonic']);
+        }
+        unset($signal);
+
+        return $signals;
     }
     
     /**

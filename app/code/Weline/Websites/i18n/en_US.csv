@@ -2325,7 +2325,7 @@ AI建站域名准备,AI建站域名准备
 "Plan generation completed","Plan generation completed"
 请先输入一句话需求,"Please enter a one-sentence requirement first"
 润色完成,"Polish completed"
-润色失败：模型未返回内容,"Polish failed: model returned empty content"
+润色失败：模型未返回内容（思考链可能占满输出额度，请重试）,润色失败：模型未返回内容（思考链可能占满输出额度，请重试）
 润色失败：%{1},"Polish failed: %{1}"
 "Local demo mode: building a deterministic site plan...","Local demo mode: building a deterministic site plan..."
 "Local demo landing site for %{title}","Local demo landing site for %{title}"
@@ -2506,6 +2506,11 @@ download,download
 "发布后的首页页面 ID 不能为空。","发布后的首页页面 ID 不能为空。"
 "尚未找到当前 AI 建站会话的域名绑定。","尚未找到当前 AI 建站会话的域名绑定。"
 域名绑定尚未完成，不能登记站点首页。,域名绑定尚未完成，不能登记站点首页。
+"跳过本机 hosts 的强制绑定仅支持测试域名模式。","跳过本机 hosts 的强制绑定仅支持测试域名模式。"
+域名绑定请求与当前管理员不匹配。,域名绑定请求与当前管理员不匹配。
+"跳过 hosts 后仍未能验证站点绑定。","跳过 hosts 后仍未能验证站点绑定。"
+"已完成站点绑定，并写入本机 hosts。","已完成站点绑定，并写入本机 hosts。"
+"已跳过强制 hosts 门禁并完成站点绑定；本机解析仍可能失败，请批准 hosts 写入后重试域名准备。%{1}","已跳过强制 hosts 门禁并完成站点绑定；本机解析仍可能失败，请批准 hosts 写入后重试域名准备。%{1}"
 检测到历史默认站点绑定，正在为当前会话重新创建独立站点。,检测到历史默认站点绑定，正在为当前会话重新创建独立站点。
 创建域名准备队列失败。,创建域名准备队列失败。
 域名准备任务已排队，等待系统调度。,域名准备任务已排队，等待系统调度。
@@ -3082,6 +3087,7 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","处理完成：%d 条非法记录"
+润色失败：模型未返回内容,"Polish failed: model returned empty content"
 网站关联数据写入后、主事务提交前触发，用于同库关键扩展；异常会回滚整个网站保存。,网站关联数据写入后、主事务提交前触发，用于同库关键扩展；异常会回滚整个网站保存。
 "网站 code 不能为空","网站 code 不能为空"
 "异步准备本地测试域名，或在明确确认后购买正式域名；完成前不得启动 AI 规划。","异步准备本地测试域名，或在明确确认后购买正式域名；完成前不得启动 AI 规划。"
@@ -3104,3 +3110,15 @@ download,download
 "目录查询参数 %{1} 必须是规范整数","Catalog query parameter %{1} must be a canonical integer"
 "目录查询参数 %{1} 必须大于或等于 %{2}","Catalog query parameter %{1} must be greater than or equal to %{2}"
 "目录查询参数 %{1} 不能大于 %{2}","Catalog query parameter %{1} cannot exceed %{2}"
+"目标地址 %{1} 已绑定到其他站点「%{2}」，不能自动改绑。","Address %{1} is already bound to site \"%{2}\" and cannot be rebound automatically."
+目标域名或子路径过长。,Target domain or sub-path is too long.
+不能分配超出该站授权包的权限,不能分配超出该站授权包的权限
+仅默认站后台可管理网站功能授权,仅默认站后台可管理网站功能授权
+请选择非默认网站,请选择非默认网站
+网站功能授权已保存,网站功能授权已保存
+访问前端,访问前端
+管理后端,管理后端
+网站功能授权,网站功能授权
+编辑网站功能授权,编辑网站功能授权
+勾选后保存为该站授权包上限,勾选后保存为该站授权包上限
+"默认站不使用站级 ACL 授权包","默认站不使用站级 ACL 授权包"

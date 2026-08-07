@@ -9,6 +9,11 @@ use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
 final class SupervisorServer
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     private const MAX_SESSIONS = 256;
     private const MAX_UNREGISTERED_SESSIONS = 64;
     private const MAX_READ_BUFFER_BYTES = 2097152;
@@ -361,7 +366,7 @@ final class SupervisorServer
 
             \stream_set_blocking($conn, false);
             @\stream_set_write_buffer($conn, 0);
-            $connectedAt = \microtime(true);
+            $connectedAt = self::monotonicSeconds();
             $session = new SupervisorSession(
                 id: (int) $conn,
                 peer: \is_string($peer) && $peer !== '' ? $peer : 'unknown',
@@ -406,7 +411,7 @@ final class SupervisorServer
             return 1;
         }
         $session->readBuffer .= $data;
-        $session->lastActivityAt = \microtime(true);
+        $session->lastActivityAt = self::monotonicSeconds();
         $this->sessions[$session->id] = $session;
 
         return $this->flushBufferedMessagesForWake($session);
@@ -494,7 +499,7 @@ final class SupervisorServer
             }
 
             if ($type === SupervisorMessage::TYPE_HEARTBEAT) {
-                $session->lastActivityAt = \microtime(true);
+                $session->lastActivityAt = self::monotonicSeconds();
                 $this->sessions[$session->id] = $session;
             }
 
@@ -526,7 +531,7 @@ final class SupervisorServer
                     break;
                 }
                 $session->pendingReady = $decoded;
-                $session->lastActivityAt = \microtime(true);
+                $session->lastActivityAt = self::monotonicSeconds();
                 $this->sessions[$session->id] = $session;
                 continue;
             }
@@ -730,7 +735,7 @@ final class SupervisorServer
     private function expireStaleSessions(): int
     {
         $expired = 0;
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         foreach ($this->sessions as $session) {
             $connectedAt = $session->connectedAt > 0.0 ? $session->connectedAt : $session->lastActivityAt;
             if ($session->role === '' && ($now - $connectedAt) > self::HELLO_DEADLINE_SEC) {
@@ -791,7 +796,7 @@ final class SupervisorServer
         }
         if ($written > 0) {
             $session->writeBuffer = (string)\substr($session->writeBuffer, $written);
-            $session->lastActivityAt = \microtime(true);
+            $session->lastActivityAt = self::monotonicSeconds();
             $this->sessions[$session->id] = $session;
             return true;
         }
@@ -918,7 +923,8 @@ final class SupervisorServer
         $reason = \substr(\trim($disconnectReason), 0, 64);
         $snapshot = $this->buildSessionSnapshot($session);
         $snapshot['disconnect_reason'] = $reason !== '' ? $reason : 'socket_closed';
-        $snapshot['disconnected_at'] = \microtime(true);
+        // Absolute audit timestamp only; lease/session decisions use monotonic time.
+        $snapshot['disconnected_at'] = \time();
         if (!isset($this->closedSessionSnapshots[$sessionId])
             && \count($this->closedSessionSnapshots) >= self::MAX_CLOSED_SESSION_SNAPSHOTS) {
             $oldestSessionId = \array_key_first($this->closedSessionSnapshots);

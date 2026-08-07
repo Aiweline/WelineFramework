@@ -128,6 +128,15 @@ class Dispatcher
      * @var array<int, \Socket|resource>
      */
     private array $clientConnections = [];
+
+    /**
+     * Sockets accepted by the kernel but not yet promoted into the tunnel map.
+     * A cooperative IPC tick can run during backend selection, so these must
+     * participate in the same global-drain fence.
+     *
+     * @var array<int, \Socket|resource>
+     */
+    private array $acceptInFlightConnections = [];
     
     /**
      * 连接接受时间（用于超时检测）
@@ -163,19 +172,19 @@ class Dispatcher
     private array $bytesCount = ['in' => 0, 'out' => 0];
     
     /**
-     * 启动时间
+     * Dispatcher 启动的单调时钟锚点；仅用于计算进程内经过时间。
      */
-    private int $startTime;
+    private float $startMonotonic;
     
     /**
      * 最后统计时间
      */
-    private int $lastStatsTime = 0;
+    private float $lastStatsTime = 0.0;
     
     /**
      * 上次连接清理时间
      */
-    private int $lastConnectionCleanup = 0;
+    private float $lastConnectionCleanup = 0.0;
     
     /**
      * 连接清理间隔（秒）
@@ -207,6 +216,15 @@ class Dispatcher
      * 是否运行中
      */
     private bool $running = true;
+
+    /** Global stop drain is irreversible for this Dispatcher generation. */
+    private bool $globalDrainActive = false;
+    private float $globalDrainStartedAt = 0.0;
+    private float $globalDrainSoftDeadlineAt = 0.0;
+    private float $globalDrainHardDeadlineAt = 0.0;
+    private int $globalDrainObservedConnections = 0;
+    private ?array $globalDrainCompletionReport = null;
+    private bool $globalDrainCompletionSent = false;
     
     /**
      * 是否 DEV 开发模式（输出详细调试信息）
@@ -274,7 +292,7 @@ class Dispatcher
     private string $helloAuthSecret = '';
     private ?ChildMasterGuard $masterGuard = null;
     
-    private int $lastMasterPidCheck = 0;
+    private float $lastMasterPidCheck = 0.0;
     private int $masterDeadCount = 0;
     
     /**
@@ -426,7 +444,7 @@ class Dispatcher
             initialBundle: $activePolicy,
         );
         WlsLogger::info_('[DispatcherPolicy] active digest=' . $policyDigest . ' topology=dispatcher');
-        $this->startTime = \time();
+        $this->startMonotonic = self::monotonicSeconds();
         // Process identity and listening ports are published once by the
         // dispatcher entrypoint. Constructors must remain side-effect free;
         // repeating the transaction here caused duplicate Windows OS probes.
@@ -648,7 +666,7 @@ class Dispatcher
         float $throttleSec = 10.0
     ): void {
         $signature ??= $message;
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (
             $signature === $this->lastMaintenanceOperationSignature
             && ($now - $this->lastMaintenanceOperationLogAt) < $throttleSec
@@ -663,7 +681,7 @@ class Dispatcher
 
     private function scheduleAllWorkersUnavailableRecovery(string $source): void
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (($now - $this->lastAllWorkersUnavailableRecoveryAt) < 1.0) {
             return;
         }
@@ -1220,17 +1238,15 @@ class Dispatcher
         }
 
         // A business snapshot is also the authoritative exit from an explicit
-        // maintenance route. The healthy business pool remains resident, so it
-        // can be selected immediately while the idempotent snapshot job runs.
+        // maintenance route. Trust Master READY the same way SET_ROUTE_TABLE
+        // does — a second in-dispatcher TLS health probe can hang (e.g. SNI /
+        // handshake stalls) and empty the pool even after Workers already READY.
         $this->passthroughCore->setMaintenanceRoutingActive(false);
-        $this->deferredWorkerPoolJobs[] = [
-            'type' => 'set_pool',
-            'ports' => $normalizedPorts,
-            'workers' => $acceptedWorkers,
-            'role' => ControlMessage::ROLE_WORKER,
-            'pool_snapshot_version' => $version,
-            'pool_snapshot_scope' => $scope,
-        ];
+        $this->acceptWorkerPoolFromMasterReady(
+            $normalizedPorts,
+            $acceptedWorkers,
+            'POOL_SNAPSHOT',
+        );
         $this->lastAppliedWorkerPoolSnapshotVersion = $version;
 
         if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
@@ -1244,7 +1260,8 @@ class Dispatcher
         }
 
         $this->log(
-            '鏀跺埌 POOL_SNAPSHOT锛堝凡鍏ラ槦寮傛鍏ユ睜锛夛紝version=' . $version . ', workers=' . \count($normalizedPorts),
+            'Applied business POOL_SNAPSHOT via Master READY trust, version=' . $version
+            . ', workers=' . \count($normalizedPorts),
             'INFO'
         );
     }
@@ -1441,7 +1458,7 @@ class Dispatcher
         $result = $this->passthroughCore->setWorkerPortsFromMasterReady($ports);
         $acceptedPorts = \is_array($result['accepted'] ?? null) ? $result['accepted'] : [];
         $rejectedPorts = \is_array($result['rejected'] ?? null) ? $result['rejected'] : [];
-        $this->lastWorkerProbeTime = \microtime(true);
+        $this->lastWorkerProbeTime = self::monotonicSeconds();
         $currentWorkerPoolSize = $this->passthroughCore->getWorkerCount();
         $this->updateMaintenanceFallbackState(
             $currentWorkerPoolSize === 0,
@@ -1706,12 +1723,7 @@ class Dispatcher
                     }
                     $this->log('Drain: 端口 ' . \implode(',', $ports) . ' 已加入黑名单', 'DRAIN');
                 } else {
-                    // 全局 drain（stopAll 时使用），Dispatcher 自己不需要排水，直接完成
-                    $this->log('Received global drain signal, completing immediately...', 'DRAIN');
-                    if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
-                        $this->ipcClient->sendDrainingComplete(0, $this->port, '', 'dispatcher_global_drain:port=' . $this->port);
-                        $this->ipcClient->flushPendingWrites(0.05);
-                    }
+                    $this->beginGlobalDrain($msg);
                 }
                 break;
                 
@@ -1779,6 +1791,203 @@ class Dispatcher
                 break;
         }
     }
+
+    /** @param array<string,mixed> $message */
+    private function beginGlobalDrain(array $message): void
+    {
+        if ($this->globalDrainActive) {
+            // A repeated control message is a retry, never authority to extend
+            // the original absolute deadline. Re-send an already-computed ACK
+            // so a lost control-plane write remains recoverable.
+            if ($this->globalDrainCompletionReport !== null) {
+                $this->sendGlobalDrainCompletion(true);
+            }
+            return;
+        }
+
+        $timeoutSeconds = (float)($message['drain_timeout_sec'] ?? 300);
+        $deadlines = ControlMessage::drainDeadlines($timeoutSeconds);
+        $now = self::monotonicSeconds();
+        $this->globalDrainActive = true;
+        $this->globalDrainStartedAt = $now;
+        $this->globalDrainSoftDeadlineAt = $now + $deadlines['soft'];
+        $this->globalDrainHardDeadlineAt = $now + $deadlines['hard'];
+        $this->globalDrainObservedConnections = $this->globalDrainConnectionCount();
+
+        // Closing the listening descriptor rejects fresh connections while the
+        // existing bidirectional tunnels remain owned by this event loop.
+        if ($this->serverSocket instanceof \Socket || \is_resource($this->serverSocket)) {
+            @\socket_close($this->serverSocket);
+        }
+        $this->serverSocket = null;
+
+        $this->log(sprintf(
+            'Global drain started: active=%d, soft=%.3fs, hard=%.3fs',
+            $this->globalDrainObservedConnections,
+            $deadlines['soft'],
+            $deadlines['hard'],
+        ), 'DRAIN');
+        $this->advanceGlobalDrain();
+    }
+
+    private function advanceGlobalDrain(): void
+    {
+        if (!$this->globalDrainActive || $this->globalDrainCompletionSent) {
+            return;
+        }
+        if ($this->globalDrainCompletionReport !== null) {
+            $this->sendGlobalDrainCompletion();
+            return;
+        }
+
+        $now = self::monotonicSeconds();
+        $currentConnections = $this->globalDrainConnectionCount();
+        $this->globalDrainObservedConnections = \max(
+            $this->globalDrainObservedConnections,
+            $currentConnections,
+        );
+        $elapsed = \max(0.0, $now - $this->globalDrainStartedAt);
+        $softDeadline = \max(0.0, $this->globalDrainSoftDeadlineAt - $this->globalDrainStartedAt);
+        $hardDeadline = \max(0.0, $this->globalDrainHardDeadlineAt - $this->globalDrainStartedAt);
+        $action = ControlMessage::drainLifecycleDecision(
+            elapsedSeconds: $elapsed,
+            softDeadlineSeconds: $softDeadline,
+            hardDeadlineSeconds: $hardDeadline,
+            connectionCount: $currentConnections,
+            // Dispatcher is an opaque L4 proxy. Treat every live tunnel as
+            // application work instead of guessing that it is idle.
+            activeRequests: $currentConnections,
+            pendingApplicationWork: 0,
+            longLivedConnections: 0,
+            http2Connections: 0,
+        );
+
+        if ($action === ControlMessage::DRAIN_ACTION_WAIT) {
+            return;
+        }
+
+        $terminatedConnections = 0;
+        $outcome = ControlMessage::DRAIN_OUTCOME_NATURAL;
+        if ($action === ControlMessage::DRAIN_ACTION_FORCE) {
+            $terminatedConnections = $this->forceCloseGlobalDrainConnections();
+            $outcome = ControlMessage::DRAIN_OUTCOME_FORCED;
+        }
+
+        $this->globalDrainCompletionReport = ControlMessage::drainCompletionReport(
+            outcome: $outcome,
+            elapsedSeconds: $elapsed,
+            softDeadlineSeconds: $softDeadline,
+            hardDeadlineSeconds: $hardDeadline,
+            observed: ['connections' => $this->globalDrainObservedConnections],
+            terminated: ['connections' => $terminatedConnections],
+        );
+        $this->sendGlobalDrainCompletion();
+    }
+
+    private function globalDrainConnectionCount(): int
+    {
+        return \count($this->clientConnections)
+            + \count($this->pendingMaintenancePageQueue)
+            + \count($this->acceptInFlightConnections);
+    }
+
+    private function forceCloseGlobalDrainConnections(): int
+    {
+        $terminated = 0;
+        foreach ($this->acceptInFlightConnections as $connId => $socket) {
+            if (isset($this->passthroughCore)) {
+                try {
+                    $this->passthroughCore->closeConnection($socket);
+                } catch (\Throwable) {
+                }
+            }
+            if ($socket instanceof \Socket || \is_resource($socket)) {
+                @\socket_shutdown($socket, 2);
+                @\socket_close($socket);
+            }
+            if (isset($this->connectionAcceptGates)) {
+                $this->connectionAcceptGates->close((string)$connId);
+            }
+            unset($this->acceptInFlightConnections[$connId]);
+            ++$terminated;
+        }
+        foreach (\array_keys($this->clientConnections) as $connId) {
+            $connId = (int)$connId;
+            $socket = $this->clientConnections[$connId] ?? null;
+            try {
+                $this->closeConnection($connId, 'dispatcher_global_drain_hard_deadline');
+            } catch (\Throwable $throwable) {
+                $this->log('Force-close tunnel failed: ' . $throwable->getMessage(), 'WARN');
+                if ($socket !== null && isset($this->passthroughCore)) {
+                    try {
+                        $this->passthroughCore->closeConnection($socket);
+                    } catch (\Throwable) {
+                    }
+                }
+                if ($socket instanceof \Socket || \is_resource($socket)) {
+                    @\socket_shutdown($socket, 2);
+                    @\socket_close($socket);
+                }
+                unset(
+                    $this->clientConnections[$connId],
+                    $this->connectionAcceptTime[$connId],
+                    $this->connectionLastActivity[$connId],
+                    $this->connectionBytes[$connId],
+                    $this->clientOutputShutdown[$connId],
+                );
+            }
+            if (!isset($this->clientConnections[$connId])) {
+                ++$terminated;
+            }
+        }
+
+        foreach ($this->pendingMaintenancePageQueue as $connId => $entry) {
+            $socket = $entry['socket'] ?? null;
+            if ($socket instanceof \Socket || \is_resource($socket)) {
+                @\socket_shutdown($socket, 2);
+                @\socket_close($socket);
+            }
+            unset($this->pendingMaintenancePageQueue[$connId]);
+            ++$terminated;
+        }
+
+        if (isset($this->connectionAcceptGates)) {
+            $this->connectionAcceptGates->reconcile([]);
+        }
+
+        return $terminated;
+    }
+
+    private function sendGlobalDrainCompletion(bool $resend = false): void
+    {
+        if ($this->globalDrainCompletionReport === null
+            || ($this->globalDrainCompletionSent && !$resend)
+            || $this->ipcClient === null
+            || !$this->ipcClient->isConnected()
+        ) {
+            return;
+        }
+
+        $outcome = (string)($this->globalDrainCompletionReport['outcome'] ?? 'unknown');
+        $reason = 'dispatcher_global_drain:' . $outcome . ':port=' . $this->port;
+        $sent = $this->ipcClient->send(ControlMessage::drainingComplete(
+            workerId: 0,
+            port: $this->port,
+            reason: $reason,
+            drainReport: $this->globalDrainCompletionReport,
+        ));
+        if (!$sent) {
+            return;
+        }
+        $this->ipcClient->flushPendingWrites(0.05);
+        $this->globalDrainCompletionSent = true;
+        $this->log('Global drain complete: ' . $reason, 'DRAIN');
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
     
     /**
      * 运行事件循环
@@ -1809,7 +2018,7 @@ class Dispatcher
         while ($this->running) {
             try {
                 $loopCount++;
-                $loopHeartbeatNow = \microtime(true);
+                $loopHeartbeatNow = self::monotonicSeconds();
 
                 // 定期输出循环计数，便于直观看到主循环是否仍在推进
                 if (
@@ -1856,6 +2065,7 @@ class Dispatcher
                 // 推进首字节未到的 pending 维护页队列（P0-5）
                 $this->pumpPendingMaintenancePageQueue();
                 $this->reconcileConnectionAcceptGates();
+                $this->advanceGlobalDrain();
 
                 // 事件处理
                 // 定期统计
@@ -1905,7 +2115,7 @@ class Dispatcher
         if ($this->masterPid <= 0 || $this->ipcReceivedShutdown) {
             return;
         }
-        $now = \time();
+        $now = self::monotonicSeconds();
         if (($now - $this->lastMasterPidCheck) < self::MASTER_PID_CHECK_INTERVAL_SEC) {
             return;
         }
@@ -1996,7 +2206,7 @@ class Dispatcher
             return;
         }
         
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($now - $this->lastWorkerProbeTime < $this->workerProbeInterval) {
             return;
         }
@@ -2014,13 +2224,13 @@ class Dispatcher
      */
     private function cleanupExpiredConnections(): void
     {
-        $now = \time();
+        $now = self::monotonicSeconds();
         if ($now - $this->lastConnectionCleanup < $this->connectionCleanupInterval) {
             return;
         }
         $this->lastConnectionCleanup = $now;
         
-        $nowMicro = \microtime(true);
+        $nowMicro = self::monotonicSeconds();
         $closedCount = 0;
         
         foreach ($this->connectionLastActivity as $connId => $lastActivity) {
@@ -2288,7 +2498,7 @@ class Dispatcher
             return;
         }
 
-        $nowMicro = \microtime(true);
+        $nowMicro = self::monotonicSeconds();
         foreach ($this->connectionLastActivity as $connId => $lastActivity) {
             if (!isset($this->clientConnections[$connId]) || !isset($this->connectionBytes[$connId])) {
                 continue;
@@ -2345,7 +2555,7 @@ class Dispatcher
             }
             
             if ($flushed > 0) {
-                $this->connectionLastActivity[$connId] = \microtime(true);
+                $this->connectionLastActivity[$connId] = self::monotonicSeconds();
                 $this->bytesCount['out'] += $flushed;
                 if (isset($this->connectionBytes[$connId])) {
                     $this->connectionBytes[$connId]['out'] += $flushed;
@@ -2380,7 +2590,7 @@ class Dispatcher
         }
 
         if ($flushed > 0) {
-            $this->connectionLastActivity[$connId] = \microtime(true);
+            $this->connectionLastActivity[$connId] = self::monotonicSeconds();
             $this->bytesCount['out'] += $flushed;
             if (isset($this->connectionBytes[$connId])) {
                 $this->connectionBytes[$connId]['out'] += $flushed;
@@ -2408,7 +2618,7 @@ class Dispatcher
             return;
         }
         if ($flushed > 0) {
-            $this->connectionLastActivity[$connId] = \microtime(true);
+            $this->connectionLastActivity[$connId] = self::monotonicSeconds();
         }
     }
 
@@ -2430,7 +2640,8 @@ class Dispatcher
             }
             
             $connId = $this->socketId($clientSocket);
-            
+            $this->acceptInFlightConnections[$connId] = $clientSocket;
+            try {
             // 获取客户端 IP
             $clientIp = '127.0.0.1';
             if (@\socket_getpeername($clientSocket, $addr)) {
@@ -2484,8 +2695,9 @@ class Dispatcher
             
             // 尝试建立到 Worker 的连接（含故障转移：失败时自动尝试其他 Worker）
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
-                $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
-                $this->pumpNewConnectionOnce($clientSocket, $connId);
+                if ($this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId)) {
+                    $this->pumpNewConnectionOnce($clientSocket, $connId);
+                }
             } else {
                 $allWorkersUnavailable = $this->passthroughCore->lastNewConnectionEndedInAllWorkersDown();
                 if ($allWorkersUnavailable) {
@@ -2534,7 +2746,7 @@ class Dispatcher
                 $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
                 $healthy = (int) ($healthSummary['healthy'] ?? 0);
                 $total = (int) ($healthSummary['total'] ?? 0);
-                $uptime = \time() - $this->startTime;
+                $uptime = \max(0.0, self::monotonicSeconds() - $this->startMonotonic);
                 $suppressEmptyPoolNoise = ($total <= 0
                     && $this->startupProtectionEnabled
                     && $this->startupProtectionWindowSec > 0.0
@@ -2542,7 +2754,7 @@ class Dispatcher
                     && $uptime <= (int) $this->startupProtectionWindowSec);
                 if (!$suppressEmptyPoolNoise) {
                     $this->scheduleAllWorkersUnavailableRecovery('maintenance_fallback_all_workers_down');
-                    $now = \microtime(true);
+                    $now = self::monotonicSeconds();
                     if ($now - $this->lastAllWorkersUnavailableLogAt >= 10.0) {
                         $logLevel = $total <= 0 ? 'WARN' : 'ERROR';
                         $detail = $total <= 0
@@ -2577,11 +2789,18 @@ class Dispatcher
                 // 高并发 accept 风暴下也要周期推进 IPC/控制任务，避免主循环“看似活着但控制面饥饿”。
                 $this->pumpSpinWaitControlTick();
             }
+            } finally {
+                unset($this->acceptInFlightConnections[$connId]);
+                $this->advanceGlobalDrain();
+            }
         } while ($accepted < $maxAcceptPerLoop);
     }
 
     private function canAcceptNewSelectTunnel(): bool
     {
+        if ($this->globalDrainActive) {
+            return false;
+        }
         if (\PHP_OS_FAMILY === 'Windows') {
             // Winsock fd_set is count-based and selectReadySockets() shards it.
             return true;
@@ -2590,12 +2809,26 @@ class Dispatcher
         return \count($this->clientConnections) < self::POSIX_SELECT_MAX_ACTIVE_TUNNELS;
     }
 
-    private function registerAcceptedClientConnection($clientSocket, string $clientIp, int $connId): void
+    private function registerAcceptedClientConnection($clientSocket, string $clientIp, int $connId): bool
     {
+        if ($this->globalDrainCompletionReport !== null) {
+            try {
+                $this->passthroughCore->closeConnection($clientSocket);
+            } catch (\Throwable) {
+            }
+            if ($clientSocket instanceof \Socket || \is_resource($clientSocket)) {
+                @\socket_shutdown($clientSocket, 2);
+                @\socket_close($clientSocket);
+            }
+            if (isset($this->connectionAcceptGates)) {
+                $this->connectionAcceptGates->close((string)$connId);
+            }
+            return false;
+        }
         $this->applyClientSocketKeepAlive($clientSocket);
         $this->clientConnections[$connId] = $clientSocket;
-        $this->connectionAcceptTime[$connId] = \microtime(true);
-        $this->connectionLastActivity[$connId] = \microtime(true);
+        $this->connectionAcceptTime[$connId] = self::monotonicSeconds();
+        $this->connectionLastActivity[$connId] = self::monotonicSeconds();
         $this->connectionBytes[$connId] = ['in' => 0, 'out' => 0];
         $this->requestCount++;
         // P2 观测性埋点：此 hook 是 Dispatcher 三条"成功转发到 Worker"路径的汇合点，
@@ -2611,6 +2844,8 @@ class Dispatcher
         if ($this->isDevMode) {
             $this->log("新连接: {$clientIp} (connId: {$connId}) → Worker:{$workerPort}", 'ROUTE');
         }
+
+        return true;
     }
 
     /**
@@ -2673,7 +2908,9 @@ class Dispatcher
         for ($i = 0; $i < $ticks; $i++) {
             $this->pumpSpinWaitControlTick();
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
-                $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
+                if (!$this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId)) {
+                    return true;
+                }
                 if ($this->isDevMode) {
                     $this->log("维护接管成功: {$clientIp} (connId: {$connId})", 'ROUTE');
                 }
@@ -2767,7 +3004,7 @@ class Dispatcher
 
         // P1-5 修复：healthy==0 且 total>0（Worker 全挂但注册表尚未清理）持续 >= 阈值时，
         // 走维护页兜底而非裸 503 / 裸关断。
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($healthy <= 0) {
             if ($this->healthyZeroSince <= 0.0) {
                 $this->healthyZeroSince = $now;
@@ -2875,8 +3112,8 @@ class Dispatcher
             return false;
         }
 
-        $deadline = \microtime(true) + $this->backendRouteWaitTimeoutSec;
-        while (\microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + $this->backendRouteWaitTimeoutSec;
+        while (self::monotonicSeconds() < $deadline) {
             $this->pumpSpinWaitControlTick();
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
                 $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
@@ -3187,8 +3424,8 @@ HTML;
         // SHUT_WR = 1：发送 FIN 但保留读端继续抽干，避免 Windows 下 closesocket 发 RST
         @\socket_shutdown($clientSocket, 1);
 
-        $drainDeadline = \microtime(true) + 0.05;
-        while (\microtime(true) < $drainDeadline) {
+        $drainDeadline = self::monotonicSeconds() + 0.05;
+        while (self::monotonicSeconds() < $drainDeadline) {
             $read = [$clientSocket];
             $write = null;
             $except = null;
@@ -3228,7 +3465,7 @@ HTML;
         $this->pendingMaintenancePageQueue[$key] = [
             'socket' => $clientSocket,
             'clientIp' => $clientIp !== '' ? $clientIp : '0.0.0.0',
-            'acceptedAt' => \microtime(true),
+            'acceptedAt' => self::monotonicSeconds(),
             'allWorkersUnavailable' => $allWorkersUnavailable,
         ];
         return true;
@@ -3248,7 +3485,7 @@ HTML;
             return;
         }
 
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         foreach ($this->pendingMaintenancePageQueue as $key => $entry) {
             $sock = $entry['socket'];
 
@@ -3409,10 +3646,10 @@ HTML;
     {
         @\socket_set_nonblock($clientSocket);
         $raw = '';
-        $deadline = \microtime(true) + \max(0.05, $timeoutSec);
+        $deadline = self::monotonicSeconds() + \max(0.05, $timeoutSec);
 
         while (\strpos($raw, "\r\n\r\n") === false && \strlen($raw) < 65536) {
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 break;
             }
 
@@ -3524,8 +3761,8 @@ HTML;
 
         $toWrite = \strlen($response);
         $written = 0;
-        $deadline = \microtime(true) + 0.5;
-        while ($written < $toWrite && \microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + 0.5;
+        while ($written < $toWrite && self::monotonicSeconds() < $deadline) {
             $write = [$clientSocket];
             $read = $except = [];
             $ready = @\socket_select($read, $write, $except, 0, 50000);
@@ -3584,8 +3821,8 @@ HTML;
             if ($this->passthroughCore->handleHttpRedirectConnection($clientSocket, $clientIp)) {
                 // 成功建立到 redirect_worker 的连接
                 $this->clientConnections[$connId] = $clientSocket;
-                $this->connectionAcceptTime[$connId] = \microtime(true);
-                $this->connectionLastActivity[$connId] = \microtime(true);
+                $this->connectionAcceptTime[$connId] = self::monotonicSeconds();
+                $this->connectionLastActivity[$connId] = self::monotonicSeconds();
                 $this->connectionBytes[$connId] = ['in' => 0, 'out' => 0];
                 $this->requestCount++;
                 
@@ -3617,7 +3854,7 @@ HTML;
     private function peekAcceptedHttpHeaderBlock($clientSocket, int $maxBytes, float $timeoutSec): string
     {
         $maxBytes = \max(256, \min($maxBytes, 65536));
-        $deadline = \microtime(true) + \max(0.0, $timeoutSec);
+        $deadline = self::monotonicSeconds() + \max(0.0, $timeoutSec);
 
         do {
             $peek = '';
@@ -3632,14 +3869,14 @@ HTML;
                 }
             }
 
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 return '';
             }
             $read = [$clientSocket];
             $write = $except = [];
-            $remainingUsec = (int)\max(1_000, \min(10_000, ($deadline - \microtime(true)) * 1_000_000));
+            $remainingUsec = (int)\max(1_000, \min(10_000, ($deadline - self::monotonicSeconds()) * 1_000_000));
             @\socket_select($read, $write, $except, 0, $remainingUsec);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         return '';
     }
@@ -3647,7 +3884,7 @@ HTML;
     private function peekAcceptedClientBytes($clientSocket, int $length, float $timeoutSec): string
     {
         $length = \max(1, $length);
-        $deadline = \microtime(true) + \max(0.0, $timeoutSec);
+        $deadline = self::monotonicSeconds() + \max(0.0, $timeoutSec);
 
         do {
             $peek = '';
@@ -3656,15 +3893,15 @@ HTML;
                 return $peek;
             }
 
-            if (\microtime(true) >= $deadline) {
+            if (self::monotonicSeconds() >= $deadline) {
                 return '';
             }
 
             $read = [$clientSocket];
             $write = $except = [];
-            $remainingUsec = (int)\max(1_000, \min(10_000, ($deadline - \microtime(true)) * 1_000_000));
+            $remainingUsec = (int)\max(1_000, \min(10_000, ($deadline - self::monotonicSeconds()) * 1_000_000));
             @\socket_select($read, $write, $except, 0, $remainingUsec);
-        } while (\microtime(true) < $deadline);
+        } while (self::monotonicSeconds() < $deadline);
 
         return '';
     }
@@ -3699,9 +3936,9 @@ HTML;
         // 非阻塞读取请求头，短超时（约 300ms），避免 Windows 下阻塞整条 accept 导致大批请求排队
         @\socket_set_nonblock($clientSocket);
         $raw = '';
-        $readDeadline = \microtime(true) + 0.3;
+        $readDeadline = self::monotonicSeconds() + 0.3;
         while (\strpos($raw, "\r\n\r\n") === false && \strlen($raw) < 65536) {
-            if (\microtime(true) >= $readDeadline) {
+            if (self::monotonicSeconds() >= $readDeadline) {
                 @\socket_close($clientSocket);
                 return true;
             }
@@ -3747,8 +3984,8 @@ HTML;
             . "Connection: close\r\n\r\n";
         $toWrite = \strlen($response);
         $written = 0;
-        $writeDeadline = \microtime(true) + 0.2;
-        while ($written < $toWrite && \microtime(true) < $writeDeadline) {
+        $writeDeadline = self::monotonicSeconds() + 0.2;
+        while ($written < $toWrite && self::monotonicSeconds() < $writeDeadline) {
             $write = [$clientSocket];
             $r = $e = [];
             $n = @\socket_select($r, $write, $e, 0, 50000);
@@ -3811,7 +4048,7 @@ HTML;
             // 兜底保护：客户端上行 FIN 在某些分支被映射为 -1 时，不应关闭整连接。
             if ($terminalReasonPeek === 'forward_to_worker_client_read_eof'
                 || $this->passthroughCore->isClientInputClosed($clientSocket)) {
-                $this->connectionLastActivity[$connId] = \microtime(true);
+                $this->connectionLastActivity[$connId] = self::monotonicSeconds();
                 return;
             }
             // 连接真正关闭或错误
@@ -3826,7 +4063,7 @@ HTML;
         
         // result === -2: 客户端上行半关闭（FIN），但下行仍可继续，不关闭连接
         if ($result === -2) {
-            $this->connectionLastActivity[$connId] = \microtime(true);
+            $this->connectionLastActivity[$connId] = self::monotonicSeconds();
             $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
             $inBytes = (int)($bytes['in'] ?? 0);
             $outBytes = (int)($bytes['out'] ?? 0);
@@ -3863,7 +4100,7 @@ HTML;
             // timeout). Receiving forwardable client bytes completes this L4
             // progress cycle; direct Workers enforce full HTTP framing.
             $this->connectionAcceptGates->markRequestComplete((string)$connId);
-            $this->connectionLastActivity[$connId] = \microtime(true);
+            $this->connectionLastActivity[$connId] = self::monotonicSeconds();
             $this->bytesCount['in'] += $result;
             if (isset($this->connectionBytes[$connId])) {
                 $this->connectionBytes[$connId]['in'] += $result;
@@ -3897,7 +4134,7 @@ HTML;
         // 不关闭客户端连接，等待缓冲区数据发送完成
         
         if ($result > 0 || $result === -2) {
-            $this->connectionLastActivity[$connId] = \microtime(true);
+            $this->connectionLastActivity[$connId] = self::monotonicSeconds();
             if ($result > 0 && $this->shouldLogHotPathDiagnostics()) {
                 $this->log("Dispatcher 转发到客户端 connId: {$connId} bytes: {$result}", 'ROUTE');
             }
@@ -4003,7 +4240,7 @@ HTML;
         }
 
         $acceptedAt = (float)($this->connectionAcceptTime[$connId] ?? 0.0);
-        $ageMs = $acceptedAt > 0.0 ? \round((\microtime(true) - $acceptedAt) * 1000, 1) : 0.0;
+        $ageMs = $acceptedAt > 0.0 ? \round((self::monotonicSeconds() - $acceptedAt) * 1000, 1) : 0.0;
         $clientIp = (string)($connInfo['client_ip'] ?? 'unknown');
         $workerPort = $connInfo['worker_port'] ?? null;
         $worker = $workerPort !== null ? (string)$workerPort : 'unknown';
@@ -4119,8 +4356,8 @@ HTML;
             $clientIp = (string)($connInfo['client_ip'] ?? 'unknown');
         }
 
-        $now = \time();
-        $lastLog = $this->halfClosedFastCloseLogThrottle[$clientIp] ?? 0;
+        $now = self::monotonicSeconds();
+        $lastLog = $this->halfClosedFastCloseLogThrottle[$clientIp] ?? 0.0;
         if (($now - $lastLog) < $this->halfClosedFastCloseLogInterval) {
             return;
         }
@@ -4145,13 +4382,13 @@ HTML;
      */
     private function printStats(): void
     {
-        $now = \time();
+        $now = self::monotonicSeconds();
         if ($now - $this->lastStatsTime < 60) {
             return;
         }
         $this->lastStatsTime = $now;
         
-        $uptime = $now - $this->startTime;
+        $uptime = \max(0.0, $now - $this->startMonotonic);
         $rps = $uptime > 0 ? \round($this->requestCount / $uptime, 2) : 0;
         $activeConns = \count($this->clientConnections);
         $bytesInKb = \round($this->bytesCount['in'] / 1024, 2);
@@ -4270,8 +4507,11 @@ HTML;
         // 关闭透传核心中的所有连接
         $this->passthroughCore->closeAllConnections();
         
-        // 关闭服务器 socket
-        @\socket_close($this->serverSocket);
+        // 关闭服务器 socket；全局 DRAIN 已提前关闭监听时这里保持幂等。
+        if ($this->serverSocket instanceof \Socket || \is_resource($this->serverSocket)) {
+            @\socket_close($this->serverSocket);
+        }
+        $this->serverSocket = null;
         
         // Master owns process-record cleanup; dispatcher exit must not block on
         // shared PID/name/port index locks.
@@ -4295,7 +4535,7 @@ HTML;
     public function getStats(): array
     {
         return [
-            'uptime' => \time() - $this->startTime,
+            'uptime' => \max(0.0, self::monotonicSeconds() - $this->startMonotonic),
             'total_connections' => $this->requestCount,
             'active_connections' => \count($this->clientConnections),
             'bytes_in' => $this->bytesCount['in'],

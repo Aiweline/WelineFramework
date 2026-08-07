@@ -29,6 +29,7 @@
 #define WLS_MAX_MANIFEST (4U * 1024U * 1024U)
 #define WLS_SIGNATURE_TEXT 256U
 #define WLS_CONTROL_TREE_RELOAD 254
+#define WLS_SERVICE_TREE_RESTART 79
 #define WLS_UPGRADE_ACTIVATION_SECONDS 300LL
 #define WLS_UPGRADE_OBSERVATION_MILLISECONDS 300000LL
 #define WLS_UPGRADE_TOTAL_SECONDS 900LL
@@ -65,6 +66,40 @@ struct wls_upgrade_state {
 };
 
 static volatile sig_atomic_t wls_shutdown_signal = 0;
+
+struct wls_platform_retirement_receipt {
+    char status[16];
+    char retirement_id[65];
+    unsigned long pid;
+    unsigned long long start_id;
+    char attestation_digest[65];
+    char binary_digest[65];
+    char runtime_generation[65];
+    char host_boot_id[65];
+    char config_digest[65];
+    char config_path_digest[65];
+    unsigned long publication_generation;
+    char platform[16];
+    char service_id[65];
+    char requested_launcher_generation[65];
+    char completed_launcher_generation[65];
+    char completed_host_boot_id[65];
+    char completed_runtime_generation[65];
+};
+
+struct wls_process_attestation_receipt {
+    unsigned long pid;
+    unsigned long long start_id;
+    char binary_digest[65];
+    char runtime_generation[65];
+    char config_digest[65];
+    char config_path_digest[65];
+    unsigned long publication_generation;
+    char fence_kind[10];
+    char candidate_transaction_id[33];
+    char candidate_phase[40];
+    char candidate_fence_digest[65];
+};
 
 static long long wls_monotonic_milliseconds(void);
 
@@ -1080,6 +1115,614 @@ static int wls_boot_id(char output[65])
     return result;
 }
 
+static int wls_sha256_text(
+    const unsigned char *contents,
+    size_t length,
+    char output[65]
+) {
+    unsigned char digest[crypto_hash_sha256_BYTES];
+    int result = -1;
+    if (contents != NULL
+        && crypto_hash_sha256(
+            digest,
+            contents,
+            (unsigned long long)length
+        ) == 0
+        && sodium_bin2hex(output, 65U, digest, sizeof(digest)) != NULL
+        && wls_is_hex_text(output, 64U)) {
+        result = 0;
+    }
+    sodium_memzero(digest, sizeof(digest));
+    return result;
+}
+
+static int wls_all_zero_hex(const char *value)
+{
+    size_t index;
+    if (!wls_is_hex_text(value, 64U)) return 0;
+    for (index = 0U; index < 64U; index++) {
+        if (value[index] != '0') return 0;
+    }
+    return 1;
+}
+
+static int wls_has_flag(int argc, char **argv, const char *name)
+{
+    int index;
+    for (index = 1; index < argc; index++) {
+        if (strcmp(argv[index], name) == 0) return 1;
+    }
+    return 0;
+}
+
+#if defined(__linux__)
+static int wls_normalize_hex_32(const char *input, char output[33])
+{
+    size_t index;
+    if (input == NULL || strlen(input) != 32U) return -1;
+    for (index = 0U; index < 32U; index++) {
+        char value = input[index];
+        if (value >= 'A' && value <= 'F') value = (char)(value - 'A' + 'a');
+        if (!((value >= '0' && value <= '9')
+            || (value >= 'a' && value <= 'f'))) return -1;
+        output[index] = value;
+    }
+    output[32] = '\0';
+    return 0;
+}
+#endif
+
+static int wls_platform_service_identity(
+    int argc,
+    char **argv,
+    const char *home,
+    char platform[16],
+    char service_id[65],
+    char launcher_generation[65]
+) {
+    char boot_id[65];
+    char invocation[33];
+    char canonical[512];
+    unsigned char random_generation[32];
+    int service_mode = wls_has_flag(argc, argv, "--service");
+    int written;
+    if (home == NULL || wls_boot_id(boot_id) != 0) return -1;
+#if defined(__linux__)
+    if (service_mode
+        && wls_normalize_hex_32(getenv("INVOCATION_ID"), invocation) == 0) {
+        memcpy(platform, "systemd", 8U);
+    } else {
+        memcpy(platform, "standalone", 11U);
+    }
+#elif defined(__APPLE__)
+    (void)invocation;
+    if (service_mode && getppid() == 1) {
+        memcpy(platform, "launchd", 8U);
+    } else {
+        memcpy(platform, "standalone", 11U);
+    }
+#else
+    (void)argc;
+    (void)argv;
+    (void)service_mode;
+    (void)invocation;
+    memcpy(platform, "standalone", 11U);
+#endif
+    written = snprintf(
+        canonical,
+        sizeof(canonical),
+        "wls-platform-service/1%c%s%ccom.weline.wls-gateway-v2",
+        '\0', platform, '\0'
+    );
+    if (written <= 0 || written >= (int)sizeof(canonical)
+        || wls_sha256_text(
+            (const unsigned char *)canonical,
+            (size_t)written,
+            service_id
+        ) != 0) {
+        sodium_memzero(canonical, sizeof(canonical));
+        return -1;
+    }
+    sodium_memzero(canonical, sizeof(canonical));
+#if defined(__linux__)
+    if (strcmp(platform, "systemd") == 0) {
+        written = snprintf(
+            canonical,
+            sizeof(canonical),
+            "wls-systemd-invocation/1%c%s%c%s%c%s",
+            '\0', invocation, '\0', boot_id, '\0', service_id
+        );
+        if (written <= 0 || written >= (int)sizeof(canonical)
+            || wls_sha256_text(
+                (const unsigned char *)canonical,
+                (size_t)written,
+                launcher_generation
+            ) != 0) {
+            sodium_memzero(canonical, sizeof(canonical));
+            return -1;
+        }
+        sodium_memzero(canonical, sizeof(canonical));
+        sodium_memzero(invocation, sizeof(invocation));
+        return 0;
+    }
+#endif
+    randombytes_buf(random_generation, sizeof(random_generation));
+    if (sodium_bin2hex(
+            launcher_generation,
+            65U,
+            random_generation,
+            sizeof(random_generation)
+        ) == NULL
+        || !wls_is_hex_text(launcher_generation, 64U)) {
+        sodium_memzero(random_generation, sizeof(random_generation));
+        return -1;
+    }
+    sodium_memzero(random_generation, sizeof(random_generation));
+    return 0;
+}
+
+/* 0=read, 1=missing, -1=unsafe/error. */
+static int wls_read_root_receipt(
+    const char *path,
+    char *contents,
+    size_t capacity,
+    size_t *length
+) {
+    int fd = -1;
+    int result = -1;
+    struct stat before;
+    struct stat after;
+    size_t used = 0U;
+    if (path == NULL || contents == NULL || capacity < 2U || length == NULL) {
+        return -1;
+    }
+    fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) return errno == ENOENT ? 1 : -1;
+    if (fstat(fd, &before) != 0
+        || !S_ISREG(before.st_mode)
+        || before.st_nlink != 1
+        || before.st_uid != 0
+        || before.st_gid != 0
+        || (before.st_mode & 0777) != 0600
+        || before.st_size <= 0
+        || (uint64_t)before.st_size >= capacity) goto cleanup;
+    while (used < (size_t)before.st_size) {
+        ssize_t amount = read(fd, contents + used, (size_t)before.st_size - used);
+        if (amount < 0 && errno == EINTR) continue;
+        if (amount <= 0) goto cleanup;
+        used += (size_t)amount;
+    }
+    if (fstat(fd, &after) != 0
+        || after.st_dev != before.st_dev
+        || after.st_ino != before.st_ino
+        || after.st_size != before.st_size
+        || after.st_mode != before.st_mode
+        || after.st_nlink != before.st_nlink
+        || after.st_uid != before.st_uid
+        || after.st_gid != before.st_gid
+#if defined(__APPLE__) || defined(__FreeBSD__)
+        || after.st_mtimespec.tv_sec != before.st_mtimespec.tv_sec
+        || after.st_mtimespec.tv_nsec != before.st_mtimespec.tv_nsec
+        || after.st_ctimespec.tv_sec != before.st_ctimespec.tv_sec
+        || after.st_ctimespec.tv_nsec != before.st_ctimespec.tv_nsec
+#else
+        || after.st_mtim.tv_sec != before.st_mtim.tv_sec
+        || after.st_mtim.tv_nsec != before.st_mtim.tv_nsec
+        || after.st_ctim.tv_sec != before.st_ctim.tv_sec
+        || after.st_ctim.tv_nsec != before.st_ctim.tv_nsec
+#endif
+        || memchr(contents, '\0', used) != NULL) goto cleanup;
+    contents[used] = '\0';
+    *length = used;
+    result = 0;
+cleanup:
+    close(fd);
+    if (result != 0) {
+        sodium_memzero(contents, capacity);
+        *length = 0U;
+    }
+    return result;
+}
+
+static int wls_parse_process_attestation(
+    const char *contents,
+    size_t length,
+    struct wls_process_attestation_receipt *receipt
+) {
+    int consumed = 0;
+    if (contents == NULL || receipt == NULL) return -1;
+    memset(receipt, 0, sizeof(*receipt));
+    if (sscanf(
+            contents,
+            "WLS-PROCESS-ATTEST/3\npid=%lu\nstart_id=%llu\n"
+            "binary_digest=%64[0-9a-f]\nruntime_generation=%64[0-9a-f]\n"
+            "config_digest=%64[0-9a-f]\nconfig_path_digest=%64[0-9a-f]\n"
+            "publication_generation=%lu\nfence_kind=%9[A-Z]\n"
+            "candidate_transaction_id=%32[0-9a-f-]\n"
+            "candidate_phase=%39[A-Z_]\n"
+            "candidate_fence_digest=%64[0-9a-f]\n%n",
+            &receipt->pid,
+            &receipt->start_id,
+            receipt->binary_digest,
+            receipt->runtime_generation,
+            receipt->config_digest,
+            receipt->config_path_digest,
+            &receipt->publication_generation,
+            receipt->fence_kind,
+            receipt->candidate_transaction_id,
+            receipt->candidate_phase,
+            receipt->candidate_fence_digest,
+            &consumed
+        ) != 11
+        || consumed != (int)length
+        || receipt->pid == 0U
+        || receipt->start_id == 0ULL
+        || receipt->publication_generation == 0U
+        || !wls_is_hex_text(receipt->binary_digest, 64U)
+        || !wls_is_hex_text(receipt->runtime_generation, 64U)
+        || !wls_is_hex_text(receipt->config_digest, 64U)
+        || !wls_is_hex_text(receipt->config_path_digest, 64U)
+        || (strcmp(receipt->fence_kind, "ACTIVE") == 0
+            ? (strcmp(receipt->candidate_transaction_id, "-") != 0
+                || strcmp(receipt->candidate_phase, "ACTIVE") != 0
+                || !wls_all_zero_hex(receipt->candidate_fence_digest))
+            : (strcmp(receipt->fence_kind, "CANDIDATE") != 0
+                || !wls_is_hex_text(receipt->candidate_transaction_id, 32U)
+                || (strcmp(receipt->candidate_phase, "ACTIVATING") != 0
+                    && strcmp(
+                        receipt->candidate_phase,
+                        "SERVICE_TREE_RETIREMENT_PENDING"
+                    ) != 0)
+                || !wls_is_hex_text(receipt->candidate_fence_digest, 64U)
+                || wls_all_zero_hex(receipt->candidate_fence_digest)))) {
+        sodium_memzero(receipt, sizeof(*receipt));
+        return -1;
+    }
+    return 0;
+}
+
+static int wls_parse_platform_retirement_v2(
+    const char *contents,
+    size_t length,
+    struct wls_platform_retirement_receipt *receipt
+) {
+    int consumed = 0;
+    if (contents == NULL || receipt == NULL) return -1;
+    memset(receipt, 0, sizeof(*receipt));
+    if (sscanf(
+            contents,
+            "WLS-PROCESS-TREE-RETIRE/2\nstatus=%15[A-Z]\n"
+            "retirement_id=%64[0-9a-f]\npid=%lu\nstart_id=%llu\n"
+            "attestation_digest=%64[0-9a-f]\n"
+            "binary_digest=%64[0-9a-f]\n"
+            "runtime_generation=%64[0-9a-f]\n"
+            "host_boot_id=%64[0-9a-f]\n"
+            "config_digest=%64[0-9a-f]\n"
+            "config_path_digest=%64[0-9a-f]\n"
+            "publication_generation=%lu\nplatform=%15[a-z-]\n"
+            "service_id=%64[0-9a-f]\n"
+            "requested_launcher_generation=%64[0-9a-f]\n"
+            "completed_launcher_generation=%64[0-9a-f]\n"
+            "completed_host_boot_id=%64[0-9a-f]\n"
+            "completed_runtime_generation=%64[0-9a-f]\n%n",
+            receipt->status,
+            receipt->retirement_id,
+            &receipt->pid,
+            &receipt->start_id,
+            receipt->attestation_digest,
+            receipt->binary_digest,
+            receipt->runtime_generation,
+            receipt->host_boot_id,
+            receipt->config_digest,
+            receipt->config_path_digest,
+            &receipt->publication_generation,
+            receipt->platform,
+            receipt->service_id,
+            receipt->requested_launcher_generation,
+            receipt->completed_launcher_generation,
+            receipt->completed_host_boot_id,
+            receipt->completed_runtime_generation,
+            &consumed
+        ) != 17
+        || consumed != (int)length
+        || (strcmp(receipt->status, "COMPLETE") != 0
+            && strcmp(receipt->status, "INDETERMINATE") != 0)
+        || receipt->pid == 0U
+        || receipt->start_id == 0ULL
+        || !wls_is_hex_text(receipt->retirement_id, 64U)
+        || !wls_is_hex_text(receipt->attestation_digest, 64U)
+        || !wls_is_hex_text(receipt->binary_digest, 64U)
+        || !wls_is_hex_text(receipt->runtime_generation, 64U)
+        || !wls_is_hex_text(receipt->host_boot_id, 64U)
+        || !wls_is_hex_text(receipt->config_digest, 64U)
+        || !wls_is_hex_text(receipt->config_path_digest, 64U)
+        || !wls_is_hex_text(receipt->service_id, 64U)
+        || !wls_is_hex_text(receipt->requested_launcher_generation, 64U)
+        || !wls_is_hex_text(receipt->completed_launcher_generation, 64U)
+        || !wls_is_hex_text(receipt->completed_host_boot_id, 64U)
+        || !wls_is_hex_text(receipt->completed_runtime_generation, 64U)) {
+        sodium_memzero(receipt, sizeof(*receipt));
+        return -1;
+    }
+    return 0;
+}
+
+static int wls_write_platform_retirement_v2(
+    const char *home,
+    const struct wls_platform_retirement_receipt *receipt
+) {
+    char path[PATH_MAX];
+    char payload[2048];
+    int written;
+    if (home == NULL || receipt == NULL || geteuid() != 0
+        || wls_join(
+            path,
+            sizeof(path),
+            home,
+            "trust/process-tree-retirement.receipt"
+        ) != 0) return -1;
+    written = snprintf(
+        payload,
+        sizeof(payload),
+        "WLS-PROCESS-TREE-RETIRE/2\nstatus=%s\nretirement_id=%s\n"
+        "pid=%lu\nstart_id=%llu\nattestation_digest=%s\n"
+        "binary_digest=%s\nruntime_generation=%s\nhost_boot_id=%s\n"
+        "config_digest=%s\nconfig_path_digest=%s\n"
+        "publication_generation=%lu\nplatform=%s\nservice_id=%s\n"
+        "requested_launcher_generation=%s\n"
+        "completed_launcher_generation=%s\ncompleted_host_boot_id=%s\n"
+        "completed_runtime_generation=%s\n",
+        receipt->status,
+        receipt->retirement_id,
+        receipt->pid,
+        receipt->start_id,
+        receipt->attestation_digest,
+        receipt->binary_digest,
+        receipt->runtime_generation,
+        receipt->host_boot_id,
+        receipt->config_digest,
+        receipt->config_path_digest,
+        receipt->publication_generation,
+        receipt->platform,
+        receipt->service_id,
+        receipt->requested_launcher_generation,
+        receipt->completed_launcher_generation,
+        receipt->completed_host_boot_id,
+        receipt->completed_runtime_generation
+    );
+    if (written <= 0 || written >= (int)sizeof(payload)
+        || wls_atomic_text(path, payload, 0600) != 0) {
+        sodium_memzero(payload, sizeof(payload));
+        return -1;
+    }
+    sodium_memzero(payload, sizeof(payload));
+    return 0;
+}
+
+static int wls_seal_platform_retirement_pending(
+    const char *home,
+    const char *platform,
+    const char *service_id,
+    const char *launcher_generation,
+    const char *runtime_generation
+) {
+    char retirement_path[PATH_MAX];
+    char attestation_path[PATH_MAX];
+    char retirement[2048];
+    char attestation[2048];
+    char status[16];
+    char zeros[65];
+    size_t retirement_length = 0U;
+    size_t attestation_length = 0U;
+    int consumed = 0;
+    int read_result;
+    struct wls_platform_retirement_receipt sealed;
+    struct wls_process_attestation_receipt process;
+    if (home == NULL || platform == NULL || service_id == NULL
+        || launcher_generation == NULL || runtime_generation == NULL
+        || strcmp(platform, "standalone") == 0
+        || geteuid() != 0
+        || wls_join(
+            retirement_path,
+            sizeof(retirement_path),
+            home,
+            "trust/process-tree-retirement.receipt"
+        ) != 0
+        || wls_join(
+            attestation_path,
+            sizeof(attestation_path),
+            home,
+            "trust/process-attestation.receipt"
+        ) != 0) return -1;
+    read_result = wls_read_root_receipt(
+        retirement_path,
+        retirement,
+        sizeof(retirement),
+        &retirement_length
+    );
+    if (read_result != 0) return -1;
+    if (strncmp(retirement, "WLS-PROCESS-TREE-RETIRE/2\n", 26U) == 0) {
+        if (wls_parse_platform_retirement_v2(
+                retirement,
+                retirement_length,
+                &sealed
+            ) == 0
+            && strcmp(sealed.status, "INDETERMINATE") == 0
+            && strcmp(sealed.platform, platform) == 0
+            && strcmp(sealed.service_id, service_id) == 0
+            && strcmp(
+                sealed.requested_launcher_generation,
+                launcher_generation
+            ) == 0) {
+            sodium_memzero(&sealed, sizeof(sealed));
+            sodium_memzero(retirement, sizeof(retirement));
+            return 0;
+        }
+        sodium_memzero(&sealed, sizeof(sealed));
+        sodium_memzero(retirement, sizeof(retirement));
+        return -1;
+    }
+    memset(&sealed, 0, sizeof(sealed));
+    if (sscanf(
+            retirement,
+            "WLS-PROCESS-TREE-RETIRE/1\nstatus=%15[A-Z]\n"
+            "retirement_id=%64[0-9a-f]\npid=%lu\nstart_id=%llu\n"
+            "attestation_digest=%64[0-9a-f]\n"
+            "binary_digest=%64[0-9a-f]\n"
+            "runtime_generation=%64[0-9a-f]\n"
+            "host_boot_id=%64[0-9a-f]\n%n",
+            status,
+            sealed.retirement_id,
+            &sealed.pid,
+            &sealed.start_id,
+            sealed.attestation_digest,
+            sealed.binary_digest,
+            sealed.runtime_generation,
+            sealed.host_boot_id,
+            &consumed
+        ) != 8
+        || consumed != (int)retirement_length
+        || strcmp(status, "INDETERMINATE") != 0
+        || !wls_is_hex_text(sealed.retirement_id, 64U)
+        || sealed.pid == 0U
+        || sealed.start_id == 0ULL
+        || !wls_is_hex_text(sealed.attestation_digest, 64U)
+        || !wls_is_hex_text(sealed.binary_digest, 64U)
+        || !wls_is_hex_text(sealed.runtime_generation, 64U)
+        || !wls_is_hex_text(sealed.host_boot_id, 64U)
+        || strcmp(sealed.runtime_generation, runtime_generation) != 0
+        || wls_read_root_receipt(
+            attestation_path,
+            attestation,
+            sizeof(attestation),
+            &attestation_length
+        ) != 0
+        || wls_parse_process_attestation(
+            attestation,
+            attestation_length,
+            &process
+        ) != 0
+        || process.pid != sealed.pid
+        || process.start_id != sealed.start_id
+        || strcmp(process.binary_digest, sealed.binary_digest) != 0
+        || strcmp(process.runtime_generation, sealed.runtime_generation) != 0
+        || wls_sha256_text(
+            (const unsigned char *)attestation,
+            attestation_length,
+            zeros
+        ) != 0
+        || strcmp(zeros, sealed.attestation_digest) != 0) {
+        sodium_memzero(&process, sizeof(process));
+        sodium_memzero(&sealed, sizeof(sealed));
+        sodium_memzero(retirement, sizeof(retirement));
+        sodium_memzero(attestation, sizeof(attestation));
+        sodium_memzero(zeros, sizeof(zeros));
+        return -1;
+    }
+    memcpy(sealed.status, "INDETERMINATE", 14U);
+    memcpy(sealed.config_digest, process.config_digest, 65U);
+    memcpy(sealed.config_path_digest, process.config_path_digest, 65U);
+    sealed.publication_generation = process.publication_generation;
+    snprintf(sealed.platform, sizeof(sealed.platform), "%s", platform);
+    memcpy(sealed.service_id, service_id, 65U);
+    memcpy(
+        sealed.requested_launcher_generation,
+        launcher_generation,
+        65U
+    );
+    memset(zeros, '0', 64U);
+    zeros[64] = '\0';
+    memcpy(sealed.completed_launcher_generation, zeros, 65U);
+    memcpy(sealed.completed_host_boot_id, zeros, 65U);
+    memcpy(sealed.completed_runtime_generation, zeros, 65U);
+    read_result = wls_write_platform_retirement_v2(home, &sealed);
+    sodium_memzero(&process, sizeof(process));
+    sodium_memzero(&sealed, sizeof(sealed));
+    sodium_memzero(retirement, sizeof(retirement));
+    sodium_memzero(attestation, sizeof(attestation));
+    sodium_memzero(zeros, sizeof(zeros));
+    return read_result;
+}
+
+static int wls_promote_platform_retirement(
+    const char *home,
+    const char *platform,
+    const char *service_id,
+    const char *launcher_generation,
+    const char *runtime_generation
+) {
+    char path[PATH_MAX];
+    char contents[2048];
+    char boot_id[65];
+    size_t length = 0U;
+    int read_result;
+    struct wls_platform_retirement_receipt receipt;
+    if (home == NULL || platform == NULL || service_id == NULL
+        || launcher_generation == NULL || runtime_generation == NULL
+        || wls_join(
+            path,
+            sizeof(path),
+            home,
+            "trust/process-tree-retirement.receipt"
+        ) != 0) return -1;
+    read_result = wls_read_root_receipt(
+        path,
+        contents,
+        sizeof(contents),
+        &length
+    );
+    if (read_result == 1) return 0;
+    if (read_result != 0) return -1;
+    if (strncmp(contents, "WLS-PROCESS-TREE-RETIRE/2\n", 26U) != 0) {
+        sodium_memzero(contents, sizeof(contents));
+        return 0;
+    }
+    if (wls_parse_platform_retirement_v2(contents, length, &receipt) != 0) {
+        sodium_memzero(contents, sizeof(contents));
+        return -1;
+    }
+    sodium_memzero(contents, sizeof(contents));
+    if (strcmp(receipt.status, "COMPLETE") == 0) {
+        sodium_memzero(&receipt, sizeof(receipt));
+        return 0;
+    }
+    if (strcmp(platform, "standalone") == 0) {
+        sodium_memzero(&receipt, sizeof(receipt));
+        return 0;
+    }
+    if (geteuid() != 0
+        || strcmp(receipt.platform, platform) != 0
+        || strcmp(receipt.service_id, service_id) != 0
+        || strcmp(
+            receipt.requested_launcher_generation,
+            launcher_generation
+        ) == 0
+        || wls_all_zero_hex(receipt.requested_launcher_generation)
+        || !wls_all_zero_hex(receipt.completed_launcher_generation)
+        || !wls_all_zero_hex(receipt.completed_host_boot_id)
+        || !wls_all_zero_hex(receipt.completed_runtime_generation)
+        || wls_boot_id(boot_id) != 0) {
+        sodium_memzero(&receipt, sizeof(receipt));
+        return -1;
+    }
+    memcpy(receipt.status, "COMPLETE", 9U);
+    memcpy(
+        receipt.completed_launcher_generation,
+        launcher_generation,
+        65U
+    );
+    memcpy(receipt.completed_host_boot_id, boot_id, 65U);
+    memcpy(
+        receipt.completed_runtime_generation,
+        runtime_generation,
+        65U
+    );
+    read_result = wls_write_platform_retirement_v2(home, &receipt);
+    sodium_memzero(&receipt, sizeof(receipt));
+    sodium_memzero(boot_id, sizeof(boot_id));
+    return read_result;
+}
+
 /* 0=acquired, 1=busy, -1=invalid/error. */
 static int wls_package_lock_acquire(
     const char *home,
@@ -1861,12 +2504,17 @@ static int wls_monitor_upgrade(const char *home, char active[2])
     return result == 1 || active[0] != before ? 1 : 0;
 }
 
-static void wls_terminate_broker(pid_t broker_pid, int signal_number)
+/* 0 means the Broker completed its bounded shutdown; -1 requires the
+ * platform supervisor to retire the whole service tree before relaunch. */
+static int wls_terminate_broker(pid_t broker_pid, int signal_number)
 {
     unsigned int attempt;
     int status = 0;
-    if (broker_pid <= 0) return;
-    kill(broker_pid, signal_number > 0 ? signal_number : SIGTERM);
+    if (broker_pid <= 0) return -1;
+    if (kill(
+            broker_pid,
+            signal_number > 0 ? signal_number : SIGTERM
+        ) != 0 && errno != ESRCH) return -1;
     for (attempt = 0U; attempt < 50U; attempt++) {
         int has_children = 1;
         pid_t waited = wls_reap_exited_children(
@@ -1875,14 +2523,17 @@ static void wls_terminate_broker(pid_t broker_pid, int signal_number)
             &has_children
         );
         if (waited == broker_pid || !has_children) {
-            return;
+            return 0;
         }
         usleep(100000);
     }
-    kill(broker_pid, SIGKILL);
+    if (kill(broker_pid, SIGKILL) != 0 && errno != ESRCH) return -1;
     while (waitpid(broker_pid, &status, 0) < 0 && errno == EINTR) {
     }
     (void)wls_reap_exited_children(0, NULL, NULL);
+    /* A force-killed Broker could not retire its Controller/Nginx descendants.
+     * Never start a replacement beneath this Launcher generation. */
+    return -1;
 }
 
 static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[2])
@@ -1895,10 +2546,10 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
         int upgrade_state;
         int signal_number = wls_take_shutdown_signal();
         if (signal_number != 0) {
-            wls_terminate_broker(
-                broker_pid,
-                signal_number == SIGHUP ? SIGTERM : signal_number
-            );
+            if (wls_terminate_broker(
+                    broker_pid,
+                    signal_number == SIGHUP ? SIGTERM : signal_number
+                ) != 0) return WLS_SERVICE_TREE_RESTART;
             return signal_number == SIGHUP ? WLS_CONTROL_TREE_RELOAD : 0;
         }
         waited = wls_reap_exited_children(
@@ -1940,12 +2591,16 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
         }
         upgrade_state = wls_monitor_upgrade(home, active);
         if (upgrade_state < 0) {
-            wls_terminate_broker(broker_pid, SIGTERM);
+            if (wls_terminate_broker(broker_pid, SIGTERM) != 0) {
+                return WLS_SERVICE_TREE_RESTART;
+            }
             return 1;
         }
         if (upgrade_state > 0) {
             /* Keep the stable launcher PID while rebuilding the verified slot. */
-            wls_terminate_broker(broker_pid, SIGTERM);
+            if (wls_terminate_broker(broker_pid, SIGTERM) != 0) {
+                return WLS_SERVICE_TREE_RESTART;
+            }
             return WLS_CONTROL_TREE_RELOAD;
         }
         while (nanosleep(&pause, &pause) != 0 && errno == EINTR) {
@@ -1956,7 +2611,13 @@ static int wls_supervise_broker(pid_t broker_pid, const char *home, char active[
     }
 }
 
-static int wls_launch(const char *home, const char *run_directory)
+static int wls_launch(
+    const char *home,
+    const char *run_directory,
+    const char *platform,
+    const char *service_id,
+    const char *launcher_generation
+)
 {
     char active[2];
     char slot[PATH_MAX];
@@ -1983,6 +2644,7 @@ static int wls_launch(const char *home, const char *run_directory)
         "weline-gateway";
 #endif
     pid_t broker_pid;
+    int supervise_result;
     int pending_signal;
     int reconcile_result;
     if (wls_admin_stopped(home) != 0) {
@@ -2040,6 +2702,19 @@ static int wls_launch(const char *home, const char *run_directory)
     }
     free(manifest);
     free(installed_manifest);
+    if (wls_promote_platform_retirement(
+            home,
+            platform,
+            service_id,
+            launcher_generation,
+            runtime_generation
+        ) != 0) {
+        fprintf(
+            stderr,
+            "platform service generation could not prove pending process-tree retirement\n"
+        );
+        return 1;
+    }
     pending_signal = wls_take_shutdown_signal();
     if (pending_signal == SIGTERM || pending_signal == SIGINT) return 0;
     if (pending_signal == SIGHUP) return WLS_CONTROL_TREE_RELOAD;
@@ -2080,13 +2755,30 @@ static int wls_launch(const char *home, const char *run_directory)
         );
         _exit(127);
     }
-    return wls_supervise_broker(broker_pid, home, active);
+    supervise_result = wls_supervise_broker(broker_pid, home, active);
+    if (supervise_result == WLS_SERVICE_TREE_RESTART
+        && wls_seal_platform_retirement_pending(
+            home,
+            platform,
+            service_id,
+            launcher_generation,
+            runtime_generation
+        ) != 0) {
+        fprintf(
+            stderr,
+            "platform service restart could not seal the pending process-tree retirement\n"
+        );
+    }
+    return supervise_result;
 }
 
 int main(int argc, char **argv)
 {
     const char *home;
     const char *run_directory;
+    char platform[16];
+    char service_id[65];
+    char launcher_generation[65];
     unsigned char key[crypto_sign_PUBLICKEYBYTES];
     if (sodium_init() < 0 || wls_public_key(key) != 0) {
         return 1;
@@ -2114,6 +2806,17 @@ int main(int argc, char **argv)
         fprintf(stderr, "stable launcher requires absolute --home and --run paths\n");
         return 64;
     }
+    if (wls_platform_service_identity(
+            argc,
+            argv,
+            home,
+            platform,
+            service_id,
+            launcher_generation
+        ) != 0) {
+        fprintf(stderr, "stable launcher cannot establish its platform generation\n");
+        return 1;
+    }
     for (;;) {
         int result;
         int pending_signal = wls_take_shutdown_signal();
@@ -2123,7 +2826,13 @@ int main(int argc, char **argv)
         if (pending_signal == SIGHUP) {
             continue;
         }
-        result = wls_launch(home, run_directory);
+        result = wls_launch(
+            home,
+            run_directory,
+            platform,
+            service_id,
+            launcher_generation
+        );
         pending_signal = wls_take_shutdown_signal();
         if (pending_signal == SIGTERM || pending_signal == SIGINT) {
             return 0;

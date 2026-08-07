@@ -28,9 +28,14 @@ final class HostGatewayPackageManager
     // reach OBSERVING; the Broker's monotonic marker owns the full 300s health
     // window after readiness.
     private const UPGRADE_ACTIVATION_TIMEOUT_SECONDS = 300;
+    private const UPGRADE_TOTAL_TIMEOUT_SECONDS = 900;
     private const INSTALL_LOCK_TIMEOUT_SECONDS = 30;
     private const SLOT_RETENTION_SECONDS = 86_400;
     private const SLOT_RETENTION_MILLISECONDS = 86_400_000;
+    private const MAX_ATOMIC_RECOVERY_BACKUPS_PER_TARGET = 8;
+    private const MAX_ATOMIC_RECOVERY_TEMPORARIES_PER_TARGET = 8;
+    private const MAX_STABLE_LAUNCHER_CANDIDATES = 8;
+    private const MAX_ATOMIC_RECOVERY_DIRECTORY_ENTRIES = 16_384;
 
     private const REQUIRED_CAPABILITIES = [
         'broker_sideband_actions',
@@ -115,6 +120,7 @@ final class HostGatewayPackageManager
                         'Inactive gateway slot is still retained for rollback and cannot be replaced.'
                     );
                 }
+                $this->ensureHostIdLocked();
                 return $this->activeSlotOrEmpty();
             });
             $slotDirectory = $this->paths->slotDir($slot);
@@ -200,7 +206,6 @@ final class HostGatewayPackageManager
                 // before any activation can reference it.
                 ($this->platform ?? new GatewayPlatformServiceInstaller($this->paths))
                     ->secureInstalledRuntimeSlot($slotDirectory);
-                $this->ensureAdministratorCredential();
                 // Permission sealing is a separate platform operation. Rehash
                 // the complete slot only after that boundary, before any
                 // package executable can run with installer privileges.
@@ -237,6 +242,7 @@ final class HostGatewayPackageManager
                             'Gateway slot pointers changed before bootstrap publication.'
                         );
                     }
+                    $this->ensureAdministratorCredentialLocked();
                     $this->installStableLauncher(
                         $slotDirectory . DIRECTORY_SEPARATOR
                             . \str_replace('/', DIRECTORY_SEPARATOR, $launcherComponent),
@@ -531,17 +537,58 @@ final class HostGatewayPackageManager
                         );
                     }
                     if (\hash_equals($failedSlot, $activeSlot)) {
-                        $this->atomicWrite(
+                        $validateRequest = function (string $contents) use (
+                            $intentBinding,
+                            $failedSlot,
+                            $previousSlot,
+                        ): void {
+                            $this->validateUpgradeRollbackRequest(
+                                $contents,
+                                $intentBinding,
+                                $failedSlot,
+                                $previousSlot,
+                            );
+                        };
+                        // withInstallLock has already prevalidated and
+                        // collected the complete host recovery closure. Keep
+                        // the target-local guard here as the rollback action's
+                        // explicit defense-in-depth contract; under the shared
+                        // lock it is now either a no-op or rejects a path that
+                        // changed outside the authoritative writer set.
+                        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
                             $rollbackRequest,
-                            "WLS-UPGRADE-ROLLBACK/2\n"
-                                . 'intent_sha256=' . $intentBinding['digest'] . "\n"
-                                . 'intent_nonce=' . $intentBinding['nonce'] . "\n"
-                                . 'from=' . $failedSlot . "\n"
-                                . 'to=' . $previousSlot . "\n"
-                                . 'at=' . \time() . "\n"
-                                . 'request_nonce=' . \bin2hex(\random_bytes(16)) . "\n",
-                            0600,
+                            512,
+                            'Gateway upgrade rollback request',
+                            $validateRequest,
                         );
+                        $currentRequest = GatewayProjectStateFilesystem::readOptional(
+                            $rollbackRequest,
+                            512,
+                            'gateway upgrade rollback request',
+                        );
+                        if ($currentRequest !== null) {
+                            $validateRequest($currentRequest);
+                        } else {
+                            $requestedAt = \time();
+                            if ($requestedAt < $intentBinding['prepared_at']
+                                || $requestedAt > $intentBinding['rollback_deadline']
+                            ) {
+                                throw new \RuntimeException(
+                                    'Gateway upgrade rollback request time is outside the signed transaction.',
+                                );
+                            }
+                            $this->atomicWrite(
+                                $rollbackRequest,
+                                "WLS-UPGRADE-ROLLBACK/2\n"
+                                    . 'intent_sha256=' . $intentBinding['digest'] . "\n"
+                                    . 'intent_nonce=' . $intentBinding['nonce'] . "\n"
+                                    . 'from=' . $failedSlot . "\n"
+                                    . 'to=' . $previousSlot . "\n"
+                                    . 'at=' . $requestedAt . "\n"
+                                    . 'request_nonce=' . \bin2hex(\random_bytes(16)) . "\n",
+                                0600,
+                            );
+                        }
                         $this->atomicWrite(
                             $this->paths->activeSlotFile(),
                             $previousSlot . PHP_EOL,
@@ -1176,13 +1223,13 @@ final class HostGatewayPackageManager
             );
             $actualDigest = $inspected['sha256'];
             $size = $inspected['size'];
-            $mode = (int)($definition['mode'] ?? 0);
+            $mode = $definition['mode'] ?? null;
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
                 || !\is_string($actualDigest)
                 || !\hash_equals($expectedDigest, $actualDigest)
                 || (int)($definition['size'] ?? -1) !== $size
-                || $mode < 0400
-                || $mode > 0755
+                || !\is_int($mode)
+                || $mode !== $this->expectedPackageComponentMode($relative)
             ) {
                 throw new \RuntimeException('Gateway package component verification failed: ' . $relative);
             }
@@ -1410,12 +1457,32 @@ PHP;
             }
             return $existing;
         }
+        throw new \RuntimeException('Gateway host identity is missing.');
+    }
+
+    /** The caller must hold trust/package-install.lock. */
+    private function ensureHostIdLocked(): string
+    {
+        $file = $this->paths->hostIdFile();
+        $existing = $this->readOptionalStableRegularFile(
+            $file,
+            33,
+            'Gateway host identity',
+        );
+        if ($existing !== null) {
+            $existing = \strtolower(\trim($existing));
+            if (\preg_match('/\A[a-f0-9]{32}\z/D', $existing) !== 1) {
+                throw new \RuntimeException('Gateway host identity is invalid.');
+            }
+            return $existing;
+        }
         $hostId = \bin2hex(\random_bytes(16));
         $this->atomicWrite($file, $hostId . PHP_EOL, 0600);
         return $hostId;
     }
 
-    private function ensureAdministratorCredential(): void
+    /** The caller must hold trust/package-install.lock. */
+    private function ensureAdministratorCredentialLocked(): void
     {
         $file = $this->paths->adminTokenFile();
         $existing = $this->readOptionalStableRegularFile(
@@ -1513,6 +1580,11 @@ PHP;
 
     private function launcherDigestBackedByInstalledSlot(string $digest): bool
     {
+        return $this->launcherSourceBackedByInstalledSlot($digest) !== null;
+    }
+
+    private function launcherSourceBackedByInstalledSlot(string $digest): ?string
+    {
         $slots = [];
         $active = $this->activeSlotOrEmpty();
         if ($active !== '') {
@@ -1526,7 +1598,11 @@ PHP;
         $launcherComponent = $this->componentPath('wls-gateway-launcher');
         foreach ($slots as $slot) {
             $slotDirectory = $this->paths->slotDir($slot);
-            $verification = $this->artifact->verify($slotDirectory, 'host_gateway');
+            try {
+                $verification = $this->artifact->verify($slotDirectory, 'host_gateway');
+            } catch (\Throwable) {
+                continue;
+            }
             if (!($verification['ok'] ?? false)) {
                 continue;
             }
@@ -1548,10 +1624,25 @@ PHP;
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $declared) === 1
                 && \hash_equals($declared, $digest)
             ) {
-                return true;
+                $source = $slotDirectory . DIRECTORY_SEPARATOR
+                    . \str_replace('/', DIRECTORY_SEPARATOR, $launcherComponent);
+                try {
+                    $actual = $this->digestStableRegularFile(
+                        $source,
+                        self::MAX_PACKAGE_BYTES,
+                        'Installed stable gateway launcher',
+                    );
+                } catch (\Throwable) {
+                    continue;
+                }
+                if ($actual['size'] > 0
+                    && \hash_equals($digest, $actual['sha256'])
+                ) {
+                    return $source;
+                }
             }
         }
-        return false;
+        return null;
     }
 
     private function assertStableLauncherPermissions(string $path): void
@@ -2149,6 +2240,36 @@ PHP;
         return $required;
     }
 
+    private function expectedPackageComponentMode(string $relative): int
+    {
+        if (\in_array($relative, [
+            'app/controller.php',
+            'LICENSES.txt',
+            'provenance.json',
+            'sbom.cdx.json',
+        ], true)) {
+            return 0644;
+        }
+
+        $executables = [
+            $this->componentPath('nginx'),
+            $this->componentPath('php'),
+            $this->componentPath('wls-gateway-broker'),
+            $this->componentPath('wls-gateway-launcher'),
+        ];
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $executables[] = $this->componentPath('wls-bounded-command');
+        }
+        if (\in_array($relative, $executables, true)) {
+            return 0755;
+        }
+
+        throw new \RuntimeException(
+            'Gateway package component path is outside the locked WLS 2.0 release set: '
+                . $relative
+        );
+    }
+
     private function componentPath(string $name): string
     {
         return 'bin/' . $name . (\PHP_OS_FAMILY === 'Windows' ? '.exe' : '');
@@ -2196,7 +2317,1092 @@ PHP;
         return $this->withHostPackageLock(
             'package-install.lock',
             'installation',
-            $callback,
+            function () use ($callback): mixed {
+                $this->cleanupHostAtomicWriteRecoveryBackupsLocked();
+                return $callback();
+            },
+        );
+    }
+
+    /**
+     * Recover every crash artifact created by a package-install.lock writer.
+     * ReplaceFileW backups, PHP atomic-write temporaries and stable-launcher
+     * candidates form one host-state closure: no artifact may be collected
+     * until every reserved namespace, paired target and cross-target binding
+     * has passed a stable no-follow inspection.
+     */
+    private function cleanupHostAtomicWriteRecoveryBackupsLocked(): void
+    {
+        $targets = $this->hostAtomicRecoveryTargets();
+        $inventory = $this->discoverHostRecoveryArtifacts($targets);
+        if ($inventory['backups'] === []
+            && $inventory['temporaries'] === []
+            && $inventory['launcher_candidates'] === []
+        ) {
+            return;
+        }
+
+        $current = [];
+        $currentIdentity = [];
+        foreach ($targets as $key => $target) {
+            $before = @\lstat($target['path']);
+            $contents = $this->readHostRecoveryFileOptional(
+                $target['path'],
+                $target['maximum_bytes'],
+                $target['mode'],
+                $target['label'] . ' recovery target',
+            );
+            if ($contents === null) {
+                if (isset($inventory['backups'][$key])
+                    || isset($inventory['temporaries'][$key])
+                ) {
+                    throw new \RuntimeException(
+                        $target['label']
+                            . ' recovery artifact paired target is missing or unsafe.'
+                    );
+                }
+                $currentIdentity[$key] = null;
+                continue;
+            }
+            $after = @\lstat($target['path']);
+            if (!\is_array($before)
+                || !\is_array($after)
+                || !$this->sameFileState($before, $after)
+            ) {
+                throw new \RuntimeException(
+                    $target['label'] . ' recovery target changed during closure validation.'
+                );
+            }
+            $this->validateHostRecoveryContents(
+                $key,
+                $contents,
+                $target['label'] . ' recovery target',
+            );
+            $current[$key] = $contents;
+            $currentIdentity[$key] = [
+                'identity' => $after,
+                'sha256' => \hash('sha256', $contents),
+            ];
+        }
+
+        $backups = [];
+        foreach ($inventory['backups'] as $key => $artifacts) {
+            $target = $targets[$key];
+            foreach ($artifacts as $artifact) {
+                $before = @\lstat($artifact['path']);
+                if (!\is_array($before)
+                    || !$this->sameFileState($artifact['identity'], $before)
+                ) {
+                    throw new \RuntimeException(
+                        $target['label'] . ' recovery backup changed before validation.'
+                    );
+                }
+                $label = $target['label'] . ' recovery backup';
+                $contents = $this->readHostRecoveryFile(
+                    $artifact['path'],
+                    $target['maximum_bytes'],
+                    $target['mode'],
+                    $label,
+                );
+                $after = @\lstat($artifact['path']);
+                if (!\is_array($after)
+                    || !$this->sameFileState($artifact['identity'], $after)
+                ) {
+                    throw new \RuntimeException(
+                        $label . ' changed during closure validation.'
+                    );
+                }
+                $this->validateHostRecoveryContents($key, $contents, $label);
+                $backups[$key][] = [
+                    'path' => $artifact['path'],
+                    'contents' => $contents,
+                    'label' => $label,
+                ];
+            }
+        }
+        $this->validateHostRecoveryClosure($current, $backups);
+        $launcherPlan = $this->stableLauncherRecoveryPlan(
+            $inventory['launcher_candidates'],
+            $current,
+        );
+
+        $this->assertHostRecoveryClosureUnchanged(
+            $targets,
+            $currentIdentity,
+            $inventory,
+        );
+        if ($launcherPlan['source'] !== null) {
+            $this->copyStableLauncher(
+                $launcherPlan['source'],
+                $this->paths->launcherFile(),
+                $launcherPlan['expected_digest'],
+            );
+            $inventory['directories'][\dirname($this->paths->launcherFile())]
+                = $this->stableRecoveryDirectoryIdentity(
+                    \dirname($this->paths->launcherFile()),
+                    'Stable gateway launcher recovery directory',
+                );
+            $launcherPlan = $this->stableLauncherRecoveryPlan(
+                $inventory['launcher_candidates'],
+                $current,
+            );
+            if ($launcherPlan['source'] !== null) {
+                throw new \RuntimeException(
+                    'Stable gateway launcher recovery did not publish its trusted target.'
+                );
+            }
+            $this->assertHostRecoveryClosureUnchanged(
+                $targets,
+                $currentIdentity,
+                $inventory,
+            );
+        }
+        $this->assertStableLauncherRecoveryTargetUnchanged($launcherPlan);
+
+        // The package lock fences all official writers. The second stable
+        // closure check above is the final mutation barrier for untrusted
+        // local path changes; removals remain bound to each selected inode.
+        foreach (['backups', 'temporaries'] as $kind) {
+            foreach ($inventory[$kind] as $key => $artifacts) {
+                foreach ($artifacts as $artifact) {
+                    $this->removeSelectedHostRecoveryArtifact(
+                        $artifact['path'],
+                        $targets[$key]['label'] . ' recovery artifact',
+                        $artifact['identity'],
+                    );
+                }
+            }
+        }
+        foreach ($inventory['launcher_candidates'] as $artifact) {
+            $this->removeSelectedHostRecoveryArtifact(
+                $artifact['path'],
+                'Stable gateway launcher recovery candidate',
+                $artifact['identity'],
+            );
+        }
+    }
+
+    /**
+     * @param array<string,array{path:string,maximum_bytes:int,mode:int,label:string}> $targets
+     * @return array{
+     *   directories:array<string,array<string|int,mixed>>,
+     *   backups:array<string,list<array{path:string,identity:array<string|int,mixed>,sha256:string}>>,
+     *   temporaries:array<string,list<array{path:string,identity:array<string|int,mixed>,sha256:string}>>,
+     *   launcher_candidates:list<array{path:string,identity:array<string|int,mixed>,sha256:string}>
+     * }
+     */
+    private function discoverHostRecoveryArtifacts(array $targets): array
+    {
+        $namespaces = [];
+        foreach ($targets as $key => $target) {
+            $directory = \dirname($target['path']);
+            $leaf = \basename(\str_replace('\\', '/', $target['path']));
+            $namespaces[$directory][] = [
+                'key' => $key,
+                'kind' => 'backups',
+                'prefix' => $leaf . '.wls-backup-',
+                'suffix' => '[a-f0-9]{16}',
+                'maximum_bytes' => $target['maximum_bytes'],
+                'mode' => $target['mode'],
+                'allow_empty_unsealed' => false,
+                'label' => $target['label'] . ' recovery backup',
+                'quota' => self::MAX_ATOMIC_RECOVERY_BACKUPS_PER_TARGET,
+                'quota_label' => 'recovery backup quota',
+            ];
+            $namespaces[$directory][] = [
+                'key' => $key,
+                'kind' => 'temporaries',
+                'prefix' => $leaf . '.tmp-',
+                'suffix' => '[a-f0-9]{24}',
+                'maximum_bytes' => $target['maximum_bytes'],
+                'mode' => $target['mode'],
+                'allow_empty_unsealed' => true,
+                'label' => $target['label'] . ' recovery temporary',
+                'quota' => self::MAX_ATOMIC_RECOVERY_TEMPORARIES_PER_TARGET,
+                'quota_label' => 'recovery temporary quota',
+            ];
+        }
+        $launcher = $this->paths->launcherFile();
+        $namespaces[\dirname($launcher)][] = [
+            'key' => 'stable-launcher',
+            'kind' => 'launcher_candidates',
+            'prefix' => \basename(\str_replace('\\', '/', $launcher)) . '.candidate.',
+            'suffix' => '[a-f0-9]{16}',
+            'maximum_bytes' => self::MAX_PACKAGE_BYTES,
+            'mode' => null,
+            'allow_empty_unsealed' => false,
+            'label' => 'Stable gateway launcher recovery candidate',
+            'quota' => self::MAX_STABLE_LAUNCHER_CANDIDATES,
+            'quota_label' => 'recovery candidate quota',
+        ];
+
+        $inventory = [
+            'directories' => [],
+            'backups' => [],
+            'temporaries' => [],
+            'launcher_candidates' => [],
+        ];
+        foreach ($namespaces as $directory => $definitions) {
+            $directoryBefore = $this->stableRecoveryDirectoryIdentity(
+                $directory,
+                'Gateway host recovery directory',
+            );
+            $handle = @\opendir($directory);
+            if (!\is_resource($handle)) {
+                throw new \RuntimeException(
+                    'Unable to enumerate the gateway host recovery directory.'
+                );
+            }
+            $selected = [];
+            $counts = [];
+            $visited = 0;
+            try {
+                while (($leaf = @\readdir($handle)) !== false) {
+                    if (++$visited > self::MAX_ATOMIC_RECOVERY_DIRECTORY_ENTRIES) {
+                        throw new \RuntimeException(
+                            'Gateway host recovery directory exceeds its fixed raw entry quota.'
+                        );
+                    }
+                    foreach ($definitions as $definition) {
+                        $reserved = \PHP_OS_FAMILY === 'Windows'
+                            ? \str_starts_with(
+                                \strtolower($leaf),
+                                \strtolower($definition['prefix']),
+                            )
+                            : \str_starts_with($leaf, $definition['prefix']);
+                        if (!$reserved) {
+                            continue;
+                        }
+                        $pattern = '/\A' . \preg_quote($definition['prefix'], '/')
+                            . $definition['suffix'] . '\z/D';
+                        if (\preg_match($pattern, $leaf) !== 1) {
+                            throw new \RuntimeException(
+                                $definition['label']
+                                    . ' namespace contains a malformed reserved leaf.'
+                            );
+                        }
+                        $countKey = $definition['kind'] . ':' . $definition['key'];
+                        $counts[$countKey] = ($counts[$countKey] ?? 0) + 1;
+                        if ($counts[$countKey] > $definition['quota']) {
+                            throw new \RuntimeException(
+                                $definition['label'] . ' ' . $definition['quota_label']
+                                    . ' is exhausted.'
+                            );
+                        }
+                        $selected[] = [
+                            'definition' => $definition,
+                            'path' => $directory . DIRECTORY_SEPARATOR . $leaf,
+                        ];
+                        break;
+                    }
+                }
+            } finally {
+                @\closedir($handle);
+            }
+            \usort(
+                $selected,
+                static fn (array $left, array $right): int =>
+                    \strcmp($left['path'], $right['path']),
+            );
+            foreach ($selected as $selection) {
+                $definition = $selection['definition'];
+                $artifact = $this->inspectHostRecoveryArtifact(
+                    $selection['path'],
+                    $definition['maximum_bytes'],
+                    $definition['label'],
+                    $definition['mode'],
+                    $definition['allow_empty_unsealed'],
+                );
+                if ($definition['kind'] === 'launcher_candidates') {
+                    $inventory['launcher_candidates'][] = $artifact;
+                } else {
+                    $inventory[$definition['kind']][$definition['key']][] = $artifact;
+                }
+            }
+            $directoryAfter = $this->stableRecoveryDirectoryIdentity(
+                $directory,
+                'Gateway host recovery directory',
+            );
+            if (!$this->sameFileState($directoryBefore, $directoryAfter)) {
+                throw new \RuntimeException(
+                    'Gateway host recovery directory changed during discovery.'
+                );
+            }
+            $inventory['directories'][$directory] = $directoryAfter;
+        }
+        return $inventory;
+    }
+
+    /** @return array<string|int,mixed> */
+    private function stableRecoveryDirectoryIdentity(string $path, string $label): array
+    {
+        $status = @\lstat($path);
+        if (!\is_array($status)
+            || \is_link($path)
+            || ((((int)$status['mode']) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException($label . ' is linked, missing, or special.');
+        }
+        return $status;
+    }
+
+    /**
+     * @return array{path:string,identity:array<string|int,mixed>,sha256:string}
+     */
+    private function inspectHostRecoveryArtifact(
+        string $path,
+        int $maximumBytes,
+        string $label,
+        ?int $requiredMode,
+        bool $allowEmptyUnsealed,
+    ): array {
+        $parent = \dirname($path);
+        $parentBefore = $this->stableRecoveryDirectoryIdentity(
+            $parent,
+            $label . ' parent',
+        );
+        $before = @\lstat($path);
+        if (!\is_array($before)
+            || \is_link($path)
+            || !$this->isRegularFileStatus($before)
+            || (int)$before['nlink'] !== 1
+            || (int)$before['size'] < 0
+            || (int)$before['size'] > $maximumBytes
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && ((int)$before['uid'] !== (int)$parentBefore['uid']
+                    || (int)$before['gid'] !== (int)$parentBefore['gid']
+                    || ($requiredMode !== null
+                        ? (!$allowEmptyUnsealed || (int)$before['size'] > 0
+                            ? (((int)$before['mode']) & 0777) !== $requiredMode
+                            : (((int)$before['mode']) & 0022) !== 0)
+                        : (((int)$before['mode']) & 0022) !== 0)))
+        ) {
+            throw new \RuntimeException($label . ' has unsafe authority or permissions.');
+        }
+        $digest = $this->digestStableRegularFile($path, $maximumBytes, $label);
+        $after = @\lstat($path);
+        $parentAfter = $this->stableRecoveryDirectoryIdentity(
+            $parent,
+            $label . ' parent',
+        );
+        if (!\is_array($after)
+            || !$this->sameFileState($before, $after)
+            || !$this->sameFileState($parentBefore, $parentAfter)
+        ) {
+            throw new \RuntimeException($label . ' changed during inspection.');
+        }
+        return [
+            'path' => $path,
+            'identity' => $after,
+            'sha256' => $digest['sha256'],
+        ];
+    }
+
+    /**
+     * @param list<array{path:string,identity:array<string|int,mixed>,sha256:string}> $candidates
+     * @param array<string,string> $current
+     * @return array{
+     *   source:?string,
+     *   expected_digest:string,
+     *   target_identity:?array<string|int,mixed>
+     * }
+     */
+    private function stableLauncherRecoveryPlan(array $candidates, array $current): array
+    {
+        if ($candidates === []) {
+            return [
+                'source' => null,
+                'expected_digest' => '',
+                'target_identity' => null,
+            ];
+        }
+        $identity = \strtolower(\trim((string)(
+            $current['stable-launcher-identity'] ?? ''
+        )));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $identity) !== 1) {
+            throw new \RuntimeException(
+                'Stable gateway launcher identity cannot authorize candidate recovery.'
+            );
+        }
+
+        $target = $this->paths->launcherFile();
+        $targetStatus = @\lstat($target);
+        if (\is_array($targetStatus)) {
+            $actual = $this->digestStableRegularFile(
+                $target,
+                self::MAX_PACKAGE_BYTES,
+                'Stable gateway launcher recovery target',
+            );
+            $this->assertStableLauncherPermissions($target);
+            if (!\hash_equals($identity, $actual['sha256'])) {
+                throw new \RuntimeException(
+                    'Stable gateway launcher identity recovery target is invalid.'
+                );
+            }
+            $targetAfter = @\lstat($target);
+            if (!\is_array($targetAfter)
+                || !$this->sameFileState($targetStatus, $targetAfter)
+            ) {
+                throw new \RuntimeException(
+                    'Stable gateway launcher recovery target changed during validation.'
+                );
+            }
+            return [
+                'source' => null,
+                'expected_digest' => $identity,
+                'target_identity' => $targetAfter,
+            ];
+        }
+        if (\file_exists($target) || \is_link($target)) {
+            throw new \RuntimeException(
+                'Stable gateway launcher recovery target is indeterminate or unsafe.'
+            );
+        }
+        foreach ($candidates as $candidate) {
+            if (\hash_equals($identity, $candidate['sha256'])) {
+                return [
+                    'source' => $candidate['path'],
+                    'expected_digest' => $identity,
+                    'target_identity' => null,
+                ];
+            }
+        }
+        $source = $this->launcherSourceBackedByInstalledSlot($identity);
+        if ($source !== null) {
+            return [
+                'source' => $source,
+                'expected_digest' => $identity,
+                'target_identity' => null,
+            ];
+        }
+        throw new \RuntimeException(
+            'Stable gateway launcher candidates cannot reconstruct the trusted target.'
+        );
+    }
+
+    /**
+     * @param array{
+     *   source:?string,
+     *   expected_digest:string,
+     *   target_identity:?array<string|int,mixed>
+     * } $plan
+     */
+    private function assertStableLauncherRecoveryTargetUnchanged(array $plan): void
+    {
+        if ($plan['target_identity'] === null) {
+            return;
+        }
+        $target = $this->paths->launcherFile();
+        $actual = @\lstat($target);
+        if (!\is_array($actual)
+            || !$this->sameFileState($plan['target_identity'], $actual)
+        ) {
+            throw new \RuntimeException(
+                'Stable gateway launcher recovery target changed before cleanup.'
+            );
+        }
+        $digest = $this->digestStableRegularFile(
+            $target,
+            self::MAX_PACKAGE_BYTES,
+            'Stable gateway launcher recovery target',
+        );
+        $this->assertStableLauncherPermissions($target);
+        if (!\hash_equals($plan['expected_digest'], $digest['sha256'])) {
+            throw new \RuntimeException(
+                'Stable gateway launcher recovery target changed before cleanup.'
+            );
+        }
+    }
+
+    /**
+     * @param array<string,array{path:string,maximum_bytes:int,mode:int,label:string}> $targets
+     * @param array<string,array{identity:array<string|int,mixed>,sha256:string}|null> $currentIdentity
+     * @param array{
+     *   directories:array<string,array<string|int,mixed>>,
+     *   backups:array<string,list<array{path:string,identity:array<string|int,mixed>,sha256:string}>>,
+     *   temporaries:array<string,list<array{path:string,identity:array<string|int,mixed>,sha256:string}>>,
+     *   launcher_candidates:list<array{path:string,identity:array<string|int,mixed>,sha256:string}>
+     * } $inventory
+     */
+    private function assertHostRecoveryClosureUnchanged(
+        array $targets,
+        array $currentIdentity,
+        array $inventory,
+    ): void {
+        foreach ($inventory['directories'] as $path => $expected) {
+            $actual = $this->stableRecoveryDirectoryIdentity(
+                $path,
+                'Gateway host recovery directory',
+            );
+            if (!$this->sameFileState($expected, $actual)) {
+                throw new \RuntimeException(
+                    'Gateway host recovery directory changed before cleanup.'
+                );
+            }
+        }
+        foreach ($targets as $key => $target) {
+            $snapshot = $currentIdentity[$key] ?? null;
+            if ($snapshot === null) {
+                if (\is_array(@\lstat($target['path']))
+                    || \file_exists($target['path'])
+                    || \is_link($target['path'])
+                ) {
+                    throw new \RuntimeException(
+                        $target['label'] . ' recovery target appeared before cleanup.'
+                    );
+                }
+                continue;
+            }
+            $actual = @\lstat($target['path']);
+            if (!\is_array($actual)
+                || !$this->sameFileState($snapshot['identity'], $actual)
+            ) {
+                throw new \RuntimeException(
+                    $target['label'] . ' recovery target changed before cleanup.'
+                );
+            }
+            $contents = $this->readHostRecoveryFile(
+                $target['path'],
+                $target['maximum_bytes'],
+                $target['mode'],
+                $target['label'] . ' recovery target',
+            );
+            if (!\hash_equals($snapshot['sha256'], \hash('sha256', $contents))) {
+                throw new \RuntimeException(
+                    $target['label'] . ' recovery target changed before cleanup.'
+                );
+            }
+        }
+        foreach (['backups', 'temporaries', 'launcher_candidates'] as $kind) {
+            $sets = $kind === 'launcher_candidates'
+                ? [$inventory[$kind]]
+                : $inventory[$kind];
+            foreach ($sets as $artifacts) {
+                foreach ($artifacts as $artifact) {
+                    $actual = @\lstat($artifact['path']);
+                    if (!\is_array($actual)
+                        || !$this->sameFileState($artifact['identity'], $actual)
+                    ) {
+                        throw new \RuntimeException(
+                            'Gateway host recovery artifact changed before cleanup.'
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /** @param array<string|int,mixed> $identity */
+    private function removeSelectedHostRecoveryArtifact(
+        string $path,
+        string $label,
+        array $identity,
+    ): void {
+        $actual = @\lstat($path);
+        if (!\is_array($actual) || !$this->sameFileState($identity, $actual)) {
+            throw new \RuntimeException($label . ' changed before collection.');
+        }
+        if (!GatewayProjectStateFilesystem::removeRegular($path, $label, $identity)) {
+            throw new \RuntimeException('Unable to collect ' . $label . '.');
+        }
+    }
+
+    /**
+     * @return array<string,array{
+     *   path:string,
+     *   maximum_bytes:int,
+     *   mode:int,
+     *   label:string
+     * }>
+     */
+    private function hostAtomicRecoveryTargets(): array
+    {
+        return [
+            'active-slot' => [
+                'path' => $this->paths->activeSlotFile(),
+                'maximum_bytes' => 2,
+                'mode' => 0640,
+                'label' => 'Gateway active-slot',
+            ],
+            'previous-slot' => [
+                'path' => $this->paths->previousSlotFile(),
+                'maximum_bytes' => 2,
+                'mode' => 0640,
+                'label' => 'Gateway previous-slot',
+            ],
+            'host-id' => [
+                'path' => $this->paths->hostIdFile(),
+                'maximum_bytes' => 33,
+                'mode' => 0600,
+                'label' => 'Gateway host identity',
+            ],
+            'admin-token' => [
+                'path' => $this->paths->adminTokenFile(),
+                'maximum_bytes' => 65,
+                'mode' => 0600,
+                'label' => 'Gateway administrator credential',
+            ],
+            'stable-launcher-identity' => [
+                'path' => $this->paths->trustDir() . DIRECTORY_SEPARATOR
+                    . 'stable-launcher.sha256',
+                'maximum_bytes' => 65,
+                'mode' => 0600,
+                'label' => 'Stable gateway launcher identity',
+            ],
+            'upgrade-intent' => [
+                'path' => $this->paths->upgradeIntentFile(),
+                'maximum_bytes' => 4096,
+                'mode' => 0600,
+                'label' => 'Gateway upgrade intent',
+            ],
+            'upgrade-rollback-request' => [
+                'path' => $this->paths->stateDir() . DIRECTORY_SEPARATOR
+                    . 'upgrade-rollback.request',
+                'maximum_bytes' => 512,
+                'mode' => 0600,
+                'label' => 'Gateway upgrade rollback request',
+            ],
+            'slot-retention' => [
+                'path' => $this->paths->trustDir() . DIRECTORY_SEPARATOR
+                    . 'slot-retention',
+                'maximum_bytes' => 512,
+                'mode' => 0600,
+                'label' => 'Gateway slot retention marker',
+            ],
+            'failed-initial-cleanup' => [
+                'path' => $this->failedInitialCleanupIntentFile(),
+                'maximum_bytes' => 256,
+                'mode' => 0600,
+                'label' => 'Failed initial gateway cleanup intent',
+            ],
+        ];
+    }
+
+    private function readHostRecoveryFileOptional(
+        string $path,
+        int $maximumBytes,
+        int $mode,
+        string $label,
+    ): ?string {
+        $status = @\lstat($path);
+        if (!\is_array($status)) {
+            if (\file_exists($path) || \is_link($path)) {
+                throw new \RuntimeException($label . ' path is indeterminate or unsafe.');
+            }
+            return null;
+        }
+        return $this->readHostRecoveryFile($path, $maximumBytes, $mode, $label);
+    }
+
+    private function readHostRecoveryFile(
+        string $path,
+        int $maximumBytes,
+        int $mode,
+        string $label,
+    ): string {
+        $before = $this->assertHostRecoveryFileAuthority($path, $mode, $label);
+        $contents = $this->readStableRegularFile($path, $maximumBytes, $label);
+        $after = $this->assertHostRecoveryFileAuthority($path, $mode, $label);
+        if (!$this->sameFileState($before, $after)
+            || (int)($before['uid'] ?? -1) !== (int)($after['uid'] ?? -1)
+            || (int)($before['gid'] ?? -1) !== (int)($after['gid'] ?? -1)
+        ) {
+            throw new \RuntimeException($label . ' changed during authority validation.');
+        }
+        return $contents;
+    }
+
+    /** @return array<string|int,mixed> */
+    private function assertHostRecoveryFileAuthority(
+        string $path,
+        int $mode,
+        string $label,
+    ): array {
+        $parent = \dirname($path);
+        $parentStatus = @\lstat($parent);
+        $status = @\lstat($path);
+        if (!\is_array($parentStatus)
+            || \is_link($parent)
+            || ((((int)$parentStatus['mode']) & 0170000) !== 0040000)
+            || !\is_array($status)
+            || \is_link($path)
+            || !$this->isRegularFileStatus($status)
+            || (int)$status['nlink'] !== 1
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && ((((int)$status['mode']) & 0777) !== $mode
+                    || (int)$status['uid'] !== (int)$parentStatus['uid']
+                    || (int)$status['gid'] !== (int)$parentStatus['gid']))
+        ) {
+            throw new \RuntimeException($label . ' has unsafe authority or permissions.');
+        }
+        return $status;
+    }
+
+    private function validateHostRecoveryContents(
+        string $key,
+        string $contents,
+        string $label,
+    ): void {
+        try {
+            switch ($key) {
+                case 'active-slot':
+                case 'previous-slot':
+                    if (\preg_match('/\A[AB]\n\z/D', $contents) !== 1) {
+                        throw new \RuntimeException('Slot pointer syntax is invalid.');
+                    }
+                    return;
+                case 'host-id':
+                    if (\preg_match('/\A[a-f0-9]{32}\n\z/D', $contents) !== 1) {
+                        throw new \RuntimeException('Host identity syntax is invalid.');
+                    }
+                    return;
+                case 'admin-token':
+                case 'stable-launcher-identity':
+                    if (\preg_match('/\A[a-f0-9]{64}\n\z/D', $contents) !== 1) {
+                        throw new \RuntimeException('Digest identity syntax is invalid.');
+                    }
+                    return;
+                case 'upgrade-intent':
+                    $this->upgradeIntentBinding($contents);
+                    return;
+                case 'upgrade-rollback-request':
+                    $this->upgradeRollbackRecoveryBinding($contents);
+                    return;
+                case 'slot-retention':
+                    $this->slotRetentionRecoveryBinding($contents);
+                    return;
+                case 'failed-initial-cleanup':
+                    $this->failedInitialRecoveryBinding($contents);
+                    return;
+                default:
+                    throw new \LogicException('Unknown host recovery target.');
+            }
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                $label . ' is invalid: ' . $throwable->getMessage(),
+                0,
+                $throwable,
+            );
+        }
+    }
+
+    /** @return array{from:string,to:string,at:int} */
+    private function upgradeRollbackRecoveryBinding(string $contents): array
+    {
+        if (\preg_match(
+            '/\AWLS-UPGRADE-ROLLBACK\/2\n'
+                . 'intent_sha256=[a-f0-9]{64}\n'
+                . 'intent_nonce=[a-f0-9]{32}\n'
+                . 'from=([AB])\nto=([AB])\n'
+                . 'at=([1-9][0-9]{0,18})\n'
+                . 'request_nonce=[a-f0-9]{32}\n\z/D',
+            $contents,
+            $matches,
+        ) !== 1
+            || \hash_equals((string)$matches[1], (string)$matches[2])
+        ) {
+            throw new \RuntimeException(
+                'Gateway upgrade rollback request is malformed or bound to another transaction.'
+            );
+        }
+        $at = $this->boundedDecimalInteger((string)$matches[3]);
+        if ($at === null || $at <= 0) {
+            throw new \RuntimeException('Gateway rollback request time is invalid.');
+        }
+        return [
+            'from' => (string)$matches[1],
+            'to' => (string)$matches[2],
+            'at' => $at,
+        ];
+    }
+
+    /** @return array{slot:string} */
+    private function slotRetentionRecoveryBinding(string $contents): array
+    {
+        if (\preg_match(
+            '/\AWLS-SLOT-RETENTION\/3\n'
+                . 'intent_sha256=[a-f0-9]{64}\n'
+                . 'intent_nonce=[a-f0-9]{32}\n'
+                . 'slot=([AB])\n'
+                . 'boot_id=[0-9A-Za-z-]{1,64}\n'
+                . 'retained_at=([1-9][0-9]{0,18})\n'
+                . 'retain_until=([1-9][0-9]{0,18})\n'
+                . 'retained_since_monotonic_ms=([1-9][0-9]{0,18})\n'
+                . 'retain_until_monotonic_ms=([1-9][0-9]{0,18})\n\z/D',
+            $contents,
+            $matches,
+        ) === 1) {
+            $retainedAt = $this->boundedDecimalInteger((string)$matches[2]);
+            $retainUntil = $this->boundedDecimalInteger((string)$matches[3]);
+            $retainedMonotonic = $this->boundedDecimalInteger((string)$matches[4]);
+            $retainUntilMonotonic = $this->boundedDecimalInteger((string)$matches[5]);
+            if ($retainedAt === null
+                || $retainUntil === null
+                || $retainedMonotonic === null
+                || $retainUntilMonotonic === null
+                || $retainedAt > PHP_INT_MAX - self::SLOT_RETENTION_SECONDS
+                || $retainUntil !== $retainedAt + self::SLOT_RETENTION_SECONDS
+                || $retainedMonotonic
+                    > PHP_INT_MAX - self::SLOT_RETENTION_MILLISECONDS
+                || $retainUntilMonotonic
+                    !== $retainedMonotonic + self::SLOT_RETENTION_MILLISECONDS
+            ) {
+                throw new \RuntimeException('Gateway slot retention window is invalid.');
+            }
+            return ['slot' => (string)$matches[1]];
+        }
+        if (\preg_match(
+            '/\AWLS-SLOT-RETENTION\/2\n'
+                . 'intent_sha256=[a-f0-9]{64}\n'
+                . 'intent_nonce=[a-f0-9]{32}\n'
+                . 'slot=([AB])\nretain_until=([1-9][0-9]{0,18})\n\z/D',
+            $contents,
+            $matches,
+        ) === 1) {
+            if ($this->boundedDecimalInteger((string)$matches[2]) === null) {
+                throw new \RuntimeException('Gateway slot retention time is invalid.');
+            }
+            return ['slot' => (string)$matches[1]];
+        }
+        if (\preg_match(
+            '/\AWLS-SLOT-RETENTION\/1\n'
+                . 'slot=([AB])\nretain_until=([1-9][0-9]{0,18})\n\z/D',
+            $contents,
+            $matches,
+        ) === 1) {
+            if ($this->boundedDecimalInteger((string)$matches[2]) === null) {
+                throw new \RuntimeException('Gateway slot retention time is invalid.');
+            }
+            return ['slot' => (string)$matches[1]];
+        }
+        throw new \RuntimeException('Gateway slot retention syntax is incomplete or invalid.');
+    }
+
+    /** @return array{slot:string,launcher_sha256:string} */
+    private function failedInitialRecoveryBinding(string $contents): array
+    {
+        if (\preg_match(
+            '/\AWLS-FAILED-INITIAL-CLEANUP\/1\n'
+                . 'slot=([AB])\n'
+                . 'launcher_sha256=([a-f0-9]{64})\n'
+                . 'nonce=[a-f0-9]{16}\n\z/D',
+            $contents,
+            $matches,
+        ) !== 1) {
+            throw new \RuntimeException(
+                'Failed initial gateway cleanup intent syntax is invalid.'
+            );
+        }
+        return [
+            'slot' => (string)$matches[1],
+            'launcher_sha256' => (string)$matches[2],
+        ];
+    }
+
+    /**
+     * @param array<string,string> $current
+     * @param array<string,list<array{path:string,contents:string,label:string}>> $backups
+     */
+    private function validateHostRecoveryClosure(array $current, array $backups): void
+    {
+        $targets = $this->hostAtomicRecoveryTargets();
+        foreach (['active-slot', 'previous-slot'] as $key) {
+            if (isset($current[$key])) {
+                $this->assertHostRecoverySlotArtifact(
+                    \trim($current[$key]),
+                    $targets[$key]['label'] . ' recovery target',
+                );
+            }
+            foreach ($backups[$key] ?? [] as $backup) {
+                $this->assertHostRecoverySlotArtifact(
+                    \trim($backup['contents']),
+                    $backup['label'],
+                );
+            }
+        }
+
+        $active = isset($current['active-slot'])
+            ? \trim($current['active-slot'])
+            : null;
+        $previous = isset($current['previous-slot'])
+            ? \trim($current['previous-slot'])
+            : null;
+        $intentBinding = null;
+        if (isset($current['upgrade-intent'])) {
+            $intentBinding = $this->upgradeIntentBinding($current['upgrade-intent']);
+            if ($active === null) {
+                throw new \RuntimeException(
+                    'Gateway upgrade intent recovery target is invalid.'
+                );
+            }
+            $this->assertHostRecoveryIntentArtifacts(
+                $intentBinding,
+                'Gateway upgrade intent recovery target',
+            );
+        } elseif ($active !== null
+            && $previous !== null
+            && \hash_equals($active, $previous)
+        ) {
+            throw new \RuntimeException(
+                'Gateway slot pointer recovery closure is invalid.'
+            );
+        }
+        if ($previous !== null
+            && $active === null
+            && !isset($current['failed-initial-cleanup'])
+        ) {
+            throw new \RuntimeException(
+                'Gateway previous-slot recovery target is invalid.'
+            );
+        }
+
+        foreach ($backups['upgrade-intent'] ?? [] as $backup) {
+            $binding = $this->upgradeIntentBinding($backup['contents']);
+            $this->assertHostRecoveryIntentArtifacts($binding, $backup['label']);
+        }
+
+        if (isset($current['upgrade-rollback-request'])) {
+            if ($intentBinding === null) {
+                throw new \RuntimeException(
+                    'Gateway upgrade rollback request recovery target is invalid.'
+                );
+            }
+            $this->validateUpgradeRollbackRequest(
+                $current['upgrade-rollback-request'],
+                $intentBinding,
+                $intentBinding['to'],
+                $intentBinding['from'],
+            );
+        }
+        foreach ($backups['upgrade-rollback-request'] ?? [] as $backup) {
+            if ($intentBinding === null) {
+                throw new \RuntimeException($backup['label'] . ' is invalid.');
+            }
+            $this->validateUpgradeRollbackRequest(
+                $backup['contents'],
+                $intentBinding,
+                $intentBinding['to'],
+                $intentBinding['from'],
+            );
+        }
+
+        if (isset($current['slot-retention'])) {
+            $retention = $this->slotRetentionRecoveryBinding(
+                $current['slot-retention'],
+            );
+            $this->assertHostRecoverySlotArtifact(
+                $retention['slot'],
+                'Gateway slot retention marker recovery target',
+            );
+        }
+        foreach ($backups['slot-retention'] ?? [] as $backup) {
+            $retention = $this->slotRetentionRecoveryBinding($backup['contents']);
+            $this->assertHostRecoverySlotArtifact(
+                $retention['slot'],
+                $backup['label'],
+            );
+        }
+
+        foreach ([
+            'host-id',
+            'admin-token',
+            'stable-launcher-identity',
+            'failed-initial-cleanup',
+        ] as $immutableKey) {
+            foreach ($backups[$immutableKey] ?? [] as $backup) {
+                if (!isset($current[$immutableKey])
+                    || !\hash_equals($current[$immutableKey], $backup['contents'])
+                ) {
+                    throw new \RuntimeException($backup['label'] . ' is invalid.');
+                }
+            }
+        }
+        if (isset($current['stable-launcher-identity'])) {
+            $this->assertStableLauncherRecoveryIdentity(
+                \trim($current['stable-launcher-identity']),
+                $current,
+            );
+        }
+    }
+
+    /**
+     * @param array{from:string,to:string,runtime_generation:string} $binding
+     */
+    private function assertHostRecoveryIntentArtifacts(
+        array $binding,
+        string $label,
+    ): void {
+        $this->assertHostRecoverySlotArtifact($binding['from'], $label);
+        $this->assertHostRecoverySlotArtifact(
+            $binding['to'],
+            $label,
+            $binding['runtime_generation'],
+        );
+    }
+
+    private function assertHostRecoverySlotArtifact(
+        string $slot,
+        string $label,
+        ?string $expectedRuntimeGeneration = null,
+    ): void {
+        try {
+            $verification = $this->artifact->verify(
+                $this->paths->slotDir($slot),
+                'host_gateway',
+            );
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException($label . ' is invalid.', 0, $throwable);
+        }
+        if (!$verification['ok']
+            || ($expectedRuntimeGeneration !== null
+                && !\hash_equals(
+                    $expectedRuntimeGeneration,
+                    $verification['runtime_generation'],
+                ))
+        ) {
+            throw new \RuntimeException($label . ' is invalid.');
+        }
+    }
+
+    /** @param array<string,string> $current */
+    private function assertStableLauncherRecoveryIdentity(
+        string $expectedDigest,
+        array $current,
+    ): void {
+        $launcher = $this->paths->launcherFile();
+        $status = @\lstat($launcher);
+        if (\is_array($status)) {
+            $actual = $this->digestStableRegularFile(
+                $launcher,
+                self::MAX_PACKAGE_BYTES,
+                'Stable gateway launcher recovery target',
+            )['sha256'];
+            $this->assertStableLauncherPermissions($launcher);
+            if (!\hash_equals($expectedDigest, $actual)) {
+                throw new \RuntimeException(
+                    'Stable gateway launcher identity recovery target is invalid.'
+                );
+            }
+            return;
+        }
+        if (\file_exists($launcher) || \is_link($launcher)) {
+            throw new \RuntimeException(
+                'Stable gateway launcher identity recovery target is invalid.'
+            );
+        }
+        if ($this->launcherDigestBackedByInstalledSlot($expectedDigest)) {
+            return;
+        }
+        if (isset($current['failed-initial-cleanup'])) {
+            $failed = $this->failedInitialRecoveryBinding(
+                $current['failed-initial-cleanup'],
+            );
+            if (\hash_equals($expectedDigest, $failed['launcher_sha256'])) {
+                return;
+            }
+        }
+        throw new \RuntimeException(
+            'Stable gateway launcher identity recovery target is invalid.'
         );
     }
 
@@ -2803,7 +4009,9 @@ PHP;
      *   nonce:string,
      *   from:string,
      *   to:string,
-     *   runtime_generation:string
+     *   runtime_generation:string,
+     *   prepared_at:int,
+     *   rollback_deadline:int
      * }
      */
     private function upgradeIntentBinding(string $intent): array
@@ -2823,7 +4031,7 @@ PHP;
         ) !== 1
             || !\hash_equals($this->hostId(), (string)$match[1])
             || \hash_equals((string)$match[2], (string)$match[3])
-            || (int)$match[4] > PHP_INT_MAX - self::UPGRADE_ACTIVATION_TIMEOUT_SECONDS
+            || (int)$match[4] > PHP_INT_MAX - self::UPGRADE_TOTAL_TIMEOUT_SECONDS
             || (int)$match[5]
                 !== (int)$match[4] + self::UPGRADE_ACTIVATION_TIMEOUT_SECONDS
         ) {
@@ -2865,7 +4073,63 @@ PHP;
             'from' => (string)$match[2],
             'to' => (string)$match[3],
             'runtime_generation' => (string)$match[6],
+            'prepared_at' => (int)$match[4],
+            'rollback_deadline' => (int)$match[4] + self::UPGRADE_TOTAL_TIMEOUT_SECONDS,
         ];
+    }
+
+    /**
+     * @param array{
+     *   digest:string,
+     *   nonce:string,
+     *   prepared_at:int,
+     *   rollback_deadline:int
+     * } $intentBinding
+     */
+    private function validateUpgradeRollbackRequest(
+        string $contents,
+        array $intentBinding,
+        string $failedSlot,
+        string $previousSlot,
+    ): void {
+        if (\preg_match(
+            '/\AWLS-UPGRADE-ROLLBACK\/2\n'
+                . 'intent_sha256=([a-f0-9]{64})\n'
+                . 'intent_nonce=([a-f0-9]{32})\n'
+                . 'from=([AB])\nto=([AB])\n'
+                . 'at=([1-9][0-9]{0,18})\n'
+                . 'request_nonce=([a-f0-9]{32})\n\z/D',
+            $contents,
+            $matches,
+        ) !== 1
+            || !\hash_equals($intentBinding['digest'], (string)$matches[1])
+            || !\hash_equals($intentBinding['nonce'], (string)$matches[2])
+            || !\hash_equals($failedSlot, (string)$matches[3])
+            || !\hash_equals($previousSlot, (string)$matches[4])
+            || \hash_equals((string)$matches[3], (string)$matches[4])
+        ) {
+            throw new \RuntimeException(
+                'Gateway upgrade rollback request is malformed or bound to another transaction.',
+            );
+        }
+        $requestedAtText = (string)$matches[5];
+        $maximum = (string)PHP_INT_MAX;
+        if (\strlen($requestedAtText) > \strlen($maximum)
+            || (\strlen($requestedAtText) === \strlen($maximum)
+                && \strcmp($requestedAtText, $maximum) > 0)
+        ) {
+            throw new \RuntimeException(
+                'Gateway upgrade rollback request time is outside the supported range.',
+            );
+        }
+        $requestedAt = (int)$requestedAtText;
+        if ($requestedAt < $intentBinding['prepared_at']
+            || $requestedAt > $intentBinding['rollback_deadline']
+        ) {
+            throw new \RuntimeException(
+                'Gateway upgrade rollback request time is outside the signed transaction.',
+            );
+        }
     }
 
     private function atomicWrite(string $path, string $contents, int $mode): void

@@ -234,9 +234,9 @@ class RoutingCacheServiceTest extends TestCase
 
         $connectionCache = new \ReflectionProperty($this->service, 'connectionCache');
         $connectionCache->setAccessible(true);
-        /** @var array<int, array{port: int, sni: string, expires: int}> $connections */
+        /** @var array<int, array{port: int, sni: string, expires: float}> $connections */
         $connections = $connectionCache->getValue($this->service);
-        $connections[99]['expires'] = \time() - 1;
+        $connections[99]['expires'] = (\hrtime(true) / 1_000_000_000) - 1.0;
         $connectionCache->setValue($this->service, $connections);
 
         $lastCleanup = new \ReflectionProperty($this->service, 'lastCleanup');

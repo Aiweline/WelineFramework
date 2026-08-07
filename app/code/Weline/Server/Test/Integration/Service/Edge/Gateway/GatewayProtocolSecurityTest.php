@@ -15,6 +15,8 @@ final class GatewayProtocolSecurityTest extends TestCase
     private string $hostId = '';
     private string $adminSecret = '';
     private string $fencing = '';
+    /** @var list<string> */
+    private array $lastBrokerActions = [];
     private \ReflectionMethod $serveClient;
     private \WlsEdgeGatewayController $controller;
 
@@ -105,6 +107,108 @@ final class GatewayProtocolSecurityTest extends TestCase
         \fclose($sockets[0]);
     }
 
+    public function testControllerAcceptsCompleteNativeBrokerIdentityEnvelope(): void
+    {
+        $response = $this->request(
+            'admin',
+            'status',
+            [],
+            'admin',
+            $this->adminSecret,
+        );
+
+        self::assertTrue($response['ok'], \json_encode($response));
+        self::assertSame('wls-edge/2', $response['protocol']);
+    }
+
+    public function testControllerRejectsBrokerIdentityWithoutActionProtocolTwo(): void
+    {
+        $response = $this->request(
+            'admin',
+            'status',
+            [],
+            'admin',
+            $this->adminSecret,
+            brokerActionProtocol: null,
+        );
+
+        self::assertFalse($response['ok']);
+        self::assertSame('broker_identity_invalid', $response['error']['code']);
+        self::assertStringContainsString(
+            'identity envelope fields are invalid',
+            $response['error']['message'],
+        );
+    }
+
+    public function testTestModeEnrollmentUsesOnlySyntheticSecurityAuthority(): void
+    {
+        $project = $this->createProject();
+        $response = $this->request(
+            'admin',
+            'enroll',
+            [
+                'project_uuid' => '123e4567-e89b-42d3-a456-426614174099',
+                'project_root' => $project,
+                'certificate_roots' => [
+                    'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+                ],
+                'allowed_domains' => ['synthetic.example.test'],
+            ],
+            'admin',
+            $this->adminSecret,
+        );
+
+        self::assertTrue($response['ok'], \json_encode($response));
+        self::assertSame([], $this->lastBrokerActions);
+        $state = (new \ReflectionProperty($this->controller, 'state'))
+            ->getValue($this->controller);
+        self::assertTrue($state['native_security_attested']);
+        self::assertNotSame(
+            \str_repeat('0', 64),
+            $state['native_security_ledger_digest'],
+        );
+    }
+
+    public function testProductionEnrollmentRequiresNativeBrokerActionChannel(): void
+    {
+        $manifestPath = $this->home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json';
+        $manifest = \json_decode(
+            (string)\file_get_contents($manifestPath),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $manifest['test_mode'] = false;
+        self::assertNotFalse(\file_put_contents(
+            $manifestPath,
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        ));
+        $project = $this->createProject();
+        $prepare = new \ReflectionMethod(
+            $this->controller,
+            'prepareBrokerCertificateRoots',
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(
+            'Production enrollment requires native Broker AUTH_PREPARE.',
+        );
+        $prepare->invoke(
+            $this->controller,
+            \str_repeat('a', 32),
+            '123e4567-e89b-42d3-a456-426614174096',
+            \str_repeat('b', 64),
+            0,
+            $project,
+            ['project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl'],
+            [
+                'kind' => 'posix',
+                'uid' => (int)\posix_geteuid(),
+                'gid' => (int)\posix_getegid(),
+            ],
+        );
+    }
+
     public function testUnauthenticatedBrokerCannotHoldControlLoopForRequestTimeout(): void
     {
         $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
@@ -159,6 +263,108 @@ final class GatewayProtocolSecurityTest extends TestCase
         ));
     }
 
+    public function testProductionStartRequiresPublicListenerWithdrawalWithoutPid(): void
+    {
+        $this->assertProductionEntryRequiresPublicListenerWithdrawal('startDataPlane');
+    }
+
+    public function testProductionRestartRequiresPublicListenerWithdrawalWithoutPid(): void
+    {
+        $this->assertProductionEntryRequiresPublicListenerWithdrawal('restartDataPlane');
+    }
+
+    private function assertProductionEntryRequiresPublicListenerWithdrawal(
+        string $entryMethod,
+    ): void
+    {
+        $controller = $this->controller;
+        $listener = \stream_socket_server(
+            'tcp://127.0.0.1:0',
+            $errorCode,
+            $errorMessage,
+        );
+        self::assertIsResource(
+            $listener,
+            'Unable to reserve the stale public listener: ' . $errorCode . ' ' . $errorMessage,
+        );
+        try {
+            $listenerName = (string)\stream_socket_get_name($listener, false);
+            self::assertMatchesRegularExpression('/:[1-9][0-9]*\z/D', $listenerName);
+            $port = (int)\substr($listenerName, (int)\strrpos($listenerName, ':') + 1);
+
+            $stateProperty = new \ReflectionProperty($controller, 'state');
+            $state = $stateProperty->getValue($controller);
+            $state['public_http'] = $port;
+            $state['public_https'] = $port;
+            $stateProperty->setValue($controller, $state);
+
+            $manifestFile = $this->home . DIRECTORY_SEPARATOR
+                . 'slots/A/manifest.json';
+            $manifest = \json_decode(
+                (string)\file_get_contents($manifestFile),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
+            $manifest['test_mode'] = false;
+            $manifest['listen_profile'] = 'ipv4-only';
+            self::assertNotFalse(\file_put_contents(
+                $manifestFile,
+                \json_encode(
+                    $manifest,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                ),
+            ));
+            $probe = \stream_socket_client(
+                'tcp://127.0.0.1:' . $port,
+                $probeErrorCode,
+                $probeErrorMessage,
+                0.2,
+            );
+            self::assertIsResource(
+                $probe,
+                'The reserved listener is not reachable: '
+                    . $probeErrorCode . ' ' . $probeErrorMessage,
+            );
+            \fclose($probe);
+            $method = new \ReflectionMethod($controller, $entryMethod);
+            $result = $entryMethod === 'restartDataPlane'
+                ? $method->invoke($controller, 'test listener withdrawal')
+                : $method->invoke($controller);
+
+            if ($entryMethod === 'startDataPlane') {
+                self::assertFalse($result['ok'] ?? true);
+                self::assertTrue(
+                    $result['service_tree_restart_required'] ?? false,
+                    \json_encode([
+                        'result' => $result,
+                        'broker_actions_required' => (new \ReflectionMethod(
+                            $this->controller,
+                            'brokerActionsRequired',
+                        ))->invoke($controller),
+                        'manifest' => $manifest,
+                        'state_active_slot' => $state['active_slot'] ?? null,
+                    ], JSON_UNESCAPED_SLASHES),
+                );
+            }
+            self::assertTrue((new \ReflectionProperty(
+                $controller,
+                'serviceTreeRestartRequested',
+            ))->getValue($controller));
+            $failedState = $stateProperty->getValue($controller);
+            self::assertSame(
+                'SERVICE_TREE_RESTART',
+                $failedState['recovery']['stage'] ?? null,
+            );
+            self::assertStringContainsString(
+                'public gateway listener remains open',
+                (string)($failedState['recovery']['last_failure'] ?? ''),
+            );
+        } finally {
+            \fclose($listener);
+        }
+    }
+
     public function testEnrollmentIssuesHostBoundCredentialAndProjectCannotUseAdminOperation(): void
     {
         $project = $this->createProject();
@@ -191,6 +397,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         $credentialKeys = \array_keys($credential);
         \sort($credentialKeys);
         self::assertSame([
+            'credential_generation',
             'credential_id',
             'host_id',
             'issued_at',
@@ -204,9 +411,9 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/D', $credential['credential_id']);
         self::assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/D', $credential['secret']);
         self::assertSame(
-            (int)$before['payload']['control_generation'] + 1,
+            1,
             (int)$enrollment['payload']['security_generation'],
-            'Enrollment must return the durable security generation acknowledged to the administrator.',
+            'The first host security allocation is independent of the ordinary control generation.',
         );
         $after = $this->request(
             'admin',
@@ -217,8 +424,9 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
         self::assertTrue($after['ok']);
         self::assertSame(
-            (int)$enrollment['payload']['security_generation'],
+            (int)$before['payload']['control_generation'] + 1,
             (int)$after['payload']['control_generation'],
+            'Enrollment advances the control generation independently of its security allocation.',
         );
         self::assertSame(
             (int)$before['payload']['generation'],
@@ -637,8 +845,8 @@ final class GatewayProtocolSecurityTest extends TestCase
         $from = '123e4567-e89b-42d3-a456-426614174040';
         $to = '123e4567-e89b-42d3-a456-426614174041';
         $domain = 'transfer.example.test';
-        $sourceRouteId = \str_repeat('4', 32);
-        $targetRouteId = \str_repeat('5', 32);
+        $sourceRouteId = $this->canonicalRouteId($from, $domain);
+        $targetRouteId = $this->canonicalRouteId($to, $domain);
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $state = $stateProperty->getValue($this->controller);
         $state['generation'] = 40;
@@ -660,6 +868,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             'route_id' => $sourceRouteId,
             'project_uuid' => $from,
             'enrollment_security_generation' => 31,
+            'domain_security_generation' => 0,
             'route_generation' => 7,
             'domain' => $domain,
             'status' => 'ACTIVE',
@@ -701,6 +910,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             'route_id' => $targetRouteId,
             'project_uuid' => $to,
             'enrollment_security_generation' => 32,
+            'domain_security_generation' => 0,
             'route_generation' => 1,
             'domain' => $domain,
             'status' => 'ACTIVE',
@@ -742,51 +952,97 @@ final class GatewayProtocolSecurityTest extends TestCase
                 ]]);
             self::fail('Transferred domain was accepted for its previous owner.');
         } catch (\DomainException $exception) {
-            self::assertStringContainsString('fenced', $exception->getMessage());
+            self::assertStringContainsString(
+                'retained by project ' . $to,
+                $exception->getMessage(),
+            );
         }
     }
 
     public function testRenderedRoutePinsBackendCapabilityAndSanitizesProxyHeaders(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174012';
-        $routeId = \str_repeat('a', 32);
+        $domain = 'secure.example.test';
+        $aliasDomain = 'secure-alias.example.test';
+        $routeId = $this->canonicalRouteId($projectUuid, $domain);
         $secret = \str_repeat('b', 64);
-        (new \ReflectionMethod($this->controller, 'ensureNeutralCertificate'))
-            ->invoke($this->controller);
-        $neutral = [
-            'cert' => $this->home . DIRECTORY_SEPARATOR . 'state/neutral-cert.pem',
-            'key' => $this->home . DIRECTORY_SEPARATOR . 'state/neutral-key.pem',
+        $backendIdentity = $this->signedBackendIdentity(
+            $projectUuid,
+            'gateway-test',
+            7,
+            7,
+            \str_repeat('d', 32),
+            $secret,
+        );
+        $project = $this->createProject();
+        $certificateSources = [
+            $domain => $this->createCertificate($project, $domain, 'secure'),
+            $aliasDomain => $this->createCertificate($project, $aliasDomain, 'secure-alias'),
         ];
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $state = $stateProperty->getValue($this->controller);
         $state['enrollments'][$projectUuid] = [
             'project_uuid' => $projectUuid,
             'security_generation' => 5,
+            'certificate_roots' => [
+                'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
+            ],
         ];
+        $stateProperty->setValue($this->controller, $state);
+        $snapshotMethod = new \ReflectionMethod(
+            $this->controller,
+            'snapshotCertificate',
+        );
+        $certificates = [];
+        foreach ($certificateSources as $certificateDomain => $source) {
+            $name = $certificateDomain === $domain ? 'secure' : 'secure-alias';
+            $sourceDigest = \hash(
+                'sha256',
+                \hash_file('sha256', $source['cert'])
+                    . ':' . \hash_file('sha256', $source['key']) . ':',
+            );
+            $certificates[$certificateDomain] = $snapshotMethod->invoke(
+                $this->controller,
+                $projectUuid,
+                $project,
+                $certificateDomain,
+                [
+                    'cert' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => $name . '/fullchain.pem',
+                    ],
+                    'key' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => $name . '/privkey.pem',
+                    ],
+                    'source_digest' => $sourceDigest,
+                    'generation' => 3,
+                ],
+            );
+            self::assertTrue($certificates[$certificateDomain]['valid']);
+        }
+        $state = $stateProperty->getValue($this->controller);
         $state['routes'][$routeId] = [
             'route_id' => $routeId,
             'project_uuid' => $projectUuid,
+            'project_root' => $project,
             'enrollment_security_generation' => 5,
+            'domain_security_generation' => 0,
+            'route_generation' => 1,
             'instance_id' => 'gateway-test',
-            'domain' => 'secure.example.test',
+            'preferred_instance_id' => 'gateway-test',
+            'distribution_mode' => 'single',
+            'domain' => $domain,
             'status' => 'ACTIVE',
             'backends' => [['host' => '127.0.0.1', 'port' => 29001, 'weight' => 1]],
-            'backend_identity' => [
-                'instance_id' => 'gateway-test',
-                'generation' => 7,
-                'edge_capability_secret' => $secret,
-            ],
-            'certificate' => [
-                'valid' => true,
-                'generation' => 3,
-                'cert_path' => $neutral['cert'],
-                'key_path' => $neutral['key'],
-            ],
+            'backend_identity' => $backendIdentity,
+            'certificate' => $certificates[$domain],
         ];
-        $secondRouteId = \str_repeat('c', 32);
+        $secondRouteId = $this->canonicalRouteId($projectUuid, $aliasDomain);
         $state['routes'][$secondRouteId] = $state['routes'][$routeId];
         $state['routes'][$secondRouteId]['route_id'] = $secondRouteId;
-        $state['routes'][$secondRouteId]['domain'] = 'secure-alias.example.test';
+        $state['routes'][$secondRouteId]['domain'] = $aliasDomain;
+        $state['routes'][$secondRouteId]['certificate'] = $certificates[$aliasDomain];
         $stateProperty->setValue($this->controller, $state);
         $config = (new \ReflectionMethod($this->controller, 'renderNginxConfig'))
             ->invoke($this->controller, false);
@@ -806,7 +1062,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             ),
         );
         self::assertSame(1, \substr_count($config, '  upstream wls_backend_'));
-        self::assertSame(2, \substr_count(
+        self::assertSame(4, \substr_count(
             $config,
             'proxy_pass http://' . $upstreamMatch[1] . '/_wls/health?;',
         ));
@@ -843,28 +1099,21 @@ final class GatewayProtocolSecurityTest extends TestCase
 
     public function testBackendEndpointRequiresLaunchFenceAndEdgeCapability(): void
     {
-        $project = $this->createProject();
-        $project = (string)\realpath($project);
-        $runtime = $project . DIRECTORY_SEPARATOR . 'var/server';
-        self::assertTrue(\mkdir($runtime, 0700, true));
-        $endpoint = $runtime . DIRECTORY_SEPARATOR . 'gateway-test.json';
+        $project = (string)\realpath($this->createProject());
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174095';
         $launchId = \str_repeat('c', 32);
-        self::assertNotFalse(\file_put_contents($endpoint, \json_encode([
-            'instance_name' => 'gateway-test',
-            'main_port' => 29001,
-            'master_pid' => \getmypid(),
-            'master_epoch' => 9,
-            'gateway' => ['launch_id' => $launchId],
-        ], JSON_THROW_ON_ERROR)));
-        $identity = [
-            'instance_id' => 'gateway-test',
-            'launch_id' => $launchId,
-            'master_epoch' => 9,
-            'endpoint_file' => $endpoint,
-        ];
+        $identity = $this->signedBackendIdentity(
+            $projectUuid,
+            'gateway-test',
+            9,
+            9,
+            $launchId,
+            \str_repeat('a', 64),
+        );
+        unset($identity['edge_capability_secret']);
         $validator = new \ReflectionMethod($this->controller, 'validateBackendEndpointIdentity');
         $this->expectException(\DomainException::class);
-        $this->expectExceptionMessage('edge capability');
+        $this->expectExceptionMessage('incomplete or internally inconsistent');
         $validator->invoke(
             $this->controller,
             $identity,
@@ -876,9 +1125,6 @@ final class GatewayProtocolSecurityTest extends TestCase
     public function testBackendEndpointRejectsForgedSharedSessionEvidence(): void
     {
         $project = (string)\realpath($this->createProject());
-        $runtime = $project . DIRECTORY_SEPARATOR . 'var/server';
-        self::assertTrue(\mkdir($runtime, 0700, true));
-        $endpoint = $runtime . DIRECTORY_SEPARATOR . 'gateway-capability.json';
         $projectUuid = '123e4567-e89b-42d3-a456-426614174097';
         $launchId = \str_repeat('e', 32);
         $secret = \str_repeat('b', 64);
@@ -894,43 +1140,16 @@ final class GatewayProtocolSecurityTest extends TestCase
             'probe' => 'healthy',
             'reason' => 'authenticated_session_runtime',
         ];
-        self::assertNotFalse(\file_put_contents($endpoint, \json_encode([
-            'instance_name' => 'gateway-capability',
-            'main_port' => 29012,
-            'master_pid' => \getmypid(),
-            'master_epoch' => 14,
-            'shared_state' => [
-                'session' => [
-                    'role' => 'session_server',
-                    'host' => '127.0.0.1',
-                    'port' => 20970,
-                    'token_file_name' => 'session_server.20970.token',
-                    'shared_service' => true,
-                    'registered' => true,
-                ],
-            ],
-            'gateway' => [
-                'project_uuid' => $projectUuid,
-                'instance_generation' => 8,
-                'launch_id' => $launchId,
-            ],
-        ], JSON_THROW_ON_ERROR)));
-        $identity = [
-            'project_uuid' => $projectUuid,
-            'instance_id' => 'gateway-capability',
-            'generation' => 8,
-            'launch_id' => $launchId,
-            'master_epoch' => 14,
-            'endpoint_file' => $endpoint,
-            'edge_capability_secret' => $secret,
-            'edge_capability_digest' => \hash('sha256', $secret),
-            'session_capability' => 'shared_session',
-            'session_capability_evidence' => $evidence,
-            'session_capability_evidence_digest' => \hash(
-                'sha256',
-                GatewayClient::canonicalJson($evidence),
-            ),
-        ];
+        $identity = $this->signedBackendIdentity(
+            $projectUuid,
+            'gateway-capability',
+            8,
+            14,
+            $launchId,
+            $secret,
+            'shared_session',
+            $evidence,
+        );
 
         $validator = new \ReflectionMethod(
             $this->controller,
@@ -943,11 +1162,8 @@ final class GatewayProtocolSecurityTest extends TestCase
             [['host' => '127.0.0.1', 'port' => 29012, 'weight' => 1]],
         ));
 
-        $identity['session_capability_evidence']['token_scope_digest'] = \str_repeat('f', 64);
-        $identity['session_capability_evidence_digest'] = \hash(
-            'sha256',
-            GatewayClient::canonicalJson($identity['session_capability_evidence']),
-        );
+        $identity['session_capability_evidence']['runtime_source'] = 'forged_runtime';
+        $identity = $this->sealBackendIdentity($identity);
         $this->expectException(\DomainException::class);
         $this->expectExceptionMessage('session capability evidence');
         $validator->invoke(
@@ -958,61 +1174,21 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
-    public function testBackendEndpointAcceptsOnlyActiveFencedGatewayJoinPort(): void
+    public function testBackendEndpointAcceptsOnlyFencedSignedListenerLease(): void
     {
         $project = (string)\realpath($this->createProject());
-        $runtime = $project . DIRECTORY_SEPARATOR . 'var/server';
-        self::assertTrue(\mkdir($runtime, 0700, true));
-        $endpoint = $runtime . DIRECTORY_SEPARATOR . 'gateway-join.json';
         $projectUuid = '123e4567-e89b-42d3-a456-426614174099';
         $launchId = \str_repeat('d', 32);
         $secret = \str_repeat('a', 64);
         $joinPort = 24579;
-        $payload = [
-            'instance_name' => 'gateway-join',
-            'main_port' => 29011,
-            'master_pid' => \getmypid(),
-            'master_epoch' => 13,
-            'gateway' => [
-                'project_uuid' => $projectUuid,
-                'instance_generation' => 7,
-                'launch_id' => $launchId,
-                'join_backend' => [
-                    'state' => 'ACTIVE',
-                    'port' => $joinPort,
-                    'project_uuid' => $projectUuid,
-                    'instance_generation' => 7,
-                    'master_pid' => \getmypid(),
-                    'master_epoch' => 13,
-                    'worker_pid' => \getmypid(),
-                    'edge_capability_digest' => \hash('sha256', $secret),
-                    'workers' => [
-                        [
-                            'instance_id' => 1,
-                            'pid' => \getmypid(),
-                            'launch_id' => 'join-worker-one',
-                            'state' => 'READY',
-                        ],
-                    ],
-                    'ready_count' => 1,
-                    'desired_count' => 1,
-                ],
-            ],
-        ];
-        self::assertNotFalse(\file_put_contents(
-            $endpoint,
-            \json_encode($payload, JSON_THROW_ON_ERROR),
-        ));
-        $identity = [
-            'project_uuid' => $projectUuid,
-            'instance_id' => 'gateway-join',
-            'generation' => 7,
-            'launch_id' => $launchId,
-            'master_epoch' => 13,
-            'endpoint_file' => $endpoint,
-            'edge_capability_secret' => $secret,
-            'edge_capability_digest' => \hash('sha256', $secret),
-        ];
+        $identity = $this->signedBackendIdentity(
+            $projectUuid,
+            'gateway-join',
+            7,
+            13,
+            $launchId,
+            $secret,
+        );
         $validator = new \ReflectionMethod($this->controller, 'validateBackendEndpointIdentity');
         self::assertNull($validator->invoke(
             $this->controller,
@@ -1021,11 +1197,8 @@ final class GatewayProtocolSecurityTest extends TestCase
             [['host' => '127.0.0.1', 'port' => $joinPort, 'weight' => 1]],
         ));
 
-        $payload['gateway']['join_backend']['state'] = 'DRAINING';
-        self::assertNotFalse(\file_put_contents(
-            $endpoint,
-            \json_encode($payload, JSON_THROW_ON_ERROR),
-        ));
+        $identity['listener_lease_id'] = 'stale';
+        $identity = $this->sealBackendIdentity($identity);
         try {
             $validator->invoke(
                 $this->controller,
@@ -1033,9 +1206,12 @@ final class GatewayProtocolSecurityTest extends TestCase
                 $project,
                 [['host' => '127.0.0.1', 'port' => $joinPort, 'weight' => 1]],
             );
-            self::fail('Inactive gateway join backend port was accepted.');
+            self::fail('An invalid listener lease fence was accepted.');
         } catch (\DomainException $exception) {
-            self::assertStringContainsString('Backend port', $exception->getMessage());
+            self::assertStringContainsString(
+                'incomplete or internally inconsistent',
+                $exception->getMessage(),
+            );
         }
     }
 
@@ -1058,7 +1234,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             'admin',
             $this->adminSecret,
         );
-        self::assertTrue($enrollment['ok']);
+        self::assertTrue($enrollment['ok'], \json_encode($enrollment));
         $credential = $enrollment['payload']['credential'];
         $token = 'TOKEN_123-abc';
         $keyAuthorization = $token . '.' . \str_repeat('A', 43);
@@ -1088,6 +1264,12 @@ final class GatewayProtocolSecurityTest extends TestCase
             'route_id' => $routeId,
             'project_uuid' => $projectUuid,
             'domain' => 'acme.example.test',
+            'enrollment_security_generation' => (int)(
+                $enrollment['payload']['security_generation'] ?? 0
+            ),
+            'domain_security_generation' => (int)(
+                $enrollment['payload']['security_generation'] ?? 0
+            ),
             'status' => 'PENDING_CERTIFICATE',
             'backends' => [],
             'certificate' => ['valid' => false],
@@ -1116,6 +1298,24 @@ final class GatewayProtocolSecurityTest extends TestCase
             (string)$credential['secret'],
         );
         self::assertTrue($firstSync['ok'], \json_encode($firstSync));
+        $signedState = $stateProperty->getValue($this->controller);
+        self::assertCount(1, $signedState['acme_challenges'] ?? []);
+        $signedLease = \array_values((array)$signedState['acme_challenges'])[0];
+        $controllerBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
+        self::assertSame($controllerBootId, $signedLease['host_boot_id'] ?? '');
+        self::assertIsFloat($signedLease['issued_monotonic'] ?? null);
+        self::assertGreaterThan(0.0, $signedLease['issued_monotonic']);
+        self::assertSame(
+            ($signedLease['issued_monotonic'] ?? 0.0) + 900.0,
+            $signedLease['deadline_monotonic'] ?? 0.0,
+            'The Controller must issue its own exact 900 second monotonic lease.',
+        );
+        $firstFence = \array_intersect_key($signedLease, \array_flip([
+            'host_boot_id',
+            'issued_monotonic',
+            'deadline_monotonic',
+        ]));
 
         $staleSync = $this->request(
             'project',
@@ -1168,6 +1368,14 @@ final class GatewayProtocolSecurityTest extends TestCase
             $reconciledState['acme_challenges'] ?? [],
             'An idempotent replay must restore a drifted serving lease.',
         );
+        self::assertSame(
+            $firstFence,
+            \array_intersect_key(
+                \array_values((array)$reconciledState['acme_challenges'])[0],
+                $firstFence,
+            ),
+            'An idempotent replay must restore, not extend, the host lease fence.',
+        );
 
         $render = new \ReflectionMethod($this->controller, 'renderNginxConfig');
         $config = $render->invoke($this->controller, false);
@@ -1200,6 +1408,14 @@ final class GatewayProtocolSecurityTest extends TestCase
             $beforeGenerationOnlyRefresh['generation'],
             $afterGenerationOnlyRefresh['generation'],
             'An identical challenge set must not reload Nginx.',
+        );
+        self::assertSame(
+            $firstFence,
+            \array_intersect_key(
+                \array_values((array)$afterGenerationOnlyRefresh['acme_challenges'])[0],
+                $firstFence,
+            ),
+            'A generation-only replay must not extend the host lease fence.',
         );
         $stateFile = (new \ReflectionMethod($this->controller, 'stateFile'))
             ->invoke($this->controller);
@@ -1259,13 +1475,278 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
 
         $state = $stateProperty->getValue($this->controller);
-        foreach ((array)$state['acme_challenges'] as $leaseId => $lease) {
-            $state['acme_challenges'][$leaseId]['expires_at'] = \time() - 1;
-        }
+        $leaseId = (string)\array_key_first((array)$state['acme_challenges']);
+        $activeLease = $state['acme_challenges'][$leaseId];
+        $intentDigest = new \ReflectionMethod(
+            $this->controller,
+            'desiredConfigIntentDigest',
+        );
+        $beforeWallJumpDigest = $intentDigest->invoke($this->controller);
+        $state['acme_challenges'][$leaseId]['expires_at'] = \time() - 1;
         $stateProperty->setValue($this->controller, $state);
+        self::assertSame(
+            $beforeWallJumpDigest,
+            $intentDigest->invoke($this->controller),
+            'Wall-clock display expiry must not change the rendered intent.',
+        );
+        self::assertStringContainsString(
+            'location = /.well-known/acme-challenge/' . $token,
+            $render->invoke($this->controller, false),
+        );
+
+        $crossBootState = $state;
+        $crossBootState['acme_challenges'][$leaseId] = $activeLease;
+        $crossBootState['acme_challenges'][$leaseId]['host_boot_id'] = \str_repeat('f', 64);
+        $stateProperty->setValue($this->controller, $crossBootState);
         self::assertStringNotContainsString(
             'location = /.well-known/acme-challenge/' . $token,
             $render->invoke($this->controller, false),
+        );
+
+        $legacyState = $state;
+        $legacyState['acme_challenges'][$leaseId] = $activeLease;
+        unset(
+            $legacyState['acme_challenges'][$leaseId]['host_boot_id'],
+            $legacyState['acme_challenges'][$leaseId]['issued_monotonic'],
+            $legacyState['acme_challenges'][$leaseId]['deadline_monotonic'],
+        );
+        $stateProperty->setValue($this->controller, $legacyState);
+        self::assertStringNotContainsString(
+            'location = /.well-known/acme-challenge/' . $token,
+            $render->invoke($this->controller, false),
+        );
+
+        $damagedState = $state;
+        $damagedState['acme_challenges'][$leaseId] = $activeLease;
+        $damagedState['acme_challenges'][$leaseId]['deadline_monotonic']
+            = (float)$activeLease['issued_monotonic'] + 899.0;
+        $stateProperty->setValue($this->controller, $damagedState);
+        self::assertNotSame(
+            $beforeWallJumpDigest,
+            $intentDigest->invoke($this->controller),
+            'A damaged monotonic fence must leave the active config intent.',
+        );
+        self::assertStringNotContainsString(
+            'location = /.well-known/acme-challenge/' . $token,
+            $render->invoke($this->controller, false),
+        );
+        (new \ReflectionMethod($this->controller, 'expireLeases'))
+            ->invoke($this->controller);
+        self::assertArrayNotHasKey(
+            $leaseId,
+            (array)($stateProperty->getValue($this->controller)['acme_challenges'] ?? []),
+            'Maintenance must retire a damaged host lease fence.',
+        );
+    }
+
+    public function testAcmeHostLeaseFenceIsMonotonicAndReplayStable(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174097';
+        $domain = 'lease.example.test';
+        $routeId = \str_repeat('e', 32);
+        $token = 'TOKEN_host_lease';
+        $authorization = $token . '.' . \str_repeat('H', 43);
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'security_generation' => 1,
+            'allowed_domains' => [$domain],
+            'capabilities' => ['acme_http_01' => true],
+        ];
+        $state['routes'][$routeId] = [
+            'route_id' => $routeId,
+            'project_uuid' => $projectUuid,
+            'enrollment_security_generation' => 1,
+            'domain' => $domain,
+            'status' => 'PENDING_CERTIFICATE',
+            'certificate' => ['valid' => false, 'state' => 'pending'],
+        ];
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionProperty($this->controller, 'deferPublication'))
+            ->setValue($this->controller, true);
+
+        $challenges = [[
+            'domain' => $domain,
+            'token' => $token,
+            'key_authorization' => $authorization,
+            'expires_at' => 1,
+        ]];
+        $digest = \hash('sha256', GatewayClient::canonicalJson($challenges));
+        $sync = new \ReflectionMethod($this->controller, 'syncAcmeChallenges');
+        $first = $sync->invoke($this->controller, [
+            'project_uuid' => $projectUuid,
+            'challenge_generation' => 1,
+            'desired_digest' => $digest,
+            'challenges' => $challenges,
+        ]);
+        self::assertSame(1, $first['count']);
+        $firstState = $stateProperty->getValue($this->controller);
+        $leaseId = (string)\array_key_first((array)$firstState['acme_challenges']);
+        $firstLease = $firstState['acme_challenges'][$leaseId];
+        $fence = \array_intersect_key($firstLease, \array_flip([
+            'host_boot_id',
+            'issued_monotonic',
+            'deadline_monotonic',
+        ]));
+        self::assertSame(
+            (new \ReflectionProperty($this->controller, 'hostBootId'))
+                ->getValue($this->controller),
+            $fence['host_boot_id'] ?? '',
+        );
+        self::assertSame(
+            ($fence['issued_monotonic'] ?? 0.0) + 900.0,
+            $fence['deadline_monotonic'] ?? 0.0,
+        );
+        $render = new \ReflectionMethod($this->controller, 'renderNginxConfig');
+        self::assertStringContainsString(
+            'location = /.well-known/acme-challenge/' . $token,
+            $render->invoke($this->controller, false),
+        );
+
+        (new \ReflectionMethod($this->controller, 'completePublication'))
+            ->invoke($this->controller);
+        (new \ReflectionProperty($this->controller, 'configDirty'))
+            ->setValue($this->controller, false);
+        $sync->invoke($this->controller, [
+            'project_uuid' => $projectUuid,
+            'challenge_generation' => 1,
+            'desired_digest' => $digest,
+            'challenges' => $challenges,
+        ]);
+        $replayedLease = $stateProperty->getValue(
+            $this->controller,
+        )['acme_challenges'][$leaseId];
+        self::assertSame($fence, \array_intersect_key($replayedLease, $fence));
+
+        $sync->invoke($this->controller, [
+            'project_uuid' => $projectUuid,
+            'challenge_generation' => 2,
+            'desired_digest' => $digest,
+            'challenges' => $challenges,
+        ]);
+        $generationReplayState = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            $fence,
+            \array_intersect_key(
+                $generationReplayState['acme_challenges'][$leaseId],
+                $fence,
+            ),
+        );
+
+        $active = new \ReflectionMethod($this->controller, 'activeAcmeChallenges');
+        $crossBootReplayState = $generationReplayState;
+        $crossBootReplayState['acme_challenges'][$leaseId]['host_boot_id']
+            = \str_repeat('f', 64);
+        $crossBootReplayState['acme_generations'][$projectUuid]['lease_fences'][$leaseId][
+            'host_boot_id'
+        ] = \str_repeat('f', 64);
+        $stateProperty->setValue($this->controller, $crossBootReplayState);
+        self::assertSame([], $active->invoke(
+            $this->controller,
+            $crossBootReplayState['routes'][$routeId],
+        ));
+        self::assertStringNotContainsString(
+            'location = /.well-known/acme-challenge/' . $token,
+            $render->invoke($this->controller, false),
+        );
+        $sync->invoke($this->controller, [
+            'project_uuid' => $projectUuid,
+            'challenge_generation' => 2,
+            'desired_digest' => $digest,
+            'challenges' => $challenges,
+        ]);
+        $generationReplayState = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            (new \ReflectionProperty($this->controller, 'hostBootId'))
+                ->getValue($this->controller),
+            $generationReplayState['acme_challenges'][$leaseId]['host_boot_id'] ?? '',
+            'An authenticated replay may re-sign a cross-boot lease on this boot.',
+        );
+        self::assertCount(1, $active->invoke(
+            $this->controller,
+            $generationReplayState['routes'][$routeId],
+        ));
+        $intentDigest = new \ReflectionMethod(
+            $this->controller,
+            'desiredConfigIntentDigest',
+        );
+        $beforeWallJumpDigest = $intentDigest->invoke($this->controller);
+        $generationReplayState['acme_challenges'][$leaseId]['expires_at'] = 2;
+        $stateProperty->setValue($this->controller, $generationReplayState);
+        self::assertCount(1, $active->invoke(
+            $this->controller,
+            $generationReplayState['routes'][$routeId],
+        ));
+        self::assertSame(
+            $beforeWallJumpDigest,
+            $intentDigest->invoke($this->controller),
+        );
+        self::assertStringContainsString(
+            'location = /.well-known/acme-challenge/' . $token,
+            $render->invoke($this->controller, false),
+        );
+
+        $expiredState = $generationReplayState;
+        $monotonicNow = \hrtime(true) / 1_000_000_000;
+        $expiredState['acme_challenges'][$leaseId]['issued_monotonic']
+            = $monotonicNow - 901.0;
+        $expiredState['acme_challenges'][$leaseId]['deadline_monotonic']
+            = $monotonicNow - 1.0;
+        $expiredState['acme_generations'][$projectUuid]['lease_fences'][$leaseId][
+            'issued_monotonic'
+        ] = $monotonicNow - 901.0;
+        $expiredState['acme_generations'][$projectUuid]['lease_fences'][$leaseId][
+            'deadline_monotonic'
+        ] = $monotonicNow - 1.0;
+        $stateProperty->setValue($this->controller, $expiredState);
+        self::assertStringNotContainsString(
+            'location = /.well-known/acme-challenge/' . $token,
+            $render->invoke($this->controller, false),
+        );
+        try {
+            $sync->invoke($this->controller, [
+                'project_uuid' => $projectUuid,
+                'challenge_generation' => 2,
+                'desired_digest' => $digest,
+                'challenges' => $challenges,
+            ]);
+            self::fail('An expired host lease was extended by an idempotent replay.');
+        } catch (\DomainException $exception) {
+            self::assertStringContainsString(
+                'requires a newer project generation',
+                $exception->getMessage(),
+            );
+        }
+        $beforeClearGeneration = (int)$expiredState['generation'];
+        $sync->invoke($this->controller, [
+            'project_uuid' => $projectUuid,
+            'challenge_generation' => 3,
+            'desired_digest' => \hash('sha256', GatewayClient::canonicalJson([])),
+            'challenges' => [],
+        ]);
+        self::assertGreaterThan(
+            $beforeClearGeneration,
+            (int)$stateProperty->getValue($this->controller)['generation'],
+            'Clearing an expired lease must still republish the static Nginx config.',
+        );
+        (new \ReflectionMethod($this->controller, 'completePublication'))
+            ->invoke($this->controller);
+        (new \ReflectionProperty($this->controller, 'configDirty'))
+            ->setValue($this->controller, false);
+
+        $generationReplayState['acme_challenges'][$leaseId]['host_boot_id']
+            = \str_repeat('f', 64);
+        $stateProperty->setValue($this->controller, $generationReplayState);
+        self::assertSame([], $active->invoke(
+            $this->controller,
+            $generationReplayState['routes'][$routeId],
+        ));
+        (new \ReflectionMethod($this->controller, 'expireLeases'))
+            ->invoke($this->controller);
+        self::assertArrayNotHasKey(
+            $leaseId,
+            (array)($stateProperty->getValue($this->controller)['acme_challenges'] ?? []),
         );
     }
 
@@ -1277,12 +1758,16 @@ final class GatewayProtocolSecurityTest extends TestCase
         $file = $this->home . DIRECTORY_SEPARATOR . 'state/journal.jsonl';
         $lines = \file($file, FILE_IGNORE_NEW_LINES);
         self::assertIsArray($lines);
-        self::assertCount(2, $lines);
-        $first = \json_decode($lines[0], true, 512, JSON_THROW_ON_ERROR);
-        $second = \json_decode($lines[1], true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame(1, $first['sequence']);
-        self::assertSame(\str_repeat('0', 64), $first['previous_sha256']);
-        self::assertSame(2, $second['sequence']);
+        self::assertCount(3, $lines);
+        $initialized = \json_decode($lines[0], true, 512, JSON_THROW_ON_ERROR);
+        $first = \json_decode($lines[1], true, 512, JSON_THROW_ON_ERROR);
+        $second = \json_decode($lines[2], true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('gateway_initialized', $initialized['event']);
+        self::assertSame(1, $initialized['sequence']);
+        self::assertSame(\str_repeat('0', 64), $initialized['previous_sha256']);
+        self::assertSame(2, $first['sequence']);
+        self::assertSame($initialized['sha256'], $first['previous_sha256']);
+        self::assertSame(3, $second['sequence']);
         self::assertSame($first['sha256'], $second['previous_sha256']);
 
         self::assertNotFalse(\file_put_contents($file, '{"truncated":', FILE_APPEND));
@@ -1294,7 +1779,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             (new \ReflectionProperty($tailRecovered, 'journalTrusted'))->getValue($tailRecovered),
         );
         self::assertSame(
-            2,
+            3,
             (new \ReflectionProperty($tailRecovered, 'journalSequence'))->getValue($tailRecovered),
         );
 
@@ -1317,55 +1802,146 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertNotEmpty(\glob($file . '.corrupt-*') ?: []);
     }
 
+    public function testJournalAppendFailsFastWhenAnotherProcessOwnsTheFileLock(): void
+    {
+        $file = $this->home . DIRECTORY_SEPARATOR . 'state/journal.jsonl';
+        $process = \proc_open(
+            [
+                PHP_BINARY,
+                '-r',
+                '$stream=fopen($argv[1], "r+b");'
+                    . 'if (!is_resource($stream) || !flock($stream, LOCK_EX)) { exit(2); }'
+                    . 'fwrite(STDOUT, "locked\\n"); fflush(STDOUT);'
+                    . 'usleep(1500000); flock($stream, LOCK_UN); fclose($stream);',
+                $file,
+            ],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        self::assertIsArray($pipes);
+        \fclose($pipes[0]);
+        self::assertSame("locked\n", \fgets($pipes[1]));
+
+        try {
+            $started = \hrtime(true);
+            $written = (new \ReflectionMethod($this->controller, 'journal'))->invoke(
+                $this->controller,
+                'lock-contention',
+                ['value' => 1],
+            );
+            $elapsedSeconds = (\hrtime(true) - $started) / 1_000_000_000;
+
+            self::assertFalse($written);
+            self::assertLessThan(
+                0.75,
+                $elapsedSeconds,
+                'Journal lock contention must not stall the single-threaded controller loop.',
+            );
+        } finally {
+            @\proc_terminate($process);
+            \stream_get_contents($pipes[1]);
+            \stream_get_contents($pipes[2]);
+            \fclose($pipes[1]);
+            \fclose($pipes[2]);
+            @\proc_close($process);
+        }
+    }
+
     public function testLkgBundleProtectsCertificateClosureAndRollbackGeneration(): void
     {
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $state = $stateProperty->getValue($this->controller);
-        $digest = \str_repeat('a', 64);
         $unusedDigest = \str_repeat('b', 64);
-        $routeId = \str_repeat('c', 32);
         $projectUuid = '123e4567-e89b-42d3-a456-426614174019';
+        $domain = 'lkg.example.test';
+        $routeId = $this->canonicalRouteId($projectUuid, $domain);
+        $project = $this->createProject();
+        $source = $this->createCertificate($project, $domain, 'lkg');
+        $sourceDigest = \hash(
+            'sha256',
+            \hash_file('sha256', $source['cert'])
+                . ':' . \hash_file('sha256', $source['key']) . ':',
+        );
         $state['generation'] = 19;
         $state['active_config_generation'] = 19;
         $state['pending_lkg_generation'] = 19;
         $state['pending_lkg_since'] = \time() - 20;
+        $state['pending_lkg_since_monotonic'] = \hrtime(true) / 1_000_000_000 - 20;
+        $state['pending_lkg_boot_id'] = $this->hostBootId();
         $state['enrollments'][$projectUuid] = [
             'project_uuid' => $projectUuid,
             'security_generation' => 17,
-        ];
-        $state['routes'] = [
-            $routeId => [
-                'route_id' => $routeId,
-                'project_uuid' => $projectUuid,
-                'enrollment_security_generation' => 17,
-                'domain' => 'lkg.example.test',
-                'status' => 'STALE',
-                'backends' => [],
-                'certificate' => [
-                    'valid' => true,
-                    'snapshot_digest' => $digest,
-                    'generation' => 3,
-                ],
-                'force_https' => true,
+            'certificate_roots' => [
+                'project_ssl' => $project . DIRECTORY_SEPARATOR . 'app/etc/ssl',
             ],
         ];
         $stateProperty->setValue($this->controller, $state);
+        $certificate = (new \ReflectionMethod($this->controller, 'snapshotCertificate'))
+            ->invoke(
+                $this->controller,
+                $projectUuid,
+                $project,
+                $domain,
+                [
+                    'cert' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'lkg/fullchain.pem',
+                    ],
+                    'key' => [
+                        'root_alias' => 'project_ssl',
+                        'relative_path' => 'lkg/privkey.pem',
+                    ],
+                    'source_digest' => $sourceDigest,
+                    'generation' => 3,
+                ],
+            );
+        self::assertTrue($certificate['valid']);
+        $digest = (string)$certificate['snapshot_digest'];
+        $routes = [
+            $routeId => [
+                'route_id' => $routeId,
+                'project_uuid' => $projectUuid,
+                'route_generation' => 1,
+                'enrollment_security_generation' => 17,
+                'domain_security_generation' => 17,
+                'domain' => $domain,
+                'status' => 'STALE',
+                'backends' => [],
+                'instances' => [],
+                'certificate' => $certificate,
+                'force_https' => true,
+            ],
+        ];
         $configDirectory = $this->home . DIRECTORY_SEPARATOR . 'runtime/conf';
         self::assertTrue(\is_dir($configDirectory) || \mkdir($configDirectory, 0700, true));
+        $config = "events {}\nhttp {}\n";
         self::assertNotFalse(\file_put_contents(
             $configDirectory . DIRECTORY_SEPARATOR . 'nginx.conf',
-            "events {}\nhttp {}\n",
+            $config,
         ));
-        foreach ([$digest, $unusedDigest] as $snapshotDigest) {
-            $snapshot = $this->home . DIRECTORY_SEPARATOR . 'snapshots/'
-                . $snapshotDigest;
-            self::assertTrue(\mkdir($snapshot, 0700, true));
-            self::assertNotFalse(\file_put_contents(
-                $snapshot . DIRECTORY_SEPARATOR . 'source-cert.pem',
-                "snapshot\n",
-            ));
-            self::assertTrue(\touch($snapshot, \time() - 8 * 86400));
-        }
+        $state = $stateProperty->getValue($this->controller);
+        $state['routes'] = $routes;
+        $state['active_routes'] = $routes;
+        $state['active_config_digest'] = \hash('sha256', $config);
+        $state['pending_lkg_config_digest'] = $state['active_config_digest'];
+        $canonicalRoutes = (new \ReflectionMethod($this->controller, 'canonicalJson'))
+            ->invoke($this->controller, $routes);
+        $state['pending_lkg_routes_digest'] = \hash('sha256', $canonicalRoutes);
+        $stateProperty->setValue($this->controller, $state);
+
+        $unusedSnapshot = $this->home . DIRECTORY_SEPARATOR . 'snapshots/'
+            . $unusedDigest;
+        self::assertTrue(\mkdir($unusedSnapshot, 0700, true));
+        self::assertNotFalse(\file_put_contents(
+            $unusedSnapshot . DIRECTORY_SEPARATOR . 'source-cert.pem',
+            "snapshot\n",
+        ));
+        self::assertTrue(\touch($unusedSnapshot, \time() - 8 * 86400));
 
         (new \ReflectionMethod($this->controller, 'promoteLkg'))->invoke($this->controller);
         $promoted = $stateProperty->getValue($this->controller);
@@ -1379,7 +1955,19 @@ final class GatewayProtocolSecurityTest extends TestCase
         $promoted['routes'] = [];
         $promoted['generation'] = 25;
         $promoted['active_config_generation'] = 25;
+        $promoted['snapshot_gc_candidates'][$unusedDigest] = [
+            'unreferenced_at' => \time() - 8 * 86400,
+            // A trusted wall-clock observation can mature across a recent
+            // host boot; keep the monotonic component valid and nonnegative.
+            'unreferenced_monotonic' => 0.0,
+            'boot_id' => $this->hostBootId(),
+        ];
         $stateProperty->setValue($this->controller, $promoted);
+        self::assertFalse(
+            (new \ReflectionMethod($this->controller, 'certificateSnapshotReferenced'))
+                ->invoke($this->controller, $unusedDigest),
+            'The GC candidate must not be protected by desired, active, publication, or LKG state.',
+        );
         (new \ReflectionMethod($this->controller, 'collectSnapshots'))->invoke($this->controller);
         self::assertDirectoryExists(
             $this->home . DIRECTORY_SEPARATOR . 'snapshots/' . $digest,
@@ -1611,15 +2199,28 @@ final class GatewayProtocolSecurityTest extends TestCase
                 ->getValue($reserveFailedRestart);
             self::assertSame('DISK_PRESSURE', $reserveFailedState['health_state']);
 
-            (new \ReflectionMethod($reserveFailedRestart, 'repair'))->invoke(
+            $repaired = (new \ReflectionMethod($reserveFailedRestart, 'repair'))->invoke(
                 $reserveFailedRestart,
                 ['accept_storage_recovery' => true],
             );
             self::assertFileDoesNotExist($marker);
             self::assertFileExists($reserve);
-            self::assertFileExists(
+            self::assertFileDoesNotExist(
                 $securityLedgerFile,
-                'Confirmed storage repair must finish a deferred security-ledger bootstrap.',
+                'Storage recovery must not recreate a historical security ledger from state.json.',
+            );
+            self::assertSame('SECURITY_LEDGER_MISSING', $repaired['state']);
+            self::assertTrue($repaired['isolation_mode']);
+            self::assertStringContainsString(
+                'signed recovery material',
+                (string)$repaired['recovery']['required_action'],
+            );
+            $doctor = (new \ReflectionMethod($reserveFailedRestart, 'doctor'))
+                ->invoke($reserveFailedRestart);
+            self::assertSame('SECURITY_LEDGER_MISSING', $doctor['state']);
+            self::assertStringContainsString(
+                'rotate/re-enroll',
+                (string)$doctor['recovery']['required_action'],
             );
         } finally {
             $testMode === false
@@ -1753,6 +2354,163 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    public function testBinaryObservationFailurePreservesOriginalObservationStart(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
+        $monotonicNow = \hrtime(true) / 1_000_000_000;
+        $originalStart = $monotonicNow - 120.0;
+        $state = $stateProperty->getValue($this->controller);
+        $state['binary_transaction'] = [
+            'phase' => 'OBSERVING',
+            'from_slot' => 'B',
+            'to_slot' => 'A',
+            'started_at' => \time() - 120,
+            'started_at_monotonic' => $originalStart,
+            'healthy_since' => \time() - 60,
+            'healthy_since_monotonic' => $monotonicNow - 60.0,
+            'observation_boot_id' => $hostBootId,
+        ];
+        $stateProperty->setValue($this->controller, $state);
+
+        (new \ReflectionMethod($this->controller, 'resetBinaryObservationHealthy'))
+            ->invoke($this->controller);
+
+        $reset = $stateProperty->getValue($this->controller)['binary_transaction'];
+        self::assertEqualsWithDelta(
+            $originalStart,
+            (float)$reset['started_at_monotonic'],
+            0.000001,
+        );
+        self::assertSame(0, $reset['healthy_since']);
+        self::assertSame(0.0, $reset['healthy_since_monotonic']);
+    }
+
+    public function testMissingBinaryRollbackAuthorityContinuesNormalRecovery(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
+        $monotonicNow = \hrtime(true) / 1_000_000_000;
+        $state = $stateProperty->getValue($this->controller);
+        $state['binary_transaction'] = [
+            'phase' => 'OBSERVING',
+            'from_slot' => 'B',
+            'to_slot' => 'A',
+            'started_at' => \time() - 10,
+            'started_at_monotonic' => $monotonicNow - 10.0,
+            'healthy_since' => 0,
+            'healthy_since_monotonic' => 0.0,
+            'observation_boot_id' => $hostBootId,
+        ];
+        $state['failure_events'] = [];
+        for ($failure = 1; $failure <= 9; ++$failure) {
+            $state['failure_events'][] = [
+                'at' => \time() - (10 - $failure),
+                'at_monotonic' => $monotonicNow - (10.0 - $failure),
+                'boot_id' => $hostBootId,
+                'reason' => 'prior-recovery-failure-' . $failure,
+            ];
+        }
+        $state['recovery']['stage'] = 'BINARY_ROLLBACK_REQUEST_REJECTED';
+        $state['recovery']['last_failure'] = 'previous rollback request was rejected';
+        $state['recovery']['consecutive_failures'] = 9;
+        $stateProperty->setValue($this->controller, $state);
+
+        (new \ReflectionMethod($this->controller, 'recoverDataPlane'))
+            ->invoke($this->controller);
+
+        $recovered = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            'ROLLBACK_UNAVAILABLE',
+            $recovered['binary_transaction']['phase'],
+        );
+        self::assertStringContainsString(
+            'previous-slot executable is missing or unsafe',
+            (string)$recovered['binary_transaction']['rollback_unavailable_reason'],
+        );
+        self::assertSame('CIRCUIT_OPEN', $recovered['recovery']['stage']);
+        self::assertCount(10, $recovered['failure_events']);
+        self::assertSame(10, $recovered['recovery']['consecutive_failures']);
+    }
+
+    public function testExpiredBinaryRollbackAuthorityContinuesNormalRecovery(): void
+    {
+        $runtimeGeneration = \str_repeat('a', 64);
+        $manifestFile = $this->home . DIRECTORY_SEPARATOR . 'slots/A/manifest.json';
+        $manifest = \json_decode(
+            (string)\file_get_contents($manifestFile),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $manifest['runtime_generation'] = $runtimeGeneration;
+        self::assertNotFalse(\file_put_contents(
+            $manifestFile,
+            \json_encode($manifest, JSON_THROW_ON_ERROR),
+        ));
+        $previousBin = $this->home . DIRECTORY_SEPARATOR . 'slots/B/bin';
+        self::assertTrue(\mkdir($previousBin, 0700, true));
+        self::assertTrue(\copy(
+            $this->home . DIRECTORY_SEPARATOR . 'slots/A/bin/nginx',
+            $previousBin . DIRECTORY_SEPARATOR . 'nginx',
+        ));
+
+        $preparedAt = \time() - 1200;
+        $nonce = \str_repeat('b', 32);
+        $intentPayload = "WLS-UPGRADE/1\n"
+            . 'host_id=' . $this->hostId . "\n"
+            . "from=B\nto=A\n"
+            . 'prepared_at=' . $preparedAt . "\n"
+            . 'deadline=' . ($preparedAt + 300) . "\n"
+            . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'nonce=' . $nonce . "\n";
+        $key = \hex2bin($this->adminSecret);
+        self::assertIsString($key);
+        self::assertNotFalse(\file_put_contents(
+            $this->home . DIRECTORY_SEPARATOR . 'trust/upgrade.intent',
+            $intentPayload . 'signature=' . \hash_hmac('sha256', $intentPayload, $key) . "\n",
+        ));
+
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $hostBootId = (new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
+        $monotonicNow = \hrtime(true) / 1_000_000_000;
+        $state = $stateProperty->getValue($this->controller);
+        $state['active_slot'] = 'A';
+        $state['previous_slot'] = 'B';
+        $state['binary_transaction'] = [
+            'phase' => 'OBSERVING',
+            'from_slot' => 'B',
+            'to_slot' => 'A',
+            'started_at' => \time() - 10,
+            'started_at_monotonic' => $monotonicNow - 10.0,
+            'healthy_since' => 0,
+            'healthy_since_monotonic' => 0.0,
+            'observation_boot_id' => $hostBootId,
+        ];
+        $state['failure_events'] = [];
+        $state['recovery']['stage'] = 'BINARY_ROLLBACK_REQUEST_REJECTED';
+        $state['recovery']['last_failure'] = 'previous rollback request was rejected';
+        $state['recovery']['consecutive_failures'] = 0;
+        $stateProperty->setValue($this->controller, $state);
+
+        (new \ReflectionMethod($this->controller, 'recoverDataPlane'))
+            ->invoke($this->controller);
+
+        $recovered = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            'ROLLBACK_UNAVAILABLE',
+            $recovered['binary_transaction']['phase'],
+        );
+        self::assertStringContainsString(
+            'outside the supported range',
+            (string)$recovered['binary_transaction']['rollback_unavailable_reason'],
+        );
+        self::assertSame(1, $recovered['recovery']['consecutive_failures']);
+    }
+
     public function testMultipleInstancesRequireCapabilityBeforeDistributionAndFailOver(): void
     {
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
@@ -1867,14 +2625,14 @@ final class GatewayProtocolSecurityTest extends TestCase
             $this->controller,
             [&$instance, false, 'transport'],
         ));
-        self::assertTrue($instance['backend_healthy']);
+        self::assertFalse($instance['backend_healthy']);
         self::assertSame(3, $instance['backend_probe_failures']);
 
         self::assertFalse($applyResult->invokeArgs(
             $this->controller,
             [&$instance, false, 'transport'],
         ));
-        self::assertTrue($instance['backend_healthy']);
+        self::assertFalse($instance['backend_healthy']);
         self::assertSame(4, $instance['backend_probe_failures']);
 
         self::assertFalse($applyResult->invokeArgs(
@@ -1885,7 +2643,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertSame(0, $instance['backend_probe_failures']);
         self::assertSame('', $instance['last_backend_probe_failure_kind']);
 
-        self::assertTrue($applyResult->invokeArgs(
+        self::assertFalse($applyResult->invokeArgs(
             $this->controller,
             [&$instance, false, 'identity'],
         ));
@@ -2193,7 +2951,7 @@ final class GatewayProtocolSecurityTest extends TestCase
     public function testRemovedRouteCannotBeReactivatedByBackendSelectionOrLeaseSweep(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174031';
-        $routeId = \str_repeat('f', 32);
+        $routeId = $this->canonicalRouteId($projectUuid, 'revoked.example.test');
         $instanceId = 'revoked-instance';
         $lease = $this->instanceLease($instanceId, 29120, 'stateless');
         $removedAt = \time() - 60;
@@ -2201,6 +2959,9 @@ final class GatewayProtocolSecurityTest extends TestCase
             'route_id' => $routeId,
             'project_uuid' => $projectUuid,
             'domain' => 'revoked.example.test',
+            'enrollment_security_generation' => 8,
+            'domain_security_generation' => 0,
+            'route_generation' => 1,
             'status' => 'REMOVED',
             'removed_at' => $removedAt,
             'certificate' => [
@@ -2605,6 +3366,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         ) . "\n";
         $broker = \json_encode([
             'broker_schema' => 1,
+            'action_protocol' => 2,
             'channel' => 'admin',
             'uid' => (int)\posix_geteuid(),
             'gid' => (int)\posix_getegid(),
@@ -2740,9 +3502,67 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertTrue($enrollment['ok']);
 
         $operationId = \str_repeat('c', 32);
-        $projectDigest = \str_repeat('1', 64);
-        $instanceDigest = \str_repeat('2', 64);
         $instanceId = 'retry-instance';
+        $launchId = \str_repeat('3', 32);
+        $domain = 'retry.example.test';
+        $routeId = $this->canonicalRouteId($projectUuid, $domain);
+        $routePayload = [
+            'route_id' => $routeId,
+            'domain' => $domain,
+            'force_https' => true,
+            'force_root_to_www' => false,
+            'root_to_www_target' => '',
+            'backends' => [
+                ['host' => '127.0.0.1', 'port' => 29150, 'weight' => 1],
+            ],
+            'backend_identity' => $this->signedBackendIdentity(
+                $projectUuid,
+                $instanceId,
+                4,
+                4,
+                $launchId,
+                \str_repeat('a', 64),
+            ),
+            'certificate' => [
+                'state' => 'pending',
+                'pending' => true,
+                'valid' => false,
+                'generation' => 0,
+                'source_digest' => \hash(
+                    'sha256',
+                    "wls-pending-certificate\0" . $domain,
+                ),
+                'snapshot_digest' => '',
+                'cert_path' => '',
+                'key_path' => '',
+            ],
+        ];
+        $candidateRoute = (new \ReflectionMethod($this->controller, 'validateRoute'))
+            ->invoke(
+                $this->controller,
+                $routePayload,
+                $projectUuid,
+                $project,
+                $instanceId,
+                4,
+                4,
+                $launchId,
+                \hrtime(true) / 1_000_000_000 + 5.0,
+                true,
+                true,
+            );
+        $projectDigest = (new \ReflectionMethod($this->controller, 'projectDesiredDigest'))
+            ->invoke($this->controller, $projectUuid, $project, [$candidateRoute]);
+        $instanceDigest = (new \ReflectionMethod($this->controller, 'instanceDesiredDigest'))
+            ->invoke($this->controller, $projectUuid, $instanceId, 4, [$candidateRoute]);
+        $nonCertificateDesiredDigest = (new \ReflectionMethod(
+            $this->controller,
+            'nonCertificateDesiredDigest',
+        ))->invoke($this->controller, $projectUuid, $project, [$candidateRoute]);
+        $idempotencyKey = \substr(\hash(
+            'sha256',
+            $projectUuid . ':desired:2:' . $projectDigest,
+        ), 0, 40);
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $lastOperation = new \ReflectionProperty($this->controller, 'lastQueuedOperationId');
         $state = $stateProperty->getValue($this->controller);
@@ -2752,17 +3572,19 @@ final class GatewayProtocolSecurityTest extends TestCase
             'project_root' => $project,
             'generation' => 2,
             'digest' => $projectDigest,
-            'idempotency_key' => $projectUuid . ':' . $instanceId . ':2',
-            'route_ids' => [],
+            'idempotency_key' => $idempotencyKey,
+            'non_certificate_desired_digest' => $nonCertificateDesiredDigest,
+            'route_ids' => [$routeId],
         ];
         $state['instances'][$projectUuid][$instanceId] = [
             'instance_id' => $instanceId,
             'generation' => 4,
             'digest' => $instanceDigest,
             'master_epoch' => 4,
-            'launch_id' => \str_repeat('3', 32),
+            'launch_id' => $launchId,
             'status' => 'ACTIVE',
         ];
+        $state['routes'][$routeId] = $candidateRoute;
         $state['operations'][$operationId] = [
             'operation_id' => $operationId,
             'operation' => 'register',
@@ -2774,6 +3596,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             'created_unix' => \time(),
             'completed_unix' => 0,
             'error' => '',
+            'result_context' => ['instance_id' => $instanceId],
         ];
         $stateProperty->setValue($this->controller, $state);
 
@@ -2785,13 +3608,15 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'instance_id' => $instanceId,
                 'project_generation' => 2,
                 'request_digest' => $projectDigest,
-                'idempotency_key' => $projectUuid . ':' . $instanceId . ':2',
+                'idempotency_key' => $idempotencyKey,
                 'instance_generation' => 4,
                 'instance_digest' => $instanceDigest,
+                'non_certificate_desired_digest' => $nonCertificateDesiredDigest,
                 'master_epoch' => 4,
-                'launch_id' => \str_repeat('3', 32),
+                'launch_id' => $launchId,
                 'gateway_epoch' => (string)$state['epoch'],
-                'routes' => [],
+                'host_boot_id' => $this->hostBootId(),
+                'routes' => [$routePayload],
                 '_broker_peer' => [
                     'channel' => 'project',
                     'uid' => (int)\posix_geteuid(),
@@ -2816,6 +3641,11 @@ final class GatewayProtocolSecurityTest extends TestCase
         $projectUuid = '123e4567-e89b-42d3-a456-426614174037';
         $instanceId = 'capability-refresh-instance';
         $launchId = \str_repeat('3', 32);
+        $projectDigest = \str_repeat('1', 64);
+        $idempotencyKey = \substr(\hash(
+            'sha256',
+            $projectUuid . ':desired:2:' . $projectDigest,
+        ), 0, 40);
         $enrollment = $this->request(
             'admin',
             'enroll',
@@ -2838,8 +3668,8 @@ final class GatewayProtocolSecurityTest extends TestCase
             'project_uuid' => $projectUuid,
             'project_root' => $project,
             'generation' => 2,
-            'digest' => \str_repeat('1', 64),
-            'idempotency_key' => $projectUuid . ':' . $instanceId . ':2',
+            'digest' => $projectDigest,
+            'idempotency_key' => $idempotencyKey,
             'route_ids' => [],
         ];
         $state['instances'][$projectUuid][$instanceId] = [
@@ -2861,13 +3691,15 @@ final class GatewayProtocolSecurityTest extends TestCase
                     'project_root' => $project,
                     'instance_id' => $instanceId,
                     'project_generation' => 2,
-                    'request_digest' => \str_repeat('1', 64),
-                    'idempotency_key' => $projectUuid . ':' . $instanceId . ':2',
+                    'request_digest' => $projectDigest,
+                    'idempotency_key' => $idempotencyKey,
                     'instance_generation' => 4,
                     'instance_digest' => \str_repeat('5', 64),
+                    'non_certificate_desired_digest' => \str_repeat('9', 64),
                     'master_epoch' => 4,
                     'launch_id' => $launchId,
                     'gateway_epoch' => (string)$state['epoch'],
+                    'host_boot_id' => $this->hostBootId(),
                     'routes' => [],
                     '_broker_peer' => [
                         'channel' => 'project',
@@ -2897,12 +3729,17 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'instance_id' => $instanceId,
                 'project_generation' => 4,
                 'request_digest' => \str_repeat('6', 64),
-                'idempotency_key' => $projectUuid . ':' . $instanceId . ':4',
+                'idempotency_key' => \substr(\hash(
+                    'sha256',
+                    $projectUuid . ':desired:4:' . \str_repeat('6', 64),
+                ), 0, 40),
                 'instance_generation' => 4,
                 'instance_digest' => \str_repeat('7', 64),
+                'non_certificate_desired_digest' => \str_repeat('9', 64),
                 'master_epoch' => 4,
                 'launch_id' => \str_repeat('8', 32),
                 'gateway_epoch' => (string)$state['epoch'],
+                'host_boot_id' => $this->hostBootId(),
                 'routes' => [],
                 '_broker_peer' => [
                     'channel' => 'project',
@@ -3031,7 +3868,8 @@ final class GatewayProtocolSecurityTest extends TestCase
         $publication = $publicationProperty->getValue($this->controller);
         $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
             ->invoke($this->controller);
-        $candidate = $configDir . DIRECTORY_SEPARATOR . 'candidate-restart-test.conf';
+        $candidate = $configDir . DIRECTORY_SEPARATOR . 'candidate-71-'
+            . $publication['transaction_id'] . '.conf';
         self::assertNotFalse(\file_put_contents($candidate, "events {}\nhttp {}\n"));
         $publication['phase'] = 'PREPARED';
         $publication['candidate_generation'] = 71;
@@ -3067,6 +3905,274 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertTrue((new \ReflectionProperty($restarted, 'configDirty'))->getValue($restarted));
     }
 
+    public function testShadowVerifiedRecoveryRemovesUnjournaledRollbackArtifact(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $publicationProperty = new \ReflectionProperty($this->controller, 'publication');
+        $state = $stateProperty->getValue($this->controller);
+        $state['generation'] = 73;
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'beginRoutingMutation'))
+            ->invoke($this->controller, 'rollback-crash-test');
+        $publication = $publicationProperty->getValue($this->controller);
+        $transactionId = (string)$publication['transaction_id'];
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $active = $configDir . DIRECTORY_SEPARATOR . 'nginx.conf';
+        $candidate = $configDir . DIRECTORY_SEPARATOR . 'candidate-73-'
+            . $transactionId . '.conf';
+        $rollback = $active . '.rollback.' . $transactionId;
+        $activeConfig = "# verified active\nevents {}\nhttp {}\n";
+        self::assertNotFalse(\file_put_contents($active, $activeConfig));
+        self::assertNotFalse(\file_put_contents($candidate, "# candidate\nevents {}\nhttp {}\n"));
+        // Crash model: atomicWrite($rollback) completed, but rollback_file and
+        // the ACTIVATING phase were not persisted yet.
+        self::assertNotFalse(\file_put_contents($rollback, $activeConfig));
+        $publication['phase'] = 'SHADOW_VERIFIED';
+        $publication['candidate_generation'] = 73;
+        $publication['candidate_file'] = $candidate;
+        $publication['candidate_digest'] = \hash_file('sha256', $candidate);
+        $publication['rollback_file'] = '';
+        $publicationProperty->setValue($this->controller, $publication);
+        (new \ReflectionMethod($this->controller, 'persistState'))->invoke($this->controller);
+        (new \ReflectionMethod($this->controller, 'persistPublication'))
+            ->invoke($this->controller);
+
+        $restarted = new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/rollback-crash-restarted.sock',
+        );
+        $restartedPublication = (new \ReflectionProperty($restarted, 'publication'))
+            ->getValue($restarted);
+
+        self::assertSame($activeConfig, \file_get_contents($active));
+        self::assertFileDoesNotExist($candidate);
+        self::assertFileDoesNotExist($rollback);
+        self::assertSame('PENDING_PUBLICATION', $restartedPublication['phase']);
+        self::assertSame('', $restartedPublication['rollback_file']);
+    }
+
+    public function testStartupBoundsPublicationDiagnosticsAndRemovesOnlyExactAtomicTemps(): void
+    {
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $rejected = [];
+        $rollbacks = [];
+        foreach (['a', 'b', 'c', 'd'] as $offset => $digit) {
+            $transactionId = \str_repeat($digit, 32);
+            $rejectedPath = $configDir . DIRECTORY_SEPARATOR
+                . 'nginx.conf.rejected.' . $transactionId;
+            $rollbackPath = $configDir . DIRECTORY_SEPARATOR
+                . 'nginx.conf.rollback.' . $transactionId;
+            self::assertNotFalse(\file_put_contents($rejectedPath, '# rejected ' . $digit));
+            self::assertNotFalse(\file_put_contents($rollbackPath, '# rollback ' . $digit));
+            self::assertTrue(\touch($rejectedPath, 100 + $offset));
+            self::assertTrue(\touch($rollbackPath, 100 + $offset));
+            $rejected[] = $rejectedPath;
+            $rollbacks[] = $rollbackPath;
+        }
+        $recoveryDiagnostic = $configDir . DIRECTORY_SEPARATOR
+            . 'nginx.conf.rejected.recovery';
+        $malformedDiagnostic = $configDir . DIRECTORY_SEPARATOR
+            . 'nginx.conf.rejected.not-a-transaction';
+        $lkgCandidate = $configDir . DIRECTORY_SEPARATOR
+            . 'lkg-candidate-deadbeefdeadbeef.conf';
+        foreach ([$recoveryDiagnostic, $malformedDiagnostic, $lkgCandidate] as $path) {
+            self::assertNotFalse(\file_put_contents($path, '# protected sentinel'));
+        }
+        $atomicTemps = [
+            $configDir . DIRECTORY_SEPARATOR . 'nginx.conf.tmp-' . \str_repeat('1', 12),
+            $configDir . DIRECTORY_SEPARATOR . 'nginx.conf.rollback.'
+                . \str_repeat('e', 32) . '.tmp-' . \str_repeat('2', 12),
+            $configDir . DIRECTORY_SEPARATOR . 'nginx.conf.rejected.'
+                . \str_repeat('f', 32) . '.tmp-' . \str_repeat('3', 12),
+            $recoveryDiagnostic . '.tmp-' . \str_repeat('4', 12),
+            $configDir . DIRECTORY_SEPARATOR . 'candidate-81-'
+                . \str_repeat('9', 32) . '.conf.tmp-' . \str_repeat('5', 12),
+        ];
+        $orphanCandidate = $configDir . DIRECTORY_SEPARATOR . 'candidate-82-'
+            . \str_repeat('8', 32) . '.conf';
+        self::assertNotFalse(\file_put_contents($orphanCandidate, '# orphan candidate'));
+        foreach ($atomicTemps as $path) {
+            self::assertNotFalse(\file_put_contents($path, '# interrupted atomic write'));
+        }
+
+        new \WlsEdgeGatewayController(
+            $this->home,
+            'unix://' . $this->home . DIRECTORY_SEPARATOR
+                . 'runtime/run/artifact-recovery-restarted.sock',
+        );
+
+        foreach ($atomicTemps as $path) {
+            self::assertFileDoesNotExist($path);
+        }
+        self::assertFileDoesNotExist($orphanCandidate);
+        self::assertFileExists($recoveryDiagnostic);
+        self::assertFileExists($malformedDiagnostic);
+        self::assertFileExists($lkgCandidate);
+        self::assertFileDoesNotExist($rejected[0]);
+        self::assertFileDoesNotExist($rejected[1]);
+        self::assertFileExists($rejected[2]);
+        self::assertFileExists($rejected[3]);
+        self::assertFileDoesNotExist($rollbacks[0]);
+        self::assertFileDoesNotExist($rollbacks[1]);
+        self::assertFileExists($rollbacks[2]);
+        self::assertFileExists($rollbacks[3]);
+    }
+
+    public function testPublicationArtifactCleanupFailsClosedOnReservedCaseAlias(): void
+    {
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $canonicalTemp = $configDir . DIRECTORY_SEPARATOR
+            . 'nginx.conf.tmp-' . \str_repeat('a', 12);
+        $reservedAlias = $configDir . DIRECTORY_SEPARATOR
+            . 'NGINX.CONF.REJECTED.' . \str_repeat('b', 32);
+        self::assertNotFalse(\file_put_contents($canonicalTemp, '# removable temp'));
+        self::assertNotFalse(\file_put_contents($reservedAlias, '# reserved case alias'));
+
+        (new \ReflectionMethod($this->controller, 'reconcilePublicationConfigArtifacts'))
+            ->invoke($this->controller);
+
+        self::assertFileExists(
+            $canonicalTemp,
+            'A reserved case alias must abort the complete cleanup before any deletion.',
+        );
+        self::assertFileExists($reservedAlias);
+        $state = (new \ReflectionProperty($this->controller, 'state'))
+            ->getValue($this->controller);
+        self::assertStringContainsString(
+            'non-canonical case',
+            (string)($state['recovery']['last_cleanup_failure'] ?? ''),
+        );
+    }
+
+    public function testPublicationArtifactCleanupPreflightsAllTypesBeforeAnyDeletion(): void
+    {
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $canonicalTemp = $configDir . DIRECTORY_SEPARATOR
+            . 'nginx.conf.tmp-' . \str_repeat('1', 12);
+        $sentinel = $configDir . DIRECTORY_SEPARATOR
+            . 'unmanaged-cleanup-sentinel';
+        $unsafeTemp = $configDir . DIRECTORY_SEPARATOR
+            . 'nginx.conf.rejected.' . \str_repeat('c', 32)
+            . '.tmp-' . \str_repeat('2', 12);
+        self::assertNotFalse(\file_put_contents($canonicalTemp, '# removable temp'));
+        self::assertNotFalse(\file_put_contents($sentinel, '# sentinel'));
+        self::assertTrue(\symlink($sentinel, $unsafeTemp));
+
+        (new \ReflectionMethod($this->controller, 'reconcilePublicationConfigArtifacts'))
+            ->invoke($this->controller);
+
+        self::assertFileExists(
+            $canonicalTemp,
+            'An unsafe selected artifact must abort cleanup before a valid artifact is deleted.',
+        );
+        self::assertTrue(\is_link($unsafeTemp));
+        self::assertFileExists($sentinel);
+    }
+
+    public function testPublicationArtifactRetentionNeverRemovesLiveTransactionRollback(): void
+    {
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $publicationProperty = new \ReflectionProperty($this->controller, 'publication');
+        $transactionIds = [
+            \str_repeat('1', 32),
+            \str_repeat('2', 32),
+            \str_repeat('3', 32),
+            \str_repeat('4', 32),
+        ];
+        $rollbacks = [];
+        foreach ($transactionIds as $offset => $transactionId) {
+            $path = $configDir . DIRECTORY_SEPARATOR
+                . 'nginx.conf.rollback.' . $transactionId;
+            self::assertNotFalse(\file_put_contents($path, '# rollback ' . $offset));
+            self::assertTrue(\touch($path, 100 + $offset));
+            $rollbacks[] = $path;
+        }
+        $publicationProperty->setValue($this->controller, [
+            'transaction_id' => $transactionIds[0],
+            'phase' => 'ACTIVATING',
+            'rollback_file' => $rollbacks[0],
+        ]);
+
+        (new \ReflectionMethod($this->controller, 'reconcilePublicationConfigArtifacts'))
+            ->invoke($this->controller);
+
+        self::assertFileExists(
+            $rollbacks[0],
+            'The live rollback must survive even when its timestamp is the oldest.',
+        );
+        self::assertFileDoesNotExist($rollbacks[1]);
+        self::assertFileExists($rollbacks[2]);
+        self::assertFileExists($rollbacks[3]);
+    }
+
+    public function testPublicationArtifactRetentionNeverRemovesLiveCandidate(): void
+    {
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $publicationProperty = new \ReflectionProperty($this->controller, 'publication');
+        $transactionId = \str_repeat('5', 32);
+        $liveCandidate = $configDir . DIRECTORY_SEPARATOR
+            . 'candidate-91-' . $transactionId . '.conf';
+        $orphanCandidate = $configDir . DIRECTORY_SEPARATOR
+            . 'candidate-92-' . \str_repeat('6', 32) . '.conf';
+        self::assertNotFalse(\file_put_contents($liveCandidate, '# live candidate'));
+        self::assertNotFalse(\file_put_contents($orphanCandidate, '# orphan candidate'));
+        $publicationProperty->setValue($this->controller, [
+            'transaction_id' => $transactionId,
+            'phase' => 'ACTIVATING',
+            'candidate_generation' => 91,
+            'candidate_file' => $liveCandidate,
+            'rollback_file' => '',
+        ]);
+
+        (new \ReflectionMethod($this->controller, 'reconcilePublicationConfigArtifacts'))
+            ->invoke($this->controller);
+
+        self::assertFileExists($liveCandidate);
+        self::assertFileDoesNotExist($orphanCandidate);
+    }
+
+    public function testCompletedPublicationImmediatelyCollectsItsTransactionArtifacts(): void
+    {
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $state['generation'] = 93;
+        $stateProperty->setValue($this->controller, $state);
+        (new \ReflectionMethod($this->controller, 'beginRoutingMutation'))
+            ->invoke($this->controller, 'terminal-artifact-cleanup');
+        $publicationProperty = new \ReflectionProperty($this->controller, 'publication');
+        $publication = $publicationProperty->getValue($this->controller);
+        $transactionId = (string)$publication['transaction_id'];
+        $configDir = (new \ReflectionMethod($this->controller, 'configDir'))
+            ->invoke($this->controller);
+        $candidate = $configDir . DIRECTORY_SEPARATOR
+            . 'candidate-93-' . $transactionId . '.conf';
+        $rollback = $configDir . DIRECTORY_SEPARATOR
+            . 'nginx.conf.rollback.' . $transactionId;
+        self::assertNotFalse(\file_put_contents($candidate, '# terminal candidate'));
+        self::assertNotFalse(\file_put_contents($rollback, '# terminal rollback'));
+        $publication['phase'] = 'FAILED';
+        $publication['candidate_generation'] = 93;
+        $publication['candidate_file'] = $candidate;
+        $publication['rollback_file'] = $rollback;
+        $publicationProperty->setValue($this->controller, $publication);
+        (new \ReflectionMethod($this->controller, 'persistPublication'))
+            ->invoke($this->controller);
+
+        (new \ReflectionMethod($this->controller, 'completePublication'))
+            ->invoke($this->controller);
+
+        self::assertNull($publicationProperty->getValue($this->controller));
+        self::assertFileDoesNotExist($candidate);
+        self::assertFileDoesNotExist($rollback);
+    }
+
     public function testCorruptPublicationFailsPendingOperationsAndPersistsIsolation(): void
     {
         $operationId = \str_repeat('b', 32);
@@ -3098,7 +4204,7 @@ final class GatewayProtocolSecurityTest extends TestCase
             $restartedState['operations'][$operationId]['error'],
         );
         self::assertFileDoesNotExist($publicationFile);
-        self::assertNotSame([], \glob($publicationFile . '.corrupt.*') ?: []);
+        self::assertNotSame([], \glob($publicationFile . '.corrupt-*') ?: []);
 
         $secondRestart = new \WlsEdgeGatewayController(
             $this->home,
@@ -3183,7 +4289,12 @@ final class GatewayProtocolSecurityTest extends TestCase
         ));
         self::assertTrue(\chmod($nginx, 0700));
         $render->invoke($this->controller, true);
-        self::assertTrue($stateProperty->getValue($this->controller)['h3_enabled']);
+        $nextRuntime = $stateProperty->getValue($this->controller);
+        self::assertFalse($nextRuntime['h3_enabled']);
+        self::assertStringContainsString(
+            'runtime QUIC attestation is unavailable',
+            (string)$nextRuntime['h3_reason'],
+        );
     }
 
     public function testPublicRouteProbeProofNeverRefreshesTenantLeases(): void
@@ -3480,12 +4591,53 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'project_generation' => 1,
                 'instance_id' => $instanceId,
                 'instance_generation' => 1,
+                'instance_digest' => (string)$lease['digest'],
                 'master_epoch' => 1,
                 'launch_id' => \str_repeat('c', 32),
+                'gateway_epoch' => (string)$renewed['epoch'],
+                'host_boot_id' => $this->hostBootId(),
             ],
         );
         self::assertTrue($heartbeat['accepted']);
         self::assertTrue($heartbeat['re_register_required']);
+    }
+
+    public function testRegisterRequiresTheCurrentGatewayEpochBeforeEnrollmentLookup(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174097';
+        $projectGeneration = 1;
+        $requestDigest = \str_repeat('a', 64);
+        $payload = [
+            'project_uuid' => $projectUuid,
+            'project_root' => $this->createProject(),
+            'instance_id' => 'instance-missing-epoch',
+            'project_generation' => $projectGeneration,
+            'request_digest' => $requestDigest,
+            'idempotency_key' => \substr(\hash(
+                'sha256',
+                $projectUuid . ':desired:' . $projectGeneration . ':' . $requestDigest,
+            ), 0, 40),
+            'instance_generation' => 1,
+            'instance_digest' => \str_repeat('b', 64),
+            'non_certificate_desired_digest' => \str_repeat('c', 64),
+            'master_epoch' => 1,
+            'launch_id' => \str_repeat('d', 32),
+            'host_boot_id' => $this->hostBootId(),
+        ];
+
+        try {
+            (new \ReflectionMethod($this->controller, 'register'))->invoke(
+                $this->controller,
+                $payload,
+                false,
+            );
+            self::fail('A full registration must be fenced by the current gateway epoch.');
+        } catch (\DomainException $exception) {
+            self::assertStringContainsString(
+                'gateway epoch is stale or missing',
+                $exception->getMessage(),
+            );
+        }
     }
 
     public function testHeartbeatRequestsReplayWhenInstanceDigestChangesWithoutTouchingLease(): void
@@ -3516,6 +4668,8 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'instance_digest' => \str_repeat('d', 64),
                 'master_epoch' => 1,
                 'launch_id' => \str_repeat('c', 32),
+                'gateway_epoch' => (string)$state['epoch'],
+                'host_boot_id' => $this->hostBootId(),
             ],
         );
 
@@ -3529,26 +4683,106 @@ final class GatewayProtocolSecurityTest extends TestCase
         );
     }
 
+    public function testHeartbeatRejectsAMissingInstanceDigestWithoutRefreshingLease(): void
+    {
+        $projectUuid = '123e4567-e89b-42d3-a456-426614174099';
+        $instanceId = 'instance-missing-digest';
+        $stateProperty = new \ReflectionProperty($this->controller, 'state');
+        $state = $stateProperty->getValue($this->controller);
+        $lease = $this->instanceLease($instanceId, 29104, 'isolated');
+        $lease['last_heartbeat'] = \time() - 20;
+        $state['projects'][$projectUuid] = [
+            'generation' => 1,
+            'route_ids' => [],
+        ];
+        $state['instances'][$projectUuid][$instanceId] = $lease;
+        $stateProperty->setValue($this->controller, $state);
+
+        try {
+            (new \ReflectionMethod($this->controller, 'heartbeat'))->invoke(
+                $this->controller,
+                [
+                    'project_uuid' => $projectUuid,
+                    'project_generation' => 1,
+                    'instance_id' => $instanceId,
+                    'instance_generation' => 1,
+                    'master_epoch' => 1,
+                    'launch_id' => \str_repeat('c', 32),
+                    'gateway_epoch' => (string)$state['epoch'],
+                    'host_boot_id' => $this->hostBootId(),
+                ],
+            );
+            self::fail('Heartbeat must prove the exact registered instance digest.');
+        } catch (\DomainException $exception) {
+            self::assertStringContainsString(
+                'instance digest is invalid',
+                $exception->getMessage(),
+            );
+        }
+
+        $unchanged = $stateProperty->getValue($this->controller);
+        self::assertSame(
+            $lease['last_heartbeat'],
+            $unchanged['instances'][$projectUuid][$instanceId]['last_heartbeat'],
+            'A digest-less heartbeat must not extend the instance lease.',
+        );
+    }
+
     public function testIdempotentRegistrationFastPathRequiresFullyActiveRouting(): void
     {
         $projectUuid = '123e4567-e89b-42d3-a456-426614174036';
         $instanceId = 'instance-rejoin';
-        $routeId = \str_repeat('6', 32);
+        $domain = 'rejoin.example.test';
+        $routeId = $this->canonicalRouteId($projectUuid, $domain);
         $stateProperty = new \ReflectionProperty($this->controller, 'state');
         $state = $stateProperty->getValue($this->controller);
         $lease = $this->instanceLease($instanceId, 29102, 'stateless');
+        $state['active_config_generation'] = 1;
+        $state['enrollments'][$projectUuid] = [
+            'project_uuid' => $projectUuid,
+            'security_generation' => 1,
+        ];
         $state['projects'][$projectUuid] = [
             'project_uuid' => $projectUuid,
             'route_ids' => [$routeId],
         ];
         $state['instances'][$projectUuid][$instanceId] = $lease;
         $state['routes'][$routeId] = [
+            'route_id' => $routeId,
             'project_uuid' => $projectUuid,
-            'status' => 'ACTIVE',
+            'domain' => $domain,
+            'enrollment_security_generation' => 1,
+            'domain_security_generation' => 0,
+            'route_generation' => 1,
+            'force_https' => true,
+            'force_root_to_www' => false,
+            'status' => 'PENDING_CERTIFICATE',
+            'backends' => $lease['backends'],
+            'backend_instances' => [
+                $instanceId => [
+                    'instance_id' => $instanceId,
+                    'backends' => $lease['backends'],
+                    'backend_identity' => $lease['backend_identity'],
+                ],
+            ],
+            'certificate' => [
+                'state' => 'pending',
+                'valid' => false,
+                'pending' => true,
+                'generation' => 0,
+                'source_digest' => \hash(
+                    'sha256',
+                    "wls-pending-certificate\0" . $domain,
+                ),
+                'snapshot_digest' => '',
+                'cert_path' => '',
+                'key_path' => '',
+            ],
             'instances' => [
                 $instanceId => $lease + ['backend_healthy' => true],
             ],
         ];
+        $state['active_routes'][$routeId] = $state['routes'][$routeId];
         $stateProperty->setValue($this->controller, $state);
         $fullyActive = new \ReflectionMethod(
             $this->controller,
@@ -3611,8 +4845,11 @@ final class GatewayProtocolSecurityTest extends TestCase
                 'project_generation' => 1,
                 'instance_id' => $instanceId,
                 'instance_generation' => 1,
+                'instance_digest' => (string)$lease['digest'],
                 'master_epoch' => 1,
                 'launch_id' => \str_repeat('c', 32),
+                'gateway_epoch' => (string)$state['epoch'],
+                'host_boot_id' => $this->hostBootId(),
                 'drain_counters' => [
                     'version' => 1,
                     'counters_known' => true,
@@ -3622,15 +4859,20 @@ final class GatewayProtocolSecurityTest extends TestCase
                     'long_lived_connections' => 4,
                     'sse_connections' => 2,
                     'websocket_connections' => 1,
+                    'http2_connections' => 2,
                 ],
             ],
         );
-        self::assertFalse($heartbeat['re_register_required']);
+        self::assertTrue(
+            $heartbeat['re_register_required'],
+            'A heartbeat may refresh counters but cannot replace a missing committed route closure.',
+        );
 
         $renewed = $stateProperty->getValue($this->controller);
         $stored = $renewed['instances'][$projectUuid][$instanceId]['drain_counters'];
         self::assertSame(3, $stored['active_requests']);
         self::assertSame(4, $stored['long_lived_connections']);
+        self::assertSame(2, $stored['http2_connections']);
         self::assertSame(
             'DRAINING',
             $renewed['routes'][$routeId]['instances'][$instanceId]['status'],
@@ -3645,6 +4887,7 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertSame('master-heartbeat', $statuses[0]['counter_source']);
         self::assertSame(3, $statuses[0]['active_requests']);
         self::assertSame(4, $statuses[0]['long_lived_connections']);
+        self::assertSame(2, $statuses[0]['http2_connections']);
         self::assertFalse($statuses[0]['drain_complete']);
 
         $renewed['instances'][$projectUuid][$instanceId]['drain_counters']['reported_monotonic']
@@ -3655,7 +4898,38 @@ final class GatewayProtocolSecurityTest extends TestCase
         self::assertFalse($stale[0]['counters_known']);
         self::assertSame(0, $stale[0]['active_requests']);
         self::assertSame(0, $stale[0]['long_lived_connections']);
+        self::assertSame(0, $stale[0]['http2_connections']);
         self::assertFalse($stale[0]['drain_complete']);
+    }
+
+    public function testDrainCounterCapabilityRequiresACompleteTypedHttp2Vector(): void
+    {
+        $method = new \ReflectionMethod($this->controller, 'completeDrainCounterVector');
+        $complete = [
+            'active_requests' => 1,
+            'long_lived_connections' => 2,
+            'sse_connections' => 1,
+            'websocket_connections' => 1,
+            'http2_connections' => 3,
+        ];
+
+        self::assertTrue($method->invoke($this->controller, $complete));
+        self::assertFalse($method->invoke(
+            $this->controller,
+            \array_diff_key($complete, ['http2_connections' => true]),
+        ));
+        self::assertFalse($method->invoke(
+            $this->controller,
+            [...$complete, 'http2_connections' => '3'],
+        ));
+        self::assertFalse($method->invoke(
+            $this->controller,
+            [...$complete, 'sse_connections' => 3],
+        ));
+        self::assertFalse($method->invoke(
+            $this->controller,
+            [...$complete, 'active_requests' => -1],
+        ));
     }
 
     public function testUntrustedSecurityMarkerOverridesOlderValidLedger(): void
@@ -3699,7 +4973,12 @@ final class GatewayProtocolSecurityTest extends TestCase
         bool $tamperDigest = false,
         ?int $peerUid = null,
         ?float $monotonicTimestamp = null,
+        ?int $brokerActionProtocol = 2,
     ): array {
+        $this->lastBrokerActions = [];
+        if ($operation === 'enroll') {
+            $payload = $this->completeEnrollmentWireFacts($payload);
+        }
         $request = [
             'protocol' => 'wls-edge/2',
             'channel' => $channel,
@@ -3732,7 +5011,7 @@ final class GatewayProtocolSecurityTest extends TestCase
                 | JSON_THROW_ON_ERROR,
         ) . "\n";
         $peerUid ??= (int)\posix_geteuid();
-        $broker = \json_encode([
+        $brokerEnvelope = [
             'broker_schema' => 1,
             'channel' => $channel,
             'uid' => $peerUid,
@@ -3740,7 +5019,22 @@ final class GatewayProtocolSecurityTest extends TestCase
             'pid' => \getmypid(),
             'fencing_token' => $this->fencing,
             'payload_length' => \strlen($encoded),
-        ], JSON_THROW_ON_ERROR) . "\n";
+        ];
+        self::assertSame(1, $brokerEnvelope['broker_schema']);
+        if ($brokerActionProtocol !== null) {
+            $brokerEnvelope['action_protocol'] = $brokerActionProtocol;
+            self::assertSame(2, $brokerEnvelope['action_protocol']);
+        }
+        self::assertContains($brokerEnvelope['channel'], ['admin', 'project']);
+        self::assertGreaterThanOrEqual(0, $brokerEnvelope['uid']);
+        self::assertGreaterThanOrEqual(0, $brokerEnvelope['gid']);
+        self::assertGreaterThan(0, $brokerEnvelope['pid']);
+        self::assertMatchesRegularExpression(
+            '/\A[a-f0-9]{64}\z/D',
+            $brokerEnvelope['fencing_token'],
+        );
+        self::assertSame(\strlen($encoded), $brokerEnvelope['payload_length']);
+        $broker = \json_encode($brokerEnvelope, JSON_THROW_ON_ERROR) . "\n";
         $handshake = $this->brokerHandshake();
         $sockets = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
         self::assertIsArray($sockets);
@@ -3751,7 +5045,61 @@ final class GatewayProtocolSecurityTest extends TestCase
         $line = \fgets($sockets[0], 4 * 1024 * 1024);
         \fclose($sockets[0]);
         self::assertIsString($line);
+        if (\str_starts_with($line, "WLS-ACTION/2\t")) {
+            $this->lastBrokerActions = [\rtrim($line, "\r\n")];
+            self::fail(
+                'Test-mode Controller unexpectedly requested a Native Broker action: '
+                    . $this->lastBrokerActions[0] . '.',
+            );
+        }
         return \json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function completeEnrollmentWireFacts(array $payload): array
+    {
+        if (isset($payload['request_digest'], $payload['idempotency_key'])
+            || !\is_string($payload['project_uuid'] ?? null)
+            || !\is_string($payload['project_root'] ?? null)
+            || !\is_array($payload['certificate_roots'] ?? null)
+            || !\is_array($payload['allowed_domains'] ?? null)
+        ) {
+            return $payload;
+        }
+        $certificateRoots = $payload['certificate_roots'];
+        \ksort($certificateRoots, SORT_STRING);
+        $allowedDomains = \array_values(\array_unique(\array_map(
+            static fn (mixed $domain): string => \strtolower(\trim((string)$domain)),
+            $payload['allowed_domains'],
+        )));
+        \sort($allowedDomains, SORT_STRING);
+        $capabilities = \is_array($payload['capabilities'] ?? null)
+            ? $payload['capabilities']
+            : [];
+        \ksort($capabilities, SORT_STRING);
+        $facts = [
+            'project_uuid' => \strtolower(\trim($payload['project_uuid'])),
+            'project_root' => $payload['project_root'],
+            'certificate_roots' => $certificateRoots,
+            'allowed_domains' => $allowedDomains,
+            'capabilities' => $capabilities,
+        ];
+        if (\array_key_exists('project_owner_uid', $payload)
+            || \array_key_exists('project_owner_gid', $payload)
+        ) {
+            $facts['project_owner_uid'] = $payload['project_owner_uid'] ?? null;
+            $facts['project_owner_gid'] = $payload['project_owner_gid'] ?? null;
+        }
+        $requestDigest = \hash('sha256', GatewayClient::canonicalJson($facts));
+        $payload['request_digest'] = $requestDigest;
+        $payload['idempotency_key'] = \substr(\hash(
+            'sha256',
+            $facts['project_uuid'] . ':enroll:' . $requestDigest,
+        ), 0, 40);
+        return $payload;
     }
 
     /** @return array{probe:string,ready:string} */
@@ -3853,6 +5201,75 @@ CONF
         self::assertTrue(\chmod($certificatePath, 0600));
         self::assertTrue(\chmod($keyPath, 0600));
         return ['cert' => $certificatePath, 'key' => $keyPath];
+    }
+
+    private function canonicalRouteId(string $projectUuid, string $domain): string
+    {
+        return \substr(\hash('sha256', $projectUuid . "\0" . $domain), 0, 32);
+    }
+
+    private function hostBootId(): string
+    {
+        return (string)(new \ReflectionProperty($this->controller, 'hostBootId'))
+            ->getValue($this->controller);
+    }
+
+    /**
+     * @param array<string,mixed>|null $evidence
+     * @return array<string,mixed>
+     */
+    private function signedBackendIdentity(
+        string $projectUuid,
+        string $instanceId,
+        int $generation,
+        int $masterEpoch,
+        string $launchId,
+        string $edgeSecret,
+        string $sessionCapability = 'isolated',
+        ?array $evidence = null,
+    ): array {
+        $identity = [
+            'schema' => 'wls-backend-listener-identity/2',
+            'project_uuid' => $projectUuid,
+            'instance_id' => $instanceId,
+            'generation' => $generation,
+            'master_pid' => \getmypid(),
+            'master_epoch' => $masterEpoch,
+            'launch_id' => $launchId,
+            'listener_lease_id' => \substr(\hash(
+                'sha256',
+                $projectUuid . "\0" . $instanceId . "\0" . $generation . "\0" . $launchId,
+            ), 0, 32),
+            'edge_capability_digest' => \hash('sha256', $edgeSecret),
+            'session_capability' => $sessionCapability,
+            'edge_capability_secret' => $edgeSecret,
+        ];
+        if ($evidence !== null) {
+            $identity['session_capability_evidence'] = $evidence;
+        }
+        return $this->sealBackendIdentity($identity);
+    }
+
+    /** @param array<string,mixed> $identity @return array<string,mixed> */
+    private function sealBackendIdentity(array $identity): array
+    {
+        unset($identity['public_digest'], $identity['digest']);
+        if (\is_array($identity['session_capability_evidence'] ?? null)) {
+            $identity['session_capability_evidence_digest'] = \hash(
+                'sha256',
+                GatewayClient::canonicalJson($identity['session_capability_evidence']),
+            );
+        } else {
+            unset($identity['session_capability_evidence_digest']);
+        }
+        $publicIdentity = $identity;
+        unset($publicIdentity['edge_capability_secret']);
+        $identity['public_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($publicIdentity),
+        );
+        $identity['digest'] = \hash('sha256', GatewayClient::canonicalJson($identity));
+        return $identity;
     }
 
     /** @return array<string,mixed> */

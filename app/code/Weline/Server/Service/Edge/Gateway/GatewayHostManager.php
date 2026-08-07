@@ -96,6 +96,8 @@ final class GatewayHostManager
     private const UPGRADE_IDENTITY_PROBE_MARGIN_SECONDS = 15.0;
     private const DRAIN_LEASE_HEARTBEAT_SECONDS = 10.0;
     private const DRAIN_LEASE_HEARTBEAT_FAILURE_SECONDS = 30.0;
+    private const FAILURE_COMPENSATION_LOCK_WAIT_SECONDS = 0.25;
+    private const FAILURE_COMPENSATION_DEADLINE_SECONDS = 1.0;
 
     public function __construct(
         private readonly GatewayPaths $paths = new GatewayPaths(),
@@ -109,13 +111,20 @@ final class GatewayHostManager
     /**
      * @return array<string,mixed>
      */
-    public function status(float $transientRetrySeconds = 0.0): array
+    public function status(
+        float $transientRetrySeconds = 0.0,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
         $deadline = \hrtime(true) / 1_000_000_000
             + \max(0.0, $transientRetrySeconds);
+        if ($deadlineMonotonic !== null) {
+            $this->remainingOperationDeadline($deadlineMonotonic);
+            $deadline = \min($deadline, $deadlineMonotonic);
+        }
         while (true) {
             try {
-                $response = $this->client->status();
+                $response = $this->client->status($deadlineMonotonic);
                 if (!($response['ok'] ?? false)) {
                     return [
                         'ok' => false,
@@ -173,7 +182,9 @@ final class GatewayHostManager
     }
 
     /**
-     * Establish or adopt a trusted WLS 2.0 gateway.
+     * Classify startup discovery without installing, binding public ports,
+     * requesting credentials, changing a service or touching another process.
+     * Establishment is reserved for explicit administrator commands.
      *
      * @return array<string,mixed>
      */
@@ -191,11 +202,7 @@ final class GatewayHostManager
             ];
         }
         $status = $observedStatus ?? $this->status(5.0);
-        if (($status['ok'] ?? false)
-            && ($status['protocol'] ?? '') === GatewayPaths::PROTOCOL
-            && ($status['ready'] ?? false)
-            && ($status['supervisor_ready'] ?? false)
-        ) {
+        if (self::hostStatusIsTrustedReady($status)) {
             return $status + ['established' => false];
         }
         $profile = $this->installedListenProfileOrDefault();
@@ -331,12 +338,11 @@ final class GatewayHostManager
         do {
             \usleep(100000);
             $status = $this->administratorStatus();
-            if (($status['ok'] ?? false)
-                && ($status['ready'] ?? false)
-                && ($status['supervisor_ready'] ?? false)
-                && ($status['broker_ready'] ?? false)
-                && ($status['release_ready'] ?? false)
-            ) {
+            if (self::hostStatusMatchesRuntimeIdentity(
+                $status,
+                (string)$staged['slot'],
+                (string)$staged['runtime_generation'],
+            )) {
                 return $status + [
                     'installed' => true,
                     'slot' => $staged['slot'],
@@ -482,7 +488,11 @@ final class GatewayHostManager
         do {
             \usleep(100000);
             $status = $this->administratorStatus();
-            if (($status['ok'] ?? false) && ($status['ready'] ?? false)) {
+            if (self::hostStatusMatchesRuntimeIdentity(
+                $status,
+                $slot,
+                (string)($staged['runtime_generation'] ?? ''),
+            )) {
                 return $status + ['promotion_activated' => true, 'slot' => $slot];
             }
         } while (self::monotonicNow() < $deadline);
@@ -852,15 +862,11 @@ final class GatewayHostManager
         $deadline = \hrtime(true) / 1_000_000_000 + $timeoutSeconds;
         $lastStatus = [];
         do {
-            $this->serviceProgressCallback();
+            $this->serviceProgressCallback($deadline);
             $status = $this->administratorStatus();
             $lastStatus = $status;
             $controlGeneration = (int)($status['control_generation'] ?? 0);
-            if (($status['ok'] ?? false)
-                && ($status['ready'] ?? false)
-                && ($status['supervisor_ready'] ?? false)
-                && ($status['broker_ready'] ?? false)
-                && ($status['release_ready'] ?? false)
+            if (self::hostStatusIsTrustedReady($status)
                 && $controlGeneration >= $expectedSecurityGeneration
             ) {
                 return;
@@ -924,7 +930,7 @@ final class GatewayHostManager
                 $probe = new GatewayPublicRouteProbe();
 
                 while (true) {
-                    $this->serviceProgressCallback();
+                    $this->serviceProgressCallback($deadline);
                     $now = \hrtime(true) / 1_000_000_000;
                     $status = $this->status(1.0);
                     $lastStatus = $status;
@@ -1313,11 +1319,11 @@ final class GatewayHostManager
      */
     public function upgrade(string $packageDirectory, string $profile = 'default'): array
     {
-        $service = $this->platform->installedDefinition();
+        $service = null;
         $before = null;
         if (!$this->paths->isTestMode()) {
             $before = $this->administratorStatus();
-            if (!($before['ok'] ?? false) || !($before['ready'] ?? false)) {
+            if (!self::hostStatusIsTrustedReady($before)) {
                 throw new \RuntimeException(
                     'Gateway must be healthy before an A/B package upgrade: '
                     . (string)($before['reason'] ?? 'status unavailable')
@@ -1422,14 +1428,11 @@ final class GatewayHostManager
         do {
             \usleep(100000);
             $status = $this->administratorStatus();
-            if (($status['ok'] ?? false)
-                && ($status['ready'] ?? false)
-                && \hash_equals($slot, (string)($status['active_slot'] ?? ''))
-                && ($runtimeGeneration === '' || \hash_equals(
-                    $runtimeGeneration,
-                    (string)($status['runtime_generation'] ?? ''),
-                ))
-            ) {
+            if (self::hostStatusMatchesRuntimeIdentity(
+                $status,
+                $slot,
+                $runtimeGeneration,
+            )) {
                 return $status;
             }
         } while (\hrtime(true) / 1_000_000_000 < $deadline);
@@ -1463,18 +1466,25 @@ final class GatewayHostManager
      * @param array<string,mixed> $registration
      * @return array<string,mixed>
      */
-    public function submitBuiltRegistration(array $registration): array
+    public function submitBuiltRegistration(
+        array $registration,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        return $this->submitRegistration($registration);
+        return $this->submitRegistration($registration, $deadlineMonotonic);
     }
 
     /**
      * @param array<string,mixed> $registration
      * @return array<string,mixed>
      */
-    private function submitRegistration(array $registration): array
+    private function submitRegistration(
+        array $registration,
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        $status = $this->status(5.0);
+        $this->remainingOperationDeadline($deadlineMonotonic);
+        $status = $this->status(5.0, $deadlineMonotonic);
         if (!self::controlPlaneAcceptsRegistration($status)) {
             throw new \RuntimeException(
                 'WLS Gateway control plane is not ready for project registration: '
@@ -1492,6 +1502,8 @@ final class GatewayHostManager
                 'gateway_epoch' => (string)$registration['gateway_epoch'],
                 'expected_route_generations' => [],
             ],
+            $this->operationLockWaitTimeout($deadlineMonotonic, 300.0),
+            $deadlineMonotonic,
         );
         $attempted = $intentId !== null;
         $intentId ??= '';
@@ -1499,9 +1511,16 @@ final class GatewayHostManager
         $lifecycleAttempt = $lifecycle->beginMutation(
             (string)$registration['instance_id'],
             'register',
+            $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+            $deadlineMonotonic,
         );
         try {
-            $response = $this->idempotentProjectMutation('register', $registration);
+            $response = $this->idempotentProjectMutation(
+                'register',
+                $registration,
+                120.0,
+                $deadlineMonotonic,
+            );
             if (!($response['ok'] ?? false)) {
                 throw new \RuntimeException(
                     (string)($response['error']['message'] ?? 'Gateway registration failed.')
@@ -1511,6 +1530,8 @@ final class GatewayHostManager
                 $response,
                 false,
                 (string)$registration['project_uuid'],
+                90.0,
+                $deadlineMonotonic,
             );
             $leaseReceipt = self::leaseReceiptFromPublication($published);
             self::assertRegistrationSecurityRetirement(
@@ -1521,19 +1542,25 @@ final class GatewayHostManager
             $this->persistLeaseReceipt(
                 (string)$registration['instance_id'],
                 $leaseReceipt,
+                $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+                $deadlineMonotonic,
             );
             if ($attempted) {
                 $renewals->acknowledge(
                     $registration,
                     (string)$registration['instance_id'],
                     'register',
-                    $this->status(5.0),
+                    $this->status(5.0, $deadlineMonotonic),
+                    $this->operationLockWaitTimeout($deadlineMonotonic, 300.0),
+                    $deadlineMonotonic,
                 );
             }
             if (!$lifecycle->markRegistered(
                 (string)$registration['instance_id'],
                 (int)$lifecycleAttempt['attempt_sequence'],
                 'register',
+                $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+                $deadlineMonotonic,
             )) {
                 throw new \RuntimeException(
                     'Gateway registration completed after this WLS launch was retired.',
@@ -1559,7 +1586,13 @@ final class GatewayHostManager
             }
             if ($intentId !== '') {
                 try {
-                    $renewals->recordFailure($intentId, $throwable->getMessage());
+                    $renewals->recordFailure(
+                        $intentId,
+                        $throwable->getMessage(),
+                        self::FAILURE_COMPENSATION_LOCK_WAIT_SECONDS,
+                        (\hrtime(true) / 1_000_000_000)
+                            + self::FAILURE_COMPENSATION_DEADLINE_SECONDS,
+                    );
                 } catch (\Throwable $renewalFailure) {
                     $recoveryFailures[] = 'certificate replay intent: '
                         . GatewayBoundedText::singleLine(
@@ -1596,36 +1629,96 @@ final class GatewayHostManager
      */
     public static function controlPlaneAcceptsRegistration(array $status): bool
     {
-        $epoch = \strtolower(\trim((string)($status['epoch'] ?? '')));
-        $hostBootId = \strtolower(\trim((string)($status['host_boot_id'] ?? '')));
-        $publicHttp = (int)($status['public_http'] ?? 0);
-        $publicHttps = (int)($status['public_https'] ?? 0);
+        $epoch = \is_string($status['epoch'] ?? null)
+            ? \strtolower(\trim($status['epoch']))
+            : '';
+        $hostBootId = \is_string($status['host_boot_id'] ?? null)
+            ? \strtolower(\trim($status['host_boot_id']))
+            : '';
+        $protocolMin = $status['protocol_min'] ?? null;
+        $protocolMax = $status['protocol_max'] ?? null;
+        $publicHttp = $status['public_http'] ?? null;
+        $publicHttps = $status['public_https'] ?? null;
         return ($status['ok'] ?? false) === true
             && ($status['control_plane_ready'] ?? false) === true
             && ($status['release_ready'] ?? false) === true
             && ($status['broker_ready'] ?? false) === true
             && ($status['supervisor_ready'] ?? false) === true
+            && \is_string($status['protocol'] ?? null)
             && \hash_equals(
                 GatewayPaths::PROTOCOL,
-                (string)($status['protocol'] ?? ''),
+                $status['protocol'],
             )
+            && \is_string($status['implementation_level'] ?? null)
             && \hash_equals(
                 GatewayPaths::IMPLEMENTATION_LEVEL,
-                (string)($status['implementation_level'] ?? ''),
+                $status['implementation_level'],
             )
+            && \is_string($status['security_profile'] ?? null)
             && \hash_equals(
                 GatewayPaths::SECURITY_PROFILE,
-                (string)($status['security_profile'] ?? ''),
+                $status['security_profile'],
             )
-            && (int)($status['protocol_min'] ?? 0) <= 2
-            && (int)($status['protocol_max'] ?? 0) >= 2
+            && \is_int($protocolMin)
+            && \is_int($protocolMax)
+            && $protocolMin >= 1
+            && $protocolMin <= 2
+            && $protocolMax >= 2
+            && $protocolMax >= $protocolMin
             && \preg_match('/\A[a-f0-9]{32}\z/D', $epoch) === 1
             && \preg_match('/\A[a-f0-9]{64}\z/D', $hostBootId) === 1
+            && \is_int($publicHttp)
+            && \is_int($publicHttps)
             && $publicHttp >= 1
             && $publicHttp <= 65535
             && $publicHttps >= 1
             && $publicHttps <= 65535
             && $publicHttp !== $publicHttps;
+    }
+
+    /** @param array<string,mixed> $status */
+    private static function hostStatusIsTrustedReady(array $status): bool
+    {
+        $activeSlot = \strtoupper(\trim((string)($status['active_slot'] ?? '')));
+        $runtimeGeneration = \strtolower(\trim((string)(
+            $status['runtime_generation'] ?? ''
+        )));
+        if (($status['ready'] ?? false) !== true
+            || !self::controlPlaneAcceptsRegistration($status)
+            || !\in_array($activeSlot, ['A', 'B'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+        ) {
+            return false;
+        }
+        try {
+            self::currentAuthenticatedHostBootId($status);
+        } catch (\Throwable) {
+            return false;
+        }
+        return true;
+    }
+
+    /** @param array<string,mixed> $status */
+    private static function hostStatusMatchesRuntimeIdentity(
+        array $status,
+        string $slot,
+        string $runtimeGeneration,
+    ): bool {
+        $slot = \strtoupper(\trim($slot));
+        $runtimeGeneration = \strtolower(\trim($runtimeGeneration));
+        return \in_array($slot, ['A', 'B'], true)
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) === 1
+            && self::hostStatusIsTrustedReady($status)
+            && \hash_equals(
+                $slot,
+                \strtoupper(\trim((string)($status['active_slot'] ?? ''))),
+            )
+            && \hash_equals(
+                $runtimeGeneration,
+                \strtolower(\trim((string)(
+                    $status['runtime_generation'] ?? ''
+                ))),
+            );
     }
 
     /** @param array<string,mixed> $status */
@@ -1658,11 +1751,14 @@ final class GatewayHostManager
         string $instanceName,
         string $expectedGatewayEpoch = '',
         array $expectedRouteGenerations = [],
+        ?float $deadlineMonotonic = null,
     ): array
     {
+        $this->remainingOperationDeadline($deadlineMonotonic);
         $builder = new GatewayRegistrationBuilder();
         $registration = $builder->build($instanceName);
-        $status = $this->status(5.0);
+        $this->remainingOperationDeadline($deadlineMonotonic);
+        $status = $this->status(5.0, $deadlineMonotonic);
         if (!self::controlPlaneAcceptsRegistration($status)) {
             throw new \RuntimeException(
                 (string)($status['reason'] ?? 'Gateway status failed before certificate renew.')
@@ -1747,13 +1843,25 @@ final class GatewayHostManager
                 'gateway_epoch' => (string)$registration['gateway_epoch'],
                 'expected_route_generations' => $expected,
             ],
+            $this->operationLockWaitTimeout($deadlineMonotonic, 300.0),
+            $deadlineMonotonic,
         );
         $attempted = $intentId !== null;
         $intentId ??= '';
         $lifecycle = new GatewayRegistrationLifecycle();
-        $lifecycleAttempt = $lifecycle->beginMutation($instanceName, 'renew');
+        $lifecycleAttempt = $lifecycle->beginMutation(
+            $instanceName,
+            'renew',
+            $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+            $deadlineMonotonic,
+        );
         try {
-            $response = $this->idempotentProjectMutation('renew', $registration);
+            $response = $this->idempotentProjectMutation(
+                'renew',
+                $registration,
+                120.0,
+                $deadlineMonotonic,
+            );
             if (!($response['ok'] ?? false)) {
                 throw new \RuntimeException(
                     (string)($response['error']['message'] ?? 'Gateway certificate renew failed.')
@@ -1763,23 +1871,31 @@ final class GatewayHostManager
                 $response,
                 false,
                 (string)$registration['project_uuid'],
+                90.0,
+                $deadlineMonotonic,
             );
             $this->persistLeaseReceipt(
                 $instanceName,
                 self::leaseReceiptFromPublication($published),
+                $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+                $deadlineMonotonic,
             );
             if ($attempted) {
                 $renewals->acknowledge(
                     $registration,
                     $instanceName,
                     'renew',
-                    $this->status(5.0),
+                    $this->status(5.0, $deadlineMonotonic),
+                    $this->operationLockWaitTimeout($deadlineMonotonic, 300.0),
+                    $deadlineMonotonic,
                 );
             }
             if (!$lifecycle->markRegistered(
                 $instanceName,
                 (int)$lifecycleAttempt['attempt_sequence'],
                 'renew',
+                $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+                $deadlineMonotonic,
             )) {
                 throw new \RuntimeException(
                     'Gateway renew completed after this WLS launch was retired.',
@@ -1805,7 +1921,13 @@ final class GatewayHostManager
             }
             if ($intentId !== '') {
                 try {
-                    $renewals->recordFailure($intentId, $throwable->getMessage());
+                    $renewals->recordFailure(
+                        $intentId,
+                        $throwable->getMessage(),
+                        self::FAILURE_COMPENSATION_LOCK_WAIT_SECONDS,
+                        (\hrtime(true) / 1_000_000_000)
+                            + self::FAILURE_COMPENSATION_DEADLINE_SECONDS,
+                    );
                 } catch (\Throwable $renewalFailure) {
                     $recoveryFailures[] = 'certificate replay intent: '
                         . GatewayBoundedText::singleLine(
@@ -1834,8 +1956,12 @@ final class GatewayHostManager
     /**
      * @return array<string,mixed>
      */
-    public function heartbeat(string $instanceName, array $drainCounters = []): array
-    {
+    public function heartbeat(
+        string $instanceName,
+        array $drainCounters = [],
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $this->remainingOperationDeadline($deadlineMonotonic);
         $registration = $this->loadLeaseReceipt($instanceName);
         $payload = [
             'project_uuid' => (string)$registration['project_uuid'],
@@ -1851,7 +1977,11 @@ final class GatewayHostManager
         if ($drainCounters !== []) {
             $payload['drain_counters'] = $drainCounters;
         }
-        $response = $this->client->projectRequest('heartbeat', $payload);
+        $response = $this->client->projectRequest(
+            'heartbeat',
+            $payload,
+            $deadlineMonotonic,
+        );
         if (!($response['ok'] ?? false)) {
             throw new \RuntimeException(
                 (string)($response['error']['message'] ?? 'Gateway heartbeat failed.')
@@ -1863,7 +1993,12 @@ final class GatewayHostManager
             // freshly signed Controller fence before exposing success so Stop,
             // ACME and the next heartbeat never rely on an expired registration
             // receipt.
-            $this->persistLeaseReceipt($instanceName, $result['lease_receipt']);
+            $this->persistLeaseReceipt(
+                $instanceName,
+                $result['lease_receipt'],
+                $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+                $deadlineMonotonic,
+            );
         }
         return $result;
     }
@@ -1877,7 +2012,9 @@ final class GatewayHostManager
         int $challengeGeneration,
         array $challenges,
         string $desiredDigest,
+        ?float $deadlineMonotonic = null,
     ): array {
+        $this->remainingOperationDeadline($deadlineMonotonic);
         $computedDigest = \hash('sha256', GatewayClient::canonicalJson($challenges));
         if ($challengeGeneration < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $desiredDigest) !== 1
@@ -1892,13 +2029,18 @@ final class GatewayHostManager
             'challenge_generation' => $challengeGeneration,
             'desired_digest' => $desiredDigest,
             'challenges' => $challenges,
-        ]);
+        ], $deadlineMonotonic);
         if (!($response['ok'] ?? false)) {
             throw new \RuntimeException(
                 (string)($response['error']['message'] ?? 'Gateway ACME challenge sync failed.')
             );
         }
-        return $this->awaitPublication($response, false, $projectUuid);
+        return $this->awaitPublication(
+            $response,
+            false,
+            $projectUuid,
+            deadlineMonotonic: $deadlineMonotonic,
+        );
     }
 
     /**
@@ -1989,6 +2131,379 @@ final class GatewayHostManager
             $payload,
             \max(1, \min(300, $seconds)),
         );
+    }
+
+    /**
+     * Irreversibly drain an exact STALE/DRAINING registration using current
+     * project credentials and authenticated own-status. Unlike ordinary Stop,
+     * this recovery path deliberately never reads an expired local lease
+     * receipt. The Controller still revalidates the exact launch tuple before
+     * committing the idempotent drain publication.
+     *
+     * @return array<string,mixed>
+     */
+    public function drainStaleRegistration(
+        string $instanceName,
+        int $seconds = 300,
+        bool $waitForConnections = false,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $this->remainingOperationDeadline($deadlineMonotonic);
+        self::assertLeaseReceiptInstanceName($instanceName);
+        $credential = (new GatewayCredentialStore())->load();
+        $status = $this->status(5.0, $deadlineMonotonic);
+        $fence = self::staleDrainFenceFromAuthenticatedStatus(
+            $credential,
+            $status,
+            $instanceName,
+        );
+        $drainOperationId = self::drainOperationId($fence, $instanceName);
+        $boundedSeconds = \max(1, \min(300, $seconds));
+        $response = $this->idempotentProjectMutation(
+            'drain',
+            $fence + [
+                'drain_operation_id' => $drainOperationId,
+                'seconds' => $boundedSeconds,
+            ],
+            (float)\min(90, $boundedSeconds),
+            $deadlineMonotonic,
+        );
+        if (!($response['ok'] ?? false)) {
+            throw new \RuntimeException((string)(
+                $response['error']['message']
+                ?? 'Gateway STALE registration drain failed.'
+            ));
+        }
+        $published = $this->awaitPublication(
+            $response,
+            false,
+            (string)$fence['project_uuid'],
+            90.0,
+            $deadlineMonotonic,
+        );
+        $operation = \is_array($published['operation'] ?? null)
+            ? $published['operation']
+            : [];
+        $result = \is_array($operation['result'] ?? null)
+            ? $operation['result']
+            : [];
+        $publishedOperationId = \strtolower(\trim((string)(
+            $result['drain_operation_id']
+            ?? $published['drain_operation_id']
+            ?? ''
+        )));
+        if (($published['already_removed'] ?? false) === true
+            || ($result['already_removed'] ?? false) === true
+            || !\hash_equals($drainOperationId, $publishedOperationId)
+        ) {
+            throw new \RuntimeException(
+                'Gateway STALE drain did not publish the exact non-removed launch fence.',
+            );
+        }
+        $leaseReceipt = self::leaseReceiptFromPublication($published);
+        $this->persistLeaseReceipt(
+            $instanceName,
+            $leaseReceipt,
+            $this->operationLockWaitTimeout($deadlineMonotonic, 5.0),
+            $deadlineMonotonic,
+        );
+        $committed = [
+            ...$published,
+            'accepted' => true,
+            'irreversible' => true,
+            'stale_drain_committed' => true,
+            'retirement_authority' => 'authenticated_own_status',
+            'drain_operation_id' => $drainOperationId,
+            'instance_generation' => (int)$fence['instance_generation'],
+        ];
+        if (!$waitForConnections) {
+            return $committed;
+        }
+        $remainingSeconds = self::committedDrainRemainingSeconds(
+            $published,
+            \time(),
+        );
+        $drained = $this->awaitInstanceDrain(
+            $instanceName,
+            (string)$fence['project_uuid'],
+            $committed,
+            $remainingSeconds,
+            true,
+            $deadlineMonotonic,
+        );
+        if (($drained['drain_complete'] ?? false) !== true
+            || ($drained['unregistered'] ?? false) !== true
+        ) {
+            throw new \RuntimeException(
+                'Gateway STALE drain did not complete exact connection retirement.',
+            );
+        }
+        return $drained;
+    }
+
+    /** @param array<string,mixed> $published */
+    private static function committedDrainRemainingSeconds(
+        array $published,
+        int $nowUnix,
+    ): float {
+        $operation = \is_array($published['operation'] ?? null)
+            ? $published['operation']
+            : [];
+        $result = \is_array($operation['result'] ?? null)
+            ? $operation['result']
+            : [];
+        $drainSeconds = $published['drain_seconds']
+            ?? $result['drain_seconds']
+            ?? null;
+        $drainUntil = $published['drain_until']
+            ?? $result['drain_until']
+            ?? null;
+        if (!\is_int($drainSeconds)
+            || $drainSeconds < 1
+            || $drainSeconds > 300
+            || !\is_int($drainUntil)
+            || $drainUntil < 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway committed drain returned no valid fixed deadline.',
+            );
+        }
+        $remaining = \min($drainSeconds, $drainUntil - $nowUnix);
+        if ($remaining <= 0) {
+            throw new \RuntimeException(
+                'Gateway committed drain deadline was already exhausted.',
+            );
+        }
+        return (float)$remaining;
+    }
+
+    /**
+     * @param array<string,mixed> $credential current host-bound project credential
+     * @param array<string,mixed> $status authenticated project own-status
+     * @return array{
+     *   project_uuid:string,
+     *   gateway_epoch:string,
+     *   host_boot_id:string,
+     *   instance_id:string,
+     *   instance_generation:int,
+     *   master_epoch:int,
+     *   launch_id:string
+     * }
+     */
+    private static function staleDrainFenceFromAuthenticatedStatus(
+        array $credential,
+        array $status,
+        string $instanceName,
+    ): array {
+        self::assertLeaseReceiptInstanceName($instanceName);
+        $projectUuid = \strtolower(\trim((string)(
+            $credential['project_uuid'] ?? ''
+        )));
+        $statusProjectUuid = \strtolower(\trim((string)(
+            $status['project_uuid'] ?? ''
+        )));
+        if (!self::controlPlaneAcceptsRegistration($status)
+            || ($status['publication_exact'] ?? false) !== true
+            || \preg_match(
+                '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+                $projectUuid,
+            ) !== 1
+            || !\hash_equals($projectUuid, $statusProjectUuid)
+            || !\is_int($status['project_generation'] ?? null)
+            || (int)$status['project_generation'] < 1
+            || !\is_array($status['instances'] ?? null)
+            || !\array_is_list($status['instances'])
+        ) {
+            throw new \RuntimeException(
+                'Gateway STALE drain requires exact authenticated same-project status.',
+            );
+        }
+        $hostBootId = self::currentAuthenticatedHostBootId($status);
+        $instancesById = [];
+        foreach ($status['instances'] as $instance) {
+            $observedId = \is_array($instance)
+                ? (string)($instance['instance_id'] ?? '')
+                : '';
+            if (\preg_match(
+                '/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D',
+                $observedId,
+            ) !== 1
+                || isset($instancesById[$observedId])
+            ) {
+                throw new \RuntimeException(
+                    'Gateway STALE drain own-status instance closure is malformed.',
+                );
+            }
+            $instancesById[$observedId] = $instance;
+        }
+        $instance = $instancesById[$instanceName] ?? null;
+        if (!\is_array($instance)) {
+            throw new \RuntimeException(
+                'Gateway STALE drain requires one exact authenticated instance identity.',
+            );
+        }
+        $instanceStatus = $instance['status'] ?? null;
+        $instanceGeneration = $instance['generation'] ?? null;
+        $masterEpoch = $instance['master_epoch'] ?? null;
+        $launchId = \is_string($instance['launch_id'] ?? null)
+            ? \strtolower(\trim($instance['launch_id']))
+            : '';
+        if (!\is_string($instanceStatus)
+            || !\in_array($instanceStatus, ['STALE', 'DRAINING'], true)
+            || !\is_int($instanceGeneration)
+            || $instanceGeneration < 1
+            || !\is_int($masterEpoch)
+            || $masterEpoch < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Gateway STALE drain instance launch fence is invalid or still live.',
+            );
+        }
+
+        $routeClosures = [];
+        foreach (['active_routes', 'desired_routes'] as $collection) {
+            $routes = $status[$collection] ?? null;
+            if (!\is_array($routes) || !\array_is_list($routes) || $routes === []) {
+                throw new \RuntimeException(
+                    'Gateway STALE drain requires a non-empty exact route closure.',
+                );
+            }
+            $routeClosures[$collection] = [];
+            foreach ($routes as $route) {
+                $routeId = \is_array($route)
+                    ? (string)($route['route_id'] ?? '')
+                    : '';
+                $routeProjectUuid = \is_array($route)
+                    ? (string)($route['project_uuid'] ?? '')
+                    : '';
+                $routeStatus = \is_array($route)
+                    ? ($route['status'] ?? null)
+                    : null;
+                $routeGeneration = \is_array($route)
+                    ? ($route['route_generation'] ?? null)
+                    : null;
+                $preferredInstanceId = \is_array($route)
+                    ? ($route['instance_id'] ?? null)
+                    : null;
+                $backendInstances = \is_array($route)
+                    ? ($route['backend_instances'] ?? null)
+                    : null;
+                if (\preg_match('/\A[a-f0-9]{32}\z/D', $routeId) !== 1
+                    || !\hash_equals($projectUuid, $routeProjectUuid)
+                    || !\is_string($routeStatus)
+                    || !\in_array($routeStatus, [
+                        'PENDING_BACKEND',
+                        'PENDING_CERTIFICATE',
+                        'ACTIVE',
+                        'DRAINING',
+                        'STALE',
+                    ], true)
+                    || !\is_int($routeGeneration)
+                    || $routeGeneration < 1
+                    || !\is_string($preferredInstanceId)
+                    || ($preferredInstanceId !== '' && \preg_match(
+                        '/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D',
+                        $preferredInstanceId,
+                    ) !== 1)
+                    || !\is_array($backendInstances)
+                    || !\array_is_list($backendInstances)
+                    || isset($routeClosures[$collection][$routeId])
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway STALE drain route closure is removed, foreign, or malformed.',
+                    );
+                }
+                $backendFence = [];
+                foreach ($backendInstances as $backendInstance) {
+                    $backendInstanceId = \is_array($backendInstance)
+                        ? (string)($backendInstance['instance_id'] ?? '')
+                        : '';
+                    $identity = \is_array($backendInstance)
+                        && \is_array($backendInstance['backend_identity'] ?? null)
+                            ? $backendInstance['backend_identity']
+                            : [];
+                    $identityProjectUuid = (string)($identity['project_uuid'] ?? '');
+                    $identityInstanceId = (string)($identity['instance_id'] ?? '');
+                    $identityGeneration = $identity['generation'] ?? null;
+                    $identityMasterEpoch = $identity['master_epoch'] ?? null;
+                    $identityLaunchId = \is_string($identity['launch_id'] ?? null)
+                        ? \strtolower(\trim($identity['launch_id']))
+                        : '';
+                    $observedInstance = $instancesById[$backendInstanceId] ?? null;
+                    if (\preg_match(
+                        '/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D',
+                        $backendInstanceId,
+                    ) !== 1
+                        || isset($backendFence[$backendInstanceId])
+                        || \hash_equals($instanceName, $backendInstanceId)
+                        || !\hash_equals($projectUuid, $identityProjectUuid)
+                        || !\hash_equals($backendInstanceId, $identityInstanceId)
+                        || !\is_int($identityGeneration)
+                        || $identityGeneration < 1
+                        || !\is_int($identityMasterEpoch)
+                        || $identityMasterEpoch < 1
+                        || \preg_match('/\A[a-f0-9]{32}\z/D', $identityLaunchId) !== 1
+                        || !\is_array($observedInstance)
+                        || !\hash_equals(
+                            'ACTIVE',
+                            (string)($observedInstance['status'] ?? ''),
+                        )
+                        || !\is_int($observedInstance['generation'] ?? null)
+                        || (int)$observedInstance['generation'] !== $identityGeneration
+                        || !\is_int($observedInstance['master_epoch'] ?? null)
+                        || (int)$observedInstance['master_epoch'] !== $identityMasterEpoch
+                        || !\hash_equals(
+                            $identityLaunchId,
+                            \strtolower(\trim((string)(
+                                $observedInstance['launch_id'] ?? ''
+                            ))),
+                        )
+                    ) {
+                        throw new \RuntimeException(
+                            'Gateway STALE drain backend-instance fence is live, foreign, or malformed.',
+                        );
+                    }
+                    $backendFence[$backendInstanceId] = [
+                        'project_uuid' => $identityProjectUuid,
+                        'generation' => $identityGeneration,
+                        'master_epoch' => $identityMasterEpoch,
+                        'launch_id' => $identityLaunchId,
+                    ];
+                }
+                \ksort($backendFence, SORT_STRING);
+                if (($preferredInstanceId === '') !== ($backendFence === [])
+                    || ($preferredInstanceId !== ''
+                        && !isset($backendFence[$preferredInstanceId]))
+                    || ($routeStatus === 'ACTIVE' && $backendFence === [])
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway STALE drain preferred backend fence is inconsistent.',
+                    );
+                }
+                $routeClosures[$collection][$routeId] = [
+                    'project_uuid' => $routeProjectUuid,
+                    'generation' => $routeGeneration,
+                    'backend_instances' => $backendFence,
+                ];
+            }
+            \ksort($routeClosures[$collection], SORT_STRING);
+        }
+        if ($routeClosures['active_routes'] !== $routeClosures['desired_routes']) {
+            throw new \RuntimeException(
+                'Gateway STALE drain active and desired route fences are not exact.',
+            );
+        }
+
+        return [
+            'project_uuid' => $projectUuid,
+            'gateway_epoch' => \strtolower(\trim((string)$status['epoch'])),
+            'host_boot_id' => $hostBootId,
+            'instance_id' => $instanceName,
+            'instance_generation' => $instanceGeneration,
+            'master_epoch' => $masterEpoch,
+            'launch_id' => $launchId,
+        ];
     }
 
     /**
@@ -2220,7 +2735,7 @@ final class GatewayHostManager
             do {
                 \usleep(100000);
                 $status = $this->administratorStatus();
-                if (($status['ok'] ?? false) && ($status['ready'] ?? false)) {
+                if (self::hostStatusIsTrustedReady($status)) {
                     return $status + [
                         'accepted' => true,
                         'platform_service' => (string)$service['kind'],
@@ -2261,17 +2776,89 @@ final class GatewayHostManager
         }
     }
 
+    /**
+     * Serialize explicit-start compensation with the root Native Broker's
+     * STOP writer. The package lock already spans host trust mutations on all
+     * supported platforms and remains root/LocalSystem owned in production.
+     *
+     * @template TResult
+     * @param \Closure():TResult $callback
+     * @return TResult
+     */
+    private function withAdminStoppedIntentTransaction(\Closure $callback): mixed
+    {
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $this->paths->trustDir() . DIRECTORY_SEPARATOR . 'package-install.lock',
+            $callback,
+        );
+    }
+
     private function clearAdminStoppedIntent(): ?string
     {
-        $file = $this->paths->adminStoppedIntentFile();
-        if (!\file_exists($file) && !\is_link($file)) {
-            return null;
-        }
-        $contents = $this->readStableRegularFile(
-            $file,
-            4096,
-            'ADMIN_STOPPED intent',
-        );
+        return $this->withAdminStoppedIntentTransaction(function (): ?string {
+            $file = $this->paths->adminStoppedIntentFile();
+            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                $file,
+                4096,
+                'ADMIN_STOPPED intent',
+                function (string $contents): void {
+                    $this->assertAdminStoppedIntent($contents);
+                },
+            );
+            if (!\file_exists($file) && !\is_link($file)) {
+                return null;
+            }
+            $contents = $this->readStableRegularFile(
+                $file,
+                4096,
+                'ADMIN_STOPPED intent',
+            );
+            $this->assertAdminStoppedIntent($contents);
+            GatewayProjectStateFilesystem::removeRegular(
+                $file,
+                'verified ADMIN_STOPPED intent',
+            );
+            return $contents;
+        });
+    }
+
+    private function restoreAdminStoppedIntent(string $contents): void
+    {
+        $this->withAdminStoppedIntentTransaction(function () use ($contents): void {
+            $file = $this->paths->adminStoppedIntentFile();
+            if (\file_exists($file) || \is_link($file)) {
+                // A concurrent Broker STOP published a newer authoritative
+                // generation after this start attempt cleared the old one.
+                // Preserve it verbatim; even an unsafe current artifact must
+                // remain fail-closed for the native Launcher and repair flow.
+                return;
+            }
+            if (GatewayProjectStateFilesystem::hasAtomicWriteRecoveryBackups(
+                $file,
+                4096,
+                'ADMIN_STOPPED intent',
+            )) {
+                throw new \RuntimeException(
+                    'ADMIN_STOPPED recovery backup has no paired target; refusing unsafe restore.'
+                );
+            }
+            $this->assertAdminStoppedIntent($contents);
+            GatewayProjectStateFilesystem::atomicWrite($file, $contents, 0600);
+            $published = @\lstat($file);
+            if (!\is_array($published)
+                || ((((int)($published['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($published['nlink'] ?? 0) !== 1
+                || (\PHP_OS_FAMILY !== 'Windows'
+                    && (((int)($published['mode'] ?? 0)) & 0777) !== 0600)
+            ) {
+                throw new \RuntimeException('Restored ADMIN_STOPPED intent is unsafe.');
+            }
+            $this->syncDirectory(\dirname($file));
+        });
+    }
+
+    private function assertAdminStoppedIntent(string $contents): void
+    {
         $secret = \strtolower(\trim($this->readStableRegularFile(
             $this->paths->adminTokenFile(),
             65,
@@ -2305,27 +2892,6 @@ final class GatewayHostManager
             );
         }
         \sodium_memzero($key);
-        GatewayProjectStateFilesystem::removeRegular(
-            $file,
-            'verified ADMIN_STOPPED intent',
-        );
-        return $contents;
-    }
-
-    private function restoreAdminStoppedIntent(string $contents): void
-    {
-        $file = $this->paths->adminStoppedIntentFile();
-        GatewayProjectStateFilesystem::atomicWrite($file, $contents, 0600);
-        $published = @\lstat($file);
-        if (!\is_array($published)
-            || ((((int)($published['mode'] ?? 0)) & 0170000) !== 0100000)
-            || (int)($published['nlink'] ?? 0) !== 1
-            || (\PHP_OS_FAMILY !== 'Windows'
-                && (((int)($published['mode'] ?? 0)) & 0777) !== 0600)
-        ) {
-            throw new \RuntimeException('Restored ADMIN_STOPPED intent is unsafe.');
-        }
-        $this->syncDirectory(\dirname($file));
     }
 
     private function readStableRegularFile(
@@ -2420,11 +2986,15 @@ final class GatewayHostManager
      *
      * @return array<string,mixed>
      */
-    public function validatedLeaseReceiptForInstance(string $instanceName): array
-    {
+    public function validatedLeaseReceiptForInstance(
+        string $instanceName,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        $this->remainingOperationDeadline($deadlineMonotonic);
         self::assertLeaseReceiptInstanceName($instanceName);
         $receipt = $this->loadLeaseReceipt($instanceName);
-        $status = $this->status(1.0);
+        $this->remainingOperationDeadline($deadlineMonotonic);
+        $status = $this->status(1.0, $deadlineMonotonic);
         self::assertLeaseReceiptMatchesAuthenticatedStatus($receipt, $status);
         return $receipt;
     }
@@ -2433,6 +3003,8 @@ final class GatewayHostManager
     private function persistLeaseReceipt(
         string $instanceName,
         array $receipt,
+        float $waitTimeoutSeconds = 5.0,
+        ?float $deadlineMonotonic = null,
     ): void {
         self::assertLeaseReceiptInstanceName($instanceName);
         $credential = (new GatewayCredentialStore())->load(
@@ -2443,7 +3015,19 @@ final class GatewayHostManager
         $file = $instances->getInstanceFile($instanceName);
         $updated = ServerInstanceManager::updateJsonFileAtomically(
             $file,
-            static function (array $endpoint) use ($instanceName, $receipt): array {
+            static function (array $endpoint) use (
+                $instanceName,
+                $receipt,
+                $deadlineMonotonic,
+            ): array {
+                if ($deadlineMonotonic !== null
+                    && (!\is_finite($deadlineMonotonic)
+                        || (\hrtime(true) / 1_000_000_000) >= $deadlineMonotonic)
+                ) {
+                    throw new \RuntimeException(
+                        'Gateway lease receipt deadline was exhausted.',
+                    );
+                }
                 self::assertEndpointMatchesLeaseReceipt(
                     $endpoint,
                     $instanceName,
@@ -2461,6 +3045,7 @@ final class GatewayHostManager
                 $endpoint['gateway'] = $gateway;
                 return $endpoint;
             },
+            $waitTimeoutSeconds,
         );
         if (!$updated) {
             throw new \RuntimeException(
@@ -3136,6 +3721,7 @@ final class GatewayHostManager
         bool $administrator,
         string $projectUuid = '',
         float $timeoutSeconds = 90.0,
+        ?float $deadlineMonotonic = null,
     ): array {
         $payload = \is_array($response['payload'] ?? null)
             ? $response['payload']
@@ -3148,11 +3734,15 @@ final class GatewayHostManager
             throw new \RuntimeException('Gateway returned an invalid publication operation ID.');
         }
         $deadline = \hrtime(true) / 1_000_000_000 + \max(1.0, $timeoutSeconds);
+        if ($deadlineMonotonic !== null) {
+            $this->remainingOperationDeadline($deadlineMonotonic);
+            $deadline = \min($deadline, $deadlineMonotonic);
+        }
         $operation = \is_array($payload['operation'] ?? null)
             ? $payload['operation']
             : [];
         while (true) {
-            $this->serviceProgressCallback();
+            $this->serviceProgressCallback($deadline);
             $state = (string)($operation['state'] ?? '');
             if ($state === 'COMMITTED') {
                 $payload['operation'] = $operation;
@@ -3176,10 +3766,14 @@ final class GatewayHostManager
             $statusPayload = ['operation_id' => $operationId];
             try {
                 $status = $administrator
-                    ? $this->client->request('operation-status', $statusPayload)
+                    ? $this->client->request(
+                        'operation-status',
+                        $statusPayload,
+                        $deadline,
+                    )
                     : $this->client->projectRequest('operation-status', $statusPayload + [
                         'project_uuid' => $projectUuid,
-                    ]);
+                    ], $deadline);
             } catch (\RuntimeException $exception) {
                 if (!$this->publicationStatusTransportFailureRetryable($exception)
                     || \hrtime(true) / 1_000_000_000 >= $deadline
@@ -3221,7 +3815,7 @@ final class GatewayHostManager
             \hrtime(true) / 1_000_000_000 + \max(0.0, $seconds),
         );
         do {
-            $this->serviceProgressCallback();
+            $this->serviceProgressCallback($deadline);
             $remaining = $until - \hrtime(true) / 1_000_000_000;
             if ($remaining <= 0.0) {
                 break;
@@ -3231,14 +3825,43 @@ final class GatewayHostManager
                 \min(200_000, \ceil($remaining * 1_000_000)),
             ));
         } while (true);
-        $this->serviceProgressCallback();
+        $this->serviceProgressCallback($deadline);
     }
 
-    private function serviceProgressCallback(): void
+    private function serviceProgressCallback(?float $deadlineMonotonic = null): void
     {
         if ($this->progressCallback !== null) {
-            ($this->progressCallback)();
+            ($this->progressCallback)($deadlineMonotonic);
         }
+    }
+
+    private function remainingOperationDeadline(
+        ?float $deadlineMonotonic,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return 300.0;
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('Gateway operation deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('Gateway operation deadline was exhausted.');
+        }
+        return $remaining;
+    }
+
+    private function operationLockWaitTimeout(
+        ?float $deadlineMonotonic,
+        float $defaultSeconds,
+    ): float {
+        if ($deadlineMonotonic === null) {
+            return $defaultSeconds;
+        }
+        return \min(
+            0.25,
+            $this->remainingOperationDeadline($deadlineMonotonic),
+        );
     }
 
     /**
@@ -3252,11 +3875,20 @@ final class GatewayHostManager
         string $operation,
         array $payload,
         float $timeoutSeconds = 120.0,
+        ?float $deadlineMonotonic = null,
     ): array {
         $deadline = \hrtime(true) / 1_000_000_000 + \max(1.0, $timeoutSeconds);
+        if ($deadlineMonotonic !== null) {
+            $this->remainingOperationDeadline($deadlineMonotonic);
+            $deadline = \min($deadline, $deadlineMonotonic);
+        }
         while (true) {
             try {
-                $response = $this->client->projectRequest($operation, $payload);
+                $response = $this->client->projectRequest(
+                    $operation,
+                    $payload,
+                    $deadline,
+                );
                 $retryAfter = $this->projectMutationRetryAfterSeconds($response);
                 if ($retryAfter === null) {
                     return $response;
@@ -3319,7 +3951,7 @@ final class GatewayHostManager
         $message = $exception->getMessage();
         return \str_starts_with($message, 'WLS Gateway admin endpoint unavailable:')
             || \str_starts_with($message, 'WLS Gateway project endpoint unavailable:')
-            || \hash_equals('WLS Gateway returned an empty response.', $message)
+            || \hash_equals(GatewayClient::UNPROVEN_RESPONSE_ERROR, $message)
             || \hash_equals('Unable to send WLS Gateway request.', $message);
     }
 
@@ -3331,10 +3963,16 @@ final class GatewayHostManager
         string $instanceName,
         string $projectUuid,
         array $drain,
-        int $seconds,
+        float $seconds,
+        bool $failClosedOnTimeout = false,
+        ?float $operationDeadlineMonotonic = null,
     ): array {
         $now = \hrtime(true) / 1_000_000_000;
         $deadline = $now + $seconds;
+        if ($operationDeadlineMonotonic !== null) {
+            $this->remainingOperationDeadline($operationDeadlineMonotonic);
+            $deadline = \min($deadline, $operationDeadlineMonotonic);
+        }
         $nextLeaseHeartbeatAt = $now;
         $lastLeaseHeartbeatSuccessAt = $now;
         $lastLeaseHeartbeatFailure = '';
@@ -3344,12 +3982,17 @@ final class GatewayHostManager
             'long_lived_connections' => 0,
             'sse_connections' => 0,
             'websocket_connections' => 0,
+            'http2_connections' => 0,
         ];
         while (true) {
             $now = \hrtime(true) / 1_000_000_000;
             if ($now >= $nextLeaseHeartbeatAt) {
                 try {
-                    $heartbeat = $this->heartbeat($instanceName);
+                    $heartbeat = $this->heartbeat(
+                        $instanceName,
+                        [],
+                        $deadline,
+                    );
                     if (($heartbeat['accepted'] ?? false) !== true
                         || !\is_array($heartbeat['lease_receipt'] ?? null)
                     ) {
@@ -3386,6 +4029,12 @@ final class GatewayHostManager
             }
             $now = \hrtime(true) / 1_000_000_000;
             if ($now >= $deadline) {
+                if ($failClosedOnTimeout) {
+                    throw new \RuntimeException(
+                        'Gateway drain reached its fixed deadline before all H2, SSE, '
+                            . 'WebSocket, and request counters reached zero.',
+                    );
+                }
                 $unregistered = $this->unregister($instanceName);
                 return $drain + $lastCounters
                     + self::forcedDrainSummary($lastCounters) + [
@@ -3397,7 +4046,7 @@ final class GatewayHostManager
             try {
                 $response = $this->client->projectRequest('own-status', [
                     'project_uuid' => $projectUuid,
-                ]);
+                ], $deadline);
             } catch (\RuntimeException $exception) {
                 if (!$this->publicationStatusTransportFailureRetryable($exception)
                     || $now - $lastLeaseHeartbeatSuccessAt
@@ -3458,23 +4107,8 @@ final class GatewayHostManager
                     'unregistered' => true,
                 ];
             }
-            $lastCounters = [
-                'counters_known' => ($instance['counters_known'] ?? false) === true,
-                'active_requests' => \max(0, (int)($instance['active_requests'] ?? 0)),
-                'long_lived_connections' => \max(
-                    0,
-                    (int)($instance['long_lived_connections'] ?? 0),
-                ),
-                'sse_connections' => \max(0, (int)($instance['sse_connections'] ?? 0)),
-                'websocket_connections' => \max(
-                    0,
-                    (int)($instance['websocket_connections'] ?? 0),
-                ),
-            ];
-            if ($lastCounters['counters_known']
-                && $lastCounters['active_requests'] === 0
-                && $lastCounters['long_lived_connections'] === 0
-            ) {
+            $lastCounters = self::normalizePublishedDrainCounters($instance);
+            if (self::drainCountersComplete($lastCounters)) {
                 $unregistered = $this->unregister($instanceName);
                 return $drain + $lastCounters + [
                     'drain_complete' => true,
@@ -3483,8 +4117,58 @@ final class GatewayHostManager
                     'unregistered' => (bool)($unregistered['accepted'] ?? false),
                 ];
             }
-            \usleep(250000);
+            $this->waitForPublicationDelay(0.25, $deadline);
         }
+    }
+
+    /** @param array<string,mixed> $counters */
+    private static function drainCountersComplete(array $counters): bool
+    {
+        $normalized = self::normalizePublishedDrainCounters($counters);
+        return $normalized['counters_known']
+            && $normalized['active_requests'] === 0
+            && $normalized['long_lived_connections'] === 0
+            && $normalized['sse_connections'] === 0
+            && $normalized['websocket_connections'] === 0
+            && $normalized['http2_connections'] === 0;
+    }
+
+    /**
+     * @param array<string,mixed> $counters
+     * @return array{
+     *   counters_known:bool,
+     *   active_requests:int,
+     *   long_lived_connections:int,
+     *   sse_connections:int,
+     *   websocket_connections:int,
+     *   http2_connections:int
+     * }
+     */
+    private static function normalizePublishedDrainCounters(array $counters): array
+    {
+        $known = ($counters['counters_known'] ?? null) === true;
+        $normalized = ['counters_known' => false];
+        foreach ([
+            'active_requests',
+            'long_lived_connections',
+            'sse_connections',
+            'websocket_connections',
+            'http2_connections',
+        ] as $field) {
+            $value = $counters[$field] ?? null;
+            if (!\is_int($value) || $value < 0 || $value > 1_000_000) {
+                $known = false;
+                $value = 0;
+            }
+            $normalized[$field] = $value;
+        }
+        if ($normalized['sse_connections'] > $normalized['long_lived_connections']
+            || $normalized['websocket_connections'] > $normalized['long_lived_connections']
+        ) {
+            $known = false;
+        }
+        $normalized['counters_known'] = $known;
+        return $normalized;
     }
 
     /**
@@ -3493,19 +4177,22 @@ final class GatewayHostManager
      */
     private static function forcedDrainSummary(array $counters): array
     {
-        $known = ($counters['counters_known'] ?? false) === true;
-        $activeRequests = \max(0, (int)($counters['active_requests'] ?? 0));
-        $longLived = \max(0, (int)($counters['long_lived_connections'] ?? 0));
+        $normalized = self::normalizePublishedDrainCounters($counters);
+        $known = $normalized['counters_known'];
+        $activeRequests = $normalized['active_requests'];
+        $longLived = $normalized['long_lived_connections'];
+        $http2 = $normalized['http2_connections'];
         return [
-            // A long-lived request may appear in both counters. The maximum is
-            // a safe non-duplicating connection count; both raw counters stay
-            // visible for diagnostics.
+            // A long-lived request or H2 stream may appear in more than one
+            // counter. The maximum is a safe non-duplicating connection count;
+            // every raw counter stays visible for diagnostics.
             'forced_connections' => $known
-                ? \max($activeRequests, $longLived)
+                ? \max($activeRequests, $longLived, $http2)
                 : 0,
             'forced_connections_known' => $known,
             'forced_active_requests' => $activeRequests,
             'forced_long_lived_connections' => $longLived,
+            'forced_http2_connections' => $http2,
         ];
     }
 

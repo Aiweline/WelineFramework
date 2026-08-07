@@ -102,7 +102,7 @@ $webhookTagPostCurl = $webhookUrl !== ''
                 </div>
                 <div class="col-12">
                     <label class="form-label"><?= __('部署后命令') ?></label>
-                    <input type="text" name="post_deploy_command" class="form-control" value="<?= $value('post_deploy_command') ?>" placeholder="php bin/w setup:upgrade --route && php bin/w server:reload -r">
+                    <input type="text" name="post_deploy_command" class="form-control" value="<?= $value('post_deploy_command') ?>" placeholder="php bin/w setup:upgrade && php bin/w server:reload -r">
                 </div>
                 <div class="col-md-3 form-check ms-2">
                     <input type="hidden" name="deploy_force_reset" value="0">

@@ -9,6 +9,9 @@ namespace Weline\Server\Service\Edge\Gateway;
  */
 final class GatewayClient
 {
+    public const UNPROVEN_RESPONSE_ERROR =
+        'WLS Gateway returned an empty, oversized, or incomplete response.';
+
     private const MAX_FRAME_BYTES = 4 * 1024 * 1024;
     private const MAX_ADMIN_ROUTE_ROWS = 2048;
     private const MAX_PROJECT_ROUTE_ROWS = 512;
@@ -27,32 +30,61 @@ final class GatewayClient
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
-    public function request(string $operation, array $payload = []): array
+    public function request(
+        string $operation,
+        array $payload = [],
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        return $this->requestWithChannel('admin', $operation, $payload);
+        return $this->requestWithChannel(
+            'admin',
+            $operation,
+            $payload,
+            $deadlineMonotonic,
+        );
     }
 
     /**
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
-    public function projectRequest(string $operation, array $payload = []): array
+    public function projectRequest(
+        string $operation,
+        array $payload = [],
+        ?float $deadlineMonotonic = null,
+    ): array
     {
-        return $this->requestWithChannel('project', $operation, $payload);
+        return $this->requestWithChannel(
+            'project',
+            $operation,
+            $payload,
+            $deadlineMonotonic,
+        );
     }
 
     /**
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
-    private function requestWithChannel(string $channel, string $operation, array $payload): array
+    private function requestWithChannel(
+        string $channel,
+        string $operation,
+        array $payload,
+        ?float $deadlineMonotonic,
+    ): array
     {
-        $response = $this->requestSingleWithChannel($channel, $operation, $payload);
+        $response = $this->requestSingleWithChannel(
+            $channel,
+            $operation,
+            $payload,
+            $deadlineMonotonic,
+        );
         return $this->collectPaginatedResponse(
             $channel,
             \strtolower(\trim($operation)),
             $payload,
             $response,
+            $deadlineMonotonic,
         );
     }
 
@@ -64,8 +96,10 @@ final class GatewayClient
         string $channel,
         string $operation,
         array $payload,
+        ?float $deadlineMonotonic,
     ): array
     {
+        $this->remainingDeadlineSeconds($deadlineMonotonic);
         if ($channel === 'admin') {
             $hostId = $this->trustedHostId();
             $secret = \strtolower(\trim($this->readStableRegularFile(
@@ -127,13 +161,17 @@ final class GatewayClient
             $endpoint = $this->paths->endpoint($channel);
             $errno = 0;
             $error = '';
+            $connectTimeout = \min(
+                $this->timeoutSeconds,
+                $this->remainingDeadlineSeconds($deadlineMonotonic),
+            );
             $socket = $endpoint['transport'] === 'pipe'
                 ? @\fopen($endpoint['address'], 'r+b')
                 : @\stream_socket_client(
                     $endpoint['address'],
                     $errno,
                     $error,
-                    $this->timeoutSeconds,
+                    $connectTimeout,
                     \STREAM_CLIENT_CONNECT,
                 );
             if (!\is_resource($socket)) {
@@ -143,13 +181,31 @@ final class GatewayClient
                 );
             }
             try {
-                \stream_set_timeout(
+                $this->setStreamDeadlineTimeout(
                     $socket,
-                    (int)\ceil($this->responseTimeoutSeconds($channel, $request['operation'])),
+                    \min(
+                        $this->responseTimeoutSeconds($channel, $request['operation']),
+                        $this->remainingDeadlineSeconds($deadlineMonotonic),
+                    ),
                 );
-                if (!$this->writeAll($socket, $encoded . "\n")) {
+                if (!$this->writeAll(
+                    $socket,
+                    $encoded . "\n",
+                    $deadlineMonotonic,
+                    $this->responseTimeoutSeconds(
+                        $channel,
+                        $request['operation'],
+                    ),
+                )) {
                     throw new \RuntimeException('Unable to send WLS Gateway request.');
                 }
+                $this->setStreamDeadlineTimeout(
+                    $socket,
+                    \min(
+                        $this->responseTimeoutSeconds($channel, $request['operation']),
+                        $this->remainingDeadlineSeconds($deadlineMonotonic),
+                    ),
+                );
                 $line = @\fgets($socket, self::MAX_FRAME_BYTES + 1);
                 if (!\is_string($line)
                     || $line === ''
@@ -157,9 +213,7 @@ final class GatewayClient
                     || \strlen($line) > self::MAX_FRAME_BYTES
                     || \trim($line) === ''
                 ) {
-                    throw new \RuntimeException(
-                        'WLS Gateway returned an empty, oversized, or incomplete response.'
-                    );
+                    throw new \RuntimeException(self::UNPROVEN_RESPONSE_ERROR);
                 }
                 $response = \json_decode($line, true);
                 if (!\is_array($response)
@@ -217,6 +271,7 @@ final class GatewayClient
         string $operation,
         array $requestPayload,
         array $first,
+        ?float $deadlineMonotonic,
     ): array {
         $payload = \is_array($first['payload'] ?? null) ? $first['payload'] : [];
         $page = \is_array($payload['page'] ?? null) ? $payload['page'] : null;
@@ -281,7 +336,12 @@ final class GatewayClient
             }
             $nextPayload = $requestPayload;
             $nextPayload['page_cursor'] = $cursor;
-            $next = $this->requestSingleWithChannel($channel, $operation, $nextPayload);
+            $next = $this->requestSingleWithChannel(
+                $channel,
+                $operation,
+                $nextPayload,
+                $deadlineMonotonic,
+            );
             if (($next['ok'] ?? false) !== true
                 || !\is_array($next['payload'] ?? null)
                 || !\is_array($next['payload']['page'] ?? null)
@@ -1126,11 +1186,23 @@ final class GatewayClient
     }
 
     /** @param resource $stream */
-    private function writeAll($stream, string $contents): bool
+    private function writeAll(
+        $stream,
+        string $contents,
+        ?float $deadlineMonotonic,
+        float $maximumIoSeconds,
+    ): bool
     {
         $offset = 0;
         $length = \strlen($contents);
         while ($offset < $length) {
+            $this->setStreamDeadlineTimeout(
+                $stream,
+                \min(
+                    $maximumIoSeconds,
+                    $this->remainingDeadlineSeconds($deadlineMonotonic),
+                ),
+            );
             $written = @\fwrite($stream, \substr($contents, $offset));
             if (!\is_int($written) || $written < 1) {
                 return false;
@@ -1138,6 +1210,42 @@ final class GatewayClient
             $offset += $written;
         }
         return true;
+    }
+
+    private function remainingDeadlineSeconds(?float $deadlineMonotonic): float
+    {
+        if ($deadlineMonotonic === null) {
+            return \max(
+                0.001,
+                $this->timeoutSeconds,
+                self::LONG_ADMIN_RESPONSE_TIMEOUT_SECONDS,
+                self::LONG_PROJECT_MUTATION_RESPONSE_TIMEOUT_SECONDS,
+            );
+        }
+        if (!\is_finite($deadlineMonotonic)) {
+            throw new \RuntimeException('WLS Gateway request deadline is invalid.');
+        }
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if ($remaining <= 0.0) {
+            throw new \RuntimeException('WLS Gateway request deadline was exhausted.');
+        }
+        return $remaining;
+    }
+
+    /** @param resource $stream */
+    private function setStreamDeadlineTimeout($stream, float $seconds): void
+    {
+        if (!\is_finite($seconds) || $seconds <= 0.0) {
+            throw new \RuntimeException('WLS Gateway stream deadline is invalid.');
+        }
+        $wholeSeconds = (int)\floor($seconds);
+        $microseconds = (int)\floor(($seconds - $wholeSeconds) * 1_000_000);
+        if ($wholeSeconds === 0 && $microseconds === 0) {
+            $microseconds = 1;
+        }
+        if (!@\stream_set_timeout($stream, $wholeSeconds, $microseconds)) {
+            throw new \RuntimeException('Unable to apply the WLS Gateway stream deadline.');
+        }
     }
 
     private function responseTimeoutSeconds(string $channel, string $operation): float
@@ -1183,17 +1291,17 @@ final class GatewayClient
     /**
      * @return array<string,mixed>
      */
-    public function status(): array
+    public function status(?float $deadlineMonotonic = null): array
     {
-        return $this->projectRequest('own-status');
+        return $this->projectRequest('own-status', [], $deadlineMonotonic);
     }
 
     /**
      * @return array<string,mixed>
      */
-    public function administratorStatus(): array
+    public function administratorStatus(?float $deadlineMonotonic = null): array
     {
-        return $this->request('status');
+        return $this->request('status', [], $deadlineMonotonic);
     }
 
     /**

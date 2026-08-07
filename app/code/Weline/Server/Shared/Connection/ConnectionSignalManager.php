@@ -14,7 +14,7 @@ namespace Weline\Server\Shared\Connection;
  */
 class ConnectionSignalManager
 {
-    /** @var array<string, array{status:string,result:mixed,waiters:int,retry_count:int,timestamp:float}> */
+    /** @var array<string, array{status:string,result:mixed,waiters:int,retry_count:int,timestamp:int,monotonic_at:float}> */
     private static array $signals = [];
 
     private const STATUS_IDLE = 'idle';
@@ -43,7 +43,8 @@ class ConnectionSignalManager
                 'result' => null,
                 'waiters' => 0,
                 'retry_count' => 0,
-                'timestamp' => \microtime(true),
+                'timestamp' => \time(),
+                'monotonic_at' => self::monotonicSeconds(),
             ];
 
             return self::executeConnection($key, $connector);
@@ -74,7 +75,8 @@ class ConnectionSignalManager
                 self::$signals[$key]['waiters']--;
                 self::$signals[$key]['status'] = self::STATUS_CONNECTING;
                 self::$signals[$key]['retry_count']++;
-                self::$signals[$key]['timestamp'] = \microtime(true);
+                self::$signals[$key]['timestamp'] = \time();
+                self::$signals[$key]['monotonic_at'] = self::monotonicSeconds();
 
                 return self::executeConnection($key, $connector);
             }
@@ -97,7 +99,8 @@ class ConnectionSignalManager
 
         self::$signals[$key]['status'] = self::STATUS_SUCCESS;
         self::$signals[$key]['result'] = $result;
-        self::$signals[$key]['timestamp'] = \microtime(true);
+        self::$signals[$key]['timestamp'] = \time();
+        self::$signals[$key]['monotonic_at'] = self::monotonicSeconds();
     }
 
     /**
@@ -111,7 +114,8 @@ class ConnectionSignalManager
 
         self::$signals[$key]['status'] = self::STATUS_FAILED;
         self::$signals[$key]['result'] = null;
-        self::$signals[$key]['timestamp'] = \microtime(true);
+        self::$signals[$key]['timestamp'] = \time();
+        self::$signals[$key]['monotonic_at'] = self::monotonicSeconds();
     }
 
     /**
@@ -156,11 +160,16 @@ class ConnectionSignalManager
      */
     private static function cleanupExpiredSignals(): void
     {
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         foreach (self::$signals as $key => $signal) {
-            if ($now - $signal['timestamp'] > self::SIGNAL_TTL) {
+            if ($now - $signal['monotonic_at'] > self::SIGNAL_TTL) {
                 unset(self::$signals[$key]);
             }
         }
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

@@ -791,8 +791,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
             $type = (string)($msg['type'] ?? '');
             switch ($type) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_PING:
-                    $pingTimestamp = (float)($msg['timestamp'] ?? 0.0);
-                    $ipcClient?->send(\Weline\Server\IPC\ControlMessage::pong($pingTimestamp, [
+                    $ipcClient?->send(\Weline\Server\IPC\ControlMessage::pongForPing($msg, [
                         'active_connections' => (int)($stats['accepted'] - $stats['closed']),
                         'accepted' => (int)$stats['accepted'],
                         'handshake_connected' => (int)$stats['handshake_connected'],
@@ -2069,7 +2068,6 @@ function wlsEventHandleStaticFile(
                 $candidate,
                 $etag,
                 $lastModified,
-                \time(),
                 31_536_000,
             );
         }

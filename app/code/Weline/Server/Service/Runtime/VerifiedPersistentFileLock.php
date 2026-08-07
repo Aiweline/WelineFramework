@@ -44,7 +44,7 @@ final class VerifiedPersistentFileLock
         $directoryStatus = @\lstat($directory);
         if (!\is_array($directoryStatus)
             || \is_link($directory)
-            || ((((int)($directoryStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+            || !self::safeDirectoryStatus($directoryStatus)
         ) {
             return false;
         }
@@ -81,12 +81,18 @@ final class VerifiedPersistentFileLock
         try {
             $opened = @\fstat($handle);
             $pathStatus = @\lstat($path);
+            $directoryAfterOpen = @\lstat($directory);
             if (!\is_array($opened)
                 || !\is_array($pathStatus)
+                || !\is_array($directoryAfterOpen)
                 || !self::safeStatus($opened)
+                || !self::safeStatus($pathStatus)
                 || (!$created && (!\is_array($before)
                     || !self::sameIdentity($before, $opened)))
                 || !self::sameIdentity($opened, $pathStatus)
+                || !self::sameDirectoryIdentity($directoryStatus, $directoryAfterOpen)
+                || \is_link($directory)
+                || \is_link($path)
             ) {
                 return false;
             }
@@ -99,25 +105,55 @@ final class VerifiedPersistentFileLock
             ) {
                 return false;
             }
+            $sealedStatus = @\fstat($handle);
+            $sealedPathStatus = @\lstat($path);
+            $directoryAfterSeal = @\lstat($directory);
+            if (!\is_array($sealedStatus)
+                || !\is_array($sealedPathStatus)
+                || !\is_array($directoryAfterSeal)
+                || !self::safeStatus($sealedStatus)
+                || !self::safeStatus($sealedPathStatus)
+                || !self::sameIdentity($sealedStatus, $sealedPathStatus)
+                || !self::sameDirectoryIdentity($directoryStatus, $directoryAfterSeal)
+                || \is_link($directory)
+                || \is_link($path)
+            ) {
+                return false;
+            }
             $deadline = self::monotonicSeconds() + $timeout;
             do {
                 if (@\flock($handle, LOCK_EX | LOCK_NB)) {
                     $locked = true;
                     break;
                 }
+                $remainingSeconds = $deadline - self::monotonicSeconds();
+                if ($remainingSeconds <= 0.0) {
+                    break;
+                }
+                SchedulerSystem::usleep((int)\max(
+                    1,
+                    \min(100_000, \ceil($remainingSeconds * 1_000_000)),
+                ));
                 if (self::monotonicSeconds() >= $deadline) {
                     break;
                 }
-                SchedulerSystem::usleep(100_000);
             } while (true);
             if (!$locked) {
                 return false;
             }
             $lockedStatus = @\fstat($handle);
             $lockedPathStatus = @\lstat($path);
+            $lockedDirectoryStatus = @\lstat($directory);
             if (!\is_array($lockedStatus)
                 || !\is_array($lockedPathStatus)
+                || !\is_array($lockedDirectoryStatus)
+                || !self::safeStatus($lockedStatus)
+                || !self::safeStatus($lockedPathStatus)
+                || !self::sameIdentity($sealedStatus, $lockedStatus)
                 || !self::sameIdentity($lockedStatus, $lockedPathStatus)
+                || !self::sameDirectoryIdentity($directoryStatus, $lockedDirectoryStatus)
+                || \is_link($directory)
+                || \is_link($path)
             ) {
                 return false;
             }
@@ -129,6 +165,13 @@ final class VerifiedPersistentFileLock
                     | JSON_THROW_ON_ERROR,
             );
             if (\strlen($payload) > self::MAX_PAYLOAD_BYTES
+                || !self::lockIdentityRemainsStable(
+                    $handle,
+                    $path,
+                    $directory,
+                    $lockedStatus,
+                    $directoryStatus,
+                )
                 || !@\ftruncate($handle, 0)
                 || @\fseek($handle, 0, SEEK_SET) !== 0
                 || !self::writeAll($handle, $payload)
@@ -139,9 +182,16 @@ final class VerifiedPersistentFileLock
             }
             $published = @\fstat($handle);
             $publishedPath = @\lstat($path);
+            $publishedDirectory = @\lstat($directory);
             if (!\is_array($published)
                 || !\is_array($publishedPath)
+                || !\is_array($publishedDirectory)
+                || !self::safeStatus($published)
+                || !self::safeStatus($publishedPath)
                 || !self::sameIdentity($published, $publishedPath)
+                || !self::sameDirectoryIdentity($directoryStatus, $publishedDirectory)
+                || \is_link($directory)
+                || \is_link($path)
                 || (int)($published['size'] ?? -1) !== \strlen($payload)
             ) {
                 return false;
@@ -181,6 +231,14 @@ final class VerifiedPersistentFileLock
         if (!self::safeStatus($before) || \is_link($path)) {
             return null;
         }
+        $directory = \dirname($path);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || !self::safeDirectoryStatus($directoryBefore)
+            || \is_link($directory)
+        ) {
+            return null;
+        }
         $handle = @\fopen($path, 'r+b');
         if (!\is_resource($handle)) {
             return null;
@@ -189,22 +247,43 @@ final class VerifiedPersistentFileLock
         try {
             $opened = @\fstat($handle);
             $pathStatus = @\lstat($path);
+            $directoryAfterOpen = @\lstat($directory);
             if (!\is_array($opened)
                 || !\is_array($pathStatus)
+                || !\is_array($directoryAfterOpen)
+                || !self::safeStatus($opened)
+                || !self::safeStatus($pathStatus)
                 || !self::sameIdentity($before, $opened)
                 || !self::sameIdentity($opened, $pathStatus)
+                || !self::sameDirectoryIdentity($directoryBefore, $directoryAfterOpen)
+                || \is_link($directory)
+                || \is_link($path)
             ) {
                 return null;
             }
             $locked = @\flock($handle, LOCK_EX | LOCK_NB);
             if (!$locked) {
-                return true;
+                return self::lockIdentityRemainsStable(
+                    $handle,
+                    $path,
+                    $directory,
+                    $opened,
+                    $directoryBefore,
+                ) ? true : null;
             }
             $lockedStatus = @\fstat($handle);
             $lockedPathStatus = @\lstat($path);
+            $lockedDirectoryStatus = @\lstat($directory);
             if (!\is_array($lockedStatus)
                 || !\is_array($lockedPathStatus)
+                || !\is_array($lockedDirectoryStatus)
+                || !self::safeStatus($lockedStatus)
+                || !self::safeStatus($lockedPathStatus)
+                || !self::sameIdentity($opened, $lockedStatus)
                 || !self::sameIdentity($lockedStatus, $lockedPathStatus)
+                || !self::sameDirectoryIdentity($directoryBefore, $lockedDirectoryStatus)
+                || \is_link($directory)
+                || \is_link($path)
             ) {
                 return null;
             }
@@ -225,6 +304,39 @@ final class VerifiedPersistentFileLock
             && (int)($status['nlink'] ?? 0) === 1;
     }
 
+    /** @param array<string|int,mixed> $status */
+    private static function safeDirectoryStatus(array $status): bool
+    {
+        return ((((int)($status['mode'] ?? 0)) & 0170000) === 0040000);
+    }
+
+    /**
+     * @param resource $handle
+     * @param array<string|int,mixed> $expectedFile
+     * @param array<string|int,mixed> $expectedDirectory
+     */
+    private static function lockIdentityRemainsStable(
+        $handle,
+        string $path,
+        string $directory,
+        array $expectedFile,
+        array $expectedDirectory,
+    ): bool {
+        $opened = @\fstat($handle);
+        $pathStatus = @\lstat($path);
+        $directoryStatus = @\lstat($directory);
+        return \is_array($opened)
+            && \is_array($pathStatus)
+            && \is_array($directoryStatus)
+            && self::safeStatus($opened)
+            && self::safeStatus($pathStatus)
+            && self::sameIdentity($expectedFile, $opened)
+            && self::sameIdentity($opened, $pathStatus)
+            && self::sameDirectoryIdentity($expectedDirectory, $directoryStatus)
+            && !\is_link($directory)
+            && !\is_link($path);
+    }
+
     /**
      * @param array<string|int,mixed> $before
      * @param array<string|int,mixed> $after
@@ -232,6 +344,21 @@ final class VerifiedPersistentFileLock
     private static function sameIdentity(array $before, array $after): bool
     {
         foreach (['dev', 'ino', 'mode', 'nlink'] as $field) {
+            if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private static function sameDirectoryIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino', 'mode'] as $field) {
             if ((int)($before[$field] ?? -1) !== (int)($after[$field] ?? -2)) {
                 return false;
             }

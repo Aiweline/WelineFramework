@@ -14,6 +14,11 @@ use Weline\Server\Supervisor\Protocol\SupervisorMessage;
 
 final class SupervisorChildClient implements ChildControlClientInterface, BeforeReadyGuardAwareClientInterface
 {
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
+    }
+
     /**
      * @var resource|null
      */
@@ -218,7 +223,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         $this->leaseId = $assignedLeaseId;
         $this->generation = $assignedGeneration;
         $this->heartbeatSeq = 0;
-        $this->lastHeartbeatAt = \microtime(true);
+        $this->lastHeartbeatAt = self::monotonicSeconds();
         $this->readyConfirmed = false;
         $this->releaseSent = false;
 
@@ -427,7 +432,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
             return true;
         }
 
-        $deadline = $timeBudgetSec > 0.0 ? (\microtime(true) + $timeBudgetSec) : 0.0;
+        $deadline = $timeBudgetSec > 0.0 ? (self::monotonicSeconds() + $timeBudgetSec) : 0.0;
         do {
             $written = $this->flushWriteBufferChunk($deadline);
             if ($written < 0) {
@@ -437,7 +442,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
             if ($written === 0) {
                 break;
             }
-        } while ($this->writeBuffer !== '' && $deadline > 0.0 && \microtime(true) < $deadline);
+        } while ($this->writeBuffer !== '' && $deadline > 0.0 && self::monotonicSeconds() < $deadline);
 
         return $this->writeBuffer === '';
     }
@@ -502,7 +507,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         if ($this->isConnected()) {
             return true;
         }
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (($now - $this->lastReconnectAt) < $this->reconnectIntervalSec) {
             return false;
         }
@@ -673,8 +678,8 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
      */
     private function waitForResponse(string $type, float $timeoutSec): ?array
     {
-        $deadline = \microtime(true) + $timeoutSec;
-        while (\microtime(true) < $deadline) {
+        $deadline = self::monotonicSeconds() + $timeoutSec;
+        while (self::monotonicSeconds() < $deadline) {
             if (\is_callable($this->progressCallback)) {
                 ($this->progressCallback)();
             }
@@ -740,7 +745,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         if ($this->leaseId === '' || $this->generation <= 0 || $this->registerInfo === null) {
             return;
         }
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (($now - $this->lastHeartbeatAt) < $this->heartbeatIntervalSec) {
             return;
         }
@@ -771,7 +776,7 @@ final class SupervisorChildClient implements ChildControlClientInterface, Before
         $write = [$socket];
         $except = [];
         if ($deadline > 0.0) {
-            $remaining = $deadline - \microtime(true);
+            $remaining = $deadline - self::monotonicSeconds();
             if ($remaining <= 0.0) {
                 return 0;
             }

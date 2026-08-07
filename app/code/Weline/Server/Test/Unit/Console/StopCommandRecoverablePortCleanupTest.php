@@ -10,7 +10,7 @@ use Weline\Server\Console\Server\Stop;
 
 final class StopCommandRecoverablePortCleanupTest extends TestCase
 {
-    public function testCleanupRecoverableProcessesWithoutInstanceFileTreatsConfiguredWlsPortAsRecoverableInDryRun(): void
+    public function testDryRunTreatsConfiguredWlsPortAsVerificationHintOnly(): void
     {
         $stop = new class extends Stop {
             protected function hasRecoverableManagedProcessHint(string $name): bool
@@ -51,10 +51,11 @@ final class StopCommandRecoverablePortCleanupTest extends TestCase
         self::assertSame(1, $this->invokeCleanup($stop, 'default', true));
     }
 
-    public function testCleanupRecoverableProcessesWithoutInstanceFileReleasesConfiguredWlsPorts(): void
+    public function testMissingInstanceCleanupNeverTurnsConfiguredPortsIntoKillAuthority(): void
     {
         $stop = new class extends Stop {
-            public array $releasedPorts = [];
+            /** @var list<string> */
+            public array $retiredInstances = [];
 
             protected function hasRecoverableManagedProcessHint(string $name): bool
             {
@@ -92,7 +93,7 @@ final class StopCommandRecoverablePortCleanupTest extends TestCase
             {
                 unset($port);
 
-                return false;
+                return true;
             }
 
             protected function cleanupStaleRecoverableProcessPidFiles(): void
@@ -106,23 +107,35 @@ final class StopCommandRecoverablePortCleanupTest extends TestCase
                 return [];
             }
 
+            protected function retireExactInstanceGeneration(string $name): array
+            {
+                $this->retiredInstances[] = $name;
+
+                return [
+                    'terminated' => 0,
+                    'released' => 0,
+                    'unreleased' => 0,
+                    'reasons' => [],
+                ];
+            }
+
             protected function killRecoverableProcessPrefix(string $prefix): int
             {
                 unset($prefix);
 
-                return 0;
+                throw new \RuntimeException('process-name prefix must not authorize termination');
             }
 
             public function killWlsProcessOnPort(int $port): bool
             {
-                $this->releasedPorts[] = $port;
+                unset($port);
 
-                return true;
+                throw new \RuntimeException('port ownership must not authorize termination');
             }
         };
 
-        self::assertSame(2, $this->invokeCleanup($stop, 'default', false));
-        self::assertSame([80, 443], $stop->releasedPorts);
+        self::assertSame(0, $this->invokeCleanup($stop, 'default', false));
+        self::assertSame(['default'], $stop->retiredInstances);
     }
 
     private function invokeCleanup(Stop $stop, string $instanceName, bool $dryRun): int

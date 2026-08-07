@@ -36,6 +36,12 @@ use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
 class ServerInstanceManager
 {
     private const MAX_ATOMIC_JSON_BYTES = 16 * 1024 * 1024;
+    private const MAX_VALIDATED_JSON_RECOVERY_ARTIFACTS = 128;
+    private const MAX_VALIDATED_JSON_DIRECTORY_ENTRIES = 16384;
+    private const INACTIVE_CLEANUP_LOCK_WAIT_SECONDS = 0.05;
+    private const MAX_INACTIVE_CLEANUP_SELECTED_PIDS = 512;
+    private const MAX_INACTIVE_CLEANUP_EXCEPTION_BYTES = 1_048_576;
+    public const GATEWAY_ENDPOINT_NAMESPACE_LOCK = '.wls-endpoint-capacity.lock';
 
     private readonly MasterLeaseManager $masterLeaseManager;
 
@@ -330,42 +336,16 @@ class ServerInstanceManager
     public function cleanupInactiveInstances(): array
     {
         $cleanedNames = [];
-        $touchedPids = [];
 
         foreach ($this->listRawInstanceNames() as $name) {
-            $rawData = $this->getRawInstanceData($name);
-            if ($rawData === null) {
+            $selected = $this->selectInactiveCleanupEndpoint($name);
+            if ($selected === null) {
                 continue;
             }
 
-            if ($this->isStartLockHeld($name)) {
-                continue;
+            if ($this->purgeInactiveInstanceTransaction($name, $selected)) {
+                $cleanedNames[] = $name;
             }
-
-            // A read/status race must never turn into destructive cleanup. A
-            // fresh lease plus exact managed-process identity is authoritative
-            // even when endpoint metadata was briefly observed before the PID
-            // index was published.
-            if ($this->hasTrackedRunningProcess($name, $rawData, null)) {
-                continue;
-            }
-
-            if (!$this->shouldPurgeStoppedInstanceRecord($rawData)) {
-                $status = $this->getMasterIpcStatusResult($name, 0.5);
-                if ($status['success'] && (bool)($status['data']['running'] ?? false)) {
-                    continue;
-                }
-            }
-
-            foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
-                $touchedPids[$pid] = true;
-            }
-            $this->purgeInactiveInstanceArtifacts($name, $rawData);
-            $cleanedNames[] = $name;
-        }
-
-        if ($touchedPids !== []) {
-            Processer::cleanupStalePidFilesForPids(\array_map('intval', \array_keys($touchedPids)));
         }
 
         return $cleanedNames;
@@ -378,37 +358,526 @@ class ServerInstanceManager
     }
 
     /**
-     * 人工清场：删除停机实例的全部本地记录文件。
+     * Select one immutable endpoint generation before entering the lifecycle
+     * transaction. Both content and file identity are fences: an atomic
+     * publication, an in-place rewrite, or a disappearing endpoint invalidates
+     * this selection and forces the caller to defer cleanup.
+     *
+     * @return array{
+     *   data:array<string,mixed>,
+     *   digest:string,
+     *   identity:array<string|int,mixed>
+     * }|null
      */
-    private function purgeInactiveInstanceArtifacts(string $name, array $rawData): void
+    private function selectInactiveCleanupEndpoint(string $name): ?array
     {
-        foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
-            Processer::removePidFile($processName);
+        $file = $this->getInstanceFile($name);
+        $before = @\lstat($file);
+        if (!\is_array($before)
+            || \is_link($file)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($before['nlink'] ?? 0) !== 1
+        ) {
+            return null;
         }
 
-        $pidFile = $this->getPidFile($name);
-        if (\is_file($pidFile)) {
-            @\unlink($pidFile);
+        try {
+            $data = $this->getRawInstanceData($name);
+            $after = @\lstat($file);
+            if ($data === null
+                || !\is_array($after)
+                || !self::sameValidatedJsonFileState($before, $after)
+            ) {
+                return null;
+            }
+            return [
+                'data' => $data,
+                'digest' => self::inactiveCleanupEndpointDigest($data),
+                'identity' => $after,
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Destructive force-clean is one fenced lifecycle transaction:
+     * lifecycle -> persistent start lock -> endpoint namespace -> endpoint
+     * JSON lock. Every observation is repeated after lock acquisition, and
+     * the endpoint removal itself is a semantic + inode compare-and-swap.
+     *
+     * @param array{
+     *   data:array<string,mixed>,
+     *   digest:string,
+     *   identity:array<string|int,mixed>
+     * } $selected
+     */
+    private function purgeInactiveInstanceTransaction(string $name, array $selected): bool
+    {
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $lifecyclePath = ServerLifecycleOperationLock::pathForInstance($name);
+        $startPath = $lockDir . 'start_' . $name . '.lock';
+        // Force-clean is never a legitimate re-entrant lifecycle action. A
+        // held, unsafe, or indeterminate stable lock therefore vetoes cleanup
+        // before any diagnostic payload can be rewritten. The subsequent
+        // acquisitions close the probe-to-lock race.
+        if (VerifiedPersistentFileLock::isHeld($lifecyclePath) !== false
+            || VerifiedPersistentFileLock::isHeld($startPath) !== false
+        ) {
+            return false;
+        }
+        $lifecycleLock = new ServerLifecycleOperationLock();
+        if (!$lifecycleLock->acquire(
+            $name,
+            'force-clean',
+            self::INACTIVE_CLEANUP_LOCK_WAIT_SECONDS,
+        )) {
+            return false;
         }
 
-        $exceptionFile = MasterProcess::getServiceExceptionFile($name);
-        if (\is_file($exceptionFile)) {
-            @\unlink($exceptionFile);
+        if (!\is_dir($lockDir)
+            && !@\mkdir($lockDir, 0755, true)
+            && !\is_dir($lockDir)
+        ) {
+            $lifecycleLock->release();
+            return false;
+        }
+        $startLock = VerifiedPersistentFileLock::acquire(
+            $startPath,
+            self::INACTIVE_CLEANUP_LOCK_WAIT_SECONDS,
+            static fn(): array => [
+                'pid' => \getmypid(),
+                'instance' => $name,
+                'purpose' => 'force_clean',
+                'started_at' => \date('Y-m-d H:i:s'),
+            ],
+        );
+        if (!\is_resource($startLock)) {
+            $lifecycleLock->release();
+            return false;
         }
 
-        $instanceFile = $this->getInstanceFile($name);
-        if (\is_file($instanceFile)) {
-            @\unlink($instanceFile);
+        try {
+            $current = $this->selectInactiveCleanupEndpoint($name);
+            if (!$this->sameInactiveCleanupEndpoint($selected, $current)) {
+                return false;
+            }
+            $rawData = $current['data'];
+
+            // A fresh lease, a live exact process identity, or a replacement
+            // generation is a cleanup veto. No PID is ever signalled here.
+            if ($this->hasTrackedRunningProcess($name, $rawData, null)) {
+                return false;
+            }
+            if (!$this->shouldPurgeStoppedInstanceRecord($rawData)) {
+                $status = $this->getMasterIpcStatusResult($name, 0.5);
+                if (($status['success'] ?? false) === true
+                    && (bool)($status['data']['running'] ?? false)
+                ) {
+                    return false;
+                }
+                $current = $this->selectInactiveCleanupEndpoint($name);
+                if (!$this->sameInactiveCleanupEndpoint($selected, $current)) {
+                    return false;
+                }
+                $rawData = $current['data'];
+                if ($this->hasTrackedRunningProcess($name, $rawData, null)) {
+                    return false;
+                }
+            }
+
+            $managedLeases = $this->selectInactiveCleanupManagedLeases(
+                $name,
+                $rawData,
+            );
+            if ($managedLeases === null) {
+                return false;
+            }
+            $pidArtifact = $this->selectInactiveCleanupArtifact(
+                $this->getPidFile($name),
+                64,
+                'WLS instance PID sidecar',
+            );
+            $exceptionArtifact = $this->selectInactiveCleanupArtifact(
+                MasterProcess::getServiceExceptionFile($name),
+                self::MAX_INACTIVE_CLEANUP_EXCEPTION_BYTES,
+                'WLS instance exception sidecar',
+            );
+
+            // Re-observe after every potentially slow probe. This is the last
+            // endpoint identity admitted into the CAS removal below.
+            $current = $this->selectInactiveCleanupEndpoint($name);
+            if (!$this->sameInactiveCleanupEndpoint($selected, $current)
+                || $this->hasTrackedRunningProcess($name, $current['data'], null)
+            ) {
+                return false;
+            }
+
+            $file = $this->getInstanceFile($name);
+            $validator = self::inactiveCleanupEndpointValidator($name);
+            $removed = GatewayProjectStateFilesystem::withExclusiveLock(
+                \rtrim($this->getInstanceDir(), '/\\') . DIRECTORY_SEPARATOR
+                    . self::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
+                static function () use (
+                    $file,
+                    $selected,
+                    $validator,
+                ): bool {
+                    $lockedIdentity = @\lstat($file);
+                    if (!\is_array($lockedIdentity)
+                        || !self::sameValidatedJsonFileState(
+                            $selected['identity'],
+                            $lockedIdentity,
+                        )
+                    ) {
+                        return false;
+                    }
+                    return self::removeValidatedJsonFileIf(
+                        $file,
+                        static fn(array $candidate): bool => \hash_equals(
+                            $selected['digest'],
+                            self::inactiveCleanupEndpointDigest($candidate),
+                        ),
+                        $validator,
+                        'WLS inactive instance endpoint',
+                        GatewayProjectEndpointReader::MAX_ENDPOINT_BYTES,
+                        self::INACTIVE_CLEANUP_LOCK_WAIT_SECONDS,
+                    );
+                },
+                waitTimeoutSeconds: self::INACTIVE_CLEANUP_LOCK_WAIT_SECONDS,
+            );
+            if (!$removed) {
+                return false;
+            }
+
+            // Endpoint removal is the commit point. Residue retirement remains
+            // inside the lifecycle/start fence and uses only frozen identities;
+            // a concurrent replacement is preserved instead of name-swept.
+            $this->removeInactiveCleanupArtifact($pidArtifact);
+            $this->removeInactiveCleanupArtifact($exceptionArtifact);
+            foreach ($managedLeases as $lease) {
+                if (Processer::probeProcessState($lease['pid'], true)
+                    !== Processer::PROCESS_STATE_EXITED
+                ) {
+                    continue;
+                }
+                Processer::removeManagedProcessLeaseRecord(
+                    $lease['pid'],
+                    $lease['process_name'],
+                    $lease['launch_id'],
+                );
+            }
+            return true;
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            @\flock($startLock, LOCK_UN);
+            @\fclose($startLock);
+            $lifecycleLock->release();
+        }
+    }
+
+    /**
+     * @param array{
+     *   data:array<string,mixed>,digest:string,identity:array<string|int,mixed>
+     * } $expected
+     * @param array{
+     *   data:array<string,mixed>,digest:string,identity:array<string|int,mixed>
+     * }|null $current
+     */
+    private function sameInactiveCleanupEndpoint(array $expected, ?array $current): bool
+    {
+        return $current !== null
+            && \hash_equals($expected['digest'], $current['digest'])
+            && self::sameValidatedJsonFileState(
+                $expected['identity'],
+                $current['identity'],
+            );
+    }
+
+    /** @param array<string,mixed> $data */
+    private static function inactiveCleanupEndpointDigest(array $data): string
+    {
+        return \hash('sha256', \json_encode(
+            $data,
+            JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_THROW_ON_ERROR,
+        ));
+    }
+
+    /**
+     * Legacy 1.x stopped endpoints did not universally persist `name` beside
+     * their filename. Force-clean may retire such a terminal record, but it
+     * must never accept a conflicting embedded identity or a nameless active
+     * generation. The stricter publication/recovery validator remains
+     * unchanged for every writer path.
+     */
+    private static function inactiveCleanupEndpointValidator(string $name): \Closure
+    {
+        self::assertGatewayEndpointName($name);
+        return static function (string $contents) use ($name): void {
+            try {
+                $endpoint = \json_decode(
+                    $contents,
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+            } catch (\JsonException $exception) {
+                throw new \RuntimeException(
+                    'WLS inactive endpoint JSON is invalid.',
+                    0,
+                    $exception,
+                );
+            }
+            if (!\is_array($endpoint) || \array_is_list($endpoint)) {
+                throw new \RuntimeException(
+                    'WLS inactive endpoint must be one JSON object.',
+                );
+            }
+            $identityPresent = false;
+            foreach (['name', 'instance_name'] as $field) {
+                if (!\array_key_exists($field, $endpoint)) {
+                    continue;
+                }
+                $identityPresent = true;
+                if (!\is_string($endpoint[$field])
+                    || !\hash_equals($name, $endpoint[$field])
+                ) {
+                    throw new \RuntimeException(
+                        'WLS inactive endpoint identity is foreign.',
+                    );
+                }
+            }
+            if (!$identityPresent) {
+                $state = (string)(
+                    $endpoint['lifecycle_state']
+                        ?? $endpoint['startup_phase']
+                        ?? ''
+                );
+                if (!\in_array(
+                    $state,
+                    ['stopped', 'stale_cleanup', 'master_exited'],
+                    true,
+                )) {
+                    throw new \RuntimeException(
+                        'Nameless WLS endpoint is not a terminal legacy record.',
+                    );
+                }
+            }
+            if (\is_array($endpoint['gateway'] ?? null)
+                && \array_key_exists('traffic_mode', $endpoint['gateway'])
+            ) {
+                throw new \RuntimeException(
+                    'Removed WLS endpoint gateway.traffic_mode cannot authorize cleanup.',
+                );
+            }
+        };
+    }
+
+    /**
+     * Freeze only leases whose PID is explicitly part of this endpoint
+     * generation. Name-index discovery remains a liveness veto, but never an
+     * authority to delete another generation sharing the same process name.
+     *
+     * @param array<string,mixed> $rawData
+     * @return list<array{pid:int,process_name:string,launch_id:string}>|null
+     */
+    private function selectInactiveCleanupManagedLeases(
+        string $name,
+        array $rawData,
+    ): ?array {
+        $selectedPids = $this->collectEndpointGenerationPids($rawData);
+        if ($selectedPids === null) {
+            return null;
+        }
+        $allowedTasks = [];
+        foreach ($this->collectManagedProcessNames($name, $rawData) as $pname) {
+            try {
+                $allowedTasks[Processer::getTaskName($pname)] = true;
+            } catch (\Throwable) {
+                // An unparseable legacy name cannot authorize deletion.
+            }
         }
 
-        $instanceLockFile = $instanceFile . '.lock';
-        if (\is_file($instanceLockFile)) {
-            @\unlink($instanceLockFile);
+        $leases = [];
+        foreach ($selectedPids as $pid) {
+            $record = Processer::getProcessRecordByPid($pid);
+            if ($record === []) {
+                if (Processer::probeProcessState($pid, true)
+                    !== Processer::PROCESS_STATE_EXITED
+                ) {
+                    return null;
+                }
+                continue;
+            }
+            $pname = \trim((string)($record['pname'] ?? ''));
+            try {
+                $taskName = $pname !== '' ? Processer::getTaskName($pname) : '';
+            } catch (\Throwable) {
+                $taskName = '';
+            }
+            if ($taskName === '' || !isset($allowedTasks[$taskName])) {
+                // The PID was reused by a foreign identity. Preserve its
+                // record and never reinterpret it as this stopped endpoint.
+                continue;
+            }
+            $processName = \trim((string)(
+                $record['process_name'] ?? $record['task_name'] ?? ''
+            ));
+            $launchId = \trim((string)($record['launch_id'] ?? ''));
+            $exact = $pname !== ''
+                ? Processer::getManagedProcessLeaseRecord($pid, $pname)
+                : [];
+            if ($processName === ''
+                || $launchId === ''
+                || $exact === []
+                || !\hash_equals(
+                    $launchId,
+                    \trim((string)($exact['launch_id'] ?? '')),
+                )
+            ) {
+                if (Processer::probeProcessState($pid, true)
+                    !== Processer::PROCESS_STATE_EXITED
+                ) {
+                    return null;
+                }
+                // Legacy generation-less residue is preserved. It may be
+                // diagnosed later but cannot be destructively selected here.
+                continue;
+            }
+            if (Processer::probeProcessState($pid, true)
+                !== Processer::PROCESS_STATE_EXITED
+            ) {
+                return null;
+            }
+            $leases[] = [
+                'pid' => $pid,
+                'process_name' => $processName,
+                'launch_id' => $launchId,
+            ];
         }
+        return $leases;
+    }
 
-        $resurrectLockFile = $this->getInstanceDir() . $name . '.resurrect.lock';
-        if (\is_file($resurrectLockFile)) {
-            @\unlink($resurrectLockFile);
+    /**
+     * @param array<string,mixed> $rawData
+     * @return list<int>|null
+     */
+    private function collectEndpointGenerationPids(array $rawData): ?array
+    {
+        $pids = [];
+        $add = static function (mixed $candidate) use (&$pids): bool {
+            $pid = (int)$candidate;
+            if ($pid <= 0) {
+                return true;
+            }
+            $pids[$pid] = true;
+            return \count($pids) <= self::MAX_INACTIVE_CLEANUP_SELECTED_PIDS;
+        };
+        foreach (['pid', 'launcher_pid', 'master_pid', 'master_exited_pid'] as $field) {
+            if (!$add($rawData[$field] ?? 0)) {
+                return null;
+            }
+        }
+        foreach ((array)($rawData['retained_pids'] ?? []) as $pid) {
+            if (!$add($pid)) {
+                return null;
+            }
+        }
+        foreach ((array)($rawData['startup_events'] ?? []) as $event) {
+            if (\is_array($event) && !$add($event['pid'] ?? 0)) {
+                return null;
+            }
+        }
+        $failureContext = $rawData['startup_failure_context'] ?? null;
+        if (\is_array($failureContext) && !$add($failureContext['pid'] ?? 0)) {
+            return null;
+        }
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * @return array{
+     *   path:string,label:string,maximum_bytes:int,
+     *   identity:array<string|int,mixed>,digest:string
+     * }|null
+     */
+    private function selectInactiveCleanupArtifact(
+        string $path,
+        int $maximumBytes,
+        string $label,
+    ): ?array {
+        try {
+            $before = @\lstat($path);
+            if (!\is_array($before)) {
+                return null;
+            }
+            $contents = GatewayProjectStateFilesystem::read(
+                $path,
+                $maximumBytes,
+                $label,
+                true,
+            );
+            $after = @\lstat($path);
+            if (!\is_array($after)
+                || !self::sameValidatedJsonFileState($before, $after)
+            ) {
+                return null;
+            }
+            return [
+                'path' => $path,
+                'label' => $label,
+                'maximum_bytes' => $maximumBytes,
+                'identity' => $after,
+                'digest' => \hash('sha256', $contents),
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array{
+     *   path:string,label:string,maximum_bytes:int,
+     *   identity:array<string|int,mixed>,digest:string
+     * }|null $selected
+     */
+    private function removeInactiveCleanupArtifact(?array $selected): void
+    {
+        if ($selected === null) {
+            return;
+        }
+        try {
+            $contents = GatewayProjectStateFilesystem::read(
+                $selected['path'],
+                $selected['maximum_bytes'],
+                $selected['label'],
+                true,
+            );
+            $identity = @\lstat($selected['path']);
+            if (!\is_array($identity)
+                || !self::sameValidatedJsonFileState(
+                    $selected['identity'],
+                    $identity,
+                )
+                || !\hash_equals(
+                    $selected['digest'],
+                    \hash('sha256', $contents),
+                )
+            ) {
+                return;
+            }
+            GatewayProjectStateFilesystem::removeRegular(
+                $selected['path'],
+                $selected['label'],
+                $identity,
+            );
+        } catch (\Throwable) {
+            // Endpoint removal is already committed. Unsafe/replaced residue
+            // is retained as evidence instead of broadening the deletion.
         }
     }
 
@@ -585,11 +1054,14 @@ class ServerInstanceManager
         if (!\is_file($file)) {
             return;
         }
-        $this->atomicUpdateJson($file, function (array $data) use ($masterPid): array {
+        $updated = $this->atomicUpdateJson($file, function (array $data) use ($masterPid): array {
             $data['master_pid'] = $masterPid;
             $data['pid'] = $masterPid;
             return $this->filterEndpointRecord($data);
         });
+        if (!$updated) {
+            throw new \RuntimeException('Failed to atomically publish WLS Master PID.');
+        }
     }
 
     /**
@@ -740,7 +1212,7 @@ class ServerInstanceManager
 
         $superseded = false;
 
-        $this->atomicUpdateJson($file, function (array $data) use (
+        $exitStatePublished = $this->atomicUpdateJson($file, function (array $data) use (
             $masterPid,
             $exitTimestamp,
             $exitAt,
@@ -764,6 +1236,11 @@ class ServerInstanceManager
 
             return $this->filterEndpointRecord($data);
         });
+        if (!$exitStatePublished) {
+            // The old endpoint is the only remaining recovery evidence. Do not
+            // reinterpret it as a post-exit snapshot or attempt stale cleanup.
+            throw new \RuntimeException('Failed to atomically publish WLS Master exit state.');
+        }
 
         if ($superseded || $this->hasSupersedingLiveMasterGeneration($name, $masterPid)) {
             return true;
@@ -785,7 +1262,7 @@ class ServerInstanceManager
             return !$cleaned;
         }
 
-        $this->atomicUpdateJson($file, function (array $data) use (
+        $retainedStatePublished = $this->atomicUpdateJson($file, function (array $data) use (
             $runningPids,
             $exitTimestamp,
             $exitAt,
@@ -807,6 +1284,11 @@ class ServerInstanceManager
 
             return $this->filterEndpointRecord($data);
         });
+        if (!$retainedStatePublished) {
+            throw new \RuntimeException(
+                'Failed to atomically publish retained WLS child process state.'
+            );
+        }
 
         return true;
     }
@@ -1270,6 +1752,13 @@ class ServerInstanceManager
             }
 
             $trackedPids = $this->collectTrackedPids($name, $rawData);
+            if (!$this->markInstanceRecordStopped(
+                $this->getInstanceFile($name),
+                'stale_cleanup'
+            )) {
+                return false;
+            }
+
             foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
                 Processer::removePidFile($processName);
             }
@@ -1284,7 +1773,6 @@ class ServerInstanceManager
                 @\unlink($exceptionFile);
             }
 
-            $this->markInstanceRecordStopped($this->getInstanceFile($name), 'stale_cleanup');
             Processer::cleanupStalePidFilesForPids($trackedPids);
             return true;
         } finally {
@@ -1689,9 +2177,39 @@ class ServerInstanceManager
     /**
      * 原子更新 JSON 文件
      */
-    private function atomicUpdateJson(string $file, callable $updater): bool
+    protected function atomicUpdateJson(string $file, callable $updater): bool
     {
-        return self::updateJsonFileAtomically($file, $updater);
+        $deadlineMonotonic = (\hrtime(true) / 1_000_000_000) + 5.0;
+        $recoveryValidator = self::endpointRecoveryValidator($file);
+        try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                \rtrim($this->getInstanceDir(), '/\\') . DIRECTORY_SEPARATOR
+                    . self::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
+                static function () use (
+                    $file,
+                    $updater,
+                    $deadlineMonotonic,
+                    $recoveryValidator,
+                ): bool {
+                    $remaining = $deadlineMonotonic
+                        - (\hrtime(true) / 1_000_000_000);
+                    if ($remaining <= 0.0) {
+                        throw new \RuntimeException(
+                            'WLS endpoint namespace update deadline was exhausted.',
+                        );
+                    }
+                    return self::updateJsonFileAtomicallyUnlocked(
+                        $file,
+                        $updater,
+                        $remaining,
+                        $recoveryValidator,
+                    );
+                },
+                waitTimeoutSeconds: 5.0,
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     // ========================================================================
@@ -2023,10 +2541,14 @@ class ServerInstanceManager
      */
     public function saveInstance(string $name, array $info): void
     {
+        self::assertGatewayEndpointName($name);
         $file = $this->getInstanceFile($name);
         $dir = $this->getInstanceDir();
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
+        if (!\is_dir($dir)
+            && !@\mkdir($dir, 0755, true)
+            && !\is_dir($dir)
+        ) {
+            throw new \RuntimeException('Unable to create WLS instance endpoint directory.');
         }
 
         $data = \array_merge([
@@ -2043,11 +2565,180 @@ class ServerInstanceManager
             'os' => PHP_OS,
         ], $info);
 
-        $this->atomicUpdateJson($file, fn(array $existing): array => $this->mergeInstanceRecordData($existing, $data));
+        $recoveryValidator = self::endpointRecoveryValidator($file, $name);
+        $publish = function () use ($file, $data, $recoveryValidator): bool {
+            try {
+                return self::updateJsonFileAtomicallyUnlocked(
+                    $file,
+                    fn(array $existing): array => $this->mergeInstanceRecordData(
+                        $existing,
+                        $data,
+                    ),
+                    recoveryValidator: $recoveryValidator,
+                );
+            } catch (\Throwable) {
+                return false;
+            }
+        };
+        $gateway = \is_array($data['gateway'] ?? null) ? $data['gateway'] : [];
+        $requestedEdgeMode = \strtolower(\trim((string)(
+            $gateway['requested_mode'] ?? ''
+        )));
+        $wls2Endpoint = \in_array($requestedEdgeMode, ['auto', 'gateway', 'wls'], true);
+        $published = $wls2Endpoint
+            ? GatewayProjectStateFilesystem::withExclusiveLock(
+                \rtrim($dir, '/\\') . DIRECTORY_SEPARATOR
+                    . self::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
+                function () use ($dir, $name, $publish): bool {
+                    $this->assertGatewayEndpointPublicationCapacity($dir, $name);
+                    return $publish();
+                },
+            )
+            : $publish();
+        if (!$published) {
+            throw new \RuntimeException('Failed to publish WLS instance endpoint.');
+        }
+    }
+
+    private static function assertGatewayEndpointName(string $name): void
+    {
+        if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $name) !== 1) {
+            throw new \InvalidArgumentException('WLS instance endpoint name is invalid.');
+        }
+    }
+
+    private static function endpointRecoveryValidator(
+        string $file,
+        ?string $expectedName = null,
+    ): \Closure {
+        $expectedName ??= \str_ends_with(\basename($file), '.json')
+            ? \substr(\basename($file), 0, -5)
+            : '';
+        self::assertGatewayEndpointName($expectedName);
+
+        return static function (string $contents) use ($expectedName): void {
+            if (\strlen($contents) > GatewayProjectEndpointReader::MAX_ENDPOINT_BYTES) {
+                throw new \RuntimeException(
+                    'WLS endpoint recovery target exceeds its fixed size limit.',
+                );
+            }
+            try {
+                $endpoint = \json_decode(
+                    $contents,
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+            } catch (\JsonException $exception) {
+                throw new \RuntimeException(
+                    'WLS endpoint recovery target JSON is invalid.',
+                    0,
+                    $exception,
+                );
+            }
+            if (!\is_array($endpoint) || \array_is_list($endpoint)) {
+                throw new \RuntimeException(
+                    'WLS endpoint recovery target must be one JSON object.',
+                );
+            }
+            $identities = [];
+            foreach (['name', 'instance_name'] as $field) {
+                if (!\array_key_exists($field, $endpoint)) {
+                    continue;
+                }
+                if (!\is_string($endpoint[$field])
+                    || !\hash_equals($expectedName, $endpoint[$field])
+                ) {
+                    throw new \RuntimeException(
+                        'WLS endpoint recovery target identity is foreign.',
+                    );
+                }
+                $identities[] = $endpoint[$field];
+            }
+            if ($identities === []) {
+                throw new \RuntimeException(
+                    'WLS endpoint recovery target identity is missing.',
+                );
+            }
+            if (\is_array($endpoint['gateway'] ?? null)
+                && \array_key_exists('traffic_mode', $endpoint['gateway'])
+            ) {
+                throw new \RuntimeException(
+                    'Removed WLS endpoint gateway.traffic_mode cannot authorize recovery.',
+                );
+            }
+        };
+    }
+
+    /**
+     * The gateway reader is deliberately fail-closed at 256 endpoint files.
+     * Reserve that semantic capacity under one directory lock before creating
+     * a new endpoint so a successful server:start cannot poison every later
+     * registration/renewal scan with endpoint 257. Replacing an existing
+     * endpoint consumes no additional slot.
+     */
+    private function assertGatewayEndpointPublicationCapacity(
+        string $directory,
+        string $targetName,
+    ): void {
+        $directoryStatus = @\lstat($directory);
+        if (!\is_array($directoryStatus)
+            || \is_link($directory)
+            || ((((int)($directoryStatus['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException('WLS instance endpoint directory is unsafe.');
+        }
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException('Unable to enumerate WLS instance endpoint capacity.');
+        }
+        $rawEntries = 0;
+        $endpointEntries = 0;
+        $targetExists = false;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                if (++$rawEntries > GatewayProjectEndpointReader::MAX_RAW_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        'WLS instance endpoint directory exceeds its raw capacity.',
+                    );
+                }
+                if (!\str_ends_with($leaf, '.json')) {
+                    continue;
+                }
+                $instanceName = \substr($leaf, 0, -5);
+                self::assertGatewayEndpointName($instanceName);
+                if (++$endpointEntries > GatewayProjectEndpointReader::MAX_ENDPOINT_ENTRIES) {
+                    throw new \RuntimeException(
+                        'WLS instance endpoint directory exceeds its semantic capacity.',
+                    );
+                }
+                GatewayProjectStateFilesystem::size(
+                    \rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $leaf,
+                    GatewayProjectEndpointReader::MAX_ENDPOINT_BYTES,
+                    'WLS instance endpoint capacity entry',
+                );
+                if (\hash_equals($targetName, $instanceName)) {
+                    $targetExists = true;
+                }
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        if (!$targetExists
+            && $endpointEntries >= GatewayProjectEndpointReader::MAX_ENDPOINT_ENTRIES
+        ) {
+            throw new \RuntimeException(
+                'WLS instance endpoint publication exceeds its semantic capacity.',
+            );
+        }
     }
 
     public function getPidFile(string $name): string
     {
+        self::assertGatewayEndpointName($name);
         return $this->getInstanceDir() . $name . '.pid';
     }
 
@@ -2068,17 +2759,77 @@ class ServerInstanceManager
      */
     public function updatePid(string $name, int $pid): void
     {
+        self::assertGatewayEndpointName($name);
+        if ($pid <= 0) {
+            throw new \InvalidArgumentException('WLS PID must be positive.');
+        }
         $file = $this->getInstanceFile($name);
         if (!\is_file($file)) {
             return;
         }
 
-        $this->atomicUpdateJson($file, function (array $data) use ($pid): array {
+        $previousPid = 0;
+        $updated = $this->atomicUpdateJson($file, function (array $data) use (
+            $pid,
+            &$previousPid,
+        ): array {
+            $previousPid = (int)($data['pid'] ?? 0);
             $data['pid'] = $pid;
             return $data;
         });
+        if (!$updated) {
+            throw new \RuntimeException('Failed to atomically publish WLS PID.');
+        }
 
-        @\file_put_contents($this->getPidFile($name), (string) $pid);
+        $pidFile = $this->getPidFile($name);
+        $expected = (string)$pid . PHP_EOL;
+        try {
+            GatewayProjectStateFilesystem::withExclusiveLock(
+                $pidFile . '.lock',
+                static function () use ($pidFile, $expected, $pid, $previousPid): void {
+                    GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                        $pidFile,
+                        32,
+                        'WLS PID sidecar',
+                        static function (string $contents) use ($pid, $previousPid): void {
+                            $normalized = \trim($contents);
+                            $parsed = (int)$normalized;
+                            if ($parsed <= 0
+                                || !\hash_equals((string)$parsed, $normalized)
+                                || \preg_match('/\A[1-9][0-9]{0,18}\z/D', $normalized) !== 1
+                                || !\in_array($parsed, [$previousPid, $pid], true)
+                            ) {
+                                throw new \RuntimeException(
+                                    'WLS PID sidecar recovery target is invalid.',
+                                );
+                            }
+                        },
+                    );
+                    GatewayProjectStateFilesystem::atomicWrite(
+                        $pidFile,
+                        $expected,
+                        0600,
+                    );
+                    $published = GatewayProjectStateFilesystem::read(
+                        $pidFile,
+                        32,
+                        'WLS PID sidecar',
+                    );
+                    if (!\hash_equals($expected, $published)) {
+                        throw new \RuntimeException(
+                            'Published WLS PID sidecar did not verify.',
+                        );
+                    }
+                },
+                waitTimeoutSeconds: 5.0,
+            );
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                'Failed to publish WLS PID sidecar: ' . $throwable->getMessage(),
+                0,
+                $throwable,
+            );
+        }
     }
 
     /**
@@ -2143,7 +2894,11 @@ class ServerInstanceManager
     /**
      * 静态原子写入 JSON 文件（带排他锁）
      */
-    public static function atomicWriteJsonStatic(string $file, array $data, int $timeout = 5): bool
+    public static function atomicWriteJsonStatic(
+        string $file,
+        array $data,
+        float $timeout = 5.0,
+    ): bool
     {
         $dir = \dirname($file);
         if ($timeout <= 0
@@ -2152,23 +2907,36 @@ class ServerInstanceManager
             return false;
         }
         try {
-            $json = \json_encode(
-                $data,
-                JSON_PRETTY_PRINT
-                    | JSON_UNESCAPED_UNICODE
-                    | JSON_UNESCAPED_SLASHES
-                    | JSON_THROW_ON_ERROR,
-            );
-            if (\strlen($json) > self::MAX_ATOMIC_JSON_BYTES) {
-                return false;
+            $timeout = \min(300.0, (float)$timeout);
+            $deadlineMonotonic = (\hrtime(true) / 1_000_000_000) + $timeout;
+            $namespaceLock = self::gatewayEndpointNamespaceLockForFile($file);
+            if ($namespaceLock === null) {
+                return self::atomicWriteJsonStaticUnlocked($file, $data, $timeout);
             }
+            $recoveryValidator = self::endpointRecoveryValidator($file);
             return GatewayProjectStateFilesystem::withExclusiveLock(
-                $file . '.lock',
-                static function () use ($file, $json): bool {
-                    GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
-                    return true;
+                $namespaceLock,
+                static function () use (
+                    $file,
+                    $data,
+                    $deadlineMonotonic,
+                    $recoveryValidator,
+                ): bool {
+                    $remaining = $deadlineMonotonic
+                        - (\hrtime(true) / 1_000_000_000);
+                    if ($remaining <= 0.0) {
+                        throw new \RuntimeException(
+                            'WLS endpoint namespace publication deadline was exhausted.',
+                        );
+                    }
+                    return self::atomicWriteJsonStaticUnlocked(
+                        $file,
+                        $data,
+                        $remaining,
+                        $recoveryValidator,
+                    );
                 },
-                waitTimeoutSeconds: \min(300.0, (float)$timeout),
+                waitTimeoutSeconds: $timeout,
             );
         } catch (\Throwable) {
             return false;
@@ -2178,7 +2946,11 @@ class ServerInstanceManager
     /**
      * 静态原子更新 JSON 文件（带排他锁）
      */
-    public static function updateJsonFileAtomically(string $file, callable $modifier, int $timeout = 5): bool
+    public static function updateJsonFileAtomically(
+        string $file,
+        callable $modifier,
+        float $timeout = 5.0,
+    ): bool
     {
         $dir = \dirname($file);
         if ($timeout <= 0
@@ -2187,49 +2959,929 @@ class ServerInstanceManager
             return false;
         }
         try {
+            $timeout = \min(300.0, (float)$timeout);
+            $deadlineMonotonic = (\hrtime(true) / 1_000_000_000) + $timeout;
+            $namespaceLock = self::gatewayEndpointNamespaceLockForFile($file);
+            if ($namespaceLock === null) {
+                return self::updateJsonFileAtomicallyUnlocked(
+                    $file,
+                    $modifier,
+                    $timeout,
+                );
+            }
+            $recoveryValidator = self::endpointRecoveryValidator($file);
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $namespaceLock,
+                static function () use (
+                    $file,
+                    $modifier,
+                    $deadlineMonotonic,
+                    $recoveryValidator,
+                ): bool {
+                    $remaining = $deadlineMonotonic
+                        - (\hrtime(true) / 1_000_000_000);
+                    if ($remaining <= 0.0) {
+                        throw new \RuntimeException(
+                            'WLS endpoint namespace update deadline was exhausted.',
+                        );
+                    }
+                    return self::updateJsonFileAtomicallyUnlocked(
+                        $file,
+                        $modifier,
+                        $remaining,
+                        $recoveryValidator,
+                    );
+                },
+                waitTimeoutSeconds: $timeout,
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Read one bounded JSON authority without following links. Recovery is a
+     * writer concern and is intentionally not triggered by status/peek reads.
+     *
+     * @param \Closure(string):void $validator
+     * @return array<string, mixed>|null
+     */
+    public static function readValidatedJsonStatic(
+        string $file,
+        \Closure $validator,
+        string $label,
+        int $maximumBytes = self::MAX_ATOMIC_JSON_BYTES,
+    ): ?array {
+        if ($label === '' || $maximumBytes < 1) {
+            throw new \InvalidArgumentException(
+                'Validated WLS JSON read boundary is invalid.'
+            );
+        }
+        $raw = GatewayProjectStateFilesystem::readOptional(
+            $file,
+            $maximumBytes,
+            $label,
+        );
+        if ($raw === null) {
+            return null;
+        }
+        $validator($raw);
+        $decoded = \json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        if (!\is_array($decoded)) {
+            throw new \RuntimeException($label . ' is not a JSON object.');
+        }
+        return $decoded;
+    }
+
+    /**
+     * Publish a semantically validated JSON authority and converge exact old
+     * `.tmp.<pid>` plus current atomic-write recovery artifacts under one
+     * stable target lock.
+     *
+     * @param \Closure(string):void $validator
+     */
+    public static function atomicWriteValidatedJsonStatic(
+        string $file,
+        array $data,
+        \Closure $validator,
+        string $label,
+        int $maximumBytes = self::MAX_ATOMIC_JSON_BYTES,
+        float $timeout = 5.0,
+    ): bool {
+        $json = self::encodeValidatedJson($data, $validator, $label, $maximumBytes);
+        if ($json === null
+            || !self::prepareValidatedJsonDirectory($file, $timeout)
+        ) {
+            return false;
+        }
+        try {
             return GatewayProjectStateFilesystem::withExclusiveLock(
                 $file . '.lock',
-                static function () use ($file, $modifier): bool {
-                    $content = GatewayProjectStateFilesystem::readOptional(
+                static function () use (
+                    $file,
+                    $json,
+                    $validator,
+                    $label,
+                    $maximumBytes,
+                ): bool {
+                    self::recoverValidatedJsonArtifactsLocked(
                         $file,
-                        self::MAX_ATOMIC_JSON_BYTES,
-                        'WLS atomic JSON state',
-                        true,
+                        $validator,
+                        $label,
+                        $maximumBytes,
+                    );
+                    GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+                    self::recoverValidatedJsonArtifactsLocked(
+                        $file,
+                        $validator,
+                        $label,
+                        $maximumBytes,
+                    );
+                    $published = GatewayProjectStateFilesystem::read(
+                        $file,
+                        $maximumBytes,
+                        $label,
+                    );
+                    $validator($published);
+                    if (!\hash_equals($json, $published)) {
+                        throw new \RuntimeException(
+                            $label . ' publication did not preserve the selected generation.'
+                        );
+                    }
+                    return true;
+                },
+                waitTimeoutSeconds: \min(300.0, $timeout),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param callable(array<string,mixed>):array<string,mixed> $modifier
+     * @param \Closure(string):void $validator
+     */
+    public static function updateValidatedJsonFileAtomically(
+        string $file,
+        callable $modifier,
+        \Closure $validator,
+        string $label,
+        int $maximumBytes = self::MAX_ATOMIC_JSON_BYTES,
+        float $timeout = 5.0,
+    ): bool {
+        if (!self::prepareValidatedJsonDirectory($file, $timeout)) {
+            return false;
+        }
+        try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $file . '.lock',
+                static function () use (
+                    $file,
+                    $modifier,
+                    $validator,
+                    $label,
+                    $maximumBytes,
+                ): bool {
+                    self::recoverValidatedJsonArtifactsLocked(
+                        $file,
+                        $validator,
+                        $label,
+                        $maximumBytes,
+                    );
+                    $raw = GatewayProjectStateFilesystem::readOptional(
+                        $file,
+                        $maximumBytes,
+                        $label,
                     );
                     $data = [];
-                    if ($content !== null && $content !== '') {
+                    if ($raw !== null) {
+                        $validator($raw);
                         $decoded = \json_decode(
-                            $content,
+                            $raw,
                             true,
                             512,
                             JSON_THROW_ON_ERROR,
                         );
                         if (!\is_array($decoded)) {
-                            throw new \RuntimeException('WLS atomic JSON state is not an object or array.');
+                            throw new \RuntimeException(
+                                $label . ' is not a JSON object.'
+                            );
                         }
                         $data = $decoded;
                     }
-                    $newData = $modifier($data);
-                    if (!\is_array($newData)) {
-                        throw new \RuntimeException('WLS atomic JSON modifier returned invalid state.');
+                    $next = $modifier($data);
+                    if (!\is_array($next)) {
+                        throw new \RuntimeException(
+                            $label . ' modifier returned invalid state.'
+                        );
                     }
-                    $json = \json_encode(
-                        $newData,
-                        JSON_PRETTY_PRINT
-                            | JSON_UNESCAPED_UNICODE
-                            | JSON_UNESCAPED_SLASHES
-                            | JSON_THROW_ON_ERROR,
+                    if ($next === $data) {
+                        return true;
+                    }
+                    $json = self::encodeValidatedJson(
+                        $next,
+                        $validator,
+                        $label,
+                        $maximumBytes,
                     );
-                    if (\strlen($json) > self::MAX_ATOMIC_JSON_BYTES) {
-                        throw new \RuntimeException('WLS atomic JSON state exceeds its fixed size limit.');
+                    if ($json === null) {
+                        throw new \RuntimeException(
+                            $label . ' could not be encoded safely.'
+                        );
+                    }
+                    if ($raw !== null && \hash_equals($raw, $json)) {
+                        return true;
                     }
                     GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+                    self::recoverValidatedJsonArtifactsLocked(
+                        $file,
+                        $validator,
+                        $label,
+                        $maximumBytes,
+                    );
+                    $published = GatewayProjectStateFilesystem::read(
+                        $file,
+                        $maximumBytes,
+                        $label,
+                    );
+                    $validator($published);
+                    if (!\hash_equals($json, $published)) {
+                        throw new \RuntimeException(
+                            $label . ' update did not preserve the selected generation.'
+                        );
+                    }
                     return true;
                 },
-                waitTimeoutSeconds: \min(300.0, (float)$timeout),
+                waitTimeoutSeconds: \min(300.0, $timeout),
             );
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Remove only the exact semantic generation selected by the caller.
+     *
+     * @param \Closure(array<string,mixed>):bool $predicate
+     * @param \Closure(string):void $validator
+     */
+    public static function removeValidatedJsonFileIf(
+        string $file,
+        \Closure $predicate,
+        \Closure $validator,
+        string $label,
+        int $maximumBytes = self::MAX_ATOMIC_JSON_BYTES,
+        float $timeout = 5.0,
+    ): bool {
+        if (!self::prepareValidatedJsonDirectory($file, $timeout)) {
+            return false;
+        }
+        try {
+            return GatewayProjectStateFilesystem::withExclusiveLock(
+                $file . '.lock',
+                static function () use (
+                    $file,
+                    $predicate,
+                    $validator,
+                    $label,
+                    $maximumBytes,
+                ): bool {
+                    self::recoverValidatedJsonArtifactsLocked(
+                        $file,
+                        $validator,
+                        $label,
+                        $maximumBytes,
+                    );
+                    $selected = @\lstat($file);
+                    if (!\is_array($selected)) {
+                        if (\file_exists($file) || \is_link($file)) {
+                            throw new \RuntimeException(
+                                $label . ' removal target is indeterminate.'
+                            );
+                        }
+                        return true;
+                    }
+                    $raw = GatewayProjectStateFilesystem::read(
+                        $file,
+                        $maximumBytes,
+                        $label,
+                    );
+                    $validator($raw);
+                    $decoded = \json_decode(
+                        $raw,
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR,
+                    );
+                    if (!\is_array($decoded) || !$predicate($decoded)) {
+                        return false;
+                    }
+                    $recheckedRaw = GatewayProjectStateFilesystem::read(
+                        $file,
+                        $maximumBytes,
+                        $label,
+                    );
+                    $validator($recheckedRaw);
+                    $rechecked = @\lstat($file);
+                    if (!\hash_equals($raw, $recheckedRaw)
+                        || !\is_array($rechecked)
+                        || !self::sameValidatedJsonFileState($selected, $rechecked)
+                    ) {
+                        throw new \RuntimeException(
+                            $label . ' generation changed before removal.'
+                        );
+                    }
+                    if (!GatewayProjectStateFilesystem::removeRegular(
+                        $file,
+                        $label,
+                        $rechecked,
+                    )) {
+                        throw new \RuntimeException(
+                            'Unable to remove ' . $label . '.'
+                        );
+                    }
+                    return true;
+                },
+                waitTimeoutSeconds: \min(300.0, $timeout),
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private static function prepareValidatedJsonDirectory(
+        string $file,
+        float $timeout,
+    ): bool {
+        if ($file === ''
+            || \str_contains($file, "\0")
+            || !\is_finite($timeout)
+            || $timeout <= 0.0
+            || $timeout > 300.0
+        ) {
+            return false;
+        }
+        $directory = \dirname($file);
+        if (!\is_dir($directory)
+            && !@\mkdir($directory, 0755, true)
+            && !\is_dir($directory)
+        ) {
+            return false;
+        }
+        $status = @\lstat($directory);
+        return \is_array($status)
+            && !\is_link($directory)
+            && ((((int)($status['mode'] ?? 0)) & 0170000) === 0040000);
+    }
+
+    /**
+     * @param \Closure(string):void $validator
+     */
+    private static function encodeValidatedJson(
+        array $data,
+        \Closure $validator,
+        string $label,
+        int $maximumBytes,
+    ): ?string {
+        if ($label === '' || $maximumBytes < 1) {
+            return null;
+        }
+        try {
+            $json = \json_encode(
+                $data,
+                JSON_PRETTY_PRINT
+                    | JSON_UNESCAPED_UNICODE
+                    | JSON_UNESCAPED_SLASHES
+                    | JSON_THROW_ON_ERROR,
+            );
+            if (\strlen($json) > $maximumBytes) {
+                return null;
+            }
+            $validator($json);
+            return $json;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param \Closure(string):void $validator
+     */
+    private static function recoverValidatedJsonArtifactsLocked(
+        string $target,
+        \Closure $validator,
+        string $label,
+        int $maximumBytes,
+    ): void {
+        $selected = self::validatedJsonRecoverySnapshot(
+            $target,
+            $validator,
+            $label,
+            $maximumBytes,
+        );
+        if ($selected['artifacts'] === []) {
+            if ($selected['target_status'] !== null && !$selected['target_valid']) {
+                throw new \RuntimeException($label . ' committed target is invalid.');
+            }
+            return;
+        }
+        $rechecked = self::validatedJsonRecoverySnapshot(
+            $target,
+            $validator,
+            $label,
+            $maximumBytes,
+        );
+        self::assertEquivalentValidatedJsonRecoverySnapshots(
+            $selected,
+            $rechecked,
+            $label,
+        );
+
+        if (!$rechecked['target_valid']) {
+            $backups = \array_values(\array_filter(
+                $rechecked['artifacts'],
+                static fn(array $artifact): bool => $artifact['kind'] === 'atomic backup',
+            ));
+            if (\count($backups) !== 1) {
+                if ($rechecked['target_status'] !== null || $backups !== []) {
+                    throw new \RuntimeException(
+                        $label . ' has no unambiguous valid backup generation.'
+                    );
+                }
+            } else {
+                $backup = $backups[0];
+                GatewayProjectStateFilesystem::restoreVerifiedAtomicBackup(
+                    $backup['path'],
+                    $target,
+                    $backup['identity'],
+                    $rechecked['target_status'],
+                    $backup['digest'],
+                    $backup['size'],
+                    0600,
+                );
+                $rechecked = self::validatedJsonRecoverySnapshot(
+                    $target,
+                    $validator,
+                    $label,
+                    $maximumBytes,
+                );
+                if (!$rechecked['target_valid']) {
+                    throw new \RuntimeException(
+                        $label . ' backup restoration did not publish a valid target.'
+                    );
+                }
+            }
+        }
+
+        $targetIdentity = $rechecked['target_status'];
+        foreach ($rechecked['artifacts'] as $artifact) {
+            $currentTarget = @\lstat($target);
+            if (!self::sameOptionalValidatedJsonFileState(
+                $targetIdentity,
+                \is_array($currentTarget) ? $currentTarget : null,
+            )) {
+                throw new \RuntimeException(
+                    $label . ' target changed during recovery cleanup.'
+                );
+            }
+            if (!GatewayProjectStateFilesystem::removeRegular(
+                $artifact['path'],
+                $label . ' interrupted publication artifact',
+                $artifact['identity'],
+            )) {
+                throw new \RuntimeException(
+                    'Unable to collect an interrupted ' . $label . ' publication.'
+                );
+            }
+        }
+        $after = self::validatedJsonRecoverySnapshot(
+            $target,
+            $validator,
+            $label,
+            $maximumBytes,
+        );
+        if ($after['artifacts'] !== []
+            || !self::sameOptionalValidatedJsonFileState(
+                $targetIdentity,
+                $after['target_status'],
+            )
+        ) {
+            throw new \RuntimeException(
+                $label . ' recovery did not converge on one stable generation.'
+            );
+        }
+    }
+
+    /**
+     * @param \Closure(string):void $validator
+     * @return array{
+     *   directory:array<string|int,mixed>,
+     *   target_status:array<string|int,mixed>|null,
+     *   target_valid:bool,
+     *   artifacts:array<string,array{
+     *     path:string,kind:string,identity:array<string|int,mixed>,digest:string,size:int
+     *   }>
+     * }
+     */
+    private static function validatedJsonRecoverySnapshot(
+        string $target,
+        \Closure $validator,
+        string $label,
+        int $maximumBytes,
+    ): array {
+        $directory = \dirname($target);
+        $directoryBefore = @\lstat($directory);
+        if (!\is_array($directoryBefore)
+            || \is_link($directory)
+            || ((((int)($directoryBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            throw new \RuntimeException($label . ' directory is missing or unsafe.');
+        }
+        $targetLeaf = \basename(\str_replace('\\', '/', $target));
+        if ($targetLeaf === '' || $targetLeaf === '.' || $targetLeaf === '..') {
+            throw new \RuntimeException($label . ' target leaf is invalid.');
+        }
+        $targetFolded = \strtolower($targetLeaf);
+        $legacyPrefix = $targetLeaf . '.tmp.';
+        $stagingPrefix = $targetLeaf . '.tmp-';
+        $backupPrefix = $targetLeaf . '.wls-backup-';
+        $legacyPattern = '/\A' . \preg_quote($legacyPrefix, '/')
+            . '[1-9][0-9]{0,18}\z/Du';
+        $stagingPattern = '/\A' . \preg_quote($stagingPrefix, '/')
+            . '[a-f0-9]{24}\z/Du';
+        $backupPattern = '/\A' . \preg_quote($backupPrefix, '/')
+            . '[a-f0-9]{16}\z/Du';
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException($label . ' directory cannot be enumerated.');
+        }
+        $targetStatus = null;
+        $targetValid = false;
+        $artifacts = [];
+        $visited = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                if (++$visited > self::MAX_VALIDATED_JSON_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        $label . ' directory exceeds its fixed raw entry quota.'
+                    );
+                }
+                $folded = \strtolower($leaf);
+                $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                if (\hash_equals($targetFolded, $folded)) {
+                    if (!\hash_equals($targetLeaf, $leaf)) {
+                        throw new \RuntimeException(
+                            $label . ' target has a non-canonical case alias.'
+                        );
+                    }
+                    $targetStatus = self::validatedJsonManagedFileStatus(
+                        $path,
+                        $maximumBytes,
+                        $label,
+                        false,
+                    );
+                    $raw = GatewayProjectStateFilesystem::read(
+                        $path,
+                        $maximumBytes,
+                        $label,
+                    );
+                    try {
+                        $validator($raw);
+                        $targetValid = true;
+                    } catch (\Throwable) {
+                        $targetValid = false;
+                    }
+                    $after = @\lstat($path);
+                    if (!\is_array($after)
+                        || !self::sameValidatedJsonFileState($targetStatus, $after)
+                    ) {
+                        throw new \RuntimeException(
+                            $label . ' target changed during semantic validation.'
+                        );
+                    }
+                    $targetStatus = $after;
+                    continue;
+                }
+                $legacyNamespace = \str_starts_with(
+                    $folded,
+                    \strtolower($legacyPrefix),
+                );
+                $stagingNamespace = \str_starts_with(
+                    $folded,
+                    \strtolower($stagingPrefix),
+                );
+                $backupNamespace = \str_starts_with(
+                    $folded,
+                    \strtolower($backupPrefix),
+                );
+                if (!$legacyNamespace && !$stagingNamespace && !$backupNamespace) {
+                    continue;
+                }
+                if (!\hash_equals($leaf, $folded)) {
+                    throw new \RuntimeException(
+                        $label . ' recovery contains a non-canonical case alias.'
+                    );
+                }
+                $kind = '';
+                if ($legacyNamespace && \preg_match($legacyPattern, $leaf) === 1) {
+                    $kind = 'legacy staging';
+                } elseif ($stagingNamespace && \preg_match($stagingPattern, $leaf) === 1) {
+                    $kind = 'atomic staging';
+                } elseif ($backupNamespace && \preg_match($backupPattern, $leaf) === 1) {
+                    $kind = 'atomic backup';
+                } else {
+                    throw new \RuntimeException(
+                        $label . ' recovery contains a malformed reserved leaf.'
+                    );
+                }
+                if (\count($artifacts) >= self::MAX_VALIDATED_JSON_RECOVERY_ARTIFACTS) {
+                    throw new \RuntimeException(
+                        $label . ' recovery artifact quota is exhausted.'
+                    );
+                }
+                $identity = self::validatedJsonManagedFileStatus(
+                    $path,
+                    $maximumBytes,
+                    $label . ' recovery artifact',
+                    $kind === 'atomic backup' || $kind === 'atomic staging',
+                );
+                $digest = '';
+                $size = (int)($identity['size'] ?? -1);
+                if ($kind === 'atomic backup') {
+                    $raw = GatewayProjectStateFilesystem::read(
+                        $path,
+                        $maximumBytes,
+                        $label . ' recovery backup',
+                    );
+                    $validator($raw);
+                    $digest = \hash('sha256', $raw);
+                    $after = @\lstat($path);
+                    if (!\is_array($after)
+                        || !self::sameValidatedJsonFileState($identity, $after)
+                    ) {
+                        throw new \RuntimeException(
+                            $label . ' recovery backup changed during validation.'
+                        );
+                    }
+                    $identity = $after;
+                }
+                $artifacts[$path] = [
+                    'path' => $path,
+                    'kind' => $kind,
+                    'identity' => $identity,
+                    'digest' => $digest,
+                    'size' => $size,
+                ];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        if ($targetStatus === null
+            && (\file_exists($target) || \is_link($target))
+        ) {
+            throw new \RuntimeException($label . ' target is indeterminate or unsafe.');
+        }
+        $directoryAfter = @\lstat($directory);
+        if (!\is_array($directoryAfter)
+            || !self::sameValidatedJsonFileState($directoryBefore, $directoryAfter)
+        ) {
+            throw new \RuntimeException(
+                $label . ' recovery directory changed during inspection.'
+            );
+        }
+        \ksort($artifacts, SORT_STRING);
+        return [
+            'directory' => $directoryAfter,
+            'target_status' => $targetStatus,
+            'target_valid' => $targetValid,
+            'artifacts' => $artifacts,
+        ];
+    }
+
+    /** @return array<string|int,mixed> */
+    private static function validatedJsonManagedFileStatus(
+        string $path,
+        int $maximumBytes,
+        string $label,
+        bool $requireAtomicMode,
+    ): array {
+        $before = @\lstat($path);
+        if (!\is_array($before)
+            || \is_link($path)
+            || ((((int)($before['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($before['nlink'] ?? 0) !== 1
+        ) {
+            throw new \RuntimeException(
+                $label . ' must be one regular non-linked file.'
+            );
+        }
+        $mode = ((int)($before['mode'] ?? 0)) & 0777;
+        if (\PHP_OS_FAMILY !== 'Windows'
+            && (($requireAtomicMode && $mode !== 0600)
+                || (!$requireAtomicMode && ($mode & 0022) !== 0))
+        ) {
+            throw new \RuntimeException($label . ' mode is unsafe.');
+        }
+        $size = GatewayProjectStateFilesystem::size(
+            $path,
+            $maximumBytes,
+            $label,
+        );
+        $after = @\lstat($path);
+        if (!\is_int($size)
+            || !\is_array($after)
+            || !self::sameValidatedJsonFileState($before, $after)
+        ) {
+            throw new \RuntimeException($label . ' changed during inspection.');
+        }
+        return $after;
+    }
+
+    /**
+     * @param array{
+     *   directory:array<string|int,mixed>,
+     *   target_status:array<string|int,mixed>|null,
+     *   target_valid:bool,
+     *   artifacts:array<string,array{path:string,kind:string,identity:array<string|int,mixed>,digest:string,size:int}>
+     * } $selected
+     * @param array{
+     *   directory:array<string|int,mixed>,
+     *   target_status:array<string|int,mixed>|null,
+     *   target_valid:bool,
+     *   artifacts:array<string,array{path:string,kind:string,identity:array<string|int,mixed>,digest:string,size:int}>
+     * } $rechecked
+     */
+    private static function assertEquivalentValidatedJsonRecoverySnapshots(
+        array $selected,
+        array $rechecked,
+        string $label,
+    ): void {
+        if (!self::sameValidatedJsonFileState(
+            $selected['directory'],
+            $rechecked['directory'],
+        )
+            || !self::sameOptionalValidatedJsonFileState(
+                $selected['target_status'],
+                $rechecked['target_status'],
+            )
+            || $selected['target_valid'] !== $rechecked['target_valid']
+            || \array_keys($selected['artifacts']) !== \array_keys($rechecked['artifacts'])
+        ) {
+            throw new \RuntimeException(
+                $label . ' recovery namespace changed before cleanup.'
+            );
+        }
+        foreach ($selected['artifacts'] as $path => $artifact) {
+            $current = $rechecked['artifacts'][$path] ?? null;
+            if (!\is_array($current)
+                || !\hash_equals($artifact['kind'], $current['kind'])
+                || !\hash_equals($artifact['digest'], $current['digest'])
+                || $artifact['size'] !== $current['size']
+                || !self::sameValidatedJsonFileState(
+                    $artifact['identity'],
+                    $current['identity'],
+                )
+            ) {
+                throw new \RuntimeException(
+                    $label . ' recovery artifact changed before cleanup.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private static function sameValidatedJsonFileState(
+        array $before,
+        array $after,
+    ): bool {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @param array<string|int,mixed>|null $before
+     * @param array<string|int,mixed>|null $after
+     */
+    private static function sameOptionalValidatedJsonFileState(
+        ?array $before,
+        ?array $after,
+    ): bool {
+        if ($before === null || $after === null) {
+            return $before === null && $after === null;
+        }
+        return self::sameValidatedJsonFileState($before, $after);
+    }
+
+    private static function atomicWriteJsonStaticUnlocked(
+        string $file,
+        array $data,
+        float $timeout,
+        ?\Closure $recoveryValidator = null,
+    ): bool {
+        $json = \json_encode(
+            $data,
+            JSON_PRETTY_PRINT
+                | JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_THROW_ON_ERROR,
+        );
+        if (\strlen($json) > self::MAX_ATOMIC_JSON_BYTES) {
+            return false;
+        }
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $file . '.lock',
+            static function () use ($file, $json, $recoveryValidator): bool {
+                if ($recoveryValidator !== null) {
+                    GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                        $file,
+                        GatewayProjectEndpointReader::MAX_ENDPOINT_BYTES,
+                        'WLS instance endpoint',
+                        $recoveryValidator,
+                    );
+                }
+                GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+                return true;
+            },
+            waitTimeoutSeconds: $timeout,
+        );
+    }
+
+    private static function updateJsonFileAtomicallyUnlocked(
+        string $file,
+        callable $modifier,
+        float $timeout = 5.0,
+        ?\Closure $recoveryValidator = null,
+    ): bool {
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $file . '.lock',
+            static function () use ($file, $modifier, $recoveryValidator): bool {
+                if ($recoveryValidator !== null) {
+                    GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                        $file,
+                        GatewayProjectEndpointReader::MAX_ENDPOINT_BYTES,
+                        'WLS instance endpoint',
+                        $recoveryValidator,
+                    );
+                }
+                $content = GatewayProjectStateFilesystem::readOptional(
+                    $file,
+                    self::MAX_ATOMIC_JSON_BYTES,
+                    'WLS atomic JSON state',
+                    true,
+                );
+                $data = [];
+                if ($content !== null && $content !== '') {
+                    $decoded = \json_decode(
+                        $content,
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR,
+                    );
+                    if (!\is_array($decoded)) {
+                        throw new \RuntimeException(
+                            'WLS atomic JSON state is not an object or array.',
+                        );
+                    }
+                    $data = $decoded;
+                }
+                $newData = $modifier($data);
+                if (!\is_array($newData)) {
+                    throw new \RuntimeException(
+                        'WLS atomic JSON modifier returned invalid state.',
+                    );
+                }
+                $json = \json_encode(
+                    $newData,
+                    JSON_PRETTY_PRINT
+                        | JSON_UNESCAPED_UNICODE
+                        | JSON_UNESCAPED_SLASHES
+                        | JSON_THROW_ON_ERROR,
+                );
+                if (\strlen($json) > self::MAX_ATOMIC_JSON_BYTES) {
+                    throw new \RuntimeException(
+                        'WLS atomic JSON state exceeds its fixed size limit.',
+                    );
+                }
+                GatewayProjectStateFilesystem::atomicWrite($file, $json, 0600);
+                return true;
+            },
+            waitTimeoutSeconds: \min(300.0, $timeout),
+        );
+    }
+
+    private static function gatewayEndpointNamespaceLockForFile(
+        string $file,
+    ): ?string {
+        if (\str_contains($file, "\0")
+            || \preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.json\z/D', \basename($file)) !== 1
+        ) {
+            return null;
+        }
+        $expectedDirectory = \realpath(Env::VAR_DIR . self::INSTANCE_SUBDIR);
+        $actualDirectory = \realpath(\dirname($file));
+        if (!\is_string($expectedDirectory)
+            || !\is_string($actualDirectory)
+            || !\hash_equals(
+                \PHP_OS_FAMILY === 'Windows' ? \strtolower($expectedDirectory) : $expectedDirectory,
+                \PHP_OS_FAMILY === 'Windows' ? \strtolower($actualDirectory) : $actualDirectory,
+            )
+        ) {
+            return null;
+        }
+        return \rtrim($actualDirectory, '/\\') . DIRECTORY_SEPARATOR
+            . self::GATEWAY_ENDPOINT_NAMESPACE_LOCK;
     }
 }

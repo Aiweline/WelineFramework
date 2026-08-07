@@ -57,7 +57,7 @@ final class SharedRuntimeConnectionWarmup
 
         $scope = self::scope($instanceName, $workerId, $connectNow, $mode);
         $readyMemoryOnly = $mode === 'ready_memory';
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if ($connectNow && ($now < (self::$nextRetryAt[$scope] ?? 0.0))) {
             return [
                 'enabled' => true,
@@ -148,6 +148,7 @@ final class SharedRuntimeConnectionWarmup
 
         $options = [
             'token_file_name' => $endpoint['token_file_name'],
+            'token_authority_instance' => (string)($endpoint['token_authority_instance'] ?? ''),
             'service_type' => $serviceType,
             'service_role' => $serviceRole,
             'min_idle' => $minIdle,
@@ -298,6 +299,9 @@ final class SharedRuntimeConnectionWarmup
             'host' => $host,
             'port' => $port,
             'token_file_name' => $tokenFileName,
+            'token_authority_instance' => \trim((string)(
+                $source['token_authority_instance'] ?? ''
+            )),
         ];
     }
 
@@ -370,5 +374,10 @@ final class SharedRuntimeConnectionWarmup
     {
         $config = Env::getInstance()->getConfig('wls');
         return \is_array($config) ? $config : [];
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

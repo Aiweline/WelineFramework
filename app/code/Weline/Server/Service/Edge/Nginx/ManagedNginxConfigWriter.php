@@ -17,6 +17,11 @@ use Weline\Server\Service\SslCertificateService;
 final class ManagedNginxConfigWriter
 {
     private const MAX_CONFIG_BYTES = 16 * 1024 * 1024;
+    private const MAX_MIME_TYPES_BYTES = 4 * 1024 * 1024;
+    private const MAX_TLS_MATERIAL_BYTES = 1024 * 1024;
+    private const WRITER_LOCK_WAIT_SECONDS = 30.0;
+    private const LEGACY_LIFECYCLE_LOCK_WAIT_SECONDS = 90.0;
+    private const FALLBACK_MIME_TYPES = "types { text/html html htm; text/css css; application/javascript js; }\n";
 
     private readonly ManagedNginxPaths $paths;
     private readonly NginxConfigPublication $publication;
@@ -35,6 +40,7 @@ final class ManagedNginxConfigWriter
     /**
      * @param list<string> $serverNames
      * @param list<int> $upstreamPorts Actual loopback Worker/Dispatcher ports. Empty keeps the primary port.
+     * @phpstan-param array<array-key,mixed> $upstreamPorts
      * @return array{conf:string,http:int,https:int,upstream:string,upstreams:list<string>,config_generation:string,config_sha256:string,candidate:bool}
      */
     public function write(
@@ -114,6 +120,8 @@ NGINX;
         $upstreamKeepalive = $this->paths->upstreamKeepalive();
         $upstreamKeepaliveTimeoutSec = $this->paths->upstreamKeepaliveTimeoutSec();
         $workerConnections = $this->paths->workerConnections();
+        $mimeTypes = $this->stageMimeTypesDependency();
+        $quotedMimeTypes = $this->nginxQuotedPath($mimeTypes);
 
         $tempBlock = '';
         if ($isWindows) {
@@ -244,7 +252,7 @@ events {
 {$eventsExtra}}
 
 http {
-    include       mime.types;
+    include       {$quotedMimeTypes};
     default_type  application/octet-stream;
     access_log    off;
     sendfile      on;
@@ -362,22 +370,10 @@ NGINX;
         }
 
         $configSha256 = \hash('sha256', $conf);
-        // mime.types: copy from install tree when present, else minimal stub
-        $mimeSrc = $this->paths->installRoot() . DIRECTORY_SEPARATOR . 'conf' . DIRECTORY_SEPARATOR . 'mime.types';
-        $mimeDst = $this->paths->confDir() . DIRECTORY_SEPARATOR . 'mime.types';
-        if (\is_file($mimeSrc)) {
-            @\copy($mimeSrc, $mimeDst);
-        } elseif (!\is_file($mimeDst)) {
-            \file_put_contents($mimeDst, "types { text/html html htm; text/css css; application/javascript js; }\n");
-        }
-
         if ($candidate) {
             $confFile = $this->publication->stageCandidate($conf);
         } else {
-            $confFile = $this->paths->confFile();
-            if (\file_put_contents($confFile, $conf, LOCK_EX) === false) {
-                throw new \RuntimeException('Unable to write managed nginx.conf: ' . $confFile);
-            }
+            $confFile = $this->publishLegacyConfig($conf);
         }
 
         return [
@@ -408,12 +404,154 @@ NGINX;
         ];
     }
 
+    /**
+     * Compatibility-only publication for callers that still request an
+     * active config directly. Production lifecycle paths always request a
+     * candidate while already holding this same lock, so they never enter
+     * this method or recursively acquire the lifecycle lock.
+     */
+    private function publishLegacyConfig(string $contents): string
+    {
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $this->paths->lifecycleLockFile(),
+            function () use ($contents): string {
+                $this->cleanupLegacyPublicationRecoveryBackups();
+                $this->publication->recoverInterruptedPublication();
+                $candidate = $this->publication->stageCandidate($contents);
+                $rollback = null;
+                $published = false;
+                try {
+                    $publication = $this->publication->publishCandidate(
+                        $candidate,
+                        \bin2hex(\random_bytes(16)),
+                    );
+                    $candidate = '';
+                    $published = true;
+                    $rollback = \is_string($publication['rollback'] ?? null)
+                        ? $publication['rollback']
+                        : null;
+                    $this->cleanupPublishedLegacyRecoveryBackups($contents);
+                    if (!$this->publication->commitPublished($rollback)) {
+                        throw new \RuntimeException(
+                            'Unable to commit the managed Nginx legacy config transaction.',
+                        );
+                    }
+                    $rollback = null;
+                    $published = false;
+                    // Committing a replacement may itself retain one Windows
+                    // ReplaceFile backup for the reusable last-good target.
+                    // Close that artifact only after the new active and LKG
+                    // both pass their target-specific validation.
+                    $this->cleanupPublishedLegacyRecoveryBackups($contents);
+                    return $this->paths->confFile();
+                } catch (\Throwable $throwable) {
+                    if ($candidate !== ''
+                        && (\file_exists($candidate) || \is_link($candidate))
+                    ) {
+                        try {
+                            $this->publication->discardCandidate($candidate);
+                        } catch (\Throwable) {
+                        }
+                    }
+                    if ($published
+                        && ($rollback === null
+                            || \file_exists($rollback)
+                            || \is_link($rollback))
+                    ) {
+                        try {
+                            $this->publication->rollbackPublished($rollback);
+                        } catch (\Throwable $rollbackFailure) {
+                            throw new \RuntimeException(
+                                'Managed Nginx legacy publication failed and rollback did not complete: '
+                                    . $rollbackFailure->getMessage(),
+                                0,
+                                $throwable,
+                            );
+                        }
+                    }
+                    throw $throwable;
+                }
+            },
+            waitTimeoutSeconds: self::LEGACY_LIFECYCLE_LOCK_WAIT_SECONDS,
+        );
+    }
+
+    private function cleanupLegacyPublicationRecoveryBackups(): void
+    {
+        $processManager = new ManagedNginxProcessManager($this->paths);
+        $this->publication->cleanupAtomicWriteRecoveryBackups(
+            static function (
+                string $path,
+                string $contents,
+                string $kind,
+            ) use ($processManager): void {
+                if ($contents === '') {
+                    throw new \RuntimeException(
+                        'Managed Nginx ' . $kind . ' recovery target is empty.',
+                    );
+                }
+                $result = $processManager->testConfig($path);
+                if ($result['code'] !== 0) {
+                    throw new \RuntimeException(
+                        'Managed Nginx ' . $kind
+                            . ' recovery target failed nginx -t: '
+                            . \substr(\trim($result['output']), 0, 1024),
+                    );
+                }
+            },
+        );
+    }
+
+    private function cleanupPublishedLegacyRecoveryBackups(string $contents): void
+    {
+        $expectedDigest = \hash('sha256', $contents);
+        $processManager = new ManagedNginxProcessManager($this->paths);
+        $this->publication->cleanupAtomicWriteRecoveryBackups(
+            function (
+                string $path,
+                string $current,
+                string $kind,
+            ) use ($expectedDigest, $processManager): void {
+                if ($kind === 'active config') {
+                    if (!\hash_equals($expectedDigest, \hash('sha256', $current))) {
+                        throw new \RuntimeException(
+                            'Managed Nginx active config changed after legacy publication.',
+                        );
+                    }
+                    return;
+                }
+                $result = $processManager->testConfig($path);
+                if ($result['code'] !== 0) {
+                    throw new \RuntimeException(
+                        'Managed Nginx ' . $kind
+                            . ' recovery target failed nginx -t: '
+                            . \substr(\trim($result['output']), 0, 1024),
+                    );
+                }
+            },
+        );
+        $active = GatewayProjectStateFilesystem::read(
+            $this->paths->confFile(),
+            self::MAX_CONFIG_BYTES,
+            'Managed Nginx committed legacy active config',
+        );
+        if (!\hash_equals($expectedDigest, \hash('sha256', $active))) {
+            throw new \RuntimeException(
+                'Managed Nginx legacy active config failed committed readback.',
+            );
+        }
+    }
+
     /** @return array{conf:string,config_generation:string,config_sha256:string,candidate:bool} */
     public function refreshCandidate(): array
     {
         $active = $this->paths->confFile();
         $contents = \is_file($active)
-            ? GatewayProjectStateFilesystem::read($active, self::MAX_CONFIG_BYTES)
+            ? GatewayProjectStateFilesystem::read(
+                $active,
+                self::MAX_CONFIG_BYTES,
+                'Managed Nginx active config',
+            )
             : false;
         if (!\is_string($contents) || $contents === '') {
             throw new \RuntimeException('Managed nginx.conf is unavailable for a verified reload.');
@@ -425,7 +563,7 @@ NGINX;
             $contents,
             $matches,
         );
-        $oldGenerations = \array_values(\array_unique((array)($matches[1] ?? [])));
+        $oldGenerations = \array_values(\array_unique($matches[1]));
         if ($markerCount !== 3 || \count($oldGenerations) !== 1) {
             throw new \RuntimeException('Managed nginx.conf lacks one consistent WLS config generation.');
         }
@@ -463,6 +601,18 @@ NGINX;
     {
         $this->publication->recoverInterruptedPublication();
     }
+
+    /** @param \Closure(string,string,string):void $validateConfig */
+    public function cleanupAtomicWriteRecoveryBackups(\Closure $validateConfig): void
+    {
+        $this->publication->cleanupAtomicWriteRecoveryBackups($validateConfig);
+    }
+
+    public function cleanupResolvedRollbackTemporaries(string $rollback): void
+    {
+        $this->publication->cleanupResolvedRollbackTemporaries($rollback);
+    }
+
     public function rollbackPathForTransaction(string $transactionId): string
     {
         return $this->publication->rollbackPathForTransaction($transactionId);
@@ -508,6 +658,7 @@ NGINX;
 
     /**
      * @param list<int> $upstreamPorts
+     * @phpstan-param array<array-key,mixed> $upstreamPorts
      * @param array{http:int,https:int} $publicPorts
      * @return list<int>
      */
@@ -534,10 +685,6 @@ NGINX;
             }
             $normalized[$port] = $port;
         }
-        if ($normalized === []) {
-            throw new \InvalidArgumentException('Managed nginx requires at least one upstream port.');
-        }
-
         return \array_values($normalized);
     }
 
@@ -581,9 +728,6 @@ NGINX;
             $name = \substr($name, 1);
         }
         $labels = \explode('.', $name);
-        if ($labels === []) {
-            return false;
-        }
         foreach ($labels as $label) {
             if ($label === ''
                 || \strlen($label) > 63
@@ -594,6 +738,70 @@ NGINX;
         }
 
         return true;
+    }
+
+    private function stageMimeTypesDependency(): string
+    {
+        return $this->withWriterLock(function (): string {
+            $source = $this->paths->installRoot() . DIRECTORY_SEPARATOR
+                . 'conf' . DIRECTORY_SEPARATOR . 'mime.types';
+            $sourceBefore = @\lstat($source);
+            if (\is_array($sourceBefore)) {
+                $this->assertCanonicalSourcePath(
+                    $source,
+                    'Managed Nginx MIME types source',
+                );
+                $contents = GatewayProjectStateFilesystem::read(
+                    $source,
+                    self::MAX_MIME_TYPES_BYTES,
+                    'Managed Nginx MIME types source',
+                );
+            } else {
+                if (\file_exists($source) || \is_link($source)) {
+                    throw new \RuntimeException(
+                        'Managed Nginx MIME types source path is indeterminate or unsafe.',
+                    );
+                }
+                $contents = self::FALLBACK_MIME_TYPES;
+            }
+            $digest = \hash('sha256', $contents);
+            $target = $this->paths->confDir() . DIRECTORY_SEPARATOR
+                . 'mime.' . $digest . '.types';
+            $this->stageContentAddressedContents(
+                $target,
+                $contents,
+                self::MAX_MIME_TYPES_BYTES,
+                0444,
+                'Managed Nginx content-addressed MIME types',
+            );
+
+            $sourceAfter = @\lstat($source);
+            if (\is_array($sourceBefore)) {
+                $this->assertCanonicalSourcePath(
+                    $source,
+                    'Managed Nginx MIME types source readback',
+                );
+                $verifiedSource = GatewayProjectStateFilesystem::read(
+                    $source,
+                    self::MAX_MIME_TYPES_BYTES,
+                    'Managed Nginx MIME types source readback',
+                );
+                if (!\hash_equals(
+                    \hash('sha256', $contents),
+                    \hash('sha256', $verifiedSource),
+                )) {
+                    throw new \RuntimeException(
+                        'Managed Nginx MIME types source changed while staging.',
+                    );
+                }
+            } elseif (\is_array($sourceAfter) || \file_exists($source)) {
+                throw new \RuntimeException(
+                    'Managed Nginx MIME types source appeared while staging the fallback.',
+                );
+            }
+
+            return $target;
+        });
     }
 
 
@@ -642,22 +850,266 @@ NGINX;
         if (\PHP_OS_FAMILY !== 'Windows') {
             return ['cert' => $cert, 'key' => $key];
         }
-        $certSha = \hash_file('sha256', $cert);
-        $keySha = \hash_file('sha256', $key);
-        if (!\is_string($certSha) || !\is_string($keySha)) {
-            throw new \RuntimeException('Unable to hash managed nginx TLS material.');
-        }
-        $directory = $this->paths->confDir() . DIRECTORY_SEPARATOR . 'certs';
-        if (!\is_dir($directory) && !@\mkdir($directory, 0700, true) && !\is_dir($directory)) {
-            throw new \RuntimeException('Unable to create local managed nginx certificate directory.');
-        }
-        $identity = \substr(\hash('sha256', $certSha . "\0" . $keySha), 0, 32);
-        $localCert = $directory . DIRECTORY_SEPARATOR . $identity . '-fullchain.pem';
-        $localKey = $directory . DIRECTORY_SEPARATOR . $identity . '-privkey.pem';
-        $this->stageContentAddressedFile($cert, $localCert, $certSha, 0644);
-        $this->stageContentAddressedFile($key, $localKey, $keySha, 0600);
+        return $this->stageLocalizedSslMaterial($cert, $key);
+    }
 
-        return ['cert' => $localCert, 'key' => $localKey];
+    /** @return array{cert:string,key:string} */
+    private function stageLocalizedSslMaterial(string $cert, string $key): array
+    {
+        return $this->withWriterLock(function () use ($cert, $key): array {
+            $this->assertCanonicalSourcePath(
+                $cert,
+                'Managed Nginx TLS certificate source',
+            );
+            $this->assertCanonicalSourcePath(
+                $key,
+                'Managed Nginx TLS private key source',
+            );
+            $certContents = GatewayProjectStateFilesystem::read(
+                $cert,
+                self::MAX_TLS_MATERIAL_BYTES,
+                'Managed Nginx TLS certificate source',
+            );
+            $keyContents = GatewayProjectStateFilesystem::read(
+                $key,
+                self::MAX_TLS_MATERIAL_BYTES,
+                'Managed Nginx TLS private key source',
+            );
+            $certSha = \hash('sha256', $certContents);
+            $keySha = \hash('sha256', $keyContents);
+            $directory = $this->paths->confDir() . DIRECTORY_SEPARATOR . 'certs';
+            $this->ensureContentAddressedDirectory($directory);
+            $identity = \substr(\hash('sha256', $certSha . "\0" . $keySha), 0, 32);
+            $localCert = $directory . DIRECTORY_SEPARATOR . $identity . '-fullchain.pem';
+            $localKey = $directory . DIRECTORY_SEPARATOR . $identity . '-privkey.pem';
+            $this->stageContentAddressedContents(
+                $localCert,
+                $certContents,
+                self::MAX_TLS_MATERIAL_BYTES,
+                0444,
+                'Managed Nginx content-addressed TLS certificate',
+            );
+            $this->stageContentAddressedContents(
+                $localKey,
+                $keyContents,
+                self::MAX_TLS_MATERIAL_BYTES,
+                0400,
+                'Managed Nginx content-addressed TLS private key',
+            );
+            $this->assertCanonicalSourcePath(
+                $cert,
+                'Managed Nginx TLS certificate source readback',
+            );
+            $this->assertCanonicalSourcePath(
+                $key,
+                'Managed Nginx TLS private key source readback',
+            );
+            $certReadback = GatewayProjectStateFilesystem::read(
+                $cert,
+                self::MAX_TLS_MATERIAL_BYTES,
+                'Managed Nginx TLS certificate source readback',
+            );
+            $keyReadback = GatewayProjectStateFilesystem::read(
+                $key,
+                self::MAX_TLS_MATERIAL_BYTES,
+                'Managed Nginx TLS private key source readback',
+            );
+            if (!\hash_equals($certSha, \hash('sha256', $certReadback))
+                || !\hash_equals($keySha, \hash('sha256', $keyReadback))
+            ) {
+                throw new \RuntimeException(
+                    'Managed Nginx TLS source changed while staging content-addressed material.',
+                );
+            }
+
+            return ['cert' => $localCert, 'key' => $localKey];
+        });
+    }
+
+    /**
+     * MIME/TLS snapshots have reusable names, unlike config candidates. Keep
+     * every reader and writer of those names in one bounded namespace lock.
+     * This lock is deliberately distinct from the managed lifecycle lock.
+     *
+     * @template TResult
+     * @param \Closure():TResult $callback
+     * @return TResult
+     */
+    private function withWriterLock(\Closure $callback): mixed
+    {
+        return GatewayProjectStateFilesystem::withExclusiveLock(
+            $this->paths->confDir() . DIRECTORY_SEPARATOR
+                . '.managed-nginx-writer.lock',
+            $callback,
+            waitTimeoutSeconds: self::WRITER_LOCK_WAIT_SECONDS,
+        );
+    }
+
+    private function assertCanonicalSourcePath(string $path, string $label): void
+    {
+        $directory = \dirname($path);
+        $directoryStatus = @\lstat($directory);
+        $resolvedDirectory = @\realpath($directory);
+        $resolvedPath = @\realpath($path);
+        if (!\is_array($directoryStatus)
+            || \is_link($directory)
+            || ((((int)$directoryStatus['mode']) & 0170000) !== 0040000)
+            || !\is_string($resolvedDirectory)
+            || !\is_string($resolvedPath)
+            || !$this->sameFilesystemPath($resolvedDirectory, $directory)
+            || !$this->sameFilesystemPath($resolvedPath, $path)
+        ) {
+            throw new \RuntimeException($label . ' path traverses an unsafe link.');
+        }
+    }
+
+    private function ensureContentAddressedDirectory(string $directory): void
+    {
+        $parent = \dirname($directory);
+        $parentStatus = @\lstat($parent);
+        $resolvedParent = @\realpath($parent);
+        if (!\is_array($parentStatus)
+            || \is_link($parent)
+            || ((((int)$parentStatus['mode']) & 0170000) !== 0040000)
+            || !\is_string($resolvedParent)
+            || !$this->sameFilesystemPath($resolvedParent, $parent)
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx content-addressed directory parent is unsafe.',
+            );
+        }
+
+        $status = @\lstat($directory);
+        if (!\is_array($status)) {
+            if (\file_exists($directory)
+                || \is_link($directory)
+                || !@\mkdir($directory, 0700)
+            ) {
+                throw new \RuntimeException(
+                    'Unable to create the managed Nginx content-addressed directory.',
+                );
+            }
+            $status = @\lstat($directory);
+        }
+        $resolved = @\realpath($directory);
+        if (!\is_array($status)
+            || \is_link($directory)
+            || ((((int)$status['mode']) & 0170000) !== 0040000)
+            || !\is_string($resolved)
+            || !$this->sameFilesystemPath($resolved, $directory)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && (((int)$status['mode']) & 0777) !== 0700)
+        ) {
+            throw new \RuntimeException(
+                'Managed Nginx content-addressed directory is unsafe.',
+            );
+        }
+    }
+
+    /**
+     * Caller must hold the writer namespace lock. A content-addressed leaf is
+     * immutable: an existing different generation is a collision, never an
+     * overwrite target.
+     */
+    private function stageContentAddressedContents(
+        string $target,
+        string $contents,
+        int $maximumBytes,
+        int $permissions,
+        string $label,
+    ): void {
+        $length = \strlen($contents);
+        if ($length < 1 || $length > $maximumBytes) {
+            throw new \RuntimeException($label . ' has an invalid size.');
+        }
+        $expectedDigest = \hash('sha256', $contents);
+        $existing = GatewayProjectStateFilesystem::readOptional(
+            $target,
+            $maximumBytes,
+            $label,
+        );
+        if ($existing === null) {
+            GatewayProjectStateFilesystem::atomicWrite(
+                $target,
+                $contents,
+                $permissions,
+            );
+        } elseif (\strlen($existing) !== $length
+            || !\hash_equals($expectedDigest, \hash('sha256', $existing))
+            || !\hash_equals($contents, $existing)
+        ) {
+            throw new \RuntimeException(
+                $label . ' content-addressed target collides with different content.',
+            );
+        }
+
+        $this->assertContentAddressedTarget(
+            $target,
+            $contents,
+            $maximumBytes,
+            $permissions,
+            $label,
+        );
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $target,
+            $maximumBytes,
+            $label,
+            function (string $current) use ($contents, $expectedDigest, $label): void {
+                if (\strlen($current) !== \strlen($contents)
+                    || !\hash_equals($expectedDigest, \hash('sha256', $current))
+                    || !\hash_equals($contents, $current)
+                ) {
+                    throw new \RuntimeException(
+                        $label . ' recovery target failed exact validation.',
+                    );
+                }
+            },
+        );
+        $this->assertContentAddressedTarget(
+            $target,
+            $contents,
+            $maximumBytes,
+            $permissions,
+            $label . ' final readback',
+        );
+    }
+
+    private function assertContentAddressedTarget(
+        string $target,
+        string $expected,
+        int $maximumBytes,
+        int $permissions,
+        string $label,
+    ): void {
+        $current = GatewayProjectStateFilesystem::read(
+            $target,
+            $maximumBytes,
+            $label,
+        );
+        $status = @\lstat($target);
+        if (\strlen($current) !== \strlen($expected)
+            || !\hash_equals(\hash('sha256', $expected), \hash('sha256', $current))
+            || !\hash_equals($expected, $current)
+            || !\is_array($status)
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && (((int)$status['mode']) & 0777) !== $permissions)
+        ) {
+            throw new \RuntimeException($label . ' failed immutable readback.');
+        }
+    }
+
+    private function sameFilesystemPath(string $left, string $right): bool
+    {
+        $left = \str_replace('\\', '/', $left);
+        $right = \str_replace('\\', '/', $right);
+        $left = $left === '/' ? $left : \rtrim($left, '/');
+        $right = $right === '/' ? $right : \rtrim($right, '/');
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $left = \strtolower($left);
+            $right = \strtolower($right);
+        }
+
+        return $left !== '' && \hash_equals($left, $right);
     }
 
     private function nginxQuotedPath(string $path): string
@@ -684,32 +1136,4 @@ NGINX;
         return \strtolower($fingerprint);
     }
 
-    private function stageContentAddressedFile(
-        string $source,
-        string $target,
-        string $expectedSha256,
-        int $permissions,
-    ): void {
-        if (\is_file($target)
-            && \hash_equals($expectedSha256, (string)@\hash_file('sha256', $target))
-        ) {
-            return;
-        }
-        $candidate = $target . '.candidate.' . (string)\getmypid() . '.' . \bin2hex(\random_bytes(4));
-        if (!@\copy($source, $candidate)
-            || !\hash_equals($expectedSha256, (string)@\hash_file('sha256', $candidate))
-        ) {
-            @\unlink($candidate);
-            throw new \RuntimeException('Unable to stage managed nginx TLS material atomically.');
-        }
-        @\chmod($candidate, $permissions);
-        if (!@\rename($candidate, $target)) {
-            @\unlink($candidate);
-            if (!\is_file($target)
-                || !\hash_equals($expectedSha256, (string)@\hash_file('sha256', $target))
-            ) {
-                throw new \RuntimeException('Unable to publish managed nginx TLS material atomically.');
-            }
-        }
-    }
 }

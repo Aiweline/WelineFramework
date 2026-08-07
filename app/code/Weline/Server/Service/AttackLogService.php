@@ -63,7 +63,7 @@ class AttackLogService
     /**
      * 上次刷新时间
      */
-    private static int $lastFlushTime = 0;
+    private static float $lastFlushTime = 0.0;
     
     /**
      * 刷新间隔（秒）
@@ -99,8 +99,8 @@ class AttackLogService
         self::enqueue($logData);
         
         // 检查是否需要刷新
-        $now = \time();
-        if (self::$lastFlushTime === 0) {
+        $now = self::monotonicSeconds();
+        if (self::$lastFlushTime === 0.0) {
             self::$lastFlushTime = $now;
         }
         $shouldFlush = (
@@ -125,13 +125,13 @@ class AttackLogService
         if (self::$bufferCount === 0 || self::$flushInProgress) {
             return false;
         }
-        $now = \microtime(true);
+        $now = self::monotonicSeconds();
         if (!$force && $now < self::$nextFlushAt) {
             return false;
         }
         $due = $force
             || self::$bufferCount >= self::$bufferSize
-            || (\time() - self::$lastFlushTime) >= self::$flushInterval;
+            || ($now - self::$lastFlushTime) >= self::$flushInterval;
         if (!$due) {
             return false;
         }
@@ -143,7 +143,7 @@ class AttackLogService
      */
     public static function flush(): void
     {
-        if (self::$bufferCount === 0 || self::$flushInProgress || \microtime(true) < self::$nextFlushAt) {
+        if (self::$bufferCount === 0 || self::$flushInProgress || self::monotonicSeconds() < self::$nextFlushAt) {
             return;
         }
         self::flushBatch(self::$flushBatchSize);
@@ -163,19 +163,19 @@ class AttackLogService
             // Never bootstrap a database connection while the process is
             // already exiting; only reuse a model proven by an idle flush.
             || self::$model === null
-            || \microtime(true) < self::$nextFlushAt
+            || self::monotonicSeconds() < self::$nextFlushAt
         ) {
             return 0;
         }
 
-        $deadline = \microtime(true) + (\max(1, $budgetMs) / 1000);
+        $deadline = self::monotonicSeconds() + (\max(1, $budgetMs) / 1000);
         $remaining = \max(1, $maxRecords);
         $flushed = 0;
         while (
             $remaining > 0
             && self::$bufferCount > 0
-            && \microtime(true) < $deadline
-            && \microtime(true) >= self::$nextFlushAt
+            && self::monotonicSeconds() < $deadline
+            && self::monotonicSeconds() >= self::$nextFlushAt
         ) {
             $count = self::flushBatch(\min(self::$flushBatchSize, $remaining), $deadline);
             if ($count <= 0) {
@@ -204,7 +204,7 @@ class AttackLogService
             $model = self::getModel();
 
             foreach ($batch as $logData) {
-                if ($deadline !== null && \microtime(true) >= $deadline) {
+                if ($deadline !== null && self::monotonicSeconds() >= $deadline) {
                     break;
                 }
                 $model->clearQuery()->logAttack($logData);
@@ -213,19 +213,19 @@ class AttackLogService
 
             if ($persisted > 0) {
                 self::discard($persisted);
-                self::$lastFlushTime = \time();
+                self::$lastFlushTime = self::monotonicSeconds();
                 self::$consecutiveFlushFailures = 0;
                 self::$nextFlushAt = 0.0;
             }
         } catch (\Throwable $e) {
             if ($persisted > 0) {
                 self::discard($persisted);
-                self::$lastFlushTime = \time();
+                self::$lastFlushTime = self::monotonicSeconds();
             }
             self::$consecutiveFlushFailures++;
             $exponent = \min(6, self::$consecutiveFlushFailures - 1);
             $delay = \min(self::MAX_FLUSH_BACKOFF_SECONDS, 1 << $exponent);
-            self::$nextFlushAt = \microtime(true) + $delay;
+            self::$nextFlushAt = self::monotonicSeconds() + $delay;
             // Do not retain a potentially broken connection/model across retries.
             self::$model = null;
 
@@ -358,7 +358,7 @@ class AttackLogService
             'unique_paths' => (int)($requestInfo['unique_paths'] ?? 0),
             'extra_data' => [
                 'headers' => self::boundedHeaders($requestInfo['headers'] ?? []),
-                'detection_time' => \microtime(true),
+                'detection_time' => \time(),
             ],
         ];
     }
@@ -515,7 +515,9 @@ class AttackLogService
             'capacity' => self::$maxBufferSize,
             'dropped' => self::$droppedCount,
             'flush_failures' => self::$consecutiveFlushFailures,
-            'next_flush_at' => self::$nextFlushAt,
+            'next_flush_at' => self::$nextFlushAt > 0.0
+                ? \time() + \max(0.0, self::$nextFlushAt - self::monotonicSeconds())
+                : 0.0,
         ];
     }
     
@@ -531,7 +533,12 @@ class AttackLogService
         self::$consecutiveFlushFailures = 0;
         self::$nextFlushAt = 0.0;
         self::$flushInProgress = false;
-        self::$lastFlushTime = 0;
+        self::$lastFlushTime = 0.0;
         self::$model = null;
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return \hrtime(true) / 1_000_000_000;
     }
 }

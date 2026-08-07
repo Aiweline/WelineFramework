@@ -20,11 +20,15 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Server\Api\Tls\AcmeDnsTxtPollPolicyProviderInterface;
 use Weline\Server\Model\SslCertificate;
+use Weline\Server\Service\Edge\CertificateMaterialUpdateCoordinator;
 use Weline\Server\Service\Edge\Gateway\GatewayAcmeChallengePublisher;
 use Weline\Server\Service\Edge\Gateway\GatewayBoundedCommandRunner;
+use Weline\Server\Service\Edge\Gateway\GatewayClient;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
+use Weline\Server\Service\Edge\Nginx\ManagedNginxService;
+use Weline\Server\Service\Edge\Nginx\Runtime\NginxChildProcessProbe;
 
 /**
  * SSL 证书管理服务
@@ -79,6 +83,8 @@ class SslCertificateService
     protected const GATEWAY_ACME_PUBLISH_INITIAL_RETRY_MICROSECONDS = 250_000;
     protected const GATEWAY_ACME_PUBLISH_MAX_RETRY_MICROSECONDS = 4_000_000;
     private const MAX_CERTIFICATE_MATERIAL_BYTES = 1_048_576;
+    private const MAX_LEGACY_CERTIFICATE_MAP_ENTRIES = 4096;
+    private const MAX_ACME_CHALLENGE_STATE_BYTES = 1024;
     private const MAX_CERTIFICATE_SOURCE_DIRECTORIES = 1024;
     private const MAX_CERTIFICATE_DIRECTORY_ENTRIES = 32;
     private const MAX_INSTANCE_JSON_FILES = 512;
@@ -140,6 +146,9 @@ class SslCertificateService
      * 证书表首次启动兜底只需每进程执行一次。
      */
     protected static bool $certificateStorageReady = false;
+
+    /** @var array<string,int> */
+    private static array $heldLocalCaStateLocks = [];
 
     /**
      * Definitive SQLite corruption is non-transient for this PHP process.
@@ -453,7 +462,16 @@ class SslCertificateService
         ) {
             throw new \RuntimeException('Certificate material target is outside app/etc/ssl.');
         }
-        GatewayProjectStateFilesystem::atomicWrite($path, $contents, $mode);
+        $this->writeLockedSslStateAtomically(
+            $path,
+            $contents,
+            $mode,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            'project certificate material',
+            function (string $candidate) use ($path): void {
+                $this->assertCertificateStateContents($path, $candidate);
+            },
+        );
     }
 
     private function writeLocalCaStateAtomically(
@@ -502,13 +520,308 @@ class SslCertificateService
         if (!$authorized) {
             throw new \RuntimeException('Local CA state target is outside an authorized directory.');
         }
-        GatewayProjectStateFilesystem::atomicWrite($path, $contents, $mode);
+        $this->withLocalCaStateDirectoryLock(
+            $parentReal,
+            function () use ($path, $contents, $mode): void {
+                $this->writeLockedSslStateAtomically(
+                    $path,
+                    $contents,
+                    $mode,
+                    self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                    'local certificate authority state',
+                    function (string $candidate) use ($path): void {
+                        $this->assertLocalCaStateContents($path, $candidate);
+                    },
+                );
+            },
+        );
+    }
+
+    /** @template TResult @param \Closure():TResult $operation @return TResult */
+    private function withLocalCaStateDirectoryLock(
+        string $directory,
+        \Closure $operation,
+    ): mixed {
+        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            function () use ($directory, $operation): mixed {
+                $canonical = \realpath($directory);
+                $status = @\lstat($directory);
+                if (!\is_string($canonical)
+                    || !\is_array($status)
+                    || \is_link($directory)
+                    || !self::sameFilesystemPath($directory, $canonical)
+                    || self::filesystemPathIsRoot($canonical)
+                    || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
+                ) {
+                    throw new \RuntimeException('Local CA lock directory is unsafe.');
+                }
+                $lockPath = \rtrim($canonical, '/\\') . DS
+                    . '.wls-local-ca-state.lock';
+                if ((self::$heldLocalCaStateLocks[$lockPath] ?? 0) > 0) {
+                    self::$heldLocalCaStateLocks[$lockPath]++;
+                    try {
+                        return $operation();
+                    } finally {
+                        self::$heldLocalCaStateLocks[$lockPath]--;
+                    }
+                }
+                return GatewayProjectStateFilesystem::withExclusiveLock(
+                    $lockPath,
+                    function () use ($lockPath, $operation): mixed {
+                        self::$heldLocalCaStateLocks[$lockPath] = 1;
+                        try {
+                            return $operation();
+                        } finally {
+                            unset(self::$heldLocalCaStateLocks[$lockPath]);
+                        }
+                    },
+                );
+            },
+        );
+    }
+
+    /** @param \Closure(string):void $validateContents */
+    private function writeLockedSslStateAtomically(
+        string $path,
+        string $contents,
+        int $mode,
+        int $maximumBytes,
+        string $label,
+        \Closure $validateContents,
+    ): void {
+        if ($path === ''
+            || \str_contains($path, "\0")
+            || $contents === ''
+            || \strlen($contents) > $maximumBytes
+            || !\in_array($mode, [0600, 0644], true)
+            || $label === ''
+        ) {
+            throw new \RuntimeException('SSL state publication boundary is invalid.');
+        }
+        $validateContents($contents);
+        (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            function () use (
+                $path,
+                $contents,
+                $mode,
+                $maximumBytes,
+                $label,
+                $validateContents,
+            ): void {
+                GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                    $path,
+                    $maximumBytes,
+                    $label,
+                    function (string $current) use (
+                        $path,
+                        $mode,
+                        $label,
+                        $validateContents,
+                    ): void {
+                        $this->assertSslStateTargetMode($path, $mode, $label);
+                        $validateContents($current);
+                    },
+                );
+                GatewayProjectStateFilesystem::atomicWrite($path, $contents, $mode);
+                $published = GatewayProjectStateFilesystem::read(
+                    $path,
+                    $maximumBytes,
+                    'published ' . $label,
+                );
+                $this->assertSslStateTargetMode($path, $mode, $label);
+                $validateContents($published);
+                if (!\hash_equals(
+                    \hash('sha256', $contents),
+                    \hash('sha256', $published),
+                )) {
+                    throw new \RuntimeException(
+                        'Published ' . $label . ' digest does not match the requested state.',
+                    );
+                }
+            },
+        );
+    }
+
+    private function assertSslStateTargetMode(
+        string $path,
+        int $mode,
+        string $label,
+    ): void {
+        $status = @\lstat($path);
+        if (!\is_array($status)
+            || \is_link($path)
+            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000)
+            || (int)($status['nlink'] ?? 0) !== 1
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && ((((int)$status['mode']) & 0777) !== $mode))
+        ) {
+            throw new \RuntimeException($label . ' target permissions or identity are unsafe.');
+        }
+    }
+
+    private function assertCertificateStateContents(string $path, string $contents): void
+    {
+        $leaf = \basename(\str_replace('\\', '/', $path));
+        if (\in_array($leaf, ['fullchain.pem', 'cert.pem'], true)) {
+            $domain = self::logicalDomainFromStorageSegment(
+                \basename(\dirname(\str_replace('\\', '/', $path))),
+            );
+            if ($domain === '' || !self::certificatePemIsValidForName($contents, $domain)) {
+                throw new \RuntimeException(
+                    'Certificate material is invalid or does not cover its storage domain.',
+                );
+            }
+            return;
+        }
+        if ($leaf === 'chain.pem') {
+            if (!self::certificateBundlePemIsValid($contents, false)) {
+                throw new \RuntimeException('Certificate chain material is malformed.');
+            }
+            return;
+        }
+        if (\in_array($leaf, ['privkey.pem', 'domain.key', 'account.key'], true)) {
+            $this->assertPrivateKeyPem($contents);
+            return;
+        }
+        if ($leaf === 'csr.pem') {
+            $this->assertCertificateSigningRequest($path, $contents);
+            return;
+        }
+        if ($leaf === self::SSL_ISSUANCE_LOCK_FILENAME) {
+            if (\preg_match(
+                '/\A[1-9][0-9]{0,18}\n[0-9]{4}-[0-9]{2}-[0-9]{2}T'
+                    . '[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[+-][0-9]{2}:[0-9]{2}|Z)\z/D',
+                $contents,
+            ) !== 1) {
+                throw new \RuntimeException('SSL issuance marker is malformed.');
+            }
+            return;
+        }
+        if (\preg_match('/\Aopenssl(?:_san_[a-f0-9]{32})?\.cnf\z/D', $leaf) === 1) {
+            $this->assertOpenSslConfiguration($contents);
+            return;
+        }
+        throw new \RuntimeException('Certificate material target leaf is not managed.');
+    }
+
+    private function assertLocalCaStateContents(string $path, string $contents): void
+    {
+        $leaf = \basename(\str_replace('\\', '/', $path));
+        if ($leaf === self::LOCAL_CA_CERT_FILENAME) {
+            $certificates = $this->extractPemCertificates($contents);
+            $parsed = \count($certificates) === 1
+                ? $this->parseCertificatePem($certificates[0])
+                : false;
+            $now = \time();
+            if (!self::certificateBundlePemIsValid($contents, false)
+                || !\is_array($parsed)
+                || (int)($parsed['validFrom_time_t'] ?? PHP_INT_MAX) > $now
+                || (int)($parsed['validTo_time_t'] ?? 0) <= $now
+                || !$this->isCertificateAuthorityPem($certificates[0])
+                || !$this->isCertificateSelfSignedPem($certificates[0])
+            ) {
+                throw new \RuntimeException('Local CA certificate state is invalid.');
+            }
+            return;
+        }
+        if ($leaf === self::LOCAL_CA_KEY_FILENAME) {
+            $this->assertPrivateKeyPem($contents);
+            return;
+        }
+        if ($leaf === self::LOCAL_CA_SERIAL_FILENAME) {
+            if (\preg_match('/\A[1-9][0-9]{0,17}\z/D', $contents) !== 1) {
+                throw new \RuntimeException('Local CA serial state is malformed.');
+            }
+            return;
+        }
+        if (\preg_match(
+            '/\Aopenssl_(?:local_ca|leaf_[a-f0-9]{32})\.cnf\z/D',
+            $leaf,
+        ) === 1) {
+            $this->assertOpenSslConfiguration($contents);
+            return;
+        }
+        throw new \RuntimeException('Local CA state target leaf is not managed.');
+    }
+
+    private function assertPrivateKeyPem(string $contents): void
+    {
+        $pattern = '/-----BEGIN ((?:RSA |EC )?PRIVATE KEY)-----.*?'
+            . '-----END \\1-----/s';
+        $count = \preg_match_all($pattern, $contents, $matches);
+        $residual = \preg_replace($pattern, '', $contents);
+        $privateKeyPem = \is_array($matches[0] ?? null)
+            ? (string)($matches[0][0] ?? '')
+            : '';
+        if ($count !== 1
+            || !\is_string($residual)
+            || \trim($residual) !== ''
+            || \substr_count($privateKeyPem, '-----BEGIN ') !== 1
+            || \substr_count($privateKeyPem, '-----END ') !== 1
+            || @\openssl_pkey_get_private($privateKeyPem) === false
+        ) {
+            throw new \RuntimeException('Private key state is malformed.');
+        }
+    }
+
+    private function assertCertificateSigningRequest(string $path, string $contents): void
+    {
+        $pattern = '/-----BEGIN CERTIFICATE REQUEST-----.*?'
+            . '-----END CERTIFICATE REQUEST-----/s';
+        $count = \preg_match_all($pattern, $contents, $matches);
+        $residual = \preg_replace($pattern, '', $contents);
+        $csrPem = \is_array($matches[0] ?? null)
+            ? (string)($matches[0][0] ?? '')
+            : '';
+        if ($count !== 1
+            || !\is_string($residual)
+            || \trim($residual) !== ''
+            || \substr_count(
+                $csrPem,
+                '-----BEGIN CERTIFICATE REQUEST-----',
+            ) !== 1
+            || \substr_count(
+                $csrPem,
+                '-----END CERTIFICATE REQUEST-----',
+            ) !== 1
+        ) {
+            throw new \RuntimeException('Certificate signing request is malformed.');
+        }
+        $subject = @\openssl_csr_get_subject($csrPem, false);
+        $domain = self::logicalDomainFromStorageSegment(
+            \basename(\dirname(\str_replace('\\', '/', $path))),
+        );
+        $commonName = \is_array($subject) && \is_string($subject['commonName'] ?? null)
+            ? (string)$subject['commonName']
+            : (\is_array($subject) && \is_string($subject['CN'] ?? null)
+                ? (string)$subject['CN']
+                : '');
+        try {
+            $commonName = self::normalizeCertificateStorageDomain($commonName);
+        } catch (\Throwable) {
+            $commonName = '';
+        }
+        if ($domain === '' || $commonName === '' || !\hash_equals($domain, $commonName)) {
+            throw new \RuntimeException(
+                'Certificate signing request does not match its storage domain.',
+            );
+        }
+    }
+
+    private function assertOpenSslConfiguration(string $contents): void
+    {
+        if (\str_contains($contents, "\0")
+            || \preg_match('/^\s*\[\s*req\s*\]\s*$/mi', $contents) !== 1
+        ) {
+            throw new \RuntimeException('OpenSSL configuration state is malformed.');
+        }
     }
 
     private function removeCertificateLeafSafely(
         string $directory,
         string $leaf,
         ?array $expectedDirectoryStatus = null,
+        ?array $expectedLeafIdentity = null,
     ): bool {
         if ($leaf === ''
             || \str_contains($leaf, "\0")
@@ -541,6 +854,11 @@ class SslCertificateService
             if (\file_exists($path) || \is_link($path)) {
                 throw new \RuntimeException('Certificate leaf is indeterminate.');
             }
+            if (\is_array($expectedLeafIdentity)) {
+                throw new \RuntimeException(
+                    'Certificate leaf identity changed after deletion preflight.',
+                );
+            }
             return false;
         }
         $type = ((int)($leafStatus['mode'] ?? 0)) & 0170000;
@@ -550,15 +868,123 @@ class SslCertificateService
         if ($type === 0100000 && (int)($leafStatus['nlink'] ?? 0) !== 1) {
             throw new \RuntimeException('Hard-linked certificate leaves cannot be removed.');
         }
+        $observedIdentity = $this->certificateRemovalLeafIdentity(
+            $path,
+            $leafStatus,
+        );
+        if (\is_array($expectedLeafIdentity)
+            && !\hash_equals(
+                \hash('sha256', GatewayClient::canonicalJson($expectedLeafIdentity)),
+                \hash('sha256', GatewayClient::canonicalJson($observedIdentity)),
+            )
+        ) {
+            throw new \RuntimeException(
+                'Certificate leaf identity changed after deletion preflight.',
+            );
+        }
+        $immediatelyBefore = @\lstat($path);
+        if (!\is_array($immediatelyBefore)
+            || !$this->certificateRemovalStatusMatches(
+                $leafStatus,
+                $immediatelyBefore,
+            )
+        ) {
+            throw new \RuntimeException(
+                'Certificate leaf changed immediately before removal.',
+            );
+        }
         if (!@\unlink($path)) {
             throw new \RuntimeException('Unable to remove certificate leaf safely.');
         }
+        GatewayProjectStateFilesystem::syncDirectory($directory);
         $directoryAfter = @\lstat($directory);
         if (!\is_array($directoryAfter)
             || (int)($directoryBefore['dev'] ?? -1) !== (int)($directoryAfter['dev'] ?? -2)
             || (int)($directoryBefore['ino'] ?? -1) !== (int)($directoryAfter['ino'] ?? -2)
         ) {
             throw new \RuntimeException('Certificate directory changed during leaf removal.');
+        }
+        return true;
+    }
+
+    private function removeCertificateStateLeafSafely(
+        string $directory,
+        string $leaf,
+    ): bool {
+        if (!\in_array($leaf, ['chain.pem', 'csr.pem'], true)) {
+            throw new \InvalidArgumentException(
+                'Optional certificate state leaf is not managed.',
+            );
+        }
+        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            function () use ($directory, $leaf): bool {
+                $path = \rtrim($directory, '/\\') . DS . $leaf;
+                $mode = $leaf === 'chain.pem' ? 0644 : 0600;
+                GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                    $path,
+                    self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                    'optional certificate state',
+                    function (string $candidate) use ($path, $mode): void {
+                        $this->assertSslStateTargetMode(
+                            $path,
+                            $mode,
+                            'optional certificate state',
+                        );
+                        $this->assertCertificateStateContents($path, $candidate);
+                    },
+                );
+                return $this->removeCertificateLeafSafely($directory, $leaf);
+            },
+        );
+    }
+
+    /** @return array<string,int|string> */
+    private function certificateRemovalLeafIdentity(string $path, array $status): array
+    {
+        $type = ((int)($status['mode'] ?? 0)) & 0170000;
+        $identity = [];
+        foreach (['dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'size', 'mtime', 'ctime'] as $field) {
+            $identity[$field] = (int)($status[$field] ?? -1);
+        }
+        if ($type === 0100000) {
+            $contents = self::readRegularFileNoFollow(
+                $path,
+                self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                true,
+                false,
+            );
+            if (!\is_string($contents)) {
+                throw new \RuntimeException(
+                    'Certificate leaf could not be read without following links.',
+                );
+            }
+            $identity['content_sha256'] = \hash('sha256', $contents);
+        } elseif ($type === 0120000) {
+            $target = @\readlink($path);
+            if (!\is_string($target) || $target === '' || \str_contains($target, "\0")) {
+                throw new \RuntimeException('Certificate symbolic-link identity is invalid.');
+            }
+            $identity['link_target_sha256'] = \hash('sha256', $target);
+        } else {
+            throw new \RuntimeException('Certificate leaf type is not removable.');
+        }
+        $after = @\lstat($path);
+        if (!\is_array($after)
+            || !$this->certificateRemovalStatusMatches($status, $after)
+        ) {
+            throw new \RuntimeException(
+                'Certificate leaf changed while its deletion identity was captured.',
+            );
+        }
+        return $identity;
+    }
+
+    private function certificateRemovalStatusMatches(array $left, array $right): bool
+    {
+        foreach (['dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'size', 'mtime', 'ctime'] as $field) {
+            if ((int)($left[$field] ?? -1) !== (int)($right[$field] ?? -2)) {
+                return false;
+            }
         }
         return true;
     }
@@ -779,9 +1205,8 @@ class SslCertificateService
         string $privateKeyPem,
         string $name,
     ): bool {
-        if (\strlen($certificatePem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
-            || \strlen($privateKeyPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
-            || !self::certificateBundlePemIsValid($certificatePem, false)
+        if (\strlen($privateKeyPem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || !self::certificatePemIsValidForName($certificatePem, $name)
         ) {
             return false;
         }
@@ -799,6 +1224,27 @@ class SslCertificateService
             return false;
         }
         if (!@\openssl_x509_check_private_key($certificate, $privateKey)) {
+            return false;
+        }
+        return true;
+    }
+
+    private static function certificatePemIsValidForName(
+        string $certificatePem,
+        string $name,
+    ): bool {
+        if (\strlen($certificatePem) > self::MAX_CERTIFICATE_MATERIAL_BYTES
+            || !self::certificateBundlePemIsValid($certificatePem, false)
+            || !\preg_match(
+                '/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s',
+                $certificatePem,
+                $leafMatch,
+            )
+        ) {
+            return false;
+        }
+        $certificate = @\openssl_x509_read((string)$leafMatch[0]);
+        if ($certificate === false) {
             return false;
         }
         if ($name === '') {
@@ -1304,11 +1750,25 @@ class SslCertificateService
      */
     public function applyWildcardToSubdomainIfExists(string $domain, int $websiteId = 0): ?array
     {
+        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            fn (): ?array => $this->applyWildcardToSubdomainIfExistsLocked(
+                $domain,
+                $websiteId,
+            ),
+        );
+    }
+
+    private function applyWildcardToSubdomainIfExistsLocked(
+        string $domain,
+        int $websiteId = 0,
+    ): ?array
+    {
         try {
             $domain = self::normalizeCertificateStorageDomain($domain);
         } catch (\Throwable) {
             return null;
         }
+        $this->assertCertificateMutationNotBlockedByRetirement($domain);
         if (\str_starts_with($domain, '*.')) {
             return null;
         }
@@ -1382,9 +1842,7 @@ class SslCertificateService
         if (!$subCert->getCertId()) {
             $subCert->setCreatedAt($now);
         }
-        if ($websiteId > 0) {
-            $subCert->setWebsiteId($websiteId);
-        }
+        $subCert->setWebsiteId($websiteId);
 
         $stagedData = $subCert->getData();
         $stagedData[SslCertificate::schema_fields_ID] = 0;
@@ -2006,6 +2464,23 @@ CNF;
             return false;
         }
 
+        return $this->withLocalCaStateDirectoryLock(
+            \dirname($globalCertPath),
+            fn (): bool => $this->syncGlobalLocalCertificateAuthorityLocked(
+                $certPath,
+                $keyPath,
+                $globalCertPath,
+                $globalKeyPath,
+            ),
+        );
+    }
+
+    private function syncGlobalLocalCertificateAuthorityLocked(
+        string $certPath,
+        string $keyPath,
+        string $globalCertPath,
+        string $globalKeyPath,
+    ): bool {
         if ($this->canUseLocalCertificateAuthorityPair($globalCertPath, $globalKeyPath)) {
             return $this->certificateFilesHaveSameFingerprint($certPath, $globalCertPath);
         }
@@ -2033,6 +2508,17 @@ CNF;
                 return false;
             }
         }
+        if (!$this->canUseLocalCertificateAuthorityPair(
+            $globalCertPath,
+            $globalKeyPath,
+        )
+            || !$this->certificateFilesHaveSameFingerprint(
+                $certPath,
+                $globalCertPath,
+            )
+        ) {
+            return false;
+        }
         w_log_info(__('[SslCertificateService] Local CA is now reusable across projects from %{1}', [\dirname($globalCertPath)]));
 
         return true;
@@ -2046,12 +2532,32 @@ CNF;
             return null;
         }
 
+        $certPath = $this->getLocalCaCertPath();
+        $keyPath = $this->getLocalCaKeyPath();
+        return $this->withLocalCaStateDirectoryLock(
+            \dirname($globalCertPath),
+            fn (): ?array => $this->withLocalCaStateDirectoryLock(
+                \dirname($certPath),
+                fn (): ?array => $this->restoreProjectLocalCertificateAuthorityFromGlobalLocked(
+                    $globalCertPath,
+                    $globalKeyPath,
+                    $certPath,
+                    $keyPath,
+                ),
+            ),
+        );
+    }
+
+    private function restoreProjectLocalCertificateAuthorityFromGlobalLocked(
+        string $globalCertPath,
+        string $globalKeyPath,
+        string $certPath,
+        string $keyPath,
+    ): ?array {
         if (!$this->canUseLocalCertificateAuthorityPair($globalCertPath, $globalKeyPath)) {
             return null;
         }
 
-        $certPath = $this->getLocalCaCertPath();
-        $keyPath = $this->getLocalCaKeyPath();
         $certPem = self::readRegularFileNoFollow($globalCertPath);
         $keyPem = self::readPrivateKeyFileNoFollow($globalKeyPath);
         try {
@@ -2079,6 +2585,14 @@ CNF;
             } catch (\Throwable) {
                 return null;
             }
+        }
+        if (!$this->canUseLocalCertificateAuthorityPair($certPath, $keyPath)
+            || !$this->certificateFilesHaveSameFingerprint(
+                $globalCertPath,
+                $certPath,
+            )
+        ) {
+            return null;
         }
         w_log_info(__('[SslCertificateService] Reusing global Weline local CA for this project'));
 
@@ -2332,6 +2846,14 @@ CNF;
 
     protected function ensureLocalCertificateAuthority(): array
     {
+        return $this->withLocalCaStateDirectoryLock(
+            $this->getLocalCaDir(),
+            fn (): array => $this->ensureLocalCertificateAuthorityLocked(),
+        );
+    }
+
+    private function ensureLocalCertificateAuthorityLocked(): array
+    {
         $certPath = $this->getLocalCaCertPath();
         $keyPath = $this->getLocalCaKeyPath();
         if ($this->canUseLocalCertificateAuthorityPair($certPath, $keyPath)) {
@@ -2420,6 +2942,12 @@ CNF;
                 'message' => __('Failed to persist local CA material: %{1}', [
                     $throwable->getMessage(),
                 ]),
+            ];
+        }
+        if (!$this->canUseLocalCertificateAuthorityPair($certPath, $keyPath)) {
+            return [
+                'success' => false,
+                'message' => __('Published local CA certificate and key did not verify'),
             ];
         }
         $this->syncGlobalLocalCertificateAuthority($certPath, $keyPath);
@@ -3351,10 +3879,31 @@ CNF;
     public function generateLocalCaSignedCertificate(string $domain, int $websiteId = 0, int $validDays = 825): array
     {
         try {
-            $domain = \strtolower(\trim($domain));
+            return (new ProjectCertificateGenerationStore())
+                ->withCertificateLifecycleLock(
+                    fn (): array => $this->generateLocalCaSignedCertificateLocked(
+                        $domain,
+                        $websiteId,
+                        $validDays,
+                    ),
+                );
+        } catch (\Throwable $throwable) {
+            return ['success' => false, 'message' => $throwable->getMessage()];
+        }
+    }
+
+    private function generateLocalCaSignedCertificateLocked(
+        string $domain,
+        int $websiteId = 0,
+        int $validDays = 825,
+    ): array
+    {
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
             if ($domain === '') {
                 return ['success' => false, 'message' => __('Domain cannot be empty')];
             }
+            $this->assertCertificateMutationNotBlockedByRetirement($domain);
 
             // 分阶段耗时追踪：帮助诊断 "准备 SSL 证书..." 卡在哪一步。
             // 每步通过 w_log_info 记录毫秒级耗时，复杂度极低但在事故时价值高。
@@ -3785,6 +4334,28 @@ CNF;
     public function generateSelfSignedCertificate(string $domain, int $websiteId = 0, int $validDays = 365): array
     {
         try {
+            return (new ProjectCertificateGenerationStore())
+                ->withCertificateLifecycleLock(
+                    fn (): array => $this->generateSelfSignedCertificateLocked(
+                        $domain,
+                        $websiteId,
+                        $validDays,
+                    ),
+                );
+        } catch (\Throwable $throwable) {
+            return ['success' => false, 'message' => $throwable->getMessage()];
+        }
+    }
+
+    private function generateSelfSignedCertificateLocked(
+        string $domain,
+        int $websiteId = 0,
+        int $validDays = 365,
+    ): array
+    {
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
+            $this->assertCertificateMutationNotBlockedByRetirement($domain);
             $reuse = $this->tryReuseWelineLocalWildcardBeforeSelfSign($domain, $websiteId);
             if ($reuse !== null) {
                 return $reuse;
@@ -4094,11 +4665,6 @@ CNF;
         }
     }
 
-    private function deactivateProjectCertificateGeneration(string $domain): void
-    {
-        (new ProjectCertificateGenerationStore())->deactivate($domain);
-    }
-
     /**
      * 触发证书更新事件
      * 
@@ -4336,6 +4902,13 @@ CNF;
      */
     public function isDomainSslIssuanceInProgress(string $domain): bool
     {
+        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            fn (): bool => $this->isDomainSslIssuanceInProgressUnlocked($domain),
+        );
+    }
+
+    private function isDomainSslIssuanceInProgressUnlocked(string $domain): bool
+    {
         $domain = \strtolower(\trim($domain));
         if ($domain === '') {
             return false;
@@ -4360,6 +4933,7 @@ CNF;
             }
             $age = \time() - (int)($lockStatus['mtime'] ?? 0);
             if ($age > self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
+                $this->cleanupSslIssuanceMarkerRecovery($lockPath);
                 $this->removeCertificateLeafSafely(
                     $certDir,
                     self::SSL_ISSUANCE_LOCK_FILENAME,
@@ -4382,15 +4956,38 @@ CNF;
     }
 
     /**
+     * Call only while holding the project certificate lifecycle lock. A
+     * projection retirement may be superseded by a newly activated generation,
+     * but an explicit disable/delete must publish its ordered event before any
+     * writer can replace its PostgreSQL row or certificate leaves.
+     */
+    private function assertCertificateMutationNotBlockedByRetirement(
+        string $domain,
+    ): void {
+        $intent = (new ProjectCertificateGenerationStore())->retirementIntent($domain);
+        if (!\is_array($intent)
+            || !\hash_equals('pending', (string)($intent['state'] ?? ''))
+            || \hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_OPERATION_PROJECTION,
+                (string)($intent['operation'] ?? ''),
+            )
+        ) {
+            return;
+        }
+        throw new \RuntimeException(
+            'Certificate material mutation is blocked until the explicit '
+                . 'retirement event has completed.',
+        );
+    }
+
+    /**
      * 创建颁发流程锁（目录由 getCertificateDir 确保存在）
      */
     protected function acquireSslIssuanceLock(string $domain): bool
     {
         try {
-            return GatewayProjectStateFilesystem::withExclusiveLock(
-                $this->certificateLifecycleLockPath(),
+            return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
                 fn (): bool => $this->acquireSslIssuanceLockUnlocked($domain),
-                waitTimeoutSeconds: 10.0,
             );
         } catch (\Throwable) {
             return false;
@@ -4399,7 +4996,12 @@ CNF;
 
     private function acquireSslIssuanceLockUnlocked(string $domain): bool
     {
-        $domain = \strtolower(\trim($domain));
+        try {
+            $domain = self::normalizeCertificateStorageDomain($domain);
+            $this->assertCertificateMutationNotBlockedByRetirement($domain);
+        } catch (\Throwable) {
+            return false;
+        }
         if ($domain === '') {
             return false;
         }
@@ -4416,6 +5018,7 @@ CNF;
             if ($age <= self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
                 return false;
             }
+            $this->cleanupSslIssuanceMarkerRecovery($lockPath);
             $this->removeCertificateLeafSafely(
                 $certDir,
                 self::SSL_ISSUANCE_LOCK_FILENAME,
@@ -4437,6 +5040,15 @@ CNF;
      */
     protected function releaseSslIssuanceLock(string $domain): void
     {
+        (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            function () use ($domain): void {
+                $this->releaseSslIssuanceLockUnlocked($domain);
+            },
+        );
+    }
+
+    private function releaseSslIssuanceLockUnlocked(string $domain): void
+    {
         $domain = \strtolower(\trim($domain));
         if ($domain === '') {
             return;
@@ -4444,12 +5056,28 @@ CNF;
         foreach (self::certificateStorageSegmentCandidatesForProbe($domain) as $segment) {
             $certDir = $this->certificateDirectoryForSegment($segment, false);
             if ($certDir !== null) {
+                $this->cleanupSslIssuanceMarkerRecovery(
+                    $certDir . self::SSL_ISSUANCE_LOCK_FILENAME,
+                );
                 $this->removeCertificateLeafSafely(
                     $certDir,
                     self::SSL_ISSUANCE_LOCK_FILENAME,
                 );
             }
         }
+    }
+
+    private function cleanupSslIssuanceMarkerRecovery(string $path): void
+    {
+        GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+            $path,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            'SSL issuance marker',
+            function (string $candidate) use ($path): void {
+                $this->assertSslStateTargetMode($path, 0600, 'SSL issuance marker');
+                $this->assertCertificateStateContents($path, $candidate);
+            },
+        );
     }
 
     /**
@@ -4477,6 +5105,28 @@ CNF;
         string $provider = '',
         bool $recoverAndTrustLocalCa = true
     ): ?SslCertificate {
+        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            fn (): ?SslCertificate => $this->syncCertificateRecordFromFilesLocked(
+                $domain,
+                $certPath,
+                $keyPath,
+                $websiteId,
+                $httpsEnabled,
+                $provider,
+                $recoverAndTrustLocalCa,
+            ),
+        );
+    }
+
+    private function syncCertificateRecordFromFilesLocked(
+        string $domain,
+        string $certPath,
+        string $keyPath,
+        int $websiteId = 0,
+        bool $httpsEnabled = true,
+        string $provider = '',
+        bool $recoverAndTrustLocalCa = true,
+    ): ?SslCertificate {
         try {
             $domain = self::normalizeCertificateStorageDomain($domain);
         } catch (\Throwable) {
@@ -4488,6 +5138,7 @@ CNF;
         }
 
         try {
+            $this->assertCertificateMutationNotBlockedByRetirement($domain);
             $chainPath = '';
             $candidateChainPath = \dirname($certPath) . DS . 'chain.pem';
             if (self::certificateBundleFileIsValid($candidateChainPath)) {
@@ -5877,12 +6528,12 @@ CNF;
             if ($chainPem !== '') {
                 $this->writeCertificateFileAtomically($certDir . 'chain.pem', $chainPem, 0644);
             } else {
-                $this->removeCertificateLeafSafely($certDir, 'chain.pem');
+                $this->removeCertificateStateLeafSafely($certDir, 'chain.pem');
             }
             if ($csrPem !== '') {
                 $this->writeCertificateFileAtomically($certDir . 'csr.pem', $csrPem, 0600);
             } else {
-                $this->removeCertificateLeafSafely($certDir, 'csr.pem');
+                $this->removeCertificateStateLeafSafely($certDir, 'csr.pem');
             }
         } catch (\Throwable $throwable) {
             w_log_error(
@@ -6020,6 +6671,14 @@ CNF;
      */
     public function reconcileCertificateFiles(): array
     {
+        return (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            fn (): array => $this->reconcileCertificateFilesLocked(),
+        );
+    }
+
+    /** @return array{written:int,updated:int,skipped:int,errors:array} */
+    private function reconcileCertificateFilesLocked(): array
+    {
         $result = [
             'written' => 0,
             'updated' => 0,
@@ -6040,6 +6699,21 @@ CNF;
             $sourceKey = (string)($row[SslCertificate::schema_fields_KEY_PATH] ?? '');
             if ($domain === '' || $domain === '0.0.0.0') {
                 $result['skipped']++;
+                continue;
+            }
+
+            try {
+                $domain = self::normalizeCertificateStorageDomain($domain);
+                $this->assertCertificateMutationNotBlockedByRetirement($domain);
+                if ($this->isDomainSslIssuanceInProgressUnlocked($domain)) {
+                    $result['skipped']++;
+                    continue;
+                }
+            } catch (\Throwable $throwable) {
+                $result['errors'][] = __('证书状态正在变更，已跳过同步 %{1}: %{2}', [
+                    $domain,
+                    $throwable->getMessage(),
+                ]);
                 continue;
             }
 
@@ -6537,8 +7211,8 @@ CNF;
         }
 
         try {
-            $prepared = GatewayProjectStateFilesystem::withExclusiveLock(
-                $this->certificateLifecycleLockPath(),
+            $prepared = (new ProjectCertificateGenerationStore())
+                ->withCertificateLifecycleLock(
                 fn (): array => $this->importManualCertificateLocked(
                     $domain,
                     $fullchainPem,
@@ -6548,7 +7222,6 @@ CNF;
                     $httpsEnabled,
                     $provider,
                 ),
-                waitTimeoutSeconds: 10.0,
             );
             if (($prepared['success'] ?? false) !== true
                 || !\hash_equals('prepared', (string)($prepared['phase'] ?? ''))
@@ -6575,6 +7248,7 @@ CNF;
         bool $httpsEnabled,
         string $provider,
     ): array {
+        $this->assertCertificateMutationNotBlockedByRetirement($domain);
         $issuingMsg = $this->getSslIssuanceConflictMessage($domain);
         if ($issuingMsg !== '') {
             return ['success' => false, 'message' => $issuingMsg, 'cert' => null];
@@ -6590,7 +7264,7 @@ CNF;
             if ($chainPem !== '') {
                 $this->writeCertificateFileAtomically($chainPath, $chainPem, 0644);
             } else {
-                $this->removeCertificateLeafSafely($certDir, 'chain.pem');
+                $this->removeCertificateStateLeafSafely($certDir, 'chain.pem');
             }
 
             $provider = \trim($provider) !== '' ? $provider : 'manual';
@@ -6746,36 +7420,105 @@ CNF;
                 continue;
             }
 
-            $subCertModel = ObjectManager::getInstance(SslCertificate::class, [], false);
-            $subCertModel->load((int) $row[SslCertificate::schema_fields_ID]);
-            if (!$subCertModel->getCertId()) {
-                continue;
-            }
             if (!self::certificatePemPairIsValidForName($certPem, $keyPem, $subDomain)) {
                 continue;
             }
+            try {
+                $didSync = (new ProjectCertificateGenerationStore())
+                    ->withCertificateLifecycleLock(function () use (
+                        $row,
+                        $subDomain,
+                        $certPem,
+                        $keyPem,
+                        $chainPem,
+                        $csrPem,
+                        $wildcardCert,
+                        $wildcardDomain,
+                        $now,
+                    ): bool {
+                        $this->assertCertificateMutationNotBlockedByRetirement(
+                            $wildcardDomain,
+                        );
+                        $this->assertCertificateMutationNotBlockedByRetirement(
+                            $subDomain,
+                        );
+                        $currentWildcard = ObjectManager::getInstance(
+                            SslCertificate::class,
+                            [],
+                            false,
+                        );
+                        $currentWildcard->load((int)$wildcardCert->getCertId());
+                        if (!$currentWildcard->getCertId()
+                            || !\hash_equals(
+                                $wildcardDomain,
+                                self::normalizeCertificateStorageDomain(
+                                    $currentWildcard->getDomain(),
+                                ),
+                            )
+                            || !\hash_equals(
+                                SslCertificate::STATUS_ACTIVE,
+                                $currentWildcard->getStatus(),
+                            )
+                            || !\hash_equals($certPem, $currentWildcard->getCertPem())
+                            || !\hash_equals($keyPem, $currentWildcard->getKeyPem())
+                            || !\hash_equals($chainPem, $currentWildcard->getChainPem())
+                            || !\hash_equals($csrPem, $currentWildcard->getCsrPem())
+                        ) {
+                            return false;
+                        }
+                        $subCertModel = ObjectManager::getInstance(
+                            SslCertificate::class,
+                            [],
+                            false,
+                        );
+                        $subCertModel->load((int)($row[
+                            SslCertificate::schema_fields_ID
+                        ] ?? 0));
+                        if (!$subCertModel->getCertId()
+                            || !\hash_equals(
+                                $subDomain,
+                                self::normalizeCertificateStorageDomain(
+                                    $subCertModel->getDomain(),
+                                ),
+                            )
+                            || !\hash_equals(
+                                SslCertificate::STATUS_ACTIVE,
+                                $subCertModel->getStatus(),
+                            )
+                        ) {
+                            return false;
+                        }
+                        $subCertModel->setCertPem($certPem)
+                            ->setKeyPem($keyPem)
+                            ->setChainPem($chainPem)
+                            ->setCsrPem($csrPem)
+                            ->setIssuer($currentWildcard->getIssuer())
+                            ->setProvider($currentWildcard->getProvider())
+                            ->setIssuedAt($currentWildcard->getIssuedAt())
+                            ->setExpiresAt($currentWildcard->getExpiresAt())
+                            ->setUpdatedAt($now);
 
-            $subCertModel->setCertPem($certPem)
-                ->setKeyPem($keyPem)
-                ->setChainPem($chainPem)
-                ->setCsrPem($csrPem)
-                ->setIssuer($wildcardCert->getIssuer())
-                ->setProvider($wildcardCert->getProvider())
-                ->setIssuedAt($wildcardCert->getIssuedAt())
-                ->setExpiresAt($wildcardCert->getExpiresAt())
-                ->setUpdatedAt($now);
-
-            $stagedData = $subCertModel->getData();
-            $stagedData[SslCertificate::schema_fields_ID] = 0;
-            if (!$this->restoreCertificateFilesFromData($stagedData)) {
-                continue;
+                        $stagedData = $subCertModel->getData();
+                        $stagedData[SslCertificate::schema_fields_ID] = 0;
+                        if (!$this->restoreCertificateFilesFromData($stagedData)) {
+                            return false;
+                        }
+                        $certDir = $this->getCertificateDir($subDomain);
+                        $subCertModel->setCertPath($certDir . 'fullchain.pem')
+                            ->setKeyPath($certDir . 'privkey.pem')
+                            ->setChainPath($chainPem !== '' ? $certDir . 'chain.pem' : '')
+                            ->save();
+                        return true;
+                    });
+                if ($didSync) {
+                    ++$synced;
+                }
+            } catch (\Throwable $throwable) {
+                w_log_warning(
+                    '[SslCertificateService] wildcard subdomain sync deferred for '
+                        . $subDomain . ': ' . $throwable->getMessage(),
+                );
             }
-            $certDir = $this->getCertificateDir($subDomain);
-            $subCertModel->setCertPath($certDir . 'fullchain.pem')
-                ->setKeyPath($certDir . 'privkey.pem')
-                ->setChainPath($chainPem !== '' ? $certDir . 'chain.pem' : '')
-                ->save();
-            $synced++;
         }
 
         if ($synced > 0) {
@@ -7747,10 +8490,16 @@ CNF;
             return false;
         }
         try {
-            GatewayProjectStateFilesystem::atomicWrite(
-                $challengeDir . $token,
+            $path = $challengeDir . $token;
+            $this->writeLockedSslStateAtomically(
+                $path,
                 $content,
                 0644,
+                self::MAX_ACME_CHALLENGE_STATE_BYTES,
+                'ACME HTTP-01 challenge state',
+                function (string $candidate) use ($path): void {
+                    $this->assertAcmeChallengeStateContents($path, $candidate);
+                },
             );
             return true;
         } catch (\Throwable) {
@@ -7771,15 +8520,64 @@ CNF;
             return;
         }
         $file = $challengeDir . $token;
-        $status = @\lstat($file);
-        if (!\is_array($status)) {
-            return;
+        try {
+            (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+                function () use ($file): void {
+                    GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                        $file,
+                        self::MAX_ACME_CHALLENGE_STATE_BYTES,
+                        'ACME HTTP-01 challenge state',
+                        function (string $candidate) use ($file): void {
+                            $this->assertSslStateTargetMode(
+                                $file,
+                                0644,
+                                'ACME HTTP-01 challenge state',
+                            );
+                            $this->assertAcmeChallengeStateContents($file, $candidate);
+                        },
+                    );
+                    $status = @\lstat($file);
+                    if (!\is_array($status)) {
+                        if (\file_exists($file) || \is_link($file)) {
+                            throw new \RuntimeException(
+                                'ACME HTTP-01 challenge target is indeterminate.',
+                            );
+                        }
+                        return;
+                    }
+                    $this->assertSslStateTargetMode(
+                        $file,
+                        0644,
+                        'ACME HTTP-01 challenge state',
+                    );
+                    if (!GatewayProjectStateFilesystem::removeRegular(
+                        $file,
+                        'ACME HTTP-01 challenge state',
+                        $status,
+                    )) {
+                        throw new \RuntimeException(
+                            'Unable to remove the ACME HTTP-01 challenge state.',
+                        );
+                    }
+                },
+            );
+        } catch (\Throwable $throwable) {
+            $this->lastAcmeError = $throwable->getMessage();
         }
-        $type = ((int)($status['mode'] ?? 0)) & 0170000;
-        if (($type === 0100000 && (int)($status['nlink'] ?? 0) === 1)
-            || $type === 0120000
+    }
+
+    private function assertAcmeChallengeStateContents(
+        string $path,
+        string $contents,
+    ): void {
+        $token = \basename(\str_replace('\\', '/', $path));
+        if (\preg_match('/\A[A-Za-z0-9_-]{1,256}\z/D', $token) !== 1
+            || \preg_match(
+                '/\A' . \preg_quote($token, '/') . '\.[A-Za-z0-9_-]{43}\z/D',
+                $contents,
+            ) !== 1
         ) {
-            @\unlink($file);
+            throw new \RuntimeException('ACME HTTP-01 challenge state is malformed.');
         }
     }
 
@@ -7845,12 +8643,19 @@ CNF;
     protected function registerWlsHttp01Challenge(string $domain, string $token, string $keyAuth): bool
     {
         try {
+            $deadline = $this->gatewayAcmePublishMonotonicNow()
+                + self::GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS;
             $desired = $this->acmeHttp01ChallengeStore()->register(
                 $domain,
                 $token,
                 $keyAuth,
+                $deadline,
             );
-            return $this->publishGatewayAcmeDesiredBeforeValidation($desired, $domain);
+            return $this->publishGatewayAcmeDesiredBeforeValidation(
+                $desired,
+                $domain,
+                $deadline,
+            );
         } catch (\Throwable $throwable) {
             $this->lastAcmeError = $throwable->getMessage();
             return false;
@@ -7869,15 +8674,25 @@ CNF;
     protected function publishGatewayAcmeDesiredBeforeValidation(
         array $desired,
         string $requiredDomain,
+        ?float $deadlineMonotonic = null,
     ): bool {
-        $deadline = $this->gatewayAcmePublishMonotonicNow()
-            + self::GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS;
+        $deadline = $deadlineMonotonic
+            ?? ($this->gatewayAcmePublishMonotonicNow()
+                + self::GATEWAY_ACME_PUBLISH_TIMEOUT_SECONDS);
+        if (!\is_finite($deadline) || $deadline < 0.0) {
+            $this->lastAcmeError = 'Gateway ACME publication deadline is invalid.';
+            return false;
+        }
         $attempt = 0;
         while (true) {
             if ($attempt > 0 && $this->gatewayAcmePublishMonotonicNow() >= $deadline) {
                 break;
             }
-            if ($this->publishGatewayAcmeDesired($desired, $requiredDomain)) {
+            if ($this->publishGatewayAcmeDesired(
+                $desired,
+                $requiredDomain,
+                $deadline,
+            )) {
                 return true;
             }
             $remainingSeconds = $deadline - $this->gatewayAcmePublishMonotonicNow();
@@ -7955,10 +8770,12 @@ CNF;
     protected function publishGatewayAcmeDesired(
         array $desired,
         ?string $requiredDomain = null,
+        ?float $deadlineMonotonic = null,
     ): bool {
         return (new GatewayAcmeChallengePublisher())->publish(
             $desired,
             $requiredDomain,
+            $deadlineMonotonic,
         );
     }
 
@@ -8478,10 +9295,9 @@ CNF;
         }
         try {
             $domain = self::normalizeCertificateStorageDomain($domain);
-            $prepared = GatewayProjectStateFilesystem::withExclusiveLock(
-                $this->certificateLifecycleLockPath(),
+            $prepared = (new ProjectCertificateGenerationStore())
+                ->withCertificateLifecycleLock(
                 fn (): array => $this->enableManagedCertificateLocked($domain),
-                waitTimeoutSeconds: 10.0,
             );
             if (($prepared['success'] ?? false) !== true
                 || !\hash_equals('prepared', (string)($prepared['phase'] ?? ''))
@@ -8509,6 +9325,25 @@ CNF;
                 return ['success' => false, 'message' => $issuingMsg];
             }
 
+            $generationStore = new ProjectCertificateGenerationStore();
+            $pendingRetirement = $generationStore->retirementIntent($domain);
+            if (\is_array($pendingRetirement)
+                && \hash_equals(
+                    'pending',
+                    (string)($pendingRetirement['state'] ?? ''),
+                )
+                && !\hash_equals(
+                    ProjectCertificateGenerationStore::RETIREMENT_OPERATION_PROJECTION,
+                    (string)($pendingRetirement['operation'] ?? ''),
+                )
+            ) {
+                return [
+                    'success' => false,
+                    'phase' => 'retirement_pending',
+                    'domain' => $domain,
+                    'message' => (string)__('上一次证书退役尚未完成代际事件确认，请等待自动恢复后再启用 HTTPS。'),
+                ];
+            }
             $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
             
             if (!$cert->getCertId()) {
@@ -8557,12 +9392,11 @@ CNF;
                 ->save();
 
             $certId = (int)$cert->getCertId();
-            $reenableIntent = (new ProjectCertificateGenerationStore())
-                ->issueExplicitReenableIntent(
-                    $domain,
-                    (string)$cert->getCertPath(),
-                    (string)$cert->getKeyPath(),
-                );
+            $reenableIntent = $generationStore->issueExplicitReenableIntent(
+                $domain,
+                (string)$cert->getCertPath(),
+                (string)$cert->getKeyPath(),
+            );
             return [
                 'success' => true,
                 'phase' => 'prepared',
@@ -8648,6 +9482,7 @@ CNF;
         bool $delete,
         string $reason,
     ): array {
+        $deadlineMonotonic = (\hrtime(true) / 1_000_000_000) + 75.0;
         try {
             $domain = self::normalizeCertificateStorageDomain($domain);
             if (\in_array($domain, self::PROTECTED_LOCAL_DOMAINS, true)) {
@@ -8656,14 +9491,31 @@ CNF;
                     [$domain],
                 ));
             }
-            return (new ProjectCertificateGenerationStore())
+            $prepared = (new ProjectCertificateGenerationStore())
                 ->withCertificateLifecycleLock(
                     fn (): array => $this->transitionCertificateOutOfServiceLocked(
                         $domain,
                         $delete,
                         $reason,
+                        $deadlineMonotonic,
+                    ),
+                    \min(
+                        0.25,
+                        $this->assertCertificateRetirementBudget(
+                            $deadlineMonotonic,
+                            0.01,
+                        ),
                     ),
                 );
+            if (($prepared['success'] ?? false) !== true
+                || !\hash_equals('prepared', (string)($prepared['phase'] ?? ''))
+            ) {
+                return $prepared;
+            }
+            return $this->completeCertificateOutOfService(
+                $prepared,
+                $deadlineMonotonic,
+            );
         } catch (\Throwable $throwable) {
             return [
                 'success' => false,
@@ -8674,23 +9526,21 @@ CNF;
         }
     }
 
-    private function certificateLifecycleLockPath(): string
-    {
-        return $this->ensureCertificateBaseDirectory()
-            . '.wls-certificate-lifecycle.lock';
-    }
-
     /** @return array<string,mixed> */
     private function transitionCertificateOutOfServiceLocked(
         string $domain,
         bool $delete,
         string $reason,
+        float $deadlineMonotonic,
     ): array {
+        $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
         $issuanceConflict = $this->getSslIssuanceConflictMessage($domain);
+        $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
         if ($issuanceConflict !== '') {
             throw new \RuntimeException($issuanceConflict);
         }
         $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
+        $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
         if (!$cert->getCertId()) {
             throw new \RuntimeException((string)__(
                 '未找到域名证书：%{1}',
@@ -8698,35 +9548,24 @@ CNF;
             ));
         }
         $certId = (int)$cert->getCertId();
-        $directoryPlan = $delete
-            ? $this->prepareCertificateDirectoryRemoval($domain)
-            : [];
+        $operation = $delete
+            ? ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE
+            : ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DISABLE;
+        $generationStore = new ProjectCertificateGenerationStore();
 
-        $cert->setHttpsEnabled(false)
-            ->setAutoRenew(false)
-            ->setStatus(SslCertificate::STATUS_REVOKED)
-            ->setRenewError('')
-            ->save();
-
-        // Publish the project security tombstone before touching any derived
-        // endpoint state. A malformed endpoint or a crash must never leave the
-        // old active selector eligible after the database revocation commits.
+        // The fail-closed tombstone and complete outbox are the first durable
+        // write. A crash before the PostgreSQL row update therefore remains
+        // replayable and can never leave the old active selector eligible.
         try {
-            $this->deactivateProjectCertificateGeneration($domain);
-            $revocationTombstone = (new ProjectCertificateGenerationStore())
-                ->disabled($domain);
-            if (!\is_array($revocationTombstone)) {
-                throw new \RuntimeException(
-                    'Disabled certificate tombstone is unavailable after deactivation.',
-                );
-            }
-        } catch (\Throwable $throwable) {
-            $this->recordCertificateLifecycleFailure(
-                $certId,
+            $retirementIntent = $generationStore->prepareCertificateRetirement(
                 $domain,
-                'snapshot_deactivation',
-                $throwable,
+                $operation,
+                $certId,
+                $reason,
+                $this->certificateRetirementRowDigest($cert),
+                $deadlineMonotonic,
             );
+        } catch (\Throwable $throwable) {
             return [
                 'success' => false,
                 'phase' => 'snapshot_deactivation',
@@ -8735,173 +9574,779 @@ CNF;
                 'endpoint_updates' => 0,
                 'desired_revoked' => true,
                 'message' => (string)__(
-                    '证书已写入撤销事实，但证书生成选择器尚未停用：%{1}',
+                    '证书退役意图未能安全持久化：%{1}',
                     [$throwable->getMessage()],
                 ),
             ];
         }
 
-        $endpointUpdates = 0;
-        $endpointFailure = null;
         try {
-            $endpointUpdates = $this->revokeDomainFromInstanceConfigs($domain);
+            $cert->setHttpsEnabled(false)
+                ->setAutoRenew(false)
+                ->setStatus(SslCertificate::STATUS_REVOKED)
+                ->setRenewError('')
+                ->save();
+            $retirementIntent = $generationStore->advanceRetirementPhase(
+                $retirementIntent,
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_PREPARED,
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_RUNTIME_PENDING,
+                \hash(
+                    'sha256',
+                    GatewayClient::canonicalJson([
+                        'certificate_id' => $certId,
+                        'row_digest' => $this->certificateRetirementRowDigest($cert),
+                        'status' => SslCertificate::STATUS_REVOKED,
+                        'https_enabled' => false,
+                    ]),
+                ),
+                $deadlineMonotonic,
+            ) ?? $retirementIntent;
         } catch (\Throwable $throwable) {
-            $this->recordCertificateLifecycleFailure(
-                $certId,
-                $domain,
-                'endpoint_revoke',
-                $throwable,
-            );
-            // Continue into live data-plane convergence. Endpoint JSON is
-            // derived state; returning here would strand a running Worker on
-            // the revoked certificate despite the durable tombstone.
-            $endpointFailure = $throwable;
-        }
-        try {
-            // The coordinator publishes an exact whole-project manifest and,
-            // for native TLS surfaces, requires the matching Worker ACK set.
-            $this->regenerateCertificateMap(
-                true,
-                $domain,
-                [
-                    'domain' => $domain,
-                    'generation' => (int)$revocationTombstone['generation'],
-                    'source_digest' => (string)$revocationTombstone['source_digest'],
-                ],
-            );
-        } catch (\Throwable $throwable) {
-            $this->recordCertificateLifecycleFailure(
-                $certId,
-                $domain,
-                'serving_publication',
-                $throwable,
-            );
             return [
                 'success' => false,
-                'phase' => 'serving_publication',
+                'phase' => 'database_revocation',
                 'domain' => $domain,
                 'cert_id' => $certId,
-                'endpoint_updates' => $endpointUpdates,
+                'endpoint_updates' => 0,
                 'desired_revoked' => true,
                 'message' => (string)__(
-                    '证书已写入撤销事实，但服务清单尚未完成确认：%{1}',
-                    [($endpointFailure === null ? '' : $endpointFailure->getMessage() . '; ')
-                        . $throwable->getMessage()],
+                    '证书已进入安全隔离且保留可重放意图，数据库撤销待恢复：%{1}',
+                    [$throwable->getMessage()],
                 ),
             ];
         }
 
-        if ($endpointFailure !== null) {
-            return [
-                'success' => false,
-                'phase' => 'endpoint_revoke',
-                'domain' => $domain,
-                'cert_id' => $certId,
-                'endpoint_updates' => $endpointUpdates,
-                'desired_revoked' => true,
-                'serving_removed' => true,
-                'message' => (string)__(
-                    '证书服务已安全撤销，但实例端点派生状态更新失败：%{1}',
-                    [$endpointFailure->getMessage()],
-                ),
-            ];
-        }
-
-        if ($delete) {
-            try {
-                $this->removeCertificateDirectoryPlan($directoryPlan);
-            } catch (\Throwable $throwable) {
-                $this->recordCertificateLifecycleFailure(
-                    $certId,
-                    $domain,
-                    'source_cleanup',
-                    $throwable,
-                );
-                return [
-                    'success' => false,
-                    'phase' => 'source_cleanup',
-                    'domain' => $domain,
-                    'cert_id' => $certId,
-                    'endpoint_updates' => $endpointUpdates,
-                    'desired_revoked' => true,
-                    'serving_removed' => true,
-                    'message' => (string)__(
-                        '服务路由已撤销，但证书源清理未完成：%{1}',
-                        [$throwable->getMessage()],
-                    ),
-                ];
-            }
-            try {
-                $toDelete = ObjectManager::getInstance(SslCertificate::class, [], false);
-                $toDelete->load($certId);
-                if ($toDelete->getCertId()) {
-                    $loadedDomain = self::normalizeCertificateStorageDomain(
-                        (string)$toDelete->getDomain(),
-                    );
-                    if (!\hash_equals($domain, $loadedDomain)) {
-                        throw new \RuntimeException(
-                            'Certificate row identity changed before final deletion.',
-                        );
-                    }
-                    $toDelete->delete()->fetch();
-                }
-            } catch (\Throwable $throwable) {
-                $this->recordCertificateLifecycleFailure(
-                    $certId,
-                    $domain,
-                    'database_cleanup',
-                    $throwable,
-                );
-                return [
-                    'success' => false,
-                    'phase' => 'database_cleanup',
-                    'domain' => $domain,
-                    'cert_id' => $certId,
-                    'endpoint_updates' => $endpointUpdates,
-                    'desired_revoked' => true,
-                    'serving_removed' => true,
-                    'source_removed' => true,
-                    'message' => (string)__(
-                        '证书路由和源文件已撤销，但数据库清理未完成：%{1}',
-                        [$throwable->getMessage()],
-                    ),
-                ];
-            }
-            $this->dispatchCertificateDeletedEvent($domain, $certId, $reason);
-            return [
-                'success' => true,
-                'phase' => 'complete',
-                'domain' => $domain,
-                'cert_id' => $certId,
-                'endpoint_updates' => $endpointUpdates,
-                'deleted' => true,
-                'message' => (string)__('证书已删除'),
-            ];
-        }
-
-        $this->dispatchCertificateDisabledEvent($domain, $certId, $reason);
         return [
             'success' => true,
-            'phase' => 'complete',
+            'phase' => 'prepared',
             'domain' => $domain,
             'cert_id' => $certId,
-            'endpoint_updates' => $endpointUpdates,
-            'deleted' => false,
-            'message' => (string)__('HTTPS 已禁用'),
+            'delete' => $delete,
+            'reason' => $reason,
+            'retirement_intent' => $retirementIntent,
         ];
     }
 
-    private function revokeDomainFromInstanceConfigs(string $domain): int
+    /** @param array<string,mixed> $prepared @return array<string,mixed> */
+    private function completeCertificateOutOfService(
+        array $prepared,
+        float $deadlineMonotonic,
+    ): array
+    {
+        $domain = (string)$prepared['domain'];
+        $certId = (int)$prepared['cert_id'];
+        $retirementIntent = \is_array($prepared['retirement_intent'] ?? null)
+            ? $prepared['retirement_intent']
+            : [];
+        try {
+            return $this->resumeCertificateRetirementIntent(
+                $retirementIntent,
+                $deadlineMonotonic,
+            );
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'phase' => 'retirement_pending',
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'endpoint_updates' => 0,
+                'desired_revoked' => true,
+                'serving_removed' => false,
+                'message' => (string)__('证书已进入失效安全状态，后续退役阶段将自动重放：%{1}', [
+                    $throwable->getMessage(),
+                ]),
+            ];
+        }
+    }
+
+    /**
+     * Resume one exact multi-stage retirement intent. Every irreversible stage
+     * records its receipt before the next stage starts, so process death at any
+     * boundary is safe to replay.
+     *
+     * @param array<string,mixed> $expectedIntent
+     * @return array<string,mixed>
+     */
+    private function resumeCertificateRetirementIntent(
+        array $expectedIntent,
+        float $deadlineMonotonic,
+    ): array {
+        $store = new ProjectCertificateGenerationStore();
+        $domain = self::normalizeCertificateStorageDomain((string)(
+            $expectedIntent['domain'] ?? ''
+        ));
+        $certId = (int)($expectedIntent['certificate_id'] ?? 0);
+        for ($step = 0; $step < 12; ++$step) {
+            $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.1);
+            $intent = $store->retirementIntent($domain, $deadlineMonotonic);
+            if (!\is_array($intent)
+                || !$this->sameCertificateRetirementIdentity($expectedIntent, $intent)
+            ) {
+                return $this->certificateRetirementSupersededResult(
+                    $domain,
+                    $certId,
+                    '证书退役意图已变更，旧清理流程已取消。',
+                );
+            }
+            $state = (string)($intent['state'] ?? '');
+            if (\hash_equals('superseded', $state)) {
+                return $this->certificateRetirementSupersededResult(
+                    $domain,
+                    $certId,
+                    '更高代证书已激活，旧清理流程已取消。',
+                );
+            }
+            if (\hash_equals('completed', $state)) {
+                $deleted = \hash_equals(
+                    ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE,
+                    (string)($intent['operation'] ?? ''),
+                );
+                return [
+                    'success' => true,
+                    'phase' => 'complete',
+                    'domain' => $domain,
+                    'cert_id' => $certId,
+                    'endpoint_updates' => 0,
+                    'deleted' => $deleted,
+                    'message' => $deleted
+                        ? (string)__('证书已删除')
+                        : (string)__('HTTPS 已禁用'),
+                ];
+            }
+            if (!\hash_equals('pending', $state)) {
+                throw new \RuntimeException('Certificate retirement state is invalid.');
+            }
+
+            $phase = (string)($intent['phase'] ?? '');
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_PREPARED,
+                $phase,
+            )) {
+                $this->withCertificateRetirementLifecycleLock(
+                    $store,
+                    $deadlineMonotonic,
+                    function () use ($store, $intent, $deadlineMonotonic): void {
+                        $receipt = $this->commitCertificateRetirementDatabaseFact(
+                            $intent,
+                        );
+                        $store->advanceRetirementPhase(
+                            $intent,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_PREPARED,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_RUNTIME_PENDING,
+                            $receipt,
+                            $deadlineMonotonic,
+                        );
+                    },
+                );
+                continue;
+            }
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_RUNTIME_PENDING,
+                $phase,
+            )) {
+                (new CertificateMaterialUpdateCoordinator())->notify(
+                    $domain,
+                    ['wls_revocation_intent' => $intent],
+                    '',
+                    $deadlineMonotonic,
+                );
+                continue;
+            }
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_RUNTIME_RETIRED,
+                $phase,
+            )) {
+                $this->withCertificateRetirementLifecycleLock(
+                    $store,
+                    $deadlineMonotonic,
+                    function () use ($store, $intent, $deadlineMonotonic): void {
+                        $receipt = $this->retireLegacyNginxCertificateGeneration(
+                            $intent,
+                            $deadlineMonotonic,
+                        );
+                        $store->advanceRetirementPhase(
+                            $intent,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_RUNTIME_RETIRED,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_LEGACY_RETIRED,
+                            $receipt,
+                            $deadlineMonotonic,
+                        );
+                    },
+                );
+                continue;
+            }
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_LEGACY_RETIRED,
+                $phase,
+            )) {
+                $this->withCertificateRetirementLifecycleLock(
+                    $store,
+                    $deadlineMonotonic,
+                    function () use (
+                        $store,
+                        $intent,
+                        $domain,
+                        $deadlineMonotonic,
+                    ): void {
+                        $endpointUpdates = $this->revokeDomainFromInstanceConfigs(
+                            $domain,
+                            $deadlineMonotonic,
+                        );
+                        $store->advanceRetirementPhase(
+                            $intent,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_LEGACY_RETIRED,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_ENDPOINT_RETIRED,
+                            \hash(
+                                'sha256',
+                                GatewayClient::canonicalJson([
+                                    'domain' => $domain,
+                                    'endpoint_updates' => $endpointUpdates,
+                                ]),
+                            ),
+                            $deadlineMonotonic,
+                        );
+                    },
+                );
+                continue;
+            }
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_ENDPOINT_RETIRED,
+                $phase,
+            )) {
+                $this->withCertificateRetirementLifecycleLock(
+                    $store,
+                    $deadlineMonotonic,
+                    function () use (
+                        $store,
+                        $intent,
+                        $domain,
+                        $deadlineMonotonic,
+                    ): void {
+                        $operation = (string)($intent['operation'] ?? '');
+                        $directoryPlan = $operation
+                            === ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE
+                            ? $this->prepareCertificateDirectoryRemoval(
+                                $domain,
+                                $deadlineMonotonic,
+                            )
+                            : [];
+                        if ($directoryPlan !== []) {
+                            $this->removeCertificateDirectoryPlan(
+                                $directoryPlan,
+                                $deadlineMonotonic,
+                            );
+                        }
+                        $store->advanceRetirementPhase(
+                            $intent,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_ENDPOINT_RETIRED,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_SOURCE_RETIRED,
+                            \hash(
+                                'sha256',
+                                GatewayClient::canonicalJson([
+                                    'domain' => $domain,
+                                    'operation' => $operation,
+                                    'directories_removed' => \count($directoryPlan),
+                                ]),
+                            ),
+                            $deadlineMonotonic,
+                        );
+                    },
+                );
+                continue;
+            }
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_SOURCE_RETIRED,
+                $phase,
+            )) {
+                $this->withCertificateRetirementLifecycleLock(
+                    $store,
+                    $deadlineMonotonic,
+                    function () use (
+                        $store,
+                        $intent,
+                        $domain,
+                        $deadlineMonotonic,
+                    ): void {
+                        $operation = (string)($intent['operation'] ?? '');
+                        $rowResult = 'retained';
+                        if ($operation
+                            === ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE
+                        ) {
+                            $rowResult = $this->deleteCertificateRetirementDatabaseRow($intent);
+                        }
+                        $store->advanceRetirementPhase(
+                            $intent,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_SOURCE_RETIRED,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_DATABASE_RETIRED,
+                            \hash(
+                                'sha256',
+                                GatewayClient::canonicalJson([
+                                    'domain' => $domain,
+                                    'operation' => $operation,
+                                    'row_result' => $rowResult,
+                                ]),
+                            ),
+                            $deadlineMonotonic,
+                        );
+                    },
+                );
+                continue;
+            }
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_DATABASE_RETIRED,
+                $phase,
+            )) {
+                $this->withCertificateRetirementLifecycleLock(
+                    $store,
+                    $deadlineMonotonic,
+                    function () use (
+                        $store,
+                        $intent,
+                        $deadlineMonotonic,
+                    ): void {
+                        $this->dispatchDurableCertificateRetirementEvent($intent);
+                        $store->advanceRetirementPhase(
+                            $intent,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_DATABASE_RETIRED,
+                            ProjectCertificateGenerationStore::RETIREMENT_PHASE_EVENT_DISPATCHED,
+                            \hash(
+                                'sha256',
+                                GatewayClient::canonicalJson([
+                                    'event_id' => (string)($intent['event_id'] ?? ''),
+                                    'operation' => (string)($intent['operation'] ?? ''),
+                                ]),
+                            ),
+                            $deadlineMonotonic,
+                        );
+                    },
+                );
+                continue;
+            }
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_PHASE_EVENT_DISPATCHED,
+                $phase,
+            )) {
+                $this->withCertificateRetirementLifecycleLock(
+                    $store,
+                    $deadlineMonotonic,
+                    fn (): bool => $store->finishRetirementIntent(
+                        $intent,
+                        $deadlineMonotonic,
+                    ),
+                );
+                continue;
+            }
+            throw new \RuntimeException(
+                'Certificate retirement contains an unknown replay phase: ' . $phase,
+            );
+        }
+        throw new \RuntimeException('Certificate retirement exceeded its bounded stage count.');
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function commitCertificateRetirementDatabaseFact(array $intent): string
+    {
+        $domain = (string)$intent['domain'];
+        $certId = (int)($intent['certificate_id'] ?? 0);
+        $record = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $record->load($certId);
+        if (!$record->getCertId()) {
+            if (\hash_equals(
+                ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE,
+                (string)($intent['operation'] ?? ''),
+            )) {
+                return \hash('sha256', 'retirement-row-already-absent:' . $certId);
+            }
+            throw new \RuntimeException(
+                'The certificate row disappeared before its disable fact committed.',
+            );
+        }
+        $recordDomain = self::normalizeCertificateStorageDomain($record->getDomain());
+        $rowDigest = $this->certificateRetirementRowDigest($record);
+        if (!\hash_equals($domain, $recordDomain)
+            || !\hash_equals(
+                (string)($intent['expected_row_digest'] ?? ''),
+                $rowDigest,
+            )
+        ) {
+            throw new \RuntimeException(
+                'The certificate row identity changed before retirement commit.',
+            );
+        }
+        if (!\hash_equals(SslCertificate::STATUS_REVOKED, $record->getStatus())
+            || $record->isHttpsEnabled()
+            || $record->isAutoRenew()
+        ) {
+            $record->setHttpsEnabled(false)
+                ->setAutoRenew(false)
+                ->setStatus(SslCertificate::STATUS_REVOKED)
+                ->setRenewError('')
+                ->save();
+        }
+        return \hash(
+            'sha256',
+            GatewayClient::canonicalJson([
+                'certificate_id' => $certId,
+                'row_digest' => $this->certificateRetirementRowDigest($record),
+                'status' => $record->getStatus(),
+                'https_enabled' => $record->isHttpsEnabled(),
+                'auto_renew' => $record->isAutoRenew(),
+            ]),
+        );
+    }
+
+    private function certificateRetirementRowDigest(SslCertificate $record): string
+    {
+        return \hash(
+            'sha256',
+            GatewayClient::canonicalJson([
+                'certificate_id' => $record->getCertId(),
+                'domain' => self::normalizeCertificateStorageDomain($record->getDomain()),
+                'certificate_type' => $record->getCertType(),
+                'website_id' => $record->getWebsiteId(),
+                'certificate_path' => $record->getCertPath(),
+                'private_key_path' => $record->getKeyPath(),
+                'chain_path' => $record->getChainPath(),
+                'issuer' => $record->getIssuer(),
+                'provider' => $record->getProvider(),
+                'issued_at' => (string)$record->getData(
+                    SslCertificate::schema_fields_ISSUED_AT,
+                ),
+                'expires_at' => $record->getExpiresAt(),
+            ]),
+        );
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function deleteCertificateRetirementDatabaseRow(array $intent): string
+    {
+        $certId = (int)($intent['certificate_id'] ?? 0);
+        $record = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $record->load($certId);
+        if (!$record->getCertId()) {
+            return 'already_absent';
+        }
+        if (!\hash_equals(
+                (string)$intent['domain'],
+                self::normalizeCertificateStorageDomain($record->getDomain()),
+            )
+            || !\hash_equals(
+                (string)($intent['expected_row_digest'] ?? ''),
+                $this->certificateRetirementRowDigest($record),
+            )
+            || !\hash_equals(SslCertificate::STATUS_REVOKED, $record->getStatus())
+            || $record->isHttpsEnabled()
+        ) {
+            throw new \RuntimeException(
+                'The certificate row changed before retirement deletion.',
+            );
+        }
+        $record->delete()->fetch();
+        return 'deleted';
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function dispatchDurableCertificateRetirementEvent(array $intent): void
+    {
+        $operation = (string)($intent['operation'] ?? '');
+        if (\hash_equals(
+            ProjectCertificateGenerationStore::RETIREMENT_OPERATION_PROJECTION,
+            $operation,
+        )) {
+            return;
+        }
+        $event = $operation
+            === ProjectCertificateGenerationStore::RETIREMENT_OPERATION_DELETE
+            ? 'Weline_Server::domain::certificate_deleted'
+            : 'Weline_Server::domain::certificate_disabled';
+        ObjectManager::getInstance(EventsManager::class)->dispatch($event, [
+            'domain' => (string)$intent['domain'],
+            'cert_id' => (int)($intent['certificate_id'] ?? 0),
+            'reason' => (string)($intent['reason'] ?? ''),
+            'retirement_generation' => (int)$intent['generation'],
+            'retirement_intent_id' => (string)$intent['intent_id'],
+            'retirement_event_id' => (string)$intent['event_id'],
+            'retirement_operation' => $operation,
+        ]);
+    }
+
+    private function assertCertificateRetirementBudget(
+        float $deadlineMonotonic,
+        float $minimumSeconds,
+    ): float {
+        $remaining = $deadlineMonotonic - (\hrtime(true) / 1_000_000_000);
+        if (!\is_finite($deadlineMonotonic)
+            || !\is_finite($minimumSeconds)
+            || $minimumSeconds <= 0.0
+            || $remaining < $minimumSeconds
+        ) {
+            throw new \RuntimeException(
+                'Certificate retirement replay exhausted its global time budget.',
+            );
+        }
+        return $remaining;
+    }
+
+    private function withCertificateRetirementLifecycleLock(
+        ProjectCertificateGenerationStore $store,
+        float $deadlineMonotonic,
+        callable $callback,
+    ): mixed {
+        $remaining = $this->assertCertificateRetirementBudget(
+            $deadlineMonotonic,
+            0.05,
+        );
+        $waitTimeout = \max(0.01, \min(0.25, $remaining / 2.0));
+        return $store->withCertificateLifecycleLock(
+            function () use ($deadlineMonotonic, $callback): mixed {
+                $this->assertCertificateRetirementBudget(
+                    $deadlineMonotonic,
+                    0.01,
+                );
+                return $callback();
+            },
+            $waitTimeout,
+        );
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function retireLegacyNginxCertificateGeneration(
+        array $intent,
+        float $deadlineMonotonic,
+    ): string {
+        $this->assertCertificateRetirementBudget($deadlineMonotonic, 1.0);
+        $managed = ManagedNginxService::fromEnv();
+        $before = $managed->retirementSnapshot($deadlineMonotonic);
+        $running = ($before['running'] ?? false) === true;
+        $legacyObserved = $running
+            || \trim((string)($before['owner_instance'] ?? '')) !== ''
+            || \trim((string)($before['owner_config_sha256'] ?? '')) !== ''
+            || \trim((string)($before['owner_ssl_certificate_sha256'] ?? '')) !== '';
+        $legacyConfigPath = $managed->paths()->confFile();
+        $legacyConfigStatus = @\lstat($legacyConfigPath);
+        $legacyConfig = '';
+        if (\is_array($legacyConfigStatus)) {
+            $legacyConfig = self::readRegularFileNoFollow(
+                $legacyConfigPath,
+                self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                true,
+                false,
+            ) ?? '';
+            if ($legacyConfig === '') {
+                throw new \RuntimeException(
+                    'Legacy managed Nginx configuration cannot be read safely.',
+                );
+            }
+            $legacyObserved = true;
+        } elseif (\file_exists($legacyConfigPath) || \is_link($legacyConfigPath)) {
+            throw new \RuntimeException(
+                'Legacy managed Nginx configuration identity is indeterminate.',
+            );
+        }
+        if ($running && ($before['runtime_owner_active'] ?? false) !== true) {
+            throw new \RuntimeException(
+                'Legacy managed Nginx is running without an exact owner/configuration identity.',
+            );
+        }
+
+        $legacyMasterPid = $running ? (int)($before['pid'] ?? 0) : 0;
+        $legacyWorkerPids = [];
+        if ($legacyMasterPid > 0 && \PHP_OS_FAMILY !== 'Windows') {
+            $workers = NginxChildProcessProbe::workerPids(
+                $legacyMasterPid,
+                $deadlineMonotonic,
+            );
+            if (!\is_array($workers) || $workers === []) {
+                throw new \RuntimeException(
+                    'Unable to enumerate the exact legacy Nginx worker generation.',
+                );
+            }
+            $legacyWorkerPids = $workers;
+        }
+
+        $stop = ['ok' => true, 'message' => 'not running'];
+        if ($running) {
+            $this->assertCertificateRetirementBudget($deadlineMonotonic, 1.0);
+            $stop = $managed->stop($deadlineMonotonic);
+            if (($stop['ok'] ?? false) !== true) {
+                throw new \RuntimeException((string)(
+                    $stop['message'] ?? 'Legacy managed Nginx stop failed.'
+                ));
+            }
+        }
+
+        // Compatibility state is rewritten only after the exact process tree
+        // is stopped, so a failed write cannot reload the retired PEM.
+        $this->writeLegacyCertificateCompatibilityMap($deadlineMonotonic);
+        $after = $managed->retirementSnapshot($deadlineMonotonic);
+        if (($after['running'] ?? false) === true
+            || (int)($after['pid'] ?? 0) > 0
+        ) {
+            throw new \RuntimeException(
+                'Legacy managed Nginx still reports a live process after retirement.',
+            );
+        }
+        foreach ($legacyWorkerPids as $workerPid) {
+            $workerRunning = NginxChildProcessProbe::processIsRunning(
+                (int)$workerPid,
+                $deadlineMonotonic,
+            );
+            if ($workerRunning === null) {
+                throw new \RuntimeException(
+                    'A retired legacy Nginx worker state is indeterminate.',
+                );
+            }
+            if ($workerRunning) {
+                throw new \RuntimeException(
+                    'A worker from the retired legacy Nginx generation remains alive.',
+                );
+            }
+        }
+
+        $ports = [];
+        if ($legacyObserved) {
+            foreach ([$before, $after] as $snapshot) {
+                foreach (['listen_https', 'owner_listen_https'] as $field) {
+                    $port = (int)($snapshot[$field] ?? 0);
+                    if ($port > 0 && $port <= 65535) {
+                        $ports[$port] = true;
+                    }
+                }
+            }
+            if ($legacyConfig !== '') {
+                $matches = [];
+                $matched = \preg_match_all(
+                    '/^\s*listen\s+([1-9][0-9]{0,4})\s+(?:ssl|quic)(?:\s|;)/mi',
+                    $legacyConfig,
+                    $matches,
+                );
+                if ($matched === false) {
+                    throw new \RuntimeException(
+                        'Legacy managed Nginx TLS listeners cannot be parsed safely.',
+                    );
+                }
+                foreach ((array)($matches[1] ?? []) as $matchedPort) {
+                    $port = (int)$matchedPort;
+                    if ($port > 0 && $port <= 65535) {
+                        $ports[$port] = true;
+                    }
+                }
+            }
+            if ($ports === []) {
+                throw new \RuntimeException(
+                    'Legacy managed Nginx was observed without an exact TLS listener port.',
+                );
+            }
+        }
+        \ksort($ports, SORT_NUMERIC);
+        $listenerProofs = [];
+        foreach (\array_keys($ports) as $port) {
+            foreach (['tcp', 'udp'] as $transport) {
+                $this->assertCertificateRetirementBudget(
+                    $deadlineMonotonic,
+                    0.25,
+                );
+                $errno = 0;
+                $error = '';
+                $socket = @\stream_socket_server(
+                    $transport . '://0.0.0.0:' . $port,
+                    $errno,
+                    $error,
+                    $transport === 'tcp'
+                        ? STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
+                        : STREAM_SERVER_BIND,
+                );
+                if (!\is_resource($socket)) {
+                    throw new \RuntimeException(
+                        'The retired legacy TLS listener cannot be proven absent on '
+                            . $transport . '/0.0.0.0:' . $port . '.',
+                    );
+                }
+                @\fclose($socket);
+                $listenerProofs[] = $transport . ':0.0.0.0:' . $port . ':exclusive';
+            }
+        }
+        return \hash(
+            'sha256',
+            GatewayClient::canonicalJson([
+                'intent_id' => (string)$intent['intent_id'],
+                'before' => \hash('sha256', GatewayClient::canonicalJson($before)),
+                'stop' => \hash('sha256', GatewayClient::canonicalJson($stop)),
+                'after' => \hash('sha256', GatewayClient::canonicalJson($after)),
+                'retired_master_pid' => $legacyMasterPid,
+                'retired_worker_pids' => $legacyWorkerPids,
+                'listener_proofs' => $listenerProofs,
+            ]),
+        );
+    }
+
+    private function sameCertificateRetirementIdentity(array $left, array $right): bool
+    {
+        return \hash_equals(
+            (string)($left['intent_id'] ?? ''),
+            (string)($right['intent_id'] ?? ''),
+        )
+            && \hash_equals(
+                (string)($left['domain'] ?? ''),
+                (string)($right['domain'] ?? ''),
+            )
+            && \is_int($left['generation'] ?? null)
+            && \is_int($right['generation'] ?? null)
+            && (int)$left['generation'] === (int)$right['generation']
+            && \hash_equals(
+                (string)($left['source_digest'] ?? ''),
+                (string)($right['source_digest'] ?? ''),
+            )
+            && \hash_equals(
+                (string)($left['metadata_digest'] ?? ''),
+                (string)($right['metadata_digest'] ?? ''),
+            );
+    }
+
+    /** @return array<string,mixed> */
+    private function certificateRetirementSupersededResult(
+        string $domain,
+        int $certId,
+        string $message,
+    ): array {
+        return [
+            'success' => false,
+            'phase' => 'retirement_superseded',
+            'domain' => $domain,
+            'cert_id' => $certId,
+            'endpoint_updates' => 0,
+            'desired_revoked' => false,
+            'serving_removed' => false,
+            'message' => (string)__($message),
+        ];
+    }
+
+    private function revokeDomainFromInstanceConfigs(
+        string $domain,
+        float $deadlineMonotonic,
+    ): int
     {
         $updated = 0;
         foreach ([
-            Env::VAR_DIR . 'server' . DS . 'config' . DS,
-            Env::VAR_DIR . 'server' . DS . 'instances' . DS,
-        ] as $directory) {
+            [
+                'directory' => Env::VAR_DIR . 'server' . DS . 'config' . DS,
+                'managed_endpoint' => false,
+            ],
+            [
+                'directory' => Env::VAR_DIR . 'server' . DS . 'instances' . DS,
+                'managed_endpoint' => true,
+            ],
+        ] as $source) {
+            $directory = (string)$source['directory'];
+            $managedEndpoint = (bool)$source['managed_endpoint'];
             foreach ($this->boundedJsonFiles(
                 $directory,
                 'WLS instance configuration directory',
             ) as $file) {
+                $this->assertCertificateRetirementBudget(
+                    $deadlineMonotonic,
+                    0.01,
+                );
                 $encoded = self::readRegularFileNoFollow($file);
                 try {
                     $current = \is_string($encoded)
@@ -8927,61 +10372,142 @@ CNF;
                     continue;
                 }
                 $applied = false;
-                GatewayProjectStateFilesystem::withExclusiveLock(
-                    $file . '.lock',
-                    function () use ($file, $domain, &$applied): void {
-                        $latestEncoded = GatewayProjectStateFilesystem::read(
-                            $file,
-                            self::MAX_CERTIFICATE_MATERIAL_BYTES,
-                            'WLS certificate endpoint record',
+                $mutate = function (array $latest) use (
+                    $domain,
+                    $deadlineMonotonic,
+                    &$applied,
+                ): array {
+                    $this->assertCertificateRetirementBudget(
+                        $deadlineMonotonic,
+                        0.01,
+                    );
+                    if (\array_is_list($latest)) {
+                        throw new \RuntimeException(
+                            'WLS certificate endpoint payload changed to an invalid value.',
                         );
-                        try {
-                            $latest = \json_decode(
-                                $latestEncoded,
-                                true,
-                                64,
-                                JSON_THROW_ON_ERROR,
-                            );
-                        } catch (\JsonException $exception) {
-                            throw new \RuntimeException(
-                                'WLS certificate endpoint JSON changed to an invalid payload.',
-                                0,
-                                $exception,
-                            );
-                        }
-                        if (!\is_array($latest) || \array_is_list($latest)) {
-                            throw new \RuntimeException(
-                                'WLS certificate endpoint payload changed to an invalid value.',
-                            );
-                        }
-                        [$next, $applied] = $this->revokeDomainFromEndpointPayload(
-                            $latest,
-                            $domain,
-                        );
-                        if (!$applied) {
-                            return;
-                        }
-                        $nextEncoded = \json_encode(
-                            $next,
-                            JSON_PRETTY_PRINT
-                                | JSON_UNESCAPED_UNICODE
-                                | JSON_UNESCAPED_SLASHES
-                                | JSON_THROW_ON_ERROR,
-                        );
-                        GatewayProjectStateFilesystem::atomicWrite(
-                            $file,
-                            $nextEncoded,
-                            0600,
-                        );
-                    },
-                    waitTimeoutSeconds: 5.0,
+                    }
+                    [$next, $applied] = $this->revokeDomainFromEndpointPayload(
+                        $latest,
+                        $domain,
+                    );
+                    return $next;
+                };
+                $lockBudget = \min(
+                    0.25,
+                    $this->assertCertificateRetirementBudget(
+                        $deadlineMonotonic,
+                        0.01,
+                    ),
                 );
+                if ($managedEndpoint) {
+                    if (!ServerInstanceManager::updateJsonFileAtomically(
+                        $file,
+                        $mutate,
+                        $lockBudget,
+                    )) {
+                        throw new \RuntimeException(
+                            'Unable to update the WLS certificate endpoint record.',
+                        );
+                    }
+                } else {
+                    GatewayProjectStateFilesystem::withExclusiveLock(
+                        $file . '.lock',
+                        function () use (
+                            $file,
+                            $mutate,
+                            &$applied,
+                        ): void {
+                            GatewayProjectStateFilesystem::cleanupAtomicWriteRecoveryBackups(
+                                $file,
+                                self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                                'saved WLS certificate configuration',
+                                function (string $candidate) use ($file): void {
+                                    $this->assertSslStateTargetMode(
+                                        $file,
+                                        0600,
+                                        'saved WLS certificate configuration',
+                                    );
+                                    $this->decodeCertificateEndpointRecord($candidate);
+                                },
+                            );
+                            $latestEncoded = GatewayProjectStateFilesystem::read(
+                                $file,
+                                self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                                'saved WLS certificate configuration',
+                            );
+                            $next = $mutate(
+                                $this->decodeCertificateEndpointRecord($latestEncoded),
+                            );
+                            if (!$applied) {
+                                return;
+                            }
+                            $nextEncoded = \json_encode(
+                                $next,
+                                JSON_PRETTY_PRINT
+                                    | JSON_UNESCAPED_UNICODE
+                                    | JSON_UNESCAPED_SLASHES
+                                    | JSON_THROW_ON_ERROR,
+                            );
+                            GatewayProjectStateFilesystem::atomicWrite(
+                                $file,
+                                $nextEncoded,
+                                0600,
+                            );
+                            $this->assertSslStateTargetMode(
+                                $file,
+                                0600,
+                                'published WLS certificate configuration',
+                            );
+                            $published = $this->decodeCertificateEndpointRecord(
+                                GatewayProjectStateFilesystem::read(
+                                    $file,
+                                    self::MAX_CERTIFICATE_MATERIAL_BYTES,
+                                    'published WLS certificate configuration',
+                                ),
+                            );
+                            if (!\hash_equals(
+                                \hash('sha256', GatewayClient::canonicalJson($next)),
+                                \hash('sha256', GatewayClient::canonicalJson($published)),
+                            )) {
+                                throw new \RuntimeException(
+                                    'Published WLS certificate configuration did not verify.',
+                                );
+                            }
+                        },
+                        waitTimeoutSeconds: $lockBudget,
+                    );
+                }
                 if ($applied) {
                     ++$updated;
                 }
             }
         }
         return $updated;
+    }
+
+    /** @return array<string,mixed> */
+    private function decodeCertificateEndpointRecord(string $encoded): array
+    {
+        try {
+            $decoded = \json_decode(
+                $encoded,
+                true,
+                64,
+                JSON_THROW_ON_ERROR,
+            );
+        } catch (\JsonException $exception) {
+            throw new \RuntimeException(
+                'WLS certificate endpoint JSON is invalid.',
+                0,
+                $exception,
+            );
+        }
+        if (!\is_array($decoded) || \array_is_list($decoded)) {
+            throw new \RuntimeException(
+                'WLS certificate endpoint payload is invalid.',
+            );
+        }
+        return $decoded;
     }
 
     /** @return array{0:array<string,mixed>,1:bool} */
@@ -9030,6 +10556,7 @@ CNF;
             );
         }
         if ($topMatches || $publicMatches || ($sourceMatches && $topDomain === '')) {
+            $data['ssl_enabled'] = false;
             $data['ssl_cert'] = '';
             $data['ssl_key'] = '';
             $data['ssl_domain'] = '';
@@ -9230,12 +10757,16 @@ CNF;
     ];
 
     /**
-     * @return list<array{directory:string,entries:list<string>,status:array<string,mixed>}>
+     * @return list<array{directory:string,entries:array<string,array<string,int|string>>,status:array<string,mixed>}>
      */
-    private function prepareCertificateDirectoryRemoval(string $domain): array
+    private function prepareCertificateDirectoryRemoval(
+        string $domain,
+        float $deadlineMonotonic,
+    ): array
     {
         $directories = [];
         foreach (self::certificateStorageSegmentCandidatesForProbe($domain) as $segment) {
+            $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
             $certDir = $this->certificateDirectoryForSegment($segment, false);
             if ($certDir === null) {
                 continue;
@@ -9245,7 +10776,12 @@ CNF;
                 self::MAX_CERTIFICATE_DIRECTORY_ENTRIES,
                 'certificate domain directory',
             );
+            $entryIdentities = [];
             foreach ($entries as $entry) {
+                $this->assertCertificateRetirementBudget(
+                    $deadlineMonotonic,
+                    0.01,
+                );
                 $managedLeaf = \in_array(
                     $entry,
                     self::CERTIFICATE_REMOVABLE_LEAVES,
@@ -9279,9 +10815,13 @@ CNF;
                 ) {
                     throw new \RuntimeException(
                         'Certificate directory contains a special or hard-linked leaf: '
-                            . $entry,
+                        . $entry,
                     );
                 }
+                $entryIdentities[$entry] = $this->certificateRemovalLeafIdentity(
+                    $certDir . $entry,
+                    $leafStatus,
+                );
             }
             $directoryStatus = @\lstat(\rtrim($certDir, '/\\'));
             if (!\is_array($directoryStatus)
@@ -9293,7 +10833,7 @@ CNF;
             }
             $directories[] = [
                 'directory' => $certDir,
-                'entries' => $entries,
+                'entries' => $entryIdentities,
                 'status' => $directoryStatus,
             ];
         }
@@ -9301,18 +10841,27 @@ CNF;
     }
 
     /**
-     * @param list<array{directory:string,entries:list<string>,status:array<string,mixed>}> $plan
+     * @param list<array{directory:string,entries:array<string,array<string,int|string>>,status:array<string,mixed>}> $plan
      */
-    private function removeCertificateDirectoryPlan(array $plan): void
+    private function removeCertificateDirectoryPlan(
+        array $plan,
+        float $deadlineMonotonic,
+    ): void
     {
         foreach ($plan as $directory) {
+            $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
             $certDir = (string)$directory['directory'];
             $expectedStatus = (array)$directory['status'];
-            foreach ((array)$directory['entries'] as $entry) {
+            foreach ((array)$directory['entries'] as $entry => $leafIdentity) {
+                $this->assertCertificateRetirementBudget(
+                    $deadlineMonotonic,
+                    0.01,
+                );
                 $this->removeCertificateLeafSafely(
                     $certDir,
                     (string)$entry,
                     $expectedStatus,
+                    \is_array($leafIdentity) ? $leafIdentity : null,
                 );
             }
             $beforeRmdir = @\lstat(\rtrim($certDir, '/\\'));
@@ -9331,6 +10880,9 @@ CNF;
                     'Unable to remove the empty certificate directory.',
                 );
             }
+            GatewayProjectStateFilesystem::syncDirectory(\dirname(
+                \rtrim($certDir, '/\\'),
+            ));
         }
     }
 
@@ -9456,38 +11008,293 @@ CNF;
         array $revocationIntent = [],
     ): void
     {
+        (new ProjectCertificateGenerationStore())->withCertificateLifecycleLock(
+            function () use (
+                $broadcastReload,
+                $changedDomain,
+                $revocationIntent,
+            ): void {
+                $securityFirst = $broadcastReload && $revocationIntent !== [];
+                if ($securityFirst) {
+                    $this->publishCertificateRuntimeUpdate(
+                        $changedDomain,
+                        $revocationIntent,
+                    );
+                }
+                $this->writeLegacyCertificateCompatibilityMap();
+
+                if (!$broadcastReload || $securityFirst) {
+                    return;
+                }
+                $this->publishCertificateRuntimeUpdate($changedDomain, []);
+            },
+        );
+    }
+
+    /**
+     * Replay the complete runtime -> legacy -> endpoint -> source -> PostgreSQL
+     * -> generation-bound-event chain under one project-global worker lease.
+     * A durable rotating cursor and total monotonic deadline prevent one broken
+     * domain or many WLS instances from creating an unbounded replay storm.
+     *
+     * @return array{attempted:int,completed:int,failures:list<string>,deferred:bool}
+     */
+    public function replayPendingCertificateRetirements(
+        float $totalBudgetSeconds = 15.0,
+        int $maximumIntents = 4,
+    ): array {
+        if (!\is_finite($totalBudgetSeconds)
+            || $totalBudgetSeconds < 1.0
+            || $totalBudgetSeconds > 80.0
+            || $maximumIntents < 1
+            || $maximumIntents > 64
+        ) {
+            throw new \InvalidArgumentException(
+                'Certificate retirement replay budget or batch is invalid.',
+            );
+        }
+        $store = new ProjectCertificateGenerationStore();
+        try {
+            return $store->withRetirementReplayLease(function () use (
+                $store,
+                $totalBudgetSeconds,
+                $maximumIntents,
+            ): array {
+                $deadline = (\hrtime(true) / 1_000_000_000) + $totalBudgetSeconds;
+                $pending = $store->pendingRetirementBatch(
+                    $maximumIntents,
+                    $deadline,
+                );
+                $attempted = 0;
+                $completed = 0;
+                $failures = [];
+                foreach ($pending as $domain => $intent) {
+                    if ($deadline - (\hrtime(true) / 1_000_000_000) < 0.25) {
+                        break;
+                    }
+                    ++$attempted;
+                    try {
+                        $result = $this->resumeCertificateRetirementIntent(
+                            $intent,
+                            $deadline,
+                        );
+                        if (($result['success'] ?? false) === true
+                            || \hash_equals(
+                                'retirement_superseded',
+                                (string)($result['phase'] ?? ''),
+                            )
+                        ) {
+                            ++$completed;
+                        }
+                    } catch (\Throwable $throwable) {
+                        $failures[] = (string)$domain . ': '
+                            . \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
+                                $throwable->getMessage(),
+                                2048,
+                                'certificate retirement replay failed',
+                            );
+                    } finally {
+                        try {
+                            $store->advanceRetirementReplayCursor($intent, $deadline);
+                        } catch (\Throwable $cursorError) {
+                            $failures[] = (string)$domain . ': replay cursor: '
+                                . \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
+                                    $cursorError->getMessage(),
+                                    1024,
+                                    'certificate retirement cursor update failed',
+                                );
+                        }
+                    }
+                }
+                if ($failures !== []) {
+                    throw new \RuntimeException(
+                        \Weline\Server\Service\Edge\Gateway\GatewayBoundedText::singleLine(
+                            \implode('; ', $failures),
+                            4096,
+                            'Certificate retirement replay did not converge.',
+                        ),
+                    );
+                }
+                return [
+                    'attempted' => $attempted,
+                    'completed' => $completed,
+                    'failures' => [],
+                    'deferred' => $attempted < \count($pending)
+                        || \count($pending) >= $maximumIntents,
+                ];
+            });
+        } catch (\RuntimeException $throwable) {
+            if (\hash_equals(
+                'Timed out acquiring the WLS state lock.',
+                $throwable->getMessage(),
+            )) {
+                return [
+                    'attempted' => 0,
+                    'completed' => 0,
+                    'failures' => [],
+                    'deferred' => true,
+                ];
+            }
+            throw $throwable;
+        }
+    }
+
+    /** @param array<string,mixed> $revocationIntent */
+    protected function publishCertificateRuntimeUpdate(
+        string $domain,
+        array $revocationIntent,
+    ): void {
+        ObjectManager::getInstance(\Weline\Server\Service\Edge\EdgeAdapterResolver::class)
+            ->resolve()
+            ->onCertificateMaterialUpdated(
+                $domain,
+                $revocationIntent === []
+                    ? []
+                    : ['wls_revocation_intent' => $revocationIntent],
+            );
+    }
+
+    protected function writeLegacyCertificateCompatibilityMap(
+        ?float $deadlineMonotonic = null,
+    ): void
+    {
+        if ($deadlineMonotonic !== null) {
+            $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
+        }
         // WLS 1.x workers still consume this compatibility map. WLS 2.0 TLS
         // workers never read it; their only serving input is the bound
-        // immutable manifest published by the edge coordinator below.
+        // immutable manifest published by the edge coordinator.
         $mapFile = Env::VAR_DIR . 'server' . DS . 'ssl_certificate_map.json';
         $mapDir = \dirname($mapFile);
         if (!\is_dir($mapDir)) {
             @\mkdir($mapDir, 0755, true);
         }
         $map = $this->getCertificateMap();
+        if ($deadlineMonotonic !== null) {
+            $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
+        }
         $encodedMap = \json_encode(
             $map,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
         );
-        GatewayProjectStateFilesystem::atomicWrite($mapFile, $encodedMap, 0600);
+        $this->writeLockedSslStateAtomically(
+            $mapFile,
+            $encodedMap,
+            0600,
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            'legacy certificate compatibility map',
+            function (string $candidate): void {
+                $this->assertLegacyCertificateCompatibilityMap($candidate);
+            },
+        );
+        if ($deadlineMonotonic !== null) {
+            $this->assertCertificateRetirementBudget($deadlineMonotonic, 0.01);
+        }
         w_log_debug(
             '[SslCertificateService] 兼容证书映射已重新生成，包含 '
             . \count($map) . ' 个域名',
         );
+    }
 
-        if (!$broadcastReload) {
-            return;
-        }
-
-        // WLS 2.0 first commits a per-instance, whole-project immutable
-        // serving manifest and only then broadcasts a native TLS reload.
-        ObjectManager::getInstance(\Weline\Server\Service\Edge\EdgeAdapterResolver::class)
-            ->resolve()
-            ->onCertificateMaterialUpdated(
-                $changedDomain,
-                $revocationIntent === []
-                    ? []
-                    : ['wls_revocation_intent' => $revocationIntent],
+    private function assertLegacyCertificateCompatibilityMap(string $contents): void
+    {
+        try {
+            $map = \json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new \RuntimeException(
+                'Legacy certificate compatibility map JSON is malformed.',
+                0,
+                $exception,
             );
+        }
+        if (!\is_array($map)
+            || (\array_is_list($map) && $map !== [])
+            || \count($map) > self::MAX_LEGACY_CERTIFICATE_MAP_ENTRIES
+        ) {
+            throw new \RuntimeException(
+                'Legacy certificate compatibility map has an invalid shape or size.',
+            );
+        }
+        $allowedFields = [
+            'cert',
+            'key',
+            'chain',
+            'cert_type',
+            'force_https',
+            'force_root_to_www',
+        ];
+        foreach ($map as $domain => $entry) {
+            if (!\is_string($domain)
+                || !\is_array($entry)
+                || \array_is_list($entry)
+            ) {
+                throw new \RuntimeException(
+                    'Legacy certificate compatibility map entry is malformed.',
+                );
+            }
+            try {
+                $normalized = self::normalizeCertificateStorageDomain($domain);
+            } catch (\Throwable $throwable) {
+                throw new \RuntimeException(
+                    'Legacy certificate compatibility map domain is invalid.',
+                    0,
+                    $throwable,
+                );
+            }
+            if (!\hash_equals($normalized, $domain)) {
+                throw new \RuntimeException(
+                    'Legacy certificate compatibility map domain is not canonical.',
+                );
+            }
+            $fields = \array_keys($entry);
+            foreach ($fields as $field) {
+                if (!\is_string($field) || !\in_array($field, $allowedFields, true)) {
+                    throw new \RuntimeException(
+                        'Legacy certificate compatibility map contains an unknown field.',
+                    );
+                }
+            }
+            foreach (['cert', 'key'] as $requiredPath) {
+                $value = $entry[$requiredPath] ?? null;
+                if (!\is_string($value)
+                    || $value === ''
+                    || \strlen($value) > 4096
+                    || \str_contains($value, "\0")
+                ) {
+                    throw new \RuntimeException(
+                        'Legacy certificate compatibility map path is invalid.',
+                    );
+                }
+            }
+            if (\array_key_exists('chain', $entry)
+                && (!\is_string($entry['chain'])
+                    || \strlen($entry['chain']) > 4096
+                    || \str_contains($entry['chain'], "\0"))
+            ) {
+                throw new \RuntimeException(
+                    'Legacy certificate compatibility map chain path is invalid.',
+                );
+            }
+            if (\array_key_exists('cert_type', $entry)
+                && (!\is_string($entry['cert_type']) || $entry['cert_type'] === '')
+            ) {
+                throw new \RuntimeException(
+                    'Legacy certificate compatibility map certificate type is invalid.',
+                );
+            }
+            foreach (['force_https', 'force_root_to_www'] as $policy) {
+                if (!\array_key_exists($policy, $entry)) {
+                    continue;
+                }
+                $value = $entry[$policy];
+                if (!\is_bool($value)
+                    && !(\is_int($value) && ($value === 0 || $value === 1))
+                ) {
+                    throw new \RuntimeException(
+                        'Legacy certificate compatibility map policy is invalid.',
+                    );
+                }
+            }
+        }
     }
 }

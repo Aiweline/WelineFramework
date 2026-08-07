@@ -43,6 +43,7 @@ final class GatewayProvider extends AbstractServiceProvider
             '',
         )));
         return $effective === GatewayStartupDecision::MODE_GATEWAY
+            || $effective === GatewayStartupDecision::MODE_WLS
             || $requested === GatewayStartupDecision::MODE_AUTO;
     }
 
@@ -82,16 +83,30 @@ final class GatewayProvider extends AbstractServiceProvider
         if ($instanceName === '') {
             throw new \LogicException('WLS Gateway Agent requires an instance name.');
         }
+        $effective = \strtolower(\trim((string)$context->getConfig(
+            'wls.edge.mode',
+            '',
+        )));
+        $requested = \strtolower(\trim((string)$context->getConfig(
+            'wls.gateway.requested_mode',
+            '',
+        )));
+        $arguments = [
+            'server:gateway:agent',
+            '--daemon',
+            '--instance-name=' . $instanceName,
+            '--control-port=' . $context->controlPort,
+            '--master-pid=' . $context->masterPid,
+            '--worker-id=' . $instanceId,
+        ];
+        if ($effective === GatewayStartupDecision::MODE_WLS
+            && $requested !== GatewayStartupDecision::MODE_AUTO
+        ) {
+            $arguments[] = '--certificate-retirement-only';
+        }
         return new ServiceCommand(
             script: BP . 'bin' . DS . 'w',
-            arguments: [
-                'server:gateway:agent',
-                '--daemon',
-                '--instance-name=' . $instanceName,
-                '--control-port=' . $context->controlPort,
-                '--master-pid=' . $context->masterPid,
-                '--worker-id=' . $instanceId,
-            ],
+            arguments: $arguments,
             processName: MasterProcess::buildScopedProcessName(
                 self::PROCESS_NAME_PREFIX,
                 $instanceName,

@@ -71,6 +71,47 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
         self::assertSame('DEGRADED_WLS', $updated['gateway']['fallback_state']);
     }
 
+    public function testDrainingFallbackLeaseCannotBePublishedAsAccepting(): void
+    {
+        $endpoint = $this->endpoint();
+        $proof = $this->fallbackLeaseProof($endpoint, 27673);
+        $proof['state'] = 'DRAINING';
+        unset($proof['proof_digest']);
+        $proof['proof_digest'] = \hash(
+            'sha256',
+            GatewayClient::canonicalJson($proof),
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('fallback lease proof is invalid');
+        GatewayRuntimeEndpointPublisher::applyFallbackObservation(
+            $endpoint,
+            27673,
+            'GATEWAY_DATA_PLANE_UNAVAILABLE',
+            1800000000,
+            $proof,
+            123.0,
+        );
+    }
+
+    public function testFallbackProofBuildSelectsAnyLiveListenerOwner(): void
+    {
+        $method = new \ReflectionMethod(
+            GatewayRuntimeEndpointPublisher::class,
+            'buildFallbackLeaseProof',
+        );
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $source = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringContainsString('->liveServingLeaseForAnyOwner(', $source);
+        self::assertStringNotContainsString('->liveServingLease(', $source);
+    }
+
     public function testUnauthenticatedHealthyObservationIsRejected(): void
     {
         $status = $this->healthyStatus();
@@ -178,7 +219,74 @@ final class GatewayRuntimeEndpointPublisherTest extends TestCase
         self::assertSame($row, $method->invoke(null, [$row], '0'));
 
         $this->expectException(\RuntimeException::class);
-        $method->invoke(null, ['0' => $row], '0');
+        $method->invoke(null, ['01' => $row], '0');
+    }
+
+    public function testHealthyProjectionPublicationIsBoundedByAgentTickDeadline(): void
+    {
+        $publisher = (string)\file_get_contents(
+            (string)(new \ReflectionClass(
+                GatewayRuntimeEndpointPublisher::class,
+            ))->getFileName(),
+        );
+        $agent = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Console/Server/Gateway/Agent.php',
+        );
+
+        self::assertStringContainsString(
+            '?float $deadlineMonotonic = null',
+            $publisher,
+        );
+        self::assertMatchesRegularExpression(
+            '/\$routeGenerations,\s*\\\\count\(\$routes\) === '
+                . '\\\\count\(\$desired\),\s*\$deadlineMonotonic,\s*\)/',
+            $publisher,
+        );
+        self::assertStringContainsString(
+            'self::remainingDeadlineSeconds($deadlineMonotonic, 5.0)',
+            $publisher,
+        );
+        self::assertMatchesRegularExpression(
+            '/->publishHealthy\([\s\S]*?\$activeRouteIds,\s*\$tickDeadline,\s*\)/',
+            $agent,
+        );
+    }
+
+    public function testFallbackProjectionPublicationIsBoundedByAgentTickDeadline(): void
+    {
+        $method = new \ReflectionMethod(
+            GatewayRuntimeEndpointPublisher::class,
+            'publishFallbackActive',
+        );
+        $lines = \file($method->getFileName());
+        self::assertIsArray($lines);
+        $publisher = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+        $agent = (string)\file_get_contents(
+            \dirname(__DIR__, 5)
+                . '/Console/Server/Gateway/Agent.php',
+        );
+
+        self::assertMatchesRegularExpression(
+            '/function publishFallbackActive\([\s\S]*?'
+                . '\?float \$deadlineMonotonic = null,\s*\): bool/',
+            $publisher,
+        );
+        self::assertMatchesRegularExpression(
+            '/updateJsonFileAtomically\([\s\S]*?'
+                . '\$endpointWriteTimeout,\s*\);/',
+            $publisher,
+        );
+        self::assertMatchesRegularExpression(
+            '/->publishFallbackActive\([\s\S]*?'
+                . "'GATEWAY_DATA_PLANE_UNAVAILABLE',\s*"
+                . '\$tickDeadline,\s*\)/',
+            $agent,
+        );
     }
 
     /** @return array<string,mixed> */

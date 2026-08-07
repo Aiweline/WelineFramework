@@ -24,6 +24,21 @@ final class WlsEdgeProtocolException extends \DomainException
     }
 }
 
+final class WlsNativeBrokerActionException extends \RuntimeException
+{
+    public function __construct(
+        private readonly string $stableCode,
+        string $message,
+    ) {
+        parent::__construct($message);
+    }
+
+    public function stableCode(): string
+    {
+        return $this->stableCode;
+    }
+}
+
 final class WlsEdgeGatewayController
 {
     private const PROTOCOL = 'wls-edge/2';
@@ -31,9 +46,12 @@ final class WlsEdgeGatewayController
     private const BROKER_READY_PROTOCOL = 'WLS-BROKER-READY/1';
     private const BROKER_HANDSHAKE_TIMEOUT_SECONDS = 0.025;
     private const BROKER_ACTION_TIMEOUT_SECONDS = 3.0;
+    private const PROCESS_TREE_RETIRE_TIMEOUT_SECONDS = 13.0;
     private const HEARTBEAT_TTL = 45;
     private const DRAIN_SECONDS = 300;
     private const STALE_RETENTION = 86400;
+    private const ACME_HTTP_01_LEASE_SECONDS = 900;
+    private const MAX_ACME_WALL_EXPIRY = 253_402_300_799;
     private const SNAPSHOT_RETENTION = 604800;
     private const HEALTH_INTERVAL = 5;
     private const STORAGE_STATUS_CACHE_SECONDS = 5.0;
@@ -73,6 +91,7 @@ final class WlsEdgeGatewayController
     private const MAX_LKG_BYTES = 268_435_456;
     private const MAX_LKG_ENTRIES = 16;
     private const MAX_LKG_MANIFEST_BYTES = 262_144;
+    private const MAX_PUBLICATION_DIAGNOSTIC_CONFIGS = 2;
     private const MAX_PUBLICATION_QUEUE = 1024;
     private const MAX_STATUS_OPERATIONS = 128;
     private const PUBLICATION_DEBOUNCE_SECONDS = 0.25;
@@ -134,6 +153,7 @@ final class WlsEdgeGatewayController
     /** @var array<string,mixed>|null */
     private ?array $publication = null;
     private bool $running = true;
+    private bool $serviceTreeRestartRequested = false;
     private bool $configDirty = false;
     private bool $deferPublication = false;
     private string $requestOperation = '';
@@ -204,6 +224,8 @@ final class WlsEdgeGatewayController
     private $brokerExchange = null;
     /** @var array<string,mixed>|null */
     private ?array $activeBrokerPeer = null;
+    private string $verifiedNativeProcessAttestationDigest = '';
+    private string $verifiedNativeCandidateAttestationFenceDigest = '';
     /** @var array<string,resource> */
     private array $windowsNginxProcesses = [];
 
@@ -232,7 +254,14 @@ final class WlsEdgeGatewayController
         }
         $this->ensureDirectories($this->readOnlyRecoveryMode);
         $this->freshInstallBootstrapAllowed = $this->freshInstallBootstrapAllowed();
-        $diskPressureRecovery = $this->readOnlyRecoveryMode;
+        // ensureDirectories() may discover that the recovery reserve cannot be
+        // established and durably latch disk pressure. Treat that transition
+        // as a recovery startup immediately; otherwise the rest of the
+        // constructor can attempt ordinary state repair and mask the primary
+        // storage failure behind a secondary initialization-marker mismatch.
+        $diskPressureRecovery = $this->readOnlyRecoveryMode
+            || $this->diskPressureMarkerActive();
+        $this->readOnlyRecoveryMode = $diskPressureRecovery;
         if ($this->brokerHostBootId !== null
             && \preg_match('/\A[a-f0-9]{64}\z/D', $this->brokerHostBootId) !== 1
         ) {
@@ -247,12 +276,28 @@ final class WlsEdgeGatewayController
         if (!$this->securityAnchorTrusted
             && !($this->state['_security_ledger_bootstrap'] ?? false)
         ) {
-            $this->state['health_state'] = 'SECURITY_ANCHOR_UNTRUSTED';
+            if (!\in_array(
+                (string)($this->state['health_state'] ?? ''),
+                ['SECURITY_LEDGER_MISSING', 'SECURITY_LEDGER_UNTRUSTED'],
+                true,
+            )) {
+                $this->state['health_state'] = 'SECURITY_ANCHOR_UNTRUSTED';
+            }
             $this->state = $this->sanitizeIsolationState($this->state);
             $this->state['_state_rebuild_required'] = true;
         }
         if (!$this->initializationMarkerTrusted) {
-            $this->state['health_state'] = 'INITIALIZATION_MARKER_UNTRUSTED';
+            if (!\in_array(
+                (string)($this->state['health_state'] ?? ''),
+                [
+                    'SECURITY_LEDGER_MISSING',
+                    'SECURITY_LEDGER_UNTRUSTED',
+                    'SECURITY_ANCHOR_UNTRUSTED',
+                ],
+                true,
+            )) {
+                $this->state['health_state'] = 'INITIALIZATION_MARKER_UNTRUSTED';
+            }
             $this->state = $this->sanitizeIsolationState($this->state);
             $this->state['_state_rebuild_required'] = true;
         }
@@ -304,6 +349,7 @@ final class WlsEdgeGatewayController
         } else {
             $this->reconcileActiveRuntimeSlot();
             $this->reconcileInterruptedPublication();
+            $this->reconcilePublicationConfigArtifacts();
         }
         $persistedNonces = $this->state['security']['nonces'] ?? [];
         $this->nonces = $this->normalizePersistedNonces($persistedNonces);
@@ -455,11 +501,17 @@ final class WlsEdgeGatewayController
 
     public function run(): int
     {
+        if ($this->serviceTreeRestartRequested) {
+            return self::SERVICE_TREE_RESTART_EXIT;
+        }
         $this->assertBrokerGenerationOwnership('startup data-plane adoption');
         // Start/adopt Nginx before opening the control listener. Otherwise a
         // daemonized Nginx master can inherit the Unix listening descriptor
         // and impersonate a live-but-silent controller after a controller exit.
         $this->adoptOrRecoverDataPlane();
+        if ($this->serviceTreeRestartRequested) {
+            return self::SERVICE_TREE_RESTART_EXIT;
+        }
         $this->controlServer = $this->openControlServer();
         if (!$this->readOnlyRecoveryMode) {
             $this->writePid();
@@ -495,7 +547,9 @@ final class WlsEdgeGatewayController
                 $this->removeVerifiedPidFile($this->controllerPidFile());
             }
         }
-        return 0;
+        return $this->serviceTreeRestartRequested
+            ? self::SERVICE_TREE_RESTART_EXIT
+            : 0;
     }
 
     /**
@@ -712,27 +766,73 @@ final class WlsEdgeGatewayController
                         && (string)$brokerPeer['channel'] === 'project'),
                 );
             } catch (\Throwable $throwable) {
+                $serviceTreeRestartRequired = (int)$throwable->getCode()
+                    === self::SERVICE_TREE_RESTART_EXIT;
+                if ($serviceTreeRestartRequired) {
+                    // Exit 79 is a durable instruction to the platform
+                    // service, not an ordinary request rejection. Preserve it
+                    // even when the failing request was bootstrap and even
+                    // when disk pressure prevents diagnostic writes.
+                    $this->requestServiceTreeRestart($throwable->getMessage());
+                    try {
+                        $this->journal('request_rejected', [
+                            'operation' => $operation,
+                            'channel' => (string)$brokerPeer['channel'],
+                            'uid' => $brokerPeer['uid'] ?? null,
+                            'sid' => $brokerPeer['sid'] ?? null,
+                            'reason' => $throwable->getMessage(),
+                        ]);
+                    } catch (\Throwable) {
+                        // The service restart flag and exit code remain the
+                        // recovery authority when diagnostics cannot persist.
+                    }
+                    try {
+                        $this->writeResponse(
+                            $client,
+                            $requestId,
+                            false,
+                            [],
+                            'service_tree_restart_required',
+                            $throwable->getMessage(),
+                            $responseSecret,
+                        );
+                    } catch (\Throwable) {
+                        // A disconnected requester must not mask exit 79.
+                    }
+                    return;
+                }
+                $storageUnavailable = $operation !== 'bootstrap'
+                    && $this->readOnlyRecoveryMode;
                 $code = $operation === 'bootstrap'
                     ? 'bootstrap_recovery_failed'
-                    : ($throwable instanceof WlsEdgeProtocolException
-                        ? $throwable->protocolCode()
-                        : ($throwable instanceof \DomainException
-                            ? 'rejected'
-                            : 'operation_failed'));
-                $this->journal('request_rejected', [
-                    'operation' => $operation,
-                    'channel' => (string)$brokerPeer['channel'],
-                    'uid' => $brokerPeer['uid'] ?? null,
-                    'sid' => $brokerPeer['sid'] ?? null,
-                    'reason' => $throwable->getMessage(),
-                ]);
+                    : ($storageUnavailable
+                        ? 'storage_unavailable'
+                        : ($throwable instanceof WlsEdgeProtocolException
+                            ? $throwable->protocolCode()
+                            : ($throwable instanceof \DomainException
+                                ? 'rejected'
+                                : 'operation_failed')));
+                $responseMessage = $storageUnavailable
+                    ? 'Gateway durable storage is unavailable; persistent operation rejected '
+                        . 'while verified active traffic is retained. Cause: '
+                        . $throwable->getMessage()
+                    : $throwable->getMessage();
+                if (!$storageUnavailable) {
+                    $this->journal('request_rejected', [
+                        'operation' => $operation,
+                        'channel' => (string)$brokerPeer['channel'],
+                        'uid' => $brokerPeer['uid'] ?? null,
+                        'sid' => $brokerPeer['sid'] ?? null,
+                        'reason' => $throwable->getMessage(),
+                    ]);
+                }
                 $this->writeResponse(
                     $client,
                     $requestId,
                     false,
                     [],
                     $code,
-                    $throwable->getMessage(),
+                    $responseMessage,
                     $responseSecret,
                 );
             }
@@ -938,7 +1038,13 @@ final class WlsEdgeGatewayController
         if ($this->publication === null
             || !\in_array(
                 (string)($this->publication['phase'] ?? ''),
-                ['PREPARED', 'SHADOW_VERIFIED', 'ACTIVATING', 'DURABILITY_PENDING'],
+                [
+                    'PREPARED',
+                    'SHADOW_VERIFIED',
+                    'ACTIVATING',
+                    'SERVICE_TREE_RETIREMENT_PENDING',
+                    'DURABILITY_PENDING',
+                ],
                 true,
             )
         ) {
@@ -1034,11 +1140,14 @@ final class WlsEdgeGatewayController
         // exception leaves the in-memory intent set, while the durable stage
         // above reconstructs it after a Controller restart.
         $this->startupDataPlaneRecoveryPending = false;
-        // The five-second Native callback must stay cheap while no action is
-        // pending. A cached root-owned receipt is enough for this response;
-        // publication/restart paths above already requested a fresh receipt
-        // before signalling a process.
-        $dataPlane = $this->nginxStatus(false, false);
+        // A fresh Controller cannot read the private root/SYSTEM receipt. It
+        // obtains one Broker proof, then may reuse only that in-process proof
+        // for cheap five-second callbacks until the attested identity changes.
+        $dataPlane = $this->nginxStatus(
+            false,
+            $this->brokerActionsRequired()
+                && $this->verifiedNativeProcessAttestationDigest === '',
+        );
         $running = ($dataPlane['running'] ?? false) === true;
         $status = $this->status(false);
         $ready = $running && ($status['ready'] ?? false) === true;
@@ -1119,6 +1228,12 @@ final class WlsEdgeGatewayController
         $nginx = $this->nginxStatus(false, $refreshNativeAttestation);
         $manifest = $this->slotManifestFromActiveFile();
         $recovery = (array)($this->state['recovery'] ?? []);
+        if (($this->state['security_ledger_valid'] ?? false) !== true) {
+            $recovery['required_action'] =
+                'Restore the host security ledger from signed recovery material; '
+                . 'otherwise use a controlled host-trust rebuild and rotate/re-enroll '
+                . 'every project credential. Ordinary state.json is not a recovery source.';
+        }
         $recovery['next_retry_in_seconds'] = \hash_equals(
             $this->hostBootId,
             (string)($recovery['circuit_boot_id'] ?? ''),
@@ -2272,7 +2387,11 @@ final class WlsEdgeGatewayController
      * @param list<string> $fields
      * @return list<string> Opcode-specific response fields, excluding the opcode.
      */
-    private function brokerAction(string $channel, array $fields): array
+    private function brokerAction(
+        string $channel,
+        array $fields,
+        ?float $timeoutSeconds = null,
+    ): array
     {
         if (!$this->brokerActionsAvailable($channel)) {
             throw new \RuntimeException(
@@ -2295,7 +2414,7 @@ final class WlsEdgeGatewayController
         if (\strlen($line) > 65_536) {
             throw new \DomainException('Native Broker action request is too large.');
         }
-        $response = $this->exchangeBrokerActionLine($line);
+        $response = $this->exchangeBrokerActionLine($line, $timeoutSeconds);
         if (!\is_string($response)
             || $response === ''
             || !\str_ends_with($response, "\n")
@@ -2333,7 +2452,8 @@ final class WlsEdgeGatewayController
                     'Native Broker returned a malformed restricted-action rejection.'
                 );
             }
-            throw new \RuntimeException(
+            throw new WlsNativeBrokerActionException(
+                $code,
                 'Native Broker rejected ' . $opcode . ' with stable code ' . $code . '.'
             );
         }
@@ -2348,7 +2468,10 @@ final class WlsEdgeGatewayController
         return \array_values(\array_slice($parts, 3));
     }
 
-    private function exchangeBrokerActionLine(string $line): string
+    private function exchangeBrokerActionLine(
+        string $line,
+        ?float $timeoutSeconds = null,
+    ): string
     {
         if (!\is_resource($this->brokerExchange)
             || !@\stream_set_blocking($this->brokerExchange, false)
@@ -2357,7 +2480,16 @@ final class WlsEdgeGatewayController
                 'Native Broker action exchange could not enter bounded I/O mode.'
             );
         }
-        $deadline = $this->monotonicNow() + self::BROKER_ACTION_TIMEOUT_SECONDS;
+        $timeoutSeconds ??= self::BROKER_ACTION_TIMEOUT_SECONDS;
+        if (!\is_finite($timeoutSeconds)
+            || $timeoutSeconds <= 0.0
+            || $timeoutSeconds > self::PROCESS_TREE_RETIRE_TIMEOUT_SECONDS
+        ) {
+            throw new \RuntimeException(
+                'Native Broker action timeout is outside its fixed bound.'
+            );
+        }
+        $deadline = $this->monotonicNow() + $timeoutSeconds;
         $offset = 0;
         $response = '';
         try {
@@ -2489,6 +2621,18 @@ final class WlsEdgeGatewayController
         ], true)) {
             return [(string)($fields[3] ?? '-'), (string)($fields[4] ?? '-')];
         }
+        if ($opcode === 'PROCESS_TREE_RETIRE') {
+            return [(string)($fields[4] ?? '-'), (string)($fields[3] ?? '-')];
+        }
+        if ($opcode === 'ROLLBACK_REQUEST') {
+            return [(string)($fields[1] ?? '-'), (string)($fields[2] ?? '-')];
+        }
+        if (in_array($opcode, [
+            'PROCESS_ATTEST_CANDIDATE_PREPARE',
+            'PROCESS_ATTEST_CANDIDATE_CLEAR',
+        ], true)) {
+            return [(string)($fields[1] ?? '-'), (string)($fields[3] ?? '-')];
+        }
         return ['-', '-'];
     }
 
@@ -2527,16 +2671,19 @@ final class WlsEdgeGatewayController
     ): array {
         \ksort($roots, SORT_STRING);
         $this->assertSecurityAllocationSerialized($transactionId);
-        if (!$this->brokerActionsAvailable('admin')) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production enrollment requires native Broker AUTH_PREPARE.'
-                );
-            }
+        // Transport capability does not promote a test slot into Native
+        // security authority. Test slots must keep their synthetic ledger and
+        // every production slot must complete the Native action protocol.
+        if (!$this->brokerActionsRequired()) {
             return [
                 'assigned_generation' => $this->nextSecurityGeneration(),
                 'root_attestations' => [],
             ];
+        }
+        if (!$this->brokerActionsAvailable('admin')) {
+            throw new \RuntimeException(
+                'Production enrollment requires native Broker AUTH_PREPARE.'
+            );
         }
         $ownerIdentity = $this->brokerOwnerIdentity($owner);
         $assignedGeneration = 0;
@@ -2619,13 +2766,13 @@ final class WlsEdgeGatewayController
         int $securityGeneration,
         array $rootAttestations,
     ): void {
-        if (!$this->brokerActionsAvailable('admin')) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production enrollment requires native Broker AUTH_COMMIT.'
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             return;
+        }
+        if (!$this->brokerActionsAvailable('admin')) {
+            throw new \RuntimeException(
+                'Production enrollment requires native Broker AUTH_COMMIT.'
+            );
         }
         \ksort($rootAttestations, SORT_STRING);
         $proofLines = '';
@@ -2686,13 +2833,13 @@ final class WlsEdgeGatewayController
         int $credentialGeneration,
         string $credentialSecret,
     ): void {
-        if (!$this->brokerActionsAvailable('admin')) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production enrollment requires Native emergency credential binding.',
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             return;
+        }
+        if (!$this->brokerActionsAvailable('admin')) {
+            throw new \RuntimeException(
+                'Production enrollment requires Native emergency credential binding.',
+            );
         }
         $response = $this->brokerAction('admin', [
             'EMERGENCY_BIND',
@@ -2723,13 +2870,13 @@ final class WlsEdgeGatewayController
         string $projectUuid,
         string $intentDigest,
     ): int {
-        if (!$this->brokerActionsAvailable('admin')) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production enrollment requires native Broker AUTH_ABORT.'
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             return 0;
+        }
+        if (!$this->brokerActionsAvailable('admin')) {
+            throw new \RuntimeException(
+                'Production enrollment requires native Broker AUTH_ABORT.'
+            );
         }
         $response = $this->brokerAction('admin', [
             'AUTH_ABORT',
@@ -2891,12 +3038,7 @@ final class WlsEdgeGatewayController
             $existing = $this->state['security_transactions'][$transactionId];
         }
         $assignedExisting = (int)($existing['assigned_generation'] ?? 0);
-        if (!$this->brokerActionsAvailable('admin')) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production security mutation requires native Broker SECURITY_RESERVE.'
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             $assigned = $assignedExisting > 0
                 ? $assignedExisting
                 : $this->nextSecurityGeneration();
@@ -2915,6 +3057,11 @@ final class WlsEdgeGatewayController
             $this->persistSecurityLedger();
             $this->persistState();
             return $receipt;
+        }
+        if (!$this->brokerActionsAvailable('admin')) {
+            throw new \RuntimeException(
+                'Production security mutation requires native Broker SECURITY_RESERVE.'
+            );
         }
         $response = $this->brokerAction('admin', [
             'SECURITY_RESERVE',
@@ -2958,12 +3105,7 @@ final class WlsEdgeGatewayController
         string $kind,
         int $assignedGeneration,
     ): array {
-        if (!$this->brokerActionsAvailable('admin')) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production security mutation requires native Broker SECURITY_COMMIT.'
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             $this->state['security_committed_high_water'] = \max(
                 (int)($this->state['security_committed_high_water'] ?? 0),
                 $assignedGeneration,
@@ -2982,6 +3124,11 @@ final class WlsEdgeGatewayController
                 'ledger_digest' => $this->fileHash($this->securityLedgerFile()),
                 'anchor_digest' => $this->fileHash($this->securityAnchorFile()),
             ];
+        }
+        if (!$this->brokerActionsAvailable('admin')) {
+            throw new \RuntimeException(
+                'Production security mutation requires native Broker SECURITY_COMMIT.'
+            );
         }
         $anchorDigest = $this->fileHash($this->securityAnchorFile());
         $response = $this->brokerAction('admin', [
@@ -3035,12 +3182,7 @@ final class WlsEdgeGatewayController
                 'Security abort requires the generation allocated by SECURITY_RESERVE.'
             );
         }
-        if (!$this->brokerActionsAvailable('admin')) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production security mutation requires native Broker SECURITY_ABORT.'
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             return [
                 'assigned' => $assignedGeneration,
                 'allocated' => (int)($this->state['security_generation_high_water'] ?? 0),
@@ -3048,6 +3190,11 @@ final class WlsEdgeGatewayController
                 'ledger_digest' => $this->fileHash($this->securityLedgerFile()),
                 'anchor_digest' => $this->fileHash($this->securityAnchorFile()),
             ];
+        }
+        if (!$this->brokerActionsAvailable('admin')) {
+            throw new \RuntimeException(
+                'Production security mutation requires native Broker SECURITY_ABORT.'
+            );
         }
         $response = $this->brokerAction('admin', [
             'SECURITY_ABORT',
@@ -3449,7 +3596,6 @@ final class WlsEdgeGatewayController
         )));
         $masterEpoch = (int)($payload['master_epoch'] ?? 0);
         $launchId = \strtolower(\trim((string)($payload['launch_id'] ?? '')));
-        $gatewayEpoch = \trim((string)($payload['gateway_epoch'] ?? ''));
         if (!$this->validProjectUuid($projectUuid)
             || $instanceId === ''
             || \strlen($instanceId) > self::MAX_INSTANCE_ID_BYTES
@@ -3474,13 +3620,7 @@ final class WlsEdgeGatewayController
                 'Registration idempotency key is not bound to project generation and request digest.'
             );
         }
-        if (($renew && $gatewayEpoch === '')
-            || ($gatewayEpoch !== ''
-                && !\hash_equals((string)$this->state['epoch'], $gatewayEpoch))
-        ) {
-            throw new \DomainException('Gateway epoch changed; submit a full registration against epoch '
-                . (string)$this->state['epoch'] . '.');
-        }
+        $this->assertGatewayEpochPayload($payload, $renew ? 'Renew' : 'Register');
         $this->assertCurrentHostBootPayload($payload, $renew ? 'Renew' : 'Register');
         $peer = \is_array($payload['_broker_peer'] ?? null) ? $payload['_broker_peer'] : [];
         $this->assertEnrollment($projectUuid, $projectRoot, $peer);
@@ -4276,6 +4416,30 @@ final class WlsEdgeGatewayController
         return \array_values($revocations);
     }
 
+    /** @param array<string,mixed> $receipt */
+    private function processTreeRetirementProofValid(array $receipt): bool
+    {
+        $proofType = (string)(
+            $receipt['process_tree_retirement_proof_type'] ?? ''
+        );
+        $validType = $this->brokerActionsRequired()
+            ? \in_array($proofType, [
+                'native_process_tree_receipt',
+                'platform_service_tree_receipt',
+            ], true)
+            : \hash_equals('test_mode_tcp_withdrawal', $proofType);
+        return (int)($receipt['schema_version'] ?? 0) === 2
+            && $validType
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($receipt['process_tree_retirement_proof_digest'] ?? ''),
+            ) === 1
+            && !\hash_equals(
+                \str_repeat('0', 64),
+                (string)($receipt['process_tree_retirement_proof_digest'] ?? ''),
+            );
+    }
+
     /**
      * @param array<int,mixed> $requirements
      * @return list<array<string,mixed>>
@@ -4295,6 +4459,7 @@ final class WlsEdgeGatewayController
                 $projectUuid . ':' . $domain
             ] ?? null;
             if (!\is_array($receipt)
+                || !$this->processTreeRetirementProofValid($receipt)
                 || !\hash_equals($projectUuid, (string)($receipt['project_uuid'] ?? ''))
                 || !\hash_equals($domain, (string)($receipt['domain'] ?? ''))
                 || (int)($receipt['generation'] ?? 0) !== $generation
@@ -4312,6 +4477,17 @@ final class WlsEdgeGatewayController
                 || !\hash_equals(
                     (string)($this->state['active_config_digest'] ?? ''),
                     (string)($receipt['active_config_digest'] ?? ''),
+                )
+            ) {
+                continue;
+            }
+            $retirementId = (string)($receipt['retirement_id'] ?? '');
+            $unsignedReceipt = $receipt;
+            unset($unsignedReceipt['retirement_id']);
+            if (\preg_match('/\A[a-f0-9]{64}\z/D', $retirementId) !== 1
+                || !\hash_equals(
+                    $retirementId,
+                    \hash('sha256', $this->canonicalJson($unsignedReceipt)),
                 )
             ) {
                 continue;
@@ -4850,8 +5026,7 @@ final class WlsEdgeGatewayController
         if (\count($incoming) > 32) {
             throw new \DomainException('A project may hold at most 32 ACME HTTP-01 leases.');
         }
-        $now = \time();
-        $leases = [];
+        $unsignedLeases = [];
         $desiredChallenges = [];
         foreach ($incoming as $challenge) {
             if (!\is_array($challenge)) {
@@ -4882,20 +5057,21 @@ final class WlsEdgeGatewayController
             $keyAuthorization = \trim((string)(
                 $challenge['key_authorization'] ?? $challenge['keyAuth'] ?? ''
             ));
-            $expiresAt = (int)($challenge['expires_at'] ?? 0);
+            $expiresAt = $challenge['expires_at'] ?? null;
             if (\preg_match('/\A[A-Za-z0-9_-]{1,256}\z/D', $token) !== 1
                 || \preg_match(
                     '/\A[A-Za-z0-9_-]{1,256}\.[A-Za-z0-9_-]{20,256}\z/D',
                     $keyAuthorization,
                 ) !== 1
                 || !\str_starts_with($keyAuthorization, $token . '.')
-                || $expiresAt < $now + 30
-                || $expiresAt > $now + 900
+                || !\is_int($expiresAt)
+                || $expiresAt <= 0
+                || $expiresAt > self::MAX_ACME_WALL_EXPIRY
             ) {
                 throw new \DomainException('ACME HTTP-01 lease token, key authorization or expiry is invalid.');
             }
             $leaseId = \hash('sha256', $projectUuid . "\0" . $domain . "\0" . $token);
-            if (isset($leases[$leaseId])) {
+            if (isset($unsignedLeases[$leaseId])) {
                 throw new \DomainException('Duplicate ACME HTTP-01 lease is forbidden.');
             }
             $desiredChallenge = [
@@ -4905,13 +5081,13 @@ final class WlsEdgeGatewayController
                 'expires_at' => $expiresAt,
             ];
             $desiredChallenges[] = $desiredChallenge;
-            $leases[$leaseId] = [
+            $unsignedLeases[$leaseId] = [
                 'lease_id' => $leaseId,
                 'project_uuid' => $projectUuid,
                 ...$desiredChallenge,
             ];
         }
-        \ksort($leases, SORT_STRING);
+        \ksort($unsignedLeases, SORT_STRING);
         \usort(
             $desiredChallenges,
             static fn (array $left, array $right): int => [
@@ -4951,6 +5127,88 @@ final class WlsEdgeGatewayController
             );
         }
 
+        $monotonicNow = $this->monotonicNow();
+        $currentProjectLeases = [];
+        foreach ((array)($this->state['acme_challenges'] ?? []) as $leaseId => $lease) {
+            if (\is_array($lease)
+                && \hash_equals($projectUuid, (string)($lease['project_uuid'] ?? ''))
+            ) {
+                $currentProjectLeases[(string)$leaseId] = $lease;
+            }
+        }
+        $persistedFences = \is_array($existingGeneration['lease_fences'] ?? null)
+            ? $existingGeneration['lease_fences']
+            : [];
+        $leases = [];
+        $leaseFences = [];
+        foreach ($unsignedLeases as $leaseId => $lease) {
+            $contentDigest = $this->acmeChallengeContentDigest($lease);
+            $fence = null;
+            $currentLease = $currentProjectLeases[$leaseId] ?? null;
+            if (\is_array($currentLease)
+                && $this->sameAcmeChallengeContent($currentLease, $lease)
+                && $this->acmeChallengeLeaseActive($currentLease, $monotonicNow)
+            ) {
+                $fence = $currentLease;
+            }
+            $persistedFence = $persistedFences[$leaseId] ?? null;
+            if ($fence === null
+                && \is_array($persistedFence)
+                && \hash_equals(
+                    $contentDigest,
+                    (string)($persistedFence['content_digest'] ?? ''),
+                )
+                && $this->acmeChallengeLeaseActive($persistedFence, $monotonicNow)
+            ) {
+                $fence = $persistedFence;
+            }
+            if ($fence === null) {
+                $sameGenerationReplay = $challengeGeneration === $currentGeneration
+                    && $currentGeneration > 0
+                    && \hash_equals($currentDigest, $desiredDigest);
+                $expiredCurrentFence = \is_array($currentLease)
+                    && $this->sameAcmeChallengeContent($currentLease, $lease)
+                    && $this->acmeChallengeLeaseExpiredOnCurrentBoot(
+                        $currentLease,
+                        $monotonicNow,
+                    );
+                $expiredPersistedFence = \is_array($persistedFence)
+                    && \hash_equals(
+                        $contentDigest,
+                        (string)($persistedFence['content_digest'] ?? ''),
+                    )
+                    && $this->acmeChallengeLeaseExpiredOnCurrentBoot(
+                        $persistedFence,
+                        $monotonicNow,
+                    );
+                if ($sameGenerationReplay
+                    && ($expiredCurrentFence || $expiredPersistedFence)
+                ) {
+                    throw new \DomainException(
+                        'ACME HTTP-01 expired host lease requires a newer project generation.'
+                    );
+                }
+                $fence = [
+                    'host_boot_id' => $this->hostBootId,
+                    'issued_monotonic' => $monotonicNow,
+                    'deadline_monotonic' => $monotonicNow
+                        + self::ACME_HTTP_01_LEASE_SECONDS,
+                ];
+            }
+            $leases[$leaseId] = [
+                ...$lease,
+                'host_boot_id' => (string)$fence['host_boot_id'],
+                'issued_monotonic' => (float)$fence['issued_monotonic'],
+                'deadline_monotonic' => (float)$fence['deadline_monotonic'],
+            ];
+            $leaseFences[$leaseId] = [
+                'content_digest' => $contentDigest,
+                'host_boot_id' => (string)$fence['host_boot_id'],
+                'issued_monotonic' => (float)$fence['issued_monotonic'],
+                'deadline_monotonic' => (float)$fence['deadline_monotonic'],
+            ];
+        }
+
         $this->beginRoutingMutation('acme-challenge-sync:' . $projectUuid);
         try {
             $current = (array)($this->state['acme_challenges'] ?? []);
@@ -4963,12 +5221,15 @@ final class WlsEdgeGatewayController
             }
             $current += $leases;
             \ksort($current, SORT_STRING);
-            $before = $this->canonicalJson((array)($this->state['acme_challenges'] ?? []));
-            $after = $this->canonicalJson($current);
+            $before = $this->acmeChallengeConfigIntentDigest(
+                (array)($this->state['acme_challenges'] ?? []),
+            );
+            $after = $this->acmeChallengeConfigIntentDigest($current);
             $this->state['acme_challenges'] = $current;
             $this->state['acme_generations'][$projectUuid] = [
                 'generation' => $challengeGeneration,
                 'digest' => $desiredDigest,
+                'lease_fences' => $leaseFences,
                 'updated_at' => \gmdate(DATE_ATOM),
             ];
             if (!\hash_equals($before, $after)) {
@@ -5972,7 +6233,8 @@ final class WlsEdgeGatewayController
         $snapshotRoot = $this->home . DIRECTORY_SEPARATOR . 'snapshots';
         $stagingDigest = \hash('sha256', 'candidate:' . \random_bytes(32));
         $snapshotDir = $snapshotRoot . DIRECTORY_SEPARATOR . $stagingDigest;
-        $brokerSnapshot = $this->brokerActionsAvailable('project');
+        $brokerSnapshot = $this->brokerActionsRequired()
+            && $this->brokerActionsAvailable('project');
         $stagingMode = $brokerSnapshot ? 0770 : 0700;
         if (!@\mkdir($snapshotDir, $stagingMode) || !\is_dir($snapshotDir)) {
             throw new \RuntimeException('Unable to create certificate snapshot directory.');
@@ -6341,7 +6603,7 @@ final class WlsEdgeGatewayController
             $certificate = @\openssl_x509_read($block);
             $normalizedPem = '';
             if ($certificate === false
-                || !@\openssl_x509_export($certificate, $normalizedPem, false)
+                || !@\openssl_x509_export($certificate, $normalizedPem, true)
             ) {
                 throw new \DomainException(
                     'Certificate bundle contains an invalid X.509 certificate.'
@@ -6514,9 +6776,7 @@ final class WlsEdgeGatewayController
         ) {
             throw new \DomainException('Heartbeat project generation is stale or unknown.');
         }
-        if ($instanceDigest !== ''
-            && \preg_match('/\A[a-f0-9]{64}\z/D', $instanceDigest) !== 1
-        ) {
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $instanceDigest) !== 1) {
             throw new \DomainException('Heartbeat instance digest is invalid.');
         }
         $registeredInstance = $this->state['instances'][$projectUuid][$instanceId] ?? null;
@@ -6530,10 +6790,8 @@ final class WlsEdgeGatewayController
         ) {
             throw new \DomainException('Instance lease fencing identity is stale or unknown.');
         }
-        if ($instanceDigest !== ''
-            && (string)($registeredInstance['digest'] ?? '') !== ''
-            && !\hash_equals(
-                (string)$registeredInstance['digest'],
+        if (!\hash_equals(
+                (string)($registeredInstance['digest'] ?? ''),
                 $instanceDigest,
             )
         ) {
@@ -8307,14 +8565,7 @@ final class WlsEdgeGatewayController
             (string)($transaction['rotation_id'] ?? ''),
         );
         $assignedExisting = (int)($transaction['security_generation'] ?? 0);
-        if (!\is_resource($this->brokerExchange)
-            || !\is_array($this->activeBrokerPeer)
-        ) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production project identity rotation requires Native AUTH_TRANSFER_PREPARE.'
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             $assigned = $assignedExisting > 0
                 ? $assignedExisting
                 : $this->nextSecurityGeneration();
@@ -8325,6 +8576,13 @@ final class WlsEdgeGatewayController
                     'test-project-rotation:' . $transaction['rotation_id'],
                 ),
             ];
+        }
+        if (!\is_resource($this->brokerExchange)
+            || !\is_array($this->activeBrokerPeer)
+        ) {
+            throw new \RuntimeException(
+                'Production project identity rotation requires Native AUTH_TRANSFER_PREPARE.'
+            );
         }
         $channel = (string)$this->activeBrokerPeer['channel'];
         $intent = $this->nativeProjectIdentityRotationIntent($transaction);
@@ -8390,17 +8648,17 @@ final class WlsEdgeGatewayController
                 'Native project identity rotation generation is missing.'
             );
         }
-        if (!\is_resource($this->brokerExchange)
-            || !\is_array($this->activeBrokerPeer)
-        ) {
-            if ($this->brokerActionsRequired()) {
+        if (!$this->brokerActionsRequired()) {
+            $registryDigest = (string)($transaction['native_registry_digest'] ?? '');
+            $tombstoneDigest = \hash('sha256', 'test-tombstone:' . $rotationId);
+        } else {
+            if (!\is_resource($this->brokerExchange)
+                || !\is_array($this->activeBrokerPeer)
+            ) {
                 throw new \RuntimeException(
                     'Production project identity rotation requires Native AUTH_TRANSFER_COMMIT.'
                 );
             }
-            $registryDigest = (string)($transaction['native_registry_digest'] ?? '');
-            $tombstoneDigest = \hash('sha256', 'test-tombstone:' . $rotationId);
-        } else {
             $channel = (string)$this->activeBrokerPeer['channel'];
             $anchorDigest = (string)(
                 $this->state['native_security_anchor_digest'] ?? ''
@@ -8524,9 +8782,7 @@ final class WlsEdgeGatewayController
     ): array {
         $requestedAssigned = (int)($transaction['security_generation'] ?? 0);
         $zeroDigest = \str_repeat('0', 64);
-        if (!\is_resource($this->brokerExchange)
-            || !\is_array($this->activeBrokerPeer)
-        ) {
+        if (!$this->brokerActionsRequired()) {
             $phase = (string)($transaction['phase'] ?? '');
             $state = \in_array(
                 $phase,
@@ -8543,6 +8799,13 @@ final class WlsEdgeGatewayController
                     $transaction['native_tombstone_digest'] ?? $zeroDigest
                 ),
             ];
+        }
+        if (!\is_resource($this->brokerExchange)
+            || !\is_array($this->activeBrokerPeer)
+        ) {
+            throw new \RuntimeException(
+                'Production project identity rotation requires Native AUTH_TRANSFER_ATTEST.'
+            );
         }
         $intent = $this->nativeProjectIdentityRotationIntent($transaction);
         $channel = (string)$this->activeBrokerPeer['channel'];
@@ -8635,20 +8898,20 @@ final class WlsEdgeGatewayController
      */
     private function abortNativeProjectIdentityRotation(array $transaction): array
     {
-        if (!\is_resource($this->brokerExchange)
-            || !\is_array($this->activeBrokerPeer)
-        ) {
-            if ($this->brokerActionsRequired()) {
-                throw new \RuntimeException(
-                    'Production project identity rotation requires Native AUTH_TRANSFER_ABORT.'
-                );
-            }
+        if (!$this->brokerActionsRequired()) {
             return [
                 'assigned' => (int)($transaction['security_generation'] ?? 0),
                 'registry_digest' => (string)(
                     $transaction['native_registry_digest'] ?? \str_repeat('0', 64)
                 ),
             ];
+        }
+        if (!\is_resource($this->brokerExchange)
+            || !\is_array($this->activeBrokerPeer)
+        ) {
+            throw new \RuntimeException(
+                'Production project identity rotation requires Native AUTH_TRANSFER_ABORT.'
+            );
         }
         $intent = $this->nativeProjectIdentityRotationIntent($transaction);
         $requestedAssigned = (int)($transaction['security_generation'] ?? 0);
@@ -10521,6 +10784,7 @@ final class WlsEdgeGatewayController
     private function repair(array $payload = []): array
     {
         $this->assertBrokerGenerationOwnership('repair');
+        $securityRecoveryState = '';
         if (\array_key_exists('accept_security_reset', $payload)) {
             // broker-security-v2.tsv is the monotonic root of H/K/X, P/C/Q
             // and R/T/Y authority. Clearing only the Controller projection
@@ -10568,6 +10832,18 @@ final class WlsEdgeGatewayController
             if ($this->securityLedgerBootstrapRequired) {
                 $this->persistSecurityLedger();
                 $this->securityLedgerBootstrapRequired = false;
+            } elseif (($this->state['security_ledger_valid'] ?? false) !== true) {
+                // Storage recovery is not authority to recreate a historical
+                // security ledger from ordinary state.json. The initialized
+                // host marker/anchor deliberately makes that projection
+                // insufficient for anti-rollback recovery. Keep only the
+                // isolation data plane until signed recovery material or a
+                // controlled trust rebuild can re-establish enrollment facts.
+                $securityRecoveryState = !\file_exists($this->securityLedgerFile())
+                    && !\is_link($this->securityLedgerFile())
+                        ? 'SECURITY_LEDGER_MISSING'
+                        : 'SECURITY_LEDGER_UNTRUSTED';
+                $this->state = $this->sanitizeIsolationState($this->state);
             }
             if (\file_exists($marker) || \is_link($marker)) {
                 try {
@@ -10625,6 +10901,16 @@ final class WlsEdgeGatewayController
             $published = $this->publishIfDirty();
             if (!$published) {
                 $this->restartDataPlane('manual_repair');
+            }
+            if ($securityRecoveryState !== '') {
+                $this->state['ready'] = false;
+                $this->state['isolation_mode'] = true;
+                $this->state['health_state'] = $securityRecoveryState;
+                $this->state['recovery']['stage'] = $securityRecoveryState;
+                $this->state['recovery']['last_failure'] =
+                    'Storage recovered, but the historical host security ledger '
+                    . 'cannot be reconstructed from ordinary gateway state.';
+                $this->persistState();
             }
             return $this->status();
         } catch (\Throwable $throwable) {
@@ -10758,6 +11044,9 @@ final class WlsEdgeGatewayController
 
     private function maintenance(): void
     {
+        if ($this->serviceTreeRestartRequested) {
+            return;
+        }
         if (!$this->brokerGenerationOwned()) {
             // The stable Launcher/Broker has advanced to a new generation.
             // Retire this orphan without reload, stop or durable writes; the
@@ -10818,17 +11107,26 @@ final class WlsEdgeGatewayController
             }
         }
         $this->processPendingPublication();
+        if ($this->serviceTreeRestartRequested) {
+            return;
+        }
         if ($now - $this->lastHealthAt >= self::HEALTH_INTERVAL) {
             $this->lastHealthAt = $now;
             try {
                 $this->expireLeases();
                 $this->publishIfDirty();
             } catch (\Throwable $throwable) {
+                if ($this->serviceTreeRestartRequested) {
+                    return;
+                }
                 $reason = 'Lease maintenance transaction aborted: ' . $throwable->getMessage();
                 $this->abortRoutingMutation($reason);
                 $this->recordFailure($reason);
                 $this->state['health_state'] = 'CONTROL_DEGRADED';
                 $this->persistState();
+            }
+            if ($this->serviceTreeRestartRequested) {
+                return;
             }
             $this->recoverDataPlane();
             $this->pruneNonces();
@@ -10874,6 +11172,9 @@ final class WlsEdgeGatewayController
                         + self::BACKEND_PROBE_RETRY_INTERVAL;
                 }
             } catch (\Throwable $throwable) {
+                if ($this->serviceTreeRestartRequested) {
+                    return;
+                }
                 $reason = 'Backend probe transaction aborted: ' . $throwable->getMessage();
                 $this->abortRoutingMutation($reason);
                 $this->recordFailure($reason);
@@ -10886,6 +11187,13 @@ final class WlsEdgeGatewayController
     private function observeDataPlaneDuringDiskPressure(): void
     {
         $status = $this->nginxStatus();
+        if (($status['service_tree_restart_required'] ?? false) === true) {
+            $this->requestServiceTreeRestart(
+                (string)($status['message']
+                    ?? 'Nginx process tree requires platform service recovery during disk pressure.'),
+            );
+            return;
+        }
         $deadline = $this->monotonicNow() + self::PUBLIC_ROUTE_PROBE_BUDGET_SECONDS;
         $coreHealthy = ($status['running'] ?? false)
             && $this->publicPortsReachable(null, false, $deadline);
@@ -11003,7 +11311,9 @@ final class WlsEdgeGatewayController
                 || $before !== $this->routeRoutingDigest($this->state['routes'][$routeId]);
         }
         foreach ((array)($this->state['acme_challenges'] ?? []) as $leaseId => $lease) {
-            if (!\is_array($lease) || (int)($lease['expires_at'] ?? 0) <= $now) {
+            if (!\is_array($lease)
+                || !$this->acmeChallengeLeaseActive($lease, $monotonicNow)
+            ) {
                 unset($this->state['acme_challenges'][$leaseId]);
                 $changed = true;
             }
@@ -11337,19 +11647,39 @@ final class WlsEdgeGatewayController
         if ((string)($transaction['phase'] ?? '') !== 'OBSERVING') {
             return;
         }
-        $wallNow = \time();
-        $monotonicNow = $this->monotonicNow();
-        $transaction['started_at'] = $wallNow;
-        $transaction['started_at_monotonic'] = $monotonicNow;
-        $transaction['observation_boot_id'] = $this->hostBootId;
         $transaction['healthy_since'] = 0;
         $transaction['healthy_since_monotonic'] = 0.0;
         $this->state['binary_transaction'] = $transaction;
-        $this->state['binary_upgrade_started_at'] = $wallNow;
-        $this->state['binary_upgrade_started_at_monotonic'] = $monotonicNow;
-        $this->state['binary_observation_boot_id'] = $this->hostBootId;
         $this->state['binary_healthy_since'] = 0;
         $this->state['binary_healthy_since_monotonic'] = 0.0;
+    }
+
+    private function terminalizeUnavailableBinaryRollback(): void
+    {
+        $transaction = (array)($this->state['binary_transaction'] ?? []);
+        if ((string)($transaction['phase'] ?? '') !== 'OBSERVING') {
+            return;
+        }
+        $transaction['phase'] = 'ROLLBACK_UNAVAILABLE';
+        $transaction['healthy_since'] = 0;
+        $transaction['healthy_since_monotonic'] = 0.0;
+        $transaction['rollback_unavailable_at'] = \time();
+        $transaction['rollback_unavailable_at_monotonic'] = $this->monotonicNow();
+        $transaction['rollback_unavailable_boot_id'] = $this->hostBootId;
+        $transaction['rollback_unavailable_reason'] = \substr(
+            \str_replace(
+                ["\r", "\n"],
+                ' ',
+                (string)($this->state['recovery']['last_failure']
+                    ?? 'Binary rollback authority is unavailable.'),
+            ),
+            0,
+            1024,
+        );
+        $this->state['binary_transaction'] = $transaction;
+        $this->state['binary_healthy_since'] = 0;
+        $this->state['binary_healthy_since_monotonic'] = 0.0;
+        $this->state['recovery']['stage'] = 'BINARY_ROLLBACK_UNAVAILABLE';
     }
 
     private function binaryObservationCommitReady(?float $monotonicNow = null): bool
@@ -11385,10 +11715,8 @@ final class WlsEdgeGatewayController
     private function recoverDataPlane(): void
     {
         $status = $this->nginxStatus();
-        if (\PHP_OS_FAMILY === 'Windows'
-            && ($status['service_tree_restart_required'] ?? false) === true
-        ) {
-            $reason = (string)($status['message'] ?? 'Windows Nginx process tree is unavailable.');
+        if (($status['service_tree_restart_required'] ?? false) === true) {
+            $reason = (string)($status['message'] ?? 'Nginx process tree is unavailable.');
             $this->resetBinaryObservationHealthy();
             $this->state['ready'] = false;
             $this->state['health_state'] = 'DATA_PLANE_DOWN';
@@ -11396,7 +11724,7 @@ final class WlsEdgeGatewayController
             $this->recordFailure($reason);
             $this->persistState();
             throw new \RuntimeException(
-                'Windows Nginx process tree requires platform service recovery: ' . $reason,
+                'Nginx process tree requires platform service recovery: ' . $reason,
                 self::SERVICE_TREE_RESTART_EXIT,
             );
         }
@@ -11546,17 +11874,19 @@ final class WlsEdgeGatewayController
         $this->resetBinaryObservationHealthy();
         $monotonicNow = $this->monotonicNow();
         if (\hash_equals(
-                'BINARY_ROLLBACK_REQUEST_REJECTED',
-                (string)($this->state['recovery']['stage'] ?? ''),
-            )
-            && $this->binaryObservationRollbackEligible($monotonicNow)
-        ) {
+            'BINARY_ROLLBACK_REQUEST_REJECTED',
+            (string)($this->state['recovery']['stage'] ?? ''),
+        )) {
             // A failed authorization/request write is not permission to
-            // restart the same suspect slot. Recheck the durable authority
-            // on maintenance, but remain up for control/repair until an exact
-            // /2 request can be published.
-            $this->rollbackBinarySlot();
-            return;
+            // restart the same suspect slot. Retry a still-open observation
+            // once, then close the local rollback branch and continue through
+            // circuit/LKG/fast restart in this same maintenance round.
+            if ($this->binaryObservationRollbackEligible($monotonicNow)
+                && $this->rollbackBinarySlot()
+            ) {
+                return;
+            }
+            $this->terminalizeUnavailableBinaryRollback();
         }
         $circuitAction = $this->recoveryCircuitAction($monotonicNow);
         if ($circuitAction === 'OPEN') {
@@ -11611,8 +11941,10 @@ final class WlsEdgeGatewayController
             // TCP/TLS/route probes. Treat the third core failure inside the
             // observation window as an upgrade failure before attempting a
             // config-only rollback with the same suspect binary.
-            $this->rollbackBinarySlot();
-            return;
+            if ($this->rollbackBinarySlot()) {
+                return;
+            }
+            $this->terminalizeUnavailableBinaryRollback();
         }
 
         $recentFive = \array_filter(
@@ -11731,6 +12063,21 @@ final class WlsEdgeGatewayController
 
     private function restartDataPlane(string $reason): void
     {
+        $status = $this->nginxStatus();
+        if (($status['running'] ?? false) !== true) {
+            $boundary = $this->verifyDataPlaneStartBoundary($status);
+            if (($boundary['ok'] ?? false) !== true) {
+                if (!$this->serviceTreeRestartRequested) {
+                    $this->recordFailure(
+                        'Nginx restart refused an unsafe start boundary: '
+                            . (string)($boundary['message'] ?? 'status unavailable'),
+                    );
+                    $this->state['recovery']['stage'] = 'START_BOUNDARY_UNSAFE';
+                    $this->persistState();
+                }
+                return;
+            }
+        }
         if ($this->brokerDrivenActionPending()) {
             $this->startupDataPlaneRecoveryPending = true;
             $this->state['ready'] = false;
@@ -11741,18 +12088,19 @@ final class WlsEdgeGatewayController
             $this->persistState();
             return;
         }
-        $status = $this->nginxStatus();
         if (($status['running'] ?? false) === true) {
             $stop = $this->stopDataPlane();
             if (($stop['ok'] ?? false) !== true
                 || ($this->nginxStatus()['running'] ?? false) === true
             ) {
-                $this->recordFailure(
-                    'Nginx restart refused because the verified owner did not stop: '
-                        . (string)($stop['message'] ?? 'stop identity unavailable'),
-                );
-                $this->state['recovery']['stage'] = 'STOP_CONFIRMATION_FAILED';
-                $this->persistState();
+                if (!$this->serviceTreeRestartRequested) {
+                    $this->recordFailure(
+                        'Nginx restart refused because the verified owner did not stop: '
+                            . (string)($stop['message'] ?? 'stop identity unavailable'),
+                    );
+                    $this->state['recovery']['stage'] = 'STOP_CONFIRMATION_FAILED';
+                    $this->persistState();
+                }
                 return;
             }
         } elseif (($status['ok'] ?? false) !== true) {
@@ -11766,9 +12114,11 @@ final class WlsEdgeGatewayController
         }
         $start = $this->startDataPlane();
         if (!($start['ok'] ?? false)) {
-            $this->recordFailure((string)($start['message'] ?? 'Nginx restart failed.'));
-            if ($this->binaryObservationRollbackEligible()) {
-                $this->rollbackBinarySlot();
+            if (!$this->serviceTreeRestartRequested) {
+                $this->recordFailure((string)($start['message'] ?? 'Nginx restart failed.'));
+                if ($this->binaryObservationRollbackEligible()) {
+                    $this->rollbackBinarySlot();
+                }
             }
         }
         $this->journal('data_plane_restart', ['reason' => $reason, 'result' => $start]);
@@ -11825,6 +12175,12 @@ final class WlsEdgeGatewayController
             'candidate_generation' => 0,
             'candidate_file' => '',
             'candidate_digest' => '',
+            'candidate_attestation_fence_status' => 'NONE',
+            'candidate_attestation_fence_phase' => '',
+            'candidate_attestation_fence_digest' => '',
+            'candidate_attestation_config_digest' => '',
+            'candidate_attestation_binding_digest' => '',
+            'candidate_attestation_fence_cleared_digest' => '',
             'rollback_file' => '',
             'irrevocable_security' => false,
             'operation_ids' => [],
@@ -11855,9 +12211,23 @@ final class WlsEdgeGatewayController
 
     private function completePublication(): void
     {
+        if (\hash_equals(
+            'ARMED',
+            (string)($this->publication[
+                'candidate_attestation_fence_status'
+            ] ?? ''),
+        )) {
+            // Never erase the only durable metadata needed to consume an
+            // indeterminate privileged fence acknowledgement.
+            return;
+        }
         if (\in_array(
             (string)($this->publication['phase'] ?? ''),
-            ['PENDING_PUBLICATION', 'DURABILITY_PENDING'],
+            [
+                'PENDING_PUBLICATION',
+                'SERVICE_TREE_RETIREMENT_PENDING',
+                'DURABILITY_PENDING',
+            ],
             true,
         )) {
             return;
@@ -11889,7 +12259,12 @@ final class WlsEdgeGatewayController
                 'Completed gateway publication journal is still present.'
             );
         }
+        $completedPublication = $this->publication;
         $this->publication = null;
+        $this->verifiedNativeCandidateAttestationFenceDigest = '';
+        $this->reconcilePublicationConfigArtifacts(
+            \is_array($completedPublication) ? $completedPublication : null,
+        );
     }
 
     private function markPublicationIrrevocableSecurity(): void
@@ -11905,6 +12280,85 @@ final class WlsEdgeGatewayController
 
     private function abortRoutingMutation(string $reason): void
     {
+        if ($this->publication !== null
+            && ($this->publication['irrevocable_security'] ?? false) === true
+            && hash_equals(
+                'SERVICE_TREE_RETIREMENT_PENDING',
+                (string)($this->publication['phase'] ?? ''),
+            )
+        ) {
+            // The old TLS generation may already have been retired by the
+            // platform service boundary. Keep the exact transaction and
+            // retirement id until a root-owned completion receipt lets the
+            // same publication move forward.
+            $this->requestStateBeforeMutation = null;
+            $this->requestPublicationBeforeMutation = null;
+            $this->requestConfigDirtyBeforeMutation = false;
+            $this->state['ready'] = false;
+            $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+            $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
+            $this->state['recovery']['last_failure'] = $reason;
+            $this->persistState();
+            $this->persistPublication();
+            return;
+        }
+        $publicationPhase = (string)($this->publication['phase'] ?? '');
+        $candidateDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_digest'] ?? ''
+        )));
+        $candidateIsAtActivePath = false;
+        if (\in_array(
+                $publicationPhase,
+                ['ACTIVATING', 'DURABILITY_PENDING'],
+                true,
+            )
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $candidateDigest) === 1
+            && \is_file($this->configFile())
+            && !\is_link($this->configFile())
+        ) {
+            try {
+                $candidateIsAtActivePath = \hash_equals(
+                    $candidateDigest,
+                    $this->fileHash($this->configFile()),
+                );
+            } catch (\Throwable) {
+                $candidateIsAtActivePath = false;
+            }
+        }
+        if ($candidateIsAtActivePath) {
+            // Once the candidate occupies the active path, an exception from a
+            // durability write or Broker acknowledgement is no longer a
+            // reversible desired-state failure. Keep the transaction intact so
+            // restart reconciliation can prove candidate-vs-active and consume
+            // the exact fence instead of restoring only the old state record.
+            $irrevocableSecurity = ($this->publication['irrevocable_security'] ?? false)
+                === true;
+            $this->requestStateBeforeMutation = null;
+            $this->requestPublicationBeforeMutation = null;
+            $this->requestConfigDirtyBeforeMutation = false;
+            $this->state['ready'] = false;
+            if ($irrevocableSecurity) {
+                $this->state['isolation_mode'] = true;
+                $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+                $this->requestServiceTreeRestart(
+                    'Post-switch security publication requires platform recovery: '
+                        . $reason,
+                );
+            } else {
+                $this->state['health_state'] = 'CONTROL_DEGRADED';
+                $this->state['recovery']['stage'] = 'PUBLICATION_RECOVERY';
+            }
+            $this->state['recovery']['last_failure'] = $reason;
+            try {
+                $this->persistState();
+            } catch (\Throwable) {
+            }
+            try {
+                $this->persistPublication();
+            } catch (\Throwable) {
+            }
+            return;
+        }
         if ($this->requestStateBeforeMutation !== null
             && $this->requestPublicationBeforeMutation !== null
         ) {
@@ -11952,6 +12406,11 @@ final class WlsEdgeGatewayController
     {
         if ($this->publication === null) {
             return;
+        }
+        if (!$this->clearCandidateAttestationFence()) {
+            throw new \RuntimeException(
+                'Publication rollback is waiting for candidate fence consumption.'
+            );
         }
         $previous = \is_array($this->publication['previous'] ?? null)
             ? $this->publication['previous']
@@ -12326,6 +12785,19 @@ final class WlsEdgeGatewayController
     private function processPendingPublication(): void
     {
         if ($this->publication !== null
+            && (string)($this->publication['phase'] ?? '') === 'ACTIVATING'
+        ) {
+            $this->reconcileInterruptedPublication();
+            return;
+        }
+        if ($this->publication !== null
+            && (string)($this->publication['phase'] ?? '')
+                === 'SERVICE_TREE_RETIREMENT_PENDING'
+        ) {
+            $this->processPendingServiceTreeRetirementPublication();
+            return;
+        }
+        if ($this->publication !== null
             && (string)($this->publication['phase'] ?? '') === 'DURABILITY_PENDING'
         ) {
             try {
@@ -12345,6 +12817,11 @@ final class WlsEdgeGatewayController
                     $this->persistState();
                     $this->persistPublication();
                 }
+                if (!$this->clearCandidateAttestationFence()) {
+                    throw new \RuntimeException(
+                        'Candidate attestation fence clear remains pending.'
+                    );
+                }
                 $this->persistRouteLkg();
                 $this->publication['phase'] = 'COMMITTED';
                 $this->finishPublicationOperations('COMMITTED');
@@ -12358,20 +12835,26 @@ final class WlsEdgeGatewayController
                     ),
                     'generation' => (int)($this->state['active_config_generation'] ?? 0),
                 ]);
-                $this->archivePublicationRollback($this->publication);
                 $this->completePublication();
             } catch (\Throwable $throwable) {
                 $securityFailure = ($this->publication['irrevocable_security'] ?? false)
                     === true && !$this->publicationSecurityRetirementProven();
                 if ($securityFailure) {
-                    $this->forceStopSecurityDataPlane();
+                    if (!$this->forceStopSecurityDataPlane()) {
+                        $this->requestServiceTreeRestart(
+                            'TLS retirement recovery could not prove data-plane exit and listener withdrawal: '
+                                . $throwable->getMessage(),
+                        );
+                    }
                 }
                 $this->state['health_state'] = $securityFailure
                     ? 'SECURITY_MUTATION_FAILED_CLOSED'
                     : 'CONTROL_DEGRADED';
-                $this->state['recovery']['stage'] = $securityFailure
-                    ? 'TLS_RETIREMENT_FAILED'
-                    : 'ROUTE_LKG_PERSIST_PENDING';
+                $this->state['recovery']['stage'] = $this->serviceTreeRestartRequested
+                    ? 'SERVICE_TREE_RESTART'
+                    : ($securityFailure
+                        ? 'TLS_RETIREMENT_FAILED'
+                        : 'ROUTE_LKG_PERSIST_PENDING');
                 $this->state['recovery']['last_failure'] = $throwable->getMessage();
                 try {
                     $this->persistState();
@@ -12417,6 +12900,9 @@ final class WlsEdgeGatewayController
         try {
             $this->publishIfDirty();
         } catch (\Throwable $throwable) {
+            if ($this->serviceTreeRestartRequested) {
+                return;
+            }
             $reason = 'Queued publication failed: ' . $throwable->getMessage();
             $this->recordFailure($reason);
             $this->abortRoutingMutation($reason);
@@ -12424,6 +12910,213 @@ final class WlsEdgeGatewayController
             $this->lastPublicationAt = $this->monotonicNow();
             $this->publicationDueAt = 0.0;
         }
+    }
+
+    private function processPendingServiceTreeRetirementPublication(): void
+    {
+        if ($this->publication === null
+            || ($this->publication['irrevocable_security'] ?? false) !== true
+            || (string)($this->publication['phase'] ?? '')
+                !== 'SERVICE_TREE_RETIREMENT_PENDING'
+        ) {
+            return;
+        }
+        $intent = \is_array($this->publication['service_tree_retirement'] ?? null)
+            ? $this->publication['service_tree_retirement']
+            : [];
+        if (!$this->validPendingServiceTreeRetirementIntent($intent)) {
+            $this->state['ready'] = false;
+            $this->state['isolation_mode'] = true;
+            $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+            $this->state['recovery']['stage'] = 'TLS_RETIREMENT_PROOF_INVALID';
+            $this->state['recovery']['last_failure'] =
+                'Pending platform retirement intent failed validation.';
+            $this->persistState();
+            return;
+        }
+        $generation = (int)($this->publication['candidate_generation'] ?? 0);
+        $candidateDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_digest'] ?? ''
+        )));
+        if ($generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $candidateDigest) !== 1
+            || !\is_file($this->configFile())
+            || \is_link($this->configFile())
+            || !\hash_equals($candidateDigest, $this->fileHash($this->configFile()))
+        ) {
+            $this->state['ready'] = false;
+            $this->state['isolation_mode'] = true;
+            $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+            $this->state['recovery']['stage'] = 'TLS_RETIREMENT_CONFIG_INVALID';
+            $this->state['recovery']['last_failure'] =
+                'Pending irreversible publication no longer matches its candidate config.';
+            $this->persistState();
+            return;
+        }
+        if ($this->publicationSecurityRetirementProven()) {
+            $activeFenceDurable = $generation
+                    === (int)($this->state['active_config_generation'] ?? 0)
+                && \hash_equals(
+                    $candidateDigest,
+                    (string)($this->state['active_config_digest'] ?? ''),
+                );
+            if (!$activeFenceDurable) {
+                try {
+                    $this->prepareCandidateAttestationFence(
+                        'SERVICE_TREE_RETIREMENT_PENDING',
+                    );
+                } catch (\Throwable $throwable) {
+                    $reason = 'Recovered replacement candidate fence is unavailable: '
+                        . $throwable->getMessage();
+                    $this->requestServiceTreeRestart($reason);
+                    $this->state['ready'] = false;
+                    $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+                    $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
+                    $this->state['recovery']['last_failure'] = $reason;
+                    $this->persistState();
+                    $this->persistPublication();
+                    return;
+                }
+            } elseif (!$this->clearCandidateAttestationFence()) {
+                $this->state['ready'] = false;
+                $this->state['health_state'] = 'CONTROL_DEGRADED';
+                $this->state['recovery']['stage'] = 'CANDIDATE_FENCE_CLEAR_PENDING';
+                $this->state['recovery']['last_failure'] =
+                    'Recovered retirement is waiting for candidate fence consumption.';
+                $this->persistState();
+                $this->persistPublication();
+                return;
+            }
+            $activation = $this->activateCurrentConfigAndProbe(
+                $generation,
+                $this->securityRetirementDeadline(),
+            );
+            if (($activation['verified'] ?? false) !== true) {
+                $reason = 'Recovered platform retirement proof is valid, but the '
+                    . 'replacement candidate did not pass a fresh activation probe: '
+                    . (string)(
+                        $activation['result']['message']
+                        ?? 'replacement activation failed'
+                    );
+                $this->state['ready'] = false;
+                $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+                $this->state['recovery']['stage'] = 'TLS_REPLACEMENT_RECOVERY';
+                $this->state['recovery']['last_failure'] = $reason;
+                $this->persistState();
+                $this->persistPublication();
+                return;
+            }
+            if (!$activeFenceDurable) {
+                $this->state['active_config_generation'] = $generation;
+                $this->state['active_routes'] = $this->publishableActiveRouteSnapshot();
+                $this->state['active_config_digest'] = $candidateDigest;
+                $this->persistState();
+                if (!$this->clearCandidateAttestationFence()) {
+                    $this->state['ready'] = false;
+                    $this->state['health_state'] = 'CONTROL_DEGRADED';
+                    $this->state['recovery']['stage'] = 'CANDIDATE_FENCE_CLEAR_PENDING';
+                    $this->state['recovery']['last_failure'] =
+                        'Recovered replacement is waiting for candidate fence consumption.';
+                    $this->persistState();
+                    $this->persistPublication();
+                    return;
+                }
+            }
+            $retirement = [
+                'ok' => true,
+                'receipt' => $this->publication['security_retirement'],
+            ];
+        } else {
+            try {
+                $this->prepareCandidateAttestationFence(
+                    'SERVICE_TREE_RETIREMENT_PENDING',
+                );
+            } catch (\Throwable $throwable) {
+                $reason = 'Pending platform retirement candidate fence is unavailable: '
+                    . $throwable->getMessage();
+                $this->requestServiceTreeRestart($reason);
+                $this->state['ready'] = false;
+                $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+                $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
+                $this->state['recovery']['last_failure'] = $reason;
+                $this->persistState();
+                $this->persistPublication();
+                return;
+            }
+            $retirement = $this->retireSecurityDataPlaneGeneration(
+                $generation,
+                $this->securityRetirementDeadline(),
+            );
+        }
+        if (($retirement['ok'] ?? false) !== true) {
+            $reason = 'Pending platform service-tree retirement has not completed: '
+                . (string)($retirement['message'] ?? 'proof unavailable');
+            $this->state['ready'] = false;
+            $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+            $this->state['recovery']['stage'] = $this->serviceTreeRestartRequested
+                ? 'SERVICE_TREE_RESTART'
+                : 'TLS_RETIREMENT_PENDING';
+            $this->state['recovery']['last_failure'] = $reason;
+            $this->persistState();
+            $this->persistPublication();
+            return;
+        }
+        $this->publication['security_retirement'] = $retirement['receipt'];
+        $this->persistPublication();
+        $this->state['active_config_generation'] = $generation;
+        $this->state['active_routes'] = $this->publishableActiveRouteSnapshot();
+        $this->state['active_config_digest'] = $this->fileHash($this->configFile());
+        $this->state['pending_lkg_generation'] = $generation;
+        $this->startPendingLkgObservation();
+        $this->state['pending_lkg_config_digest'] =
+            (string)$this->state['active_config_digest'];
+        $this->state['pending_lkg_routes_digest'] = \hash(
+            'sha256',
+            $this->canonicalJson((array)$this->state['active_routes']),
+        );
+        $this->state['lkg_rollback_hold_generation'] = 0;
+        $this->state['lkg_rollback_hold_since'] = 0;
+        $this->state['lkg_rollback_hold_desired_digest'] = '';
+        $this->configDirty = false;
+        // Make the active fence durable before consuming the candidate fence.
+        // A crash can therefore prove exactly one of them: candidate while
+        // ACTIVATING, or active after this state commit.
+        $this->persistState();
+        if (!$this->clearCandidateAttestationFence()) {
+            $this->publication['phase'] = 'DURABILITY_PENDING';
+            $this->state['health_state'] = 'CONTROL_DEGRADED';
+            $this->state['recovery']['stage'] = 'CANDIDATE_FENCE_CLEAR_PENDING';
+            $this->state['recovery']['last_failure'] =
+                'Candidate attestation fence clear is awaiting Broker recovery.';
+            $this->persistState();
+            $this->persistPublication();
+            return;
+        }
+        try {
+            $this->persistRouteLkg();
+        } catch (\Throwable $throwable) {
+            $this->publication['phase'] = 'DURABILITY_PENDING';
+            $this->state['health_state'] = 'CONTROL_DEGRADED';
+            $this->state['recovery']['stage'] = 'ROUTE_LKG_PERSIST_PENDING';
+            $this->state['recovery']['last_failure'] = $throwable->getMessage();
+            $this->persistState();
+            $this->persistPublication();
+            return;
+        }
+        $this->publication['phase'] = 'COMMITTED';
+        $this->finishPublicationOperations('COMMITTED');
+        $this->state['recovery']['stage'] = 'NONE';
+        $this->state['recovery']['last_failure'] = '';
+        $this->persistState();
+        $this->persistPublication();
+        $this->journal('publication_service_tree_retirement_committed', [
+            'transaction_id' => (string)(
+                $this->publication['transaction_id'] ?? ''
+            ),
+            'generation' => $generation,
+            'retirement_id' => (string)($intent['retirement_id'] ?? ''),
+        ]);
+        $this->completePublication();
     }
 
     private function updatePublicationOperations(string $state): void
@@ -12672,7 +13365,9 @@ final class WlsEdgeGatewayController
         $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
         $this->state['last_publication_error'] = $reason;
         $this->configDirty = true;
-        $this->stopDataPlane();
+        if (!$this->forceStopSecurityDataPlane()) {
+            $this->requestServiceTreeRestart($reason);
+        }
         try {
             $this->persistState();
         } finally {
@@ -12748,23 +13443,39 @@ final class WlsEdgeGatewayController
             }
             $this->finishPublicationOperations('COMMITTED');
             $this->persistState();
-            $this->archivePublicationRollback($payload);
             $this->completePublication();
             return;
         }
         $phase = (string)($payload['phase'] ?? '');
+        if (\in_array($phase, ['ACTIVATING', 'DURABILITY_PENDING'], true)
+            && $this->brokerDrivenActionPending()
+        ) {
+            $this->startupDataPlaneRecoveryPending = true;
+            $this->state['ready'] = false;
+            $this->state['health_state'] = 'CONTROL_DEGRADED';
+            $this->state['recovery']['stage'] = 'BROKER_ACTION_PENDING_RECOVERY';
+            $this->state['recovery']['last_failure'] =
+                'Interrupted publication is waiting for a fresh Native Broker fence exchange.';
+            $this->persistState();
+            $this->persistPublication();
+            return;
+        }
         if (\in_array(
             $phase,
             ['PENDING_PUBLICATION', 'DESIRED', 'PREPARED', 'SHADOW_VERIFIED'],
             true,
         )) {
-            $candidate = (string)($payload['candidate_file'] ?? '');
-            if ($candidate !== '') {
-                $this->removePublicationCandidateFile(
-                    $candidate,
-                    (int)($payload['candidate_generation'] ?? 0),
-                    (string)($payload['transaction_id'] ?? ''),
-                );
+            if (!$this->reconcilePublicationConfigArtifacts($payload)) {
+                $this->configDirty = true;
+                $this->state['ready'] = false;
+                $this->state['health_state'] = 'CONTROL_DEGRADED';
+                $this->state['recovery']['stage'] =
+                    'PUBLICATION_ARTIFACT_CLEANUP_FAILED';
+                $this->state['recovery']['last_failure'] =
+                    'Interrupted pre-activation rollback artifact could not be removed safely.';
+                $this->persistState();
+                $this->persistPublication();
+                return;
             }
             $this->publication['phase'] = 'PENDING_PUBLICATION';
             $this->publication['candidate_file'] = '';
@@ -12778,8 +13489,90 @@ final class WlsEdgeGatewayController
             $this->persistPublication();
             return;
         }
+        if ($phase === 'SERVICE_TREE_RETIREMENT_PENDING') {
+            $intent = \is_array($payload['service_tree_retirement'] ?? null)
+                ? $payload['service_tree_retirement']
+                : [];
+            $candidateDigest = \strtolower(\trim((string)(
+                $payload['candidate_digest'] ?? ''
+            )));
+            if (($payload['irrevocable_security'] ?? false) !== true
+                || !$this->validPendingServiceTreeRetirementIntent($intent)
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $candidateDigest) !== 1
+                || !\is_file($this->configFile())
+                || \is_link($this->configFile())
+                || !\hash_equals($candidateDigest, $this->fileHash($this->configFile()))
+            ) {
+                $this->state['ready'] = false;
+                $this->state['isolation_mode'] = true;
+                $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+                $this->state['recovery']['stage'] = 'TLS_RETIREMENT_PROOF_INVALID';
+                $this->state['recovery']['last_failure'] =
+                    'Interrupted platform retirement intent or candidate config is invalid.';
+                $this->persistState();
+                return;
+            }
+            $this->state['ready'] = false;
+            $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
+            $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
+            $this->state['recovery']['last_failure'] =
+                'Waiting for root-owned platform service-tree retirement completion.';
+            $this->persistState();
+            $this->persistPublication();
+            return;
+        }
         $activationRecoveryDeadline = $this->monotonicNow()
             + (($this->slotManifest()['test_mode'] ?? false) === true ? 3.0 : 20.0);
+        $candidateGeneration = (int)($payload['candidate_generation'] ?? 0);
+        $candidateDigest = \strtolower(\trim((string)(
+            $payload['candidate_digest'] ?? ''
+        )));
+        $activeFenceDurable = $candidateGeneration > 0
+            && $candidateGeneration
+                === (int)($this->state['active_config_generation'] ?? 0)
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $candidateDigest) === 1
+            && \hash_equals(
+                $candidateDigest,
+                (string)($this->state['active_config_digest'] ?? ''),
+            );
+        if ($phase === 'ACTIVATING'
+            && !\hash_equals(
+                'CLEARED',
+                (string)($this->publication[
+                    'candidate_attestation_fence_status'
+                ] ?? ''),
+            )
+        ) {
+            if ($activeFenceDurable) {
+                if (!$this->clearCandidateAttestationFence()) {
+                    $this->publication['phase'] = 'DURABILITY_PENDING';
+                    $this->state['ready'] = false;
+                    $this->state['health_state'] = 'CONTROL_DEGRADED';
+                    $this->state['recovery']['stage'] =
+                        'CANDIDATE_FENCE_CLEAR_PENDING';
+                    $this->state['recovery']['last_failure'] =
+                        'Recovered active state is waiting for candidate fence consumption.';
+                    $this->persistState();
+                    $this->persistPublication();
+                    return;
+                }
+            } else {
+                try {
+                    $this->prepareCandidateAttestationFence('ACTIVATING');
+                } catch (\Throwable $throwable) {
+                    $reason = 'Interrupted candidate fence could not be reconstructed: '
+                        . $throwable->getMessage();
+                    $this->requestServiceTreeRestart($reason);
+                    $this->state['ready'] = false;
+                    $this->state['health_state'] = 'CONTROL_DEGRADED';
+                    $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
+                    $this->state['recovery']['last_failure'] = $reason;
+                    $this->persistState();
+                    $this->persistPublication();
+                    return;
+                }
+            }
+        }
         if (\in_array($phase, ['ACTIVATING', 'DURABILITY_PENDING'], true)
             && \is_file($this->configFile())
             && !\is_link($this->configFile())
@@ -12804,12 +13597,14 @@ final class WlsEdgeGatewayController
                     $reason = 'Interrupted security publication could not prove old TLS '
                         . 'generation retirement: '
                         . (string)($retirement['message'] ?? 'unknown failure');
-                    $this->forceStopSecurityDataPlane();
-                    $this->rollbackRoutingMutation($reason);
+                    if (!$this->serviceTreeRestartRequested) {
+                        $this->requestServiceTreeRestart($reason);
+                    }
                     $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
-                    $this->state['recovery']['stage'] = 'TLS_RETIREMENT_FAILED';
+                    $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
                     $this->state['recovery']['last_failure'] = $reason;
                     $this->persistState();
+                    $this->persistPublication();
                     return;
                 }
                 $this->publication['security_retirement'] = $retirement['receipt'];
@@ -12830,6 +13625,17 @@ final class WlsEdgeGatewayController
                 $this->canonicalJson((array)$this->state['active_routes']),
             );
             $this->configDirty = false;
+            $this->persistState();
+            if (!$this->clearCandidateAttestationFence()) {
+                $this->publication['phase'] = 'DURABILITY_PENDING';
+                $this->state['health_state'] = 'CONTROL_DEGRADED';
+                $this->state['recovery']['stage'] = 'CANDIDATE_FENCE_CLEAR_PENDING';
+                $this->state['recovery']['last_failure'] =
+                    'Recovered candidate fence clear is awaiting Broker recovery.';
+                $this->persistState();
+                $this->persistPublication();
+                return;
+            }
             try {
                 $this->persistRouteLkg();
             } catch (\Throwable $throwable) {
@@ -12849,7 +13655,6 @@ final class WlsEdgeGatewayController
                 'transaction_id' => (string)($payload['transaction_id'] ?? ''),
                 'generation' => (int)$this->state['active_config_generation'],
             ]);
-            $this->archivePublicationRollback($payload);
             $this->completePublication();
             return;
         }
@@ -12898,7 +13703,6 @@ final class WlsEdgeGatewayController
         }
         $this->persistState();
         $this->completePublication();
-        $this->discardPublicationRollback($rollback);
         if ($rollbackVerified && !$irrevocableSecurity) {
             return;
         }
@@ -13088,6 +13892,11 @@ final class WlsEdgeGatewayController
             'Candidate Nginx config',
         );
         try {
+            // Arm the root/SYSTEM-private candidate fence before replacing
+            // the active path. Before the swap the Broker still hashes the
+            // old config and therefore cannot use this authorization; after
+            // the swap only this exact transaction can be attested.
+            $this->prepareCandidateAttestationFence('ACTIVATING');
             if ($candidateConfig === null || $candidateConfig === '') {
                 throw new \RuntimeException('Candidate Nginx config became unreadable.');
             }
@@ -13110,7 +13919,6 @@ final class WlsEdgeGatewayController
                 . $throwable->getMessage();
             $this->recordFailure($reason);
             $this->rollbackRoutingMutation($reason);
-            $this->discardPublicationRollback($rollback);
             $this->completePublication();
             return false;
         }
@@ -13126,40 +13934,53 @@ final class WlsEdgeGatewayController
             // runtime or linked-library failure. If the real data plane fails
             // only after activation, retry the same desired routing without
             // H3 before touching the H2/H1 rollback state.
-            $this->quarantineH3ForActiveRuntime(
-                'Runtime activation failed with H3; downgraded to H2/H1 '
-                    . 'until the gateway runtime changes or an administrator explicitly retries H3.',
-            );
-            $fallbackConfig = $this->renderNginxConfig(false);
-            $this->atomicWrite($current, $fallbackConfig, 0600);
-            $this->publication['candidate_digest'] = $this->fileHash($current);
-            $this->persistPublication();
-            $fallbackTest = $this->runNginx(['-t'], $publicationDeadline);
-            if (($fallbackTest['code'] ?? 1) === 0
-                && $this->shadowVerifyRoutes(
-                    $current,
-                    $transactionId,
-                    $publicationDeadline,
-                )
-            ) {
-                $activation = $this->activateCurrentConfigAndProbe(
-                    (int)$this->state['generation'],
-                    $publicationDeadline,
+            try {
+                $this->quarantineH3ForActiveRuntime(
+                    'Runtime activation failed with H3; downgraded to H2/H1 '
+                        . 'until the gateway runtime changes or an administrator explicitly retries H3.',
                 );
-                $result = $activation['result'];
-                $publicVerified = $activation['verified'];
-                if ($publicVerified) {
-                    $this->journal('h3_runtime_downgrade', [
-                        'transaction_id' => $transactionId,
-                        'generation' => (int)$this->state['generation'],
-                        'reason' => (string)$this->state['h3_reason'],
-                    ]);
+                $fallbackConfig = $this->renderNginxConfig(false);
+                $this->publication['candidate_digest'] = \hash(
+                    'sha256',
+                    $fallbackConfig,
+                );
+                $this->persistPublication();
+                $this->prepareCandidateAttestationFence('ACTIVATING');
+                $this->atomicWrite($current, $fallbackConfig, 0600);
+                $fallbackTest = $this->runNginx(['-t'], $publicationDeadline);
+                if (($fallbackTest['code'] ?? 1) === 0
+                    && $this->shadowVerifyRoutes(
+                        $current,
+                        $transactionId,
+                        $publicationDeadline,
+                    )
+                ) {
+                    $activation = $this->activateCurrentConfigAndProbe(
+                        (int)$this->state['generation'],
+                        $publicationDeadline,
+                    );
+                    $result = $activation['result'];
+                    $publicVerified = $activation['verified'];
+                    if ($publicVerified) {
+                        $this->journal('h3_runtime_downgrade', [
+                            'transaction_id' => $transactionId,
+                            'generation' => (int)$this->state['generation'],
+                            'reason' => (string)$this->state['h3_reason'],
+                        ]);
+                    }
+                } else {
+                    $result = [
+                        'ok' => false,
+                        'message' => 'H3 runtime fallback validation failed: '
+                            . (string)($fallbackTest['output'] ?? ''),
+                    ];
                 }
-            } else {
+            } catch (\Throwable $throwable) {
+                $publicVerified = false;
                 $result = [
                     'ok' => false,
-                    'message' => 'H3 runtime fallback validation failed: '
-                        . (string)($fallbackTest['output'] ?? ''),
+                    'message' => 'H3 runtime fallback publication failed: '
+                        . $throwable->getMessage(),
                 ];
             }
         }
@@ -13182,11 +14003,16 @@ final class WlsEdgeGatewayController
                     // rejected diagnostic copy under disk pressure.
                 }
             }
+            $this->reconcilePublicationConfigArtifacts();
             $irrevocableSecurity = ($this->publication['irrevocable_security'] ?? false)
                 === true;
             $rollbackVerified = false;
             if ($irrevocableSecurity) {
-                $this->forceStopSecurityDataPlane();
+                if (!$this->forceStopSecurityDataPlane()) {
+                    $this->requestServiceTreeRestart(
+                        'Rejected irreversible publication could not prove data-plane exit.',
+                    );
+                }
             } else {
                 $rollbackVerified = $this->restorePublicationDataPlane(
                     $current,
@@ -13201,10 +14027,11 @@ final class WlsEdgeGatewayController
             if (!$rollbackVerified) {
                 $this->state['ready'] = false;
                 $this->state['health_state'] = 'DATA_PLANE_DOWN';
-                $this->state['recovery']['stage'] = 'PUBLICATION_ROLLBACK_FAILED';
+                $this->state['recovery']['stage'] = $this->serviceTreeRestartRequested
+                    ? 'SERVICE_TREE_RESTART'
+                    : 'PUBLICATION_ROLLBACK_FAILED';
                 $this->persistState();
             }
-            $this->discardPublicationRollback($rollback);
             $this->completePublication();
             return false;
         }
@@ -13218,14 +14045,15 @@ final class WlsEdgeGatewayController
                     . 'shared-gateway TLS generation: '
                     . (string)($retirement['message'] ?? 'retirement proof unavailable');
                 $this->recordFailure($reason);
-                $this->forceStopSecurityDataPlane();
-                $this->rollbackRoutingMutation($reason);
+                if (!$this->serviceTreeRestartRequested) {
+                    $this->requestServiceTreeRestart($reason);
+                }
                 $this->state['ready'] = false;
                 $this->state['health_state'] = 'SECURITY_MUTATION_FAILED_CLOSED';
-                $this->state['recovery']['stage'] = 'TLS_RETIREMENT_FAILED';
+                $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
+                $this->state['recovery']['last_failure'] = $reason;
                 $this->persistState();
-                $this->discardPublicationRollback($rollback);
-                $this->completePublication();
+                $this->persistPublication();
                 return false;
             }
             $this->publication['security_retirement'] = $retirement['receipt'];
@@ -13251,6 +14079,17 @@ final class WlsEdgeGatewayController
         $this->state['lkg_rollback_hold_since'] = 0;
         $this->state['lkg_rollback_hold_desired_digest'] = '';
         $this->configDirty = false;
+        $this->persistState();
+        if (!$this->clearCandidateAttestationFence()) {
+            $this->publication['phase'] = 'DURABILITY_PENDING';
+            $this->state['health_state'] = 'CONTROL_DEGRADED';
+            $this->state['recovery']['stage'] = 'CANDIDATE_FENCE_CLEAR_PENDING';
+            $this->state['recovery']['last_failure'] =
+                'Candidate attestation fence clear is awaiting Broker recovery.';
+            $this->persistState();
+            $this->persistPublication();
+            return true;
+        }
         try {
             $this->persistRouteLkg();
         } catch (\Throwable $throwable) {
@@ -13272,7 +14111,6 @@ final class WlsEdgeGatewayController
             'phase' => 'COMMITTED',
             'generation' => (int)$this->state['active_config_generation'],
         ]);
-        $this->archivePublicationRollback($this->publication);
         $this->completePublication();
         return true;
     }
@@ -13366,11 +14204,48 @@ final class WlsEdgeGatewayController
         ?float $deadlineMonotonic = null,
     ): array
     {
+        $testMode = ($this->slotManifest()['test_mode'] ?? false) === true;
+        $observationSeconds = $testMode ? 0.2 : 15.0;
+        $overallDeadline = $deadlineMonotonic
+            ?? ($this->monotonicNow() + ($testMode ? 20.0 : 45.0));
+        // Reserve the entire continuous observation plus one bounded route
+        // sweep before launching any command. A locally successful start must
+        // never consume the time needed to prove the generation it activated.
+        $operationDeadline = $overallDeadline
+            - $observationSeconds
+            - self::PUBLIC_ROUTE_PROBE_BUDGET_SECONDS
+            - ($testMode ? 0.25 : 1.0);
+        if ($operationDeadline <= $this->monotonicNow()) {
+            return [
+                'verified' => false,
+                'result' => [
+                    'ok' => false,
+                    'message' => 'Nginx activation deadline cannot reserve its mandatory stability probe.',
+                ],
+            ];
+        }
         $status = $this->nginxStatus();
+        if (($status['running'] ?? false) !== true) {
+            $boundary = $this->verifyDataPlaneStartBoundary($status);
+            if (($boundary['ok'] ?? false) !== true) {
+                if (!$this->serviceTreeRestartRequested) {
+                    $this->recordFailure((string)(
+                        $boundary['message']
+                            ?? 'Gateway config activation data-plane boundary is unsafe.'
+                    ));
+                    $this->state['recovery']['stage'] = 'START_BOUNDARY_UNSAFE';
+                    $this->persistState();
+                }
+                return [
+                    'verified' => false,
+                    'result' => $boundary,
+                ];
+            }
+        }
         if (($status['running'] ?? false) === true) {
-            $result = $this->reloadDataPlane();
+            $result = $this->reloadDataPlane($operationDeadline);
         } elseif (($status['ok'] ?? false) === true) {
-            $result = $this->startDataPlane();
+            $result = $this->startDataPlane($operationDeadline);
         } else {
             $result = [
                 'ok' => false,
@@ -13380,13 +14255,7 @@ final class WlsEdgeGatewayController
         }
         $verified = false;
         if (($result['ok'] ?? false) === true) {
-            $testMode = ($this->slotManifest()['test_mode'] ?? false) === true;
-            $activationBudgetSeconds = $testMode ? 15.0 : 20.0;
-            $observationSeconds = $testMode ? 0.2 : 15.0;
-            $activationDeadline = \min(
-                $deadlineMonotonic ?? PHP_FLOAT_MAX,
-                $this->monotonicNow() + $activationBudgetSeconds,
-            );
+            $activationDeadline = $overallDeadline;
             $healthySince = null;
 
             // A successful reload signal only means the master accepted the
@@ -13458,7 +14327,7 @@ final class WlsEdgeGatewayController
     private function securityRetirementDeadline(): float
     {
         return $this->monotonicNow()
-            + (($this->slotManifest()['test_mode'] ?? false) === true ? 6.0 : 45.0);
+            + (($this->slotManifest()['test_mode'] ?? false) === true ? 20.0 : 75.0);
     }
 
     /**
@@ -13537,37 +14406,317 @@ final class WlsEdgeGatewayController
         }
     }
 
-    /**
-     * @param array<string,mixed> $publication
-     */
-    private function archivePublicationRollback(array $publication): void
-    {
-        $rollback = (string)($publication['rollback_file'] ?? '');
-        if ($rollback === ''
-            || !$this->pathInside($rollback, $this->configDir())
-            || !\is_file($rollback)
-            || \is_link($rollback)
-        ) {
-            return;
+    /** @param array<string,mixed>|null $cleanupPublication */
+    private function reconcilePublicationConfigArtifacts(
+        ?array $cleanupPublication = null,
+    ): bool {
+        $configDir = $this->configDir();
+        $directoryBefore = @\lstat($configDir);
+        try {
+            $entries = $this->boundedDirectoryEntries(
+                $configDir,
+                self::MAX_HOST_DIRECTORY_ENTRIES,
+                'Gateway config artifact directory',
+            );
+        } catch (\Throwable $throwable) {
+            $this->observeCleanupFailure(
+                'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                $throwable->getMessage(),
+            );
+            return false;
         }
-        // The previous active generation is already retained by the two
-        // immutable LKG bundles. Archiving every transaction rollback as an
-        // unreferenced `pre-*` file creates an unbounded third retention
-        // system that no recovery reader consumes.
-        $this->discardPublicationRollback($rollback);
+        if (!\is_array($directoryBefore)
+            || \is_link($configDir)
+            || ((((int)($directoryBefore['mode'] ?? 0)) & 0170000) !== 0040000)
+        ) {
+            $this->observeCleanupFailure(
+                'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                'Gateway config artifact directory identity is unsafe.',
+            );
+            return false;
+        }
+
+        // Windows resolves these names case-insensitively. Treat any stored
+        // case variant as a reserved namespace collision on every platform so
+        // a POSIX-prepared artifact cannot be interpreted differently after
+        // migration to a Windows gateway host.
+        $reservedCaseAlias = '';
+        foreach ($entries as $entry) {
+            if ($this->publicationConfigReservedCaseAlias($entry)) {
+                $reservedCaseAlias = $entry;
+                break;
+            }
+        }
+        if ($reservedCaseAlias !== '') {
+            $this->observeCleanupFailure(
+                'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                'Publication artifact uses non-canonical case in a reserved namespace: '
+                    . $reservedCaseAlias,
+            );
+            return false;
+        }
+
+        $cleanupTransactionId = '';
+        $cleanupRollback = '';
+        if ($cleanupPublication !== null) {
+            $cleanupTransactionId = (string)($cleanupPublication['transaction_id'] ?? '');
+            if (\preg_match('/\A[a-f0-9]{32}\z/D', $cleanupTransactionId) !== 1) {
+                $this->observeCleanupFailure(
+                    'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                    'Completed publication transaction identity is invalid.',
+                );
+                return false;
+            }
+            $cleanupRollback = $this->configFile() . '.rollback.'
+                . $cleanupTransactionId;
+            $trackedRollback = (string)($cleanupPublication['rollback_file'] ?? '');
+            if ($trackedRollback !== ''
+                && !\hash_equals($cleanupRollback, $trackedRollback)
+            ) {
+                $this->observeCleanupFailure(
+                    'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                    'Completed publication rollback path is not canonical.',
+                );
+                return false;
+            }
+            $trackedCandidate = (string)($cleanupPublication['candidate_file'] ?? '');
+            if ($trackedCandidate !== '') {
+                $generation = (int)($cleanupPublication['candidate_generation'] ?? 0);
+                $expected = $configDir . DIRECTORY_SEPARATOR . 'candidate-'
+                    . $generation . '-' . $cleanupTransactionId . '.conf';
+                if ($generation < 1 || !\hash_equals($expected, $trackedCandidate)) {
+                    $this->observeCleanupFailure(
+                        'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                        'Completed publication candidate path is not canonical.',
+                    );
+                    return false;
+                }
+            }
+        }
+
+        $protectedRollback = '';
+        $protectedCandidate = '';
+        $liveTransactionId = (string)($this->publication['transaction_id'] ?? '');
+        $cleaningLiveTransaction = $cleanupTransactionId !== ''
+            && \hash_equals($cleanupTransactionId, $liveTransactionId);
+        if (!$cleaningLiveTransaction) {
+            $trackedRollback = (string)($this->publication['rollback_file'] ?? '');
+            if ($trackedRollback !== '') {
+                $expected = $this->configFile() . '.rollback.' . $liveTransactionId;
+                if (\preg_match('/\A[a-f0-9]{32}\z/D', $liveTransactionId) !== 1
+                    || !\hash_equals($expected, $trackedRollback)
+                ) {
+                    $this->observeCleanupFailure(
+                        'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                        'Live publication rollback identity is not canonical.',
+                    );
+                    return false;
+                }
+                $protectedRollback = $expected;
+            }
+            $trackedCandidate = (string)($this->publication['candidate_file'] ?? '');
+            if ($trackedCandidate !== '') {
+                $generation = (int)($this->publication['candidate_generation'] ?? 0);
+                $expected = $configDir . DIRECTORY_SEPARATOR . 'candidate-'
+                    . $generation . '-' . $liveTransactionId . '.conf';
+                if ($generation < 1
+                    || \preg_match('/\A[a-f0-9]{32}\z/D', $liveTransactionId) !== 1
+                    || !\hash_equals($expected, $trackedCandidate)
+                ) {
+                    $this->observeCleanupFailure(
+                        'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                        'Live publication candidate identity is not canonical.',
+                    );
+                    return false;
+                }
+                $protectedCandidate = $expected;
+            }
+        }
+
+        $managed = [];
+        $deletions = [];
+        $rejected = [];
+        $rollbacks = [];
+        $preflightFailure = '';
+        foreach ($entries as $entry) {
+            $kind = '';
+            if (\preg_match(
+                '/\A(?:nginx\.conf(?:\.rollback\.[a-f0-9]{32}'
+                    . '|\.rejected\.(?:[a-f0-9]{32}|recovery))?'
+                    . '|candidate-[1-9][0-9]{0,18}-[a-f0-9]{32}\.conf)'
+                    . '\.tmp-[a-f0-9]{12}\z/D',
+                $entry,
+            ) === 1) {
+                $kind = 'temporary';
+            } elseif (\preg_match(
+                '/\Acandidate-[1-9][0-9]{0,18}-[a-f0-9]{32}\.conf\z/D',
+                $entry,
+            ) === 1) {
+                $kind = 'candidate';
+            } elseif (\preg_match(
+                '/\Anginx\.conf\.rejected\.[a-f0-9]{32}\z/D',
+                $entry,
+            ) === 1) {
+                $kind = 'rejected';
+            } elseif (\preg_match(
+                '/\Anginx\.conf\.rollback\.[a-f0-9]{32}\z/D',
+                $entry,
+            ) === 1) {
+                $kind = 'rollback';
+            } elseif (\hash_equals('nginx.conf.rejected.recovery', $entry)) {
+                $kind = 'recovery-diagnostic';
+            }
+            if ($kind === '') {
+                continue;
+            }
+            $path = $configDir . DIRECTORY_SEPARATOR . $entry;
+            $status = @\lstat($path);
+            if (!\is_array($status)
+                || \is_link($path)
+                || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0100000)
+                || (int)($status['nlink'] ?? 0) !== 1
+            ) {
+                $preflightFailure = $preflightFailure !== ''
+                    ? $preflightFailure
+                    : 'Publication artifact is missing, linked, or special: ' . $entry;
+                continue;
+            }
+            $artifact = [
+                'path' => $path,
+                'name' => $entry,
+                'kind' => $kind,
+                'mtime' => (int)($status['mtime'] ?? 0),
+                'status' => $status,
+            ];
+            $managed[$entry] = $artifact;
+            if ($kind === 'temporary') {
+                $deletions[$entry] = $artifact + [
+                    'label' => 'Interrupted atomic publication staging file',
+                ];
+            } elseif ($kind === 'candidate') {
+                if ($protectedCandidate === ''
+                    || !\hash_equals($protectedCandidate, $path)
+                ) {
+                    $deletions[$entry] = $artifact + [
+                        'label' => 'Orphaned publication candidate config',
+                    ];
+                }
+            } elseif ($kind === 'rejected') {
+                $rejected[] = $artifact;
+            } elseif ($kind === 'rollback') {
+                if ($cleanupRollback !== '' && \hash_equals($cleanupRollback, $path)) {
+                    $deletions[$entry] = $artifact + [
+                        'label' => 'Completed publication rollback config',
+                    ];
+                } elseif ($protectedRollback === ''
+                    || !\hash_equals($protectedRollback, $path)
+                ) {
+                    $rollbacks[] = $artifact;
+                }
+            }
+        }
+        if ($preflightFailure !== '') {
+            $this->observeCleanupFailure(
+                'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                $preflightFailure,
+            );
+            return false;
+        }
+
+        foreach ([$rejected, $rollbacks] as $artifacts) {
+            \usort(
+                $artifacts,
+                static fn (array $left, array $right): int =>
+                    (($right['mtime'] <=> $left['mtime'])
+                        ?: \strcmp((string)$right['name'], (string)$left['name'])),
+            );
+            foreach (\array_slice(
+                $artifacts,
+                self::MAX_PUBLICATION_DIAGNOSTIC_CONFIGS,
+            ) as $artifact) {
+                $deletions[(string)$artifact['name']] = $artifact + [
+                    'label' => 'Expired publication diagnostic config',
+                ];
+            }
+        }
+
+        // Re-enumerate and re-attest every managed artifact before the first
+        // unlink. A late unsafe entry or identity replacement aborts the whole
+        // pass instead of leaving a misleading partially-cleaned transaction.
+        try {
+            $recheckedEntries = $this->boundedDirectoryEntries(
+                $configDir,
+                self::MAX_HOST_DIRECTORY_ENTRIES,
+                'Gateway config artifact directory recheck',
+            );
+        } catch (\Throwable $throwable) {
+            $this->observeCleanupFailure(
+                'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                $throwable->getMessage(),
+            );
+            return false;
+        }
+        $sortedEntries = $entries;
+        $sortedRecheckedEntries = $recheckedEntries;
+        \sort($sortedEntries, SORT_STRING);
+        \sort($sortedRecheckedEntries, SORT_STRING);
+        $directoryAfter = @\lstat($configDir);
+        if ($sortedEntries !== $sortedRecheckedEntries
+            || !\is_array($directoryAfter)
+            || !$this->sameStableFileState($directoryBefore, $directoryAfter)
+        ) {
+            $this->observeCleanupFailure(
+                'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                'Gateway config artifact directory changed during cleanup preflight.',
+            );
+            return false;
+        }
+        foreach ($managed as $artifact) {
+            $path = (string)$artifact['path'];
+            $current = @\lstat($path);
+            if (!\is_array($current)
+                || \is_link($path)
+                || !$this->sameStableFileState((array)$artifact['status'], $current)
+            ) {
+                $this->observeCleanupFailure(
+                    'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                    'Publication artifact identity changed during cleanup preflight: '
+                        . (string)$artifact['name'],
+                );
+                return false;
+            }
+        }
+
+        foreach ($deletions as $artifact) {
+            if (!$this->removePublicationConfigArtifact(
+                (string)$artifact['path'],
+                (string)$artifact['label'],
+            )) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    private function discardPublicationRollback(string $rollback): void
+    private function publicationConfigReservedCaseAlias(string $entry): bool
     {
-        if ($rollback !== ''
-            && $this->pathInside($rollback, $this->configDir())
-            && \is_file($rollback)
-            && !\is_link($rollback)
-        ) {
-            $this->removeStableRegularFile(
-                $rollback,
-                'Publication rollback config',
+        $folded = \strtolower($entry);
+        return !\hash_equals($entry, $folded)
+            && (\hash_equals('nginx.conf', $folded)
+                || \str_starts_with($folded, 'nginx.conf.')
+                || \str_starts_with($folded, 'candidate-'));
+    }
+
+    private function removePublicationConfigArtifact(string $path, string $label): bool
+    {
+        try {
+            return $this->removeStableRegularFile($path, $label);
+        } catch (\Throwable $throwable) {
+            $this->observeCleanupFailure(
+                'PUBLICATION_ARTIFACT_CLEANUP_FAILED',
+                $throwable->getMessage(),
             );
+            return false;
         }
     }
 
@@ -14664,23 +15813,9 @@ final class WlsEdgeGatewayController
 
     private function desiredConfigIntentDigest(): string
     {
-        $activeChallenges = [];
-        $now = \time();
-        foreach ((array)($this->state['acme_challenges'] ?? []) as $leaseId => $lease) {
-            if (!\is_array($lease) || (int)($lease['expires_at'] ?? 0) <= $now) {
-                continue;
-            }
-            $activeChallenges[(string)$leaseId] = [
-                'project_uuid' => (string)($lease['project_uuid'] ?? ''),
-                'domain' => (string)($lease['domain'] ?? ''),
-                'token' => (string)($lease['token'] ?? ''),
-                'key_authorization' => (string)(
-                    $lease['key_authorization'] ?? ''
-                ),
-                'expires_at' => (int)($lease['expires_at'] ?? 0),
-            ];
-        }
-        \ksort($activeChallenges, SORT_STRING);
+        $activeChallenges = $this->activeAcmeChallengeConfigIntents(
+            (array)($this->state['acme_challenges'] ?? []),
+        );
         $routes = [];
         foreach ((array)($this->state['routes'] ?? []) as $routeId => $route) {
             if (!\is_array($route)
@@ -15360,23 +16495,88 @@ final class WlsEdgeGatewayController
                 $previous,
             );
             $requestedAt = \time();
-            if ($requestedAt <= 0) {
+            if ($requestedAt <= 0
+                || $requestedAt < $binding['prepared_at']
+                || $requestedAt > $binding['rollback_deadline']
+            ) {
                 throw new \RuntimeException(
                     'Binary rollback request time is outside the supported range.',
                 );
             }
             $requestNonce = \bin2hex(\random_bytes(16));
-            $this->atomicWrite(
-                $this->stateDir() . DIRECTORY_SEPARATOR . 'upgrade-rollback.request',
-                "WLS-UPGRADE-ROLLBACK/2\n"
-                    . 'intent_sha256=' . $binding['digest'] . "\n"
-                    . 'intent_nonce=' . $binding['nonce'] . "\n"
-                    . 'from=' . $current . "\n"
-                    . 'to=' . $previous . "\n"
-                    . 'at=' . $requestedAt . "\n"
-                    . 'request_nonce=' . $requestNonce . "\n",
-                0600,
-            );
+            $channel = (string)($this->activeBrokerPeer['channel'] ?? '');
+            if (!\in_array($channel, ['admin', 'project'], true)
+                || !$this->brokerActionsAvailable($channel)
+            ) {
+                throw new \RuntimeException(
+                    'Binary rollback requires the Native Broker package-lock action.',
+                );
+            }
+            $receipt = $this->brokerAction($channel, [
+                'ROLLBACK_REQUEST',
+                $requestNonce,
+                $binding['digest'],
+                $binding['nonce'],
+                $current,
+                $previous,
+                (string)$requestedAt,
+            ]);
+            if (\count($receipt) !== 8
+                || \preg_match(
+                    '/\A[a-f0-9]{32}\z/D',
+                    (string)($receipt[0] ?? ''),
+                ) !== 1
+                || !\hash_equals($binding['digest'], (string)($receipt[1] ?? ''))
+                || !\hash_equals($binding['nonce'], (string)($receipt[2] ?? ''))
+                || !\hash_equals($current, (string)($receipt[3] ?? ''))
+                || !\hash_equals($previous, (string)($receipt[4] ?? ''))
+                || \preg_match(
+                    '/\A[1-9][0-9]{0,18}\z/D',
+                    (string)($receipt[5] ?? ''),
+                ) !== 1
+                || !\in_array(
+                    (string)($receipt[7] ?? ''),
+                    ['not_applicable', 'deleted', 'retained'],
+                    true,
+                )
+            ) {
+                throw new \RuntimeException(
+                    'Native Broker returned an invalid binary rollback receipt.',
+                );
+            }
+            $receiptTimeText = (string)$receipt[5];
+            $maximumInteger = (string)PHP_INT_MAX;
+            if (\strlen($receiptTimeText) > \strlen($maximumInteger)
+                || (\strlen($receiptTimeText) === \strlen($maximumInteger)
+                    && \strcmp($receiptTimeText, $maximumInteger) > 0)
+            ) {
+                throw new \RuntimeException(
+                    'Native Broker rollback receipt time is outside the supported range.',
+                );
+            }
+            $requestedAt = (int)$receiptTimeText;
+            if ($requestedAt < $binding['prepared_at']
+                || $requestedAt > $binding['rollback_deadline']
+            ) {
+                throw new \RuntimeException(
+                    'Native Broker rollback receipt time does not match the activation intent.',
+                );
+            }
+            $requestEnvelope = "WLS-UPGRADE-ROLLBACK/2\n"
+                . 'intent_sha256=' . $binding['digest'] . "\n"
+                . 'intent_nonce=' . $binding['nonce'] . "\n"
+                . 'from=' . $current . "\n"
+                . 'to=' . $previous . "\n"
+                . 'at=' . $requestedAt . "\n"
+                . 'request_nonce=' . (string)$receipt[0] . "\n";
+            if (!\hash_equals(
+                \hash('sha256', $requestEnvelope),
+                (string)($receipt[6] ?? ''),
+            )) {
+                throw new \RuntimeException(
+                    'Native Broker rollback receipt does not bind the published request.',
+                );
+            }
         } catch (\Throwable $throwable) {
             return $this->rejectBinaryRollbackRequest(
                 'Binary rollback request was not durably authorized: '
@@ -15411,7 +16611,14 @@ final class WlsEdgeGatewayController
         return true;
     }
 
-    /** @return array{digest:string,nonce:string} */
+    /**
+     * @return array{
+     *     digest:string,
+     *     nonce:string,
+     *     prepared_at:int,
+     *     rollback_deadline:int
+     * }
+     */
     private function validateUpgradeIntentForRollback(
         string $intent,
         string $current,
@@ -15453,7 +16660,7 @@ final class WlsEdgeGatewayController
             || !\hash_equals($current, (string)$matches[3])
             || \hash_equals((string)$matches[2], (string)$matches[3])
             || $preparedAt <= 0
-            || $preparedAt > PHP_INT_MAX - self::FAILURE_WINDOW
+            || $preparedAt > PHP_INT_MAX - (self::FAILURE_WINDOW * 3)
             || $deadline !== $preparedAt + self::FAILURE_WINDOW
             || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
             || !\hash_equals($runtimeGeneration, (string)$matches[6])
@@ -15497,6 +16704,8 @@ final class WlsEdgeGatewayController
         return [
             'digest' => \hash('sha256', $intent),
             'nonce' => (string)$matches[7],
+            'prepared_at' => $preparedAt,
+            'rollback_deadline' => $preparedAt + (self::FAILURE_WINDOW * 3),
         ];
     }
 
@@ -16337,6 +17546,134 @@ final class WlsEdgeGatewayController
         $this->state['h3_quarantined_runtime_generation'] = $this->activeRuntimeGeneration();
     }
 
+    /** @param array<string,mixed> $lease */
+    private function acmeChallengeContentDigest(array $lease): string
+    {
+        return \hash('sha256', $this->canonicalJson([
+            'domain' => (string)($lease['domain'] ?? ''),
+            'token' => (string)($lease['token'] ?? ''),
+            'key_authorization' => (string)($lease['key_authorization'] ?? ''),
+            'expires_at' => (int)($lease['expires_at'] ?? 0),
+        ]));
+    }
+
+    /** @param array<string,mixed> $left @param array<string,mixed> $right */
+    private function sameAcmeChallengeContent(array $left, array $right): bool
+    {
+        return \hash_equals(
+            $this->acmeChallengeContentDigest($left),
+            $this->acmeChallengeContentDigest($right),
+        );
+    }
+
+    /** @param array<string,mixed> $lease */
+    private function acmeChallengeLeaseFenceWellFormed(array $lease): bool
+    {
+        $bootId = \strtolower(\trim((string)($lease['host_boot_id'] ?? '')));
+        $issued = $this->finitePositiveMonotonicValue(
+            $lease['issued_monotonic'] ?? null,
+        );
+        $deadline = $this->finitePositiveMonotonicValue(
+            $lease['deadline_monotonic'] ?? null,
+        );
+        return \preg_match('/\A[a-f0-9]{64}\z/D', $bootId) === 1
+            && $issued !== null
+            && $deadline !== null
+            && $deadline === $issued + self::ACME_HTTP_01_LEASE_SECONDS;
+    }
+
+    private function finitePositiveMonotonicValue(mixed $value): ?float
+    {
+        if (!\is_int($value) && !\is_float($value)) {
+            return null;
+        }
+        $value = (float)$value;
+        return \is_finite($value) && $value > 0.0 ? $value : null;
+    }
+
+    /** @param array<string,mixed> $lease */
+    private function acmeChallengeLeaseActive(
+        array $lease,
+        ?float $monotonicNow = null,
+    ): bool {
+        if (!$this->acmeChallengeLeaseFenceWellFormed($lease)
+            || !\hash_equals(
+                $this->hostBootId,
+                \strtolower((string)($lease['host_boot_id'] ?? '')),
+            )
+        ) {
+            return false;
+        }
+        $monotonicNow ??= $this->monotonicNow();
+        $issued = (float)$lease['issued_monotonic'];
+        $deadline = (float)$lease['deadline_monotonic'];
+        return $monotonicNow >= $issued && $monotonicNow < $deadline;
+    }
+
+    /** @param array<string,mixed> $lease */
+    private function acmeChallengeLeaseExpiredOnCurrentBoot(
+        array $lease,
+        float $monotonicNow,
+    ): bool {
+        return $this->acmeChallengeLeaseFenceWellFormed($lease)
+            && \hash_equals(
+                $this->hostBootId,
+                \strtolower((string)($lease['host_boot_id'] ?? '')),
+            )
+            && (float)$lease['issued_monotonic'] <= $monotonicNow
+            && (float)$lease['deadline_monotonic'] <= $monotonicNow;
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $challenges
+     * @return array<string,array<string,string>>
+     */
+    private function activeAcmeChallengeConfigIntents(
+        array $challenges,
+        ?float $monotonicNow = null,
+    ): array {
+        $monotonicNow ??= $this->monotonicNow();
+        $active = [];
+        foreach ($challenges as $leaseId => $lease) {
+            if (!\is_array($lease)
+                || !$this->acmeChallengeLeaseActive($lease, $monotonicNow)
+            ) {
+                continue;
+            }
+            $active[(string)$leaseId] = [
+                'project_uuid' => (string)($lease['project_uuid'] ?? ''),
+                'domain' => (string)($lease['domain'] ?? ''),
+                'token' => (string)($lease['token'] ?? ''),
+                'key_authorization' => (string)($lease['key_authorization'] ?? ''),
+            ];
+        }
+        \ksort($active, SORT_STRING);
+        return $active;
+    }
+
+    /** @param array<string,array<string,mixed>> $challenges */
+    private function acmeChallengeConfigIntentDigest(array $challenges): string
+    {
+        $intents = [];
+        foreach ($challenges as $leaseId => $lease) {
+            if (!\is_array($lease)) {
+                continue;
+            }
+            // Compare the static Nginx payload, not only leases active at this
+            // instant. An expired location remains in the running config until
+            // a publication removes it, while wall/fence metadata is not an
+            // Nginx input and must not cause a reload by itself.
+            $intents[(string)$leaseId] = [
+                'project_uuid' => (string)($lease['project_uuid'] ?? ''),
+                'domain' => (string)($lease['domain'] ?? ''),
+                'token' => (string)($lease['token'] ?? ''),
+                'key_authorization' => (string)($lease['key_authorization'] ?? ''),
+            ];
+        }
+        \ksort($intents, SORT_STRING);
+        return \hash('sha256', $this->canonicalJson($intents));
+    }
+
     /**
      * @param array<string,mixed> $route
      * @return list<array<string,mixed>>
@@ -16344,10 +17681,10 @@ final class WlsEdgeGatewayController
     private function activeAcmeChallenges(array $route): array
     {
         $active = [];
-        $now = \time();
+        $monotonicNow = $this->monotonicNow();
         foreach ((array)($this->state['acme_challenges'] ?? []) as $challenge) {
             if (!\is_array($challenge)
-                || (int)($challenge['expires_at'] ?? 0) <= $now
+                || !$this->acmeChallengeLeaseActive($challenge, $monotonicNow)
                 || !\hash_equals(
                     (string)($route['project_uuid'] ?? ''),
                     (string)($challenge['project_uuid'] ?? ''),
@@ -16372,10 +17709,65 @@ final class WlsEdgeGatewayController
     }
 
     /**
-     * @return array{ok:bool,message:string,pid?:int}
+     * @param array<string,mixed>|null $status
+     * @return array{ok:bool,message:string,service_tree_restart_required?:bool}
      */
-    private function startDataPlane(): array
+    private function verifyDataPlaneStartBoundary(?array $status = null): array
     {
+        $status ??= $this->nginxStatus();
+        if (($status['running'] ?? false) === true) {
+            return [
+                'ok' => false,
+                'message' => 'Nginx start refused because an attested data plane is already running.',
+            ];
+        }
+        if (($status['service_tree_restart_required'] ?? false) === true
+            || ($status['ok'] ?? false) !== true
+        ) {
+            $message = 'Nginx start refused an unsafe process identity: '
+                . (string)($status['message'] ?? 'identity unavailable');
+            if ($this->brokerActionsRequired()) {
+                $this->requestServiceTreeRestart($message);
+            }
+            return [
+                'ok' => false,
+                'message' => $message,
+                'service_tree_restart_required' => $this->brokerActionsRequired(),
+            ];
+        }
+        if (!$this->brokerActionsRequired()) {
+            return ['ok' => true, 'message' => 'test-mode start boundary accepted'];
+        }
+
+        // A missing PID is not proof that the previous Nginx generation has
+        // released 80/443. Reuse the production stop boundary so a stale
+        // worker, PID publication race, or unknown listener forces platform
+        // whole-tree recovery instead of entering a bind/restart loop.
+        $withdrawal = $this->stopDataPlane();
+        if (($withdrawal['ok'] ?? false) !== true) {
+            return [
+                'ok' => false,
+                'message' => (string)(
+                    $withdrawal['message']
+                        ?? 'Public listener withdrawal could not be proven.'
+                ),
+                'service_tree_restart_required' =>
+                    ($withdrawal['service_tree_restart_required'] ?? false) === true
+                    || $this->serviceTreeRestartRequested,
+            ];
+        }
+        return ['ok' => true, 'message' => 'public listeners withdrawn'];
+    }
+
+    /**
+     * @return array{ok:bool,message:string,pid?:int,service_tree_restart_required?:bool}
+     */
+    private function startDataPlane(?float $deadlineMonotonic = null): array
+    {
+        $boundary = $this->verifyDataPlaneStartBoundary();
+        if (($boundary['ok'] ?? false) !== true) {
+            return $boundary;
+        }
         $brokerChannel = (string)($this->activeBrokerPeer['channel'] ?? '');
         if ($this->brokerActionsRequired()
             && (!\in_array($brokerChannel, ['admin', 'project'], true)
@@ -16395,7 +17787,11 @@ final class WlsEdgeGatewayController
         if (!\is_file($this->configFile())) {
             return ['ok' => false, 'message' => 'Gateway Nginx config is missing.'];
         }
-        $test = $this->runNginx(['-t']);
+        $testDeadline = \min(
+            $deadlineMonotonic ?? PHP_FLOAT_MAX,
+            $this->monotonicNow() + self::COMMAND_TIMEOUT_SECONDS,
+        );
+        $test = $this->runNginx(['-t'], $testDeadline);
         if (($test['code'] ?? 1) !== 0) {
             return ['ok' => false, 'message' => 'nginx -t failed: ' . (string)$test['output']];
         }
@@ -16412,7 +17808,11 @@ final class WlsEdgeGatewayController
             }
         }
         try {
-            $start = $this->runNginx([]);
+            $startDeadline = \min(
+                $deadlineMonotonic ?? PHP_FLOAT_MAX,
+                $this->monotonicNow() + self::COMMAND_TIMEOUT_SECONDS,
+            );
+            $start = $this->runNginx([], $startDeadline);
         } finally {
             if ($reopenControl) {
                 $this->controlServer = $this->openControlServer();
@@ -16426,8 +17826,15 @@ final class WlsEdgeGatewayController
             'running' => false,
             'message' => 'Native process attestation has not completed.',
         ];
-        for ($attempt = 0; $attempt < 30; $attempt++) {
-            \usleep(100000);
+        $attestationDeadline = \min(
+            $deadlineMonotonic ?? PHP_FLOAT_MAX,
+            $this->monotonicNow() + self::BROKER_ACTION_TIMEOUT_SECONDS,
+        );
+        while ($this->monotonicNow() < $attestationDeadline) {
+            \usleep((int)\min(
+                100000,
+                \max(1, ($attestationDeadline - $this->monotonicNow()) * 1_000_000),
+            ));
             $status = $this->nginxStatus(true);
             if (($status['running'] ?? false) === true) {
                 return ['ok' => true, 'message' => 'started', 'pid' => (int)$status['pid']];
@@ -16437,33 +17844,557 @@ final class WlsEdgeGatewayController
         // left untouched with its PID/config evidence intact. Signalling or
         // deleting its PID file here would turn an attestation failure into a
         // PID-reuse kill primitive. The platform service tree owns recovery.
+        $message = 'Nginx did not publish a Native-attested process identity: '
+            . (string)($status['message'] ?? 'status unavailable');
+        if ($this->brokerActionsRequired()) {
+            $this->requestServiceTreeRestart($message);
+        }
         return [
             'ok' => false,
-            'message' => 'Nginx did not publish a Native-attested process identity: '
-                . (string)($status['message'] ?? 'status unavailable'),
-            'service_tree_restart_required' => true,
+            'message' => $message,
+            'service_tree_restart_required' => $this->brokerActionsRequired(),
         ];
     }
 
     /**
      * @return array{ok:bool,message:string}
      */
-    private function reloadDataPlane(): array
+    private function reloadDataPlane(?float $deadlineMonotonic = null): array
     {
         $status = $this->nginxStatus(true);
         if (!($status['running'] ?? false)) {
             return ($status['ok'] ?? false) === true
-                ? $this->startDataPlane()
+                ? $this->startDataPlane($deadlineMonotonic)
                 : [
                     'ok' => false,
                     'message' => 'reload refused an unsafe Nginx identity: '
                         . (string)($status['message'] ?? 'status unavailable'),
                 ];
         }
-        $reload = $this->runNginx(['-s', 'reload']);
+        $reload = $this->runNginx(['-s', 'reload'], $deadlineMonotonic);
         return ($reload['code'] ?? 1) === 0
             ? ['ok' => true, 'message' => 'reloaded']
             : ['ok' => false, 'message' => 'reload failed: ' . (string)$reload['output']];
+    }
+
+    /**
+     * Retire the exact freshly-attested Nginx generation. Production delegates
+     * the complete process-tree proof to the privileged Native Broker; the
+     * TCP-only path exists solely for an explicitly test-mode runtime.
+     *
+     * @return array{ok:bool,message:string,proof_digest?:string,proof_type?:string}
+     */
+    private function nativeProcessTreeRetirementIntent(
+        int $pid,
+        string $startId,
+    ): ?array {
+        if ($pid < 1
+            || \preg_match('/\A[1-9][0-9]*\z/D', $startId) !== 1
+        ) {
+            return null;
+        }
+        $attestation = \is_array(
+            $this->state['nginx_process_attestation'] ?? null
+        ) ? $this->state['nginx_process_attestation'] : [];
+        $attestationDigest = \strtolower(\trim((string)(
+            $attestation['receipt_digest'] ?? ''
+        )));
+        $binaryDigest = \strtolower(\trim((string)(
+            $attestation['binary_digest'] ?? ''
+        )));
+        $runtimeGeneration = \strtolower(\trim((string)(
+            $attestation['runtime_generation'] ?? ''
+        )));
+        $configDigest = \strtolower(\trim((string)(
+            $attestation['config_digest'] ?? ''
+        )));
+        $configPathDigest = \strtolower(\trim((string)(
+            $attestation['config_path_digest'] ?? ''
+        )));
+        $publicationGeneration = (int)(
+            $attestation['publication_generation'] ?? -1
+        );
+        $candidateGeneration = (int)(
+            $this->publication['candidate_generation'] ?? 0
+        );
+        $candidateDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_digest'] ?? ''
+        )));
+        $transactionId = (string)(
+            $this->publication['transaction_id'] ?? ''
+        );
+        $gatewayEpoch = (string)($this->state['epoch'] ?? '');
+        $candidateFenceDigest = \strtolower(\trim((string)(
+            $attestation['candidate_fence_digest'] ?? ''
+        )));
+        $candidateAttestationPhase = (string)(
+            $attestation['candidate_phase'] ?? ''
+        );
+        if ((int)($attestation['schema_version'] ?? 0) !== 3
+            || (int)($attestation['pid'] ?? 0) !== $pid
+            || !\hash_equals($startId, (string)($attestation['start_id'] ?? ''))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $attestationDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $binaryDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $configDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $configPathDigest) !== 1
+            || !\hash_equals($this->activeRuntimeGeneration(), $runtimeGeneration)
+            || $candidateGeneration < 1
+            || $publicationGeneration !== $candidateGeneration
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $candidateDigest) !== 1
+            || !\hash_equals($candidateDigest, $configDigest)
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1
+            || !\hash_equals(
+                'CANDIDATE',
+                (string)($attestation['fence_kind'] ?? ''),
+            )
+            || !\hash_equals(
+                $transactionId,
+                (string)($attestation['candidate_transaction_id'] ?? ''),
+            )
+            || !$this->candidateAttestationPhaseAllowed(
+                $candidateAttestationPhase,
+            )
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $candidateFenceDigest) !== 1
+            || !\hash_equals(
+                $candidateFenceDigest,
+                $this->verifiedNativeCandidateAttestationFenceDigest,
+            )
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayEpoch) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $this->hostBootId) !== 1
+        ) {
+            return null;
+        }
+        $retirementId = \hash(
+            'sha256',
+            "wls-process-tree-retirement/1\0"
+                . $gatewayEpoch . "\0"
+                . $pid . "\0" . $startId . "\0"
+                . $attestationDigest . "\0"
+                . $binaryDigest . "\0"
+                . $runtimeGeneration . "\0"
+                . $this->hostBootId,
+        );
+        return [
+            'schema_version' => 1,
+            'retirement_id' => $retirementId,
+            'pid' => $pid,
+            'start_id' => $startId,
+            'attestation_digest' => $attestationDigest,
+            'binary_digest' => $binaryDigest,
+            'runtime_generation' => $runtimeGeneration,
+            'host_boot_id' => $this->hostBootId,
+            'config_digest' => $configDigest,
+            'config_path_digest' => $configPathDigest,
+            'publication_generation' => $publicationGeneration,
+            'publication_transaction_id' => $transactionId,
+            'candidate_generation' => $candidateGeneration,
+            'candidate_digest' => $candidateDigest,
+            'candidate_attestation_phase' => $candidateAttestationPhase,
+            'candidate_attestation_fence_digest' => $candidateFenceDigest,
+            'gateway_epoch' => $gatewayEpoch,
+        ];
+    }
+
+    /** @param array<string,mixed> $intent */
+    private function validPendingServiceTreeRetirementIntent(array $intent): bool
+    {
+        if ($this->publication === null
+            || (int)($intent['schema_version'] ?? 0) !== 1
+            || !\is_int($intent['pid'] ?? null)
+            || (int)$intent['pid'] < 1
+            || \preg_match(
+                '/\A[1-9][0-9]*\z/D',
+                (string)($intent['start_id'] ?? ''),
+            ) !== 1
+        ) {
+            return false;
+        }
+        foreach ([
+            'retirement_id',
+            'attestation_digest',
+            'binary_digest',
+            'runtime_generation',
+            'host_boot_id',
+            'config_digest',
+            'config_path_digest',
+            'candidate_digest',
+            'candidate_attestation_fence_digest',
+        ] as $field) {
+            if (\preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($intent[$field] ?? ''),
+            ) !== 1) {
+                return false;
+            }
+        }
+        $expectedRetirementId = \hash(
+            'sha256',
+            "wls-process-tree-retirement/1\0"
+                . (string)$intent['gateway_epoch'] . "\0"
+                . (int)$intent['pid'] . "\0"
+                . (string)$intent['start_id'] . "\0"
+                . (string)$intent['attestation_digest'] . "\0"
+                . (string)$intent['binary_digest'] . "\0"
+                . (string)$intent['runtime_generation'] . "\0"
+                . (string)$intent['host_boot_id'],
+        );
+        return \hash_equals(
+                $expectedRetirementId,
+                (string)$intent['retirement_id'],
+            )
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)($intent['publication_transaction_id'] ?? ''),
+            ) === 1
+            && \preg_match(
+                '/\A[a-f0-9]{32}\z/D',
+                (string)($intent['gateway_epoch'] ?? ''),
+            ) === 1
+            && (int)($intent['publication_generation'] ?? 0) > 0
+            && (int)($intent['candidate_generation'] ?? 0) > 0
+            && (int)$intent['publication_generation']
+                === (int)$intent['candidate_generation']
+            && \hash_equals(
+                (string)$intent['config_digest'],
+                (string)$intent['candidate_digest'],
+            )
+            && $this->candidateAttestationPhaseAllowed(
+                (string)($intent['candidate_attestation_phase'] ?? ''),
+            )
+            && \hash_equals(
+                (string)($this->publication['transaction_id'] ?? ''),
+                (string)$intent['publication_transaction_id'],
+            )
+            && (int)($this->publication['candidate_generation'] ?? 0)
+                === (int)$intent['candidate_generation']
+            && \hash_equals(
+                (string)($this->publication['candidate_digest'] ?? ''),
+                (string)$intent['candidate_digest'],
+            )
+            && \hash_equals(
+                (string)($this->state['epoch'] ?? ''),
+                (string)$intent['gateway_epoch'],
+            );
+    }
+
+    /** @return array<string,mixed>|null */
+    private function rebindPendingServiceTreeRetirementIntent(
+        int $expectedPid,
+        string $expectedStartId,
+    ): ?array {
+        if ($this->publication === null
+            || !\hash_equals(
+                'SERVICE_TREE_RETIREMENT_PENDING',
+                (string)($this->publication['phase'] ?? ''),
+            )
+            || $expectedPid < 1
+            || \preg_match('/\A[1-9][0-9]*\z/D', $expectedStartId) !== 1
+        ) {
+            return null;
+        }
+        $status = $this->nginxStatus(true);
+        if (($status['ok'] ?? false) !== true
+            || ($status['running'] ?? false) !== true
+            || (int)($status['pid'] ?? 0) !== $expectedPid
+            || !\hash_equals(
+                $expectedStartId,
+                (string)($status['start_id'] ?? ''),
+            )
+        ) {
+            return null;
+        }
+        $intent = $this->nativeProcessTreeRetirementIntent(
+            $expectedPid,
+            $expectedStartId,
+        );
+        if (!\is_array($intent)
+            || !\hash_equals(
+                'SERVICE_TREE_RETIREMENT_PENDING',
+                (string)($intent['candidate_attestation_phase'] ?? ''),
+            )
+            || !$this->validPendingServiceTreeRetirementIntent($intent)
+        ) {
+            return null;
+        }
+        // The root candidate fence changed when ACTIVATING advanced to the
+        // destructive retirement phase. Persist a fresh PROCESS_ATTEST/3 and
+        // its new retirement id before the Broker may touch the process tree.
+        $this->publication['service_tree_retirement'] = $intent;
+        $this->persistState();
+        $this->persistPublication();
+        return $intent;
+    }
+
+    private function retireAttestedNginxProcessTree(
+        int $pid,
+        string $startId,
+        ?float $deadlineMonotonic = null,
+    ): array {
+        if ($pid < 1
+            || \preg_match('/\A[1-9][0-9]*\z/D', $startId) !== 1
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'Nginx process-tree retirement identity is invalid.',
+            ];
+        }
+
+        $deadline = \min(
+            $deadlineMonotonic ?? PHP_FLOAT_MAX,
+            $this->monotonicNow() + self::PROCESS_TREE_RETIRE_TIMEOUT_SECONDS,
+        );
+        if ($deadline <= $this->monotonicNow()) {
+            return [
+                'ok' => false,
+                'message' => 'Nginx process-tree retirement deadline is exhausted.',
+            ];
+        }
+
+        if ($this->brokerActionsRequired()) {
+            $channel = (string)($this->activeBrokerPeer['channel'] ?? '');
+            $attestation = \is_array(
+                $this->state['nginx_process_attestation'] ?? null
+            ) ? $this->state['nginx_process_attestation'] : [];
+            $expectedProofDigest = \strtolower(\trim((string)(
+                $attestation['receipt_digest'] ?? ''
+            )));
+            $expectedBinaryDigest = \strtolower(\trim((string)(
+                $attestation['binary_digest'] ?? ''
+            )));
+            $expectedRuntimeGeneration = \strtolower(\trim((string)(
+                $attestation['runtime_generation'] ?? ''
+            )));
+            if (!\in_array($channel, ['admin', 'project'], true)
+                || !$this->brokerActionsAvailable($channel)
+                || (int)($attestation['schema_version'] ?? 0) !== 3
+                || (int)($attestation['pid'] ?? 0) !== $pid
+                || !\hash_equals(
+                    $startId,
+                    (string)($attestation['start_id'] ?? ''),
+                )
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedProofDigest) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedBinaryDigest) !== 1
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedRuntimeGeneration) !== 1
+                || !\hash_equals(
+                    $this->activeRuntimeGeneration(),
+                    $expectedRuntimeGeneration,
+                )
+            ) {
+                return [
+                    'ok' => false,
+                    'message' => 'Fresh Native PROCESS_ATTEST evidence is unavailable for tree retirement.',
+                ];
+            }
+            $retirementId = \hash(
+                'sha256',
+                "wls-process-tree-retirement/1\0"
+                    . (string)($this->state['epoch'] ?? '') . "\0"
+                    . $pid . "\0" . $startId . "\0"
+                    . $expectedProofDigest . "\0"
+                    . $expectedBinaryDigest . "\0"
+                    . $expectedRuntimeGeneration . "\0"
+                    . $this->hostBootId,
+            );
+            $retirement = $this->requestBrokerProcessTreeRetirement(
+                $channel,
+                $pid,
+                $startId,
+                $expectedProofDigest,
+                $retirementId,
+                $deadline,
+            );
+            if (($retirement['ok'] ?? false) !== true) {
+                return $retirement;
+            }
+            $currentPid = $this->readPidFile($this->nginxPidFile());
+            if ($currentPid !== null && $currentPid !== $pid) {
+                $message = 'Nginx PID file changed after process-tree retirement proof.';
+                $this->requestServiceTreeRestart($message);
+                return [
+                    'ok' => false,
+                    'message' => $message,
+                    'service_tree_restart_required' => true,
+                ];
+            }
+            if ($currentPid === $pid) {
+                $this->removeVerifiedPidFile($this->nginxPidFile());
+            }
+            unset($this->state['nginx_process_attestation']);
+            $this->verifiedNativeProcessAttestationDigest = '';
+            return [
+                'ok' => true,
+                'message' => 'Native Broker retired the exact Nginx process tree.',
+                'proof_digest' => (string)$retirement['proof_digest'],
+                'proof_type' => (string)$retirement['proof_type'],
+            ];
+        }
+
+        $stop = $this->runNginx(['-s', 'stop'], $deadline);
+        if (($stop['code'] ?? 1) !== 0) {
+            return [
+                'ok' => false,
+                'message' => 'Test-mode security stop signal failed: '
+                    . (string)($stop['output'] ?? ''),
+            ];
+        }
+        $retired = false;
+        do {
+            $running = $this->pidRunningState($pid);
+            $observedStart = $running === true
+                ? $this->processStartIdentity($pid)
+                : '';
+            if ($running === false
+                || ($observedStart !== '' && !\hash_equals($startId, $observedStart))
+            ) {
+                $retired = true;
+                break;
+            }
+            if ($this->monotonicNow() >= $deadline) {
+                break;
+            }
+            \usleep(50_000);
+        } while (true);
+        if (!$retired || !$this->waitForPublicListenerWithdrawal($deadline)) {
+            return [
+                'ok' => false,
+                'message' => 'Test-mode Nginx generation did not withdraw its TCP listeners.',
+            ];
+        }
+        $currentPid = $this->readPidFile($this->nginxPidFile());
+        if ($currentPid !== null && $currentPid !== $pid) {
+            return [
+                'ok' => false,
+                'message' => 'Test-mode Nginx PID file changed during retirement.',
+            ];
+        }
+        if ($currentPid === $pid) {
+            $this->removeVerifiedPidFile($this->nginxPidFile());
+        }
+        unset($this->state['nginx_process_attestation']);
+        $this->verifiedNativeProcessAttestationDigest = '';
+        return [
+            'ok' => true,
+            'message' => 'Test-mode Nginx generation retired.',
+            'proof_digest' => \hash(
+                'sha256',
+                "wls-test-process-tree-retirement\0"
+                    . (string)($this->state['epoch'] ?? '') . "\0"
+                    . $pid . "\0" . $startId . "\0"
+                    . $this->fileHash($this->configFile()),
+            ),
+            'proof_type' => 'test_mode_tcp_withdrawal',
+        ];
+    }
+
+    /**
+     * The retirement receipt remains private to the platform identity. The
+     * privileged Broker re-opens and validates its exact root/SYSTEM-owned
+     * bytes for every idempotent request, then returns only the receipt digest
+     * and proof class over the inherited authenticated action channel.
+     *
+     * @return array{ok:bool,message:string,service_tree_restart_required?:bool,proof_digest?:string,proof_type?:string}
+     */
+    private function requestBrokerProcessTreeRetirement(
+        string $channel,
+        int $pid,
+        string $startId,
+        string $attestationDigest,
+        string $retirementId,
+        float $deadlineMonotonic,
+    ): array {
+        if (!\in_array($channel, ['admin', 'project'], true)
+            || !$this->brokerActionsAvailable($channel)
+            || $pid < 1
+            || \preg_match('/\A[1-9][0-9]*\z/D', $startId) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $attestationDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $retirementId) !== 1
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'Native Broker retirement request identity is unavailable.',
+            ];
+        }
+        $remaining = $deadlineMonotonic - $this->monotonicNow();
+        $budgetMilliseconds = \min(12_000, (int)\floor($remaining * 1_000));
+        if ($remaining <= 0.0 || $budgetMilliseconds < 1) {
+            return [
+                'ok' => false,
+                'message' => 'Nginx process-tree retirement deadline is exhausted.',
+            ];
+        }
+        try {
+            $response = $this->brokerAction(
+                $channel,
+                [
+                    'PROCESS_TREE_RETIRE',
+                    (string)$pid,
+                    $startId,
+                    $attestationDigest,
+                    $retirementId,
+                    (string)$budgetMilliseconds,
+                ],
+                \min(self::PROCESS_TREE_RETIRE_TIMEOUT_SECONDS, $remaining),
+            );
+        } catch (WlsNativeBrokerActionException $exception) {
+            $safeRejection = \hash_equals(
+                'PROCESS_TREE_RETIRE_FAILED',
+                $exception->stableCode(),
+            );
+            $message = $safeRejection
+                ? 'Native Broker rejected Nginx process-tree retirement before action: '
+                    . $exception->getMessage()
+                : 'Native Broker reported indeterminate Nginx process-tree retirement: '
+                    . $exception->getMessage();
+            if (!$safeRejection) {
+                $this->requestServiceTreeRestart($message);
+            }
+            return [
+                'ok' => false,
+                'message' => $message,
+                'service_tree_restart_required' => !$safeRejection,
+            ];
+        } catch (\Throwable $throwable) {
+            // The destructive operation may have completed before its reply
+            // was lost. Re-establish the Broker and replay the same idempotent
+            // request; only its private durable receipt can resolve this.
+            $message = 'Native Broker retirement acknowledgement is indeterminate: '
+                . $throwable->getMessage();
+            $this->requestServiceTreeRestart($message);
+            return [
+                'ok' => false,
+                'message' => $message,
+                'service_tree_restart_required' => true,
+            ];
+        }
+        $proofDigest = \strtolower(\trim((string)($response[4] ?? '')));
+        $proofType = \trim((string)($response[5] ?? ''));
+        if (\count($response) !== 6
+            || !\hash_equals((string)$pid, (string)($response[0] ?? ''))
+            || !\hash_equals($startId, (string)($response[1] ?? ''))
+            || !\hash_equals($attestationDigest, (string)($response[2] ?? ''))
+            || !\hash_equals($retirementId, (string)($response[3] ?? ''))
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $proofDigest) !== 1
+            || \hash_equals(\str_repeat('0', 64), $proofDigest)
+            || !\in_array($proofType, [
+                'native_process_tree_receipt',
+                'platform_service_tree_receipt',
+            ], true)
+        ) {
+            $message = 'Native Broker returned a malformed PROCESS_TREE_RETIRE proof.';
+            $this->requestServiceTreeRestart($message);
+            return [
+                'ok' => false,
+                'message' => $message,
+                'service_tree_restart_required' => true,
+            ];
+        }
+        return [
+            'ok' => true,
+            'message' => 'Native Broker verified its private retirement receipt.',
+            'proof_digest' => $proofDigest,
+            'proof_type' => $proofType,
+        ];
     }
 
     /**
@@ -16479,58 +18410,182 @@ final class WlsEdgeGatewayController
         int $generation,
         ?float $deadlineMonotonic = null,
     ): array {
-        $status = $this->nginxStatus(true);
-        $pid = $status['pid'] ?? null;
-        $startId = \trim((string)($status['start_id'] ?? ''));
-        if (($status['ok'] ?? false) !== true
-            || ($status['running'] ?? false) !== true
-            || !\is_int($pid)
-            || $pid < 1
-            || $startId === ''
-        ) {
-            return [
-                'ok' => false,
-                'message' => 'Old Nginx generation has no fresh Native-attested process fence.',
-            ];
-        }
-        $stopDeadline = \min(
-            $deadlineMonotonic ?? PHP_FLOAT_MAX,
-            $this->monotonicNow() + 10.0,
-        );
-        $stop = $this->runNginx(['-s', 'stop'], $stopDeadline);
-        if (($stop['code'] ?? 1) !== 0) {
-            return [
-                'ok' => false,
-                'message' => 'Security stop signal failed: ' . (string)($stop['output'] ?? ''),
-            ];
-        }
-        $retired = false;
-        do {
-            $running = $this->pidRunningState($pid);
-            $observedStart = $running === true
-                ? $this->processStartIdentity($pid)
-                : '';
-            if ($running === false
-                || ($observedStart !== '' && !\hash_equals($startId, $observedStart))
+        $pendingIntent = \is_array(
+            $this->publication['service_tree_retirement'] ?? null
+        ) ? $this->publication['service_tree_retirement'] : [];
+        $retirement = null;
+        if (!$this->brokerActionsRequired()) {
+            $status = $this->nginxStatus(true);
+            $pid = $status['pid'] ?? null;
+            $startId = \trim((string)($status['start_id'] ?? ''));
+            if (($status['ok'] ?? false) !== true
+                || ($status['running'] ?? false) !== true
+                || !\is_int($pid)
+                || $pid < 1
+                || $startId === ''
             ) {
-                $retired = true;
-                break;
+                return [
+                    'ok' => false,
+                    'message' => 'Old Nginx generation has no attested test-mode process fence.',
+                ];
             }
-            if ($this->monotonicNow() >= $stopDeadline) {
-                break;
+            $retirement = $this->retireAttestedNginxProcessTree(
+                $pid,
+                $startId,
+                $deadlineMonotonic,
+            );
+        } elseif ($this->validPendingServiceTreeRetirementIntent($pendingIntent)) {
+            $pid = (int)$pendingIntent['pid'];
+            $startId = (string)$pendingIntent['start_id'];
+            $deadline = \min(
+                $deadlineMonotonic ?? PHP_FLOAT_MAX,
+                $this->monotonicNow()
+                    + self::PROCESS_TREE_RETIRE_TIMEOUT_SECONDS,
+            );
+            $channel = (string)($this->activeBrokerPeer['channel'] ?? '');
+            $retirement = $this->requestBrokerProcessTreeRetirement(
+                $channel,
+                $pid,
+                $startId,
+                (string)$pendingIntent['attestation_digest'],
+                (string)$pendingIntent['retirement_id'],
+                $deadline,
+            );
+            if (($retirement['ok'] ?? false) !== true
+                && ($retirement['service_tree_restart_required'] ?? false) !== true
+            ) {
+                // No completed receipt exists for the pre-transition intent.
+                // Re-attest under the exact PENDING fence, persist the new
+                // transaction-bound digest, then retry the still non-destructive
+                // rejected request once.
+                $pendingIntent = $this->rebindPendingServiceTreeRetirementIntent(
+                    $pid,
+                    $startId,
+                ) ?? [];
+                if (!$this->validPendingServiceTreeRetirementIntent($pendingIntent)) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Pending platform retirement could not obtain a phase-bound PROCESS_ATTEST/3 receipt.',
+                    ];
+                }
+                $retirement = $this->requestBrokerProcessTreeRetirement(
+                    $channel,
+                    $pid,
+                    $startId,
+                    (string)$pendingIntent['attestation_digest'],
+                    (string)$pendingIntent['retirement_id'],
+                    $deadline,
+                );
             }
-            \usleep(50_000);
-        } while (true);
-        if (!$retired) {
+            if (($retirement['ok'] ?? false) === true) {
+                $currentPid = $this->readPidFile($this->nginxPidFile());
+                unset($this->state['nginx_process_attestation']);
+                $this->verifiedNativeProcessAttestationDigest = '';
+                if ($currentPid !== null) {
+                    // The old process is durably retired, but a crash may have
+                    // already started its exact replacement before the
+                    // publication receipt was persisted. This also handles
+                    // numeric PID reuse without deleting the replacement PID
+                    // file or replaying retirement against the new birth id.
+                    $replacementStatus = $this->nginxStatus(true);
+                    $replacementStartId = \trim((string)(
+                        $replacementStatus['start_id'] ?? ''
+                    ));
+                    if (($replacementStatus['ok'] ?? false) === true
+                        && ($replacementStatus['running'] ?? false) === true
+                        && (int)($replacementStatus['pid'] ?? 0) === $currentPid
+                        && $replacementStartId !== ''
+                        && !($currentPid === $pid
+                            && \hash_equals($replacementStartId, $startId))
+                    ) {
+                        // Keep the fresh PROCESS_ATTEST/3. The activation and
+                        // public probes below complete the recovery proof.
+                    } elseif ($this->pidRunningState($currentPid) === false) {
+                        // A replacement can die after it atomically publishes a
+                        // different pidfile but before Controller durability.
+                        // Removing a kernel-confirmed stale pidfile is safe;
+                        // any live or indeterminate identity remains blocked.
+                        $this->removeVerifiedPidFile($this->nginxPidFile());
+                    } else {
+                        return [
+                            'ok' => false,
+                            'message' => 'Nginx PID file conflicts with the completed platform retirement.',
+                        ];
+                    }
+                }
+            }
+        } else {
+            $status = $this->nginxStatus(true);
+            $pid = $status['pid'] ?? null;
+            $startId = \trim((string)($status['start_id'] ?? ''));
+            if (($status['ok'] ?? false) !== true
+                || ($status['running'] ?? false) !== true
+                || !\is_int($pid)
+                || $pid < 1
+                || $startId === ''
+            ) {
+                return [
+                    'ok' => false,
+                    'message' => 'Old Nginx generation has no fresh Native-attested process fence.',
+                ];
+            }
+            $pendingIntent = $this->nativeProcessTreeRetirementIntent($pid, $startId) ?? [];
+            if (!$this->validPendingServiceTreeRetirementIntent($pendingIntent)) {
+                return [
+                    'ok' => false,
+                    'message' => 'Old Nginx generation cannot be bound to this publication.',
+                ];
+            }
+            $this->publication['service_tree_retirement'] = $pendingIntent;
+            $this->publication['phase'] = 'SERVICE_TREE_RETIREMENT_PENDING';
+            $this->updatePublicationOperations('SERVICE_TREE_RETIREMENT_PENDING');
+            $this->persistState();
+            $this->persistPublication();
+            try {
+                $this->prepareCandidateAttestationFence(
+                    'SERVICE_TREE_RETIREMENT_PENDING',
+                );
+            } catch (\Throwable $throwable) {
+                $message = 'Platform retirement candidate fence could not be advanced: '
+                    . $throwable->getMessage();
+                $this->requestServiceTreeRestart($message);
+                return ['ok' => false, 'message' => $message];
+            }
+            $pendingIntent = $this->rebindPendingServiceTreeRetirementIntent(
+                $pid,
+                $startId,
+            ) ?? [];
+            if (!$this->validPendingServiceTreeRetirementIntent($pendingIntent)) {
+                $message = 'Platform retirement could not bind PROCESS_ATTEST/3 '
+                    . 'to the SERVICE_TREE_RETIREMENT_PENDING fence.';
+                $this->requestServiceTreeRestart($message);
+                return ['ok' => false, 'message' => $message];
+            }
+            $retirement = $this->retireAttestedNginxProcessTree(
+                $pid,
+                $startId,
+                $deadlineMonotonic,
+            );
+        }
+        if (($retirement['ok'] ?? false) !== true) {
             return [
                 'ok' => false,
-                'message' => 'Old Nginx PID/start tuple did not exit within the security deadline.',
+                'message' => (string)($retirement['message']
+                    ?? 'Old Nginx process tree could not be retired.'),
             ];
         }
-        if ($this->readPidFile($this->nginxPidFile()) === $pid) {
-            $this->removeVerifiedPidFile($this->nginxPidFile());
+        $retirementProofDigest = (string)($retirement['proof_digest'] ?? '');
+        $retirementProofType = (string)($retirement['proof_type'] ?? '');
+        if (!$this->processTreeRetirementProofValid([
+            'schema_version' => 2,
+            'process_tree_retirement_proof_digest' => $retirementProofDigest,
+            'process_tree_retirement_proof_type' => $retirementProofType,
+        ])) {
+            return [
+                'ok' => false,
+                'message' => 'Old Nginx process-tree retirement proof is malformed.',
+            ];
         }
-        unset($this->state['nginx_process_attestation']);
         $activation = $this->activateCurrentConfigAndProbe(
             $generation,
             $deadlineMonotonic,
@@ -16594,7 +18649,7 @@ final class WlsEdgeGatewayController
                 continue;
             }
             $receipt = [
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'project_uuid' => $projectUuid,
                 'domain' => $domain,
                 'generation' => $certificateGeneration,
@@ -16607,6 +18662,8 @@ final class WlsEdgeGatewayController
                 'active_config_digest' => $configDigest,
                 'old_master_pid' => $pid,
                 'old_master_start_id' => $startId,
+                'process_tree_retirement_proof_digest' => $retirementProofDigest,
+                'process_tree_retirement_proof_type' => $retirementProofType,
                 'new_master_pid' => $replacementPid,
                 'new_master_start_id' => $replacementStart,
                 'old_generation_retired' => true,
@@ -16636,7 +18693,7 @@ final class WlsEdgeGatewayController
             'ok' => true,
             'message' => 'Old shared-gateway TLS generation retired.',
             'receipt' => [
-                'schema_version' => 1,
+                'schema_version' => 2,
                 'gateway_epoch' => (string)$this->state['epoch'],
                 'publication_transaction_id' => (string)(
                     $this->publication['transaction_id'] ?? ''
@@ -16645,6 +18702,8 @@ final class WlsEdgeGatewayController
                 'active_config_digest' => $configDigest,
                 'old_master_pid' => $pid,
                 'old_master_start_id' => $startId,
+                'process_tree_retirement_proof_digest' => $retirementProofDigest,
+                'process_tree_retirement_proof_type' => $retirementProofType,
                 'new_master_pid' => $replacementPid,
                 'new_master_start_id' => $replacementStart,
                 'old_generation_retired' => true,
@@ -16659,6 +18718,8 @@ final class WlsEdgeGatewayController
 
     private function forceStopSecurityDataPlane(): bool
     {
+        $deadline = $this->monotonicNow()
+            + self::PROCESS_TREE_RETIRE_TIMEOUT_SECONDS;
         $status = $this->nginxStatus(true);
         $pid = $status['pid'] ?? null;
         $startId = \trim((string)($status['start_id'] ?? ''));
@@ -16666,29 +18727,141 @@ final class WlsEdgeGatewayController
             return false;
         }
         if (($status['running'] ?? false) !== true) {
-            return true;
+            return !$this->brokerActionsRequired()
+                && $this->waitForPublicListenerWithdrawal($deadline);
         }
         if (!\is_int($pid) || $pid < 1 || $startId === '') {
             return false;
         }
-        $deadline = $this->monotonicNow() + 10.0;
-        $stop = $this->runNginx(['-s', 'stop'], $deadline);
-        if (($stop['code'] ?? 1) !== 0) {
+        $retirement = $this->retireAttestedNginxProcessTree(
+            $pid,
+            $startId,
+            $deadline,
+        );
+        if (($retirement['ok'] ?? false) !== true) {
             return false;
         }
-        do {
-            $running = $this->pidRunningState($pid);
-            $observedStart = $running === true
-                ? $this->processStartIdentity($pid)
-                : '';
-            if ($running === false
-                || ($observedStart !== '' && !\hash_equals($startId, $observedStart))
-            ) {
-                return true;
+        $this->releaseWindowsNginxProcess($this->configFile());
+        return true;
+    }
+
+    /**
+     * Require every public IPv4/IPv6 TCP listener to remain closed for two
+     * observations. PID exit alone is insufficient because old Nginx workers
+     * can retain inherited 80/443 sockets after their master disappears.
+     */
+    private function publicListenerProbeProvesClosed(
+        int $errorCode,
+        string $errorMessage,
+    ): bool {
+        $closedErrors = [
+            47,  // macOS EAFNOSUPPORT
+            49,  // macOS EADDRNOTAVAIL
+            51,  // macOS ENETUNREACH
+            61,  // macOS ECONNREFUSED
+            97,  // Linux EAFNOSUPPORT
+            99,  // Linux EADDRNOTAVAIL
+            101, // Linux ENETUNREACH
+            111, // Linux ECONNREFUSED
+            10047, // Windows WSAEAFNOSUPPORT
+            10049, // Windows WSAEADDRNOTAVAIL
+            10051, // Windows WSAENETUNREACH
+            10061, // Windows WSAECONNREFUSED
+        ];
+        foreach ([
+            'SOCKET_EAFNOSUPPORT',
+            'SOCKET_EADDRNOTAVAIL',
+            'SOCKET_ENETUNREACH',
+            'SOCKET_ECONNREFUSED',
+        ] as $constant) {
+            if (\defined($constant)) {
+                $closedErrors[] = (int)\constant($constant);
             }
-            \usleep(50_000);
-        } while ($this->monotonicNow() < $deadline);
-        return false;
+        }
+        if (\in_array($errorCode, $closedErrors, true)) {
+            return true;
+        }
+        $normalized = \strtolower(\trim($errorMessage));
+        return \str_contains($normalized, 'connection refused')
+            || \str_contains($normalized, 'address family not supported')
+            || \str_contains($normalized, 'cannot assign requested address')
+            || \str_contains($normalized, 'network is unreachable');
+    }
+
+    private function waitForPublicListenerWithdrawal(float $deadlineMonotonic): bool
+    {
+        $closedSince = null;
+        do {
+            $listenerOpen = false;
+            $hosts = ['127.0.0.1'];
+            if ((string)($this->slotManifest()['listen_profile'] ?? 'default') !== 'ipv4-only') {
+                $hosts[] = '::1';
+            }
+            foreach ($hosts as $host) {
+                foreach ([(int)$this->state['public_http'], (int)$this->state['public_https']] as $port) {
+                    $remaining = $deadlineMonotonic - $this->monotonicNow();
+                    if ($remaining <= 0.0) {
+                        return false;
+                    }
+                    $target = $host === '::1'
+                        ? 'tcp://[::1]:' . $port
+                        : 'tcp://127.0.0.1:' . $port;
+                    $errno = 0;
+                    $error = '';
+                    $socket = @\stream_socket_client(
+                        $target,
+                        $errno,
+                        $error,
+                        \min(0.1, $remaining),
+                    );
+                    if (\is_resource($socket)) {
+                        @\fclose($socket);
+                        $listenerOpen = true;
+                    } elseif (!$this->publicListenerProbeProvesClosed(
+                        $errno,
+                        $error,
+                    )) {
+                        // A timeout can be caused by a full accept queue on an
+                        // otherwise live stale worker. Only an explicit local
+                        // refusal proves that the listener has withdrawn.
+                        $listenerOpen = true;
+                    }
+                }
+            }
+            $now = $this->monotonicNow();
+            if (!$listenerOpen) {
+                $closedSince ??= $now;
+                if ($now - $closedSince >= 0.05) {
+                    return true;
+                }
+            } else {
+                $closedSince = null;
+            }
+            if ($now >= $deadlineMonotonic) {
+                return false;
+            }
+            \usleep(25_000);
+        } while (true);
+    }
+
+    private function requestServiceTreeRestart(string $reason): void
+    {
+        $reason = \trim($reason);
+        if ($reason === '') {
+            $reason = 'Security data-plane stop could not be proven.';
+        }
+        $this->serviceTreeRestartRequested = true;
+        $this->running = false;
+        $this->state['ready'] = false;
+        $this->state['health_state'] = 'DATA_PLANE_DOWN';
+        $this->state['recovery']['stage'] = 'SERVICE_TREE_RESTART';
+        $this->state['recovery']['last_failure'] = $reason;
+        try {
+            $this->persistState();
+        } catch (\Throwable) {
+            // Exit code 79 remains the platform recovery authority even when
+            // the diagnostic state cannot be persisted under disk failure.
+        }
     }
 
     private function publicationSecurityRetirementProven(): bool
@@ -16707,7 +18880,7 @@ final class WlsEdgeGatewayController
         $candidateDigest = (string)(
             $this->publication['candidate_digest'] ?? ''
         );
-        return ($receipt['schema_version'] ?? null) === 1
+        return $this->processTreeRetirementProofValid($receipt)
             && ($receipt['old_generation_retired'] ?? false) === true
             && $candidateGeneration > 0
             && (int)($receipt['active_config_generation'] ?? 0) === $candidateGeneration
@@ -16729,7 +18902,11 @@ final class WlsEdgeGatewayController
             && \trim((string)($receipt['old_master_start_id'] ?? '')) !== ''
             && \is_int($receipt['new_master_pid'] ?? null)
             && (int)$receipt['new_master_pid'] > 0
-            && \trim((string)($receipt['new_master_start_id'] ?? '')) !== '';
+            && \trim((string)($receipt['new_master_start_id'] ?? '')) !== ''
+            && \preg_match(
+                '/\A[a-f0-9]{64}\z/D',
+                (string)($receipt['retired_routes_digest'] ?? ''),
+            ) === 1;
     }
 
     /**
@@ -16740,9 +18917,29 @@ final class WlsEdgeGatewayController
         $status = $this->nginxStatus(true);
         if (!($status['running'] ?? false)) {
             if (($status['ok'] ?? false) !== true) {
+                $message = (string)(
+                    $status['message'] ?? 'Nginx PID identity is unsafe.'
+                );
+                if ($this->brokerActionsRequired()) {
+                    $this->requestServiceTreeRestart($message);
+                }
                 return [
                     'ok' => false,
-                    'message' => (string)($status['message'] ?? 'Nginx PID identity is unsafe.'),
+                    'message' => $message,
+                    'service_tree_restart_required' => $this->brokerActionsRequired(),
+                ];
+            }
+            if ($this->brokerActionsRequired()
+                && !$this->waitForPublicListenerWithdrawal(
+                    $this->monotonicNow() + 1.0,
+                )
+            ) {
+                $message = 'Nginx has no attestable master, but a public gateway listener remains open.';
+                $this->requestServiceTreeRestart($message);
+                return [
+                    'ok' => false,
+                    'message' => $message,
+                    'service_tree_restart_required' => true,
                 ];
             }
             $this->removeVerifiedPidFile($this->nginxPidFile());
@@ -16751,6 +18948,36 @@ final class WlsEdgeGatewayController
         }
         $pid = (int)$status['pid'];
         $startId = (string)($status['start_id'] ?? '');
+        if ($this->brokerActionsRequired()) {
+            $deadline = $this->monotonicNow()
+                + self::PROCESS_TREE_RETIRE_TIMEOUT_SECONDS;
+            $retirement = $this->retireAttestedNginxProcessTree(
+                $pid,
+                $startId,
+                $deadline,
+            );
+            if (($retirement['ok'] ?? false) !== true) {
+                $message = (string)(
+                    $retirement['message']
+                        ?? 'Nginx process-tree retirement could not be proven.'
+                );
+                $this->requestServiceTreeRestart($message);
+                return [
+                    'ok' => false,
+                    'message' => $message,
+                    'service_tree_restart_required' => true,
+                ];
+            }
+            $this->releaseWindowsNginxProcess($this->configFile());
+            return [
+                'ok' => true,
+                'message' => 'stopped with Native process-tree retirement proof',
+            ];
+        }
+
+        // Test-mode fixtures intentionally have no privileged Broker. Preserve
+        // graceful drain semantics there, but never use this PID-only path for
+        // a production gateway where old workers can retain public listeners.
         $quit = $this->runNginx(['-s', 'quit']);
         if (($quit['code'] ?? 1) !== 0) {
             return ['ok' => false, 'message' => 'graceful stop failed: ' . (string)$quit['output']];
@@ -16767,6 +18994,7 @@ final class WlsEdgeGatewayController
             $currentPid = $this->readPidFile($this->nginxPidFile());
             if ($currentPid === null) {
                 unset($this->state['nginx_process_attestation']);
+                $this->verifiedNativeProcessAttestationDigest = '';
                 $this->releaseWindowsNginxProcess($this->configFile());
                 return ['ok' => true, 'message' => 'stopped'];
             }
@@ -16779,6 +19007,7 @@ final class WlsEdgeGatewayController
             if ($this->pidRunningState($pid) === false) {
                 $this->removeVerifiedPidFile($this->nginxPidFile());
                 unset($this->state['nginx_process_attestation']);
+                $this->verifiedNativeProcessAttestationDigest = '';
                 $this->releaseWindowsNginxProcess($this->configFile());
                 return ['ok' => true, 'message' => 'stopped'];
             }
@@ -16939,6 +19168,328 @@ final class WlsEdgeGatewayController
         ];
     }
 
+    private function candidateAttestationPhaseAllowed(string $phase): bool
+    {
+        return \in_array($phase, [
+            'ACTIVATING',
+            'SERVICE_TREE_RETIREMENT_PENDING',
+        ], true);
+    }
+
+    private function candidateAttestationBindingDigest(
+        string $transactionId,
+        int $generation,
+        string $configDigest,
+        string $configPathDigest,
+        string $slot,
+        string $runtimeGeneration,
+        string $phase,
+        string $gatewayEpoch,
+    ): string {
+        return \hash(
+            'sha256',
+            "WLS-CONTROLLER-CANDIDATE-FENCE-BINDING/1\n"
+                . 'transaction_id=' . $transactionId . "\n"
+                . 'candidate_generation=' . $generation . "\n"
+                . 'config_digest=' . $configDigest . "\n"
+                . 'config_path_digest=' . $configPathDigest . "\n"
+                . 'active_slot=' . $slot . "\n"
+                . 'runtime_generation=' . $runtimeGeneration . "\n"
+                . 'allowed_phase=' . $phase . "\n"
+                . 'gateway_epoch=' . $gatewayEpoch . "\n",
+        );
+    }
+
+    /**
+     * Arm the exact candidate publication in the privileged Broker. The
+     * receipt is root/SYSTEM-private and binds this Controller fencing
+     * generation, publication transaction, config, slot/runtime and phase.
+     * Re-entering after a Controller crash replaces only the same transaction;
+     * a cleared transaction can never be armed again.
+     */
+    private function prepareCandidateAttestationFence(?string $phase = null): string
+    {
+        if ($this->publication === null) {
+            throw new \RuntimeException(
+                'Candidate PROCESS_ATTEST fencing requires an active publication.'
+            );
+        }
+        $phase ??= (string)($this->publication['phase'] ?? '');
+        $transactionId = \strtolower(\trim((string)(
+            $this->publication['transaction_id'] ?? ''
+        )));
+        $generation = (int)($this->publication['candidate_generation'] ?? 0);
+        $configDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_digest'] ?? ''
+        )));
+        $configPathDigest = \hash('sha256', $this->configFile());
+        $slot = (string)($this->state['active_slot'] ?? '');
+        $runtimeGeneration = $this->activeRuntimeGeneration();
+        $gatewayEpoch = \strtolower(\trim((string)(
+            $this->state['epoch'] ?? ''
+        )));
+        if (!$this->candidateAttestationPhaseAllowed($phase)
+            || !\hash_equals(
+                $phase,
+                (string)($this->publication['phase'] ?? ''),
+            )
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1
+            || $generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $configDigest) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $configPathDigest) !== 1
+            || !\in_array($slot, ['A', 'B'], true)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $gatewayEpoch) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Candidate PROCESS_ATTEST fence identity is incomplete.'
+            );
+        }
+        $bindingDigest = $this->candidateAttestationBindingDigest(
+            $transactionId,
+            $generation,
+            $configDigest,
+            $configPathDigest,
+            $slot,
+            $runtimeGeneration,
+            $phase,
+            $gatewayEpoch,
+        );
+        $persistedDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_attestation_fence_digest'] ?? ''
+        )));
+        if (\hash_equals(
+                'ARMED',
+                (string)($this->publication['candidate_attestation_fence_status'] ?? ''),
+            )
+            && \hash_equals(
+                $phase,
+                (string)($this->publication['candidate_attestation_fence_phase'] ?? ''),
+            )
+            && \hash_equals(
+                $configDigest,
+                (string)($this->publication['candidate_attestation_config_digest'] ?? ''),
+            )
+            && \hash_equals(
+                $bindingDigest,
+                (string)($this->publication['candidate_attestation_binding_digest'] ?? ''),
+            )
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $persistedDigest) === 1
+            && \hash_equals(
+                $persistedDigest,
+                $this->verifiedNativeCandidateAttestationFenceDigest,
+            )
+        ) {
+            return $persistedDigest;
+        }
+        if (!$this->brokerActionsRequired()) {
+            $digest = \hash(
+                'sha256',
+                "wls-test-candidate-attestation-fence\0"
+                    . $transactionId . "\0" . $generation . "\0"
+                    . $configDigest . "\0" . $phase,
+            );
+        } else {
+            $channel = (string)($this->activeBrokerPeer['channel'] ?? '');
+            if (!\in_array($channel, ['admin', 'project'], true)
+                || !$this->brokerActionsAvailable($channel)
+            ) {
+                throw new \RuntimeException(
+                    'Native Broker action channel is unavailable for candidate fencing.'
+                );
+            }
+            $response = $this->brokerAction($channel, [
+                'PROCESS_ATTEST_CANDIDATE_PREPARE',
+                $transactionId,
+                (string)$generation,
+                $configDigest,
+                $configPathDigest,
+                $slot,
+                $runtimeGeneration,
+                $phase,
+                $gatewayEpoch,
+            ]);
+            $digest = \strtolower(\trim((string)($response[4] ?? '')));
+            if (\count($response) !== 5
+                || !\hash_equals($transactionId, (string)($response[0] ?? ''))
+                || !\hash_equals((string)$generation, (string)($response[1] ?? ''))
+                || !\hash_equals($configDigest, (string)($response[2] ?? ''))
+                || !\hash_equals($phase, (string)($response[3] ?? ''))
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $digest) !== 1
+                || \hash_equals(\str_repeat('0', 64), $digest)
+            ) {
+                throw new \RuntimeException(
+                    'Native Broker returned a malformed candidate fence receipt.'
+                );
+            }
+        }
+        $this->publication['candidate_attestation_fence_status'] = 'ARMED';
+        $this->publication['candidate_attestation_fence_phase'] = $phase;
+        $this->publication['candidate_attestation_fence_digest'] = $digest;
+        $this->publication['candidate_attestation_config_digest'] = $configDigest;
+        $this->publication['candidate_attestation_binding_digest'] = $bindingDigest;
+        $this->publication['candidate_attestation_fence_cleared_digest'] = '';
+        $this->verifiedNativeCandidateAttestationFenceDigest = $digest;
+        $this->persistPublication();
+        return $digest;
+    }
+
+    /**
+     * Consume an armed fence before a publication is committed or rolled
+     * back. CLEAR is exact and idempotent: a lost acknowledgement can replay
+     * the original armed digest, while PREPARE rejects that transaction after
+     * the durable CLEARED tombstone exists.
+     */
+    private function clearCandidateAttestationFence(): bool
+    {
+        if ($this->publication === null) {
+            $this->verifiedNativeCandidateAttestationFenceDigest = '';
+            return true;
+        }
+        $status = (string)(
+            $this->publication['candidate_attestation_fence_status'] ?? 'NONE'
+        );
+        if ($status === 'NONE' || $status === 'CLEARED') {
+            $this->verifiedNativeCandidateAttestationFenceDigest = '';
+            return true;
+        }
+        $transactionId = \strtolower(\trim((string)(
+            $this->publication['transaction_id'] ?? ''
+        )));
+        $generation = (int)($this->publication['candidate_generation'] ?? 0);
+        $configDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_digest'] ?? ''
+        )));
+        $phase = (string)(
+            $this->publication['candidate_attestation_fence_phase'] ?? ''
+        );
+        $armedDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_attestation_fence_digest'] ?? ''
+        )));
+        $bindingDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_attestation_binding_digest'] ?? ''
+        )));
+        if ($status !== 'ARMED'
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $transactionId) !== 1
+            || $generation < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $configDigest) !== 1
+            || !$this->candidateAttestationPhaseAllowed($phase)
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $armedDigest) !== 1
+            || !\hash_equals(
+                $configDigest,
+                (string)($this->publication['candidate_attestation_config_digest'] ?? ''),
+            )
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $bindingDigest) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Candidate PROCESS_ATTEST fence cannot be consumed safely.'
+            );
+        }
+        if (!$this->brokerActionsRequired()) {
+            $clearedDigest = \hash(
+                'sha256',
+                "wls-test-candidate-attestation-cleared\0" . $armedDigest,
+            );
+        } else {
+            $channel = (string)($this->activeBrokerPeer['channel'] ?? '');
+            if (!\in_array($channel, ['admin', 'project'], true)
+                || !$this->brokerActionsAvailable($channel)
+            ) {
+                return false;
+            }
+            try {
+                $response = $this->brokerAction($channel, [
+                    'PROCESS_ATTEST_CANDIDATE_CLEAR',
+                    $transactionId,
+                    (string)$generation,
+                    $configDigest,
+                    $phase,
+                    $armedDigest,
+                ]);
+            } catch (\Throwable $throwable) {
+                $this->requestServiceTreeRestart(
+                    'Candidate PROCESS_ATTEST fence clear is indeterminate: '
+                        . $throwable->getMessage(),
+                );
+                return false;
+            }
+            $clearedDigest = \strtolower(\trim((string)($response[4] ?? '')));
+            if (\count($response) !== 5
+                || !\hash_equals($transactionId, (string)($response[0] ?? ''))
+                || !\hash_equals((string)$generation, (string)($response[1] ?? ''))
+                || !\hash_equals($configDigest, (string)($response[2] ?? ''))
+                || !\hash_equals($phase, (string)($response[3] ?? ''))
+                || \preg_match('/\A[a-f0-9]{64}\z/D', $clearedDigest) !== 1
+                || \hash_equals(\str_repeat('0', 64), $clearedDigest)
+            ) {
+                $this->requestServiceTreeRestart(
+                    'Native Broker returned a malformed candidate fence clear receipt.',
+                );
+                return false;
+            }
+        }
+        $this->publication['candidate_attestation_fence_status'] = 'CLEARED';
+        $this->publication['candidate_attestation_fence_cleared_digest']
+            = $clearedDigest;
+        $this->verifiedNativeCandidateAttestationFenceDigest = '';
+        $this->persistPublication();
+        return true;
+    }
+
+    /** @return array{kind:string,transaction_id:string,phase:string,digest:string,generation:int} */
+    private function processAttestationFenceContext(string $configDigest): array
+    {
+        $phase = (string)($this->publication['phase'] ?? '');
+        $candidateGeneration = (int)(
+            $this->publication['candidate_generation'] ?? 0
+        );
+        $candidateDigest = \strtolower(\trim((string)(
+            $this->publication['candidate_digest'] ?? ''
+        )));
+        if ($this->publication !== null
+            && $this->candidateAttestationPhaseAllowed($phase)
+            && !\hash_equals(
+                'CLEARED',
+                (string)($this->publication[
+                    'candidate_attestation_fence_status'
+                ] ?? ''),
+            )
+            && $candidateGeneration > 0
+            && \preg_match('/\A[a-f0-9]{64}\z/D', $candidateDigest) === 1
+            && \hash_equals($candidateDigest, $configDigest)
+        ) {
+            $digest = $this->prepareCandidateAttestationFence($phase);
+            return [
+                'kind' => 'CANDIDATE',
+                'transaction_id' => (string)$this->publication['transaction_id'],
+                'phase' => $phase,
+                'digest' => $digest,
+                'generation' => $candidateGeneration,
+            ];
+        }
+        $activeGeneration = (int)(
+            $this->state['active_config_generation'] ?? 0
+        );
+        $activeDigest = \strtolower(\trim((string)(
+            $this->state['active_config_digest'] ?? ''
+        )));
+        if ($activeGeneration < 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $activeDigest) !== 1
+            || !\hash_equals($activeDigest, $configDigest)
+        ) {
+            throw new \RuntimeException(
+                'Current config matches neither the active nor an armed candidate fence.'
+            );
+        }
+        return [
+            'kind' => 'ACTIVE',
+            'transaction_id' => '-',
+            'phase' => 'ACTIVE',
+            'digest' => \str_repeat('0', 64),
+            'generation' => $activeGeneration,
+        ];
+    }
+
     /**
      * @return array<string,mixed>
      */
@@ -16950,12 +19501,13 @@ final class WlsEdgeGatewayController
         $runtimeGeneration = $this->activeRuntimeGeneration();
         $configDigest = $this->fileHash($this->configFile());
         $configPathDigest = \hash('sha256', $this->configFile());
-        $publicationGeneration = (int)($this->state['active_config_generation'] ?? 0);
+        $fence = $this->processAttestationFenceContext($configDigest);
+        $publicationGeneration = (int)$fence['generation'];
         if ($pid < 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedBinaryDigest) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $runtimeGeneration) !== 1
             || \preg_match('/\A[a-f0-9]{64}\z/D', $configDigest) !== 1
-            || $publicationGeneration < 0
+            || $publicationGeneration < 1
         ) {
             throw new \RuntimeException(
                 'Current runtime/config evidence is incomplete for PROCESS_ATTEST.'
@@ -16989,8 +19541,12 @@ final class WlsEdgeGatewayController
             $configDigest,
             $configPathDigest,
             (string)$publicationGeneration,
+            (string)$fence['kind'],
+            (string)$fence['transaction_id'],
+            (string)$fence['phase'],
+            (string)$fence['digest'],
         ]);
-        if (\count($response) !== 8
+        if (\count($response) !== 12
             || \preg_match('/\A[a-f0-9]{64}\z/D', (string)$response[0]) !== 1
             || (int)$response[1] !== $pid
             || \preg_match('/\A[1-9][0-9]*\z/D', (string)$response[2]) !== 1
@@ -16999,6 +19555,13 @@ final class WlsEdgeGatewayController
             || !\hash_equals($configDigest, (string)$response[5])
             || !\hash_equals($configPathDigest, (string)$response[6])
             || (int)$response[7] !== $publicationGeneration
+            || !\hash_equals((string)$fence['kind'], (string)$response[8])
+            || !\hash_equals(
+                (string)$fence['transaction_id'],
+                (string)$response[9],
+            )
+            || !\hash_equals((string)$fence['phase'], (string)$response[10])
+            || !\hash_equals((string)$fence['digest'], (string)$response[11])
             || ($expectedStartId !== '-'
                 && !\hash_equals($expectedStartId, (string)$response[2]))
         ) {
@@ -17014,22 +19577,18 @@ final class WlsEdgeGatewayController
             'config_digest' => (string)$response[5],
             'config_path_digest' => (string)$response[6],
             'publication_generation' => (int)$response[7],
+            'fence_kind' => (string)$response[8],
+            'candidate_transaction_id' => (string)$response[9],
+            'candidate_phase' => (string)$response[10],
+            'candidate_fence_digest' => (string)$response[11],
         ]);
-        $receiptState = $this->readStableRegularFileWithStatus(
-            $this->processAttestationReceiptFile(),
-            4096,
-            'Native Nginx process-attestation receipt',
-        );
-        if (!\hash_equals($receipt, (string)$receiptState['contents'])
-            || !\hash_equals((string)$response[0], \hash('sha256', $receipt))
-            || !$this->nativeReceiptOwnerTrusted((array)$receiptState['status'])
-        ) {
+        if (!\hash_equals((string)$response[0], \hash('sha256', $receipt))) {
             throw new \RuntimeException(
-                'Native PROCESS_ATTEST receipt is not the root-owned acknowledged artifact.'
+                'Native PROCESS_ATTEST response conflicts with its canonical receipt digest.'
             );
         }
         $attestation = [
-            'schema_version' => 2,
+            'schema_version' => 3,
             'receipt_digest' => (string)$response[0],
             'pid' => $pid,
             'start_id' => (string)$response[2],
@@ -17038,10 +19597,15 @@ final class WlsEdgeGatewayController
             'config_digest' => (string)$response[5],
             'config_path_digest' => (string)$response[6],
             'publication_generation' => (int)$response[7],
+            'fence_kind' => (string)$response[8],
+            'candidate_transaction_id' => (string)$response[9],
+            'candidate_phase' => (string)$response[10],
+            'candidate_fence_digest' => (string)$response[11],
             'attested_at' => \gmdate(DATE_ATOM),
         ];
         $this->state['nginx_process_attestation'] = $attestation;
         $this->persistState();
+        $this->verifiedNativeProcessAttestationDigest = (string)$response[0];
         return $attestation;
     }
 
@@ -17055,7 +19619,7 @@ final class WlsEdgeGatewayController
     ): ?array {
         $attestation = $this->state['nginx_process_attestation'] ?? null;
         if (!\is_array($attestation)
-            || (int)($attestation['schema_version'] ?? 0) !== 2
+            || (int)($attestation['schema_version'] ?? 0) !== 3
             || (int)($attestation['pid'] ?? 0) !== $pid
             || !\hash_equals(
                 $expectedBinaryDigest,
@@ -17073,9 +19637,7 @@ final class WlsEdgeGatewayController
                 \hash('sha256', $this->configFile()),
                 (string)($attestation['config_path_digest'] ?? ''),
             )
-            || (int)($attestation['publication_generation'] ?? -1) < 0
-            || (int)($attestation['publication_generation'] ?? -1)
-                > (int)($this->state['active_config_generation'] ?? 0)
+            || (int)($attestation['publication_generation'] ?? 0) < 1
             || \preg_match(
                 '/\A[1-9][0-9]*\z/D',
                 (string)($attestation['start_id'] ?? ''),
@@ -17087,23 +19649,89 @@ final class WlsEdgeGatewayController
         ) {
             return null;
         }
-        try {
-            $receiptState = $this->readStableRegularFileWithStatus(
-                $this->processAttestationReceiptFile(),
-                4096,
-                'Cached Native Nginx process-attestation receipt',
-            );
-        } catch (\Throwable) {
-            return null;
-        }
         $receipt = $this->processAttestationReceiptContents($attestation);
-        if (!\hash_equals($receipt, (string)$receiptState['contents'])
-            || !\hash_equals(
+        if (!\hash_equals(
                 (string)$attestation['receipt_digest'],
                 \hash('sha256', $receipt),
             )
-            || !$this->nativeReceiptOwnerTrusted((array)$receiptState['status'])
         ) {
+            return null;
+        }
+        $fenceKind = (string)($attestation['fence_kind'] ?? '');
+        if ($fenceKind === 'ACTIVE') {
+            if (!\hash_equals(
+                    '-',
+                    (string)($attestation['candidate_transaction_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    'ACTIVE',
+                    (string)($attestation['candidate_phase'] ?? ''),
+                )
+                || !\hash_equals(
+                    \str_repeat('0', 64),
+                    (string)($attestation['candidate_fence_digest'] ?? ''),
+                )
+                || (int)$attestation['publication_generation']
+                    !== (int)($this->state['active_config_generation'] ?? 0)
+                || !\hash_equals(
+                    (string)$attestation['config_digest'],
+                    (string)($this->state['active_config_digest'] ?? ''),
+                )
+            ) {
+                return null;
+            }
+        } elseif ($fenceKind === 'CANDIDATE') {
+            $publicationPhase = (string)($this->publication['phase'] ?? '');
+            $fenceDigest = (string)(
+                $attestation['candidate_fence_digest'] ?? ''
+            );
+            if ($this->publication === null
+                || !$this->candidateAttestationPhaseAllowed($publicationPhase)
+                || !\hash_equals(
+                    (string)($this->publication['transaction_id'] ?? ''),
+                    (string)($attestation['candidate_transaction_id'] ?? ''),
+                )
+                || !\hash_equals(
+                    $publicationPhase,
+                    (string)($attestation['candidate_phase'] ?? ''),
+                )
+                || (int)$attestation['publication_generation']
+                    !== (int)($this->publication['candidate_generation'] ?? 0)
+                || !\hash_equals(
+                    (string)$attestation['config_digest'],
+                    (string)($this->publication['candidate_digest'] ?? ''),
+                )
+                || !\hash_equals(
+                    'ARMED',
+                    (string)($this->publication[
+                        'candidate_attestation_fence_status'
+                    ] ?? ''),
+                )
+                || !\hash_equals(
+                    $fenceDigest,
+                    (string)($this->publication[
+                        'candidate_attestation_fence_digest'
+                    ] ?? ''),
+                )
+                || !\hash_equals(
+                    $fenceDigest,
+                    $this->verifiedNativeCandidateAttestationFenceDigest,
+                )
+            ) {
+                return null;
+            }
+        } else {
+            return null;
+        }
+        if ($this->brokerActionsRequired()
+            && !\hash_equals(
+                $this->verifiedNativeProcessAttestationDigest,
+                (string)$attestation['receipt_digest'],
+            )
+        ) {
+            // A cached controller record is not a privileged Native proof.
+            // Production accepts it only after this Controller generation
+            // received the same canonical digest from its inherited Broker.
             return null;
         }
         $currentStartId = $this->processStartIdentity($pid);
@@ -17131,7 +19759,7 @@ final class WlsEdgeGatewayController
     /** @param array<string,mixed> $attestation */
     private function processAttestationReceiptContents(array $attestation): string
     {
-        return "WLS-PROCESS-ATTEST/2\n"
+        return "WLS-PROCESS-ATTEST/3\n"
             . 'pid=' . (int)($attestation['pid'] ?? 0) . "\n"
             . 'start_id=' . (string)($attestation['start_id'] ?? '') . "\n"
             . 'binary_digest=' . (string)($attestation['binary_digest'] ?? '') . "\n"
@@ -17140,7 +19768,210 @@ final class WlsEdgeGatewayController
             . 'config_path_digest=' . (string)($attestation['config_path_digest'] ?? '') . "\n"
             . 'publication_generation=' . (int)(
                 $attestation['publication_generation'] ?? -1
+            ) . "\n"
+            . 'fence_kind=' . (string)($attestation['fence_kind'] ?? '') . "\n"
+            . 'candidate_transaction_id=' . (string)(
+                $attestation['candidate_transaction_id'] ?? ''
+            ) . "\n"
+            . 'candidate_phase=' . (string)(
+                $attestation['candidate_phase'] ?? ''
+            ) . "\n"
+            . 'candidate_fence_digest=' . (string)(
+                $attestation['candidate_fence_digest'] ?? ''
             ) . "\n";
+    }
+
+    /**
+     * Legacy diagnostic parser retained for migration tooling. Runtime
+     * recovery never invokes it because the production Controller is
+     * intentionally unable to read this root/SYSTEM-private artifact.
+     *
+     * @return array{status:string,digest:string}|null
+     * @deprecated Use requestBrokerProcessTreeRetirement().
+     */
+    private function readProcessTreeRetirementReceipt(
+        string $retirementId,
+        int $pid,
+        string $startId,
+        string $attestationDigest,
+        string $binaryDigest,
+        string $runtimeGeneration,
+        ?string $expectedHostBootId = null,
+        ?string $expectedConfigDigest = null,
+        ?string $expectedConfigPathDigest = null,
+        ?int $expectedPublicationGeneration = null,
+    ): ?array {
+        $file = $this->processTreeRetirementReceiptFile();
+        $pathStatus = @\lstat($file);
+        if (!\is_array($pathStatus)) {
+            if (\file_exists($file) || \is_link($file)) {
+                throw new \RuntimeException(
+                    'Native process-tree retirement receipt path is unsafe.'
+                );
+            }
+            return null;
+        }
+        $receiptState = $this->readStableRegularFileWithStatus(
+            $file,
+            2048,
+            'Native process-tree retirement receipt',
+        );
+        $status = (array)$receiptState['status'];
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $trustedOwner = $this->nativeReceiptOwnerTrusted($status);
+        } else {
+            $trustedOwner = (int)($status['uid'] ?? -1) === 0
+                && (((int)($status['mode'] ?? 0)) & 0777) === 0600;
+        }
+        if (!$trustedOwner) {
+            throw new \RuntimeException(
+                'Native process-tree retirement receipt ownership is unsafe.'
+            );
+        }
+        $contents = (string)$receiptState['contents'];
+        $expectedHostBootId ??= $this->hostBootId;
+        foreach (['COMPLETE', 'INDETERMINATE'] as $completionStatus) {
+            $expected = $this->processTreeRetirementReceiptContents(
+                $completionStatus,
+                $retirementId,
+                $pid,
+                $startId,
+                $attestationDigest,
+                $binaryDigest,
+                $runtimeGeneration,
+                $expectedHostBootId,
+            );
+            if (\hash_equals($expected, $contents)) {
+                return [
+                    'status' => $completionStatus,
+                    'digest' => \hash('sha256', $contents),
+                    'proof_type' => 'native_process_tree_receipt',
+                ];
+            }
+        }
+        $matches = [];
+        if (\preg_match(
+            '/\AWLS-PROCESS-TREE-RETIRE\/2\n'
+                . 'status=(COMPLETE|INDETERMINATE)\n'
+                . 'retirement_id=([a-f0-9]{64})\n'
+                . 'pid=([1-9][0-9]*)\n'
+                . 'start_id=([1-9][0-9]*)\n'
+                . 'attestation_digest=([a-f0-9]{64})\n'
+                . 'binary_digest=([a-f0-9]{64})\n'
+                . 'runtime_generation=([a-f0-9]{64})\n'
+                . 'host_boot_id=([a-f0-9]{64})\n'
+                . 'config_digest=([a-f0-9]{64})\n'
+                . 'config_path_digest=([a-f0-9]{64})\n'
+                . 'publication_generation=([0-9]+)\n'
+                . 'platform=(systemd|launchd|windows-job)\n'
+                . 'service_id=([a-f0-9]{64})\n'
+                . 'requested_launcher_generation=([a-f0-9]{64})\n'
+                . 'completed_launcher_generation=([a-f0-9]{64})\n'
+                . 'completed_host_boot_id=([a-f0-9]{64})\n'
+                . 'completed_runtime_generation=([a-f0-9]{64})\n\z/D',
+            $contents,
+            $matches,
+        ) === 1) {
+            $platform = match (\PHP_OS_FAMILY) {
+                'Linux' => 'systemd',
+                'Darwin' => 'launchd',
+                'Windows' => 'windows-job',
+                default => '',
+            };
+            $serviceId = $platform === '' ? '' : \hash(
+                'sha256',
+                "wls-platform-service/1\0{$platform}\0com.weline.wls-gateway-v2",
+            );
+            $expectedConfigDigest ??= \strtolower(\trim((string)(
+                $this->state['nginx_process_attestation']['config_digest'] ?? ''
+            )));
+            $expectedConfigPathDigest ??= \strtolower(\trim((string)(
+                $this->state['nginx_process_attestation']['config_path_digest'] ?? ''
+            )));
+            $expectedPublicationGeneration ??= (int)(
+                $this->state['nginx_process_attestation']['publication_generation'] ?? -1
+            );
+            $zeroGeneration = \str_repeat('0', 64);
+            $completion = (string)$matches[1];
+            $completionFieldsValid = $completion === 'COMPLETE'
+                ? !\hash_equals($zeroGeneration, (string)$matches[15])
+                    && !\hash_equals((string)$matches[14], (string)$matches[15])
+                    && !\hash_equals($zeroGeneration, (string)$matches[16])
+                    && !\hash_equals($zeroGeneration, (string)$matches[17])
+                : \hash_equals($zeroGeneration, (string)$matches[15])
+                    && \hash_equals($zeroGeneration, (string)$matches[16])
+                    && \hash_equals($zeroGeneration, (string)$matches[17]);
+            if ($platform !== ''
+                && $completionFieldsValid
+                && \hash_equals($retirementId, (string)$matches[2])
+                && \hash_equals((string)$pid, (string)$matches[3])
+                && \hash_equals($startId, (string)$matches[4])
+                && \hash_equals($attestationDigest, (string)$matches[5])
+                && \hash_equals($binaryDigest, (string)$matches[6])
+                && \hash_equals($runtimeGeneration, (string)$matches[7])
+                && \hash_equals($expectedHostBootId, (string)$matches[8])
+                && \preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    (string)$expectedConfigDigest,
+                ) === 1
+                && \hash_equals((string)$expectedConfigDigest, (string)$matches[9])
+                && \preg_match(
+                    '/\A[a-f0-9]{64}\z/D',
+                    (string)$expectedConfigPathDigest,
+                ) === 1
+                && \hash_equals(
+                    (string)$expectedConfigPathDigest,
+                    (string)$matches[10],
+                )
+                && $expectedPublicationGeneration >= 0
+                && \hash_equals(
+                    (string)$expectedPublicationGeneration,
+                    (string)$matches[11],
+                )
+                && \hash_equals($platform, (string)$matches[12])
+                && \hash_equals($serviceId, (string)$matches[13])
+                && !\hash_equals($zeroGeneration, (string)$matches[14])
+            ) {
+                return [
+                    'status' => $completion,
+                    'digest' => \hash('sha256', $contents),
+                    'proof_type' => 'platform_service_tree_receipt',
+                    'platform' => $platform,
+                    'requested_launcher_generation' => (string)$matches[14],
+                    'completed_launcher_generation' => (string)$matches[15],
+                ];
+            }
+        }
+        throw new \RuntimeException(
+            'Native process-tree retirement receipt does not match the requested identity.'
+        );
+    }
+
+    private function processTreeRetirementReceiptContents(
+        string $status,
+        string $retirementId,
+        int $pid,
+        string $startId,
+        string $attestationDigest,
+        string $binaryDigest,
+        string $runtimeGeneration,
+        ?string $hostBootId = null,
+    ): string {
+        if (!\in_array($status, ['COMPLETE', 'INDETERMINATE'], true)) {
+            throw new \LogicException(
+                'Process-tree retirement receipt status is invalid.'
+            );
+        }
+        $hostBootId ??= $this->hostBootId;
+        return "WLS-PROCESS-TREE-RETIRE/1\n"
+            . 'status=' . $status . "\n"
+            . 'retirement_id=' . $retirementId . "\n"
+            . 'pid=' . $pid . "\n"
+            . 'start_id=' . $startId . "\n"
+            . 'attestation_digest=' . $attestationDigest . "\n"
+            . 'binary_digest=' . $binaryDigest . "\n"
+            . 'runtime_generation=' . $runtimeGeneration . "\n"
+            . 'host_boot_id=' . $hostBootId . "\n";
     }
 
     /** @param array<string|int,mixed> $status */
@@ -18300,6 +21131,13 @@ final class WlsEdgeGatewayController
     {
         if ($this->diskPressureMarkerActive()) {
             $status = $this->nginxStatus();
+            if (($status['service_tree_restart_required'] ?? false) === true) {
+                $this->requestServiceTreeRestart(
+                    (string)($status['message']
+                        ?? 'Nginx process tree requires platform service recovery during startup disk pressure.'),
+                );
+                return;
+            }
             $deadline = $this->monotonicNow()
                 + self::PUBLIC_ROUTE_PROBE_BUDGET_SECONDS;
             $healthy = ($status['running'] ?? false) === true
@@ -18349,6 +21187,20 @@ final class WlsEdgeGatewayController
             return;
         }
         $status = $this->nginxStatus();
+        if (($status['running'] ?? false) !== true) {
+            $boundary = $this->verifyDataPlaneStartBoundary($status);
+            if (($boundary['ok'] ?? false) !== true) {
+                if (!$this->serviceTreeRestartRequested) {
+                    $this->recordFailure((string)(
+                        $boundary['message']
+                            ?? 'Gateway startup data-plane boundary is unsafe.'
+                    ));
+                    $this->state['recovery']['stage'] = 'START_BOUNDARY_UNSAFE';
+                    $this->persistState();
+                }
+                return;
+            }
+        }
         if (($status['running'] ?? false) === true) {
             $deadline = $this->monotonicNow()
                 + self::PUBLIC_ROUTE_PROBE_BUDGET_SECONDS;
@@ -19480,6 +22332,7 @@ final class WlsEdgeGatewayController
             'long_lived_connections',
             'sse_connections',
             'websocket_connections',
+            'http2_connections',
         ] as $field) {
             $value = $counters[$field] ?? null;
             if (!\is_int($value) || $value < 0 || $value > 1_000_000) {
@@ -19499,10 +22352,37 @@ final class WlsEdgeGatewayController
             || $normalized['long_lived_connections'] !== 0
             || $normalized['sse_connections'] !== 0
             || $normalized['websocket_connections'] !== 0
+            || $normalized['http2_connections'] !== 0
         ) {
             throw new \DomainException('Unknown heartbeat drain counters must be zero.');
         }
         return $normalized;
+    }
+
+    /**
+     * A drain counter vector is trustworthy only when every Protocol 2 field
+     * is present with its exact wire type. In particular, an older worker that
+     * advertises version 1 without the later H2 counter must fail closed rather
+     * than make an active multiplexed connection look drained.
+     *
+     * @param array<string,mixed> $counters
+     */
+    private static function completeDrainCounterVector(array $counters): bool
+    {
+        foreach ([
+            'active_requests',
+            'long_lived_connections',
+            'sse_connections',
+            'websocket_connections',
+            'http2_connections',
+        ] as $field) {
+            $value = $counters[$field] ?? null;
+            if (!\is_int($value) || $value < 0 || $value > 1_000_000) {
+                return false;
+            }
+        }
+        return $counters['sse_connections'] <= $counters['long_lived_connections']
+            && $counters['websocket_connections'] <= $counters['long_lived_connections'];
     }
 
     /**
@@ -20134,6 +23014,7 @@ final class WlsEdgeGatewayController
                     'long_lived_connections' => 0,
                     'sse_connections' => 0,
                     'websocket_connections' => 0,
+                    'http2_connections' => 0,
                     'counter_source' => 'none',
                     'drain_complete' => false,
                 ];
@@ -20143,6 +23024,7 @@ final class WlsEdgeGatewayController
             $longLived = 0;
             $sse = 0;
             $webSocket = 0;
+            $http2 = 0;
             $reachable = 0;
             $counterCapable = 0;
             $backends = (array)($instance['backends'] ?? []);
@@ -20154,6 +23036,7 @@ final class WlsEdgeGatewayController
                     - (float)($reported['reported_monotonic'] ?? 0.0);
                 $countersKnown = (int)($reported['version'] ?? 0) === 1
                     && ($reported['counters_known'] ?? false) === true
+                    && self::completeDrainCounterVector($reported)
                     && $this->hostBootId === (string)($reported['lease_boot_id'] ?? '')
                     && $reportAge >= 0.0
                     && $reportAge <= 25.0
@@ -20172,6 +23055,9 @@ final class WlsEdgeGatewayController
                 $webSocket = $countersKnown
                     ? (int)($reported['websocket_connections'] ?? 0)
                     : 0;
+                $http2 = $countersKnown
+                    ? (int)($reported['http2_connections'] ?? 0)
+                    : 0;
                 $statuses[] = [
                     'instance_id' => (string)$instanceId,
                     'status' => $status,
@@ -20187,10 +23073,14 @@ final class WlsEdgeGatewayController
                     'long_lived_connections' => $longLived,
                     'sse_connections' => $sse,
                     'websocket_connections' => $webSocket,
+                    'http2_connections' => $http2,
                     'counter_source' => 'master-heartbeat',
                     'drain_complete' => $countersKnown
                         && $activeRequests === 0
-                        && $longLived === 0,
+                        && $longLived === 0
+                        && $sse === 0
+                        && $webSocket === 0
+                        && $http2 === 0,
                 ];
                 continue;
             }
@@ -20224,13 +23114,16 @@ final class WlsEdgeGatewayController
                     continue;
                 }
                 ++$reachable;
-                if ((int)($health['drain_counters_version'] ?? 0) === 1) {
+                if ((int)($health['drain_counters_version'] ?? 0) === 1
+                    && self::completeDrainCounterVector($health)
+                ) {
                     ++$counterCapable;
                 }
                 $activeRequests += \max(0, (int)($health['active_requests'] ?? 0));
                 $longLived += \max(0, (int)($health['long_lived_connections'] ?? 0));
                 $sse += \max(0, (int)($health['sse_connections'] ?? 0));
                 $webSocket += \max(0, (int)($health['websocket_connections'] ?? 0));
+                $http2 += \max(0, (int)($health['http2_connections'] ?? 0));
             }
             $countersKnown = $backends !== []
                 && $reachable === \count($backends)
@@ -20250,11 +23143,15 @@ final class WlsEdgeGatewayController
                 'long_lived_connections' => $longLived,
                 'sse_connections' => $sse,
                 'websocket_connections' => $webSocket,
+                'http2_connections' => $http2,
                 'counter_source' => 'legacy-backend-probe',
                 'drain_complete' => $status === 'DRAINING'
                     && $countersKnown
                     && $activeRequests === 0
-                    && $longLived === 0,
+                    && $longLived === 0
+                    && $sse === 0
+                    && $webSocket === 0
+                    && $http2 === 0,
             ];
         }
         return $statuses;
@@ -23160,7 +26057,7 @@ CDEF,
             || (int)($openedStatus['nlink'] ?? 0) !== 1
             || (\is_array($pathStatus)
                 && !$this->sameStableFileState($pathStatus, $openedStatus))
-            || !@\flock($stream, LOCK_EX)
+            || !@\flock($stream, LOCK_EX | LOCK_NB)
         ) {
             if (\is_resource($stream)) {
                 @\fclose($stream);
@@ -23612,11 +26509,20 @@ CDEF,
     private function assertPersistentMutationPreconditions(string $operation): void
     {
         $this->assertBrokerGenerationOwnership($operation);
+        // A latched storage failure is more specific than the secondary
+        // trust failures caused by being unable to persist/repair durable
+        // state. Preserve that root cause for protocol classification and
+        // operator recovery instead of masking it as generic corruption.
+        if ($this->readOnlyRecoveryMode) {
+            throw new \DomainException(
+                'Gateway storage reserve is below the safe mutation threshold; '
+                    . 'verified active traffic is retained but new durable operations are rejected.'
+            );
+        }
         if (!$this->journalTrusted
             || !$this->initializationMarkerTrusted
             || !$this->securityAnchorTrusted
             || ($this->state['security_ledger_valid'] ?? false) !== true
-            || $this->readOnlyRecoveryMode
         ) {
             throw new \DomainException(
                 'Gateway durable state is untrusted; refusing ' . $operation . '.'
@@ -23769,6 +26675,11 @@ CDEF,
 
     private function markDiskPressure(string $stage, string $reason): void
     {
+        // Disk pressure is a durable mutation fence, not merely a diagnostic
+        // state. Latch the live Controller before touching the reserve/marker
+        // so every later path in this process remains adoption/read-only even
+        // when marker creation itself cannot be completed.
+        $this->readOnlyRecoveryMode = true;
         $this->invalidateStorageStatus();
         $this->state['ready'] = (bool)($this->state['ready'] ?? false);
         $this->state['health_state'] = 'DISK_PRESSURE';
@@ -26478,9 +29389,11 @@ CDEF,
         return $this->trustDir() . DIRECTORY_SEPARATOR . 'admin-stopped.intent';
     }
 
-    private function processAttestationReceiptFile(): string
+    /** @deprecated Retirement proofs are consumed through the Native Broker. */
+    private function processTreeRetirementReceiptFile(): string
     {
-        return $this->trustDir() . DIRECTORY_SEPARATOR . 'process-attestation.receipt';
+        return $this->trustDir() . DIRECTORY_SEPARATOR
+            . 'process-tree-retirement.receipt';
     }
 
     private function hostId(): string

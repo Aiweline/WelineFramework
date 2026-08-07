@@ -18,6 +18,7 @@ final class GatewayProjectStateFilesystem
     /** @var array{ready:bool,mode:string,reason:string}|null */
     private static ?array $atomicWriteRuntimeCapability = null;
     private const MAX_WINDOWS_RECOVERY_BACKUPS_PER_TARGET = 8;
+    private const MAX_ATOMIC_STAGING_FILES_PER_TARGET = 8;
     private const MAX_WINDOWS_RECOVERY_BACKUPS_PER_DIRECTORY = 256;
     private const MAX_WINDOWS_ATOMIC_DIRECTORY_ENTRIES = 16384;
     private const DEFAULT_LOCK_WAIT_SECONDS = 300.0;
@@ -122,7 +123,9 @@ final class GatewayProjectStateFilesystem
         $before = false;
         $created = false;
         $handle = false;
+        $openingChanged = false;
         for ($attempt = 0; $attempt < 8; ++$attempt) {
+            \clearstatcache(true, $path);
             $before = @\lstat($path);
             $created = false;
             if (\is_array($before)) {
@@ -138,7 +141,41 @@ final class GatewayProjectStateFilesystem
                 $created = \is_resource($handle);
             }
             if (\is_resource($handle)) {
-                break;
+                $opened = @\fstat($handle);
+                \clearstatcache(true, $path);
+                $pathStatus = @\lstat($path);
+                if (!\is_array($opened) || !\is_array($pathStatus)) {
+                    @\fclose($handle);
+                    $handle = false;
+                    throw new \RuntimeException('Unable to verify the opened WLS state lock.');
+                }
+                try {
+                    self::assertRegularStatus($path, $opened, 'WLS state lock');
+                    self::assertRegularStatus($path, $pathStatus, 'WLS state lock');
+                } catch (\Throwable $exception) {
+                    @\fclose($handle);
+                    $handle = false;
+                    throw $exception;
+                }
+                $stable = ($created
+                        || (\is_array($before) && self::sameState($before, $opened)))
+                    && self::sameState($opened, $pathStatus);
+                if ($stable) {
+                    break;
+                }
+                $sameOpenedObject = ($created
+                        || (\is_array($before)
+                            && self::sameOpenFileIdentity($before, $opened)))
+                    && self::sameOpenFileIdentity($opened, $pathStatus);
+                @\fclose($handle);
+                $handle = false;
+                if (!$sameOpenedObject) {
+                    throw new \RuntimeException('WLS state lock changed while being opened.');
+                }
+                // A trusted holder may have tightened mode or ownership on
+                // this exact inode between lstat and fstat. Retry until one
+                // complete snapshot is stable; never retry a path/inode swap.
+                $openingChanged = true;
             }
             // Another local process may have won the first-create race after
             // lstat but before fopen(x). Re-resolve and open that exact inode;
@@ -147,22 +184,12 @@ final class GatewayProjectStateFilesystem
             \usleep(2_000);
         }
         if (!\is_resource($handle)) {
-            throw new \RuntimeException('Unable to open the WLS state lock safely.');
+            throw new \RuntimeException($openingChanged
+                ? 'WLS state lock did not stabilize while being opened.'
+                : 'Unable to open the WLS state lock safely.');
         }
         $locked = false;
         try {
-            $opened = @\fstat($handle);
-            $pathStatus = @\lstat($path);
-            if (!\is_array($opened) || !\is_array($pathStatus)) {
-                throw new \RuntimeException('Unable to verify the opened WLS state lock.');
-            }
-            self::assertRegularStatus($path, $opened, 'WLS state lock');
-            if ((!$created && (!\is_array($before) || !self::sameState($before, $opened)))
-                || !self::sameState($opened, $pathStatus)
-            ) {
-                throw new \RuntimeException('WLS state lock changed while being opened.');
-            }
-            self::sealHandle($handle, $path, 0600, $seal);
             $startedAt = self::monotonicSeconds();
             $deadline = $startedAt + $waitTimeoutSeconds;
             do {
@@ -187,6 +214,7 @@ final class GatewayProjectStateFilesystem
                 throw new \RuntimeException('Timed out acquiring the WLS state lock.');
             }
             $afterLock = @\fstat($handle);
+            \clearstatcache(true, $path);
             $pathAfterLock = @\lstat($path);
             if (!\is_array($afterLock)
                 || !\is_array($pathAfterLock)
@@ -194,6 +222,20 @@ final class GatewayProjectStateFilesystem
             ) {
                 throw new \RuntimeException('WLS state lock changed while being locked.');
             }
+            self::assertRegularStatus($path, $afterLock, 'WLS state lock');
+            self::assertRegularStatus($path, $pathAfterLock, 'WLS state lock');
+            self::sealHandle($handle, $path, 0600, $seal);
+            $afterSeal = @\fstat($handle);
+            \clearstatcache(true, $path);
+            $pathAfterSeal = @\lstat($path);
+            if (!\is_array($afterSeal)
+                || !\is_array($pathAfterSeal)
+                || !self::sameState($afterSeal, $pathAfterSeal)
+            ) {
+                throw new \RuntimeException('WLS state lock changed while being sealed.');
+            }
+            self::assertRegularStatus($path, $afterSeal, 'WLS state lock');
+            self::assertRegularStatus($path, $pathAfterSeal, 'WLS state lock');
             if ($created) {
                 if (!@\fflush($handle)
                     || (\function_exists('fsync') && !@\fsync($handle))
@@ -315,6 +357,238 @@ final class GatewayProjectStateFilesystem
         }
     }
 
+    /**
+     * Report whether an exact atomic-write target has retained recovery
+     * evidence. Besides Windows ReplaceFileW backups this includes an exact
+     * same-target staging leaf left by a hard crash before rename. This method
+     * is read-only; callers that observe evidence must acquire the target
+     * namespace lock and use cleanupAtomicWriteRecoveryBackups().
+     */
+    public static function hasAtomicWriteRecoveryBackups(
+        string $target,
+        int $maximumBytes,
+        string $label,
+    ): bool {
+        return self::atomicWriteRecoveryArtifacts($target, $maximumBytes, $label) !== [];
+    }
+
+    /**
+     * Collect retained ReplaceFileW backups and interrupted staging leaves for
+     * one exact target.
+     *
+     * The caller must hold the namespace lock used by every writer of $target.
+     * A backup is the previous committed generation and a staging leaf may be
+     * the only after-image of a failed first publication. Both are removed only
+     * after the caller-provided validator accepts the current paired target and
+     * that target retains one stable identity through the whole collection.
+     * Missing or invalid targets, case aliases, malformed reserved leaves,
+     * special files and quota violations fail before any evidence is deleted.
+     *
+     * @param \Closure(string):void $validateTarget
+     */
+    public static function cleanupAtomicWriteRecoveryBackups(
+        string $target,
+        int $maximumBytes,
+        string $label,
+        \Closure $validateTarget,
+        bool $allowEmpty = false,
+    ): void {
+        $artifacts = self::atomicWriteRecoveryArtifacts(
+            $target,
+            $maximumBytes,
+            $label,
+        );
+        if ($artifacts === []) {
+            return;
+        }
+
+        $targetBefore = @\lstat($target);
+        if (!\is_array($targetBefore)) {
+            throw new \RuntimeException(
+                $label . ' recovery artifact paired target is missing or unsafe.'
+            );
+        }
+        $contents = self::read(
+            $target,
+            $maximumBytes,
+            $label . ' recovery artifact paired target',
+            $allowEmpty,
+        );
+        $validateTarget($contents);
+        $targetAfterValidation = @\lstat($target);
+        if (!\is_array($targetAfterValidation)
+            || !self::sameState($targetBefore, $targetAfterValidation)
+        ) {
+            throw new \RuntimeException(
+                $label . ' recovery artifact paired target changed during validation.'
+            );
+        }
+
+        // Repeat the complete namespace preflight before the first unlink.
+        // A late case alias, special file, quota violation, added artifact, or
+        // identity replacement therefore preserves the whole recovery set.
+        $rechecked = self::atomicWriteRecoveryArtifacts(
+            $target,
+            $maximumBytes,
+            $label,
+        );
+        if (\array_keys($artifacts) !== \array_keys($rechecked)) {
+            throw new \RuntimeException(
+                $label . ' atomic recovery artifact set changed before cleanup.'
+            );
+        }
+        foreach ($artifacts as $path => $artifact) {
+            $current = $rechecked[$path] ?? null;
+            if (!\is_array($current)
+                || !self::sameState($artifact['identity'], $current['identity'])
+                || !\hash_equals($artifact['kind'], $current['kind'])
+            ) {
+                throw new \RuntimeException(
+                    $label . ' atomic recovery artifact changed before cleanup.'
+                );
+            }
+        }
+        $targetAfterPreflight = @\lstat($target);
+        if (!\is_array($targetAfterPreflight)
+            || !self::sameState($targetAfterValidation, $targetAfterPreflight)
+        ) {
+            throw new \RuntimeException(
+                $label . ' recovery artifact paired target changed before cleanup.'
+            );
+        }
+
+        foreach ($artifacts as $artifact) {
+            $currentTarget = @\lstat($target);
+            if (!\is_array($currentTarget)
+                || !self::sameState($targetAfterPreflight, $currentTarget)
+            ) {
+                throw new \RuntimeException(
+                    $label . ' recovery artifact paired target changed during cleanup.'
+                );
+            }
+            if (!self::removeRegular(
+                $artifact['path'],
+                $label . ' atomic recovery ' . $artifact['kind'],
+                $artifact['identity'],
+            )) {
+                throw new \RuntimeException(
+                    'Unable to collect ' . $label . ' atomic recovery artifact.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @return array<string,array{path:string,kind:string,identity:array<string|int,mixed>}>
+     */
+    private static function atomicWriteRecoveryArtifacts(
+        string $target,
+        int $maximumBytes,
+        string $label,
+    ): array {
+        if ($maximumBytes < 1 || $label === '') {
+            throw new \InvalidArgumentException(
+                'Atomic recovery artifact inspection boundary is invalid.'
+            );
+        }
+        self::assertParentDirectory($target);
+        $directory = \dirname($target);
+        $targetLeaf = \basename(\str_replace('\\', '/', $target));
+        if ($targetLeaf === '' || $targetLeaf === '.' || $targetLeaf === '..') {
+            throw new \RuntimeException('Atomic recovery target leaf is invalid.');
+        }
+        $backupPrefix = $targetLeaf . '.wls-backup-';
+        $stagingPrefix = $targetLeaf . '.tmp-';
+        $backupPattern = '/\A' . \preg_quote($backupPrefix, '/')
+            . '[a-f0-9]{16}\z/Du';
+        $stagingPattern = '/\A' . \preg_quote($stagingPrefix, '/')
+            . '[a-f0-9]{24}\z/Du';
+        $foldedBackupPrefix = \strtolower($backupPrefix);
+        $foldedStagingPrefix = \strtolower($stagingPrefix);
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            throw new \RuntimeException(
+                'Unable to enumerate ' . $label . ' atomic recovery directory.'
+            );
+        }
+        $artifacts = [];
+        $backups = 0;
+        $staging = 0;
+        $visited = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if (++$visited > self::MAX_WINDOWS_ATOMIC_DIRECTORY_ENTRIES) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery directory exceeds its fixed raw entry quota.'
+                    );
+                }
+                $foldedLeaf = \strtolower($leaf);
+                $isBackupNamespace = \str_starts_with(
+                    $foldedLeaf,
+                    $foldedBackupPrefix,
+                );
+                $isStagingNamespace = \str_starts_with(
+                    $foldedLeaf,
+                    $foldedStagingPrefix,
+                );
+                if (!$isBackupNamespace && !$isStagingNamespace) {
+                    continue;
+                }
+                if (($isBackupNamespace && !\str_starts_with($leaf, $backupPrefix))
+                    || ($isStagingNamespace && !\str_starts_with($leaf, $stagingPrefix))
+                ) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery directory contains a non-canonical case alias.'
+                    );
+                }
+                $kind = '';
+                if ($isBackupNamespace && \preg_match($backupPattern, $leaf) === 1) {
+                    $kind = 'backup';
+                    ++$backups;
+                } elseif ($isStagingNamespace
+                    && \preg_match($stagingPattern, $leaf) === 1
+                ) {
+                    $kind = 'staging file';
+                    ++$staging;
+                } else {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery directory contains a malformed reserved leaf.'
+                    );
+                }
+                if ($backups > self::MAX_WINDOWS_RECOVERY_BACKUPS_PER_TARGET
+                    || $staging > self::MAX_ATOMIC_STAGING_FILES_PER_TARGET
+                ) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery artifact quota is exhausted.'
+                    );
+                }
+                $path = $directory . DIRECTORY_SEPARATOR . $leaf;
+                $before = @\lstat($path);
+                if (!\is_array($before)) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery artifact is indeterminate.'
+                    );
+                }
+                self::size($path, $maximumBytes, $label . ' atomic recovery artifact');
+                $after = @\lstat($path);
+                if (!\is_array($after) || !self::sameState($before, $after)) {
+                    throw new \RuntimeException(
+                        $label . ' atomic recovery artifact changed during inspection.'
+                    );
+                }
+                $artifacts[$path] = [
+                    'path' => $path,
+                    'kind' => $kind,
+                    'identity' => $after,
+                ];
+            }
+        } finally {
+            @\closedir($handle);
+        }
+        \ksort($artifacts, SORT_STRING);
+        return $artifacts;
+    }
+
     /** @param (\Closure(resource,string):void)|null $seal */
     public static function atomicWrite(
         string $path,
@@ -329,6 +603,21 @@ final class GatewayProjectStateFilesystem
             self::assertRegularStatus($path, $existing, 'WLS state target');
         } elseif (\file_exists($path) || \is_link($path)) {
             throw new \RuntimeException('WLS state target is indeterminate or unsafe.');
+        }
+
+        // Never layer a new transaction over unresolved evidence from a hard
+        // crash. Callers own the semantic validator and namespace lock needed
+        // to reconcile that evidence through cleanupAtomicWriteRecoveryBackups().
+        // Refusing here keeps repeated retries from exhausting the directory
+        // or obscuring a first-publication after-image with newer staging.
+        if (self::atomicWriteRecoveryArtifacts(
+            $path,
+            \max(1, \strlen($contents)),
+            'WLS state target',
+        ) !== []) {
+            throw new \RuntimeException(
+                'WLS state target has unresolved atomic recovery artifacts.'
+            );
         }
 
         $temporary = $path . '.tmp-' . \bin2hex(\random_bytes(12));
@@ -488,6 +777,314 @@ final class GatewayProjectStateFilesystem
             throw new \RuntimeException('Published WLS state file mode is unsafe.');
         }
         self::syncDirectory(\dirname($path));
+    }
+
+    /**
+     * Restore one exact, semantically pre-validated ReplaceFileW backup as the
+     * committed target without introducing a delete-then-write crash window.
+     *
+     * The caller must hold the target namespace lock and must bind both path
+     * identities, contents and size before calling. A safe-but-semantically
+     * damaged target may be replaced only while it still has the exact
+     * identity selected by the caller. Links, hard links, cross-directory
+     * moves and ambiguous backup leaves are always rejected.
+     *
+     * @param array<string|int,mixed> $expectedBackupIdentity
+     * @param array<string|int,mixed>|null $expectedTargetIdentity
+     */
+    public static function restoreVerifiedAtomicBackup(
+        string $backup,
+        string $target,
+        array $expectedBackupIdentity,
+        ?array $expectedTargetIdentity,
+        string $expectedDigest,
+        int $expectedSize,
+        int $mode = 0600,
+    ): void {
+        self::assertAtomicWriteRuntimeCapability();
+        self::assertParentDirectory($backup);
+        self::assertParentDirectory($target);
+        if ($expectedBackupIdentity === []
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $expectedDigest) !== 1
+            || $expectedSize < 1
+            || $mode < 0
+            || $mode > 0777
+        ) {
+            throw new \InvalidArgumentException(
+                'WLS atomic backup restoration contract is invalid.'
+            );
+        }
+        $backupDirectory = @\realpath(\dirname($backup));
+        $targetDirectory = @\realpath(\dirname($target));
+        if (!\is_string($backupDirectory)
+            || !\is_string($targetDirectory)
+            || !\hash_equals(
+                \PHP_OS_FAMILY === 'Windows'
+                    ? self::normalizeWindowsPathForComparison($targetDirectory)
+                    : $targetDirectory,
+                \PHP_OS_FAMILY === 'Windows'
+                    ? self::normalizeWindowsPathForComparison($backupDirectory)
+                    : $backupDirectory,
+            )
+        ) {
+            throw new \RuntimeException(
+                'WLS atomic backup and target must share one canonical directory.'
+            );
+        }
+        $targetLeaf = \basename(\str_replace('\\', '/', $target));
+        $backupLeaf = \basename(\str_replace('\\', '/', $backup));
+        if ($targetLeaf === ''
+            || \preg_match(
+                '/\A' . \preg_quote($targetLeaf, '/')
+                    . '\.wls-backup-[a-f0-9]{16}\z/Du',
+                $backupLeaf,
+            ) !== 1
+        ) {
+            throw new \RuntimeException(
+                'WLS atomic backup leaf is not bound to the exact target.'
+            );
+        }
+
+        $backupBefore = @\lstat($backup);
+        if (!\is_array($backupBefore)
+            || !self::sameState($expectedBackupIdentity, $backupBefore)
+        ) {
+            throw new \RuntimeException(
+                'WLS atomic backup changed before restoration.'
+            );
+        }
+        self::assertRegularStatus($backup, $backupBefore, 'WLS atomic recovery backup');
+        if ((int)($backupBefore['size'] ?? -1) !== $expectedSize
+            || (\PHP_OS_FAMILY !== 'Windows'
+                && ((((int)($backupBefore['mode'] ?? 0)) & 0777) !== $mode))
+        ) {
+            throw new \RuntimeException(
+                'WLS atomic recovery backup shape is invalid.'
+            );
+        }
+        $backupDigest = @\hash_file('sha256', $backup);
+        $backupAfterDigest = @\lstat($backup);
+        if (!\is_string($backupDigest)
+            || !\hash_equals($expectedDigest, $backupDigest)
+            || !\is_array($backupAfterDigest)
+            || !self::sameState($backupBefore, $backupAfterDigest)
+        ) {
+            throw new \RuntimeException(
+                'WLS atomic recovery backup contents or identity changed.'
+            );
+        }
+
+        $targetBefore = @\lstat($target);
+        if ($expectedTargetIdentity === null) {
+            if (\is_array($targetBefore)
+                || \file_exists($target)
+                || \is_link($target)
+            ) {
+                throw new \RuntimeException(
+                    'WLS atomic recovery target appeared before restoration.'
+                );
+            }
+        } elseif (!\is_array($targetBefore)
+            || !self::sameState($expectedTargetIdentity, $targetBefore)
+        ) {
+            throw new \RuntimeException(
+                'WLS atomic recovery target changed before restoration.'
+            );
+        } else {
+            self::assertRegularStatus($target, $targetBefore, 'WLS damaged atomic target');
+        }
+
+        // Repeat both exact identity checks immediately before the one atomic
+        // name operation. No evidence is deleted before this point.
+        $backupAtCommit = @\lstat($backup);
+        $targetAtCommit = @\lstat($target);
+        if (!\is_array($backupAtCommit)
+            || !self::sameState($backupAfterDigest, $backupAtCommit)
+            || ($expectedTargetIdentity === null
+                ? (\is_array($targetAtCommit)
+                    || \file_exists($target)
+                    || \is_link($target))
+                : (!\is_array($targetAtCommit)
+                    || !self::sameState($targetBefore, $targetAtCommit)))
+        ) {
+            throw new \RuntimeException(
+                'WLS atomic recovery namespace changed before commit.'
+            );
+        }
+
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::windowsRestoreVerifiedAtomicBackup(
+                $backup,
+                $target,
+                $backupAtCommit,
+                \is_array($targetAtCommit) ? $targetAtCommit : null,
+                $expectedDigest,
+                $expectedSize,
+            );
+        } elseif (!@\rename($backup, $target)) {
+            throw new \RuntimeException(
+                'Unable to atomically restore the WLS recovery backup.'
+            );
+        }
+
+        \clearstatcache(true, $backup);
+        \clearstatcache(true, $target);
+        $published = @\lstat($target);
+        $publishedDigest = @\hash_file('sha256', $target);
+        if (\file_exists($backup)
+            || \is_link($backup)
+            || !\is_array($published)
+            || !self::sameIdentity($backupAtCommit, $published)
+            || !\is_string($publishedDigest)
+            || !\hash_equals($expectedDigest, $publishedDigest)
+            || (int)($published['size'] ?? -1) !== $expectedSize
+        ) {
+            throw new \RuntimeException(
+                'Restored WLS atomic target failed its identity receipt.'
+            );
+        }
+        self::assertRegularStatus($target, $published, 'Restored WLS atomic target');
+        if (\PHP_OS_FAMILY !== 'Windows'
+            && ((((int)($published['mode'] ?? 0)) & 0777) !== $mode)
+        ) {
+            throw new \RuntimeException('Restored WLS atomic target mode is unsafe.');
+        }
+        self::syncDirectory($targetDirectory);
+    }
+
+    /**
+     * @param array<string|int,mixed> $backupStatus
+     * @param array<string|int,mixed>|null $targetStatus
+     */
+    private static function windowsRestoreVerifiedAtomicBackup(
+        string $backup,
+        string $target,
+        array $backupStatus,
+        ?array $targetStatus,
+        string $expectedDigest,
+        int $expectedSize,
+    ): void {
+        if (\PHP_OS_FAMILY !== 'Windows'
+            || !\extension_loaded('FFI')
+            || !\class_exists(\FFI::class)
+            || !\function_exists('iconv')
+        ) {
+            throw new \RuntimeException(
+                'Windows native WLS backup restoration is unavailable.'
+            );
+        }
+        try {
+            $ffi = \FFI::cdef(
+                'typedef int BOOL; typedef unsigned long DWORD;'
+                    . ' typedef unsigned short WCHAR; typedef void* HANDLE;'
+                    . ' typedef struct { DWORD dwLowDateTime; DWORD dwHighDateTime; } FILETIME;'
+                    . ' typedef struct {'
+                    . ' DWORD dwFileAttributes; FILETIME ftCreationTime;'
+                    . ' FILETIME ftLastAccessTime; FILETIME ftLastWriteTime;'
+                    . ' DWORD dwVolumeSerialNumber; DWORD nFileSizeHigh;'
+                    . ' DWORD nFileSizeLow; DWORD nNumberOfLinks;'
+                    . ' DWORD nFileIndexHigh; DWORD nFileIndexLow;'
+                    . ' } BY_HANDLE_FILE_INFORMATION;'
+                    . ' HANDLE CreateFileW(const WCHAR*, DWORD, DWORD, void*,'
+                    . ' DWORD, DWORD, HANDLE);'
+                    . ' BOOL GetFileInformationByHandle('
+                    . ' HANDLE, BY_HANDLE_FILE_INFORMATION*);'
+                    . ' BOOL CloseHandle(HANDLE);'
+                    . ' BOOL ReplaceFileW(const WCHAR*, const WCHAR*, const WCHAR*,'
+                    . ' DWORD, void*, void*);'
+                    . ' BOOL MoveFileExW(const WCHAR*, const WCHAR*, DWORD);'
+                    . ' DWORD GetLastError(void);',
+                'kernel32.dll',
+            );
+            $backupWide = self::windowsWidePath($ffi, $backup);
+            $targetWide = self::windowsWidePath($ffi, $target);
+            $handles = [];
+            try {
+                $backupNative = self::windowsNativeFileProof(
+                    $ffi,
+                    $backup,
+                    $backupWide,
+                );
+                $handles[] = $backupNative['handle'];
+                if ((int)$backupNative['size'] !== $expectedSize) {
+                    throw new \RuntimeException(
+                        'Windows WLS recovery backup size changed before commit.'
+                    );
+                }
+                if ($targetStatus !== null) {
+                    $targetNative = self::windowsNativeFileProof(
+                        $ffi,
+                        $target,
+                        $targetWide,
+                    );
+                    $handles[] = $targetNative['handle'];
+                }
+                $backupProof = self::windowsNativeFileProof(
+                    $ffi,
+                    $backup,
+                    $backupWide,
+                );
+                $handles[] = $backupProof['handle'];
+                $digestAtCommit = @\hash_file('sha256', $backup);
+                if (!\hash_equals(
+                    (string)$backupNative['identity'],
+                    (string)$backupProof['identity'],
+                )
+                    || !\is_string($digestAtCommit)
+                    || !\hash_equals($expectedDigest, $digestAtCommit)
+                ) {
+                    throw new \RuntimeException(
+                        'Windows WLS recovery backup changed immediately before commit.'
+                    );
+                }
+                $succeeded = $targetStatus === null
+                    ? (int)$ffi->MoveFileExW($backupWide, $targetWide, 0x00000008)
+                    : (int)$ffi->ReplaceFileW(
+                        $targetWide,
+                        $backupWide,
+                        null,
+                        0x00000001,
+                        null,
+                        null,
+                    );
+                if ($succeeded === 0) {
+                    throw new \RuntimeException(
+                        'Windows native WLS backup restoration failed with error '
+                        . (int)$ffi->GetLastError() . '.'
+                    );
+                }
+                $publishedNative = self::windowsNativeFileProof(
+                    $ffi,
+                    $target,
+                    $targetWide,
+                );
+                $handles[] = $publishedNative['handle'];
+                if (!\hash_equals(
+                    (string)$backupNative['identity'],
+                    (string)$publishedNative['identity'],
+                ) || (int)$publishedNative['size'] !== $expectedSize) {
+                    throw new \RuntimeException(
+                        'Windows native WLS backup restoration changed the selected file identity.'
+                    );
+                }
+            } finally {
+                foreach ($handles as $handle) {
+                    try {
+                        $ffi->CloseHandle($handle);
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+        } catch (\Throwable $throwable) {
+            if ($throwable instanceof \RuntimeException) {
+                throw $throwable;
+            }
+            throw new \RuntimeException(
+                'Windows native WLS backup restoration failed.',
+                0,
+                $throwable,
+            );
+        }
     }
 
     /**
@@ -1474,6 +2071,12 @@ final class GatewayProjectStateFilesystem
      */
     private static function applyHandleMode($handle, string $path, int $mode): bool
     {
+        $status = @\fstat($handle);
+        if (\is_array($status)
+            && (((int)($status['mode'] ?? -1)) & 07777) === $mode
+        ) {
+            return true;
+        }
         if (\function_exists('fchmod')) {
             return @\fchmod($handle, $mode);
         }
@@ -1517,6 +2120,29 @@ final class GatewayProjectStateFilesystem
     private static function sameState(array $before, array $after): bool
     {
         foreach (['dev', 'ino', 'mode', 'nlink', 'size', 'mtime', 'ctime'] as $field) {
+            if (!\array_key_exists($field, $before)
+                || !\array_key_exists($field, $after)
+                || (int)$before[$field] !== (int)$after[$field]
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Mutable metadata may be tightened by another trusted lock holder while
+     * an opener is taking its pre-flock snapshots. The open file description
+     * keeps its inode alive, so an equal device/inode pair cannot be a reused
+     * replacement. Callers still validate regular type and nlink=1 on every
+     * snapshot and require a subsequent complete sameState comparison.
+     *
+     * @param array<string|int,mixed> $before
+     * @param array<string|int,mixed> $after
+     */
+    private static function sameOpenFileIdentity(array $before, array $after): bool
+    {
+        foreach (['dev', 'ino'] as $field) {
             if (!\array_key_exists($field, $before)
                 || !\array_key_exists($field, $after)
                 || (int)$before[$field] !== (int)$after[$field]
