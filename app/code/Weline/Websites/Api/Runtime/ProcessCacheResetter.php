@@ -16,13 +16,17 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 {
     public function resetProcessCaches(ProcessCacheResetContext $context): int
     {
+        // Website ACL grant memo must not survive cache_clear / worker soft reset,
+        // or an empty [] entry can hide newly saved grants until process recycle.
+        \Weline\Websites\Service\WebsiteAclGrantService::clearRequestCache();
+
         $pageClass = '\\GuoLaiRen\\PageBuilder\\Controller\\Frontend\\Page';
         if (!\class_exists($pageClass) || !\is_callable([$pageClass, 'clearProcessCaches'])) {
-            return 0;
+            return 1;
         }
 
         $pageClass::clearProcessCaches($context->isExplicitCacheClear());
 
-        return $context->isExplicitCacheClear() ? 2 : 1;
+        return $context->isExplicitCacheClear() ? 3 : 2;
     }
 }

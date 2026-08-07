@@ -25,8 +25,10 @@ use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\WebsiteBackendEntryBridgeService;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 use Weline\Websites\Service\WebsiteChangeSnapshotFactory;
+use Weline\Websites\Service\WebsiteEntryUrlService;
 use Weline\Websites\Service\WebsiteStoreChannelDirectory;
 
 #[Acl('Weline_Websites::website', '网站管理', 'mdi mdi-web', '网站管理', 'Weline_Websites::website_service')]
@@ -142,12 +144,92 @@ class Website extends BackendController
             // 获取关联域名（多个）
             $website['domain_list'] = $websiteDomain->getDomainsWithStatus($websiteId);
             $website['store_channel_directory'] = $this->storeChannelDirectory->forWebsite($websiteId);
-            $entryUrls = ObjectManager::getInstance(\Weline\Websites\Service\WebsiteEntryUrlService::class)
+            $entryUrls = ObjectManager::getInstance(WebsiteEntryUrlService::class)
                 ->resolveForListingRow($website);
             $website['frontend_url'] = $entryUrls['frontend_url'];
-            $website['backend_url'] = $entryUrls['backend_url'];
+            if ($websiteId === \Weline\Websites\Model\Website::ID_DEFAULT) {
+                // 默认站：管理后端即本站后台首页
+                $website['backend_url'] = $this->request->getUrlBuilder()->getBackendUrl('admin');
+            } else {
+                // 非默认站：主站签发直进令牌，有授权包则免再登录
+                $website['backend_url'] = $this->request->getUrlBuilder()->getBackendUrl(
+                    '*/admin/website/enter-backend',
+                    ['website_id' => $websiteId]
+                );
+            }
+            $website['backend_login_url'] = $entryUrls['backend_url'];
         }
         unset($website);
+    }
+
+    #[Acl('Weline_Websites::website_enter_backend', '直进子站后台', 'mdi mdi-login-variant', '主站直进已授权子站后台', 'Weline_Websites::website_list')]
+    public function getEnterBackend()
+    {
+        $websiteId = (int)$this->request->getGet('website_id', 0);
+        try {
+            /** @var WebsiteBackendEntryBridgeService $bridge */
+            $bridge = ObjectManager::getInstance(WebsiteBackendEntryBridgeService::class);
+            $userId = (int)($this->session->getUserId() ?? 0);
+            $token = $bridge->issueToken($websiteId, $userId);
+            $urls = $bridge->buildConsumeUrl($websiteId, $token);
+            // 跨子域直进：不能走 PcController::redirect（同源校验会拦掉）
+            $this->request->getResponse()->redirect($urls['consume_url']);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+            $this->redirect('*/admin/website/index');
+        }
+    }
+
+    /**
+     * 一次性令牌消费入口：故意不挂 #[Acl]。
+     * 有 Acl 时 RouteBefore 会按受保护路由强制登录，而本请求尚未装上子站会话。
+     * 鉴权靠 WebsiteBackendEntryBridgeService 的短时一次性 token。
+     */
+    public function getConsumeBackendEntry()
+    {
+        $token = \trim((string)$this->request->getGet('token', ''));
+        try {
+            /** @var WebsiteBackendEntryBridgeService $bridge */
+            $bridge = ObjectManager::getInstance(WebsiteBackendEntryBridgeService::class);
+            $result = $bridge->consumeAndLogin($token, $this->session, (string)$this->request->clientIP());
+            $this->redirect($result['redirect_url']);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->getMessageManager()->addError($e->getMessage());
+            // 失败时落到子站登录页，便于站点本地账号登录
+            try {
+                $websiteId = ObjectManager::getInstance(\Weline\Websites\Service\WebsiteAclGrantService::class)
+                    ->currentWebsiteId();
+                $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class, [], false)->load($websiteId);
+                $entry = ObjectManager::getInstance(WebsiteEntryUrlService::class)
+                    ->resolveForListingRow($website->getData() ?: ['website_id' => $websiteId]);
+                $loginUrl = (string)($entry['backend_url'] ?? '');
+                if ($loginUrl !== '') {
+                    $this->redirect($loginUrl);
+                }
+            } catch (\Weline\Framework\Http\ResponseTerminateException $redirect) {
+                throw $redirect;
+            } catch (\Throwable) {
+            }
+            $this->redirect('*/admin/login');
+        }
+    }
+
+    /**
+     * 消费入口在装会话前必须可达；不依赖可能陈旧的 controller 白名单缓存。
+     */
+    protected function loginCheck(): void
+    {
+        $route = \strtolower(\trim((string)$this->request->getRouteUrlPath(), '/'));
+        if ($route === 'websites/admin/website/consume-backend-entry'
+            || $route === 'websites/admin/website/get-consume-backend-entry'
+        ) {
+            return;
+        }
+        parent::loginCheck();
     }
 
     private function createWebsiteListingModel(): \Weline\Websites\Model\Website
