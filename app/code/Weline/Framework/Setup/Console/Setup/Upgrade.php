@@ -1646,7 +1646,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         $this->printing->note(__('检测到新部署模块，先写入模块注册表：%{1}', [implode(', ', array_keys($missingModules))]));
         Register::setRegisterPhase(Register::PHASE_MODULE_ONLY);
-        foreach ($missingModules as $registerFile) {
+        // Re-sort the missing subset with authoritative dependencies so dependents
+        // (e.g. Weline_I18n → Weline_Captcha) never register before their requires.
+        $sortedMissing = [];
+        foreach ($dependencyModules as $moduleName => $module) {
+            if (isset($missingModules[$moduleName])) {
+                $sortedMissing[$moduleName] = $missingModules[$moduleName];
+            }
+        }
+        foreach ($missingModules as $moduleName => $registerFile) {
+            if (!isset($sortedMissing[$moduleName])) {
+                $sortedMissing[$moduleName] = $registerFile;
+            }
+        }
+        foreach ($sortedMissing as $registerFile) {
             require $registerFile;
         }
         Env::getInstance()->reload();
